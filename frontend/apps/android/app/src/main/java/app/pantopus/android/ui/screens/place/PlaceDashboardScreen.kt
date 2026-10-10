@@ -52,10 +52,12 @@ import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.RefreshFailedLine
 import app.pantopus.android.ui.components.RefreshNotice
+import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.screens.ballot.BallotGovernmentsSheet
 import app.pantopus.android.ui.screens.ballot.BallotPlacement
 import app.pantopus.android.ui.screens.ballot.BallotSeasonBlock
+import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
 import app.pantopus.android.ui.screens.place.components.JustMovedCard
 import app.pantopus.android.ui.screens.place.components.PlaceGroupLabel
 import app.pantopus.android.ui.screens.place.components.PlaceHeroCard
@@ -110,7 +112,8 @@ fun PlaceDashboardScreen(
     LaunchedEffect(state) {
         if ((state as? PlaceDashboardUiState.Error)?.unavailable == true) onPlaceUnavailable(homeId)
     }
-    LaunchedEffect(homeId) { viewModel.load(homeId) }
+    HomeCopyLifecycle({ viewModel.load(homeId) }, viewModel::suspendContent)
+    RefreshOnStoreChange { viewModel.load(homeId) }
 
     var showSwitcher by remember { mutableStateOf(false) }
     var showVerify by remember { mutableStateOf(false) }

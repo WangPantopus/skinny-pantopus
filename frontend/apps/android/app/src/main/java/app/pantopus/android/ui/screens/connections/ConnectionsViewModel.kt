@@ -20,9 +20,12 @@ import app.pantopus.android.data.api.models.connections.SentRequestDto
 import app.pantopus.android.data.api.models.relationships.PendingRequestDto
 import app.pantopus.android.data.api.models.relationships.RelationshipDto
 import app.pantopus.android.data.api.models.relationships.RelationshipUserDto
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.connections.ConnectionsRepository
 import app.pantopus.android.data.relationships.RelationshipsRepository
+import app.pantopus.android.data.store.StoreKind
+import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.components.StatusChipVariant
 import app.pantopus.android.ui.screens.shared.list_of_rows.AvatarBackground
 import app.pantopus.android.ui.screens.shared.list_of_rows.AvatarBadgeSize
@@ -225,13 +228,14 @@ class ConnectionsViewModel
             }
 
         /** Initial load. Idempotent — re-running won't refetch when already loaded. */
-        fun load() {
-            if (loadedOnce) return
-            reload()
-        }
+        private var loading = false
+        private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
+        val refreshNotice: StateFlow<RefreshNotice?> = _refreshNotice.asStateFlow()
+
+        fun load() = reload(force = false)
 
         /** Pull-to-refresh. */
-        fun refresh() = reload()
+        fun refresh() = reload(force = true)
 
         /** Tab switch — re-segment over the cached payload. */
         fun selectTab(id: String) {
@@ -368,18 +372,39 @@ class ConnectionsViewModel
             }
         }
 
-        private fun reload() {
-            _state.value = ListOfRowsUiState.Loading
+        private fun reload(force: Boolean) {
+            if (loading) return
+            loading = true
+            if (!loadedOnce) {
+                val acceptedCopy = repo.listCopy("accepted").data
+                val pendingCopy = repo.pendingCopy().data
+                val sentCopy = connectionsRepo.sentCopy().data
+                val blockedCopy = connectionsRepo.blockedCopy().data
+                if (acceptedCopy != null && pendingCopy != null && sentCopy != null && blockedCopy != null) {
+                    accepted = acceptedCopy.relationships
+                    pending = pendingCopy.requests
+                    sent = sentCopy.requests
+                    blocked = blockedCopy.blocked
+                    loadedOnce = true
+                    applyState()
+                }
+                if (!loadedOnce) _state.value = ListOfRowsUiState.Loading
+            }
             viewModelScope.launch {
-                val acceptedDeferred = async { fetchAccepted() }
-                val pendingDeferred = async { fetchPending() }
-                val sentDeferred = async { fetchSent() }
-                val blockedDeferred = async { fetchBlocked() }
+                val acceptedDeferred = async { fetchAccepted(force) }
+                val pendingDeferred = async { fetchPending(force) }
+                val sentDeferred = async { fetchSent(force) }
+                val blockedDeferred = async { fetchBlocked(force) }
                 val acceptedOk = acceptedDeferred.await()
                 val pendingOk = pendingDeferred.await()
                 val sentOk = sentDeferred.await()
                 val blockedOk = blockedDeferred.await()
-                if (!acceptedOk && !pendingOk && !sentOk && !blockedOk) {
+                loading = false
+                val staleFailure =
+                    listOf(repo.listCopy("accepted"), repo.pendingCopy(), connectionsRepo.sentCopy(), connectionsRepo.blockedCopy())
+                        .firstOrNull { it.showsRefreshFailure(StoreKind.PEOPLE) }
+                _refreshNotice.value = staleFailure?.let { RefreshNotice(it.fetchedAt, ::refresh) }
+                if (!loadedOnce && !acceptedOk && !pendingOk && !sentOk && !blockedOk) {
                     _state.value =
                         ListOfRowsUiState.Error("Couldn't load your connections. Try again.")
                     return@launch
@@ -389,40 +414,72 @@ class ConnectionsViewModel
             }
         }
 
-        private suspend fun fetchSent(): Boolean =
-            when (val result = connectionsRepo.sentRequests()) {
+        private suspend fun fetchSent(force: Boolean): Boolean =
+            when (val result = connectionsRepo.sentRequests(force = force)) {
                 is NetworkResult.Success -> {
                     sent = result.data.requests
                     true
                 }
-                is NetworkResult.Failure -> false
+                is NetworkResult.Failure -> {
+                    if (result.error is NetworkError.Forbidden ||
+                        result.error == NetworkError.NotFound ||
+                        result.error == NetworkError.Unauthorized
+                    ) {
+                        sent = emptyList()
+                    }
+                    false
+                }
             }
 
-        private suspend fun fetchBlocked(): Boolean =
-            when (val result = connectionsRepo.blocked()) {
+        private suspend fun fetchBlocked(force: Boolean): Boolean =
+            when (val result = connectionsRepo.blocked(force = force)) {
                 is NetworkResult.Success -> {
                     blocked = result.data.blocked
                     true
                 }
-                is NetworkResult.Failure -> false
+                is NetworkResult.Failure -> {
+                    if (result.error is NetworkError.Forbidden ||
+                        result.error == NetworkError.NotFound ||
+                        result.error == NetworkError.Unauthorized
+                    ) {
+                        blocked = emptyList()
+                    }
+                    false
+                }
             }
 
-        private suspend fun fetchAccepted(): Boolean =
-            when (val result = repo.list(status = "accepted")) {
+        private suspend fun fetchAccepted(force: Boolean): Boolean =
+            when (val result = repo.list(status = "accepted", force = force)) {
                 is NetworkResult.Success -> {
                     accepted = result.data.relationships
                     true
                 }
-                is NetworkResult.Failure -> false
+                is NetworkResult.Failure -> {
+                    if (result.error is NetworkError.Forbidden ||
+                        result.error == NetworkError.NotFound ||
+                        result.error == NetworkError.Unauthorized
+                    ) {
+                        accepted = emptyList()
+                    }
+                    false
+                }
             }
 
-        private suspend fun fetchPending(): Boolean =
-            when (val result = repo.pendingRequests()) {
+        private suspend fun fetchPending(force: Boolean): Boolean =
+            when (val result = repo.pendingRequests(force = force)) {
                 is NetworkResult.Success -> {
                     pending = result.data.requests
                     true
                 }
-                is NetworkResult.Failure -> false
+                is NetworkResult.Failure -> {
+                    if (result.error is NetworkError.Forbidden ||
+                        result.error == NetworkError.NotFound ||
+                        result.error == NetworkError.Unauthorized
+                    ) {
+                        pending = emptyList()
+                    }
+                    false
+                }
             }
 
         private fun applyState() {

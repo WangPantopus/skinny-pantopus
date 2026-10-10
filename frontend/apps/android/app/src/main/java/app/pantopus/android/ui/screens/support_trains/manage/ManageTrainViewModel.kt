@@ -13,11 +13,16 @@ import app.pantopus.android.data.api.models.support_trains.SupportTrainUpdateBod
 import app.pantopus.android.data.api.models.support_trains.UpdateSupportTrainSlotBody
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
+import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.support_trains.SupportTrainsRepository
+import app.pantopus.android.data.store.StoreKind
+import app.pantopus.android.ui.components.RefreshNotice
+import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScopeFactory
 import app.pantopus.android.ui.screens.support_trains.detail.SupportTrainViewerRole
 import app.pantopus.android.ui.theme.PantopusIcon
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -104,6 +109,8 @@ data class ManageTrainContent(
      * (`backend/middleware/supportTrainPermissions.js:51`).
      */
     val viewerRole: SupportTrainViewerRole = SupportTrainViewerRole.PRIMARY_ORGANIZER,
+    /** Organizer controls and private replies belong only to the current checked visit. */
+    val privateDetailsAvailable: Boolean = true,
 )
 
 /** Drives the Close-train confirmation sheet presentation. */
@@ -149,6 +156,8 @@ data class ManageTrainUiState(
     val pendingConfirm: ManageDestructiveConfirm? = null,
     /** Set once the train is deleted so the host can pop the screen. */
     val didDeleteTrain: Boolean = false,
+    val refreshing: Boolean = false,
+    val refreshNotice: RefreshNotice? = null,
 ) {
     val characterCount: Int get() = draftMessage.length
     val characterCounterLabel: String get() = "$characterCount / $MAX_MESSAGE_CHARS"
@@ -188,20 +197,86 @@ class ManageTrainViewModel
     constructor(
         private val repo: SupportTrainsRepository,
         savedStateHandle: SavedStateHandle,
+        sessionScopes: HomeClaimSessionScopeFactory,
     ) : ViewModel() {
         private val trainId: String =
             savedStateHandle.get<String>(TRAIN_ID_KEY).orEmpty()
 
-        private val _state = MutableStateFlow(ManageTrainUiState())
+        private val _state = MutableStateFlow(ManageTrainUiState(state = summary()))
         val state: StateFlow<ManageTrainUiState> = _state.asStateFlow()
         private var updateRequestId = java.util.UUID.randomUUID().toString()
         private val closeRequestId = java.util.UUID.randomUUID().toString()
+        private val session = sessionScopes.create(viewModelScope)
+        private var active = true
+        private var readVersion = 0L
+        private var readJob: Job? = null
+        private var formInitialized = false
+
+        init {
+            viewModelScope.launch {
+                session.invalidated.collect { ended ->
+                    if (ended) {
+                        suspendContent()
+                        _state.value = ManageTrainUiState()
+                    }
+                }
+            }
+        }
+
+        private fun summary(): ManageTrainState =
+            repo.detailCopy(trainId).data?.let {
+                ManageTrainState.Loaded(ManageTrainProjection.project(it).copy(privateDetailsAvailable = false))
+            } ?: ManageTrainState.Loading
+
+        /** Keep the unsent forms, but discard the recipient, helper, organizer and fund responses. */
+        fun suspendContent() {
+            if (!active) return
+            active = false
+            readVersion++
+            readJob?.cancel()
+            _state.update {
+                it.copy(
+                    state = if (session.isCurrent) summary() else ManageTrainState.Loading,
+                    helperRows = emptyList(), organizerRows = emptyList(), fund = null, deliveredMeals = null,
+                    slotRows = emptyList(), helpersFailed = false, pendingConfirm = null,
+                    toast = null, actionError = null, refreshing = false, refreshNotice = null,
+                )
+            }
+        }
+
+        private suspend fun current(version: Long): Boolean {
+            val allowed = session.confirmCurrent()
+            return active && version == readVersion && allowed
+        }
+
+        fun refresh() {
+            _state.update { it.copy(refreshing = it.state is ManageTrainState.Loaded) }
+            load()
+        }
+
+        fun refreshFromSignal() {
+            if (active && !repo.detailIsCurrent(trainId)) load()
+        }
+
+        private val canAct: Boolean
+            get() = active && session.isCurrent &&
+                (_state.value.state as? ManageTrainState.Loaded)?.content?.privateDetailsAvailable == true
+
+        /** A completed write can settle an unsent form while paused, but cannot cross sign-out. */
+        private suspend fun <T> checkedAction(block: suspend () -> NetworkResult<T>): NetworkResult<T>? {
+            if (!session.confirmCurrent()) return null
+            val result = block()
+            return result.takeIf { session.confirmCurrent() }
+        }
 
         /**
          * Load the dashboard. With a `seed` (previews / tests) it renders
          * directly; otherwise it fetches `GET /:id` and projects it.
          */
         fun load(seed: ManageTrainContent? = null) {
+            active = true
+            readJob?.cancel()
+            val version = ++readVersion
             if (seed != null) {
                 applyContent(seed)
                 return
@@ -215,17 +290,41 @@ class ManageTrainViewModel
                     it.copy(state = ManageTrainState.Loading, deliveredMeals = null)
                 }
             }
-            viewModelScope.launch {
-                when (val result = repo.detail(trainId)) {
+            readJob = viewModelScope.launch {
+                try {
+                    if (!current(version)) return@launch
+                    val result = repo.detail(trainId)
+                    if (!current(version)) return@launch
+                    when (result) {
                     is NetworkResult.Success -> {
                         applyContent(ManageTrainProjection.project(result.data))
                         val slots = ManageOrganizerProjection.slotRows(result.data.slots ?: emptyList())
                         _state.update { it.copy(slotRows = slots) }
-                        loadOrganizerSurfaces(slots)
+                        if (result.data.viewerIsOrganizer) loadOrganizerSurfaces(slots, version)
                     }
-                    is NetworkResult.Failure ->
-                        _state.update { it.copy(state = ManageTrainState.Error(result.error.message)) }
+                    is NetworkResult.Failure -> showReadFailure(result)
+                    }
+                } finally {
+                    if (version == readVersion) _state.update { it.copy(refreshing = false) }
                 }
+            }
+        }
+
+        private fun showReadFailure(result: NetworkResult.Failure) {
+            val copy = repo.detailCopy(trainId)
+            val safe = summary()
+            _state.update {
+                it.copy(
+                    state = if (!result.error.refusesStoredCopy && safe is ManageTrainState.Loaded) {
+                        safe
+                    } else {
+                        ManageTrainState.Error(result.error.displayMessage("Couldn't load this train."))
+                    },
+                    helperRows = emptyList(), organizerRows = emptyList(), fund = null, deliveredMeals = null,
+                    refreshNotice = RefreshNotice(copy.fetchedAt) { refresh() }.takeIf {
+                        copy.data != null && System.currentTimeMillis() - copy.fetchedAt > StoreKind.SUPPORT_TRAINS.maxShownAgeMs
+                    },
+                )
             }
         }
 
@@ -234,20 +333,25 @@ class ManageTrainViewModel
          * sections instead of blowing up the whole screen.
          */
         @Suppress("CyclomaticComplexMethod")
-        private suspend fun loadOrganizerSurfaces(slots: List<ManageSlotRow>) {
+        private suspend fun loadOrganizerSurfaces(slots: List<ManageSlotRow>, version: Long) {
             val reservationsResult = repo.reservations(trainId)
+            if (!current(version)) return
             val reservations =
                 when (reservationsResult) {
                     is NetworkResult.Success -> reservationsResult.data.reservations
                     is NetworkResult.Failure -> emptyList()
                 }
+            val organizersResult = repo.organizers(trainId)
+            if (!current(version)) return
             val organizers =
-                when (val result = repo.organizers(trainId)) {
+                when (val result = organizersResult) {
                     is NetworkResult.Success -> result.data.organizers
                     is NetworkResult.Failure -> emptyList()
                 }
+            val fundResult = repo.fund(trainId)
+            if (!current(version)) return
             val fund =
-                when (val result = repo.fund(trainId)) {
+                when (val result = fundResult) {
                     is NetworkResult.Success -> result.data
                     is NetworkResult.Failure -> null
                 }
@@ -300,24 +404,15 @@ class ManageTrainViewModel
 
         private fun applyContent(content: ManageTrainContent) {
             _state.update { current ->
-                ManageTrainUiState(
+                current.copy(
                     state = ManageTrainState.Loaded(content),
-                    draftMessage = content.draftMessage,
-                    selectedAudienceId = content.selectedAudienceId,
-                    pushToPhones = content.pushToPhones,
-                    thankYouNote = "",
-                    sheetMode = ManageTrainSheetMode.HIDDEN,
-                    // Organizer actions flash a toast and then re-`load()`;
-                    // carry it across the refresh so it isn't swallowed.
-                    toast = current.toast,
-                    helperRows = current.helperRows,
-                    helpersFailed = current.helpersFailed,
-                    slotRows = current.slotRows,
-                    organizerRows = current.organizerRows,
-                    fund = current.fund,
-                    fundGoalDollars = current.fundGoalDollars,
+                    draftMessage = if (formInitialized) current.draftMessage else content.draftMessage,
+                    selectedAudienceId = if (formInitialized) current.selectedAudienceId else content.selectedAudienceId,
+                    pushToPhones = if (formInitialized) current.pushToPhones else content.pushToPhones,
+                    refreshNotice = null,
                 )
             }
+            formInitialized = true
         }
 
         // MARK: - Send-update form
@@ -350,7 +445,7 @@ class ManageTrainViewModel
          */
         fun sendUpdate() {
             val current = _state.value
-            if (!current.canSendUpdate) return
+            if (!current.canSendUpdate || !canAct) return
             val content = (current.state as? ManageTrainState.Loaded)?.content ?: return
             val body = current.draftMessage
             val helperCount =
@@ -360,10 +455,12 @@ class ManageTrainViewModel
             viewModelScope.launch {
                 when (
                     val result =
-                        repo.postUpdate(
-                            trainId,
-                            SupportTrainUpdateBody(body = body, clientRequestId = updateRequestId, pushToPhones = current.pushToPhones),
-                        )
+                        checkedAction {
+                            repo.postUpdate(
+                                trainId,
+                                SupportTrainUpdateBody(body = body, clientRequestId = updateRequestId, pushToPhones = current.pushToPhones),
+                            )
+                        } ?: return@launch
                 ) {
                     is NetworkResult.Success -> {
                         updateRequestId = java.util.UUID.randomUUID().toString()
@@ -406,13 +503,14 @@ class ManageTrainViewModel
         /** Keep the confirmation open until both the optional thanks and close are confirmed. */
         fun confirmClose() {
             val current = _state.value
-            if (current.isSubmitting) return
-            val content = (current.state as? ManageTrainState.Loaded)?.content ?: return
+            val content = (current.state as? ManageTrainState.Loaded)?.content?.takeIf { !current.isSubmitting && canAct } ?: return
             val note = current.thankYouNote.trim()
             _state.update { it.copy(isSubmitting = true, actionError = null, toast = null) }
             viewModelScope.launch {
                 if (note.isNotEmpty()) {
-                    when (val result = repo.postUpdate(trainId, SupportTrainUpdateBody(body = note, clientRequestId = closeRequestId))) {
+                    when (val result = checkedAction {
+                        repo.postUpdate(trainId, SupportTrainUpdateBody(body = note, clientRequestId = closeRequestId))
+                    } ?: return@launch) {
                         is NetworkResult.Success -> Unit
                         is NetworkResult.Failure -> {
                             _state.update {
@@ -425,12 +523,16 @@ class ManageTrainViewModel
                         }
                     }
                 }
-                when (val result = repo.complete(trainId)) {
+                when (val result = checkedAction { repo.complete(trainId) } ?: return@launch) {
                     is NetworkResult.Success ->
                         _state.update {
                             it.copy(
                                 isSubmitting = false,
-                                state = ManageTrainState.Loaded(content.copy(isActive = false, status = "completed")),
+                                state = if (canAct) {
+                                    ManageTrainState.Loaded(content.copy(isActive = false, status = "completed"))
+                                } else {
+                                    it.state
+                                },
                                 sheetMode = ManageTrainSheetMode.CLOSED,
                                 toast =
                                     if (note.isEmpty()) {
@@ -477,10 +579,10 @@ class ManageTrainViewModel
          * verbatim.
          */
         fun deleteTrain() {
-            if (_state.value.isSubmitting) return
+            if (_state.value.isSubmitting || !canAct) return
             _state.update { it.copy(isSubmitting = true, pendingConfirm = null) }
             viewModelScope.launch {
-                when (val result = repo.deleteTrain(trainId)) {
+                when (val result = checkedAction { repo.deleteTrain(trainId) } ?: return@launch) {
                     is NetworkResult.Success ->
                         _state.update {
                             it.copy(
@@ -634,10 +736,10 @@ class ManageTrainViewModel
 
         /** `POST /:id/nudges/draft`. */
         fun draftNudge() {
-            if (_state.value.isSubmitting) return
+            if (_state.value.isSubmitting || !canAct) return
             _state.update { it.copy(isSubmitting = true) }
             viewModelScope.launch {
-                when (val result = repo.draftNudge(trainId)) {
+                when (val result = checkedAction { repo.draftNudge(trainId) } ?: return@launch) {
                     is NetworkResult.Success ->
                         _state.update { it.copy(isSubmitting = false, nudgeDraft = result.data) }
                     is NetworkResult.Failure ->
@@ -662,10 +764,10 @@ class ManageTrainViewModel
         /** `POST /:id/nudges/send`. */
         fun sendNudge() {
             val message = _state.value.nudgeDraft?.trim().orEmpty()
-            if (message.isEmpty() || _state.value.isSubmitting) return
+            if (message.isEmpty() || _state.value.isSubmitting || !canAct) return
             _state.update { it.copy(isSubmitting = true) }
             viewModelScope.launch {
-                when (val result = repo.sendNudge(trainId, message)) {
+                when (val result = checkedAction { repo.sendNudge(trainId, message) } ?: return@launch) {
                     is NetworkResult.Success ->
                         _state.update {
                             it.copy(
@@ -732,14 +834,14 @@ class ManageTrainViewModel
             onSuccess: () -> Unit = {},
             block: suspend () -> NetworkResult<Unit>,
         ) {
-            if (_state.value.isSubmitting) return
+            if (_state.value.isSubmitting || !canAct) return
             _state.update { it.copy(isSubmitting = true, pendingConfirm = null, actionError = null) }
             viewModelScope.launch {
-                when (val result = block()) {
+                when (val result = checkedAction { block() } ?: return@launch) {
                     is NetworkResult.Success -> {
                         onSuccess()
                         _state.update { it.copy(isSubmitting = false, toast = success) }
-                        load()
+                        if (active) load()
                     }
                     is NetworkResult.Failure ->
                         _state.update {

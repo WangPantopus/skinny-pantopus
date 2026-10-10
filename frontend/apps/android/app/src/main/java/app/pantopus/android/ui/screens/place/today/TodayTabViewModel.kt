@@ -7,18 +7,21 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.security.AppLockManager
 import app.pantopus.android.data.analytics.PilotEvents
 import app.pantopus.android.data.api.models.homes.MyHomesResponse
+import app.pantopus.android.data.api.models.homes.showsCopyBeforeRecheck
 import app.pantopus.android.data.api.models.hub.NotificationPreferencesPatch
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.saved_places.SavedPlaceDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
+import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.auth.AuthenticatedDispatchGuard
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.data.hub.HubRepository
 import app.pantopus.android.data.hub.NotificationPreferencesRepository
 import app.pantopus.android.data.place.PlaceRepository
 import app.pantopus.android.data.saved_places.SavedPlacesRepository
+import app.pantopus.android.data.store.Stored
 import app.pantopus.android.data.widget.TodayWidgetStore
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScopeFactory
 import app.pantopus.android.ui.screens.homes.tasks.HomeTaskCreationFactory
@@ -54,6 +57,8 @@ internal const val TODAY_ALERTS_MAX_SHOWN_AGE_MS = 30 * 60 * 1000L
  * does (`/api/homes/my-homes`, `is_primary_owner` first). Mirrors the
  * iOS `TodayTabRoot`.
  */
+// Today owns the existing calendar/preferences actions as well as its copy lifecycle.
+@Suppress("TooManyFunctions")
 @HiltViewModel
 class TodayTabViewModel
     @Inject
@@ -101,6 +106,7 @@ class TodayTabViewModel
             }
         private var loadJob: Job? = null
         private var loadVersion = 0L
+        private var active = true
         private val sessionScope = sessionScopes.create(viewModelScope)
         private val keyguard = context.getSystemService(KeyguardManager::class.java)
         private var promptAttempted = false
@@ -169,18 +175,73 @@ class TodayTabViewModel
          * saved since the last visit takes over.
          */
         fun load() {
+            active = true
+            homeId?.takeUnless(::mayKeepHome)?.let(::clearHomeCopy)
             when (val shown = _state.value) {
                 is TodayTabUiState.Loaded ->
                     when {
-                        // A saved place's Today isn't kept in the store: every visit checks it quietly.
-                        shown.savedPlace != null -> refresh(force = false)
+                        // The shared bookmark and Today copies decide whether this visit needs a request.
+                        shown.savedPlace != null -> refresh(force = !shown.isSameDay())
                         // Midnight in the home's time zone (contract §4) ends the copy even inside its window.
                         !shown.isSameDay() -> refresh(force = true)
                         shown.calendarHomeId?.let(repo::todayIsCurrent) == true -> Unit
                         else -> refresh(force = false)
                     }
-                TodayTabUiState.Loading -> if (loadJob?.isActive != true) refresh(force = false)
+                TodayTabUiState.Loading -> {
+                    showStoredToday()
+                    if (loadJob?.isActive != true) refresh(force = false)
+                }
                 TodayTabUiState.NoPlace, is TodayTabUiState.Error -> refresh(force = false)
+            }
+        }
+
+        private fun mayKeepHome(id: String): Boolean =
+            homesRepository.myHomesCopy()?.homes?.firstOrNull { it.id == id }?.showsCopyBeforeRecheck == true
+
+        /** Only open-ended household access may keep a home-linked Today between visits. */
+        fun suspendContent() {
+            if (!active) return
+            active = false
+            loadVersion++
+            loadJob?.cancel()
+            _refreshing.value = false
+            homeId?.takeUnless(::mayKeepHome)?.let(::clearHomeCopy)
+        }
+
+        private fun clearHomeCopy(id: String) {
+            repo.forgetToday(id)
+            _state.value = TodayTabUiState.Loading
+            _showMorningCard.value = false
+            _pickupPrimerHomeId.value = null
+            if (::todayWidget.isInitialized) todayWidget.clear()
+        }
+
+        /** A first entry (a cold start too) shows the stored Today of the primary home at once; the read revalidates it. */
+        private fun showStoredToday() {
+            val homes = homesRepository.myHomesCopy() ?: return
+            val id = primaryHomeId(homes)
+            if (id == null) {
+                val saved = savedPlacesRepository.listCopy()?.savedPlaces?.firstOrNull() ?: return
+                val copy = savedPlacesRepository.todayCopy(saved.id)
+                copy.data?.let {
+                    _state.value =
+                        TodayTabUiState.Loaded(
+                            it, savedPlace = saved, fetchedAt = copy.fetchedAt, refreshFailed = copy.failure != null,
+                        )
+                }
+                return
+            }
+            if (homes.homes.firstOrNull { it.id == id }?.showsCopyBeforeRecheck != true) {
+                clearHomeCopy(id)
+                return
+            }
+            val copy = repo.todayCopy(id)
+            copy.data?.let { data ->
+                homeId = id
+                _state.value =
+                    TodayTabUiState.Loaded(
+                        data, calendarHomeId = id, fetchedAt = copy.fetchedAt, refreshFailed = copy.failure != null,
+                    )
             }
         }
 
@@ -191,6 +252,7 @@ class TodayTabViewModel
          * failed read keeps the content and marks it, so the screen can say how old it is.
          */
         fun refresh(force: Boolean = true) {
+            if (!active) return
             loadJob?.cancel()
             val version = ++loadVersion
             val shown = _state.value
@@ -203,54 +265,73 @@ class TodayTabViewModel
                 homeId = null
                 _state.value = TodayTabUiState.Loading
             }
-            _refreshing.value = true
+            _refreshing.value = force && shown is TodayTabUiState.Loaded
             if (force) radonMemory.readAgain()
             loadJob =
                 viewModelScope.launch {
                     try {
                         if (!current(version)) return@launch
-                        val homes = homesRepository.myHomesStored(force)
+                        val homes = homesRepository.myHomesStored(force || homeId?.let { !mayKeepHome(it) } == true)
                         if (!current(version)) return@launch
                         val homesList = homes.data
                         if (homesList == null) {
                             // A failed lookup isn't "no place": offer a retry instead of
                             // sending a resident off to claim an address they already have.
+                            if (homes.failure.refusesStoredCopy) {
+                                homeId?.let(::clearHomeCopy)
+                            }
                             _state.value = _state.value.afterFailedRead(homes.failure.sentence("Couldn't load your place."))
                             return@launch
                         }
                         val id = primaryHomeId(homesList)
                         if (id == null) {
-                            loadSavedPlace(version)
+                            loadSavedPlace(version, force)
                             return@launch
                         }
-                        homeId = id
-                        val today = repo.todayStored(id, force)
-                        if (!current(version)) return@launch
-                        val data = today.data
-                        val failure = today.failure
-                        when {
-                            data != null -> {
-                                _state.value =
-                                    TodayTabUiState.Loaded(
-                                        data,
-                                        calendarHomeId = id,
-                                        fetchedAt = today.fetchedAt,
-                                        refreshFailed = failure != null,
-                                    )
-                                if (failure == null && ::todayWidget.isInitialized) todayWidget.write(data.todayWidgetSnapshot())
-                            }
-                            // Access ended (contract §3): the store dropped the copy, and the server's answer shows.
-                            failure is NetworkError.Forbidden || failure == NetworkError.NotFound ->
-                                _state.value = TodayTabUiState.Error(failure.displayMessage("Couldn't load today."))
-                            else -> {
-                                val sameHome = _state.value.takeIf { (it as? TodayTabUiState.Loaded)?.calendarHomeId == id }
-                                _state.value = sameHome.afterFailedRead(failure.sentence("Couldn't load today."))
-                            }
-                        }
+                        loadHomeToday(homes, id, version, force)
                     } finally {
                         if (version == loadVersion) _refreshing.value = false
                     }
                 }
+        }
+
+        private suspend fun loadHomeToday(
+            homes: Stored<MyHomesResponse>,
+            id: String,
+            version: Long,
+            force: Boolean,
+        ) {
+            val keep = homes.data?.homes?.firstOrNull { it.id == id }?.showsCopyBeforeRecheck == true
+            homeId?.takeIf { it != id }?.let(::clearHomeCopy)
+            homeId = id
+            if (!keep) clearHomeCopy(id)
+            if (!keep && homes.failure != null) {
+                _state.value = TodayTabUiState.Error(homes.failure.sentence("Couldn't check your access."))
+                return
+            }
+            val today = repo.todayStored(id, force || !keep, persist = keep)
+            if (!current(version)) return
+            val data = today.data
+            val failure = today.failure
+            when {
+                data != null -> {
+                    _state.value =
+                        TodayTabUiState.Loaded(
+                            data,
+                            calendarHomeId = id,
+                            fetchedAt = today.fetchedAt,
+                            refreshFailed = failure != null,
+                        )
+                    if (keep && failure == null && ::todayWidget.isInitialized) todayWidget.write(data.todayWidgetSnapshot())
+                }
+                // Access ended (contract §3): the store dropped the copy, and the server's answer shows.
+                failure.refusesStoredCopy ->
+                    _state.value = TodayTabUiState.Error(failure.sentence("Couldn't load today."))
+                else -> {
+                    val sameHome = _state.value.takeIf { (it as? TodayTabUiState.Loaded)?.calendarHomeId == id }
+                    _state.value = sameHome.afterFailedRead(failure.sentence("Couldn't load today."))
+                }
+            }
         }
 
         override suspend fun loadAddressCalendar(): app.pantopus.android.data.api.models.place.PlaceAddressCalendarData? {
@@ -262,8 +343,10 @@ class TodayTabViewModel
             val calendar = (result as? NetworkResult.Success)?.data?.calendar
             // The calendar section was down: the widget gets the dates Today now shows.
             val loaded = _state.value as? TodayTabUiState.Loaded
-            if (calendar != null && loaded != null && ::todayWidget.isInitialized) {
-                todayWidget.write(loaded.intelligence.todayWidgetSnapshot(calendar))
+            if (calendar != null && loaded != null) {
+                if (mayKeepHome(id) && ::todayWidget.isInitialized) {
+                    todayWidget.write(loaded.intelligence.todayWidgetSnapshot(calendar))
+                }
             }
             return calendar
         }
@@ -276,35 +359,47 @@ class TodayTabViewModel
                 _showMorningCard.value = false
                 _preferenceBusy.value = false
             }
-            return allowed && version == loadVersion
+            return active && allowed && version == loadVersion
         }
 
-        private suspend fun loadSavedPlace(version: Long) {
+        private suspend fun loadSavedPlace(version: Long, force: Boolean) {
             homeId = null
-            val saved = savedPlacesRepository.list()
+            val saved = savedPlacesRepository.listStored(force)
             if (!current(version)) return
-            val place =
-                when (saved) {
-                    is NetworkResult.Success -> saved.data.savedPlaces.firstOrNull()
-                    is NetworkResult.Failure -> {
-                        val shown = _state.value
-                        val noHome = shown.takeIf { it == TodayTabUiState.NoPlace || (it as? TodayTabUiState.Loaded)?.savedPlace != null }
-                        _state.value = noHome.afterFailedRead(saved.error.displayMessage("Couldn't load your place."))
-                        return
-                    }
+            val places = saved.data
+            if (places == null) {
+                val samePlace = _state.value.takeIf { it == TodayTabUiState.NoPlace || (it as? TodayTabUiState.Loaded)?.savedPlace != null }
+                _state.value = if (saved.failure.refusesStoredCopy) {
+                    TodayTabUiState.Error(saved.failure.sentence("Couldn't load your place."))
+                } else {
+                    samePlace.afterFailedRead(saved.failure.sentence("Couldn't load your place."))
                 }
+                return
+            }
+            val place = places.savedPlaces.firstOrNull()
             if (place == null) {
                 _state.value = TodayTabUiState.NoPlace
                 return
             }
-            val result = savedPlacesRepository.today(place.id)
+            val copy = savedPlacesRepository.todayCopy(place.id)
+            copy.data?.let {
+                _state.value =
+                    TodayTabUiState.Loaded(
+                        it, savedPlace = place, fetchedAt = copy.fetchedAt, refreshFailed = copy.failure != null,
+                    )
+            }
+            val result = savedPlacesRepository.todayStored(place.id, force)
             if (!current(version)) return
-            when (result) {
-                is NetworkResult.Failure -> {
-                    val samePlace = _state.value.takeIf { (it as? TodayTabUiState.Loaded)?.savedPlace?.id == place.id }
-                    _state.value = samePlace.afterFailedRead(result.error.displayMessage("Couldn't load today."))
+            val intelligence = result.data
+            if (intelligence == null) {
+                val samePlace = _state.value.takeIf { (it as? TodayTabUiState.Loaded)?.savedPlace?.id == place.id }
+                _state.value = if (result.failure.refusesStoredCopy) {
+                    TodayTabUiState.Error(result.failure.sentence("Couldn't load today."))
+                } else {
+                    samePlace.afterFailedRead(result.failure.sentence("Couldn't load today."))
                 }
-                is NetworkResult.Success -> loadSavedToday(version, place, result.data)
+            } else {
+                loadSavedToday(version, place, intelligence, result.fetchedAt, result.failure != null)
             }
         }
 
@@ -312,12 +407,16 @@ class TodayTabViewModel
             version: Long,
             place: SavedPlaceDto,
             intelligence: PlaceIntelligence,
+            fetchedAt: Long,
+            failed: Boolean,
         ) {
+            // The copy is visible before checking the optional morning-briefing anchor.
+            val shown = TodayTabUiState.Loaded(intelligence, savedPlace = place, fetchedAt = fetchedAt, refreshFailed = failed)
+            _state.value = shown
             val matches = checkSavedAnchor(place)
             if (!current(version)) return
-            val now = System.currentTimeMillis()
-            _state.value = TodayTabUiState.Loaded(intelligence, savedPlace = place, savedAnchorMatches = matches, fetchedAt = now)
-            if (::todayWidget.isInitialized) todayWidget.write(intelligence.todayWidgetSnapshot())
+            _state.value = shown.copy(savedAnchorMatches = matches)
+            if (!failed && ::todayWidget.isInitialized) todayWidget.write(intelligence.todayWidgetSnapshot())
             if (!matches) return
             val preferences = preferencesRepository.preferences()
             if (!current(version)) return
@@ -503,7 +602,7 @@ class TodayTabViewModel
     }
 
 /** The home Today shows: the primary home, else the first shared one, else the newest private setup; null for none. */
-private fun primaryHomeId(response: MyHomesResponse): String? {
+internal fun primaryHomeId(response: MyHomesResponse): String? {
     val homes = response.sharedHomes
     val privateHome =
         response.homes.filter { it.hasValidListContext && it.accessKind == "private_setup" }

@@ -17,7 +17,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -27,6 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.api.models.identity.HomeMirrorDto
 import app.pantopus.android.ui.components.ErrorState
@@ -50,7 +50,10 @@ fun PlacePrivacyMirrorScreen(
     viewModel: PlacePrivacyMirrorViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    LaunchedEffect(Unit) { viewModel.load() }
+    LifecycleResumeEffect(Unit) {
+        viewModel.load()
+        onPauseOrDispose { viewModel.suspendContent() }
+    }
     Column(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg).testTag("place.privacyMirror.screen")) {
         PlaceDetailHeader(title = "What neighbors see", address = "", onBack = onBack)
         Column(

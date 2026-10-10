@@ -26,6 +26,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -50,6 +51,10 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.LaunchFeatures
+import app.pantopus.android.core.perf.ReportContentShown
+import app.pantopus.android.ui.components.RefreshFailedLine
+import app.pantopus.android.ui.components.RefreshOnStoreChange
+import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
 import app.pantopus.android.ui.screens.inbox.newmessage.NewMessageScreen
 import app.pantopus.android.ui.screens.support_trains.detail.SupportTrainViewerRole
 import app.pantopus.android.ui.screens.support_trains.manage.components.CloseTrainSheet
@@ -115,7 +120,10 @@ fun ManageTrainScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
-    LaunchedEffect(Unit) { viewModel.load() }
+    val privateDetailsAvailable = (state.state as? ManageTrainState.Loaded)?.content?.privateDetailsAvailable == true
+    HomeCopyLifecycle({ viewModel.load() }, viewModel::suspendContent)
+    RefreshOnStoreChange(viewModel::refreshFromSignal)
+    ReportContentShown("manage-train", state.state is ManageTrainState.Loaded)
 
     LaunchedEffect(state.toast) {
         if (state.toast != null) {
@@ -124,7 +132,9 @@ fun ManageTrainScreen(
         }
     }
 
-    Box(
+    PullToRefreshBox(
+        isRefreshing = state.refreshing,
+        onRefresh = viewModel::refresh,
         modifier =
             Modifier
                 .fillMaxSize()
@@ -141,7 +151,7 @@ fun ManageTrainScreen(
                 onInviteHelpers = onInviteHelpers,
             )
         }
-        if (state.sheetMode == ManageTrainSheetMode.CLOSING) {
+        if (privateDetailsAvailable && state.sheetMode == ManageTrainSheetMode.CLOSING) {
             val content = (state.state as? ManageTrainState.Loaded)?.content
             if (content != null) {
                 CloseSheetOverlay(
@@ -154,12 +164,12 @@ fun ManageTrainScreen(
                 )
             }
         }
-        state.toast?.let { toast ->
+        state.toast?.takeIf { privateDetailsAvailable }?.let { toast ->
             ToastChip(text = toast)
         }
     }
 
-    state.slotEditor?.let { editor ->
+    state.slotEditor?.takeIf { privateDetailsAvailable }?.let { editor ->
         ModalBottomSheet(
             onDismissRequest = { viewModel.dismissSlotEditor() },
             sheetState =
@@ -178,7 +188,7 @@ fun ManageTrainScreen(
         }
     }
 
-    state.pendingConfirm?.let { confirm ->
+    state.pendingConfirm?.takeIf { privateDetailsAvailable }?.let { confirm ->
         AlertDialog(
             onDismissRequest = { viewModel.dismissConfirm() },
             title = { Text(confirm.title) },
@@ -195,7 +205,7 @@ fun ManageTrainScreen(
         )
     }
 
-    state.actionError?.let { message ->
+    state.actionError?.takeIf { privateDetailsAvailable }?.let { message ->
         AlertDialog(
             onDismissRequest = { viewModel.acknowledgeActionError() },
             title = { Text("Something went wrong") },
@@ -213,7 +223,8 @@ fun ManageTrainScreen(
 
     // Only organizers manage a train, and the server refuses everyone else,
     // so hand off rather than show controls that can only fail.
-    val notOrganizer = (state.state as? ManageTrainState.Loaded)?.content?.viewerRole?.isOrganizer == false
+    val notOrganizer = privateDetailsAvailable &&
+        (state.state as? ManageTrainState.Loaded)?.content?.viewerRole?.isOrganizer == false
     LaunchedEffect(notOrganizer) {
         if (notOrganizer) onNotOrganizer()
     }
@@ -275,7 +286,7 @@ private fun Body(
         is ManageTrainState.Loading -> LoadingBody()
         is ManageTrainState.Error -> ErrorBody(message = s.message, onRetry = { viewModel.load() })
         is ManageTrainState.Loaded ->
-            if (!s.content.viewerRole.isOrganizer) {
+            if (s.content.privateDetailsAvailable && !s.content.viewerRole.isOrganizer) {
                 // Handed off to the train's page (see ManageTrainScreen).
                 LoadingBody()
             } else {
@@ -425,6 +436,10 @@ private fun LoadedBody(
                 total = content.slotsTotal,
                 caption = content.slotFillCaption,
             )
+            ui.refreshNotice?.let { RefreshFailedLine(it) }
+            if (!content.privateDetailsAvailable) {
+                TextButton(onClick = viewModel::refresh) { Text("Load organizer details") }
+            } else {
             SectionOverline("Send an update")
             SendUpdateForm(
                 chips = content.audienceChips,
@@ -488,9 +503,10 @@ private fun LoadedBody(
                     )
                 },
             )
+            }
         }
         StickyCTA(
-            isEnabled = ui.canSendUpdate,
+            isEnabled = content.privateDetailsAvailable && ui.canSendUpdate,
             onTap = { viewModel.sendUpdate() },
             modifier = Modifier.align(Alignment.BottomCenter),
         )

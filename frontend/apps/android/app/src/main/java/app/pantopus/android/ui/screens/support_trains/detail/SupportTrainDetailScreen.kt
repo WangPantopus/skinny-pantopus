@@ -27,6 +27,7 @@ import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -52,6 +53,11 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.EmptyState
+import app.pantopus.android.core.perf.ReportContentShown
+import app.pantopus.android.ui.components.RefreshFailedLine
+import app.pantopus.android.ui.components.RefreshNotice
+import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
+import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.components.SlotCalendar
 import app.pantopus.android.ui.components.SlotCalendarDay
 import app.pantopus.android.ui.screens.support_trains.detail.components.RecipientCard
@@ -87,7 +93,10 @@ fun SupportTrainDetailScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val action by viewModel.action.collectAsStateWithLifecycle()
-    LaunchedEffect(Unit) { viewModel.load() }
+    val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
+    val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
+    HomeCopyLifecycle(viewModel::load, viewModel::suspendContent)
+    RefreshOnStoreChange(viewModel::refreshFromSignal)
     LaunchedEffect(action.toast) {
         if (action.toast != null) {
             delay(TOAST_MILLIS)
@@ -95,7 +104,8 @@ fun SupportTrainDetailScreen(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    ReportContentShown("support-train", state is SupportTrainDetailUiState.Loaded)
+    PullToRefreshBox(isRefreshing = refreshing, onRefresh = viewModel::refresh, modifier = Modifier.fillMaxSize()) {
         SupportTrainDetailContentLayout(
             state = state,
             isOrganizer = isOrganizer,
@@ -110,6 +120,7 @@ fun SupportTrainDetailScreen(
                 ),
             onRetry = { viewModel.refresh() },
             isSubmitting = action.isSubmitting,
+            refreshNotice = refreshNotice,
             onReserveSlot = { slotId -> viewModel.startReserve(slotId) },
             onMarkDelivered = { viewModel.markDelivered(it) },
             onConfirmDelivery = { viewModel.confirmDelivery(it) },
@@ -143,7 +154,7 @@ fun SupportTrainDetailScreen(
     // theme change the screen reloads, so the sheet leaves and comes back, and the draft has to outlive that. Each
     // opening of the sheet starts a new draft.
     val reserveDraft = rememberReserveSheetDraft(reserveSheet?.slotId, sheetKey = reserveSheet)
-    if (reserveSheet != null && loaded != null) {
+    if (reserveSheet != null && loaded?.content?.privateDetailsAvailable == true) {
         GuardedReserveSheet(draft = reserveDraft, onClose = { viewModel.dismissReserve() }) {
             ReserveSlotSheet(
                 preselectedSlotId = reserveSheet.slotId,
@@ -300,6 +311,7 @@ internal fun SupportTrainDetailContentLayout(
     onMarkDelivered: (String) -> Unit = {},
     onConfirmDelivery: (String) -> Unit = {},
     onRequestLeave: (SlotRowContent) -> Unit = {},
+    refreshNotice: RefreshNotice? = null,
 ) {
     Column(
         modifier =
@@ -311,9 +323,9 @@ internal fun SupportTrainDetailContentLayout(
         val loaded = (state as? SupportTrainDetailUiState.Loaded)?.content
         // The organizer flag also comes from the loaded train, so hosts that
         // can't know the viewer's role still show Manage.
-        val viewerIsOrganizer = isOrganizer || loaded?.viewerRole?.isOrganizer == true
+        val viewerIsOrganizer = loaded?.privateDetailsAvailable == true && (isOrganizer || loaded.viewerRole.isOrganizer)
         val messageHost =
-            loaded?.let { content -> messageHostAction(content, actions.onMessageHost) }
+            loaded?.takeIf { it.privateDetailsAvailable }?.let { content -> messageHostAction(content, actions.onMessageHost) }
         TopBar(
             onBack = actions.onBack,
             onShare = actions.onShare,
@@ -335,6 +347,8 @@ internal fun SupportTrainDetailContentLayout(
                     onMarkDelivered = onMarkDelivered,
                     onConfirmDelivery = onConfirmDelivery,
                     onRequestLeave = onRequestLeave,
+                    onRetry = onRetry,
+                    refreshNotice = refreshNotice,
                 )
             is SupportTrainDetailUiState.Error ->
                 EmptyState(
@@ -480,6 +494,8 @@ private fun LoadedBody(
     onMarkDelivered: (String) -> Unit = {},
     onConfirmDelivery: (String) -> Unit = {},
     onRequestLeave: (SlotRowContent) -> Unit = {},
+    onRetry: () -> Unit = {},
+    refreshNotice: RefreshNotice? = null,
 ) {
     // Sections whose "See all N" was tapped.
     var expandedSections by remember { mutableStateOf(setOf<String>()) }
@@ -501,10 +517,15 @@ private fun LoadedBody(
             }
 
             SectionOverline("For")
-            RecipientCard(content.recipient)
+            if (content.privateDetailsAvailable) {
+                RecipientCard(content.recipient)
+            } else {
+                TextButton(onClick = onRetry) { Text("Load recipient and delivery details") }
+            }
 
             SectionOverline("The train")
             TypeDatesCard(content.typeDates)
+            refreshNotice?.let { RefreshFailedLine(it) }
 
             UpdatesBlock(
                 updates = content.updates,
@@ -541,7 +562,7 @@ private fun LoadedBody(
             }
 
             Spacer(modifier = Modifier.height(Spacing.s3))
-            HostedByRow(content.hostedBy, onMessageHost = onMessageHost)
+            if (content.privateDetailsAvailable) HostedByRow(content.hostedBy, onMessageHost = onMessageHost)
             Spacer(modifier = Modifier.height(Spacing.s3))
         }
 

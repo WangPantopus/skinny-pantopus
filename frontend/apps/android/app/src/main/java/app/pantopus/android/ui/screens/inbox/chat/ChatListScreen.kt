@@ -42,6 +42,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.core.perf.ReportContentShown
+import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -70,6 +71,7 @@ fun ChatListScreen(
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) { viewModel.load() }
+    RefreshOnStoreChange(viewModel::load)
     DisposableEffect(Unit) {
         onDispose { viewModel.teardown() }
     }

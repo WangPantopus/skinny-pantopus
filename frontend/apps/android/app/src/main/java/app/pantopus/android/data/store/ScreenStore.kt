@@ -8,6 +8,7 @@ import app.pantopus.android.BuildConfig
 import app.pantopus.android.data.api.net.Conditional
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.auth.TokenStorage
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -20,7 +21,10 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Provider
@@ -41,7 +45,7 @@ private const val IDLE_MS = 30 * 60 * 1000L
  * - **One request per key:** concurrent reads share the one in flight, which finishes even if the screen that
  *   started it leaves, so the next visit finds the reply.
  * - **Conditional:** a read sends the stored ETag; a 304 keeps the copy and counts it as checked now.
- * - **Failures:** a 403 or 404 deletes the entry, so the screen shows the server's answer; any other failure keeps
+ * - **Failures:** a 401, 403 or 404 deletes the entry, so the screen shows the server's answer; other failures keep
  *   the copy and marks it.
  * - **Late replies are dropped:** a reply that lands after [wipe], or after the account or session changed, never
  *   writes into the new state (generation number plus the account and session marker captured at the start).
@@ -51,18 +55,34 @@ private const val IDLE_MS = 30 * 60 * 1000L
  * Sensitive replies (contract §5) never enter the store: their screens keep calling the repository directly.
  */
 @Singleton
+@Suppress("TooManyFunctions") // Read, write, invalidation and eviction share the same account/generation lock.
 class ScreenStore
     @Inject
     constructor(
         @ApplicationContext context: Context,
         private val tokens: TokenStorage,
         private val auth: Provider<AuthRepository>,
+        private val saved: SavedCopies,
     ) {
         private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
         // Least recently used first (access order); guarded by itself.
         private val slots = LinkedHashMap<String, Slot>(MAX_ENTRIES, LOAD_FACTOR, true)
+
+        @Volatile
         private var generation = 0L
+
+        // Guards the saved copy: a write checks the generation and the entry's edits under it, and a wipe or a delete
+        // runs under it, so a write queued before them can't put a copy back afterwards.
+        private val diskLock = Any()
+
+        private val _changes = MutableStateFlow(0L)
+
+        /**
+         * Moves whenever a topic or a kind marks entries out of date (contract §8): screens on show read again, and a
+         * read answers the entries nobody marked without a request.
+         */
+        val changes: StateFlow<Long> = _changes.asStateFlow()
 
         private class Slot(
             val key: StoreKey<*>,
@@ -71,11 +91,16 @@ class ScreenStore
             var etag: String? = null
             var stale = false
 
-            /** Own edits (`put`, `remove`): a read that started before one never overwrites it. */
+            /** Own edits (`put`, `remove`) and ended access: a read that started before one never overwrites it. */
+            @Volatile
             var edits = 0L
 
             /** Topic marks: a reply to a read that started before one is kept but stays out of date. */
             var marks = 0L
+
+            /** The entry may be written to the phone (its kind allows it, and the last reader said the viewer may). */
+            @Volatile
+            var persist = false
             var inFlight: Deferred<Unit>? = null
             var lastUsed = SystemClock.elapsedRealtime()
 
@@ -84,6 +109,13 @@ class ScreenStore
             fun markStaleLocked() {
                 stale = true
                 marks++
+            }
+
+            /** An evicted slot cannot finish a queued disk write after a newer slot has refused the same key. */
+            fun retire() {
+                edits++
+                persist = false
+                inFlight?.cancel()
             }
         }
 
@@ -137,17 +169,32 @@ class ScreenStore
         suspend fun <T : Any> read(
             key: StoreKey<T>,
             force: Boolean = false,
+            persist: Boolean = key.kind.tier == StoreTier.EVERYDAY,
             fetch: suspend (etag: String?) -> NetworkResult<Conditional<T>>,
         ): Stored<T> {
             val account = accountId() ?: return readSignedOut(fetch)
             val (slot, job) =
                 synchronized(slots) {
                     val slot = slotLocked(key, account)
+                    // Founder decision 3: a household entry stays on the phone only while its reader vouches for the
+                    // viewer. A reader that no longer does (the viewer became a guest, or the access now expires)
+                    // takes the saved copy away.
+                    val vouched = persist && key.savable
+                    val unsave = slot.persist && !vouched
+                    slot.persist = vouched
+                    if (unsave) {
+                        // Retire queued writes and reads from the previous access decision before a later reader
+                        // can enable persistence again.
+                        slot.edits++
+                        slot.inFlight?.cancel()
+                        slot.inFlight = null
+                        deleteSaved(key.id, account)
+                    }
                     val current = slot.state.value
                     if (!force && !slot.stale && current.isFresh(key.kind)) return current.cast()
                     val running = slot.inFlight?.takeIf { it.isActive }
                     if (running != null) return@synchronized slot to running
-                    val ticket = Ticket(generation, identity(), slot.edits, slot.marks)
+                    val ticket = Ticket(generation, identity(account), slot.edits, slot.marks)
                     val etag = slot.etag.takeIf { current.data != null }
                     slot.state.value = current.copy(refreshing = true)
                     val job = scope.async { settle(slot, fetchSafely(fetch, etag), ticket) }
@@ -169,6 +216,81 @@ class ScreenStore
          */
         fun markStale(topic: String) {
             synchronized(slots) { slots.values.forEach { if (it.key.matches(topic)) it.markStaleLocked() } }
+            _changes.update { it + 1 }
+        }
+
+        /** An own write without a full replacement: retire earlier reads and saved copies before revalidation. */
+        fun markEdited(topic: String) {
+            synchronized(slots) {
+                slots.values.filter { it.key.matches(topic) }.forEach { slot ->
+                    slot.edits++
+                    slot.markStaleLocked()
+                    slot.etag = null
+                    slot.inFlight?.cancel()
+                    slot.inFlight = null
+                    slot.state.value = slot.state.value.copy(refreshing = false)
+                    deleteSaved(slot.key.id)
+                }
+            }
+            _changes.update { it + 1 }
+        }
+
+        /** Capture before an asynchronous save, so its reply cannot populate another account or a cleared cache. */
+        fun <T : Any> writer(key: StoreKey<T>): (T) -> Unit {
+            val account = accountId() ?: return {}
+            val (slot, ticket) =
+                synchronized(slots) {
+                    val slot = slotLocked(key, account)
+                    slot.edits++
+                    slot.etag = null
+                    slot.markStaleLocked()
+                    slot.inFlight?.cancel()
+                    slot.inFlight = null
+                    slot.state.value = slot.state.value.copy(refreshing = false)
+                    slot to Ticket(generation, identity(account), slot.edits, slot.marks)
+                }
+            return { data ->
+                synchronized(slots) {
+                    if (ticket.generation == generation && ticket.identity == identity() && ticket.edits == slot.edits) {
+                        val markedMeanwhile = ticket.marks != slot.marks
+                        put(key, data)
+                        // Another device's change during this save still needs a read, just as during a GET.
+                        if (markedMeanwhile) slot.stale = true
+                    }
+                }
+            }
+        }
+
+        /** Capture before a direct sensitive read: its refusal cannot erase a newer account's safe summary. */
+        fun remover(key: StoreKey<*>): () -> Unit {
+            val account = accountId() ?: return {}
+            val (slot, ticket) =
+                synchronized(slots) {
+                    val slot = slotLocked(key, account)
+                    slot to Ticket(generation, identity(account), slot.edits, slot.marks)
+                }
+            return {
+                synchronized(slots) {
+                    if (ticket.generation == generation && ticket.identity == identity() && ticket.edits == slot.edits) {
+                        remove(key)
+                    }
+                }
+            }
+        }
+
+        /** A list item tapped now can seed a detail's first frame. It stays in the same bounded, wiped memory store. */
+        fun <T : Any> seed(
+            key: StoreKey<T>,
+            data: T,
+        ) {
+            val account = accountId() ?: return
+            synchronized(slots) {
+                val slot = slotLocked(key, account)
+                if (slot.state.value.data != null || slot.state.value.failure.refusesStoredCopy) return
+                // A seed is never fresh or saved. A read already in flight may still replace it with the complete reply.
+                slot.stale = true
+                slot.state.value = Stored(data)
+            }
         }
 
         /**
@@ -186,12 +308,17 @@ class ScreenStore
                 slot.etag = null
                 slot.stale = false
                 slot.state.value = Stored(data, fetchedAt = System.currentTimeMillis())
+                if (slot.persist || (key.kind.tier == StoreTier.EVERYDAY && key.savable)) {
+                    slot.persist = true
+                    writeSaved(data, slot, slot.state.value.fetchedAt, etag = null)
+                }
             }
         }
 
         /** Marks every entry of [kinds] out of date, e.g. the household ones after a socket reconnect. */
         fun markStale(kinds: Set<StoreKind>) {
             synchronized(slots) { slots.values.forEach { if (it.key.kind in kinds) it.markStaleLocked() } }
+            _changes.update { it + 1 }
         }
 
         /** Drops one entry, e.g. after the item was deleted. */
@@ -199,11 +326,11 @@ class ScreenStore
             val account = accountId() ?: return
             synchronized(slots) {
                 slots.remove("$account|${key.id}")?.let { slot ->
-                    slot.edits++
-                    slot.inFlight?.cancel()
+                    slot.retire()
                     slot.state.value = Stored()
                 }
             }
+            deleteSaved(key.id, account)
         }
 
         /**
@@ -215,16 +342,22 @@ class ScreenStore
             synchronized(slots) {
                 generation++
                 slots.values.forEach { slot ->
-                    slot.inFlight?.cancel()
+                    slot.retire()
                     slot.state.value = Stored()
                 }
                 slots.clear()
             }
+            // The saved pages too, before anyone else can sign in on this phone.
+            synchronized(diskLock) { saved.deleteAll() }
         }
 
         /** Contract §6: when the phone warns about memory, keep only what screens are showing. */
         fun trimToVisible() {
-            synchronized(slots) { slots.values.removeAll { it.removable } }
+            synchronized(slots) {
+                slots.values.removeAll { slot ->
+                    slot.removable.also { if (it) slot.retire() }
+                }
+            }
         }
 
         private fun slotLocked(
@@ -232,15 +365,73 @@ class ScreenStore
             account: String,
         ): Slot {
             val now = SystemClock.elapsedRealtime()
-            val slot = slots.getOrPut("$account|${key.id}") { Slot(key) }
+            val slot = slots.getOrPut("$account|${key.id}") { Slot(key).also { loadSavedLocked(it, account) } }
             slot.lastUsed = now
             val iterator = slots.values.iterator()
             while (iterator.hasNext()) {
                 val candidate = iterator.next()
                 val overLimit = now - candidate.lastUsed > IDLE_MS || slots.size > MAX_ENTRIES
-                if (candidate !== slot && overLimit && candidate.removable) iterator.remove()
+                if (candidate !== slot && overLimit && candidate.removable) {
+                    candidate.retire()
+                    iterator.remove()
+                }
             }
             return slot
+        }
+
+        /** Remove the saved entry before returning, so an immediate relaunch cannot restore refused or edited data. */
+        private fun deleteSaved(
+            keyId: String,
+            account: String? = accountId(),
+        ) {
+            if (account == null) return
+            synchronized(diskLock) { saved.delete(account, keyId) }
+        }
+
+        /** A new entry starts from its saved copy on the phone, when there is a usable one (contract §6 "Read"). */
+        private fun loadSavedLocked(
+            slot: Slot,
+            account: String,
+        ) {
+            val type = slot.key.type ?: return
+            if (!slot.key.savable) return
+            val copy = saved.load<Any>(account, slot.key.id, type) ?: return
+            if (!slot.key.permitsSavedCopy(copy.data)) {
+                deleteSaved(slot.key.id, account)
+                return
+            }
+            slot.etag = copy.etag
+            slot.persist = true
+            slot.state.value = Stored(copy.data, fetchedAt = copy.fetchedAt)
+        }
+
+        /** Writes a confirmed reply to the phone off the caller's thread, when the entry may be saved. */
+        private fun writeSaved(
+            data: Any?,
+            slot: Slot,
+            fetchedAt: Long,
+            etag: String? = slot.etag,
+        ) {
+            val account = accountId() ?: return
+            if (data == null || !slot.persist) return
+            if (!slot.key.permitsSavedCopy(data)) {
+                slot.edits++
+                slot.persist = false
+                deleteSaved(slot.key.id, account)
+                return
+            }
+            val type = slot.key.type ?: return
+            val edits = slot.edits
+            val gen = generation
+            scope.launch {
+                synchronized(diskLock) {
+                    // A wipe, a newer own edit, ended access or a reader that stopped vouching for the viewer since
+                    // this reply was settled: it is not written.
+                    if (gen == generation && edits == slot.edits && slot.persist) {
+                        saved.save(account, slot.key.id, type, data, fetchedAt, etag)
+                    }
+                }
+            }
         }
 
         private suspend fun <T : Any> fetchSafely(
@@ -283,23 +474,35 @@ class ScreenStore
                                 is Conditional.Fresh -> {
                                     slot.etag = reply.etag
                                     slot.stale = markedMeanwhile
-                                    Stored(reply.data, fetchedAt = now)
+                                    Stored(reply.data, fetchedAt = now).also { writeSaved(it.data, slot, now) }
                                 }
                                 Conditional.NotModified -> {
                                     slot.stale = markedMeanwhile
-                                    previous.copy(fetchedAt = now, refreshing = false, failure = null)
+                                    previous.copy(fetchedAt = now, refreshing = false, failure = null).also {
+                                        writeSaved(it.data, slot, now)
+                                    }
                                 }
                             }
                         is NetworkResult.Failure ->
-                            if (result.error is NetworkError.Forbidden || result.error == NetworkError.NotFound) {
-                                // Access ended: the entry goes at once and the screen shows the server's answer.
+                            if (
+                                result.error.refusesStoredCopy
+                            ) {
+                                // Access ended: the entry goes at once, from the phone too, and the screen shows
+                                // the server's answer.
                                 slot.etag = null
+                                slot.edits++
+                                deleteSaved(slot.key.id)
                                 Stored(failure = result.error)
                             } else {
                                 previous.copy(refreshing = false, failure = result.error)
                             }
                     }
                 if (BuildConfig.DEBUG) Timber.tag("ISStore").d("%s → %s", slot.key.id.replace(UUID, ":id"), slot.state.value.describe())
+                // The visible reader may have consumed a topic signal by joining this older flight. Release it
+                // before notifying again, so that reader rechecks the newer version instead of joining it twice.
+                // No signal without a newer mark: failed reads do not create a retry loop.
+                slot.inFlight = null
+                if (markedMeanwhile && !slot.state.value.failure.refusesStoredCopy) _changes.update { it + 1 }
             }
         }
 
@@ -316,7 +519,8 @@ class ScreenStore
         private fun accountId(): String? = (auth.get().state.value as? AuthRepository.State.SignedIn)?.user?.id
 
         /** Server, account and session marker: never a token, never logged. */
-        private fun identity(): String? = accountId()?.let { "${BuildConfig.PANTOPUS_API_BASE_URL}|$it|${tokens.sessionMarker()}" }
+        private fun identity(account: String? = accountId()): String? =
+            account?.let { "${BuildConfig.PANTOPUS_API_BASE_URL}|$it|${tokens.sessionMarker()}" }
 
         private companion object {
             const val LOAD_FACTOR = 0.75f

@@ -4,7 +4,6 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
-import android.net.NetworkRequest
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -16,8 +15,8 @@ import javax.inject.Singleton
  * Wraps `ConnectivityManager.NetworkCallback` as a [StateFlow] so
  * Composables and ViewModels can observe online/offline transitions.
  *
- * Defaults [isOnline] to `true` so first-launch UI doesn't flicker
- * through an offline state before the OS reports.
+ * Starts from the current default connection, then follows callback payloads.
+ * Querying ConnectivityManager inside onLost can still report the network that just disappeared.
  */
 @Singleton
 open class NetworkMonitor
@@ -32,21 +31,25 @@ open class NetworkMonitor
         open val isOnline: StateFlow<Boolean> = _isOnline.asStateFlow()
 
         init {
-            val request =
-                NetworkRequest
-                    .Builder()
-                    .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-                    .build()
-
-            manager.registerNetworkCallback(
-                request,
+            manager.registerDefaultNetworkCallback(
                 object : ConnectivityManager.NetworkCallback() {
+                    private var defaultNetwork: Network? = manager.activeNetwork
+
                     override fun onAvailable(network: Network) {
-                        _isOnline.value = true
+                        defaultNetwork = network
+                    }
+
+                    override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
+                        if (network == defaultNetwork) {
+                            _isOnline.value = capabilities.hasInternet()
+                        }
                     }
 
                     override fun onLost(network: Network) {
-                        _isOnline.value = currentlyConnected()
+                        if (network == defaultNetwork) {
+                            defaultNetwork = null
+                            _isOnline.value = false
+                        }
                     }
                 },
             )
@@ -57,7 +60,9 @@ open class NetworkMonitor
         private fun currentlyConnected(): Boolean {
             val active = manager.activeNetwork ?: return false
             val caps = manager.getNetworkCapabilities(active) ?: return false
-            return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
-                caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+            return caps.hasInternet()
         }
+
+        private fun NetworkCapabilities.hasInternet(): Boolean =
+            hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) && hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
     }

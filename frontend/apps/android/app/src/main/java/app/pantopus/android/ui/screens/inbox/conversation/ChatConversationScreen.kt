@@ -2522,6 +2522,9 @@ internal fun PopulatedFrame(
     onOpenAttachment: ((ChatBubbleBody.Attachment) -> Unit)? = null,
 ) {
     val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    var newMessageCount by rememberSaveable { mutableIntStateOf(0) }
+    var previousNewestId by rememberSaveable { mutableStateOf<String?>(null) }
     // Leading non-row items (pagination spacer + any pinned welcome card)
     // offset row indices inside the LazyColumn.
     val headerCount =
@@ -2529,10 +2532,13 @@ internal fun PopulatedFrame(
     // Set once the first non-empty projection has been positioned — gates
     // the load-older trigger so it can't fire while the list still sits at
     // the top pre-scroll.
-    var initialScrollDone by remember { mutableStateOf(false) }
-    LaunchedEffect(rows.size) {
+    var initialScrollDone by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(rows.size, rows.lastOrNull()?.rowId) {
         if (rows.isEmpty()) return@LaunchedEffect
         val lastIndex = headerCount + rows.lastIndex
+        val previousIndex = rows.indexOfLast { it.rowId == previousNewestId }
+        val appended = if (previousIndex >= 0) rows.drop(previousIndex + 1).count { it is ChatTimelineRow.Bubble } else 0
+        previousNewestId = rows.lastOrNull { it is ChatTimelineRow.Bubble }?.rowId
         if (!initialScrollDone) {
             // Open at the latest message. A Chat Search deep-link owns the
             // first scroll instead (the effect below lands on the match).
@@ -2547,7 +2553,15 @@ internal fun PopulatedFrame(
         val layoutInfo = listState.layoutInfo
         val lastVisible = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: return@LaunchedEffect
         if (lastVisible >= layoutInfo.totalItemsCount - 1 - NEAR_BOTTOM_ROW_SLACK) {
+            newMessageCount = 0
             listState.animateScrollToItem(lastIndex)
+        } else {
+            newMessageCount += appended
+        }
+    }
+    LaunchedEffect(listState) {
+        snapshotFlow { !listState.canScrollForward }.collect { atBottom ->
+            if (atBottom) newMessageCount = 0
         }
     }
     // The keyboard shortens the list from the bottom. A reader who was at the
@@ -2589,55 +2603,72 @@ internal fun PopulatedFrame(
             onScrollConsumed()
         }
     }
-    LazyColumn(
-        state = listState,
-        modifier = Modifier.fillMaxSize().testTag("chatConversationContent"),
-        contentPadding = PaddingValues(horizontal = Spacing.s3, vertical = Spacing.s3),
-    ) {
-        item(key = "chat_pagination_top_spacer") {
-            Spacer(modifier = Modifier.size(1.dp))
-        }
-        // A15.5's "Auto-welcome · free" card is omitted: no persona
-        // welcome-message exists on the wire, and the design's copy is
-        // fixture identity.
-        // A15.3: the `.ai-welcome` capability card doubles as the AI
-        // thread's pinned system message at the top of the timeline.
-        if (conversationMode == ChatConversationMode.AiAssistant && aiPrompts.isNotEmpty()) {
-            item(key = "ai_welcome_card") {
-                AiWelcomeCard(
-                    prompts = aiPrompts,
-                    onCapabilityTap = onCapabilityTap,
-                    modifier = Modifier.padding(bottom = Spacing.s3),
-                )
+    Box(modifier = Modifier.fillMaxSize()) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize().testTag("chatConversationContent"),
+            contentPadding = PaddingValues(horizontal = Spacing.s3, vertical = Spacing.s3),
+        ) {
+            item(key = "chat_pagination_top_spacer") {
+                Spacer(modifier = Modifier.size(1.dp))
+            }
+            // A15.5's "Auto-welcome · free" card is omitted: no persona
+            // welcome-message exists on the wire, and the design's copy is
+            // fixture identity.
+            // A15.3: the `.ai-welcome` capability card doubles as the AI
+            // thread's pinned system message at the top of the timeline.
+            if (conversationMode == ChatConversationMode.AiAssistant && aiPrompts.isNotEmpty()) {
+                item(key = "ai_welcome_card") {
+                    AiWelcomeCard(
+                        prompts = aiPrompts,
+                        onCapabilityTap = onCapabilityTap,
+                        modifier = Modifier.padding(bottom = Spacing.s3),
+                    )
+                }
+            }
+            items(items = rows, key = { it.rowId }) { row ->
+                when (row) {
+                    is ChatTimelineRow.DayDivider -> DayDividerRow(label = row.divider.label)
+                    is ChatTimelineRow.TopicDivider -> TopicDividerRow(label = row.label)
+                    is ChatTimelineRow.BroadcastReference -> BroadcastReferenceCard(reference = row.reference)
+                    is ChatTimelineRow.Bubble ->
+                        BubbleRow(
+                            content = row.content,
+                            incomingInitials = incomingInitials,
+                            onLockedAction = onLockedAction,
+                            onLongPress = { onBubbleLongPress(row.content) },
+                            isSelected = selectedMessageIds.contains(row.content.id),
+                            onTap = { onBubbleTap(row.content) },
+                            onUseAIDraft = onUseAIDraft,
+                            onOpenGig = onOpenGig,
+                            onOpenListing = onOpenListing,
+                            onOpenLocation = onOpenLocation,
+                            onRetry = {
+                                if (row.content.id.startsWith("client_")) onRetry(row.content.id)
+                            },
+                            onReact = { reaction -> onReact(row.content.id, reaction) },
+                            linkPreviews = linkPreviews,
+                            onResolveLink = onResolveLink,
+                            onOpenUrl = onOpenUrl,
+                            onOpenPhotos = onOpenPhotos.takeIf { selectedMessageIds.isEmpty() },
+                            onOpenAttachment = onOpenAttachment.takeIf { selectedMessageIds.isEmpty() },
+                        )
+                }
             }
         }
-        items(items = rows, key = { it.rowId }) { row ->
-            when (row) {
-                is ChatTimelineRow.DayDivider -> DayDividerRow(label = row.divider.label)
-                is ChatTimelineRow.TopicDivider -> TopicDividerRow(label = row.label)
-                is ChatTimelineRow.BroadcastReference -> BroadcastReferenceCard(reference = row.reference)
-                is ChatTimelineRow.Bubble ->
-                    BubbleRow(
-                        content = row.content,
-                        incomingInitials = incomingInitials,
-                        onLockedAction = onLockedAction,
-                        onLongPress = { onBubbleLongPress(row.content) },
-                        isSelected = selectedMessageIds.contains(row.content.id),
-                        onTap = { onBubbleTap(row.content) },
-                        onUseAIDraft = onUseAIDraft,
-                        onOpenGig = onOpenGig,
-                        onOpenListing = onOpenListing,
-                        onOpenLocation = onOpenLocation,
-                        onRetry = {
-                            if (row.content.id.startsWith("client_")) onRetry(row.content.id)
-                        },
-                        onReact = { reaction -> onReact(row.content.id, reaction) },
-                        linkPreviews = linkPreviews,
-                        onResolveLink = onResolveLink,
-                        onOpenUrl = onOpenUrl,
-                        onOpenPhotos = onOpenPhotos.takeIf { selectedMessageIds.isEmpty() },
-                        onOpenAttachment = onOpenAttachment.takeIf { selectedMessageIds.isEmpty() },
-                    )
+        if (newMessageCount > 0) {
+            TextButton(
+                onClick = {
+                    newMessageCount = 0
+                    scope.launch { listState.animateScrollToItem((listState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0)) }
+                },
+                modifier =
+                    Modifier.align(Alignment.BottomCenter).padding(bottom = Spacing.s2)
+                        .clip(RoundedCornerShape(Radii.pill)).background(PantopusColors.appSurface)
+                        .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.pill))
+                        .testTag("chatNewMessages"),
+            ) {
+                Text(if (newMessageCount == 1) "1 new message ↓" else "$newMessageCount new messages ↓", color = PantopusColors.appText)
             }
         }
     }
