@@ -16,9 +16,15 @@ class StoreKey<T : Any>(
     val topics: Set<String> = emptySet(),
     /** The reply's type, for the saved copy on the phone; null keeps the entry in memory only. */
     val type: Type? = null,
+    /** Reply-specific access restrictions in addition to the caller's household check. */
+    private val saveWhen: (T) -> Boolean = { true },
 ) {
     /** Whether this entry may be written to the phone at all (its kind allows it and its type is known). */
     val savable: Boolean get() = type != null && kind.savedOnPhone
+
+    /** A typed key owns this reply; only approved data may be written or restored. */
+    @Suppress("UNCHECKED_CAST")
+    internal fun permitsSavedCopy(data: Any): Boolean = savable && saveWhen(data as T)
 
     val id: String =
         buildString {

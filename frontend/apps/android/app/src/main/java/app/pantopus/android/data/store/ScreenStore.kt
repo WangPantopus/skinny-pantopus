@@ -288,6 +288,10 @@ class ScreenStore
             val type = slot.key.type ?: return
             if (!slot.key.savable) return
             val copy = saved.load<Any>(account, slot.key.id, type) ?: return
+            if (!slot.key.permitsSavedCopy(copy.data)) {
+                deleteSaved(slot.key.id, account)
+                return
+            }
             slot.etag = copy.etag
             slot.persist = true
             slot.state.value = Stored(copy.data, fetchedAt = copy.fetchedAt)
@@ -302,6 +306,11 @@ class ScreenStore
         ) {
             val account = accountId() ?: return
             if (data == null || !slot.persist) return
+            if (!slot.key.permitsSavedCopy(data)) {
+                slot.persist = false
+                deleteSaved(slot.key.id, account)
+                return
+            }
             val type = slot.key.type ?: return
             val edits = slot.edits
             val gen = generation
