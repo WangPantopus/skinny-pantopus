@@ -2522,7 +2522,7 @@ internal fun PopulatedFrame(
     // the load-older trigger so it can't fire while the list still sits at
     // the top pre-scroll.
     var initialScrollDone by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(rows.size) {
+    LaunchedEffect(rows.size, rows.lastOrNull()?.rowId) {
         if (rows.isEmpty()) return@LaunchedEffect
         val lastIndex = headerCount + rows.lastIndex
         val previousIndex = rows.indexOfLast { it.rowId == previousNewestId }
