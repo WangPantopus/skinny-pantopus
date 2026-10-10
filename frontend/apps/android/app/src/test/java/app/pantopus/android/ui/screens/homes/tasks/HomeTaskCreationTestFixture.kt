@@ -17,6 +17,7 @@ import app.pantopus.android.data.homes.PendingHomeTaskCreateStore
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimScopeTestFixture
 import app.pantopus.android.ui.screens.homes.claim_review.claimScopeFactory
 import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
 
@@ -52,7 +53,10 @@ internal class TaskCreateMemoryStore : PendingHomeTaskCreateStore {
 }
 
 internal class HomeTaskCreationTestFixture {
-    val repository = mockk<HomeTasksRepository>(relaxUnitFun = true)
+    val repository = mockk<HomeTasksRepository>(relaxUnitFun = true).apply {
+        every { homeTasksWriter(any()) } returns {}
+        every { homeTaskWriter(any(), any()) } returns {}
+    }
     val identity =
         HomeClaimScopeTestFixture().apply {
             accounts.value = CREATE_ACTOR
