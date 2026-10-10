@@ -501,11 +501,25 @@ extension ScreenStore {
 // MARK: - The saved copy (contract sections 5 to 7)
 
 extension ScreenStore {
+    /// Replies the phone never keeps, whoever reads them: the Hub overview
+    /// (bill items, bills due, notification titles) and a Home's dashboard
+    /// (the next bill, bill and document counts). Bills and notifications are
+    /// never saved (contract sections 4 and 5); these stay in memory.
+    static func isNeverSaved(_ path: String) -> Bool {
+        path == "/api/hub" || (path.hasPrefix("/api/homes/") && path.hasSuffix("/dashboard"))
+    }
+
     /// The entry in memory, else the saved copy on the phone. A saved copy is
     /// never fresh: it shows at once and is re-checked once.
     private func entry(for key: Key) -> ScreenStoreEntry? {
         if let entry = entries[key] { return entry }
-        guard let disk, let saved = disk.read(folder: folder(for: key), file: file(for: key), now: now()),
+        guard let disk else { return nil }
+        if Self.isNeverSaved(key.path) {
+            // A file an older build saved for it goes, unread.
+            disk.remove(folder: folder(for: key), file: file(for: key))
+            return nil
+        }
+        guard let saved = disk.read(folder: folder(for: key), file: file(for: key), now: now()),
               let kind = ScreenDataKind(rawValue: saved.kind), kind.savedOnPhone else { return nil }
         let entry = ScreenStoreEntry(data: saved.data, etag: saved.etag, kind: kind, at: saved.fetchedAt)
         entry.topics = Set(saved.topics)
@@ -518,12 +532,13 @@ extension ScreenStore {
         return entry
     }
 
-    /// Writes an entry the phone may keep: never sensitive data, and household
-    /// data only while it may show before the re-check. A copy that may no
-    /// longer be kept is deleted instead.
+    /// Writes an entry the phone may keep: never sensitive data or a reply
+    /// that is never saved, and household data only while it may show before
+    /// the re-check. A copy that may no longer be kept is deleted instead.
     private func save(_ key: Key, _ entry: ScreenStoreEntry) {
         guard let disk else { return }
-        guard entry.kind.savedOnPhone, entry.kind.tier != .household || entry.showsBeforeRecheck else {
+        guard !Self.isNeverSaved(key.path), entry.kind.savedOnPhone,
+              entry.kind.tier != .household || entry.showsBeforeRecheck else {
             disk.remove(folder: folder(for: key), file: file(for: key))
             return
         }

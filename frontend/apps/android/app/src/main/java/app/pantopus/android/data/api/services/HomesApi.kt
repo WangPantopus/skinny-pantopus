@@ -181,6 +181,13 @@ interface HomesApi {
         @Path("id") homeId: String,
     ): OwnersResponse
 
+    /** [listOwners] for the screens' store: sends the stored ETag; a 304 means the stored copy is current. */
+    @GET("api/homes/{id}/owners")
+    suspend fun listOwnersConditional(
+        @Path("id") homeId: String,
+        @Header("If-None-Match") etag: String?,
+    ): Response<OwnersResponse>
+
     /**
      * `DELETE /api/homes/:id/owners/:ownerId` — route
      * `backend/routes/homeOwnership.js:1614`. May return a quorum
@@ -517,6 +524,13 @@ interface HomesApi {
         @Path("id") homeId: String,
         @Query("status") status: String? = null,
     ): GetHomeMaintenanceResponse
+
+    /** The whole log ([getHomeMaintenance] without a status) for the screens' store: a 304 means the copy is current. */
+    @GET("api/homes/{id}/maintenance")
+    suspend fun getHomeMaintenanceConditional(
+        @Path("id") homeId: String,
+        @Header("If-None-Match") etag: String?,
+    ): Response<GetHomeMaintenanceResponse>
 
     /** `POST /api/homes/:id/maintenance` — route `backend/routes/home.js`. */
     @POST("api/homes/{id}/maintenance")
