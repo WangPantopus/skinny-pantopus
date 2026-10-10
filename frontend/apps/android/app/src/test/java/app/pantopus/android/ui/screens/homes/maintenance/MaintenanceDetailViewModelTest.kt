@@ -9,6 +9,7 @@ import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.data.store.Stored
+import app.pantopus.android.ui.screens.homes.HomeCopyGateFactory
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -30,10 +31,12 @@ import java.math.BigDecimal
 class MaintenanceDetailViewModelTest {
     private val repo: HomesRepository = mockk(relaxUnitFun = true)
     private val store = MaintenanceDraftStore()
+    private val gates: HomeCopyGateFactory = mockk(relaxed = true)
 
     @Before
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        coEvery { gates.create(any(), any()).checkForRead(any(), any()) } returns null
         store.clear()
     }
 
@@ -46,7 +49,7 @@ class MaintenanceDetailViewModelTest {
         MaintenanceDetailViewModel(
             repo = repo,
             draftStore = store,
-            gates = mockk(relaxed = true),
+            gates = gates,
             savedStateHandle =
                 SavedStateHandle(
                     mapOf(

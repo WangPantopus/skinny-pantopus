@@ -22,7 +22,7 @@ const val SAVED_PAGES_MAX_BYTES = 20L * 1024 * 1024
 private const val MAX_AGE_MS = 7L * 24 * 60 * 60 * 1000
 
 /** The envelope's format. A file written in another format is deleted instead of read. */
-private const val SCHEMA = 1
+private const val SCHEMA = 2
 
 /**
  * The screens' store on the phone (Instant Screens contract §6 "Saved copy", §5 "At rest on Android"): one file per

@@ -14,7 +14,7 @@ commands, and **check**: how to see that it worked.
   `~/.config/pantopus/hosted-secrets/staging.env` and `production.env` on the
   Mac (mode 600); provider keys come from each provider's console.
 
-Last checked: 2026-10-08 by L4.
+Staging, GitHub release gates and Lambda schedules rechecked: 2026-10-10 by L4. Other rows retain their recorded checks.
 
 ## 0. What's running today
 
@@ -22,13 +22,13 @@ Last checked: 2026-10-08 by L4.
 |---|---|
 | Website `pantopus.com` | Up, on Vercel. The deployment is about four months old (June). Its JavaScript calls `https://api.pantopus.com`. |
 | Production API `api.pantopus.com` | Doesn't answer. The DNS record is proxied by Cloudflare to the server's old public address; the server's address changed when it restarted in September. |
-| Staging | `https://staging-api.pantopus.com` runs the October backend (API and worker) since the release at 19:00Z on October 7, on the September server's Elastic IP. `https://staging.pantopus.com` is the Vercel project `pantopus-staging`, whose production branch is `dev`. `scripts/staging/check-hosted.cjs` passes 9 of 10 (the Android app-links file waits for P10), and the staging Lambda stack runs in `us-west-2`. Not yet proven: sign-up and sign-in on staging, the apps on phones and the full journey (S9, S10). The June production container and its env file are kept on the same server, unrouted. The server costs money every hour it runs. |
+| Staging | `https://staging-api.pantopus.com` runs the API and worker; `https://staging.pantopus.com` is the Vercel project `pantopus-staging`, with production branch `dev`. Last verified backend release: October 9 at 04:47 UTC (`dev 1cf15565f`); the web subsequently deployed `dev 1905772d1` at 22:11 UTC. That later push did not release the backend: CI failed on a rate-limited public PostgreSQL image pull and Deploy Backend skipped. PR 2119 repairs this for the next push. Checked October 10: API healthy, hosted checks 9/10 (Android app links await P10), active and daily staging Lambdas without observed errors, six alarms OK. S10 below distinguishes completed checks from the remaining web and physical-Android checks. |
 | `pantopus.app` | The zone is on Cloudflare with no records, so `pantopus.app`, `api.pantopus.app` and `staging.api.pantopus.app` don't resolve. |
 | April store apps | App Store "Pantopus" (`com.pantopus.app`, version 1.5.0 from May 12) and Google Play `com.pantopus.app`: the Expo app from the older repository. The live website links to both. Their API host was set in Expo's build settings (the old guides used `https://api.pantopus.com`); it can't be read from here. |
 | New native apps | iOS `app.pantopus.ios`, Android `app.pantopus.android`: different app IDs from the April apps, so they're new store listings (decision D2). Not uploaded anywhere yet. |
 | Supabase | The April production project and new `pantopus-production` project (`falmvysvndmwtfxsrxek`) are in the founder's `Pantopus` Free organization. The new project is healthy in Oregon; all 148 canonical migrations were applied and verified on October 9, and the private `home-documents` bucket is configured. Auth transfer, the two 100 MB buckets, the S3 key and managed daily backups are pending. `Pantopus-staging` is separate and was reset to the canonical migrations on October 7 (S2). A separate production organization is optional billing isolation. |
-| GitHub | `staging` has its secrets and variables and releases from `dev` (S5, S6). `production` has `BACKEND_DEPLOY_ENABLED=false` and `DB_MIGRATIONS_ENABLED=false` and no secrets, so each master push ends with "Backend deployment is disabled". `ios-release` and `android-release` have no secrets. |
-| AWS Lambdas | Staging stack `pantopus-seeder-staging` (October 7). The stack (`pantopus-seeder/deploy/template.yaml`) carries the seeder and the briefing, home-reminder, weather-alert, mail and job-trigger functions. **The April production stack `pantopus-seeder-production` (last deployed May 3) still runs** (checked October 8): its 14 EventBridge schedules read the April database through the secret `pantopus/seeder/production` every 5 to 15 minutes and send through `api.pantopus.com`, which answers 522, so nothing reaches anyone. At 01:00Z on October 8 its evening briefing tried three April users and failed. Pause it before P1 (start of section 3); P8 turns it into the production stack. The April `pantopus-seeder-dev` stack is inert: its functions were deleted in April, so its ten schedules have nothing to run. |
+| GitHub | `staging` releases from `dev` after CI. Checked October 10: `production` has nine secrets, `DB_MIGRATIONS_ENABLED=true`, and `BACKEND_DEPLOY_ENABLED=false`; automatic master runs still skip the production release. Preparation is not a deployed production service: the founder enables it at the reviewed cutover step. Store signing setup remains separate (section 4). |
+| AWS Lambdas | Staging stack `pantopus-seeder-staging` carries the seeder, briefing, home-reminder, weather-alert, mail and job-trigger functions. The founder paused the April `pantopus-seeder-production` stack: all 14 EventBridge rules were independently confirmed `DISABLED` on October 10, and its briefing log has no event after October 8 at 19:14 UTC. Keep them disabled until P8 replaces the old production configuration. The April `pantopus-seeder-dev` functions were deleted; its ten schedules have nothing to run. |
 
 **Reminders run on AWS Lambda.** Morning and evening briefings (the night-before
 pickup push rides the evening one), task and bill reminders, weather alerts and
@@ -366,17 +366,31 @@ notification tap-through, and the web for the same account. Failures go to the
 owning stream. A household invitation needs a verified owner, so it waits for
 the identity decision (Stripe Identity or a photo-ID check).
 
+**Verified so far:** the founder created and signed in the staging owner; the Android
+staging app completed Add Home in private setup, Today, pickup days, radon, task
+creation/completion and relaunch persistence. The founder confirmed the October 8
+7 AM task reminder reached the iPhone and opened the task. On October 10, the
+signed-out web address preview loaded current weather, air and alerts and carried
+its preview into sign-in; area facts still need the Census key.
+
+**Still open:** the same-account signed-in web journey, the physical Android
+reminder, and the invitation after the identity decision. Vercel released the newer
+web independently of backend CI. A new `dev` push must
+finish CI and Deploy Backend before the newer API changes count as staging-verified.
+
 ## 3. Production
 
 Same shape as staging, with live vendors where D4 and D5 say so.
 
-### Before P1: pause the April Lambda stack (founder, now)
+### Before P1: keep the April Lambda stack paused (founder completed)
 
-The April stack `pantopus-seeder-production` still runs against the April
-database (section 0). Its sends fail while `api.pantopus.com` answers 522, but
-once P1 points that name at a working backend, or if the June container is ever
-started again, it would send April users briefings and reminders with April's
-code. Pause its 14 schedules; nothing is deleted:
+**Verified October 10:** all 14 rules are disabled; no recent production briefing runs.
+The command below remains the pause/rollback reference. Do not enable schedules before P8.
+
+The April stack `pantopus-seeder-production` retains its April database settings
+(section 0). Enabling its schedules before replacing those settings could send
+April users briefings and reminders with the old code. To pause its 14 schedules
+again if needed, without deleting anything:
 
 ```bash
 for r in $(aws cloudformation describe-stack-resources --region us-west-2 --stack-name pantopus-seeder-production \

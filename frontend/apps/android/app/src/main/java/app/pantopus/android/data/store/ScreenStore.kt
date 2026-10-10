@@ -108,6 +108,13 @@ class ScreenStore
                 stale = true
                 marks++
             }
+
+            /** An evicted slot cannot finish a queued disk write after a newer slot has refused the same key. */
+            fun retire() {
+                edits++
+                persist = false
+                inFlight?.cancel()
+            }
         }
 
         /** What a read captured when it started (see [settle]). */
@@ -173,12 +180,19 @@ class ScreenStore
                     val vouched = persist && key.savable
                     val unsave = slot.persist && !vouched
                     slot.persist = vouched
-                    if (unsave) deleteSaved(key.id, account)
+                    if (unsave) {
+                        // Retire queued writes and reads from the previous access decision before a later reader
+                        // can enable persistence again.
+                        slot.edits++
+                        slot.inFlight?.cancel()
+                        slot.inFlight = null
+                        deleteSaved(key.id, account)
+                    }
                     val current = slot.state.value
                     if (!force && !slot.stale && current.isFresh(key.kind)) return current.cast()
                     val running = slot.inFlight?.takeIf { it.isActive }
                     if (running != null) return@synchronized slot to running
-                    val ticket = Ticket(generation, identity(), slot.edits, slot.marks)
+                    val ticket = Ticket(generation, identity(account), slot.edits, slot.marks)
                     val etag = slot.etag.takeIf { current.data != null }
                     slot.state.value = current.copy(refreshing = true)
                     val job = scope.async { settle(slot, fetchSafely(fetch, etag), ticket) }
@@ -201,6 +215,26 @@ class ScreenStore
         fun markStale(topic: String) {
             synchronized(slots) { slots.values.forEach { if (it.key.matches(topic)) it.markStaleLocked() } }
             _changes.update { it + 1 }
+        }
+
+        /** Capture before an asynchronous save, so its reply cannot populate another account or a cleared cache. */
+        fun <T : Any> writer(key: StoreKey<T>): (T) -> Unit {
+            val account = accountId() ?: return {}
+            val (slot, ticket) = synchronized(slots) {
+                val slot = slotLocked(key, account)
+                slot.edits++
+                slot.etag = null
+                slot.markStaleLocked()
+                slot.inFlight?.cancel()
+                slot.inFlight = null
+                slot.state.value = slot.state.value.copy(refreshing = false)
+                slot to Ticket(generation, identity(account), slot.edits, slot.marks)
+            }
+            return { data ->
+                synchronized(slots) {
+                    if (ticket.generation == generation && ticket.identity == identity() && ticket.edits == slot.edits) put(key, data)
+                }
+            }
         }
 
         /**
@@ -236,8 +270,7 @@ class ScreenStore
             val account = accountId() ?: return
             synchronized(slots) {
                 slots.remove("$account|${key.id}")?.let { slot ->
-                    slot.edits++
-                    slot.inFlight?.cancel()
+                    slot.retire()
                     slot.state.value = Stored()
                 }
             }
@@ -253,7 +286,7 @@ class ScreenStore
             synchronized(slots) {
                 generation++
                 slots.values.forEach { slot ->
-                    slot.inFlight?.cancel()
+                    slot.retire()
                     slot.state.value = Stored()
                 }
                 slots.clear()
@@ -264,7 +297,11 @@ class ScreenStore
 
         /** Contract §6: when the phone warns about memory, keep only what screens are showing. */
         fun trimToVisible() {
-            synchronized(slots) { slots.values.removeAll { it.removable } }
+            synchronized(slots) {
+                slots.values.removeAll { slot ->
+                    slot.removable.also { if (it) slot.retire() }
+                }
+            }
         }
 
         private fun slotLocked(
@@ -278,7 +315,10 @@ class ScreenStore
             while (iterator.hasNext()) {
                 val candidate = iterator.next()
                 val overLimit = now - candidate.lastUsed > IDLE_MS || slots.size > MAX_ENTRIES
-                if (candidate !== slot && overLimit && candidate.removable) iterator.remove()
+                if (candidate !== slot && overLimit && candidate.removable) {
+                    candidate.retire()
+                    iterator.remove()
+                }
             }
             return slot
         }
@@ -300,6 +340,10 @@ class ScreenStore
             val type = slot.key.type ?: return
             if (!slot.key.savable) return
             val copy = saved.load<Any>(account, slot.key.id, type) ?: return
+            if (!slot.key.permitsSavedCopy(copy.data)) {
+                deleteSaved(slot.key.id, account)
+                return
+            }
             slot.etag = copy.etag
             slot.persist = true
             slot.state.value = Stored(copy.data, fetchedAt = copy.fetchedAt)
@@ -314,6 +358,12 @@ class ScreenStore
         ) {
             val account = accountId() ?: return
             if (data == null || !slot.persist) return
+            if (!slot.key.permitsSavedCopy(data)) {
+                slot.edits++
+                slot.persist = false
+                deleteSaved(slot.key.id, account)
+                return
+            }
             val type = slot.key.type ?: return
             val edits = slot.edits
             val gen = generation
@@ -409,7 +459,8 @@ class ScreenStore
         private fun accountId(): String? = (auth.get().state.value as? AuthRepository.State.SignedIn)?.user?.id
 
         /** Server, account and session marker: never a token, never logged. */
-        private fun identity(): String? = accountId()?.let { "${BuildConfig.PANTOPUS_API_BASE_URL}|$it|${tokens.sessionMarker()}" }
+        private fun identity(account: String? = accountId()): String? =
+            account?.let { "${BuildConfig.PANTOPUS_API_BASE_URL}|$it|${tokens.sessionMarker()}" }
 
         private companion object {
             const val LOAD_FACTOR = 0.75f

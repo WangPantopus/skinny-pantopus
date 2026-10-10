@@ -44,6 +44,7 @@ class MaintenanceListViewModelTest {
 
     @Before fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        coEvery { gates.create(any(), any()).checkForRead(any(), any()) } returns null
     }
 
     @After fun tearDown() {
