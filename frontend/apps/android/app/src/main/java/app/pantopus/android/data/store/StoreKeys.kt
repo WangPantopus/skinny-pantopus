@@ -130,7 +130,7 @@ object StoreKeys {
                 "limit" to FeedQuery.PAGE_SIZE.toString(),
             ),
             kind = StoreKind.NEARBY,
-            topics = setOf(StoreTopics.POSTS),
+            topics = setOf(StoreTopics.POSTS, StoreTopics.PROFILE_ME),
         )
 
     /** One post and its comments (contract §4 "A post": fresh 1 minute, never saved on the phone). */
