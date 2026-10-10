@@ -302,8 +302,7 @@ class MyPostsViewModel
                 loadingMore = false
                 when (result) {
                     is NetworkResult.Success -> {
-                        posts = result.data.posts
-                        nextPage = nextPageAfter(result.data)
+                        replaceRefreshedHead(result.data)
                         loadedAtLeastOnce = true
                         applyState()
                     }
@@ -324,6 +323,22 @@ class MyPostsViewModel
                     }
                 }
             }
+        }
+
+        /** A bounded refresh replaces its covered range without dropping older pages the reader already opened. */
+        private fun replaceRefreshedHead(response: MyPostsResponse) {
+            val boundary = response.posts.lastOrNull()
+            val time = boundary?.createdAt?.let(::parseInstant)
+            val older = if (response.pagination?.hasMore == true && boundary != null && time != null) {
+                posts.filter { row ->
+                    val created = parseInstant(row.createdAt)
+                    created != null && (created < time || (created == time && row.id < boundary.id))
+                }
+            } else {
+                emptyList()
+            }
+            posts = (response.posts + older).distinctBy { it.id }
+            if (older.isEmpty()) nextPage = nextPageAfter(response)
         }
 
         /**

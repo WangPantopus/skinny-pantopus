@@ -98,8 +98,7 @@ class SavedPostsViewModel
                 _refreshNotice.value = if (copy.showsRefreshFailure(StoreKind.POST)) RefreshNotice(copy.fetchedAt, ::refresh) else null
                 when (result) {
                     is NetworkResult.Success -> {
-                        posts = result.data.posts
-                        nextOffset = nextOffsetAfter(result.data)
+                        replaceRefreshedHead(result.data)
                         loadedOnce = true
                         applyState()
                     }
@@ -118,6 +117,26 @@ class SavedPostsViewModel
                         }
                     }
                 }
+            }
+        }
+
+        /** Keep later pages below the newest bookmark returned; changes in the head shift the next save offset. */
+        private fun replaceRefreshedHead(response: SavedPostsResponse) {
+            val previousSize = posts.size
+            val boundary = response.posts.lastOrNull()?.savedAt?.let { MyPostsViewModel.parseInstant(it) }
+            val refreshedIds = response.posts.mapTo(HashSet()) { it.id }
+            val older = if (response.pagination?.hasMore == true && boundary != null) {
+                posts.filter { row ->
+                    row.id !in refreshedIds && MyPostsViewModel.parseInstant(row.savedAt)?.let { it <= boundary } == true
+                }
+            } else {
+                emptyList()
+            }
+            posts = (response.posts + older).distinctBy { it.id }
+            nextOffset = if (older.isEmpty()) {
+                nextOffsetAfter(response)
+            } else {
+                nextOffset?.let { maxOf(response.pagination?.nextOffset ?: 0, it + posts.size - previousSize) }
             }
         }
 
