@@ -17,7 +17,8 @@ import Foundation
 
 /// One saved store entry: the reply's bytes and what the store knew about them.
 struct SavedScreenEntry: Codable {
-    static let currentSchema = 1
+    /// Earlier copies did not account for HomeOccupancy.access_end_at.
+    static let currentSchema = 2
 
     let schema: Int
     let build: String

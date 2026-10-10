@@ -56,10 +56,13 @@ enum HomesStoreReads {
 }
 
 extension MyHome {
-    /// Owners and household roles with open-ended access may see a copy before
-    /// the re-check; guests, service providers and expiring access may not.
+    /// Owners and household roles with open-ended access, and the person's
+    /// own private setup, may see a copy before the re-check. Guests, service
+    /// providers, unknown contexts and expiring access may not.
     var showsCopyBeforeRecheck: Bool {
-        let role = (roleBase ?? occupancy?.roleBase ?? occupancy?.role ?? "").lowercased()
-        return !["guest", "service_provider", "nonresident"].contains(role) && occupancy?.endAt == nil
+        guard hasValidListContext, occupancy?.endAt == nil, occupancy?.accessEndAt == nil else { return false }
+        if accessKind == "private_setup" { return true }
+        let household = ["owner", "admin", "manager", "lease_resident", "member", "restricted_member"]
+        return hasSharedAccess && household.contains(roleBase ?? "")
     }
 }

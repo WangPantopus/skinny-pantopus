@@ -152,6 +152,10 @@ final class ScreenStore {
         }
         // Memory, then the saved copy (its ETag makes an unchanged reply a 304).
         let held = entry(for: key)
+        if let held, let showsBeforeRecheck, let value = decoded(held, as: type) {
+            held.showsBeforeRecheck = showsBeforeRecheck(value)
+            if !held.showsBeforeRecheck { unsave(key) }
+        }
         if !force, let entry = held, isFresh(entry), let value = decoded(entry, as: type) {
             entry.lastUsed = now()
             count("hit", kind)
@@ -533,12 +537,12 @@ extension ScreenStore {
     }
 
     /// Writes an entry the phone may keep: never sensitive data or a reply
-    /// that is never saved, and household data only while it may show before
-    /// the re-check. A copy that may no longer be kept is deleted instead.
+    /// that is never saved, and only while it may show before the re-check
+    /// (including Today's household subset). Other copies are deleted.
     private func save(_ key: Key, _ entry: ScreenStoreEntry) {
         guard let disk else { return }
         guard !Self.isNeverSaved(key.path), entry.kind.savedOnPhone,
-              entry.kind.tier != .household || entry.showsBeforeRecheck else {
+              entry.showsBeforeRecheck else {
             disk.remove(folder: folder(for: key), file: file(for: key))
             return
         }

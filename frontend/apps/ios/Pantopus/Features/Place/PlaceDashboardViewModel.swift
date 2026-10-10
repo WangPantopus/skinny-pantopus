@@ -132,6 +132,10 @@ final class PlaceDashboardViewModel {
     }
 
     private func fetch(force: Bool) async {
+        if !PlaceStoreReads.allowsCopy(homeId: homeId) {
+            state = .loading
+            moveInDate = nil
+        }
         do {
             let snapshot = try await PlaceStoreReads.load(homeId: homeId, kind: .place, force: force)
             apply(snapshot.value)
@@ -146,7 +150,7 @@ final class PlaceDashboardViewModel {
                 if case .forbidden = apiError { accessDenied = true } else { accessDenied = false }
                 state = .error(message: message)
             default:
-                if case .loaded = state {
+                if case .loaded = state, PlaceStoreReads.allowsCopy(homeId: homeId) {
                     // Keep the dashboard on screen; a failed refresh only toasts.
                     if force { refreshFailureMessage = message }
                 } else {

@@ -79,7 +79,7 @@ final class PlaceDetailViewModel {
     }
 
     func load() async {
-        if case .loaded = state { return }
+        if case .loaded = state, PlaceStoreReads.allowsCopy(homeId: homeId, savedPlaceId: savedPlaceId) { return }
         // The dashboard or Today may already hold this copy (one store entry).
         if let copy = PlaceStoreReads.peek(homeId: homeId, savedPlaceId: savedPlaceId, sections: sections) {
             show(copy)
@@ -136,6 +136,12 @@ final class PlaceDetailViewModel {
     /// so in a toast). A refusal (403 or 404) replaces it with the server's
     /// answer, and with nothing loaded the error shows.
     private func fetch(quietly: Bool, force: Bool) async {
+        if !PlaceStoreReads.allowsCopy(homeId: homeId, savedPlaceId: savedPlaceId) {
+            state = .loading
+            loadedAt = nil
+            fallbackRequested = false
+            fallbackCalendar = nil
+        }
         let hadFallback = fallbackCalendar != nil
         do {
             let snapshot = try await PlaceStoreReads.load(
@@ -158,7 +164,8 @@ final class PlaceDetailViewModel {
             return
         } catch {
             let apiError = error as? APIError
-            if case .loaded = state, !Self.isRefusal(apiError) {
+            if case .loaded = state, !Self.isRefusal(apiError),
+               PlaceStoreReads.allowsCopy(homeId: homeId, savedPlaceId: savedPlaceId) {
                 if !quietly { refreshFailureMessage = "Couldn't refresh. Pull down to try again." }
                 return
             }
