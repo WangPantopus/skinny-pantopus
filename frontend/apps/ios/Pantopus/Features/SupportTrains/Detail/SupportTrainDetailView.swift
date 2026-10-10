@@ -16,6 +16,8 @@ import SwiftUI
 
 @MainActor
 public struct SupportTrainDetailView: View {
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var isVisible = false
     @State private var viewModel: SupportTrainDetailViewModel
     private let onBack: @MainActor () -> Void
     private let onOpenManage: (@MainActor () -> Void)?
@@ -68,6 +70,18 @@ public struct SupportTrainDetailView: View {
         .accessibilityIdentifier("supportTrainDetail")
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .task { await viewModel.load() }
+        .onAppear { isVisible = true }
+        .onDisappear {
+            isVisible = false
+            viewModel.suspend()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active {
+                viewModel.suspend()
+            } else if isVisible {
+                Task { await viewModel.load() }
+            }
+        }
         // Someone took or left a slot (`supporttrain:{id}`): the open train re-reads.
         .refreshesOnStoreChange(affects: { viewModel.isAffected(by: $0) }, perform: { await viewModel.refreshFromSignal() })
         .overlay(alignment: .bottom) { toastOverlay }
@@ -132,6 +146,8 @@ public struct SupportTrainDetailView: View {
                 options: content.reserveOptions,
                 context: content.reserveContext,
                 isSubmitting: viewModel.isSubmitting,
+                recipientDetailsAvailable: viewModel.recipientDetailsAvailable,
+                onRetryRecipientDetails: { Task { await viewModel.refresh() } },
                 onSubmit: { slotId, body in
                     await viewModel.reserve(slotId: slotId, body: body)
                 },

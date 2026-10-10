@@ -40,6 +40,8 @@ public struct ReserveSlotSheet: View {
     private let options: [ReserveSlotOption]
     private let context: ReserveSheetContext
     private let isSubmitting: Bool
+    private let recipientDetailsAvailable: Bool
+    private let onRetryRecipientDetails: @MainActor () -> Void
     /// Returns nil on success, or the message to render inline.
     private let onSubmit: @MainActor (String, ReserveSlotBody) async -> String?
     private let onClose: @MainActor () -> Void
@@ -59,12 +61,16 @@ public struct ReserveSlotSheet: View {
         options: [ReserveSlotOption],
         context: ReserveSheetContext,
         isSubmitting: Bool,
+        recipientDetailsAvailable: Bool = true,
+        onRetryRecipientDetails: @escaping @MainActor () -> Void = {},
         onSubmit: @escaping @MainActor (String, ReserveSlotBody) async -> String?,
         onClose: @escaping @MainActor () -> Void
     ) {
         self.options = options
         self.context = context
         self.isSubmitting = isSubmitting
+        self.recipientDetailsAvailable = recipientDetailsAvailable
+        self.onRetryRecipientDetails = onRetryRecipientDetails
         self.onSubmit = onSubmit
         self.onClose = onClose
         _slotId = State(initialValue: selection.slotId)
@@ -88,6 +94,11 @@ public struct ReserveSlotSheet: View {
             header
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.s3) {
+                    if !recipientDetailsAvailable {
+                        errorBox("Recipient details need to be checked before you sign up.")
+                        Button("Retry recipient details", action: onRetryRecipientDetails)
+                            .accessibilityIdentifier("supportTrainRetryRecipientDetails")
+                    }
                     switch step {
                     case .date: dateStep
                     case .mode: modeStep
@@ -350,7 +361,7 @@ public struct ReserveSlotSheet: View {
         case .date: slotId != nil
         case .mode: mode != nil
         case .details, .success: true
-        case .confirm: !isSubmitting
+        case .confirm: !isSubmitting && recipientDetailsAvailable
         }
     }
 
