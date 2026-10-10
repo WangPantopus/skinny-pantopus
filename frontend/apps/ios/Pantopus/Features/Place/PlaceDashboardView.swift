@@ -37,7 +37,9 @@ struct PlaceDashboardView: View {
     }
 
     var body: some View {
-        Group {
+        // Keep lifecycle observers attached when privacy clearing replaces the
+        // loaded dashboard with its placeholder during a background transition.
+        ZStack {
             switch viewModel.state {
             case .loading:
                 PlaceDashboardSkeleton()
