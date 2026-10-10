@@ -6,9 +6,9 @@ import app.pantopus.android.data.api.models.homes.showsCopyBeforeRecheck
 import app.pantopus.android.data.api.models.notifications.personalBellCount
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.net.NetworkError
-import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
+import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.data.notifications.NotificationsRepository
 import app.pantopus.android.data.place.PlaceRepository
@@ -153,9 +153,16 @@ class PlaceDashboardViewModel
                 }
         }
 
-        private fun current(id: String, version: Long): Boolean = active && version == readVersion && homeId == id
+        private fun current(
+            id: String,
+            version: Long,
+        ): Boolean = active && version == readVersion && homeId == id
 
-        private suspend fun readAuthorized(id: String, force: Boolean, version: Long): Stored<PlaceIntelligence> {
+        private suspend fun readAuthorized(
+            id: String,
+            force: Boolean,
+            version: Long,
+        ): Stored<PlaceIntelligence> {
             val homes = homesRepo.myHomesStored(force || !householdViewer(id))
             if (!current(id, version)) return Stored()
             val home = homes.data?.homes?.firstOrNull { it.id == id }

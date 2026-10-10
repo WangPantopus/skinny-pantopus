@@ -12,9 +12,9 @@ import app.pantopus.android.data.api.models.hub.NotificationPreferencesPatch
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.saved_places.SavedPlaceDto
 import app.pantopus.android.data.api.net.NetworkError
-import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
+import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.auth.AuthenticatedDispatchGuard
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.data.hub.HubRepository
@@ -342,7 +342,8 @@ class TodayTabViewModel
             val calendar = (result as? NetworkResult.Success)?.data?.calendar
             // The calendar section was down: the widget gets the dates Today now shows.
             val loaded = _state.value as? TodayTabUiState.Loaded
-            if (calendar != null && loaded != null && mayKeepHome(id) && ::todayWidget.isInitialized) {
+            if (calendar == null || loaded == null) return calendar
+            if (mayKeepHome(id) && ::todayWidget.isInitialized) {
                 todayWidget.write(loaded.intelligence.todayWidgetSnapshot(calendar))
             }
             return calendar

@@ -7,8 +7,8 @@ import android.os.SystemClock
 import app.pantopus.android.BuildConfig
 import app.pantopus.android.data.api.net.Conditional
 import app.pantopus.android.data.api.net.NetworkError
-import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.auth.TokenStorage
 import dagger.hilt.android.qualifiers.ApplicationContext
