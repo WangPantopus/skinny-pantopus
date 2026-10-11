@@ -168,11 +168,12 @@ class FeedMapViewModel
                 if (!isReady) {
                     initializeMap()
                 } else {
-                    val target = when {
-                        areaChanged -> _region.value
-                        changed -> pendingRegion ?: _region.value
-                        else -> shownRegion ?: _region.value
-                    }
+                    val target =
+                        when {
+                            areaChanged -> _region.value
+                            changed -> pendingRegion ?: _region.value
+                            else -> shownRegion ?: _region.value
+                        }
                     fetchMarkers(target)
                 }
             }
