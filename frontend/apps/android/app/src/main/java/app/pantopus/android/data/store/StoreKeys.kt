@@ -17,7 +17,9 @@ import app.pantopus.android.data.api.models.notifications.NotificationUnreadCoun
 import app.pantopus.android.data.api.models.notifications.NotificationsListResponse
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.place.PlaceSectionId
+import app.pantopus.android.data.api.models.posts.MyPostsResponse
 import app.pantopus.android.data.api.models.posts.PostDetailResponse
+import app.pantopus.android.data.api.models.posts.SavedPostsResponse
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsListResponse
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsNearbyResponse
 import app.pantopus.android.data.api.models.users.InviteCodeDto
@@ -134,6 +136,25 @@ object StoreKeys {
             kind = StoreKind.NEARBY,
             topics = setOf(StoreTopics.POSTS),
             type = FeedResponse::class.java,
+        )
+
+    fun userPosts(
+        userId: String,
+        limit: Int,
+        includeArchived: Boolean,
+    ) = StoreKey<MyPostsResponse>(
+        "api/posts/user/$userId",
+        mapOf("limit" to limit.toString(), "include_archived" to includeArchived.takeIf { it }?.toString()),
+        kind = StoreKind.POST,
+        topics = setOf(StoreTopics.POSTS, "profile:$userId"),
+    )
+
+    fun savedPosts(limit: Int) =
+        StoreKey<SavedPostsResponse>(
+            "api/posts/saved",
+            mapOf("limit" to limit.toString()),
+            kind = StoreKind.POST,
+            topics = setOf(StoreTopics.POSTS, StoreTopics.PROFILE_ME),
         )
 
     /** One post and its comments (contract §4 "A post": fresh 1 minute, never saved on the phone). */
