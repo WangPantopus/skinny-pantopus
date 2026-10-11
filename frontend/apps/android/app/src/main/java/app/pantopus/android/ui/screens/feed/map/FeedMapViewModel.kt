@@ -5,8 +5,10 @@ package app.pantopus.android.ui.screens.feed.map
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.postsmap.PostsMapResponse
+import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.location.LocationProvider
 import app.pantopus.android.data.location.UserCoordinate
+import app.pantopus.android.data.location.ViewingLocationRepository
 import app.pantopus.android.data.postsmap.PostsMapRepository
 import app.pantopus.android.data.store.StoreKind
 import app.pantopus.android.ui.components.RefreshNotice
@@ -111,6 +113,7 @@ class FeedMapViewModel
     constructor(
         private val postsMapRepository: PostsMapRepository,
         private val locationProvider: LocationProvider,
+        private val viewingLocation: ViewingLocationRepository,
     ) : ViewModel() {
         private val _state = MutableStateFlow<FeedMapUiState>(FeedMapUiState.Loading)
         val state: StateFlow<FeedMapUiState> = _state.asStateFlow()
@@ -137,6 +140,7 @@ class FeedMapViewModel
         private var fetchGeneration = 0
         private var shownRegion: FeedMapRegion? = null
         private var shownQuery: FeedMapQuery? = null
+        private var selectedArea: Pair<Double, Double>? = null
         private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
         val refreshNotice = _refreshNotice.asStateFlow()
 
@@ -160,10 +164,15 @@ class FeedMapViewModel
             val changed = next != query
             query = next
             launchRead {
+                val areaChanged = updateSelectedArea()
                 if (!isReady) {
                     initializeMap()
                 } else {
-                    val target = if (changed) pendingRegion ?: _region.value else shownRegion ?: _region.value
+                    val target = when {
+                        areaChanged -> _region.value
+                        changed -> pendingRegion ?: _region.value
+                        else -> shownRegion ?: _region.value
+                    }
                     fetchMarkers(target)
                 }
             }
@@ -173,11 +182,27 @@ class FeedMapViewModel
             launchRead { fetchMarkers(pendingRegion ?: _region.value, force = true) }
         }
 
+        /** The map shares the feed's chosen area; returning inside its window adds no location request. */
+        private suspend fun updateSelectedArea(): Boolean {
+            val result = viewingLocation.current()
+            if (result !is NetworkResult.Success) return false
+            val next = result.data.viewingLocation?.let { it.latitude to it.longitude }
+            if (next == selectedArea) return false
+            selectedArea = next
+            if (next != null) {
+                _region.value = _region.value.copy(latitude = next.first, longitude = next.second)
+                pendingRegion = null
+                _viewportDirty.value = false
+            }
+            return next != null
+        }
+
         private suspend fun initializeMap() {
             if (userCoordinate == null) {
-                userCoordinate = locationProvider.cachedCoordinate() ?: locationProvider.requestCurrent()
+                userCoordinate = locationProvider.cachedCoordinate()
+                if (selectedArea == null && userCoordinate == null) userCoordinate = locationProvider.requestCurrent()
             }
-            userCoordinate?.let { coord ->
+            userCoordinate?.takeIf { selectedArea == null }?.let { coord ->
                 _region.value =
                     FeedMapRegion(
                         latitude = coord.latitude,
