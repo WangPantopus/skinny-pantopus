@@ -99,12 +99,13 @@ object StoreKeys {
             topics = setOf(StoreTopics.PROFILE_ME),
         )
 
-    /** Private bookmarks share one memory copy; household/Today signals include SavedPlace changes. */
+    /** Private bookmarks use the account-scoped phone copy so saved-place Today can open offline. */
     val savedPlaces =
         StoreKey<SavedPlacesListResponse>(
             "api/saved-places",
             kind = StoreKind.YOU,
             topics = setOf(StoreTopics.HOMES, StoreTopics.TODAY),
+            type = SavedPlacesListResponse::class.java,
         )
 
     /** Public Today facts for the viewer's saved place; a deleted bookmark refuses the copy. */
