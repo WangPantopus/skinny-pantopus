@@ -9,6 +9,7 @@ import app.pantopus.android.data.api.models.saved_places.SavedPlaceDto
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.saved_places.SavedPlacesRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -41,12 +42,14 @@ class SavedPlacesStoreViewModel
         val toast: StateFlow<SavedPlacesToast?> = _toast.asStateFlow()
 
         private var loading = false
+        private var writing = false
+        private var readJob: Job? = null
 
         fun loadIfNeeded() {
-            if (loading) return
+            if (loading || writing) return
             loading = true
             repository.listCopy()?.let { _saved.value = it.savedPlaces }
-            viewModelScope.launch {
+            readJob = viewModelScope.launch {
                 try {
                     val stored = repository.listStored()
                     stored.data?.let { _saved.value = it.savedPlaces }
@@ -67,6 +70,7 @@ class SavedPlacesStoreViewModel
         ): Boolean = savedId(geocodePlaceId, latitude, longitude) != null
 
         fun toggle(pending: PendingSavePlace) {
+            if (writing) return
             val id = savedId(pending.geocodePlaceId, pending.latitude, pending.longitude)
             if (id != null) {
                 remove(id)
@@ -79,7 +83,9 @@ class SavedPlacesStoreViewModel
             label: String,
             choice: SavePlaceTypeChoice,
         ) {
+            if (writing) return
             val pending = _pendingSave.value ?: return
+            beginWrite("Pending · Saving $label")
             _pendingSave.value = null
             val optimistic =
                 SavedPlaceDto(
@@ -109,6 +115,7 @@ class SavedPlacesStoreViewModel
                     )
                 when (val result = repository.save(body)) {
                     is NetworkResult.Success -> {
+                        _toast.value = SavedPlacesToast("Saved $label.")
                         _saved.value =
                             _saved.value.map { item ->
                                 if (item.id == optimistic.id) result.data.savedPlace else item
@@ -119,6 +126,7 @@ class SavedPlacesStoreViewModel
                         _toast.value = SavedPlacesToast("Couldn't save $label.", isError = true)
                     }
                 }
+                writing = false
             }
         }
 
@@ -127,19 +135,25 @@ class SavedPlacesStoreViewModel
         }
 
         fun undoRemove() {
+            if (writing) return
             val snapshot = _undo.value ?: return
-            _undo.value = null
             val dto = snapshot.dto
-            _saved.value = _saved.value.toMutableList().apply { add(snapshot.index.coerceIn(0, size), dto) }
+            beginWrite("Pending · Restoring ${dto.label}")
+            restoreRow(dto, snapshot.index)
             viewModelScope.launch {
-                when (val result = repository.save(SavePlaceBody.from(dto))) {
-                    is NetworkResult.Success -> {
-                        _saved.value = _saved.value.map { if (it.id == dto.id) result.data.savedPlace else it }
+                try {
+                    when (val result = repository.save(SavePlaceBody.from(dto))) {
+                        is NetworkResult.Success -> {
+                            _saved.value = _saved.value.map { if (it.id == dto.id) result.data.savedPlace else it }
+                            _toast.value = SavedPlacesToast("Restored ${dto.label}.")
+                        }
+                        is NetworkResult.Failure -> {
+                            _saved.value = _saved.value.filterNot { it.id == dto.id }
+                            _toast.value = SavedPlacesToast("Couldn't restore ${dto.label}.", isError = true)
+                        }
                     }
-                    is NetworkResult.Failure -> {
-                        _saved.value = _saved.value.filterNot { it.id == dto.id }
-                        _toast.value = SavedPlacesToast("Couldn't restore ${dto.label}.", isError = true)
-                    }
+                } finally {
+                    writing = false
                 }
             }
         }
@@ -149,23 +163,44 @@ class SavedPlacesStoreViewModel
         }
 
         fun dismissToast() {
-            _toast.value = null
+            if (_toast.value?.isPending != true) _toast.value = null
         }
 
         private fun remove(id: String) {
+            if (writing) return
             val index = _saved.value.indexOfFirst { it.id == id }
             if (index < 0) return
             val removed = _saved.value[index]
-            val previous = _saved.value
-            _saved.value = previous.filterNot { it.id == id }
-            _undo.value = SavedPlaceUndo(removed, index)
+            beginWrite("Pending · Removing ${removed.label}")
+            _saved.value = _saved.value.filterNot { it.id == id }
             viewModelScope.launch {
-                if (repository.remove(id) is NetworkResult.Failure) {
-                    _saved.value = previous
-                    _undo.value = null
-                    _toast.value = SavedPlacesToast("Couldn't remove ${removed.label}.", isError = true)
+                try {
+                    when (repository.remove(id)) {
+                        is NetworkResult.Success -> {
+                            _toast.value = null
+                            _undo.value = SavedPlaceUndo(removed, index)
+                        }
+                        is NetworkResult.Failure -> {
+                            restoreRow(removed, index)
+                            _toast.value = SavedPlacesToast("Couldn't remove ${removed.label}.", isError = true)
+                        }
+                    }
+                } finally {
+                    writing = false
                 }
             }
+        }
+
+        private fun beginWrite(message: String) {
+            writing = true
+            readJob?.cancel()
+            loading = false
+            _undo.value = null
+            _toast.value = SavedPlacesToast(message, isPending = true)
+        }
+
+        private fun restoreRow(dto: SavedPlaceDto, index: Int) {
+            _saved.value = _saved.value.filterNot { it.id == dto.id }.toMutableList().apply { add(index.coerceIn(0, size), dto) }
         }
 
         private fun savedId(
