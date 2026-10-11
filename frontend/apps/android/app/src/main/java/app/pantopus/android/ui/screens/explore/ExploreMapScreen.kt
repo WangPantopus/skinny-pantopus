@@ -798,6 +798,8 @@ private fun ExploreMapControls(
     onFitAll: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // The expanded list leaves no room for both controls below the map's header actions.
+    if (sheetStop == ExploreSheetStop.Expanded) return
     val density = LocalDensity.current
     val bottomOffset = with(density) { (screenHeightPx * sheetStop.heightFraction).toDp() + 14.dp }
     val animatedBottom by animateDpAsState(targetValue = bottomOffset, label = "exploreMapControlsBottom")
