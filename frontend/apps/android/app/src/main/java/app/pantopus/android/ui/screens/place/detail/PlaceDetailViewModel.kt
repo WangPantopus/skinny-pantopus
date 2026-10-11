@@ -258,11 +258,7 @@ class PlaceDetailViewModel
             if (!visible) return
             val generation = pageGeneration
             viewModelScope.launch {
-                val result =
-                    when (val r = repo.residencyLetters(homeId)) {
-                        is NetworkResult.Success -> ResidencyLetterUiState.Loaded(r.data.letters)
-                        is NetworkResult.Failure -> ResidencyLetterUiState.Error(r.error.message)
-                    }
+                val result = repo.readLetterState(homeId)
                 if (generation == pageGeneration && visible) _letters.value = result
             }
         }
@@ -400,11 +396,7 @@ class PlaceDetailViewModel
             if (!visible) return
             val generation = pageGeneration
             viewModelScope.launch {
-                val result =
-                    when (val r = repo.residencyClaims(homeId)) {
-                        is NetworkResult.Success -> ResidencyClaimsUiState.Loaded(r.data.claims)
-                        is NetworkResult.Failure -> ResidencyClaimsUiState.Error(r.error.displayMessage("Couldn't load your claims."))
-                    }
+                val result = repo.readClaimState(homeId)
                 if (generation == pageGeneration && visible) _claims.value = result
             }
         }
@@ -480,25 +472,13 @@ class PlaceDetailViewModel
             if (!visible || fridgeReadJob?.isActive == true) return
             val generation = pageGeneration
             fridgeReadJob = viewModelScope.launch {
-                val cards =
-                    when (val r = repo.fridgeCards(homeId)) {
-                        is NetworkResult.Success -> FridgeCardsUiState.Loaded(r.data.cards)
-                        is NetworkResult.Failure -> FridgeCardsUiState.Error(r.error.displayMessage("Couldn't load the cards."))
-                    }
+                val cards = repo.readFridgeState(homeId)
                 if (generation != pageGeneration || !visible) return@launch
                 _fridgeCards.value = cards
                 if (_utilitySeed.value.isEmpty()) {
-                    val result = repo.homeEmergencies(homeId)
+                    val seed = repo.readUtilitySeed(homeId)
                     if (generation != pageGeneration || !visible) return@launch
-                    when (val r = result) {
-                        is NetworkResult.Success ->
-                            _utilitySeed.value =
-                                r.data.emergencies
-                                    .filter { it.label.isNotBlank() }
-                                    .take(MAX_SEED_ITEMS)
-                                    .map { FridgeCardItem(label = it.label, note = it.location.orEmpty()) }
-                        is NetworkResult.Failure -> Unit
-                    }
+                    if (seed != null) _utilitySeed.value = seed
                 }
             }
         }
@@ -555,11 +535,7 @@ class PlaceDetailViewModel
 
         fun loadMailboxCheck() {
             viewModelScope.launch {
-                _mailboxCheck.value =
-                    when (val r = repo.mailboxCheck(homeId)) {
-                        is NetworkResult.Success -> MailboxCheckUiState.Loaded(r.data.check)
-                        is NetworkResult.Failure -> MailboxCheckUiState.Error(r.error.displayMessage("Couldn't run the mailbox check."))
-                    }
+                _mailboxCheck.value = repo.readMailboxCheckState(homeId)
             }
         }
 
@@ -575,12 +551,7 @@ class PlaceDetailViewModel
             if (!visible) return
             val generation = pageGeneration
             viewModelScope.launch {
-                val result =
-                    when (val r = repo.recordWatch(homeId)) {
-                        is NetworkResult.Success ->
-                            r.data.watch?.let { RateWatchUiState.Loaded(it) } ?: RateWatchUiState.None
-                        is NetworkResult.Failure -> RateWatchUiState.Error(r.error.displayMessage("Couldn't load your watch."))
-                    }
+                val result = repo.readRateWatchState(homeId)
                 if (generation == pageGeneration && visible) _rateWatch.value = result
             }
         }
@@ -664,12 +635,7 @@ class PlaceDetailViewModel
                 // rejection the viewer never triggered.
                 _rentSaveError.value = null
                 _isEditingRent.value = false
-                val result =
-                    when (val r = repo.rentReport(homeId)) {
-                        is NetworkResult.Success ->
-                            r.data.report?.let { RealRentUiState.Loaded(it) } ?: RealRentUiState.None
-                        is NetworkResult.Failure -> RealRentUiState.Error(r.error.displayMessage("Couldn't load your rent."))
-                    }
+                val result = repo.readRentState(homeId)
                 if (generation == pageGeneration && visible) _rentReport.value = result
             }
         }
@@ -773,11 +739,7 @@ class PlaceDetailViewModel
 
         fun loadBlockFounders() {
             viewModelScope.launch {
-                _blockFounders.value =
-                    when (val r = repo.blockFounders(homeId)) {
-                        is NetworkResult.Success -> BlockFoundersUiState.Loaded(r.data.block)
-                        is NetworkResult.Failure -> BlockFoundersUiState.Error(r.error.displayMessage("Couldn't load your block."))
-                    }
+                _blockFounders.value = repo.readBlockFoundersState(homeId)
             }
         }
 
@@ -837,12 +799,7 @@ class PlaceDetailViewModel
             if (!visible) return
             val generation = pageGeneration
             viewModelScope.launch {
-                val result =
-                    when (val r = repo.unlisted(homeId)) {
-                        is NetworkResult.Success -> UnlistedUiState.Loaded(r.data.unlisted)
-                        is NetworkResult.Failure ->
-                            UnlistedUiState.Error(r.error.displayMessage("Couldn't load your removal list."))
-                    }
+                val result = repo.readUnlistedState(homeId)
                 if (generation == pageGeneration && visible) _unlisted.value = result
             }
         }
@@ -947,6 +904,68 @@ class PlaceDetailViewModel
                 fallback: String,
             ): String = rentFailureMessage(error, fallback)
         }
+    }
+
+// Direct reads stay outside the shared store; only the current visit may publish their projected state.
+private suspend fun PlaceRepository.readLetterState(homeId: String): ResidencyLetterUiState =
+    when (val r = residencyLetters(homeId)) {
+        is NetworkResult.Success -> ResidencyLetterUiState.Loaded(r.data.letters)
+        is NetworkResult.Failure -> ResidencyLetterUiState.Error(r.error.message)
+    }
+
+private suspend fun PlaceRepository.readClaimState(homeId: String): ResidencyClaimsUiState =
+    when (val r = residencyClaims(homeId)) {
+        is NetworkResult.Success -> ResidencyClaimsUiState.Loaded(r.data.claims)
+        is NetworkResult.Failure -> ResidencyClaimsUiState.Error(r.error.displayMessage("Couldn't load your claims."))
+    }
+
+private suspend fun PlaceRepository.readFridgeState(homeId: String): FridgeCardsUiState =
+    when (val r = fridgeCards(homeId)) {
+        is NetworkResult.Success -> FridgeCardsUiState.Loaded(r.data.cards)
+        is NetworkResult.Failure -> FridgeCardsUiState.Error(r.error.displayMessage("Couldn't load the cards."))
+    }
+
+private suspend fun PlaceRepository.readRateWatchState(homeId: String): RateWatchUiState =
+    when (val r = recordWatch(homeId)) {
+        is NetworkResult.Success ->
+            r.data.watch?.let { RateWatchUiState.Loaded(it) } ?: RateWatchUiState.None
+        is NetworkResult.Failure -> RateWatchUiState.Error(r.error.displayMessage("Couldn't load your watch."))
+    }
+
+private suspend fun PlaceRepository.readRentState(homeId: String): RealRentUiState =
+    when (val r = rentReport(homeId)) {
+        is NetworkResult.Success ->
+            r.data.report?.let { RealRentUiState.Loaded(it) } ?: RealRentUiState.None
+        is NetworkResult.Failure -> RealRentUiState.Error(r.error.displayMessage("Couldn't load your rent."))
+    }
+
+private suspend fun PlaceRepository.readUnlistedState(homeId: String): UnlistedUiState =
+    when (val r = unlisted(homeId)) {
+        is NetworkResult.Success -> UnlistedUiState.Loaded(r.data.unlisted)
+        is NetworkResult.Failure ->
+            UnlistedUiState.Error(r.error.displayMessage("Couldn't load your removal list."))
+    }
+
+private suspend fun PlaceRepository.readUtilitySeed(homeId: String): List<FridgeCardItem>? =
+    when (val result = homeEmergencies(homeId)) {
+        is NetworkResult.Success ->
+            result.data.emergencies
+                .filter { it.label.isNotBlank() }
+                .take(MAX_SEED_ITEMS)
+                .map { FridgeCardItem(label = it.label, note = it.location.orEmpty()) }
+        is NetworkResult.Failure -> null
+    }
+
+private suspend fun PlaceRepository.readMailboxCheckState(homeId: String): MailboxCheckUiState =
+    when (val r = mailboxCheck(homeId)) {
+        is NetworkResult.Success -> MailboxCheckUiState.Loaded(r.data.check)
+        is NetworkResult.Failure -> MailboxCheckUiState.Error(r.error.displayMessage("Couldn't run the mailbox check."))
+    }
+
+private suspend fun PlaceRepository.readBlockFoundersState(homeId: String): BlockFoundersUiState =
+    when (val r = blockFounders(homeId)) {
+        is NetworkResult.Success -> BlockFoundersUiState.Loaded(r.data.block)
+        is NetworkResult.Failure -> BlockFoundersUiState.Error(r.error.displayMessage("Couldn't load your block."))
     }
 
 /** One consumable outcome message for the claim/card composers. */
