@@ -17,9 +17,9 @@ import app.pantopus.android.data.api.models.feed.FeedResponse
 import app.pantopus.android.data.api.models.location.ViewingLocationDto
 import app.pantopus.android.data.api.models.sports.ActiveSportsEventDto
 import app.pantopus.android.data.api.net.NetworkError
-import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
+import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.feed.FeedActionsRepository
 import app.pantopus.android.data.feed.FeedModerationStore
@@ -934,7 +934,10 @@ class PulseFeedViewModel
             }
         }
 
-        private fun beginFeedRead(isRefresh: Boolean, quiet: Boolean) {
+        private fun beginFeedRead(
+            isRefresh: Boolean,
+            quiet: Boolean,
+        ) {
             if (!quiet) {
                 heldPosts = emptyList()
                 _newPostCount.value = 0
@@ -959,7 +962,8 @@ class PulseFeedViewModel
         ) {
             val message = error.displayMessage("Couldn't load your viewing area. Try again.")
             if (_state.value !is PulseFeedUiState.Loaded ||
-                error.refusesStoredCopy) {
+                error.refusesStoredCopy
+            ) {
                 loadedPosts = emptyList()
                 _state.value = PulseFeedUiState.Error(message)
             } else if (isRefresh) {
