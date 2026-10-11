@@ -235,10 +235,7 @@ class ExploreMapViewModel
             }
             // Public posts can appear while the independent Home access check is still running.
             allEntities = projectMarkers(posts.data.markers, center).filter { it.kind == ExploreKind.Post }
-            // A first empty public reply cannot yet say that the mixed map has no nearby Homes.
-            if (_state.value is ExploreMapUiState.Loaded || allEntities.isNotEmpty() || _activeKind.value == ExploreKind.Post) {
-                rebuild(keptSelection())
-            }
+            rebuild(keptSelection())
             val homes = homesDeferred.await()
             val gigs = gigsDeferred.await()
             val listings = listingsDeferred.await()
@@ -394,7 +391,12 @@ class ExploreMapViewModel
             val homesOnly =
                 _activeKind.value == ExploreKind.Home ||
                     (_activeKind.value == null && _filters.value.kinds == setOf(ExploreKind.Home))
-            if (liveMode && homesOnly) {
+            val sorted = sortFor(filtered())
+            val includesHomes =
+                _activeKind.value == ExploreKind.Home ||
+                    (_activeKind.value == null && (_filters.value.kinds.isEmpty() || ExploreKind.Home in _filters.value.kinds))
+            // An empty public copy cannot establish an empty mixed map before the current Home check.
+            if (liveMode && includesHomes && (homesOnly || sorted.isEmpty())) {
                 if (!homeLayerChecked) {
                     _state.value = ExploreMapUiState.Loading
                     return
@@ -405,7 +407,6 @@ class ExploreMapViewModel
                     return
                 }
             }
-            val sorted = sortFor(filtered())
             _state.value =
                 ExploreMapUiState.Loaded(
                     entities = sorted,
