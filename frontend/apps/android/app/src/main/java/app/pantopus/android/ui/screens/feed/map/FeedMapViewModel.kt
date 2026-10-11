@@ -197,6 +197,7 @@ class FeedMapViewModel
             if (result !is NetworkResult.Success) {
                 if (isReady && !(result as NetworkResult.Failure).error.refusesStoredCopy) return false
                 isReady = false
+                _refreshNotice.value = null
                 _state.value = FeedMapUiState.Error("Couldn't load your selected area. Please try again.")
                 return null
             }
@@ -228,6 +229,7 @@ class FeedMapViewModel
             }
             val center = selectedArea ?: userCoordinate?.let { it.latitude to it.longitude } ?: defaultArea
             if (center == null) {
+                _refreshNotice.value = null
                 _state.value = FeedMapUiState.Error("Choose an area or turn on location to explore nearby.")
                 return
             }
