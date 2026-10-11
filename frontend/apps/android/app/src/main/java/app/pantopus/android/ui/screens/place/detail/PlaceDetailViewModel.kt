@@ -479,28 +479,29 @@ class PlaceDetailViewModel
         fun loadFridgeCards() {
             if (!visible || fridgeReadJob?.isActive == true) return
             val generation = pageGeneration
-            fridgeReadJob = viewModelScope.launch {
-                val cards =
-                    when (val r = repo.fridgeCards(homeId)) {
-                        is NetworkResult.Success -> FridgeCardsUiState.Loaded(r.data.cards)
-                        is NetworkResult.Failure -> FridgeCardsUiState.Error(r.error.displayMessage("Couldn't load the cards."))
-                    }
-                if (generation != pageGeneration || !visible) return@launch
-                _fridgeCards.value = cards
-                if (_utilitySeed.value.isEmpty()) {
-                    val result = repo.homeEmergencies(homeId)
+            fridgeReadJob =
+                viewModelScope.launch {
+                    val cards =
+                        when (val r = repo.fridgeCards(homeId)) {
+                            is NetworkResult.Success -> FridgeCardsUiState.Loaded(r.data.cards)
+                            is NetworkResult.Failure -> FridgeCardsUiState.Error(r.error.displayMessage("Couldn't load the cards."))
+                        }
                     if (generation != pageGeneration || !visible) return@launch
-                    when (val r = result) {
-                        is NetworkResult.Success ->
-                            _utilitySeed.value =
-                                r.data.emergencies
-                                    .filter { it.label.isNotBlank() }
-                                    .take(MAX_SEED_ITEMS)
-                                    .map { FridgeCardItem(label = it.label, note = it.location.orEmpty()) }
-                        is NetworkResult.Failure -> Unit
+                    _fridgeCards.value = cards
+                    if (_utilitySeed.value.isEmpty()) {
+                        val result = repo.homeEmergencies(homeId)
+                        if (generation != pageGeneration || !visible) return@launch
+                        when (val r = result) {
+                            is NetworkResult.Success ->
+                                _utilitySeed.value =
+                                    r.data.emergencies
+                                        .filter { it.label.isNotBlank() }
+                                        .take(MAX_SEED_ITEMS)
+                                        .map { FridgeCardItem(label = it.label, note = it.location.orEmpty()) }
+                            is NetworkResult.Failure -> Unit
+                        }
                     }
                 }
-            }
         }
 
         fun issueFridgeCard(body: IssueFridgeCardRequest) {
