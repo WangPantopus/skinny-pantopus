@@ -287,6 +287,7 @@ public final class ManageTrainViewModel {
         helpersFailed = true
         pendingConfirm = nil
         actionError = nil
+        replaceOrganizerSurfaces(helperCount: nil)
         if case var .loaded(content) = state {
             content.close.recipientQuote = ""
             state = .loaded(content)

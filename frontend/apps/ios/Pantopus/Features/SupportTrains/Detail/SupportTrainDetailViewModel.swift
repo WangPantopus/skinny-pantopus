@@ -72,6 +72,7 @@ public final class SupportTrainDetailViewModel {
     private let store: ScreenStore
     private let sessionScope: HomeClaimSessionScope
     private var readGeneration = 0
+    private var safeContent: SupportTrainDetailContent?
     public private(set) var recipientDetailsAvailable = false
     /// Offline override. When set, `load()` resolves from it instead of the
     /// network — used by QA / previews to swap variants on a row tap.
@@ -103,7 +104,9 @@ public final class SupportTrainDetailViewModel {
         seeded = false
         // The store's copy shows in the first frame (opening the train again).
         if resolver == nil, let copy = store.peek(endpoint, as: SupportTrainDetailDTO.self) {
-            state = .loaded(Self.project(copy.value))
+            let content = Self.project(copy.value)
+            safeContent = content
+            state = .loaded(content)
         }
     }
 
@@ -179,11 +182,13 @@ public final class SupportTrainDetailViewModel {
             let reply = try await api.requestDataResponse(endpoint)
             try requireCurrentRead(read, cache: cache)
             let dto = try ScreenStore.decoder().decode(SupportTrainDetailDTO.self, from: reply.data)
+            let safeData = try Self.safePreviewData(reply.data)
+            safeContent = try Self.project(ScreenStore.decoder().decode(SupportTrainDetailDTO.self, from: safeData))
             // Never put the mixed response into the store. Only this allowlisted
             // preview may survive closing/backgrounding; no ETag can skip rechecking.
             try store.put(
                 endpoint,
-                data: Self.safePreviewData(reply.data),
+                data: safeData,
                 kind: .supportTrain,
                 topics: [ScreenTopic.supportTrain(trainId)],
                 showsBeforeRecheck: true
@@ -197,6 +202,7 @@ public final class SupportTrainDetailViewModel {
             redactRecipientDetails()
             if ScreenStore.isRefusal(error) {
                 store.remove(endpoint)
+                safeContent = nil
                 state = .error(message: message)
             } else if case .loaded = state {
                 if announcesFailure { refreshFailureMessage = message }
@@ -220,7 +226,7 @@ public final class SupportTrainDetailViewModel {
 
     private func redactRecipientDetails() {
         recipientDetailsAvailable = false
-        if case let .loaded(content) = state { state = .loaded(content.withoutRecipientDetails) }
+        if let safeContent { state = .loaded(safeContent) }
     }
 
     /// Unknown fields are excluded too: adding a server field must not opt it into caching.
@@ -242,10 +248,6 @@ public final class SupportTrainDetailViewModel {
             "capacity"
         ]
         safe["slots"] = (body["slots"] as? [[String: Any]])?.map { row in row.filter { slotFields.contains($0.key) } }
-        let reservationFields: Set<String> = ["id", "slot_id", "status", "contribution_mode"]
-        safe["my_reservations"] = (body["my_reservations"] as? [[String: Any]])?
-            .map { row in row.filter { reservationFields.contains($0.key) } }
-        safe["coarse_location"] = (body["coarse_location"] as? [String: Any])?.filter { ["city", "state"].contains($0.key) }
         return try JSONSerialization.data(withJSONObject: safe)
     }
 
@@ -858,34 +860,5 @@ extension SupportTrainDetailViewModel {
         let words = name.split(separator: " ").prefix(2)
         let letters = words.compactMap { $0.first.map(String.init) }.joined().uppercased()
         return letters.isEmpty ? "ST" : letters
-    }
-}
-
-extension SupportTrainDetailContent {
-    /// Safe display during a new access check. Drafts belong to the sheet, not this reply.
-    var withoutRecipientDetails: Self {
-        Self(
-            trainId: trainId,
-            recipient: RecipientCardContent(
-                initials: recipient.initials,
-                householdName: typeDates.title,
-                identityTag: recipient.identityTag,
-                verified: false,
-                address: recipient.address,
-                quote: ""
-            ),
-            typeDates: typeDates,
-            calendarDays: calendarDays,
-            sections: sections,
-            hostedBy: HostedByFooter(organizerInitials: "O", organizerDisplayName: "Organizer", neighborHint: nil),
-            dock: dock,
-            celebrationBanner: celebrationBanner,
-            reserveOptions: reserveOptions,
-            reserveContext: ReserveSheetContext(
-                enabledModes: reserveContext.enabledModes,
-                restrictionChips: [],
-                contactlessPreferred: false
-            )
-        )
     }
 }
