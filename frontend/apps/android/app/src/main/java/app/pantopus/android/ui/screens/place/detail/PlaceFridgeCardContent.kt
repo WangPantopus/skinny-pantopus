@@ -77,7 +77,7 @@ fun PlaceFridgeCardSection(viewModel: PlaceDetailViewModel) {
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        FridgeCardComposer(viewModel)
+        FridgeCardComposer(viewModel, isAvailable = state is FridgeCardsUiState.Loaded)
         PlaceActionToastLine(viewModel, retainErrors = true)
         when (val current = state) {
             is FridgeCardsUiState.Loading -> Unit
@@ -90,7 +90,10 @@ fun PlaceFridgeCardSection(viewModel: PlaceDetailViewModel) {
 }
 
 @Composable
-private fun FridgeCardComposer(viewModel: PlaceDetailViewModel) {
+private fun FridgeCardComposer(
+    viewModel: PlaceDetailViewModel,
+    isAvailable: Boolean,
+) {
     var label by remember { mutableStateOf("") }
     val drafts = remember { mutableStateMapOf<String, SnapshotStateList<FridgeCardItem>>() }
     val seed by viewModel.utilitySeed.collectAsStateWithLifecycle()
@@ -102,6 +105,9 @@ private fun FridgeCardComposer(viewModel: PlaceDetailViewModel) {
             drafts["utilities"] = seed.toMutableStateList()
         }
     }
+
+    // Keep the person's draft independent of the access check, but never display its private prefill before it passes.
+    if (!isAvailable) return
 
     val hasContent = drafts.values.any { list -> list.any { it.label.isNotBlank() || it.note.isNotBlank() } }
 
