@@ -218,6 +218,7 @@ class ExploreMapViewModel
             val privateMarkers = (homes as? NetworkResult.Success)?.data?.markers.orEmpty()
             if (posts.data == null) {
                 allEntities = emptyList()
+                _refreshNotice.value = null
                 _state.value = ExploreMapUiState.Error(posts.failure?.displayMessage("Couldn't load the map.") ?: "Couldn't load the map.")
                 return@coroutineScope
             }
@@ -243,12 +244,14 @@ class ExploreMapViewModel
             if (generation != fetchGeneration) return null
             return when (result) {
                 is NetworkResult.Failure -> {
+                    _refreshNotice.value = null
                     _state.value = ExploreMapUiState.Error("Couldn't load your selected area. Please try again.")
                     null
                 }
                 is NetworkResult.Success ->
                     result.data.also { center ->
                         if (center == null) {
+                            _refreshNotice.value = null
                             _state.value = ExploreMapUiState.Error("Choose an area or turn on location to explore nearby.")
                         }
                     }
