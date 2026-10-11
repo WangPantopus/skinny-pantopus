@@ -14,15 +14,15 @@ import app.pantopus.android.data.api.models.support_trains.UpdateSupportTrainSlo
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.api.net.refusesStoredCopy
-import app.pantopus.android.data.support_trains.SupportTrainsRepository
 import app.pantopus.android.data.store.StoreKind
+import app.pantopus.android.data.support_trains.SupportTrainsRepository
 import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScopeFactory
 import app.pantopus.android.ui.screens.support_trains.detail.SupportTrainViewerRole
 import app.pantopus.android.ui.theme.PantopusIcon
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -259,8 +259,9 @@ class ManageTrainViewModel
         }
 
         private val canAct: Boolean
-            get() = active && session.isCurrent &&
-                (_state.value.state as? ManageTrainState.Loaded)?.content?.privateDetailsAvailable == true
+            get() =
+                active && session.isCurrent &&
+                    (_state.value.state as? ManageTrainState.Loaded)?.content?.privateDetailsAvailable == true
 
         /** A completed write can settle an unsent form while paused, but cannot cross sign-out. */
         private suspend fun <T> checkedAction(block: suspend () -> NetworkResult<T>): NetworkResult<T>? {
@@ -290,24 +291,25 @@ class ManageTrainViewModel
                     it.copy(state = ManageTrainState.Loading, deliveredMeals = null)
                 }
             }
-            readJob = viewModelScope.launch {
-                try {
-                    if (!current(version)) return@launch
-                    val result = repo.detail(trainId)
-                    if (!current(version)) return@launch
-                    when (result) {
-                    is NetworkResult.Success -> {
-                        applyContent(ManageTrainProjection.project(result.data))
-                        val slots = ManageOrganizerProjection.slotRows(result.data.slots ?: emptyList())
-                        _state.update { it.copy(slotRows = slots) }
-                        if (result.data.viewerIsOrganizer) loadOrganizerSurfaces(slots, version)
+            readJob =
+                viewModelScope.launch {
+                    try {
+                        if (!current(version)) return@launch
+                        val result = repo.detail(trainId)
+                        if (!current(version)) return@launch
+                        when (result) {
+                            is NetworkResult.Success -> {
+                                applyContent(ManageTrainProjection.project(result.data))
+                                val slots = ManageOrganizerProjection.slotRows(result.data.slots ?: emptyList())
+                                _state.update { it.copy(slotRows = slots) }
+                                if (result.data.viewerIsOrganizer) loadOrganizerSurfaces(slots, version)
+                            }
+                            is NetworkResult.Failure -> showReadFailure(result)
+                        }
+                    } finally {
+                        if (version == readVersion) _state.update { it.copy(refreshing = false) }
                     }
-                    is NetworkResult.Failure -> showReadFailure(result)
-                    }
-                } finally {
-                    if (version == readVersion) _state.update { it.copy(refreshing = false) }
                 }
-            }
         }
 
         private fun showReadFailure(result: NetworkResult.Failure) {
@@ -315,15 +317,20 @@ class ManageTrainViewModel
             val safe = summary()
             _state.update {
                 it.copy(
-                    state = if (!result.error.refusesStoredCopy && safe is ManageTrainState.Loaded) {
-                        safe
-                    } else {
-                        ManageTrainState.Error(result.error.displayMessage("Couldn't load this train."))
-                    },
-                    helperRows = emptyList(), organizerRows = emptyList(), fund = null, deliveredMeals = null,
-                    refreshNotice = RefreshNotice(copy.fetchedAt) { refresh() }.takeIf {
-                        copy.data != null && System.currentTimeMillis() - copy.fetchedAt > StoreKind.SUPPORT_TRAINS.maxShownAgeMs
-                    },
+                    state =
+                        if (!result.error.refusesStoredCopy && safe is ManageTrainState.Loaded) {
+                            safe
+                        } else {
+                            ManageTrainState.Error(result.error.displayMessage("Couldn't load this train."))
+                        },
+                    helperRows = emptyList(),
+                    organizerRows = emptyList(),
+                    fund = null,
+                    deliveredMeals = null,
+                    refreshNotice =
+                        RefreshNotice(copy.fetchedAt) { refresh() }.takeIf {
+                            copy.data != null && System.currentTimeMillis() - copy.fetchedAt > StoreKind.SUPPORT_TRAINS.maxShownAgeMs
+                        },
                 )
             }
         }
@@ -333,7 +340,10 @@ class ManageTrainViewModel
          * sections instead of blowing up the whole screen.
          */
         @Suppress("CyclomaticComplexMethod")
-        private suspend fun loadOrganizerSurfaces(slots: List<ManageSlotRow>, version: Long) {
+        private suspend fun loadOrganizerSurfaces(
+            slots: List<ManageSlotRow>,
+            version: Long,
+        ) {
             val reservationsResult = repo.reservations(trainId)
             if (!current(version)) return
             val reservations =
@@ -508,9 +518,12 @@ class ManageTrainViewModel
             _state.update { it.copy(isSubmitting = true, actionError = null, toast = null) }
             viewModelScope.launch {
                 if (note.isNotEmpty()) {
-                    when (val result = checkedAction {
-                        repo.postUpdate(trainId, SupportTrainUpdateBody(body = note, clientRequestId = closeRequestId))
-                    } ?: return@launch) {
+                    when (
+                        val result =
+                            checkedAction {
+                                repo.postUpdate(trainId, SupportTrainUpdateBody(body = note, clientRequestId = closeRequestId))
+                            } ?: return@launch
+                    ) {
                         is NetworkResult.Success -> Unit
                         is NetworkResult.Failure -> {
                             _state.update {
@@ -528,11 +541,12 @@ class ManageTrainViewModel
                         _state.update {
                             it.copy(
                                 isSubmitting = false,
-                                state = if (canAct) {
-                                    ManageTrainState.Loaded(content.copy(isActive = false, status = "completed"))
-                                } else {
-                                    it.state
-                                },
+                                state =
+                                    if (canAct) {
+                                        ManageTrainState.Loaded(content.copy(isActive = false, status = "completed"))
+                                    } else {
+                                        it.state
+                                    },
                                 sheetMode = ManageTrainSheetMode.CLOSED,
                                 toast =
                                     if (note.isEmpty()) {

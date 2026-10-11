@@ -29,9 +29,9 @@ import app.pantopus.android.data.api.models.relationships.PendingRequestsRespons
 import app.pantopus.android.data.api.models.relationships.RelationshipsListResponse
 import app.pantopus.android.data.api.models.saved_places.SavedPlacesListResponse
 import app.pantopus.android.data.api.models.settings.PrivacySettingsResponse
+import app.pantopus.android.data.api.models.support_trains.SupportTrainDetailDto
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsListResponse
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsNearbyResponse
-import app.pantopus.android.data.api.models.support_trains.SupportTrainDetailDto
 import app.pantopus.android.data.api.models.users.InviteCodeDto
 import app.pantopus.android.data.api.models.users.InviteProgressDto
 import app.pantopus.android.data.api.models.users.ProfileResponse

@@ -223,8 +223,9 @@ fun ManageTrainScreen(
 
     // Only organizers manage a train, and the server refuses everyone else,
     // so hand off rather than show controls that can only fail.
-    val notOrganizer = privateDetailsAvailable &&
-        (state.state as? ManageTrainState.Loaded)?.content?.viewerRole?.isOrganizer == false
+    val notOrganizer =
+        privateDetailsAvailable &&
+            (state.state as? ManageTrainState.Loaded)?.content?.viewerRole?.isOrganizer == false
     LaunchedEffect(notOrganizer) {
         if (notOrganizer) onNotOrganizer()
     }
@@ -440,69 +441,69 @@ private fun LoadedBody(
             if (!content.privateDetailsAvailable) {
                 TextButton(onClick = viewModel::refresh) { Text("Load organizer details") }
             } else {
-            SectionOverline("Send an update")
-            SendUpdateForm(
-                chips = content.audienceChips,
-                message = ui.draftMessage,
-                onMessageChange = viewModel::updateDraftMessage,
-                selectedAudienceId = ui.selectedAudienceId,
-                onSelectAudience = viewModel::selectAudience,
-                pushToPhones = ui.pushToPhones,
-                onTogglePush = viewModel::togglePush,
-                counterLabel = ui.characterCounterLabel,
-                isOverLimit = false,
-            )
-            SectionOverline("Organize")
-            OrganizeSection(
-                rows = content.organizeRows.filter { organizeHandler(it.id) != null },
-                onTapRow = { row -> organizeHandler(row.id)?.invoke(content.trainId) },
-            )
+                SectionOverline("Send an update")
+                SendUpdateForm(
+                    chips = content.audienceChips,
+                    message = ui.draftMessage,
+                    onMessageChange = viewModel::updateDraftMessage,
+                    selectedAudienceId = ui.selectedAudienceId,
+                    onSelectAudience = viewModel::selectAudience,
+                    pushToPhones = ui.pushToPhones,
+                    onTogglePush = viewModel::togglePush,
+                    counterLabel = ui.characterCounterLabel,
+                    isOverLimit = false,
+                )
+                SectionOverline("Organize")
+                OrganizeSection(
+                    rows = content.organizeRows.filter { organizeHandler(it.id) != null },
+                    onTapRow = { row -> organizeHandler(row.id)?.invoke(content.trainId) },
+                )
 
-            OrganizerControls(content = content, ui = ui, viewModel = viewModel, onInviteHelpers = onInviteHelpers)
+                OrganizerControls(content = content, ui = ui, viewModel = viewModel, onInviteHelpers = onInviteHelpers)
 
-            SectionOverline("Wind down")
-            WindDownSection(
-                row = content.closeRow,
-                onTap = { viewModel.showCloseSheet() },
-            )
-            ManageLifecycleSection(
-                status = content.status,
-                viewerRole = content.viewerRole,
-                isBusy = ui.isSubmitting,
-                onPublish = { viewModel.publishTrain() },
-                onPause = { viewModel.pauseTrain() },
-                onResume = { viewModel.resumeTrain() },
-                onUnpublish = {
-                    viewModel.requestConfirm(
-                        ManageDestructiveConfirm(
-                            kind = ManageConfirmKind.UnpublishTrain,
-                            title = "Unpublish this train?",
-                            message = "${content.title} goes back to draft and neighbors stop seeing it.",
-                            confirmLabel = "Unpublish",
-                        ),
-                    )
-                },
-                onArchive = {
-                    viewModel.requestConfirm(
-                        ManageDestructiveConfirm(
-                            kind = ManageConfirmKind.ArchiveTrain,
-                            title = "Archive this train?",
-                            message = "${content.title} moves out of your active list.",
-                            confirmLabel = "Archive",
-                        ),
-                    )
-                },
-                onDelete = {
-                    viewModel.requestConfirm(
-                        ManageDestructiveConfirm(
-                            kind = ManageConfirmKind.DeleteTrain,
-                            title = "Delete ${content.title}?",
-                            message = "This permanently deletes the train, its dates, updates and invites.",
-                            confirmLabel = "Delete",
-                        ),
-                    )
-                },
-            )
+                SectionOverline("Wind down")
+                WindDownSection(
+                    row = content.closeRow,
+                    onTap = { viewModel.showCloseSheet() },
+                )
+                ManageLifecycleSection(
+                    status = content.status,
+                    viewerRole = content.viewerRole,
+                    isBusy = ui.isSubmitting,
+                    onPublish = { viewModel.publishTrain() },
+                    onPause = { viewModel.pauseTrain() },
+                    onResume = { viewModel.resumeTrain() },
+                    onUnpublish = {
+                        viewModel.requestConfirm(
+                            ManageDestructiveConfirm(
+                                kind = ManageConfirmKind.UnpublishTrain,
+                                title = "Unpublish this train?",
+                                message = "${content.title} goes back to draft and neighbors stop seeing it.",
+                                confirmLabel = "Unpublish",
+                            ),
+                        )
+                    },
+                    onArchive = {
+                        viewModel.requestConfirm(
+                            ManageDestructiveConfirm(
+                                kind = ManageConfirmKind.ArchiveTrain,
+                                title = "Archive this train?",
+                                message = "${content.title} moves out of your active list.",
+                                confirmLabel = "Archive",
+                            ),
+                        )
+                    },
+                    onDelete = {
+                        viewModel.requestConfirm(
+                            ManageDestructiveConfirm(
+                                kind = ManageConfirmKind.DeleteTrain,
+                                title = "Delete ${content.title}?",
+                                message = "This permanently deletes the train, its dates, updates and invites.",
+                                confirmLabel = "Delete",
+                            ),
+                        )
+                    },
+                )
             }
         }
         StickyCTA(

@@ -11,8 +11,8 @@ import app.pantopus.android.data.api.models.support_trains.SupportTrainOrganizer
 import app.pantopus.android.data.api.models.support_trains.SupportTrainSlotDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
-import app.pantopus.android.data.support_trains.SupportTrainsRepository
 import app.pantopus.android.data.store.Stored
+import app.pantopus.android.data.support_trains.SupportTrainsRepository
 import app.pantopus.android.ui.components.SlotCalendarState
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimScopeTestFixture
 import app.pantopus.android.ui.screens.homes.claim_review.claimScopeFactory
