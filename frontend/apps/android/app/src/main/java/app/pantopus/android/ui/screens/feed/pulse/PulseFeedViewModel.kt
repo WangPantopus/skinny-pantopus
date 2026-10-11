@@ -19,6 +19,7 @@ import app.pantopus.android.data.api.models.sports.ActiveSportsEventDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
+import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.feed.FeedActionsRepository
 import app.pantopus.android.data.feed.FeedModerationStore
@@ -869,18 +870,7 @@ class PulseFeedViewModel
             quiet: Boolean = false,
         ) {
             val generation = ++fetchGeneration
-            _isLoadingMore.value = false
-            _loadMoreError.value = null
-            loading = true
-            if (isRefresh) _isRefreshing.value = true
-            if (!isRefresh && !quiet) {
-                // A different query must recreate the list, including its page-boundary effects.
-                _radiusSuggestion.value = null
-                postsLoaded = false
-                if (!showStoredFirstPage()) _state.value = PulseFeedUiState.Loading
-            } else if (_state.value !is PulseFeedUiState.Loaded) {
-                _state.value = PulseFeedUiState.Loading
-            }
+            beginFeedRead(isRefresh, quiet)
             viewModelScope.launch {
                 try {
                     // A pull reads the chosen area again too: it may have changed on another device.
@@ -895,7 +885,7 @@ class PulseFeedViewModel
                     val failure = stored.failure
                     when {
                         response != null -> applyFirstPage(response, area, query, inPlace = !isRefresh)
-                        failure is NetworkError.Forbidden || failure == NetworkError.NotFound -> {
+                        failure.refusesStoredCopy -> {
                             loadedPosts = emptyList()
                             _state.value = PulseFeedUiState.Error(failure.displayMessageOr("Couldn't load Pulse."))
                         }
@@ -916,9 +906,30 @@ class PulseFeedViewModel
             }
         }
 
-        private fun showAreaFailure(error: NetworkError, isRefresh: Boolean) {
+        private fun beginFeedRead(
+            isRefresh: Boolean,
+            quiet: Boolean,
+        ) {
+            _isLoadingMore.value = false
+            _loadMoreError.value = null
+            loading = true
+            if (isRefresh) _isRefreshing.value = true
+            if (!isRefresh && !quiet) {
+                // A different query must recreate the list, including its page-boundary effects.
+                _radiusSuggestion.value = null
+                postsLoaded = false
+                if (!showStoredFirstPage()) _state.value = PulseFeedUiState.Loading
+            } else if (_state.value !is PulseFeedUiState.Loaded) {
+                _state.value = PulseFeedUiState.Loading
+            }
+        }
+
+        private fun showAreaFailure(
+            error: NetworkError,
+            isRefresh: Boolean,
+        ) {
             val message = error.displayMessage("Couldn't load your viewing area. Try again.")
-            if (_state.value !is PulseFeedUiState.Loaded || error is NetworkError.Forbidden || error == NetworkError.NotFound) {
+            if (_state.value !is PulseFeedUiState.Loaded || error.refusesStoredCopy) {
                 loadedPosts = emptyList()
                 _state.value = PulseFeedUiState.Error(message)
             } else if (isRefresh) {
