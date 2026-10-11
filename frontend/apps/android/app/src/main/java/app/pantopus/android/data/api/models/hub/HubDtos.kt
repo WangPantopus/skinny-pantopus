@@ -200,7 +200,9 @@ data class HubTodayResponse(
     val error: String?,
     val location: TodayLocationDto? = null,
     @Json(name = "display_mode") val displayMode: String? = null,
-)
+) {
+    val isRenderable: Boolean get() = error == null && displayMode != "hidden"
+}
 
 /**
  * `GET /api/hub/discovery` — route `backend/routes/hub.js:757`.
