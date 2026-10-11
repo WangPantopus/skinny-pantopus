@@ -905,7 +905,7 @@ private fun ExploreBottomSheet(
                 .testTag("exploreSheet"),
     ) {
         ExploreDragHandle()
-        refreshNotice?.let { RefreshFailedLine(it) }
+        refreshNotice?.let { RefreshFailedLine(it, modifier = Modifier.padding(horizontal = Spacing.s4)) }
         ExploreSheetHeader(
             countLabel = exploreHeaderCountLabel(state, activeFilterCount),
             activeFilterCount = activeFilterCount,
