@@ -49,18 +49,19 @@ class SavedPlacesStoreViewModel
             if (loading || writing) return
             loading = true
             repository.listCopy()?.let { _saved.value = it.savedPlaces }
-            readJob = viewModelScope.launch {
-                try {
-                    val stored = repository.listStored()
-                    stored.data?.let { _saved.value = it.savedPlaces }
-                    if (stored.data == null) {
-                        _saved.value = emptyList()
-                        _toast.value = SavedPlacesToast("Couldn't load saved places.", isError = true)
+            readJob =
+                viewModelScope.launch {
+                    try {
+                        val stored = repository.listStored()
+                        stored.data?.let { _saved.value = it.savedPlaces }
+                        if (stored.data == null) {
+                            _saved.value = emptyList()
+                            _toast.value = SavedPlacesToast("Couldn't load saved places.", isError = true)
+                        }
+                    } finally {
+                        loading = false
                     }
-                } finally {
-                    loading = false
                 }
-            }
         }
 
         fun isSaved(
@@ -199,7 +200,10 @@ class SavedPlacesStoreViewModel
             _toast.value = SavedPlacesToast(message, isPending = true)
         }
 
-        private fun restoreRow(dto: SavedPlaceDto, index: Int) {
+        private fun restoreRow(
+            dto: SavedPlaceDto,
+            index: Int,
+        ) {
             _saved.value = _saved.value.filterNot { it.id == dto.id }.toMutableList().apply { add(index.coerceIn(0, size), dto) }
         }
 

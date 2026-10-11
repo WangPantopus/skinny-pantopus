@@ -83,35 +83,36 @@ class SavedPlacesViewModel
                 }
                 if (!loadedAtLeastOnce) _state.value = SavedPlacesUiState.Loading
             }
-            readJob = viewModelScope.launch {
-                try {
-                    val stored = repository.listStored(force)
-                    val data = stored.data
-                    _refreshNotice.value =
-                        if (stored.showsRefreshFailure(StoreKind.YOU)) {
-                            RefreshNotice(stored.fetchedAt, ::refresh)
-                        } else {
-                            null
+            readJob =
+                viewModelScope.launch {
+                    try {
+                        val stored = repository.listStored(force)
+                        val data = stored.data
+                        _refreshNotice.value =
+                            if (stored.showsRefreshFailure(StoreKind.YOU)) {
+                                RefreshNotice(stored.fetchedAt, ::refresh)
+                            } else {
+                                null
+                            }
+                        if (data != null) {
+                            items = data.savedPlaces
+                            loadedAtLeastOnce = true
+                            rebuild()
+                        } else if (!loadedAtLeastOnce ||
+                            stored.failure.refusesStoredCopy
+                        ) {
+                            items = emptyList()
+                            loadedAtLeastOnce = false
+                            _state.value =
+                                SavedPlacesUiState.Error(
+                                    stored.failure?.displayMessage("Couldn't load saved places.") ?: "Couldn't load saved places.",
+                                )
                         }
-                    if (data != null) {
-                        items = data.savedPlaces
-                        loadedAtLeastOnce = true
-                        rebuild()
-                    } else if (!loadedAtLeastOnce ||
-                        stored.failure.refusesStoredCopy
-                    ) {
-                        items = emptyList()
-                        loadedAtLeastOnce = false
-                        _state.value =
-                            SavedPlacesUiState.Error(
-                                stored.failure?.displayMessage("Couldn't load saved places.") ?: "Couldn't load saved places.",
-                            )
+                    } finally {
+                        loading = false
+                        _refreshing.value = false
                     }
-                } finally {
-                    loading = false
-                    _refreshing.value = false
                 }
-            }
         }
 
         private fun rebuild() {
@@ -208,7 +209,10 @@ class SavedPlacesViewModel
             _toast.value = SavedPlacesToast(message, isPending = true)
         }
 
-        private fun restoreRow(dto: SavedPlaceDto, index: Int) {
+        private fun restoreRow(
+            dto: SavedPlaceDto,
+            index: Int,
+        ) {
             items = items.filterNot { it.id == dto.id }.toMutableList().apply { add(index.coerceIn(0, size), dto) }
             rebuild()
         }
