@@ -27,18 +27,18 @@ export const APP_WEB_URL = trimTrailingSlash(
 export const IOS_APP_STORE_URL = trimTrailingSlash(
   process.env.NEXT_PUBLIC_IOS_APP_STORE_URL ||
     process.env.EXPO_PUBLIC_IOS_APP_STORE_URL ||
-    'https://apps.apple.com/us/app/pantopus/id6760512315'
+    ''
 );
 
 export const IOS_APP_STORE_APP_ID =
   process.env.NEXT_PUBLIC_IOS_APP_STORE_APP_ID ||
   process.env.EXPO_PUBLIC_IOS_APP_STORE_APP_ID ||
-  '6760512315';
+  '';
 
 export const ANDROID_PLAY_STORE_URL = trimTrailingSlash(
   process.env.NEXT_PUBLIC_ANDROID_PLAY_STORE_URL ||
     process.env.EXPO_PUBLIC_ANDROID_PLAY_STORE_URL ||
-    'https://play.google.com/store/apps/details?id=com.pantopus.app'
+    ''
 );
 
 export const WS_BASE_URL =
