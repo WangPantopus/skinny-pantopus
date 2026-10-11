@@ -222,6 +222,7 @@ class HouseholdTasksListViewModel
         val refreshNotice: StateFlow<RefreshNotice?> = _refreshNotice.asStateFlow()
 
         private var tasks: List<HomeTaskDto>? = null
+        private var pendingOriginal: HomeTaskDto? = null
 
         /** Members' names by user id, for assignees; empty when the viewer can't read members ("Member 1A2B"). */
         private var memberNames: Map<String, String> = emptyMap()
@@ -265,6 +266,7 @@ class HouseholdTasksListViewModel
             work?.cancel()
             work = null
             acting = false
+            rollbackCompletion()
             _actionError.value = null
             _refreshing.value = false
             // Founder decision 3: owners and household roles keep what's on screen while away; anyone else blanks
@@ -402,7 +404,7 @@ class HouseholdTasksListViewModel
         fun toggleDone(taskId: String) {
             val original = tasks?.firstOrNull { it.id == taskId } ?: return
             if (!readyToAct || original.capabilities?.canComplete != true) return
-            mutate {
+            mutate(original) {
                 access.complete(taskId, original.status != "done")
                 access.list()
             }
@@ -431,20 +433,39 @@ class HouseholdTasksListViewModel
             }
         }
 
-        private fun mutate(operation: suspend () -> GetHomeTasksResponse) {
+        private fun mutate(
+            completing: HomeTaskDto? = null,
+            operation: suspend () -> GetHomeTasksResponse,
+        ) {
             acting = true
             val revision = ++generation
             work?.cancel()
+            pendingOriginal = completing
+            if (completing != null) {
+                val pending =
+                    completing.copy(
+                        status = if (completing.status == "done") "open" else "done",
+                        completedAt = if (completing.status == "done") null else clock().toString(),
+                    )
+                applySuccess(tasks.orEmpty().map { if (it.id == pending.id) pending else it })
+            }
             work =
                 viewModelScope.launch {
                     taskAttempt(revision) {
                         val result = operation()
                         if (!current(revision)) return@taskAttempt
                         canCreate = result.collectionCapabilities?.canCreate == true
+                        pendingOriginal = null
                         applySuccess(result.tasks)
                     }
                     if (current(revision)) acting = false
                 }
+        }
+
+        private fun rollbackCompletion() {
+            val original = pendingOriginal ?: return
+            pendingOriginal = null
+            tasks?.let { loaded -> applySuccess(loaded.map { if (it.id == original.id) original else it }) }
         }
 
         private val readyToAct: Boolean get() = active && !acting && access.isCurrent
@@ -460,7 +481,7 @@ class HouseholdTasksListViewModel
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: NetworkError) {
-                if (current(revision)) fail(error.displayMessage("Could not refresh task access. Try again."))
+                handleTaskFailure(error, revision)
             } catch (error: IllegalStateException) {
                 if (active && revision == generation) fail(error.message ?: TASK_ACCESS_CHANGED)
             } catch (error: IllegalArgumentException) {
@@ -468,8 +489,23 @@ class HouseholdTasksListViewModel
             }
         }
 
+        private fun handleTaskFailure(
+            error: NetworkError,
+            revision: Int,
+        ) {
+            if (!current(revision)) return
+            if (pendingOriginal != null && error.code !in listOf(401, 403, 404)) {
+                rollbackCompletion()
+                _actionError.value = error.displayMessage("Couldn't confirm the task change. Try again.")
+            } else {
+                if (error.code in listOf(401, 403, 404)) gate?.invalidate()
+                fail(error.displayMessage("Could not refresh task access. Try again."))
+            }
+        }
+
         private fun clearContent() {
             tasks = null
+            pendingOriginal = null
             canCreate = false
             _tabs.value = initialTabs()
             _banner.value = null
@@ -495,7 +531,7 @@ class HouseholdTasksListViewModel
         private fun renderForCurrentTab(loaded: List<HomeTaskDto>) {
             val now = clock()
             val tab = HouseholdTasksTab.fromId(_selectedTab.value)
-            val filtered = loaded.filter { passes(it, tab, now) }
+            val filtered = loaded.filter { it.id == pendingOriginal?.id || passes(it, tab, now) }
             if (filtered.isEmpty()) {
                 _banner.value = null
                 _state.value = emptyContent(tab, hasTasks = loaded.isNotEmpty())
@@ -634,6 +670,7 @@ class HouseholdTasksListViewModel
             tab: HouseholdTasksTab,
             taskId: String,
         ): RowTrailing {
+            if (taskId == pendingOriginal?.id) return RowTrailing.Status("Pending", StatusChipVariant.Neutral)
             if (tab == HouseholdTasksTab.Recurring) return RowTrailing.Chevron
             val complete = task.capabilities?.canComplete == true
             val delete = task.capabilities?.canDelete == true

@@ -130,6 +130,7 @@ class HomeSettingsViewModel
         private val gate =
             gates.create(homeId, listOf(HomeStoreKeys.detail(homeId), HomeStoreKeys.occupants(homeId), HomeStoreKeys.me(homeId)))
         private var readGeneration = 0L
+        private var active = true
 
         private val _identity =
             MutableStateFlow(HomeSettingsSampleData.identity(HomeSettingsSampleData.Frame.Populated))
@@ -161,12 +162,30 @@ class HomeSettingsViewModel
          * and the store answers a fresh copy without a request or revalidates an older one quietly.
          */
         fun load() {
+            active = true
             if (!loadedOnce && gate.showsCopy) showStoredCopy()
             read(force = false)
         }
 
         /** Pull to refresh, Retry and own edits: read now. */
         fun refresh() = read(force = true)
+
+        fun suspendContent() {
+            active = false
+            readGeneration += 1
+            if (!gate.showsCopy) clearCopy()
+            gate.leave()
+        }
+
+        private fun clearCopy() {
+            loadedOnce = false
+            viewerAccess = null
+            currentName = ""
+            _rename.value = HomeRenameState()
+            _navigation.value = null
+            _refreshNotice.value = null
+            _state.value = GroupedListUiState.Loading
+        }
 
         override fun onCleared() {
             gate.leave()
@@ -236,7 +255,7 @@ class HomeSettingsViewModel
          */
         fun saveRenaming() {
             val current = _rename.value
-            if (!current.canEdit || current.isSaving) return
+            if (!active || !current.canEdit || current.isSaving) return
             val trimmed = current.draft.trim()
             if (trimmed == currentName) {
                 _rename.update { it.copy(isRenaming = false, error = null) }
@@ -249,8 +268,15 @@ class HomeSettingsViewModel
                 return
             }
             _rename.update { it.copy(isSaving = true, error = null) }
+            val generation = readGeneration
             viewModelScope.launch {
-                when (val result = homeSettingsRepository.updateHome(homeId, UpdateHomeRequest(name = trimmed))) {
+                val result = homeSettingsRepository.updateHome(homeId, UpdateHomeRequest(name = trimmed))
+                if (!active || generation != readGeneration) {
+                    _rename.update { it.copy(isSaving = false) }
+                    if (active) refresh()
+                    return@launch
+                }
+                when (result) {
                     is NetworkResult.Success -> {
                         _rename.update { it.copy(isSaving = false, isRenaming = false, error = null) }
                         refresh()
@@ -275,27 +301,32 @@ class HomeSettingsViewModel
         }
 
         private fun read(force: Boolean) {
+            if (!active) return
             val generation = ++readGeneration
             if (!loadedOnce) _state.value = GroupedListUiState.Loading
             viewModelScope.launch {
-                val fromCopy = gate.showsCopy && !force
-                var reads = readAll(force = !fromCopy)
-                // Household access ended meanwhile: whatever came from a copy is read again now.
-                if (fromCopy && !gate.showsCopy) reads = readAll(force = true)
+                val reads = readAll(force, generation)
                 if (generation == readGeneration) publish(reads)
             }
         }
 
-        /** The Home, its occupants and the viewer's access, read side by side with the access re-check. */
-        private suspend fun readAll(force: Boolean): SettingsReads =
-            coroutineScope {
-                val recheck = async { gate.recheck(force) }
-                val detail = async { homesRepository.detailStored(homeId, force) }
-                val occupants = async { homeMembersRepository.listOccupantsStored(homeId, force) }
-                val access = async { homeAdminRepository.myAccessStored(homeId, force) }
-                recheck.await()
-                SettingsReads(detail.await(), occupants.await(), access.await())
+        private suspend fun readAll(
+            force: Boolean,
+            generation: Long,
+        ): SettingsReads {
+            val refusal = gate.checkForRead(force) { if (generation == readGeneration) clearCopy() }
+            if (refusal != null) return SettingsReads(Stored(failure = refusal), Stored(), Stored())
+            if (generation != readGeneration) return SettingsReads(Stored(), Stored(), Stored())
+            return coroutineScope {
+                val readNow = force || !gate.showsCopy
+                val detail = async { homesRepository.detailStored(homeId, readNow) }
+                val occupants = async { homeMembersRepository.listOccupantsStored(homeId, readNow) }
+                val access = async { homeAdminRepository.myAccessStored(homeId, readNow) }
+                val stored = detail.await()
+                val home = if (!gate.showsCopy && stored.failure != null) Stored<HomeDetailResponse>(failure = stored.failure) else stored
+                SettingsReads(home, occupants.await(), access.await())
             }
+        }
 
         private fun publish(reads: SettingsReads) {
             val home = reads.detail.data?.home

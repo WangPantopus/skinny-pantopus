@@ -391,7 +391,7 @@ class HouseholdTasksListViewModelTest {
 
     // ─── Optimistic toggle ─────────────────────────────────────
 
-    @Test fun failed_mutation_hides_stale_rows_until_current_reload() =
+    @Test fun failed_completion_rolls_back_the_row_with_a_reason() =
         runTest {
             coEvery { repo.getHomeTasks(any(), any()) } returns
                 NetworkResult.Success(
@@ -412,8 +412,10 @@ class HouseholdTasksListViewModelTest {
             val vm = makeVm()
             vm.load()
             vm.toggleDone("t1")
-            assertTrue(vm.state.value is ListOfRowsUiState.Error)
-            assertNull(vm.fab())
+            val row = (vm.state.value as ListOfRowsUiState.Loaded).sections.single().rows.single()
+            assertEquals("t1", row.id)
+            assertEquals("Vacuum", row.title)
+            assertFalse(row.trailing is RowTrailing.Status)
             assertNotNull(vm.actionError.value)
         }
 

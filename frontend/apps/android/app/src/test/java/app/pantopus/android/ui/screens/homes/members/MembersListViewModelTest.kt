@@ -82,6 +82,7 @@ class MembersListViewModelTest {
     @Before
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        coEvery { gates.create(any(), any()).checkForRead(any(), any()) } returns null
         every { auth.state } returns MutableStateFlow(AuthRepository.State.SignedOut)
         every { sender.session(any()) } returns readSession
         coEvery { readSession.requireCurrent() } returns Unit
@@ -359,6 +360,7 @@ class MembersListViewModelTest {
             coEvery { repo.listOccupants("home_1") } returns NetworkResult.Success(populated())
             // An owner: the store may answer a return from its fresh copy (no request).
             val gate = mockk<HomeCopyGate>(relaxed = true)
+            coEvery { gate.checkForRead(any(), any()) } returns null
             every { gate.showsCopy } returns true
             every { gates.create(any(), any()) } returns gate
             every { repo.storedOccupants("home_1") } returns null

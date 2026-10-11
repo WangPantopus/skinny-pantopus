@@ -128,6 +128,8 @@ class HouseholdTaskDetailViewModelTest {
             val pending = CompletableDeferred<NetworkResult<HomeTaskResponse>>()
             coEvery { repository.updateHomeTask(any(), any(), any(), any()) } coAnswers { pending.await() }
             model.complete()
+            assertEquals("done", model.state.value.task?.status)
+            assertTrue(model.state.value.pendingCompletion)
             model.complete()
             model.delete()
             coVerify(exactly = 1) { repository.updateHomeTask(any(), any(), any(), any()) }

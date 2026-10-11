@@ -3,11 +3,11 @@
 package app.pantopus.android.ui.screens.homes.settings.security
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.perf.ReportContentShown
+import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListCallbacks
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListScreen
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListUiState
@@ -25,7 +25,7 @@ fun HomeSecurityScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     ReportContentShown("home_privacy", state is GroupedListUiState.Loaded)
     val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
-    LaunchedEffect(Unit) { viewModel.load() }
+    HomeCopyLifecycle(viewModel::load, viewModel::suspendContent)
     GroupedListScreen(
         title = viewModel.title,
         state = state,

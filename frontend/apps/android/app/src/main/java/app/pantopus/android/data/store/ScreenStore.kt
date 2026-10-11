@@ -8,6 +8,7 @@ import app.pantopus.android.BuildConfig
 import app.pantopus.android.data.api.net.Conditional
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.auth.TokenStorage
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -52,6 +53,7 @@ private const val IDLE_MS = 30 * 60 * 1000L
  * Sensitive replies (contract §5) never enter the store: their screens keep calling the repository directly.
  */
 @Singleton
+@Suppress("TooManyFunctions") // Read, write, invalidation and eviction share the same account/generation lock.
 class ScreenStore
     @Inject
     constructor(
@@ -209,19 +211,25 @@ class ScreenStore
         /** Capture before an asynchronous save, so its reply cannot populate another account or a cleared cache. */
         fun <T : Any> writer(key: StoreKey<T>): (T) -> Unit {
             val account = accountId() ?: return {}
-            val (slot, ticket) = synchronized(slots) {
-                val slot = slotLocked(key, account)
-                slot.edits++
-                slot.etag = null
-                slot.markStaleLocked()
-                slot.inFlight?.cancel()
-                slot.inFlight = null
-                slot.state.value = slot.state.value.copy(refreshing = false)
-                slot to Ticket(generation, identity(account), slot.edits, slot.marks)
-            }
+            val (slot, ticket) =
+                synchronized(slots) {
+                    val slot = slotLocked(key, account)
+                    slot.edits++
+                    slot.etag = null
+                    slot.markStaleLocked()
+                    slot.inFlight?.cancel()
+                    slot.inFlight = null
+                    slot.state.value = slot.state.value.copy(refreshing = false)
+                    slot to Ticket(generation, identity(account), slot.edits, slot.marks)
+                }
             return { data ->
                 synchronized(slots) {
-                    if (ticket.generation == generation && ticket.identity == identity() && ticket.edits == slot.edits) put(key, data)
+                    if (ticket.generation == generation && ticket.identity == identity() && ticket.edits == slot.edits) {
+                        val markedMeanwhile = ticket.marks != slot.marks
+                        put(key, data)
+                        // Another device's change during this save still needs a read, just as during a GET.
+                        if (markedMeanwhile) slot.stale = true
+                    }
                 }
             }
         }
@@ -417,8 +425,7 @@ class ScreenStore
                             }
                         is NetworkResult.Failure ->
                             if (
-                                result.error is NetworkError.Forbidden || result.error == NetworkError.NotFound ||
-                                result.error == NetworkError.Unauthorized
+                                result.error.refusesStoredCopy
                             ) {
                                 // Access ended: the entry goes at once, from the phone too, and the screen shows
                                 // the server's answer.

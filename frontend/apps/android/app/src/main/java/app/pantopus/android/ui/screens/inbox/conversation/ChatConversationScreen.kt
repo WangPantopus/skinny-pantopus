@@ -1651,6 +1651,7 @@ private fun HeaderAvatar(
         counterparty is ChatCounterparty.Person ->
             PersonAvatar(
                 initials = counterparty.initials,
+                avatarUrl = counterparty.avatarUrl,
                 verified = counterparty.verified,
                 online = counterparty.online,
                 size = 36.dp,
@@ -1687,6 +1688,7 @@ private fun PersonAvatar(
     // Design `.vb` is 14px on the 36px header avatar and 24px on the 88px
     // empty-state avatar — callers scale it alongside [size].
     badgeSize: androidx.compose.ui.unit.Dp = 13.dp,
+    avatarUrl: String? = null,
 ) {
     Box(modifier = Modifier.size(size + 4.dp), contentAlignment = Alignment.BottomEnd) {
         Box(
@@ -1697,6 +1699,20 @@ private fun PersonAvatar(
                     .background(PantopusColors.primary600),
             contentAlignment = Alignment.Center,
         ) {
+            Text(
+                text = initials,
+                fontSize = (size.value * 0.4f).sp,
+                fontWeight = FontWeight.Bold,
+                color = PantopusColors.appTextInverse,
+            )
+            if (!avatarUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = avatarUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.matchParentSize(),
+                )
+            }
             if (ringColor != null) {
                 Box(
                     modifier =
@@ -1707,12 +1723,6 @@ private fun PersonAvatar(
                             .border(2.dp, ringColor, CircleShape),
                 )
             }
-            Text(
-                text = initials,
-                fontSize = (size.value * 0.4f).sp,
-                fontWeight = FontWeight.Bold,
-                color = PantopusColors.appTextInverse,
-            )
         }
         if (verified) {
             Box(
@@ -1998,6 +2008,7 @@ private fun PersonEmptyFrame(
     ) {
         PersonAvatar(
             initials = counterparty.initials,
+            avatarUrl = counterparty.avatarUrl,
             verified = counterparty.verified,
             online = counterparty.online,
             size = 88.dp,
