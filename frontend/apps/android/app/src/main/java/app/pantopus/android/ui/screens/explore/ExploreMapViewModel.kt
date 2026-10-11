@@ -391,8 +391,9 @@ class ExploreMapViewModel
             }
 
         private fun rebuild(selectedId: String?) {
-            val homesOnly = _activeKind.value == ExploreKind.Home ||
-                (_activeKind.value == null && _filters.value.kinds == setOf(ExploreKind.Home))
+            val homesOnly =
+                _activeKind.value == ExploreKind.Home ||
+                    (_activeKind.value == null && _filters.value.kinds == setOf(ExploreKind.Home))
             if (liveMode && homesOnly) {
                 if (!homeLayerChecked) {
                     _state.value = ExploreMapUiState.Loading
