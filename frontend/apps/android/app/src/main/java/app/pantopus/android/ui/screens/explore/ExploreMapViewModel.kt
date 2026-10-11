@@ -271,12 +271,14 @@ class ExploreMapViewModel
                         if (_userCoordinate.value == null) {
                             _userCoordinate.value = locationProvider.requestCurrent(timeoutMillis = 4_000L)
                         }
-                        val fallback = payload.data.homes.firstNotNullOfOrNull { home ->
-                            home.latitude?.let { lat -> home.longitude?.let { lon -> UserCoordinate(lat, lon, 0.0) } }
-                        }
-                        val center = _userCoordinate.value ?: fallback ?: savedPlaces.listStored().data?.savedPlaces?.firstOrNull()?.let {
-                            UserCoordinate(it.latitude, it.longitude, 0.0)
-                        }
+                        val fallback =
+                            payload.data.homes.firstNotNullOfOrNull { home ->
+                                home.latitude?.let { lat -> home.longitude?.let { lon -> UserCoordinate(lat, lon, 0.0) } }
+                            }
+                        val center =
+                            _userCoordinate.value ?: fallback ?: savedPlaces.listStored().data?.savedPlaces?.firstOrNull()?.let {
+                                UserCoordinate(it.latitude, it.longitude, 0.0)
+                            }
                         NetworkResult.Success(center)
                     }
                 }
