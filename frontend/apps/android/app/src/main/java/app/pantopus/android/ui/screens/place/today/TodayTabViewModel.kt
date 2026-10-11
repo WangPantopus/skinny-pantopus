@@ -404,42 +404,45 @@ class TodayTabViewModel
                         samePlace.afterFailedRead(result.failure.sentence("Couldn't load today."))
                     }
             } else {
-                loadSavedToday(version, place, intelligence, result.fetchedAt, result.failure != null)
+                loadSavedToday(version, place, result, force)
             }
         }
 
         private suspend fun loadSavedToday(
             version: Long,
             place: SavedPlaceDto,
-            intelligence: PlaceIntelligence,
-            fetchedAt: Long,
-            failed: Boolean,
+            copy: Stored<PlaceIntelligence>,
+            force: Boolean,
         ) {
+            val intelligence = copy.data ?: return
             // The copy is visible before checking the optional morning-briefing anchor.
-            val shown = TodayTabUiState.Loaded(intelligence, savedPlace = place, fetchedAt = fetchedAt, refreshFailed = failed)
+            val shown = TodayTabUiState.Loaded(intelligence, savedPlace = place, fetchedAt = copy.fetchedAt, refreshFailed = copy.failure != null)
             _state.value = shown
-            val matches = checkSavedAnchor(place)
+            val matches = checkSavedAnchor(place, force)
             if (!current(version)) return
             _state.value = shown.copy(savedAnchorMatches = matches)
-            if (!failed && ::todayWidget.isInitialized) todayWidget.write(intelligence.todayWidgetSnapshot())
+            if (copy.failure == null && ::todayWidget.isInitialized) todayWidget.write(intelligence.todayWidgetSnapshot())
             if (!matches) return
-            val preferences = preferencesRepository.preferences()
+            val preferences = preferencesRepository.preferencesStored(force).data
             if (!current(version)) return
-            if (preferences is NetworkResult.Success) {
-                promptConfirmed = !preferences.data.dailyBriefingPromptedAt.isNullOrBlank()
-                _showMorningCard.value = preferences.data.dailyBriefingPromptedAt == null
+            if (preferences != null) {
+                promptConfirmed = !preferences.dailyBriefingPromptedAt.isNullOrBlank()
+                _showMorningCard.value = preferences.dailyBriefingPromptedAt == null
             }
         }
 
-        private suspend fun checkSavedAnchor(place: SavedPlaceDto): Boolean {
+        private suspend fun checkSavedAnchor(
+            place: SavedPlaceDto,
+            force: Boolean,
+        ): Boolean {
             if (!sessionScope.confirmCurrent()) return false
-            val today = hubRepository.todayDetail()
-            if (!sessionScope.confirmCurrent()) return false
-            val payload = (today as? NetworkResult.Success)?.data ?: return false
+            val today = hubRepository.todayStored(force)
+            if (!sessionScope.confirmCurrent() || today.failure != null) return false
+            val payload = today.data ?: return false
             val location = payload.location
             val latitude = location?.latitude
             val longitude = location?.longitude
-            return payload.isRenderable && location?.source == "saved_place" && latitude != null && longitude != null &&
+            return payload.error == null && payload.displayMode != "hidden" && location?.source == "saved_place" && latitude != null && longitude != null &&
                 abs(latitude - place.latitude) < SAVED_ANCHOR_TOLERANCE && abs(longitude - place.longitude) < SAVED_ANCHOR_TOLERANCE
         }
 
@@ -488,7 +491,7 @@ class TodayTabViewModel
             _preferenceError.value = null
             viewModelScope.launch {
                 if (!current(version)) return@launch
-                val matches = checkSavedAnchor(place)
+                val matches = checkSavedAnchor(place, force = true)
                 if (!current(version)) return@launch
                 if (!matches) {
                     _state.value = loaded.copy(savedAnchorMatches = false)
