@@ -8,6 +8,7 @@ import app.pantopus.android.data.api.models.gigs.GigDto
 import app.pantopus.android.data.api.models.listings.ListingDto
 import app.pantopus.android.data.api.models.postsmap.PostsMapMarkerDto
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.gigs.GigsRepository
 import app.pantopus.android.data.listings.ListingsRepository
 import app.pantopus.android.data.location.LocationProvider
@@ -212,9 +213,9 @@ class ExploreMapViewModel
             val listings = listingsDeferred.await()
             if (generation != fetchGeneration) return@coroutineScope
             val privateMarkers = (homes as? NetworkResult.Success)?.data?.markers.orEmpty()
-            if (posts.data == null && privateMarkers.isEmpty()) {
+            if (posts.data == null) {
                 allEntities = emptyList()
-                _state.value = ExploreMapUiState.Error("Couldn't load the map. Try again.")
+                _state.value = ExploreMapUiState.Error(posts.failure?.displayMessage("Couldn't load the map.") ?: "Couldn't load the map.")
                 return@coroutineScope
             }
             _refreshNotice.value =
