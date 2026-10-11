@@ -191,8 +191,12 @@ class SupportTrainDetailViewModel
         }
 
         fun refreshFromSignal() {
-            if (!active || repo.detailIsCurrent(trainId)) return
-            if (_action.value.reserveSheet == null) load() else pendingReserveRefresh = true
+            if (!active) return
+            val needsPrivateCheck = loadedContent?.privateDetailsAvailable != true
+            if (!needsPrivateCheck && repo.detailIsCurrent(trainId)) return
+            // A paused sheet is hidden until its private context is checked again. Its retained draft must not
+            // defer that reconnect check, otherwise neither the sheet nor its dismissal can become reachable.
+            if (_action.value.reserveSheet == null || needsPrivateCheck) load() else pendingReserveRefresh = true
         }
 
         /**
