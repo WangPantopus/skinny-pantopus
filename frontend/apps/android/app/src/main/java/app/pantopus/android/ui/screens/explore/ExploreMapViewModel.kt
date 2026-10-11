@@ -102,12 +102,17 @@ class ExploreMapViewModel
             if (_userCoordinate.value == null) _userCoordinate.value = locationProvider.cachedCoordinate()
             readJob?.cancel()
             val generation = ++fetchGeneration
+            hideHomePins()
             readJob = viewModelScope.launch { fetchAroundUser(generation, force) }
         }
 
         fun suspendContent() {
             readJob?.cancel()
             fetchGeneration++
+            hideHomePins()
+        }
+
+        private fun hideHomePins() {
             // The mixed map has no role/expiry metadata. Only current-access reads may display home pins.
             allEntities = allEntities.filterNot { it.kind == ExploreKind.Home }
             if (_state.value is ExploreMapUiState.Loaded) rebuild(keptSelection())
@@ -244,6 +249,7 @@ class ExploreMapViewModel
             if (generation != fetchGeneration) return null
             return when (result) {
                 is NetworkResult.Failure -> {
+                    allEntities = emptyList()
                     _refreshNotice.value = null
                     _state.value = ExploreMapUiState.Error("Couldn't load your selected area. Please try again.")
                     null
