@@ -206,7 +206,9 @@ class FeedMapViewModel
                 home.latitude?.let { lat -> home.longitude?.let { lon -> lat to lon } }
             } ?: if (next == null && !isReady) {
                 savedPlaces.listStored().data?.savedPlaces?.firstOrNull()?.let { it.latitude to it.longitude }
-            } else defaultArea
+            } else {
+                defaultArea
+            }
             if (next == selectedArea) return false
             selectedArea = next
             if (next != null) {
