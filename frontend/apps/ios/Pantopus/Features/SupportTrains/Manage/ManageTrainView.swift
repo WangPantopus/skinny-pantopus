@@ -267,6 +267,16 @@ public struct ManageTrainView: View {
                     statusLabel: content.status.isEmpty ? "Unavailable" : content.status.capitalized
                 )
 
+                if viewModel.helpersFailed {
+                    VStack(alignment: .leading, spacing: Spacing.s2) {
+                        Text("Organizer details need to be checked again.")
+                            .font(.system(size: 13.5))
+                            .foregroundStyle(Theme.Color.appTextSecondary)
+                        Button("Retry organizer details") { Task { await viewModel.refresh() } }
+                            .accessibilityIdentifier("manageTrainRetryDetails")
+                    }
+                }
+
                 StatCellRow(cells: [
                     StatCellContent(id: "slots", value: content.slotFillValue, label: "Slots", tone: .success),
                     StatCellContent(id: "helpers", value: content.helpersValue, label: "Helpers", tone: .neutral),
@@ -348,6 +358,7 @@ public struct ManageTrainView: View {
             .padding(.bottom, Spacing.s4)
         }
         .scrollDismissesKeyboard(.interactively)
+        .refreshable { await viewModel.refresh() }
         .safeAreaInset(edge: .bottom, spacing: Spacing.s0) { stickyCTA(content: content) }
         .accessibilityIdentifier("manageTrainScroll")
     }
