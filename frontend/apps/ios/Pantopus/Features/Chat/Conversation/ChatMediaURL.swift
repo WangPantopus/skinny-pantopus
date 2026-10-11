@@ -32,7 +32,11 @@ enum ChatMediaURL {
         }
         guard let absolute else { return nil }
 
-        guard absolute.path.contains("/api/chat/files/"),
+        // The token goes only to the API's own chat-file proxy. Message metadata
+        // comes from the sender, so a link to another host that merely has this
+        // path must load without it, or that host collects the viewer's token.
+        guard isSameOrigin(absolute, baseURL),
+              absolute.path.contains("/api/chat/files/"),
               let trimmedToken = token?.trimmingCharacters(in: .whitespacesAndNewlines),
               !trimmedToken.isEmpty
         else {
@@ -46,6 +50,18 @@ enum ChatMediaURL {
         }
         components?.queryItems = items
         return components?.url ?? absolute
+    }
+
+    /// Same scheme, host and port (a missing port is the scheme's default).
+    static func isSameOrigin(_ url: URL, _ other: URL) -> Bool {
+        guard let scheme = url.scheme?.lowercased(), let host = url.host?.lowercased(), !host.isEmpty,
+              scheme == other.scheme?.lowercased(), host == other.host?.lowercased()
+        else { return false }
+        return effectivePort(url) == effectivePort(other)
+    }
+
+    private static func effectivePort(_ url: URL) -> Int {
+        url.port ?? (url.scheme?.lowercased() == "https" ? 443 : 80)
     }
 
     /// Download a chat file into the temporary directory so QuickLook can
