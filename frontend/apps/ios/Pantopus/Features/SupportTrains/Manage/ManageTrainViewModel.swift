@@ -95,7 +95,7 @@ public struct ManageTrainContent: Sendable, Hashable {
     /// Organizer tier. `primary` unlocks unpublish / archive / delete /
     /// co-organizer edits / fund disable
     /// (`backend/middleware/supportTrainPermissions.js:51`).
-    public let viewerRole: SupportTrainViewerRole
+    public var viewerRole: SupportTrainViewerRole
 
     public init(
         trainId: String,
@@ -168,6 +168,7 @@ public let manageTrainMessageMaxChars: Int = 500
 @MainActor
 public final class ManageTrainViewModel {
     public private(set) var state: ManageTrainState = .loading
+    public private(set) var accessChecked = false
 
     /// Editable draft fields. Initialised from `content.draftMessage` /
     /// `selectedAudienceId` / `pushToPhones` on `load()`.
@@ -285,11 +286,13 @@ public final class ManageTrainViewModel {
         fund = nil
         deliveredMeals = nil
         helpersFailed = true
+        accessChecked = false
         pendingConfirm = nil
         actionError = nil
         replaceOrganizerSurfaces(helperCount: nil)
         if case var .loaded(content) = state {
             content.close.recipientQuote = ""
+            content.viewerRole = .viewer
             state = .loaded(content)
         }
     }
@@ -343,6 +346,7 @@ public final class ManageTrainViewModel {
 
     /// Push a loaded content payload into state + the editable draft fields.
     private func apply(_ content: ManageTrainContent) {
+        accessChecked = true
         state = .loaded(content)
         guard !initializedDrafts else { return }
         initializedDrafts = true
@@ -367,6 +371,7 @@ public final class ManageTrainViewModel {
     /// character and is under the cap. Mirrors the design's
     /// `Send update` enable rule (textarea non-empty + valid).
     public var canSendUpdate: Bool {
+        guard case let .loaded(content) = state, content.viewerRole.isOrganizer else { return false }
         let trimmed = draftMessage.trimmingCharacters(in: .whitespacesAndNewlines)
         return !isSubmitting && !trimmed.isEmpty && characterCount <= manageTrainMessageMaxChars
     }

@@ -16,8 +16,6 @@ import SwiftUI
 
 @MainActor
 public struct SupportTrainDetailView: View {
-    @Environment(\.scenePhase) private var scenePhase
-    @State private var isVisible = false
     @State private var viewModel: SupportTrainDetailViewModel
     private let onBack: @MainActor () -> Void
     private let onOpenManage: (@MainActor () -> Void)?
@@ -69,21 +67,16 @@ public struct SupportTrainDetailView: View {
         .background(Theme.Color.appBg)
         .accessibilityIdentifier("supportTrainDetail")
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
-        .task { await viewModel.load() }
-        .onAppear { isVisible = true }
-        .onDisappear {
-            isVisible = false
-            viewModel.suspend()
-        }
-        .onChange(of: scenePhase) { _, phase in
-            if phase != .active {
-                viewModel.suspend()
-            } else if isVisible {
-                Task { await viewModel.load() }
-            }
-        }
         // Someone took or left a slot (`supporttrain:{id}`): the open train re-reads.
-        .refreshesOnStoreChange(affects: { viewModel.isAffected(by: $0) }, perform: { await viewModel.refreshFromSignal() })
+        .refreshesOnStoreChange(
+            affects: { viewModel.isAffected(by: $0) },
+            recheckOnAttach: true,
+            onBackground: {
+                viewModel.suspend()
+                return true
+            },
+            perform: { await viewModel.refreshFromSignal() }
+        )
         .overlay(alignment: .bottom) { toastOverlay }
         .refreshFailureToast($viewModel.refreshFailureMessage)
         .sheet(item: $viewModel.reserveSelection, onDismiss: { viewModel.dismissReserve() }, content: { selection in

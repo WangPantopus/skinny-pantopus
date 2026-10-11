@@ -25,8 +25,6 @@ import SwiftUI
 
 @MainActor
 public struct ManageTrainView: View {
-    @Environment(\.scenePhase) private var scenePhase
-    @State private var isVisible = false
     @State private var viewModel: ManageTrainViewModel
     private let onClose: @MainActor () -> Void
     /// Runs after a successful delete instead of `onClose`, so a host can
@@ -73,19 +71,15 @@ public struct ManageTrainView: View {
             content
         }
         .background(Theme.Color.appBg)
-        .task { await viewModel.load() }
-        .onAppear { isVisible = true }
-        .onDisappear {
-            isVisible = false
-            viewModel.suspend()
-        }
-        .onChange(of: scenePhase) { _, phase in
-            if phase != .active {
+        .refreshesOnStoreChange(
+            affects: { $0.names(topic: ScreenTopic.supportTrain(viewModel.supportTrainId)) },
+            recheckOnAttach: true,
+            onBackground: {
                 viewModel.suspend()
-            } else if isVisible {
-                Task { await viewModel.load() }
-            }
-        }
+                return true
+            },
+            perform: { await viewModel.load() }
+        )
         .overlay(alignment: .bottom) { closeSheetOverlay }
         .overlay(alignment: .bottom) { toastOverlay }
         .accessibilityIdentifier("manageTrain")
@@ -200,7 +194,7 @@ public struct ManageTrainView: View {
         switch viewModel.state {
         case .loading:
             loadingBody
-        case let .loaded(content) where !content.viewerRole.isOrganizer:
+        case let .loaded(content) where viewModel.accessChecked && !content.viewerRole.isOrganizer:
             // Only organizers manage a train, and the server refuses everyone
             // else, so hand off rather than show controls that can only fail.
             loadingBody

@@ -149,7 +149,7 @@ public final class SupportTrainDetailViewModel {
     /// re-read waits for it to close, so the slot options don't change under
     /// the helper mid-signup.
     public func refreshFromSignal() async {
-        guard reserveSelection == nil else {
+        guard reserveSelection == nil || !recipientDetailsAvailable else {
             pendingReserveRefresh = true
             return
         }
