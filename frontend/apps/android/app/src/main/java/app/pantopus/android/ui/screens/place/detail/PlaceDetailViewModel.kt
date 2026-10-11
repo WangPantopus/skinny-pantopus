@@ -6,6 +6,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.security.AppLockManager
+import app.pantopus.android.data.api.models.homes.showsCopyBeforeRecheck
 import app.pantopus.android.data.api.models.hub.NotificationPreferencesPatch
 import app.pantopus.android.data.api.models.place.BlockInviteRecipient
 import app.pantopus.android.data.api.models.place.FridgeCardItem
@@ -16,19 +17,17 @@ import app.pantopus.android.data.api.models.place.PlaceSectionId
 import app.pantopus.android.data.api.models.place.UnlistedProfile
 import app.pantopus.android.data.api.models.place.UnlistedRemovalStatus
 import app.pantopus.android.data.api.net.NetworkError
-import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
+import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.auth.AuthenticatedDispatchGuard
 import app.pantopus.android.data.homes.HomeAdminRepository
 import app.pantopus.android.data.homes.HomesRepository
-import app.pantopus.android.data.api.models.homes.showsCopyBeforeRecheck
+import app.pantopus.android.data.hub.NotificationPreferencesRepository
+import app.pantopus.android.data.place.PlaceRepository
 import app.pantopus.android.data.store.StoreKind
 import app.pantopus.android.data.store.Stored
 import app.pantopus.android.ui.components.RefreshNotice
-import kotlinx.coroutines.Job
-import app.pantopus.android.data.hub.NotificationPreferencesRepository
-import app.pantopus.android.data.place.PlaceRepository
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScope
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScopeFactory
 import app.pantopus.android.ui.screens.place.PlaceDetailGroup
@@ -36,6 +35,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -569,8 +569,10 @@ class PlaceDetailViewModel
                 // typo into an apparent feature outage with no way back.
                 when (val r = repo.setRecordWatch(homeId, month.trim())) {
                     is NetworkResult.Success -> {
-                        if (generation == pageGeneration && visible) _rateWatch.value =
-                            r.data.watch?.let { RateWatchUiState.Loaded(it) } ?: RateWatchUiState.None
+                        if (generation == pageGeneration && visible) {
+                            _rateWatch.value =
+                                r.data.watch?.let { RateWatchUiState.Loaded(it) } ?: RateWatchUiState.None
+                        }
                     }
                     is NetworkResult.Failure ->
                         _watchSaveError.value = r.error.displayMessage("Couldn't save the watch.")
@@ -672,8 +674,10 @@ class PlaceDetailViewModel
                 when (val r = repo.setRentReport(homeId, amount, parseBedrooms(bedrooms))) {
                     is NetworkResult.Success -> {
                         _isEditingRent.value = false
-                        if (generation == pageGeneration && visible) _rentReport.value =
-                            r.data.report?.let { RealRentUiState.Loaded(it) } ?: RealRentUiState.None
+                        if (generation == pageGeneration && visible) {
+                            _rentReport.value =
+                                r.data.report?.let { RealRentUiState.Loaded(it) } ?: RealRentUiState.None
+                        }
                         // The block band now includes this figure, so the
                         // section's own progress/standing is stale.
                         refreshIntelligenceQuietly()
@@ -869,7 +873,6 @@ class PlaceDetailViewModel
             internal const val VERIFICATION_REQUIRED_MESSAGE =
                 "Verify your address to add your rent — a benchmark is only real if the people in it live there."
 
-
             /**
              * "$2,400", "2,400", "2400" and "2400.50" all name the same
              * monthly figure — and "495.75" names $496, never $49,575.
@@ -898,7 +901,10 @@ class PlaceDetailViewModel
              * 400 already does instead of the shared client's canned
              * "You don't have permission to do that."
              */
-            internal fun rentWriteMessage(error: NetworkError, fallback: String): String = rentFailureMessage(error, fallback)
+            internal fun rentWriteMessage(
+                error: NetworkError,
+                fallback: String,
+            ): String = rentFailureMessage(error, fallback)
         }
     }
 
@@ -1042,7 +1048,6 @@ private fun parsedBedrooms(raw: String): Int? {
     return if (n in 0..MAX_BEDROOMS) n else null
 }
 
-
 private fun removalStatusMessage(status: UnlistedRemovalStatus): String =
     when (status) {
         UnlistedRemovalStatus.TODO -> "Marked as still to do."
@@ -1061,7 +1066,6 @@ private fun rentFailureMessage(
         error.code == java.net.HttpURLConnection.HTTP_FORBIDDEN -> error.displayMessage(PlaceDetailViewModel.VERIFICATION_REQUIRED_MESSAGE)
         else -> error.displayMessage(fallback)
     }
-
 
 /** Role-aware Place read state; the view model owns the page's independent forms and sensitive panels. */
 private class PlaceDetailCopy(
@@ -1113,16 +1117,20 @@ private class PlaceDetailCopy(
         }
         refreshing.value = force && state.value is PlaceDetailUiState.Loaded
         val version = generation
-        readJob = scope.launch {
-            val stored = readAuthorized(force, version)
-            if (!current(version)) return@launch
-            refreshing.value = false
-            refreshNotice.value = RefreshNotice(stored.fetchedAt, ::refresh).takeIf { stored.showsRefreshFailure(StoreKind.PLACE) }
-            publish(stored)
-        }
+        readJob =
+            scope.launch {
+                val stored = readAuthorized(force, version)
+                if (!current(version)) return@launch
+                refreshing.value = false
+                refreshNotice.value = RefreshNotice(stored.fetchedAt, ::refresh).takeIf { stored.showsRefreshFailure(StoreKind.PLACE) }
+                publish(stored)
+            }
     }
 
-    private suspend fun readAuthorized(force: Boolean, version: Long): Stored<PlaceIntelligence> {
+    private suspend fun readAuthorized(
+        force: Boolean,
+        version: Long,
+    ): Stored<PlaceIntelligence> {
         val access = homes.myHomesStored(force || !household())
         if (!current(version)) return Stored()
         val keep = household()
@@ -1146,10 +1154,11 @@ private class PlaceDetailCopy(
         }
     }
 
-    private fun failure(error: NetworkError?): PlaceDetailUiState.Error = PlaceDetailUiState.Error(
-        error?.displayMessage("Couldn't load this place.") ?: "Couldn't load this place.",
-        denied = error is NetworkError.Forbidden,
-    )
+    private fun failure(error: NetworkError?): PlaceDetailUiState.Error =
+        PlaceDetailUiState.Error(
+            error?.displayMessage("Couldn't load this place.") ?: "Couldn't load this place.",
+            denied = error is NetworkError.Forbidden,
+        )
 }
 
 private fun pickupGuard(
@@ -1157,10 +1166,11 @@ private fun pickupGuard(
     session: HomeClaimSessionScope,
     appLock: AppLockManager,
     keyguard: KeyguardManager?,
-): AuthenticatedDispatchGuard = AuthenticatedDispatchGuard { credentials ->
-    scope.coroutineContext.ensureActive()
-    session.requireCurrent()
-    session.requireDispatchCredentials(credentials)
-    scope.coroutineContext.ensureActive()
-    check(!appLock.isLocked.value && keyguard?.isDeviceLocked == false)
-}
+): AuthenticatedDispatchGuard =
+    AuthenticatedDispatchGuard { credentials ->
+        scope.coroutineContext.ensureActive()
+        session.requireCurrent()
+        session.requireDispatchCredentials(credentials)
+        scope.coroutineContext.ensureActive()
+        check(!appLock.isLocked.value && keyguard?.isDeviceLocked == false)
+    }

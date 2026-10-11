@@ -6,10 +6,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.saved_places.SavePlaceBody
 import app.pantopus.android.data.api.models.saved_places.SavedPlaceDto
-import app.pantopus.android.data.api.net.NetworkError
-import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
+import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.saved_places.SavedPlacesRepository
 import app.pantopus.android.data.store.StoreKind
 import app.pantopus.android.ui.components.RefreshNotice
@@ -81,22 +80,25 @@ class SavedPlacesViewModel
                 try {
                     val stored = repository.listStored(force)
                     val data = stored.data
-                _refreshNotice.value = if (stored.showsRefreshFailure(StoreKind.YOU)) {
-                    RefreshNotice(stored.fetchedAt, ::refresh)
-                } else {
-                    null
-                }
+                    _refreshNotice.value =
+                        if (stored.showsRefreshFailure(StoreKind.YOU)) {
+                            RefreshNotice(stored.fetchedAt, ::refresh)
+                        } else {
+                            null
+                        }
                     if (data != null) {
                         items = data.savedPlaces
                         loadedAtLeastOnce = true
                         rebuild()
                     } else if (!loadedAtLeastOnce ||
-                        stored.failure.refusesStoredCopy) {
+                        stored.failure.refusesStoredCopy
+                    ) {
                         items = emptyList()
                         loadedAtLeastOnce = false
-                    _state.value = SavedPlacesUiState.Error(
-                        stored.failure?.displayMessage("Couldn't load saved places.") ?: "Couldn't load saved places.",
-                    )
+                        _state.value =
+                            SavedPlacesUiState.Error(
+                                stored.failure?.displayMessage("Couldn't load saved places.") ?: "Couldn't load saved places.",
+                            )
                     }
                 } finally {
                     loading = false

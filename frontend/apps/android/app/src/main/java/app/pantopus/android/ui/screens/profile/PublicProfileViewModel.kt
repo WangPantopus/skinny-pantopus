@@ -9,8 +9,8 @@ import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.posts.MyPostDto
 import app.pantopus.android.data.api.models.profile.PublicProfileDto
 import app.pantopus.android.data.api.net.NetworkError
-import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.blocks.BlocksRepository
 import app.pantopus.android.data.connections.ConnectionsRepository
@@ -796,7 +796,8 @@ class PublicProfileViewModel
                     // feeding them into the broadcast card would invent a
                     // visibility chip the API never sent.
                     val previous = (_state.value as? PublicProfileUiState.Loaded)?.content?.takeIf { it.profile.id == profile.id }
-                        val firstFrame = if (kind == PublicProfileKind.Local) {
+                    val firstFrame =
+                        if (kind == PublicProfileKind.Local) {
                             previous?.posts ?: posts.userPostsCopy(profile.id, 50, includeArchived = false)
                                 .data?.posts.orEmpty().map(::project)
                         } else {
@@ -809,7 +810,8 @@ class PublicProfileViewModel
                 }
                 is NetworkResult.Failure -> {
                     if (_state.value !is PublicProfileUiState.Loaded ||
-                        result.error.refusesStoredCopy) {
+                        result.error.refusesStoredCopy
+                    ) {
                         _canFollow.value = false
                         _relationshipLoaded.value = false
                         _state.value = PublicProfileUiState.Error(friendlyMessage(result.error))
@@ -913,8 +915,6 @@ class PublicProfileViewModel
             )
         }
 
-
-
         private fun buildReviewCards(profile: PublicProfileDto): List<ProfileReviewCard> =
             profile.reviews.map { r ->
                 ProfileReviewCard(
@@ -999,10 +999,6 @@ class PublicProfileViewModel
                 primaryCtaLabel = if (isNew) "Say hi" else "Message",
             )
         }
-
-
-
-
 
         /**
          * P6.5 — Kind heuristic. A profile with a verified residency
