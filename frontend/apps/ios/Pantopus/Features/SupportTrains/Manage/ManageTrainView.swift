@@ -71,6 +71,7 @@ public struct ManageTrainView: View {
             content
         }
         .background(Theme.Color.appBg)
+        .onDisappear { viewModel.suspend() }
         .refreshesOnStoreChange(
             affects: { $0.names(topic: ScreenTopic.supportTrain(viewModel.supportTrainId)) },
             recheckOnAttach: true,
