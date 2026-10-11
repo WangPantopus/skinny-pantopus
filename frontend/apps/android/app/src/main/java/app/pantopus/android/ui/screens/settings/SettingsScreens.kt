@@ -204,6 +204,7 @@ fun PrivacySettingsScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
+    val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
     val banner by viewModel.banner.collectAsStateWithLifecycle()
     val toast by viewModel.toast.collectAsStateWithLifecycle()
     val deleteSheetVisible by viewModel.deleteSheetVisible.collectAsStateWithLifecycle()
@@ -248,6 +249,7 @@ fun PrivacySettingsScreen(
             title = viewModel.title,
             state = state,
             refreshing = refreshing,
+            refreshNotice = refreshNotice,
             onRefresh = viewModel::refresh,
             banner = banner,
             callbacks =

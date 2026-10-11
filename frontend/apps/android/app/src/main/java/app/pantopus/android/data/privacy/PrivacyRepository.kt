@@ -24,6 +24,8 @@ class PrivacyRepository
     ) {
         fun settingsCopy(): PrivacySettingsResponse? = store.peek(StoreKeys.privacySettings).data
 
+        fun settingsSnapshot() = store.peek(StoreKeys.privacySettings)
+
         suspend fun settings(force: Boolean = false): NetworkResult<PrivacySettingsResponse> =
             store.read(StoreKeys.privacySettings, force) { etag -> conditionalApiCall { api.settingsConditional(etag) } }.asResult()
 

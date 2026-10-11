@@ -13,12 +13,16 @@ import app.pantopus.android.data.account.AccountRepository
 import app.pantopus.android.data.api.models.settings.PrivacySettingsUpdate
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.displayMessage
+import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.auth.SessionEndReason
 import app.pantopus.android.data.privacy.PrivacyRepository
 import app.pantopus.android.data.profile.ProfileRepository
 import app.pantopus.android.data.storage.StorageUsage
+import app.pantopus.android.data.store.StoreKind
 import app.pantopus.android.data.support_trains.SupportTrainsRepository
+import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.components.ToastKind
 import app.pantopus.android.ui.components.ToastMessage
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListBanner
@@ -477,6 +481,8 @@ class PrivacySettingsViewModel
         private var searchPrivacyLoading = false
         private val _refreshing = MutableStateFlow(false)
         val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+        private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
+        val refreshNotice: StateFlow<RefreshNotice?> = _refreshNotice.asStateFlow()
 
         fun load() = readPrivacy(force = false)
 
@@ -496,14 +502,23 @@ class PrivacySettingsViewModel
             }
             viewModelScope.launch {
                 try {
-                    when (val result = privacy.settings(force)) {
+                    val result = privacy.settings(force)
+                    val copy = privacy.settingsSnapshot()
+                    _refreshNotice.value = RefreshNotice(copy.fetchedAt, ::refresh).takeIf { copy.showsRefreshFailure(StoreKind.YOU) }
+                    when (result) {
                         is NetworkResult.Success ->
                             if (!searchPrivacySaving) {
                                 searchVisibility = result.data.settings.searchVisibility ?: "everyone"
                                 findableByName = result.data.settings.findableByName ?: false
                                 searchPrivacyLoadFailed = false
                             }
-                        is NetworkResult.Failure -> searchPrivacyLoadFailed = true
+                        is NetworkResult.Failure -> {
+                            searchPrivacyLoadFailed = true
+                            if (result.error.refusesStoredCopy) {
+                                _state.value = GroupedListUiState.Error(result.error.displayMessage("Search privacy is unavailable."))
+                                return@launch
+                            }
+                        }
                     }
                     rebuild()
                 } finally {
@@ -822,7 +837,7 @@ class PrivacySettingsViewModel
          * (`settings/privacy.tsx:20-33`, `:476-556`) word for word.
          */
         private fun searchPrivacyGroup(): GroupedListGroup {
-            // The card has no pull-to-refresh; after a failed load this row is the way back.
+            // Keep an explicit recovery action alongside pull-to-refresh after a failed first read.
             val retry =
                 GroupedListRow(
                     id = ROW_SEARCH_PRIVACY_RETRY,
