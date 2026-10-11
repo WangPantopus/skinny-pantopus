@@ -14,6 +14,7 @@ import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.privacy.PrivacyRepository
+import app.pantopus.android.data.store.Stored
 import app.pantopus.android.ui.components.ToastKind
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListBanner
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListGroup
@@ -58,6 +59,7 @@ class PrivacyViewModelTest {
     @Before fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         every { privacy.settingsCopy() } returns null
+        every { privacy.settingsSnapshot() } returns Stored()
         coEvery { privacy.settings(any()) } returns NetworkResult.Success(settingsResponse())
         coEvery { account.authMethods() } returns NetworkResult.Success(AuthMethodsResponse(hasPassword = true))
         // Mirrors the real coordinator: no host Activity → nothing can be verified.
