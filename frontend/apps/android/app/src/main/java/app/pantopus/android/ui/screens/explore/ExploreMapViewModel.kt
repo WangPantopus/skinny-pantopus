@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.gigs.GigDto
 import app.pantopus.android.data.api.models.listings.ListingDto
 import app.pantopus.android.data.api.models.postsmap.PostsMapMarkerDto
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.api.net.refusesStoredCopy
@@ -92,6 +93,8 @@ class ExploreMapViewModel
         private var liveMode: Boolean = true
         private var scenario: ExploreScenario = ExploreScenario.Populated
         private var allEntities: List<ExploreEntity> = emptyList()
+        private var homeLayerChecked = false
+        private var homeLayerError: NetworkError? = null
         private var clusterRadiusDegrees: Double = 0.005
 
         /** Returning keeps the public map; household pins are fetched for each active visit. */
@@ -113,6 +116,8 @@ class ExploreMapViewModel
         }
 
         private fun hideHomePins() {
+            homeLayerChecked = false
+            homeLayerError = null
             // The mixed map has no role/expiry metadata. Only current-access reads may display home pins.
             allEntities = allEntities.filterNot { it.kind == ExploreKind.Home }
             if (_state.value is ExploreMapUiState.Loaded) rebuild(keptSelection())
@@ -216,17 +221,28 @@ class ExploreMapViewModel
                     }
                 }
             val posts = postsDeferred.await()
-            val homes = homesDeferred.await()
-            val gigs = gigsDeferred.await()
-            val listings = listingsDeferred.await()
             if (generation != fetchGeneration) return@coroutineScope
-            val privateMarkers = (homes as? NetworkResult.Success)?.data?.markers.orEmpty()
             if (posts.data == null) {
+                homesDeferred.cancel()
+                gigsDeferred.cancel()
+                listingsDeferred.cancel()
+                homeLayerChecked = true
+                homeLayerError = posts.failure
                 allEntities = emptyList()
                 _refreshNotice.value = null
                 _state.value = ExploreMapUiState.Error(posts.failure?.displayMessage("Couldn't load the map.") ?: "Couldn't load the map.")
                 return@coroutineScope
             }
+            // Public posts can appear while the independent Home access check is still running.
+            allEntities = projectMarkers(posts.data.markers, center).filter { it.kind == ExploreKind.Post }
+            rebuild(keptSelection())
+            val homes = homesDeferred.await()
+            val gigs = gigsDeferred.await()
+            val listings = listingsDeferred.await()
+            if (generation != fetchGeneration) return@coroutineScope
+            homeLayerChecked = true
+            homeLayerError = (homes as? NetworkResult.Failure)?.error
+            val privateMarkers = (homes as? NetworkResult.Success)?.data?.markers.orEmpty()
             _refreshNotice.value =
                 if (posts.showsRefreshFailure(StoreKind.NEARBY) || homes is NetworkResult.Failure) {
                     RefreshNotice(posts.fetchedAt, ::refresh)
@@ -372,6 +388,19 @@ class ExploreMapViewModel
             }
 
         private fun rebuild(selectedId: String?) {
+            val homesOnly = _activeKind.value == ExploreKind.Home ||
+                (_activeKind.value == null && _filters.value.kinds == setOf(ExploreKind.Home))
+            if (liveMode && homesOnly) {
+                if (!homeLayerChecked) {
+                    _state.value = ExploreMapUiState.Loading
+                    return
+                }
+                homeLayerError?.let { error ->
+                    _refreshNotice.value = null
+                    _state.value = ExploreMapUiState.Error(error.displayMessage("Couldn't load homes."))
+                    return
+                }
+            }
             val sorted = sortFor(filtered())
             _state.value =
                 ExploreMapUiState.Loaded(
