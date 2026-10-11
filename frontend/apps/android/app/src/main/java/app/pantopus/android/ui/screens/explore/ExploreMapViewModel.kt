@@ -15,8 +15,12 @@ import app.pantopus.android.data.location.UserCoordinate
 import app.pantopus.android.data.location.ViewingLocationRepository
 import app.pantopus.android.data.postsmap.PostsMapLayer
 import app.pantopus.android.data.postsmap.PostsMapRepository
+import app.pantopus.android.data.store.StoreKind
+import app.pantopus.android.ui.components.RefreshNotice
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -74,6 +78,9 @@ class ExploreMapViewModel
         val viewingCenter: StateFlow<UserCoordinate?> = _viewingCenter.asStateFlow()
         private var explicitCenter: UserCoordinate? = null
         private var fetchGeneration = 0
+        private var readJob: Job? = null
+        private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
+        val refreshNotice = _refreshNotice.asStateFlow()
 
         private val _filters = MutableStateFlow(ExploreFilterCriteria())
         val filters: StateFlow<ExploreFilterCriteria> = _filters.asStateFlow()
@@ -83,16 +90,23 @@ class ExploreMapViewModel
         private var allEntities: List<ExploreEntity> = emptyList()
         private var clusterRadiusDegrees: Double = 0.005
 
-        /** Live (production) load — fetch the viewport around the user. */
-        fun load() {
+        /** Returning keeps the public map; household pins are fetched for each active visit. */
+        fun load() = load(force = false)
+
+        private fun load(force: Boolean) {
             liveMode = true
-            if (_userCoordinate.value == null) {
-                _userCoordinate.value = locationProvider.cachedCoordinate()
-            }
-            _state.value = ExploreMapUiState.Loading
-            fetchGeneration += 1
-            val generation = fetchGeneration
-            viewModelScope.launch { fetchAroundUser(generation) }
+            if (_userCoordinate.value == null) _userCoordinate.value = locationProvider.cachedCoordinate()
+            readJob?.cancel()
+            val generation = ++fetchGeneration
+            readJob = viewModelScope.launch { fetchAroundUser(generation, force) }
+        }
+
+        fun suspendContent() {
+            readJob?.cancel()
+            fetchGeneration++
+            // The mixed map has no role/expiry metadata. Only current-access reads may display home pins.
+            allEntities = allEntities.filterNot { it.kind == ExploreKind.Home }
+            if (_state.value is ExploreMapUiState.Loaded) rebuild(keptSelection())
         }
 
         /** Sample/preview load — local sample entities, no network. */
@@ -111,12 +125,19 @@ class ExploreMapViewModel
         }
 
         fun refresh() {
-            if (liveMode) load() else load(scenario)
+            if (liveMode) load(force = true) else load(scenario)
         }
 
         fun configureFocus(focus: ExploreMapFocus?) {
-            fetchGeneration += 1
-            explicitCenter = focus?.let { UserCoordinate(it.latitude, it.longitude, 0.0) }
+            val next = focus?.let { UserCoordinate(it.latitude, it.longitude, 0.0) }
+            if (next == explicitCenter) return
+            readJob?.cancel()
+            fetchGeneration++
+            explicitCenter = next
+            allEntities = emptyList()
+            _state.value = ExploreMapUiState.Loading
+            _sheetStop.value = ExploreSheetStop.Standard
+            _refreshNotice.value = null
         }
 
         fun locate() {
@@ -135,45 +156,66 @@ class ExploreMapViewModel
             }
         }
 
-        private suspend fun fetchAroundUser(generation: Int) {
-            val center = resolveCurrentCenter(generation) ?: return
+        private suspend fun fetchAroundUser(generation: Int, force: Boolean) = coroutineScope {
+            val center = resolveCurrentCenter(generation) ?: return@coroutineScope
             val minLat = center.latitude - 0.012
             val maxLat = center.latitude + 0.012
             val minLon = center.longitude - 0.016
             val maxLon = center.longitude + 0.016
-
-            val gigsDeferred =
-                viewModelScope.async {
-                    gigsRepository.inBounds(minLat = minLat, minLon = minLon, maxLat = maxLat, maxLon = maxLon)
-                }
-            val listingsDeferred =
-                viewModelScope.async {
-                    listingsRepository.inBounds(south = minLat, west = minLon, north = maxLat, east = maxLon)
-                }
-            val markersDeferred =
-                viewModelScope.async {
-                    postsMapRepository.markers(
-                        south = minLat,
-                        west = minLon,
-                        north = maxLat,
-                        east = maxLon,
-                        layers = listOf(PostsMapLayer.Posts, PostsMapLayer.Businesses, PostsMapLayer.Homes),
-                    )
-                }
-            val gigsResult = gigsDeferred.await()
-            val listingsResult = listingsDeferred.await()
-            val markersResult = markersDeferred.await()
-            if (generation != fetchGeneration) return
-            val gigs = if (gigsResult is NetworkResult.Success) gigsResult.data.gigs else null
-            val listings = if (listingsResult is NetworkResult.Success) listingsResult.data.listings else null
-            val markers = if (markersResult is NetworkResult.Success) markersResult.data.markers else null
-            if (gigs == null && listings == null && markers == null) {
-                _state.value = ExploreMapUiState.Error("Couldn't load the map.")
-                return
+            val priorCenter = _viewingCenter.value
+            val sameArea = priorCenter != null && priorCenter.latitude == center.latitude && priorCenter.longitude == center.longitude
+            if (!sameArea) {
+                allEntities = emptyList()
+                _state.value = ExploreMapUiState.Loading
             }
             _viewingCenter.value = center
-            allEntities = project(gigs ?: emptyList(), listings ?: emptyList(), markers ?: emptyList(), center)
-            rebuild(selectedId = null)
+            val copy = postsMapRepository.postsCopy(minLat, minLon, maxLat, maxLon)
+            if (_state.value !is ExploreMapUiState.Loaded && copy.data != null) {
+                allEntities = projectMarkers(copy.data.markers, center).filter { it.kind == ExploreKind.Post }
+                rebuild(selectedId = null)
+            }
+            val postsDeferred = async { postsMapRepository.postsStored(minLat, minLon, maxLat, maxLon, force = force) }
+            val homesDeferred = async {
+                postsMapRepository.markers(
+                    south = minLat, west = minLon, north = maxLat, east = maxLon,
+                    layers =
+                        listOf(PostsMapLayer.Homes) +
+                            if (ExploreKind.Spot.isLaunchAvailable) listOf(PostsMapLayer.Businesses) else emptyList(),
+                )
+            }
+            val gigsDeferred = async {
+                if (ExploreKind.Task.isLaunchAvailable) {
+                    gigsRepository.inBounds(minLat = minLat, minLon = minLon, maxLat = maxLat, maxLon = maxLon)
+                } else null
+            }
+            val listingsDeferred = async {
+                if (ExploreKind.Item.isLaunchAvailable) {
+                    listingsRepository.inBounds(south = minLat, west = minLon, north = maxLat, east = maxLon)
+                } else null
+            }
+            val posts = postsDeferred.await()
+            val homes = homesDeferred.await()
+            val gigs = gigsDeferred.await()
+            val listings = listingsDeferred.await()
+            if (generation != fetchGeneration) return@coroutineScope
+            val privateMarkers = (homes as? NetworkResult.Success)?.data?.markers.orEmpty()
+            if (posts.data == null && privateMarkers.isEmpty()) {
+                allEntities = emptyList()
+                _state.value = ExploreMapUiState.Error("Couldn't load the map. Try again.")
+                return@coroutineScope
+            }
+            _refreshNotice.value =
+                if (posts.showsRefreshFailure(StoreKind.NEARBY) || homes is NetworkResult.Failure) {
+                    RefreshNotice(posts.fetchedAt, ::refresh)
+                } else null
+            val selectedId = currentSelectedId()
+            allEntities = project(
+                (gigs as? NetworkResult.Success)?.data?.gigs.orEmpty(),
+                (listings as? NetworkResult.Success)?.data?.listings.orEmpty(),
+                posts.data?.markers.orEmpty() + privateMarkers,
+                center,
+            )
+            rebuild(selectedId.takeIf { id -> allEntities.any { it.id == id } })
         }
 
         private suspend fun resolveCurrentCenter(generation: Int): UserCoordinate? {

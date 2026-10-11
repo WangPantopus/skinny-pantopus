@@ -16,6 +16,7 @@ import app.pantopus.android.data.listings.ListingsRepository
 import app.pantopus.android.data.location.LocationProvider
 import app.pantopus.android.data.location.UserCoordinate
 import app.pantopus.android.data.location.ViewingLocationRepository
+import app.pantopus.android.data.store.Stored
 import app.pantopus.android.data.postsmap.PostsMapRepository
 import io.mockk.coEvery
 import io.mockk.every
@@ -221,6 +222,10 @@ class ExploreMapViewModelTest {
             coEvery {
                 postsMapRepo.markers(any(), any(), any(), any(), any(), any(), any(), any())
             } returns NetworkResult.Success(PostsMapResponse(markers = emptyList()))
+
+            every { postsMapRepo.postsCopy(any(), any(), any(), any(), any(), any()) } returns Stored()
+            coEvery { postsMapRepo.postsStored(any(), any(), any(), any(), any(), any(), any()) } returns
+                Stored(PostsMapResponse(markers = emptyList()), fetchedAt = System.currentTimeMillis())
 
             val viewingLocation: ViewingLocationRepository = mockk()
             coEvery { viewingLocation.current() } returns NetworkResult.Success(ViewingLocationPayload())

@@ -24,6 +24,7 @@ import app.pantopus.android.data.api.models.place.PlaceSectionId
 import app.pantopus.android.data.api.models.posts.MyPostsResponse
 import app.pantopus.android.data.api.models.posts.PostDetailResponse
 import app.pantopus.android.data.api.models.posts.SavedPostsResponse
+import app.pantopus.android.data.api.models.postsmap.PostsMapResponse
 import app.pantopus.android.data.api.models.profile.PublicProfileDto
 import app.pantopus.android.data.api.models.relationships.PendingRequestsResponse
 import app.pantopus.android.data.api.models.relationships.RelationshipsListResponse
@@ -192,6 +193,30 @@ object StoreKeys {
 
     /** The area the viewer chose in the Nearby context bar (`GET /api/location`; kind You: fresh 10 minutes). */
     val viewingLocation = StoreKey<ViewingLocationPayload>("api/location", kind = StoreKind.YOU, topics = setOf(StoreTopics.PROFILE_ME))
+
+    /** Post pins only; household pins must always pass their own current access check. */
+    @Suppress("LongParameterList")
+    fun mapPosts(
+        south: Double,
+        west: Double,
+        north: Double,
+        east: Double,
+        postType: String?,
+        surface: String?,
+    ) =
+        StoreKey<PostsMapResponse>(
+            "api/posts/map",
+            mapOf(
+                "south" to south.toString(), "west" to west.toString(),
+                "north" to north.toString(), "east" to east.toString(),
+                "layers" to "posts", "limit" to "200",
+                "postType" to postType?.takeIf(String::isNotBlank), "surface" to surface?.takeIf(String::isNotBlank),
+            ),
+            kind = StoreKind.NEARBY,
+            topics = setOf(StoreTopics.POSTS, StoreTopics.PROFILE_ME),
+            type = PostsMapResponse::class.java,
+            saveWhen = { reply -> reply.markers.all { it.layerType == "post" } },
+        )
 
     /** The first page of one feed query (contract §4 "Nearby": fresh 2 minutes); later pages are never stored. */
     fun feedFirstPage(query: FeedQuery) =
