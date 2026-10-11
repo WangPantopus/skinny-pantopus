@@ -18,6 +18,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -35,10 +36,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.posts.PostDetailDto
 import app.pantopus.android.ui.components.EmptyState
+import app.pantopus.android.ui.components.RefreshFailedLine
+import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.components.Toast
 import app.pantopus.android.ui.components.ToastKind
@@ -107,6 +114,8 @@ fun PulsePostDetailScreen(
 ) {
     val context = LocalContext.current
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
+    val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
     app.pantopus.android.core.perf.ReportContentShown("post", state is PulsePostDetailUiState.Loaded)
     val composer by viewModel.composerText.collectAsStateWithLifecycle()
     val isSending by viewModel.isSendingComment.collectAsStateWithLifecycle()
@@ -127,7 +136,16 @@ fun PulsePostDetailScreen(
     var showsDeleteConfirm by rememberSaveable { mutableStateOf(false) }
     var commentPendingDeleteId by rememberSaveable { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(Unit) { viewModel.load() }
+    LifecycleResumeEffect(Unit) {
+        viewModel.load()
+        onPauseOrDispose { }
+    }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            viewModel.postChanges.collect { viewModel.refetchInPlace() }
+        }
+    }
     LaunchedEffect(Unit) { viewModel.loadNearbyProviders() }
     LaunchedEffect(state) {
         if (state is PulsePostDetailUiState.Loaded) onContentLoaded()
@@ -154,7 +172,11 @@ fun PulsePostDetailScreen(
         viewModel.recordShare()
     }
 
-    Box(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg)) {
+    PullToRefreshBox(
+        isRefreshing = refreshing,
+        onRefresh = viewModel::refresh,
+        modifier = Modifier.fillMaxSize().background(PantopusColors.appBg),
+    ) {
         when (val s = state) {
             PulsePostDetailUiState.Loading -> LoadingLayout(onBack = onBack)
             is PulsePostDetailUiState.Error ->
@@ -168,6 +190,7 @@ fun PulsePostDetailScreen(
                 PulsePostDetailLoadedContent(
                     content = content,
                     actionPending = likePending || savePending,
+                    refreshNotice = refreshNotice,
                     composerText = composer,
                     onComposerTextChange = { viewModel.setComposerText(it) },
                     isSending = isSending,
@@ -408,6 +431,7 @@ fun PulsePostDetailLoadedContent(
     onCommentDelete: ((PostCommentRow) -> Unit)? = null,
     /** Instant Screens: the post shows from its feed card while its comments load. */
     commentsLoading: Boolean = false,
+    refreshNotice: RefreshNotice? = null,
 ) {
     ContentDetailShell(
         title = "Post",
@@ -417,6 +441,7 @@ fun PulsePostDetailLoadedContent(
         cta = { InlineReplyCta() },
         header = {
             Column(verticalArrangement = Arrangement.spacedBy(Spacing.s4)) {
+                refreshNotice?.let { RefreshFailedLine(it, Modifier.padding(horizontal = Spacing.s4)) }
                 if (content.post.isRemovedByModerator) {
                     RemovedPostNotice(modifier = Modifier.padding(horizontal = Spacing.s4))
                 }

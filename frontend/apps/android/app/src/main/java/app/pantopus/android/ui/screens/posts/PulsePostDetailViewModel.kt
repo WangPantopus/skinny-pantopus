@@ -12,11 +12,14 @@ import app.pantopus.android.data.api.models.posts.PostDetailDto
 import app.pantopus.android.data.api.models.posts.PostReactionKind
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.posts.MatchedBusinessesRepository
 import app.pantopus.android.data.posts.PostsRepository
 import app.pantopus.android.data.posts.PulsePostsRefreshNotifier
+import app.pantopus.android.data.store.StoreKind
 import app.pantopus.android.ui.components.IdentityPillar
+import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.screens.shared.content_detail.bodies.PostCommentRow
 import app.pantopus.android.ui.screens.shared.content_detail.bodies.PostReactionCounts
 import app.pantopus.android.ui.screens.shared.content_detail.headers.PostIntent
@@ -174,11 +177,15 @@ class PulsePostDetailViewModel
         private val signedInUserId: String?
             get() = (authRepo.state.value as? AuthRepository.State.SignedIn)?.user?.id
 
+        /** The screen observes post changes only while it is visible. */
+        val postChanges = postsRefresh.ticks
+        private val _refreshing = MutableStateFlow(false)
+        val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+        private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
+        val refreshNotice: StateFlow<RefreshNotice?> = _refreshNotice.asStateFlow()
+
         init {
             showStoredCopy()
-            viewModelScope.launch {
-                postsRefresh.ticks.collect { refetchInPlace() }
-            }
         }
 
         /** The stored post, or its feed card, in the first frame (Instant Screens); the read follows in [load]. */
@@ -206,8 +213,16 @@ class PulsePostDetailViewModel
 
         /** Retry: reads now; the skeleton only when nothing is on screen. */
         fun refresh() {
-            if (_state.value !is PulsePostDetailUiState.Loaded) _state.value = PulsePostDetailUiState.Loading
-            viewModelScope.launch { fetch(force = true) }
+            if (_refreshing.value) return
+            _refreshing.value = _state.value is PulsePostDetailUiState.Loaded
+            if (!_refreshing.value) _state.value = PulsePostDetailUiState.Loading
+            viewModelScope.launch {
+                try {
+                    fetch(force = true)
+                } finally {
+                    _refreshing.value = false
+                }
+            }
         }
 
         /** Refetch without dropping to the loading state (pull-to-refresh, a post changed elsewhere). */
@@ -483,8 +498,9 @@ class PulsePostDetailViewModel
         private suspend fun fetch(force: Boolean) {
             val revision = reactionRevision
             val stored = repo.detailStored(postId, force)
+            _refreshNotice.value = RefreshNotice(stored.fetchedAt, ::refresh).takeIf { stored.showsRefreshFailure(StoreKind.POST) }
             val failure = stored.failure
-            val gone = failure == NetworkError.NotFound || failure is NetworkError.Forbidden || failure == NetworkError.Unauthorized
+            val gone = failure.refusesStoredCopy
             // Refusals always clear content; an older read cannot undo a pending or just-confirmed tap.
             val editInFlight = _likePending.value || _savePending.value
             if (!gone && (revision != reactionRevision || editInFlight)) return
