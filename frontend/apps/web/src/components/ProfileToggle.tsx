@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import { myHomesQuery } from '@/lib/myHomes';
+import { showsMyHomesCopy, useAfterRecheck } from '@/lib/householdCopy';
 import { queryKeys } from '@/lib/query-keys';
 import { IdentityIcons } from '@/lib/icons';
 import { Check, ChevronDown, Shield } from 'lucide-react';
@@ -70,15 +71,26 @@ export default function ProfileToggle({
   // follows changes (a rename, the `homes` signal) without its own reads.
   const queryClient = useQueryClient();
   const homesQuery = useQuery(myHomesQuery());
+  const [homeOpenedAt, setHomeOpenedAt] = useState(() => Date.now());
+  const { data: checkedHomes } = useAfterRecheck(homesQuery, showsMyHomesCopy);
+  const homesReply = checkedHomes && (showsMyHomesCopy(checkedHomes) || homesQuery.dataUpdatedAt >= homeOpenedAt)
+    ? checkedHomes : undefined;
   const homes = useMemo(
-    () => toHomeOptions(((homesQuery.data as Record<string, unknown> | undefined)?.homes as Record<string, unknown>[] | undefined) ?? []),
-    [homesQuery.data],
+    () => toHomeOptions(((homesReply as Record<string, unknown> | undefined)?.homes as Record<string, unknown>[] | undefined) ?? []),
+    [homesReply],
   );
-  const homesLoading = !homesQuery.data && homesQuery.isPending;
+  const homesLoading = !homesReply && (homesQuery.isPending || homesQuery.isFetching);
   const [businesses, setBusinesses] = useState<BusinessOption[]>([]);
   const [professional, setProfessional] = useState<ProfessionalOption | null>(null);
   const [hasSeats, setHasSeats] = useState(false);
   const [open, setOpen] = useState(false);
+  const toggleOpen = () => {
+    if (!open) {
+      setHomeOpenedAt(Date.now());
+      if (!showsMyHomesCopy(homesQuery.data)) void homesQuery.refetch();
+    }
+    setOpen(!open);
+  };
   const [loading, setLoading] = useState(true);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [dropdownStyle, setDropdownStyle] = useState<{ top: number; left: number } | null>(null);
@@ -217,7 +229,7 @@ export default function ProfileToggle({
       {compact ? (
         <button
           ref={buttonRef}
-          onClick={() => setOpen(!open)}
+          onClick={toggleOpen}
           className={`w-10 h-10 flex items-center justify-center rounded-lg transition hover-bg-app ${compactBgColor}`}
           title={currentLabel}
         >
@@ -226,7 +238,7 @@ export default function ProfileToggle({
       ) : (
         <button
           ref={buttonRef}
-          onClick={() => setOpen(!open)}
+          onClick={toggleOpen}
           className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition text-left ${currentColor}`}
         >
           <CurrentIcon className="w-4 h-4 flex-shrink-0" />
@@ -335,6 +347,12 @@ export default function ProfileToggle({
                   )}
                 </button>
               ))
+            )}
+
+            {!homesReply && homesQuery.isError && (
+              <button onClick={() => void homesQuery.refetch()} className="px-3 py-3 text-xs text-app-muted">
+                Couldn’t load your homes. Try again.
+              </button>
             )}
 
             {/* Add home */}
