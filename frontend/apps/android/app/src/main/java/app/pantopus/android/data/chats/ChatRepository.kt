@@ -49,7 +49,8 @@ class ChatRepository
          * its badge share it, so a visit right after launch sends nothing.
          */
         suspend fun conversationsStored(force: Boolean = false): Stored<UnifiedConversationsResponse> =
-            store.read(StoreKeys.conversations, force) { etag ->
+            // Founder decision 7: the list (names, previews, unread counts) is saved on the phone; history never is.
+            store.read(StoreKeys.conversations, force, persist = true) { etag ->
                 conditionalApiCall { api.unifiedConversationsConditional(limit = CONVERSATIONS_LIMIT, etag = etag) }
             }
 
