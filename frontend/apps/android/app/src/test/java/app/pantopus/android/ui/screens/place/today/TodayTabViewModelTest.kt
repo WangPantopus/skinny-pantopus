@@ -5,7 +5,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModelStore
 import app.pantopus.android.core.security.AppLockManager
 import app.pantopus.android.data.api.models.homes.MyHomesResponse
-import app.pantopus.android.data.api.models.hub.HubTodayPayload
+import app.pantopus.android.data.api.models.hub.HubTodayResponse
 import app.pantopus.android.data.api.models.hub.NotificationPreferences
 import app.pantopus.android.data.api.models.hub.NotificationPreferencesDto
 import app.pantopus.android.data.api.models.hub.NotificationPreferencesPatch
@@ -71,9 +71,9 @@ class TodayTabViewModelTest {
                 mockk<PlaceIntelligence> { every { timeZone } returns "America/Los_Angeles" },
                 fetchedAt = System.currentTimeMillis(),
             )
-        coEvery { hub.todayDetail() } returns
-            NetworkResult.Success(HubTodayPayload(location = TodayLocationDto(source = "saved_place", latitude = 0.0, longitude = 0.0)))
-        coEvery { preferences.preferences() } answers { NetworkResult.Success(stored) }
+        coEvery { hub.todayStored(any()) } returns
+            Stored(HubTodayResponse(today = null, error = null, location = TodayLocationDto(source = "saved_place", latitude = 0.0, longitude = 0.0)))
+        coEvery { preferences.preferencesStored(any()) } answers { Stored(stored) }
     }
 
     @After fun teardown() {

@@ -198,6 +198,8 @@ data class HubNeighborDensity(
 data class HubTodayResponse(
     val today: JsonValue?,
     val error: String?,
+    val location: TodayLocationDto? = null,
+    @Json(name = "display_mode") val displayMode: String? = null,
 )
 
 /**
