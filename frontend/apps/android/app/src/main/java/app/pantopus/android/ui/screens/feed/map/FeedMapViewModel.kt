@@ -10,6 +10,7 @@ import app.pantopus.android.data.location.LocationProvider
 import app.pantopus.android.data.location.UserCoordinate
 import app.pantopus.android.data.location.ViewingLocationRepository
 import app.pantopus.android.data.postsmap.PostsMapRepository
+import app.pantopus.android.data.saved_places.SavedPlacesRepository
 import app.pantopus.android.data.store.StoreKind
 import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.screens.explore.ExploreEntity
@@ -114,6 +115,7 @@ class FeedMapViewModel
         private val postsMapRepository: PostsMapRepository,
         private val locationProvider: LocationProvider,
         private val viewingLocation: ViewingLocationRepository,
+        private val savedPlaces: SavedPlacesRepository,
     ) : ViewModel() {
         private val _state = MutableStateFlow<FeedMapUiState>(FeedMapUiState.Loading)
         val state: StateFlow<FeedMapUiState> = _state.asStateFlow()
@@ -141,6 +143,7 @@ class FeedMapViewModel
         private var shownRegion: FeedMapRegion? = null
         private var shownQuery: FeedMapQuery? = null
         private var selectedArea: Pair<Double, Double>? = null
+        private var defaultArea: Pair<Double, Double>? = null
         private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
         val refreshNotice = _refreshNotice.asStateFlow()
 
@@ -164,7 +167,7 @@ class FeedMapViewModel
             val changed = next != query
             query = next
             launchRead {
-                val areaChanged = updateSelectedArea()
+                val areaChanged = updateSelectedArea() ?: return@launchRead
                 if (!isReady) {
                     initializeMap()
                 } else {
@@ -184,10 +187,19 @@ class FeedMapViewModel
         }
 
         /** The map shares the feed's chosen area; returning inside its window adds no location request. */
-        private suspend fun updateSelectedArea(): Boolean {
+        private suspend fun updateSelectedArea(): Boolean? {
             val result = viewingLocation.current()
-            if (result !is NetworkResult.Success) return false
+            if (result !is NetworkResult.Success) {
+                _state.value = FeedMapUiState.Error("Couldn't load your selected area. Please try again.")
+                return null
+            }
             val next = result.data.viewingLocation?.let { it.latitude to it.longitude }
+            // The list feed also falls back to the first Home, then the newest saved place.
+            defaultArea = result.data.homes.firstNotNullOfOrNull { home ->
+                home.latitude?.let { lat -> home.longitude?.let { lon -> lat to lon } }
+            } ?: if (next == null && !isReady) {
+                savedPlaces.listStored().data?.savedPlaces?.firstOrNull()?.let { it.latitude to it.longitude }
+            } else defaultArea
             if (next == selectedArea) return false
             selectedArea = next
             if (next != null) {
@@ -203,15 +215,12 @@ class FeedMapViewModel
                 userCoordinate = locationProvider.cachedCoordinate()
                 if (selectedArea == null && userCoordinate == null) userCoordinate = locationProvider.requestCurrent()
             }
-            userCoordinate?.takeIf { selectedArea == null }?.let { coord ->
-                _region.value =
-                    FeedMapRegion(
-                        latitude = coord.latitude,
-                        longitude = coord.longitude,
-                        latitudeDelta = FeedMapRegion.Fallback.latitudeDelta,
-                        longitudeDelta = FeedMapRegion.Fallback.longitudeDelta,
-                    )
+            val center = selectedArea ?: userCoordinate?.let { it.latitude to it.longitude } ?: defaultArea
+            if (center == null) {
+                _state.value = FeedMapUiState.Error("Choose an area or turn on location to explore nearby.")
+                return
             }
+            _region.value = _region.value.copy(latitude = center.first, longitude = center.second)
             fetchMarkers(_region.value)
             isReady = true
         }
