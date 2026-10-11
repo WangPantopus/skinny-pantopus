@@ -1,6 +1,7 @@
 package app.pantopus.android.data.store
 
 import app.pantopus.android.data.api.models.businesses.MyBusinessesResponse
+import app.pantopus.android.data.api.models.chats.ChatMessagesResponse
 import app.pantopus.android.data.api.models.chats.UnifiedConversationsResponse
 import app.pantopus.android.data.api.models.connections.BlockedRelationshipsResponse
 import app.pantopus.android.data.api.models.connections.SentRequestsResponse
@@ -173,6 +174,28 @@ object StoreKeys {
     /** One post and its comments (contract §4 "A post": fresh 1 minute, never saved on the phone). */
     fun post(postId: String) =
         StoreKey<PostDetailResponse>("api/posts/$postId", kind = StoreKind.POST, topics = setOf("post:$postId", StoreTopics.POSTS))
+
+    /** Message history is memory only: no Moshi type means these keys can never be saved. */
+    fun roomMessages(
+        roomId: String,
+        limit: Int,
+    ) = StoreKey<ChatMessagesResponse>(
+        "api/chat/rooms/$roomId/messages",
+        mapOf("limit" to limit.toString()),
+        kind = StoreKind.CONVERSATION,
+        topics = setOf("chat:$roomId", StoreTopics.CHATS),
+    )
+
+    fun conversationMessages(
+        otherId: String,
+        topicId: String?,
+        limit: Int,
+    ) = StoreKey<ChatMessagesResponse>(
+        "api/chat/conversations/$otherId/messages",
+        mapOf("limit" to limit.toString(), "topicId" to topicId),
+        kind = StoreKind.CONVERSATION,
+        topics = setOf("chat:*", StoreTopics.CHATS),
+    )
 
     /**
      * The Messages list (contract §4 "Messages list"): names, last-message previews and unread counts, fresh for 30
