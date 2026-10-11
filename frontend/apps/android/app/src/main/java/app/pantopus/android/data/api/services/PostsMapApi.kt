@@ -3,6 +3,8 @@
 package app.pantopus.android.data.api.services
 
 import app.pantopus.android.data.api.models.postsmap.PostsMapResponse
+import retrofit2.Response
+import retrofit2.http.Header
 import retrofit2.http.GET
 import retrofit2.http.Query
 
@@ -33,4 +35,19 @@ interface PostsMapApi {
         @Query("surface") surface: String? = null,
         @Query("limit") limit: Int = 200,
     ): PostsMapResponse
+
+    /** The post-only viewport can be revalidated without replacing unchanged pins. */
+    @GET("api/posts/map")
+    suspend fun postsConditional(
+        @Query("south") south: Double,
+        @Query("west") west: Double,
+        @Query("north") north: Double,
+        @Query("east") east: Double,
+        @Query("postType") postType: String?,
+        @Query("surface") surface: String?,
+        @Header("If-None-Match") etag: String?,
+        @Query("layers") layers: String = "posts",
+        @Query("limit") limit: Int = 200,
+    ): Response<PostsMapResponse>
+
 }
