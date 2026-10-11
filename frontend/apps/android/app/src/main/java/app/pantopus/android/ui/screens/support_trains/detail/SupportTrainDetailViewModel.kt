@@ -212,9 +212,12 @@ class SupportTrainDetailViewModel
         private val loadedContent: SupportTrainDetailContent?
             get() = (_state.value as? SupportTrainDetailUiState.Loaded)?.content
 
+        private val canAct: Boolean
+            get() = active && session.isCurrent && loadedContent?.privateDetailsAvailable == true
+
         /** Open the reserve sheet; pass a slot id to skip the picker step. */
         fun startReserve(slotId: String? = null) {
-            if (!active || !session.isCurrent || loadedContent?.privateDetailsAvailable != true) return
+            if (!canAct) return
             val content = loadedContent
             if (content == null || content.reserveOptions.isEmpty()) {
                 _action.update { it.copy(error = NO_OPEN_DATES_NOTICE) }
@@ -263,7 +266,7 @@ class SupportTrainDetailViewModel
             body: ReserveSlotBody,
             onResult: (String?) -> Unit,
         ) {
-            if (_action.value.isSubmitting || !active || !session.isCurrent || loadedContent?.privateDetailsAvailable != true) return
+            if (_action.value.isSubmitting || !canAct) return
             _action.update { it.copy(isSubmitting = true) }
             viewModelScope.launch {
                 if (!session.confirmCurrent()) return@launch
@@ -347,7 +350,7 @@ class SupportTrainDetailViewModel
             failure: String,
             block: suspend () -> NetworkResult<Unit>,
         ) {
-            if (_action.value.isSubmitting || !active || !session.isCurrent || loadedContent?.privateDetailsAvailable != true) return
+            if (_action.value.isSubmitting || !canAct) return
             _action.update { it.copy(isSubmitting = true, pendingLeave = null) }
             viewModelScope.launch {
                 if (!session.confirmCurrent()) return@launch
