@@ -2,14 +2,7 @@
 //  ManageTrainViewModel.swift
 //  Pantopus
 //
-//  A13.13 — Manage train. Organizer-side surface for an active support
-//  train. `load()` fetches `GET /api/support-trains/:id`
-//  (`SupportTrainsEndpoints.detail`) and derives the stat strip from its
-//  slots. `Send update` posts to `POST /:id/updates`; `Close & thank`
-//  marks the train completed via `POST /:id/complete` (sending the
-//  optional thank-you note as a final broadcast first). Both mutate local
-//  state optimistically so the toast / chip flip stay instant.
-//
+//  Organizer dashboard, unsent drafts and verified update/close actions.
 //  The reservations endpoint supplies helper/delivery counts. Updates
 //  broadcast to all helpers; the backend has no combined close-with-thanks route.
 //
