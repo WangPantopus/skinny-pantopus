@@ -52,6 +52,7 @@ import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.RefreshFailedLine
 import app.pantopus.android.ui.components.RefreshNotice
+import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.screens.ballot.BallotGovernmentsSheet
 import app.pantopus.android.ui.screens.ballot.BallotPlacement
@@ -112,6 +113,7 @@ fun PlaceDashboardScreen(
         if ((state as? PlaceDashboardUiState.Error)?.unavailable == true) onPlaceUnavailable(homeId)
     }
     HomeCopyLifecycle({ viewModel.load(homeId) }, viewModel::suspendContent)
+    RefreshOnStoreChange { viewModel.load(homeId) }
 
     var showSwitcher by remember { mutableStateOf(false) }
     var showVerify by remember { mutableStateOf(false) }

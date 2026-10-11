@@ -49,6 +49,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
@@ -59,6 +60,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.pantopus.android.ui.components.AvatarWithIdentityRing
 import app.pantopus.android.ui.components.IdentityPillar
+import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.screens.shared.content_detail.headers.PostIntent
 import app.pantopus.android.ui.screens.shared.media.PostMediaGridStyle
 import app.pantopus.android.ui.screens.shared.media.PostMediaGridWithViewer
@@ -164,7 +166,14 @@ fun BodyReactionsBody(
      * moderator removed); null keeps the composer and the empty-thread prompts.
      */
     repliesClosedNote: String? = null,
+    /**
+     * Instant Screens: the post shows from its feed card while its comments load. The bar counts the card's
+     * [loadingCommentCount], and placeholder rows stand where the comments will be.
+     */
+    commentsLoading: Boolean = false,
+    loadingCommentCount: Int = 0,
 ) {
+    val placeholders = commentsLoading && comments.isEmpty() && loadingCommentCount > 0
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(Spacing.s4),
@@ -190,8 +199,8 @@ fun BodyReactionsBody(
         }
         ReactionsBar(
             counts = reactions,
-            commentCount = comments.size + hiddenReplyCount,
-            commentsAreFresh = comments.isEmpty(),
+            commentCount = if (placeholders) loadingCommentCount else comments.size + hiddenReplyCount,
+            commentsAreFresh = comments.isEmpty() && !placeholders,
             postedRecently = postedRecently,
             onTap = onReactionTap,
             selectedEmoji = selectedReactionEmoji,
@@ -262,10 +271,10 @@ fun BodyReactionsBody(
                 placeholder =
                     when {
                         replyingToName != null -> "Reply to $replyingToName..."
-                        comments.isEmpty() -> "Be the first to reply..."
+                        comments.isEmpty() && !placeholders -> "Be the first to reply..."
                         else -> "Add a comment"
                     },
-                isFocusedPresentation = comments.isEmpty(),
+                isFocusedPresentation = comments.isEmpty() && !placeholders,
                 isSending = isSending,
                 onSend = onSendTap,
                 modifier = Modifier.padding(horizontal = Spacing.s4),
@@ -304,6 +313,8 @@ fun BodyReactionsBody(
                     )
                 }
             }
+        } else if (placeholders) {
+            CommentPlaceholders(count = loadingCommentCount, modifier = Modifier.padding(horizontal = Spacing.s4))
         } else if (repliesClosedNote == null) {
             EmptyThreadState(
                 intent = intent,
@@ -902,3 +913,30 @@ val PostIntent.quickReplyPrompts: List<PostQuickReplyPrompt>
                     PostQuickReplyPrompt("Need help?", PantopusIcon.HelpCircle),
                 )
         }
+
+private const val MAX_COMMENT_PLACEHOLDERS = 3
+
+/** Rows standing where a post's comments will be while they load (at most three). */
+@Composable
+private fun CommentPlaceholders(
+    count: Int,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier =
+            modifier
+                .testTag("pulsePostDetail-commentPlaceholders")
+                .clearAndSetSemantics { contentDescription = "Loading comments" },
+        verticalArrangement = Arrangement.spacedBy(Spacing.s3),
+    ) {
+        repeat(count.coerceIn(1, MAX_COMMENT_PLACEHOLDERS)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s3)) {
+                Shimmer(width = 28.dp, height = 28.dp, cornerRadius = Radii.pill)
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.s1)) {
+                    Shimmer(width = 120.dp, height = 12.dp, cornerRadius = Radii.sm)
+                    Shimmer(width = 220.dp, height = 14.dp, cornerRadius = Radii.sm)
+                }
+            }
+        }
+    }
+}

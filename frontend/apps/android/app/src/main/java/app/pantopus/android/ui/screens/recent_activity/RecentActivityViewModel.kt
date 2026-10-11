@@ -6,10 +6,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.routing.DeepLinkRouter
 import app.pantopus.android.data.api.models.hub.HubActivityItem
-import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.hub.HubRepository
+import app.pantopus.android.data.store.StoreKind
 import app.pantopus.android.ui.components.IdentityPillar
+import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsUiState
 import app.pantopus.android.ui.screens.shared.list_of_rows.RowChip
 import app.pantopus.android.ui.screens.shared.list_of_rows.RowHighlight
@@ -47,27 +49,45 @@ class RecentActivityViewModel
         /** Host-supplied router. Set by the screen before the first row tap. */
         var onOpen: (RecentActivityDestination) -> Unit = {}
 
-        fun load() {
-            if (_state.value is ListOfRowsUiState.Loaded) return
-            fetch()
+        private val _refreshing = MutableStateFlow(false)
+
+        /** True only while a pull or Retry reads with the rows on screen. */
+        val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
+        private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
+        val refreshNotice: StateFlow<RefreshNotice?> = _refreshNotice.asStateFlow()
+
+        init {
+            // Instant Screens: the Hub's overview (one shared copy in the screens' store) is the first frame.
+            repo.overviewCopy()?.let { apply(it.activity) }
         }
 
-        fun refresh() {
-            fetch()
-        }
+        /** Entry: the stored activity shows at once and is read again only once the store says it is out of date. */
+        fun load() = fetch(force = false)
+
+        /** Pull and Retry: reads now; the rows stay on screen. */
+        fun refresh() = fetch(force = true)
 
         fun loadMoreIfNeeded() {
             // No-op: backend caps activity at 10 per `/api/hub` response;
             // no pagination cursor is exposed.
         }
 
-        private fun fetch() {
+        private fun fetch(force: Boolean) {
+            val shown = _state.value is ListOfRowsUiState.Loaded || _state.value is ListOfRowsUiState.Empty
+            if (!shown) _state.value = ListOfRowsUiState.Loading
+            _refreshing.value = force && shown
             viewModelScope.launch {
-                _state.value = ListOfRowsUiState.Loading
-                when (val result = repo.overview()) {
-                    is NetworkResult.Success -> apply(result.data.activity)
-                    is NetworkResult.Failure ->
-                        _state.value = ListOfRowsUiState.Error(result.error.displayMessage("Couldn't load the list."))
+                val stored = repo.overviewStored(force)
+                _refreshing.value = false
+                _refreshNotice.value = RefreshNotice(stored.fetchedAt, ::refresh).takeIf { stored.showsRefreshFailure(StoreKind.HOMES) }
+                val hub = stored.data
+                val failure = stored.failure
+                when {
+                    hub != null -> apply(hub.activity)
+                    // A failed read keeps the rows; only an empty screen, or the server's refusal, shows the error.
+                    failure != null && (!shown || failure is NetworkError.Forbidden || failure == NetworkError.NotFound) ->
+                        _state.value = ListOfRowsUiState.Error(failure.displayMessage("Couldn't load the list."))
                 }
             }
         }
