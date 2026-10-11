@@ -318,27 +318,32 @@ class EditProfileViewModel
         /** Idempotent — refuses to refetch when already loaded. */
         fun load() {
             if (_state.value is EditProfileUiState.Loaded) return
-            _state.value = EditProfileUiState.Loading
+            repo.ownProfileCopy()?.user?.let(::seedProfile)
+            if (_state.value !is EditProfileUiState.Loaded) _state.value = EditProfileUiState.Loading
             viewModelScope.launch {
                 when (val result = repo.ownProfile()) {
                     is NetworkResult.Success -> {
-                        hydrate(result.data.user)
-                        // Seeded here rather than in `hydrate`: the PATCH
-                        // echo carries no `skills` key
-                        // (`backend/routes/users.js:2194`), so hydrating
-                        // skills there would blank the list after a save.
-                        _skills.value = result.data.user.skills.orEmpty()
-                        _savedSkills.value = _skills.value
-                        _state.value = EditProfileUiState.Loaded
+                        // A quiet refresh cannot replace fields the person has started editing.
+                        if (!isDirty) seedProfile(result.data.user)
                     }
                     is NetworkResult.Failure -> {
-                        _state.value =
-                            EditProfileUiState.Error(
-                                result.error.message.ifBlank { "Couldn't load profile." },
-                            )
+                        if (_state.value !is EditProfileUiState.Loaded) {
+                            _state.value =
+                                EditProfileUiState.Error(
+                                    result.error.message.ifBlank { "Couldn't load profile." },
+                                )
+                        }
                     }
                 }
             }
+        }
+
+        private fun seedProfile(profile: UserProfile) {
+            hydrate(profile)
+            // Skills have their own PUT and are absent from the PATCH echo.
+            _skills.value = profile.skills.orEmpty()
+            _savedSkills.value = _skills.value
+            _state.value = EditProfileUiState.Loaded
         }
 
         fun refresh() = load()
