@@ -28,6 +28,8 @@ fun RecentActivityScreen(
     viewModel: RecentActivityViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
+    val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) {
         viewModel.onOpen = onOpen
         viewModel.load()
@@ -40,6 +42,8 @@ fun RecentActivityScreen(
             onRefresh = { viewModel.refresh() },
             onEndReached = { viewModel.loadMoreIfNeeded() },
             onBack = onBack,
+            refreshing = refreshing,
+            refreshNotice = refreshNotice,
         )
     }
 }
