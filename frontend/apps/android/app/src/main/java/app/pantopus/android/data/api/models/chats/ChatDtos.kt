@@ -288,4 +288,5 @@ data class ChatRoomParticipant(
 @JsonClass(generateAdapter = true)
 data class ChatRoomParticipantIdentity(
     val displayName: String? = null,
+    val avatarUrl: String? = null,
 )

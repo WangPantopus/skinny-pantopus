@@ -180,6 +180,7 @@ sealed interface ChatCounterparty {
         val locality: String? = null,
         val verified: Boolean = false,
         val online: Boolean = false,
+        val avatarUrl: String? = null,
     ) : ChatCounterparty
 
     data class Group(
