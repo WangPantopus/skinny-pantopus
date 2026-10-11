@@ -39,7 +39,10 @@ open class NetworkMonitor
                         defaultNetwork = network
                     }
 
-                    override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
+                    override fun onCapabilitiesChanged(
+                        network: Network,
+                        capabilities: NetworkCapabilities,
+                    ) {
                         if (network == defaultNetwork) {
                             _isOnline.value = capabilities.hasInternet()
                         }
