@@ -45,6 +45,8 @@ import java.time.Instant
 import javax.inject.Inject
 
 /** Where a feed request looks: coordinates plus the viewing radius, when known. */
+private const val MAX_HELD_POSTS = 100
+
 private data class FeedArea(
     val latitude: Double?,
     val longitude: Double?,
@@ -272,12 +274,33 @@ class PulseFeedViewModel
 
         /** All pages loaded so far — search filters project from this. */
         private var loadedPosts: List<FeedPost> = emptyList()
+        private var heldPosts: List<FeedPost> = emptyList()
+        private var readingAtTop = true
+        private val _newPostCount = MutableStateFlow(0)
+        val newPostCount: StateFlow<Int> = _newPostCount.asStateFlow()
+
+        /** New head rows wait while the reader is below the top, just as on web. */
+        fun readingPosition(atTop: Boolean) {
+            readingAtTop = atTop
+            if (atTop) showNewPosts()
+        }
+
+        fun showNewPosts() {
+            if (heldPosts.isEmpty()) return
+            loadedPosts = (heldPosts + loadedPosts).distinctBy { it.id }
+            heldPosts = emptyList()
+            _newPostCount.value = 0
+            rebuildLoadedState()
+        }
+
         private var nextCursorCreatedAt: String? = null
         private var nextCursorId: String? = null
         private var hasMore = false
 
         /** Optimistic per-post state layered over [loadedPosts]. */
         private var overrides: Map<String, PulsePostOverride> = emptyMap()
+        private val liking = mutableSetOf<String>()
+        private val saving = mutableSetOf<String>()
 
         /**
          * Posts removed client-side by *this* surface (deleted / dismissed).
@@ -295,13 +318,8 @@ class PulseFeedViewModel
         private val viewerId: String?
             get() = (authRepo.state.value as? AuthRepository.State.SignedIn)?.user?.id
 
-        init {
-            viewModelScope.launch {
-                postsRefresh.ticks.collect {
-                    refresh()
-                }
-            }
-        }
+        /** The screen collects own-post events only while visible; hidden feeds wait for their next entry. */
+        val postChanges = postsRefresh.ticks
 
         /** Wire location coordinates from the host before the first load. */
         fun configureLocation(
@@ -529,6 +547,7 @@ class PulseFeedViewModel
          */
         fun tapReaction(postId: String) {
             val post = loadedPosts.firstOrNull { it.id == postId } ?: return
+            if (!liking.add(postId)) return
             val original = effectiveHasReacted(post)
             val originalCount = effectiveLikeCount(post)
             val toggled = !original
@@ -536,17 +555,22 @@ class PulseFeedViewModel
                 it.copy(hasReacted = toggled, likeCount = (originalCount + if (toggled) 1 else -1).coerceAtLeast(0))
             }
             rebuildLoadedState()
-
             viewModelScope.launch {
-                when (val result = repo.toggleLike(postId, liked = toggled)) {
-                    is NetworkResult.Success ->
-                        putOverride(postId) {
-                            it.copy(hasReacted = result.data.liked, likeCount = result.data.likeCount)
+                try {
+                    when (val result = repo.toggleLike(postId, liked = toggled)) {
+                        is NetworkResult.Success ->
+                            putOverride(postId) {
+                                it.copy(hasReacted = result.data.liked, likeCount = result.data.likeCount)
+                            }
+                        is NetworkResult.Failure -> {
+                            putOverride(postId) { it.copy(hasReacted = original, likeCount = originalCount) }
+                            _toastMessage.value = "Couldn't update your reaction. Try again."
                         }
-                    is NetworkResult.Failure ->
-                        putOverride(postId) { it.copy(hasReacted = original, likeCount = originalCount) }
+                    }
+                } finally {
+                    liking.remove(postId)
+                    rebuildLoadedState()
                 }
-                rebuildLoadedState()
             }
         }
 
@@ -558,22 +582,26 @@ class PulseFeedViewModel
          */
         fun toggleSave(postId: String) {
             val post = loadedPosts.firstOrNull { it.id == postId } ?: return
+            if (!saving.add(postId)) return
             val original = effectiveIsSaved(post)
             putOverride(postId) { it.copy(isSaved = !original) }
             rebuildLoadedState()
             viewModelScope.launch {
-                when (val result = repo.toggleSave(postId, saved = !original)) {
-                    is NetworkResult.Success -> {
-                        putOverride(postId) { it.copy(isSaved = result.data.saved) }
-                        _toastMessage.value =
-                            if (result.data.saved) "Saved to your bookmarks." else "Removed from bookmarks."
+                try {
+                    when (val result = repo.toggleSave(postId, saved = !original)) {
+                        is NetworkResult.Success -> {
+                            putOverride(postId) { it.copy(isSaved = result.data.saved) }
+                            _toastMessage.value = if (result.data.saved) "Saved to your bookmarks." else "Removed from bookmarks."
+                        }
+                        is NetworkResult.Failure -> {
+                            putOverride(postId) { it.copy(isSaved = original) }
+                            _toastMessage.value = "Couldn't update your bookmark."
+                        }
                     }
-                    is NetworkResult.Failure -> {
-                        putOverride(postId) { it.copy(isSaved = original) }
-                        _toastMessage.value = "Couldn't update your bookmark."
-                    }
+                } finally {
+                    saving.remove(postId)
+                    rebuildLoadedState()
                 }
-                rebuildLoadedState()
             }
         }
 
@@ -910,6 +938,10 @@ class PulseFeedViewModel
             isRefresh: Boolean,
             quiet: Boolean,
         ) {
+            if (!quiet) {
+                heldPosts = emptyList()
+                _newPostCount.value = 0
+            }
             _isLoadingMore.value = false
             _loadMoreError.value = null
             loading = true
@@ -929,7 +961,9 @@ class PulseFeedViewModel
             isRefresh: Boolean,
         ) {
             val message = error.displayMessage("Couldn't load your viewing area. Try again.")
-            if (_state.value !is PulseFeedUiState.Loaded || error.refusesStoredCopy) {
+            if (_state.value !is PulseFeedUiState.Loaded ||
+                error.refusesStoredCopy
+            ) {
                 loadedPosts = emptyList()
                 _state.value = PulseFeedUiState.Error(message)
             } else if (isRefresh) {
@@ -955,12 +989,13 @@ class PulseFeedViewModel
             lastArea = area
             updateFallbackAreaLabel(response.fallbackArea?.label, area)
             scopeLabel = response.posts.firstOrNull()?.locationName ?: scopeLabel
-            if (inPlace && query == lastQuery && loadedPosts.size > response.posts.size) {
-                val refreshed = response.posts.associateBy { it.id }
-                loadedPosts = loadedPosts.map { refreshed[it.id] ?: it }
-                rebuildLoadedState()
+            val hasBothPages = loadedPosts.isNotEmpty() && response.posts.isNotEmpty()
+            if (inPlace && query == lastQuery && hasBothPages) {
+                keepReadingPosition(response)
                 return
             }
+            heldPosts = emptyList()
+            _newPostCount.value = 0
             lastQuery = query
             loadedPosts = response.posts
             postsLoaded = true
@@ -973,6 +1008,21 @@ class PulseFeedViewModel
                     PulseFeedUiState.Loaded(rows = emptyList())
                 }
             if (response.posts.isNotEmpty()) rebuildLoadedState()
+        }
+
+        private fun keepReadingPosition(response: FeedResponse) {
+            val shownIds = loadedPosts.map { it.id }.toSet()
+            val newHead = response.posts.takeWhile { it.id !in shownIds }.filter { it.userId != viewerId }
+            if (readingAtTop) {
+                heldPosts = emptyList()
+            } else {
+                heldPosts = (newHead + heldPosts).distinctBy { it.id }.take(MAX_HELD_POSTS)
+            }
+            val heldIds = heldPosts.map { it.id }.toSet()
+            loadedPosts = (response.posts.filterNot { it.id in heldIds } + loadedPosts).distinctBy { it.id }
+            _newPostCount.value = heldPosts.size
+            if (!hasMore && response.pagination?.hasMore == true) applyPagination(response.pagination)
+            rebuildLoadedState()
         }
 
         /** The stored first page for what is already known (no waiting), on screen at once. False without one. */
@@ -1114,6 +1164,8 @@ class PulseFeedViewModel
             val isSolved = effectiveIsSolved(post)
             return PulsePostCardContent(
                 id = post.id,
+                likePending = post.id in liking,
+                savePending = post.id in saving,
                 authorName = authorName,
                 authorInitials = initials(authorName),
                 // Beacon credentials come from the public profile, never the surface.
