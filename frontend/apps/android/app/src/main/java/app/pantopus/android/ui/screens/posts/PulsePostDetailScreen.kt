@@ -122,6 +122,8 @@ fun PulsePostDetailScreen(
     val toast by viewModel.toastMessage.collectAsStateWithLifecycle()
     val showsOverflow by viewModel.showsOverflowMenu.collectAsStateWithLifecycle()
     val didDelete by viewModel.didDeletePost.collectAsStateWithLifecycle()
+    val likePending by viewModel.likePending.collectAsStateWithLifecycle()
+    val savePending by viewModel.savePending.collectAsStateWithLifecycle()
     val isSaved by viewModel.isSaved.collectAsStateWithLifecycle()
     val isReposted by viewModel.isReposted.collectAsStateWithLifecycle()
     val selectedEmoji by viewModel.selectedReactionEmoji.collectAsStateWithLifecycle()
@@ -187,6 +189,7 @@ fun PulsePostDetailScreen(
                 val content = s.content
                 PulsePostDetailLoadedContent(
                     content = content,
+                    actionPending = likePending || savePending,
                     refreshNotice = refreshNotice,
                     composerText = composer,
                     onComposerTextChange = { viewModel.setComposerText(it) },
@@ -408,6 +411,7 @@ fun PulsePostDetailLoadedContent(
     composerText: String,
     onComposerTextChange: (String) -> Unit,
     isSending: Boolean,
+    actionPending: Boolean = false,
     topBarAction: ContentDetailTopBarAction? = null,
     topBarSecondaryAction: ContentDetailTopBarAction? = null,
     onBack: () -> Unit = {},
@@ -450,6 +454,13 @@ fun PulsePostDetailLoadedContent(
                     intent = content.intent,
                     onAvatarTap = { onOpenProfile(content.post.userId) },
                 )
+                if (actionPending) {
+                    Text(
+                        "Pending",
+                        color = PantopusColors.appTextSecondary,
+                        modifier = Modifier.padding(horizontal = Spacing.s4).testTag("postActionPending"),
+                    )
+                }
             }
         },
         body = {
