@@ -416,7 +416,13 @@ class TodayTabViewModel
         ) {
             val intelligence = copy.data ?: return
             // The copy is visible before checking the optional morning-briefing anchor.
-            val shown = TodayTabUiState.Loaded(intelligence, savedPlace = place, fetchedAt = copy.fetchedAt, refreshFailed = copy.failure != null)
+            val shown =
+                TodayTabUiState.Loaded(
+                    intelligence,
+                    savedPlace = place,
+                    fetchedAt = copy.fetchedAt,
+                    refreshFailed = copy.failure != null,
+                )
             _state.value = shown
             val matches = checkSavedAnchor(place, force)
             if (!current(version)) return
