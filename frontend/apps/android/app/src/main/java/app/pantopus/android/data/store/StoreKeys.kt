@@ -50,6 +50,7 @@ object StoreTopics {
 }
 
 /** The store's keys, one per endpoint and parameters it caches, with their kind and change topics (contract §4, §8). */
+@Suppress("TooManyFunctions") // Declarative endpoint keys form the single audited cache allowlist.
 object StoreKeys {
     /** My Homes: one source for every screen that lists the viewer's homes. */
     val myHomes =
