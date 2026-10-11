@@ -471,16 +471,17 @@ class PlaceDetailViewModel
         fun loadFridgeCards() {
             if (!visible || fridgeReadJob?.isActive == true) return
             val generation = pageGeneration
-            fridgeReadJob = viewModelScope.launch {
-                val cards = repo.readFridgeState(homeId)
-                if (generation != pageGeneration || !visible) return@launch
-                _fridgeCards.value = cards
-                if (_utilitySeed.value.isEmpty()) {
-                    val seed = repo.readUtilitySeed(homeId)
+            fridgeReadJob =
+                viewModelScope.launch {
+                    val cards = repo.readFridgeState(homeId)
                     if (generation != pageGeneration || !visible) return@launch
-                    if (seed != null) _utilitySeed.value = seed
+                    _fridgeCards.value = cards
+                    if (_utilitySeed.value.isEmpty()) {
+                        val seed = repo.readUtilitySeed(homeId)
+                        if (generation != pageGeneration || !visible) return@launch
+                        if (seed != null) _utilitySeed.value = seed
+                    }
                 }
-            }
         }
 
         fun issueFridgeCard(body: IssueFridgeCardRequest) {
