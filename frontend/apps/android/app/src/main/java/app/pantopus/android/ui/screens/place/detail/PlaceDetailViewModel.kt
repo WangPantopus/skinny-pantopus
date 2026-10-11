@@ -233,6 +233,11 @@ class PlaceDetailViewModel
             _rateWatch.value = RateWatchUiState.Loading
             _rentReport.value = RealRentUiState.Loading
             _claimLinkToCopy.value = null
+            _roleBase.value = null
+            _fridgeCards.value = FridgeCardsUiState.Loading
+            _utilitySeed.value = emptyList()
+            _cardLinkToCopy.value = null
+            _unlisted.value = UnlistedUiState.Loading
         }
 
         // ── Residency letters (Identity detail, T4) ──────────────
@@ -299,12 +304,18 @@ class PlaceDetailViewModel
             letterId: String,
             onReady: (ByteArray) -> Unit,
         ) {
-            if (_openingLetterId.value != null) return
+            if (!visible || _openingLetterId.value != null) return
+            val generation = pageGeneration
             _openingLetterId.value = letterId
             viewModelScope.launch {
                 when (val r = repo.residencyLetterPdf(homeId, letterId)) {
                     is NetworkResult.Success -> {
                         val bytes = runCatching { withContext(Dispatchers.IO) { r.data.use { it.bytes() } } }.getOrNull()
+                        if (generation != pageGeneration || !visible) {
+                            // A paused or replaced visit must not open a private document over another screen.
+                            _openingLetterId.value = null
+                            return@launch
+                        }
                         if (bytes != null) {
                             onReady(bytes)
                         } else {
@@ -345,8 +356,11 @@ class PlaceDetailViewModel
         val roleBase: StateFlow<String?> = _roleBase.asStateFlow()
 
         fun loadAccess() {
+            if (!visible) return
+            val generation = pageGeneration
             viewModelScope.launch {
-                _roleBase.value = (adminRepo.myAccess(homeId) as? NetworkResult.Success)?.data?.roleBase
+                val role = (adminRepo.myAccess(homeId) as? NetworkResult.Success)?.data?.roleBase
+                if (generation == pageGeneration && visible) _roleBase.value = role
             }
         }
 
@@ -395,6 +409,8 @@ class PlaceDetailViewModel
             scope: String,
             expiresInDays: Int,
         ) {
+            if (!visible) return
+            val generation = pageGeneration
             viewModelScope.launch {
                 if (_isIssuingClaim.value) return@launch
                 _isIssuingClaim.value = true
@@ -407,8 +423,10 @@ class PlaceDetailViewModel
                     is NetworkResult.Success -> {
                         pendingClaimDraft = null
                         pendingClaimRequestId = null
-                        _claimLinkToCopy.value = r.data.claim.verifyUrl
-                        _actionToast.value = PlaceActionToast("Claim issued — verification link copied.", isError = false)
+                        if (generation == pageGeneration && visible) {
+                            _claimLinkToCopy.value = r.data.claim.verifyUrl
+                            _actionToast.value = PlaceActionToast("Claim issued — verification link copied.", isError = false)
+                        }
                     }
                     is NetworkResult.Failure ->
                         _actionToast.value =
@@ -454,14 +472,20 @@ class PlaceDetailViewModel
         val utilitySeed: StateFlow<List<FridgeCardItem>> = _utilitySeed.asStateFlow()
 
         fun loadFridgeCards() {
+            if (!visible) return
+            val generation = pageGeneration
             viewModelScope.launch {
-                _fridgeCards.value =
+                val cards =
                     when (val r = repo.fridgeCards(homeId)) {
                         is NetworkResult.Success -> FridgeCardsUiState.Loaded(r.data.cards)
                         is NetworkResult.Failure -> FridgeCardsUiState.Error(r.error.displayMessage("Couldn't load the cards."))
                     }
+                if (generation != pageGeneration || !visible) return@launch
+                _fridgeCards.value = cards
                 if (_utilitySeed.value.isEmpty()) {
-                    when (val r = repo.homeEmergencies(homeId)) {
+                    val result = repo.homeEmergencies(homeId)
+                    if (generation != pageGeneration || !visible) return@launch
+                    when (val r = result) {
                         is NetworkResult.Success ->
                             _utilitySeed.value =
                                 r.data.emergencies
@@ -475,6 +499,8 @@ class PlaceDetailViewModel
         }
 
         fun issueFridgeCard(body: IssueFridgeCardRequest) {
+            if (!visible || _isIssuingCard.value) return
+            val generation = pageGeneration
             viewModelScope.launch {
                 _actionToast.value = null
                 _isIssuingCard.value = true
@@ -486,8 +512,10 @@ class PlaceDetailViewModel
                     is NetworkResult.Success -> {
                         pendingFridgeDraft = null
                         pendingFridgeRequestId = null
-                        _cardLinkToCopy.value = r.data.card.cardUrl
-                        _actionToast.value = PlaceActionToast("Card issued — link copied.", isError = false)
+                        if (generation == pageGeneration && visible) {
+                            _cardLinkToCopy.value = r.data.card.cardUrl
+                            _actionToast.value = PlaceActionToast("Card issued — link copied.", isError = false)
+                        }
                     }
                     is NetworkResult.Failure ->
                         _actionToast.value =
@@ -801,13 +829,16 @@ class PlaceDetailViewModel
         val pendingRemovalBrokerId: StateFlow<String?> = _pendingRemovalBrokerId.asStateFlow()
 
         fun loadUnlisted() {
+            if (!visible) return
+            val generation = pageGeneration
             viewModelScope.launch {
-                _unlisted.value =
+                val result =
                     when (val r = repo.unlisted(homeId)) {
                         is NetworkResult.Success -> UnlistedUiState.Loaded(r.data.unlisted)
                         is NetworkResult.Failure ->
                             UnlistedUiState.Error(r.error.displayMessage("Couldn't load your removal list."))
                     }
+                if (generation == pageGeneration && visible) _unlisted.value = result
             }
         }
 
@@ -832,11 +863,16 @@ class PlaceDetailViewModel
             brokerId: String,
             status: UnlistedRemovalStatus,
         ) {
-            if (!status.isSendable || brokerId.isBlank()) return
+            if (!visible || !status.isSendable || brokerId.isBlank()) return
+            val generation = pageGeneration
             viewModelScope.launch {
                 _pendingRemovalBrokerId.value = brokerId
                 when (val r = repo.setUnlistedRemoval(homeId, brokerId, status)) {
                     is NetworkResult.Success -> {
+                        if (generation != pageGeneration || !visible) {
+                            _pendingRemovalBrokerId.value = null
+                            return@launch
+                        }
                         val current = _unlisted.value
                         if (current is UnlistedUiState.Loaded && current.profile.removals != null) {
                             _unlisted.value = UnlistedUiState.Loaded(current.profile.withRemoval(r.data.removal))

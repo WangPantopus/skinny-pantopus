@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import app.pantopus.android.data.api.models.place.PlaceFloodNfipData
 import app.pantopus.android.data.api.models.place.PlaceHeatColdData
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
@@ -97,7 +98,10 @@ fun PlaceRiskDetailContent(
 
     PlaceDetailSectionLabel("Fridge card")
     if (intel.tier == PlaceTier.T4) {
-        LaunchedEffect(Unit) { viewModel.loadFridgeCards() }
+        LifecycleResumeEffect(Unit) {
+            viewModel.loadFridgeCards()
+            onPauseOrDispose { }
+        }
         PlaceFridgeCardSection(viewModel)
     } else {
         PlaceLockedCard(
