@@ -16,8 +16,8 @@ import app.pantopus.android.data.listings.ListingsRepository
 import app.pantopus.android.data.location.LocationProvider
 import app.pantopus.android.data.location.UserCoordinate
 import app.pantopus.android.data.location.ViewingLocationRepository
-import app.pantopus.android.data.store.Stored
 import app.pantopus.android.data.postsmap.PostsMapRepository
+import app.pantopus.android.data.store.Stored
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk

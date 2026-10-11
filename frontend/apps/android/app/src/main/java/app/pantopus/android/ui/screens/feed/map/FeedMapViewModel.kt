@@ -292,22 +292,40 @@ class FeedMapViewModel
             _state.value = current.copy(selectedId = id)
         }
 
-        private suspend fun fetchMarkers(target: FeedMapRegion, force: Boolean = false) {
+        private suspend fun fetchMarkers(
+            target: FeedMapRegion,
+            force: Boolean = false,
+        ) {
             val generation = ++fetchGeneration
             val requestedQuery = query
             val sameView = shownRegion == target && shownQuery == requestedQuery
-            val copy = postsMapRepository.postsCopy(
-                target.south, target.west, target.north, target.east, requestedQuery.postType, requestedQuery.surface.backendSurface,
-            )
+            val copy =
+                postsMapRepository.postsCopy(
+                    target.south,
+                    target.west,
+                    target.north,
+                    target.east,
+                    requestedQuery.postType,
+                    requestedQuery.surface.backendSurface,
+                )
             if (!sameView || _state.value !is FeedMapUiState.Loaded) {
                 _refreshNotice.value = null
-                if (copy.data != null) publish(copy.data, target, requestedQuery, keepSelection = false)
-                else _state.value = FeedMapUiState.Loading
+                if (copy.data != null) {
+                    publish(copy.data, target, requestedQuery, keepSelection = false)
+                } else {
+                    _state.value = FeedMapUiState.Loading
+                }
             }
-            val stored = postsMapRepository.postsStored(
-                target.south, target.west, target.north, target.east,
-                requestedQuery.postType, requestedQuery.surface.backendSurface, force,
-            )
+            val stored =
+                postsMapRepository.postsStored(
+                    target.south,
+                    target.west,
+                    target.north,
+                    target.east,
+                    requestedQuery.postType,
+                    requestedQuery.surface.backendSurface,
+                    force,
+                )
             if (generation != fetchGeneration || requestedQuery != query) return
             _refreshNotice.value =
                 if (stored.showsRefreshFailure(StoreKind.NEARBY)) RefreshNotice(stored.fetchedAt, ::refresh) else null
@@ -320,22 +338,29 @@ class FeedMapViewModel
             }
         }
 
-        private fun publish(data: PostsMapResponse, target: FeedMapRegion, requestedQuery: FeedMapQuery, keepSelection: Boolean) {
+        private fun publish(
+            data: PostsMapResponse,
+            target: FeedMapRegion,
+            requestedQuery: FeedMapQuery,
+            keepSelection: Boolean,
+        ) {
             val anchor = userCoordinate ?: UserCoordinate(target.latitude, target.longitude, 0.0)
             val selected = if (keepSelection) (_state.value as? FeedMapUiState.Loaded)?.selectedId else null
             val entities = ExploreMapViewModel.projectMarkers(data.markers, anchor).filter { it.kind == ExploreKind.Post }
-            val hint = data.nearestActivityCenter?.let {
-                FeedMapRegion(it.latitude, it.longitude, target.latitudeDelta, target.longitudeDelta)
-            }
+            val hint =
+                data.nearestActivityCenter?.let {
+                    FeedMapRegion(it.latitude, it.longitude, target.latitudeDelta, target.longitudeDelta)
+                }
             shownRegion = target
             shownQuery = requestedQuery
-            _state.value = FeedMapUiState.Loaded(
-                entities = entities.sortedBy { it.distanceMiles },
-                markers = ExploreMapViewModel.cluster(entities, clusterRadius(target)),
-                userCoordinate = userCoordinate,
-                selectedId = selected.takeIf { id -> entities.any { it.id == id } },
-                nearestActivityCenter = hint,
-            )
+            _state.value =
+                FeedMapUiState.Loaded(
+                    entities = entities.sortedBy { it.distanceMiles },
+                    markers = ExploreMapViewModel.cluster(entities, clusterRadius(target)),
+                    userCoordinate = userCoordinate,
+                    selectedId = selected.takeIf { id -> entities.any { it.id == id } },
+                    nearestActivityCenter = hint,
+                )
         }
 
         /** Widen the cluster radius as the camera zooms out and vice versa. */
