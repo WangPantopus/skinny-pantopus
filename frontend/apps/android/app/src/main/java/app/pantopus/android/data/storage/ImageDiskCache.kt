@@ -33,30 +33,37 @@ class ImageDiskCache private constructor(
     override val maxSize: Long get() = synchronized(lock) { budget }
 
     /** Bind the entire fetch/decode to the generation at dispatch, before a disk editor exists. */
-    fun requestInterceptor(): Interceptor = Interceptor { chain ->
-        val started = synchronized(lock) { generation }
-        withContext(requestGeneration.asContextElement(started)) {
-            val result = chain.proceed(chain.request)
-            if (synchronized(lock) { started != generation }) throw CancellationException("Image cache was cleared")
-            result
+    fun requestInterceptor(): Interceptor =
+        Interceptor { chain ->
+            val started = synchronized(lock) { generation }
+            withContext(requestGeneration.asContextElement(started)) {
+                val result = chain.proceed(chain.request)
+                if (synchronized(lock) { started != generation }) throw CancellationException("Image cache was cleared")
+                result
+            }
         }
-    }
 
     /** Coil writes memory after decoding, so that final write needs the same generation check as disk. */
-    fun guardMemoryCache(memory: MemoryCache): MemoryCache = object : MemoryCache by memory {
-        override fun set(key: MemoryCache.Key, value: MemoryCache.Value) = synchronized(lock) {
-            if (currentRequest()) memory[key] = value
-        }
+    fun guardMemoryCache(memory: MemoryCache): MemoryCache =
+        object : MemoryCache by memory {
+            override fun set(
+                key: MemoryCache.Key,
+                value: MemoryCache.Value,
+            ) = synchronized(lock) {
+                if (currentRequest()) memory[key] = value
+            }
 
-        override fun get(key: MemoryCache.Key): MemoryCache.Value? = synchronized(lock) {
-            if (currentRequest()) memory[key] else null
-        }
+            override fun get(key: MemoryCache.Key): MemoryCache.Value? =
+                synchronized(lock) {
+                    if (currentRequest()) memory[key] else null
+                }
 
-        override fun clear() = synchronized(lock) {
-            generation++
-            memory.clear()
+            override fun clear() =
+                synchronized(lock) {
+                    generation++
+                    memory.clear()
+                }
         }
-    }
 
     /** Called only under [lock]; direct, synchronous cache operations belong to the current generation. */
     private fun currentRequest(): Boolean = requestGeneration.get()?.let { it == generation } ?: true
