@@ -223,7 +223,10 @@ class PlaceDetailViewModel
 
         fun load() = copy.load()
 
-        fun refresh() = copy.refresh()
+        fun refresh() {
+            copy.refresh()
+            if (group == PlaceDetailGroup.RISK && _fridgeCards.value !is FridgeCardsUiState.Loading) loadFridgeCards()
+        }
 
         fun suspendContent() {
             if (!visible) return
@@ -234,6 +237,7 @@ class PlaceDetailViewModel
             _rentReport.value = RealRentUiState.Loading
             _claimLinkToCopy.value = null
             _roleBase.value = null
+            fridgeReadJob?.cancel()
             _fridgeCards.value = FridgeCardsUiState.Loading
             _utilitySeed.value = emptyList()
             _cardLinkToCopy.value = null
@@ -457,6 +461,7 @@ class PlaceDetailViewModel
 
         private val _fridgeCards = MutableStateFlow<FridgeCardsUiState>(FridgeCardsUiState.Loading)
         val fridgeCards: StateFlow<FridgeCardsUiState> = _fridgeCards.asStateFlow()
+        private var fridgeReadJob: Job? = null
 
         private val _isIssuingCard = MutableStateFlow(false)
         val isIssuingCard: StateFlow<Boolean> = _isIssuingCard.asStateFlow()
@@ -472,9 +477,9 @@ class PlaceDetailViewModel
         val utilitySeed: StateFlow<List<FridgeCardItem>> = _utilitySeed.asStateFlow()
 
         fun loadFridgeCards() {
-            if (!visible) return
+            if (!visible || fridgeReadJob?.isActive == true) return
             val generation = pageGeneration
-            viewModelScope.launch {
+            fridgeReadJob = viewModelScope.launch {
                 val cards =
                     when (val r = repo.fridgeCards(homeId)) {
                         is NetworkResult.Success -> FridgeCardsUiState.Loaded(r.data.cards)
