@@ -685,11 +685,16 @@ app-link files, robots.txt).
   `MATCH_GIT_URL`, `MATCH_PASSWORD`, `MATCH_GIT_BASIC_AUTHORIZATION`,
   `APP_STORE_CONNECT_KEY_ID`, `APP_STORE_CONNECT_ISSUER_ID`,
   `APP_STORE_CONNECT_KEY_CONTENT` (base64 of the `.p8`), `APPLE_TEAM_ID`.
-- [ ] L4: Release build points at `https://api.pantopus.com`, has no test keys or
-  local URLs, and meets current App Store rules (privacy manifest, account
-  deletion, Sign in with Apple, permission strings). The app is iPhone-only (no
+- [ ] L4: Release build points at `https://api.pantopus.com`, has no local URLs
+  or development credentials, uses the pilot-approved Stripe mode (D4), and
+  meets current App Store rules (privacy manifest, account deletion, Sign in
+  with Apple, permission strings). The app is iPhone-only (no
   iPad layouts), so App Store Connect needs iPhone screenshots only.
 - [ ] Founder: run **iOS Beta (TestFlight)** (tag `ios-v<version>` or manual run).
+
+**Source check, October 11:** the release workflow selects Xcode 26.2, meeting
+[Apple’s Xcode 26 / iOS 26 SDK minimum](https://developer.apple.com/news/?id=ueeok6yw).
+This does not verify store signing or an uploaded build.
 
 ### Android (Play internal track)
 
@@ -708,6 +713,11 @@ app-link files, robots.txt).
   release build refuses anything but `pk_live_`. Delete the variable when live
   payments start. iOS needs no switch: its secret simply carries the matching key.
 - [ ] Founder: run **Android Beta (Play Store)**.
+
+**Source check, October 11:** `targetSdk=36` meets the
+[current Play target requirement](https://support.google.com/googleplay/android-developer/answer/11926878?hl=en);
+the manifest removes broad image/video read permissions in favor of the system
+photo picker. Signed release and physical-device checks remain open.
 
 ### Listings (founder approves; L4 drafts)
 
