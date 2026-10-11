@@ -67,6 +67,7 @@ public struct SupportTrainDetailView: View {
         .background(Theme.Color.appBg)
         .accessibilityIdentifier("supportTrainDetail")
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
+        .onDisappear { viewModel.suspend() }
         // Someone took or left a slot (`supporttrain:{id}`): the open train re-reads.
         .refreshesOnStoreChange(
             affects: { viewModel.isAffected(by: $0) },
