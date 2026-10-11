@@ -41,11 +41,11 @@ import kotlin.math.sqrt
  * `List<ExploreEntity>`:
  *  - `GET /api/gigs/in-bounds` → Task (carries price + bid count)
  *  - `GET /api/listings/in-bounds` → Item
- *  - `GET /api/posts/map` with `layers=posts,businesses,homes` → Post / Spot /
- *    Home (route `backend/routes/posts.js:1646`)
+ *  - `GET /api/posts/map` with `layers=posts` → stored Post pins
+ *  - a separate current-access map read → Home / enabled Spot pins
  *
- * Tasks stay on the gigs route rather than the map route's `tasks` layer
- * because only the former carries price + bid count for the rail card.
+ * Enabled tasks stay on the gigs route because it carries price + bid count for the rail card.
+ * Launch-cut kinds do not request their routes.
  * Filtering, sort, and clustering run locally over the fetched window (mirrors
  * `ExploreMapViewModel.swift`). Previews / snapshots / tests seed deterministic
  * content via `load(scenario)`.
