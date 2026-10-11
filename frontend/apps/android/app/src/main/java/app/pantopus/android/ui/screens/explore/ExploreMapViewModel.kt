@@ -9,6 +9,7 @@ import app.pantopus.android.data.api.models.listings.ListingDto
 import app.pantopus.android.data.api.models.postsmap.PostsMapMarkerDto
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
+import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.gigs.GigsRepository
 import app.pantopus.android.data.listings.ListingsRepository
 import app.pantopus.android.data.location.LocationProvider
@@ -16,6 +17,7 @@ import app.pantopus.android.data.location.UserCoordinate
 import app.pantopus.android.data.location.ViewingLocationRepository
 import app.pantopus.android.data.postsmap.PostsMapLayer
 import app.pantopus.android.data.postsmap.PostsMapRepository
+import app.pantopus.android.data.saved_places.SavedPlacesRepository
 import app.pantopus.android.data.store.StoreKind
 import app.pantopus.android.ui.components.RefreshNotice
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -60,6 +62,7 @@ class ExploreMapViewModel
         private val postsMapRepository: PostsMapRepository,
         private val locationProvider: LocationProvider,
         private val viewingLocation: ViewingLocationRepository,
+        private val savedPlaces: SavedPlacesRepository,
     ) : ViewModel() {
         private val _state = MutableStateFlow<ExploreMapUiState>(ExploreMapUiState.Loading)
         val state: StateFlow<ExploreMapUiState> = _state.asStateFlow()
@@ -256,7 +259,10 @@ class ExploreMapViewModel
             _userCoordinate.value = locationProvider.cachedCoordinate()
             explicitCenter?.let { return NetworkResult.Success(it) }
             return when (val payload = viewingLocation.current()) {
-                is NetworkResult.Failure -> payload
+                is NetworkResult.Failure -> {
+                    val prior = _viewingCenter.value
+                    if (prior != null && !payload.error.refusesStoredCopy) NetworkResult.Success(prior) else payload
+                }
                 is NetworkResult.Success -> {
                     val selected = payload.data.viewingLocation
                     if (selected != null) {
@@ -265,7 +271,13 @@ class ExploreMapViewModel
                         if (_userCoordinate.value == null) {
                             _userCoordinate.value = locationProvider.requestCurrent(timeoutMillis = 4_000L)
                         }
-                        NetworkResult.Success(_userCoordinate.value)
+                        val fallback = payload.data.homes.firstNotNullOfOrNull { home ->
+                            home.latitude?.let { lat -> home.longitude?.let { lon -> UserCoordinate(lat, lon, 0.0) } }
+                        }
+                        val center = _userCoordinate.value ?: fallback ?: savedPlaces.listStored().data?.savedPlaces?.firstOrNull()?.let {
+                            UserCoordinate(it.latitude, it.longitude, 0.0)
+                        }
+                        NetworkResult.Success(center)
                     }
                 }
             }

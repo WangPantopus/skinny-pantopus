@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.postsmap.PostsMapResponse
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.location.LocationProvider
 import app.pantopus.android.data.location.UserCoordinate
 import app.pantopus.android.data.location.ViewingLocationRepository
@@ -183,13 +184,19 @@ class FeedMapViewModel
         }
 
         fun refresh() {
-            launchRead { fetchMarkers(pendingRegion ?: _region.value, force = true) }
+            if (!isReady) {
+                activate(query)
+            } else {
+                launchRead { fetchMarkers(pendingRegion ?: _region.value, force = true) }
+            }
         }
 
         /** The map shares the feed's chosen area; returning inside its window adds no location request. */
         private suspend fun updateSelectedArea(): Boolean? {
             val result = viewingLocation.current()
             if (result !is NetworkResult.Success) {
+                if (isReady && !(result as NetworkResult.Failure).error.refusesStoredCopy) return false
+                isReady = false
                 _state.value = FeedMapUiState.Error("Couldn't load your selected area. Please try again.")
                 return null
             }
@@ -206,6 +213,8 @@ class FeedMapViewModel
                 _region.value = _region.value.copy(latitude = next.first, longitude = next.second)
                 pendingRegion = null
                 _viewportDirty.value = false
+            } else {
+                isReady = false
             }
             return next != null
         }
