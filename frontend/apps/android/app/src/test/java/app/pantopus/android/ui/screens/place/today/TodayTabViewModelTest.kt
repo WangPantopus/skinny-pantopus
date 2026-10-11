@@ -72,7 +72,13 @@ class TodayTabViewModelTest {
                 fetchedAt = System.currentTimeMillis(),
             )
         coEvery { hub.todayStored(any()) } returns
-            Stored(HubTodayResponse(today = null, error = null, location = TodayLocationDto(source = "saved_place", latitude = 0.0, longitude = 0.0)))
+            Stored(
+                HubTodayResponse(
+                    today = null,
+                    error = null,
+                    location = TodayLocationDto(source = "saved_place", latitude = 0.0, longitude = 0.0),
+                ),
+            )
         coEvery { preferences.preferencesStored(any()) } answers { Stored(stored) }
     }
 
