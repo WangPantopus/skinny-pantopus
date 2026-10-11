@@ -14,7 +14,7 @@ commands, and **check**: how to see that it worked.
   `~/.config/pantopus/hosted-secrets/staging.env` and `production.env` on the
   Mac (mode 600); provider keys come from each provider's console.
 
-Staging and GitHub release gates rechecked: 2026-10-11 by L4. Lambda schedules were checked October 10; other rows retain their recorded checks.
+Staging, GitHub release gates and Lambda schedules rechecked: 2026-10-11 by L4. Other rows retain their recorded checks.
 
 ## 0. What's running today
 
@@ -28,7 +28,7 @@ Staging and GitHub release gates rechecked: 2026-10-11 by L4. Lambda schedules w
 | New native apps | iOS `app.pantopus.ios`, Android `app.pantopus.android`: different app IDs from the April apps, so they're new store listings (decision D2). Not uploaded anywhere yet. |
 | Supabase | The April production project and new `pantopus-production` project (`falmvysvndmwtfxsrxek`) are in the founder's `Pantopus` Free organization. The new project is healthy in Oregon; all 148 canonical migrations were applied and verified on October 9, and the private `home-documents` bucket is configured. Auth transfer, the two 100 MB buckets, the S3 key and managed daily backups are pending. `Pantopus-staging` is separate and was reset to the canonical migrations on October 7 (S2). A separate production organization is optional billing isolation. |
 | GitHub | `staging` releases from `dev` after CI. Checked October 10: `production` has nine secrets, `DB_MIGRATIONS_ENABLED=true`, and `BACKEND_DEPLOY_ENABLED=false`; automatic master runs still skip the production release. The October 10 master release run [38042486417](https://github.com/WangPantopus/skinny-pantopus/actions/runs/38042486417) skipped its database and API/worker deployment steps; the production health URL returned 502 on October 11. Preparation is not a deployed production service: the founder enables it at the reviewed cutover step. Store signing setup remains separate (section 4). |
-| AWS Lambdas | Staging stack `pantopus-seeder-staging` carries the seeder, briefing, home-reminder, weather-alert, mail and job-trigger functions. The founder paused the April `pantopus-seeder-production` stack: all 14 EventBridge rules were independently confirmed `DISABLED` on October 10, and its briefing log has no event after October 8 at 19:14 UTC. Keep them disabled until P8 replaces the old production configuration. The April `pantopus-seeder-dev` functions were deleted; its ten schedules have nothing to run. |
+| AWS Lambdas | Staging stack `pantopus-seeder-staging` carries the seeder, briefing, home-reminder, weather-alert, mail and job-trigger functions. The founder paused the April `pantopus-seeder-production` stack: all 14 EventBridge rules were independently confirmed `DISABLED` on October 11, and its briefing log has no event after October 8 at 19:14 UTC. Keep them disabled until P8 replaces the old production configuration. The April `pantopus-seeder-dev` functions were deleted; its ten schedules have nothing to run. |
 
 **Reminders run on AWS Lambda.** Morning and evening briefings (the night-before
 pickup push rides the evening one), task and bill reminders, weather alerts and
@@ -385,7 +385,7 @@ Same shape as staging, with live vendors where D4 and D5 say so.
 
 ### Before P1: keep the April Lambda stack paused (founder completed)
 
-**Verified October 10:** all 14 rules are disabled; no recent production briefing runs.
+**Verified October 11:** all 14 rules are disabled; the six staging alarms are OK.
 The command below remains the pause/rollback reference. Do not enable schedules before P8.
 
 The April stack `pantopus-seeder-production` retains its April database settings
