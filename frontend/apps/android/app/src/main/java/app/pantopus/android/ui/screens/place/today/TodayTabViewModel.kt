@@ -442,7 +442,7 @@ class TodayTabViewModel
             val location = payload.location
             val latitude = location?.latitude
             val longitude = location?.longitude
-            return payload.error == null && payload.displayMode != "hidden" && location?.source == "saved_place" && latitude != null && longitude != null &&
+            return payload.isRenderable && location?.source == "saved_place" && latitude != null && longitude != null &&
                 abs(latitude - place.latitude) < SAVED_ANCHOR_TOLERANCE && abs(longitude - place.longitude) < SAVED_ANCHOR_TOLERANCE
         }
 
