@@ -68,7 +68,7 @@ extension ManageTrainViewModel {
 
         return ManageTrainContent(
             trainId: dto.id,
-            title: dto.title ?? dto.recipientSummary ?? "Support train",
+            title: dto.title ?? "Support train",
             dateRangeLabel: dateRangeLabel(slots: slots),
             isActive: isActive,
             slotFillValue: "\(filled)/\(total)",
