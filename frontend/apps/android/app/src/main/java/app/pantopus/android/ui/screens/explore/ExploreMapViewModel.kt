@@ -156,7 +156,10 @@ class ExploreMapViewModel
             }
         }
 
-        private suspend fun fetchAroundUser(generation: Int, force: Boolean) = coroutineScope {
+        private suspend fun fetchAroundUser(
+            generation: Int,
+            force: Boolean,
+        ) = coroutineScope {
             val center = resolveCurrentCenter(generation) ?: return@coroutineScope
             val minLat = center.latitude - 0.012
             val maxLat = center.latitude + 0.012
@@ -175,24 +178,34 @@ class ExploreMapViewModel
                 rebuild(selectedId = null)
             }
             val postsDeferred = async { postsMapRepository.postsStored(minLat, minLon, maxLat, maxLon, force = force) }
-            val homesDeferred = async {
-                postsMapRepository.markers(
-                    south = minLat, west = minLon, north = maxLat, east = maxLon,
-                    layers =
-                        listOf(PostsMapLayer.Homes) +
-                            if (ExploreKind.Spot.isLaunchAvailable) listOf(PostsMapLayer.Businesses) else emptyList(),
-                )
-            }
-            val gigsDeferred = async {
-                if (ExploreKind.Task.isLaunchAvailable) {
-                    gigsRepository.inBounds(minLat = minLat, minLon = minLon, maxLat = maxLat, maxLon = maxLon)
-                } else null
-            }
-            val listingsDeferred = async {
-                if (ExploreKind.Item.isLaunchAvailable) {
-                    listingsRepository.inBounds(south = minLat, west = minLon, north = maxLat, east = maxLon)
-                } else null
-            }
+            val homesDeferred =
+                async {
+                    postsMapRepository.markers(
+                        south = minLat,
+                        west = minLon,
+                        north = maxLat,
+                        east = maxLon,
+                        layers =
+                            listOf(PostsMapLayer.Homes) +
+                                if (ExploreKind.Spot.isLaunchAvailable) listOf(PostsMapLayer.Businesses) else emptyList(),
+                    )
+                }
+            val gigsDeferred =
+                async {
+                    if (ExploreKind.Task.isLaunchAvailable) {
+                        gigsRepository.inBounds(minLat = minLat, minLon = minLon, maxLat = maxLat, maxLon = maxLon)
+                    } else {
+                        null
+                    }
+                }
+            val listingsDeferred =
+                async {
+                    if (ExploreKind.Item.isLaunchAvailable) {
+                        listingsRepository.inBounds(south = minLat, west = minLon, north = maxLat, east = maxLon)
+                    } else {
+                        null
+                    }
+                }
             val posts = postsDeferred.await()
             val homes = homesDeferred.await()
             val gigs = gigsDeferred.await()
@@ -207,14 +220,17 @@ class ExploreMapViewModel
             _refreshNotice.value =
                 if (posts.showsRefreshFailure(StoreKind.NEARBY) || homes is NetworkResult.Failure) {
                     RefreshNotice(posts.fetchedAt, ::refresh)
-                } else null
+                } else {
+                    null
+                }
             val selectedId = currentSelectedId()
-            allEntities = project(
-                (gigs as? NetworkResult.Success)?.data?.gigs.orEmpty(),
-                (listings as? NetworkResult.Success)?.data?.listings.orEmpty(),
-                posts.data?.markers.orEmpty() + privateMarkers,
-                center,
-            )
+            allEntities =
+                project(
+                    (gigs as? NetworkResult.Success)?.data?.gigs.orEmpty(),
+                    (listings as? NetworkResult.Success)?.data?.listings.orEmpty(),
+                    posts.data?.markers.orEmpty() + privateMarkers,
+                    center,
+                )
             rebuild(selectedId.takeIf { id -> allEntities.any { it.id == id } })
         }
 

@@ -4,8 +4,8 @@ package app.pantopus.android.data.api.services
 
 import app.pantopus.android.data.api.models.postsmap.PostsMapResponse
 import retrofit2.Response
-import retrofit2.http.Header
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.Query
 
 /**
@@ -49,5 +49,4 @@ interface PostsMapApi {
         @Query("layers") layers: String = "posts",
         @Query("limit") limit: Int = 200,
     ): Response<PostsMapResponse>
-
 }

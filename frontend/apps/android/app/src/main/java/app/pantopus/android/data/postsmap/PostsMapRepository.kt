@@ -2,11 +2,11 @@ package app.pantopus.android.data.postsmap
 
 import app.pantopus.android.data.api.models.postsmap.PostsMapResponse
 import app.pantopus.android.data.api.net.NetworkResult
-import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.net.conditionalApiCall
+import app.pantopus.android.data.api.net.safeApiCall
+import app.pantopus.android.data.api.services.PostsMapApi
 import app.pantopus.android.data.store.ScreenStore
 import app.pantopus.android.data.store.StoreKeys
-import app.pantopus.android.data.api.services.PostsMapApi
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -44,17 +44,29 @@ class PostsMapRepository
             east: Double,
             postType: String? = null,
             surface: String? = null,
-        ) =
-            store.peek(StoreKeys.mapPosts(south, west, north, east, postType, surface))
+        ) = store.peek(StoreKeys.mapPosts(south, west, north, east, postType, surface))
 
         @Suppress("LongParameterList")
         suspend fun postsStored(
-            south: Double, west: Double, north: Double, east: Double,
-            postType: String? = null, surface: String? = null, force: Boolean = false,
+            south: Double,
+            west: Double,
+            north: Double,
+            east: Double,
+            postType: String? = null,
+            surface: String? = null,
+            force: Boolean = false,
         ) = store.read(StoreKeys.mapPosts(south, west, north, east, postType, surface), force) { etag ->
-            conditionalApiCall { api.postsConditional(
-                south, west, north, east, postType?.takeIf(String::isNotBlank), surface?.takeIf(String::isNotBlank), etag,
-            ) }
+            conditionalApiCall {
+                api.postsConditional(
+                    south,
+                    west,
+                    north,
+                    east,
+                    postType?.takeIf(String::isNotBlank),
+                    surface?.takeIf(String::isNotBlank),
+                    etag,
+                )
+            }
         }
 
         /**
