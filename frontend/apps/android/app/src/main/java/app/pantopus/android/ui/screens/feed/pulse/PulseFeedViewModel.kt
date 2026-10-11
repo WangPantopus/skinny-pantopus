@@ -1012,14 +1012,18 @@ class PulseFeedViewModel
 
         private fun keepReadingPosition(response: FeedResponse) {
             val shownIds = loadedPosts.map { it.id }.toSet()
-            val newHead = response.posts.takeWhile { it.id !in shownIds }.filter { it.userId != viewerId }
+            val incoming = response.posts.filter { it.id !in shownIds }
             if (readingAtTop) {
                 heldPosts = emptyList()
+                loadedPosts = (response.posts + loadedPosts).distinctBy { it.id }
             } else {
-                heldPosts = (newHead + heldPosts).distinctBy { it.id }.take(MAX_HELD_POSTS)
+                val newFromOthers = incoming.filter { it.userId != viewerId }
+                heldPosts = (newFromOthers + heldPosts).distinctBy { it.id }.take(MAX_HELD_POSTS)
+                // Update known rows in their existing order: server ranking changes must not move the reading anchor.
+                val refreshed = response.posts.associateBy { it.id }
+                val confirmedRows = loadedPosts.map { refreshed[it.id] ?: it }
+                loadedPosts = (incoming.filter { it.userId == viewerId } + confirmedRows).distinctBy { it.id }
             }
-            val heldIds = heldPosts.map { it.id }.toSet()
-            loadedPosts = (response.posts.filterNot { it.id in heldIds } + loadedPosts).distinctBy { it.id }
             _newPostCount.value = heldPosts.size
             if (!hasMore && response.pagination?.hasMore == true) applyPagination(response.pagination)
             rebuildLoadedState()
