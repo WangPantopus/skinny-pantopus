@@ -58,6 +58,8 @@ class SavedPlacesViewModel
         private var items: List<SavedPlaceDto> = emptyList()
         private var loadedAtLeastOnce = false
         private var loading = false
+        private val _refreshing = MutableStateFlow(false)
+        val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
         private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
         val refreshNotice: StateFlow<RefreshNotice?> = _refreshNotice.asStateFlow()
 
@@ -68,6 +70,7 @@ class SavedPlacesViewModel
         private fun fetch(force: Boolean) {
             if (loading) return
             loading = true
+            _refreshing.value = force && loadedAtLeastOnce
             if (!loadedAtLeastOnce) {
                 repository.listCopy()?.let {
                     items = it.savedPlaces
@@ -102,6 +105,7 @@ class SavedPlacesViewModel
                     }
                 } finally {
                     loading = false
+                    _refreshing.value = false
                 }
             }
         }
