@@ -115,7 +115,7 @@ private struct RefreshOnStoreChange: ViewModifier {
         content
             .background(WindowProbeView(probe: probe, onAttach: attached, onDetach: detached))
             .onReceive(NotificationCenter.default.publisher(for: .screenStoreChanged)) { note in
-                guard probe.isOnScreen, UIApplication.shared.applicationState == .active, affects(note) else { return }
+                guard canRefresh, UIApplication.shared.applicationState == .active, affects(note) else { return }
                 performIfVisible()
             }
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
@@ -127,6 +127,10 @@ private struct RefreshOnStoreChange: ViewModifier {
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
                 resumeIfNeeded()
             }
+    }
+
+    private var canRefresh: Bool {
+        probe.isOnScreen && (!recheckOnAttach || probe.isTopNavigationScreen)
     }
 
     private func attached() {
@@ -143,7 +147,7 @@ private struct RefreshOnStoreChange: ViewModifier {
     private func resumeIfNeeded() {
         // UIKit may reattach a retained screen after didBecomeActive. Keep
         // the pending re-check until both conditions hold; hidden screens wait.
-        guard recheckOnResume, probe.isOnScreen, UIApplication.shared.applicationState == .active else { return }
+        guard recheckOnResume, canRefresh, UIApplication.shared.applicationState == .active else { return }
         recheckOnResume = false
         performIfVisible()
     }
@@ -152,7 +156,7 @@ private struct RefreshOnStoreChange: ViewModifier {
         Task {
             // A navigation transition may detach the screen after the signal
             // but before this task starts. Preserve its pending re-check.
-            if recheckOnAttach, !probe.isOnScreen || UIApplication.shared.applicationState != .active {
+            if recheckOnAttach, !canRefresh || UIApplication.shared.applicationState != .active {
                 recheckOnResume = true
                 return
             }
@@ -161,16 +165,33 @@ private struct RefreshOnStoreChange: ViewModifier {
     }
 }
 
-/// Whether a screen is really showing. `onAppear`/`onDisappear` can't tell:
-/// SwiftUI re-fires `onAppear` for a view two screens under the top of a
-/// stack with no matching `onDisappear`. UIKit takes covered screens (and
-/// unselected tabs) out of the window, so a view in the window is showing.
+/// SwiftUI can reattach a covered screen and fire its appearance callbacks
+/// while another navigation destination is on top. Sensitive callers also
+/// check the containing controller's position in every navigation stack.
 @MainActor
 private final class WindowProbe {
     weak var view: UIView?
 
     var isOnScreen: Bool {
         view?.window != nil
+    }
+
+    var isTopNavigationScreen: Bool {
+        var responder: UIResponder? = view
+        while let current = responder, !(current is UIViewController) {
+            responder = current.next
+        }
+        guard var controller = responder as? UIViewController else { return false }
+        while let parent = controller.parent {
+            // Use the stack's top, not visibleViewController: a screen must
+            // still recheck access while its own reservation sheet is open.
+            if let navigation = parent as? UINavigationController,
+               navigation.topViewController !== controller { return false }
+            if let tabs = parent as? UITabBarController,
+               tabs.selectedViewController !== controller { return false }
+            controller = parent
+        }
+        return true
     }
 }
 
