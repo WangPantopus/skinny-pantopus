@@ -205,10 +205,6 @@ class FeedMapViewModel
             // The list feed also falls back to the first Home, then the newest saved place.
             defaultArea = result.data.homes.firstNotNullOfOrNull { home ->
                 home.latitude?.let { lat -> home.longitude?.let { lon -> lat to lon } }
-            } ?: if (next == null && !isReady) {
-                savedPlaces.listStored().data?.savedPlaces?.firstOrNull()?.let { it.latitude to it.longitude }
-            } else {
-                defaultArea
             }
             if (next == selectedArea) return false
             selectedArea = next
@@ -228,6 +224,7 @@ class FeedMapViewModel
                 if (selectedArea == null && userCoordinate == null) userCoordinate = locationProvider.requestCurrent()
             }
             val center = selectedArea ?: userCoordinate?.let { it.latitude to it.longitude } ?: defaultArea
+                ?: savedPlaces.listStored().data?.savedPlaces?.firstOrNull()?.let { it.latitude to it.longitude }
             if (center == null) {
                 _refreshNotice.value = null
                 _state.value = FeedMapUiState.Error("Choose an area or turn on location to explore nearby.")
