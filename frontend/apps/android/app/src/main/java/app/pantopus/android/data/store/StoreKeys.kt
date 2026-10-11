@@ -18,9 +18,9 @@ import app.pantopus.android.data.api.models.notifications.NotificationsListRespo
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.place.PlaceSectionId
 import app.pantopus.android.data.api.models.posts.PostDetailResponse
+import app.pantopus.android.data.api.models.support_trains.SupportTrainDetailDto
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsListResponse
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsNearbyResponse
-import app.pantopus.android.data.api.models.support_trains.SupportTrainDetailDto
 import app.pantopus.android.data.api.models.users.InviteCodeDto
 import app.pantopus.android.data.api.models.users.InviteProgressDto
 import app.pantopus.android.data.api.models.users.ProfileResponse

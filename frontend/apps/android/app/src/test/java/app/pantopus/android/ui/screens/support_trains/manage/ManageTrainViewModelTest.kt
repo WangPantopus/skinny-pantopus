@@ -10,12 +10,12 @@ import app.pantopus.android.data.api.models.support_trains.SupportTrainReservati
 import app.pantopus.android.data.api.models.support_trains.SupportTrainSlotDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
-import app.pantopus.android.data.support_trains.SupportTrainsRepository
 import app.pantopus.android.data.store.Stored
+import app.pantopus.android.data.support_trains.SupportTrainsRepository
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimScopeTestFixture
 import app.pantopus.android.ui.screens.homes.claim_review.claimScopeFactory
-import io.mockk.every
 import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi

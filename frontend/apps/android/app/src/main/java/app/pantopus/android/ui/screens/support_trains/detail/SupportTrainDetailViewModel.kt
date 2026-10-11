@@ -11,8 +11,8 @@ import app.pantopus.android.data.api.models.support_trains.SupportTrainDetailDto
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.api.net.refusesStoredCopy
-import app.pantopus.android.data.support_trains.SupportTrainsRepository
 import app.pantopus.android.data.store.StoreKind
+import app.pantopus.android.data.support_trains.SupportTrainsRepository
 import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScopeFactory
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -151,16 +151,17 @@ class SupportTrainDetailViewModel
             if (session.isCurrent && _state.value !is SupportTrainDetailUiState.Loaded) {
                 _state.value = summary()
             }
-            readJob = viewModelScope.launch {
-                try {
-                    if (!current(version)) return@launch
-                    val result = repo.detail(trainId)
-                    if (!current(version)) return@launch
-                    publish(result)
-                } finally {
-                    if (version == readVersion) _refreshing.value = false
+            readJob =
+                viewModelScope.launch {
+                    try {
+                        if (!current(version)) return@launch
+                        val result = repo.detail(trainId)
+                        if (!current(version)) return@launch
+                        publish(result)
+                    } finally {
+                        if (version == readVersion) _refreshing.value = false
+                    }
                 }
-            }
         }
 
         private fun publish(result: NetworkResult<SupportTrainDetailDto>) {
@@ -170,17 +171,18 @@ class SupportTrainDetailViewModel
                     result is NetworkResult.Failure && saved.data != null &&
                         System.currentTimeMillis() - saved.fetchedAt > StoreKind.SUPPORT_TRAINS.maxShownAgeMs
                 }
-            _state.value = when (result) {
-                is NetworkResult.Success -> SupportTrainDetailUiState.Loaded(SupportTrainDetailProjection.project(result.data))
-                is NetworkResult.Failure -> {
-                    val safe = summary()
-                    if (!result.error.refusesStoredCopy && safe is SupportTrainDetailUiState.Loaded) {
-                        safe
-                    } else {
-                        SupportTrainDetailUiState.Error(result.error.displayMessage("Couldn't load this train."))
+            _state.value =
+                when (result) {
+                    is NetworkResult.Success -> SupportTrainDetailUiState.Loaded(SupportTrainDetailProjection.project(result.data))
+                    is NetworkResult.Failure -> {
+                        val safe = summary()
+                        if (!result.error.refusesStoredCopy && safe is SupportTrainDetailUiState.Loaded) {
+                            safe
+                        } else {
+                            SupportTrainDetailUiState.Error(result.error.displayMessage("Couldn't load this train."))
+                        }
                     }
                 }
-            }
         }
 
         fun refresh() {
