@@ -40,6 +40,9 @@ export default function HomesPage() {
   });
   const seeded = useRef(seed.length > 0);
   const [homes, setHomes] = useState<MyHome[]>(seed);
+  const mayKeep = useRef(false);
+  mayKeep.current = homes.length > 0 && showsMyHomesCopy({ homes });
+  const recheckOnResume = useRef(false);
   const savedRemoval = useSavedRemoval();
   const [pendingClaims, setPendingClaims] = useState<Array<{ claim: Claim; addressLine: string; cityLine: string }>>([]);
   const [loading, setLoading] = useState(!seeded.current);
@@ -161,21 +164,36 @@ export default function HomesPage() {
     // Coming back keeps the list visible and refreshes it behind the scenes (a full load only
     // after an error, when there's no list to keep).
     const refresh = () => {
-      if (document.visibilityState === 'hidden' || inFlight.current > 0
+      if (document.visibilityState === 'hidden') return;
+      if (recheckOnResume.current) {
+        recheckOnResume.current = false;
+        const revision = generation.current;
+        // Cancel the older shared read before starting this visit's check.
+        void queryClient.cancelQueries({ queryKey: myHomesQuery().queryKey, exact: true }).then(() => {
+          if (generation.current === revision) void load();
+        });
+        return;
+      }
+      if (inFlight.current > 0
         || Date.now() - lastAttempt.current < FOCUS_REFRESH_MS) return;
       void load(ready.current !== null);
     };
-    const visibility = () => { if (document.visibilityState !== 'hidden') refresh(); };
+    const leave = () => {
+      if (mayKeep.current || recheckOnResume.current) return;
+      recheckOnResume.current = true;
+      retire();
+    };
+    const visibility = () => { if (document.visibilityState === 'hidden') leave(); else refresh(); };
     const storage = (event: StorageEvent) => { if (event.key === null || event.key === api.AUTH_SESSION_CHANGE_KEY) restart(); };
     // Opened on the kept list: the first load re-checks behind it instead of clearing the page.
     void load(seeded.current);
     const unsubscribe = api.onTokenChange(restart);
-    window.addEventListener('focus', refresh); window.addEventListener('storage', storage);
+    window.addEventListener('focus', refresh); window.addEventListener('blur', leave); window.addEventListener('storage', storage);
     document.addEventListener('visibilitychange', visibility);
     return () => { retire(); unsubscribe();
-      window.removeEventListener('focus', refresh); window.removeEventListener('storage', storage);
+      window.removeEventListener('focus', refresh); window.removeEventListener('blur', leave); window.removeEventListener('storage', storage);
       document.removeEventListener('visibilitychange', visibility); };
-  }, [load, retire]);
+  }, [load, retire, queryClient]);
 
   const remove = async (homeId: string) => {
     const opening = ready.current;
