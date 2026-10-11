@@ -238,6 +238,7 @@ class ConnectionsViewModel
         fun dismissActionError() {
             _actionError.value = null
         }
+
         private val _refreshing = MutableStateFlow(false)
         val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
         private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
@@ -364,8 +365,7 @@ class ConnectionsViewModel
             }
         }
 
-        private fun pendingAction(id: String): RowTrailing.Status? =
-            actions[id]?.let { RowTrailing.Status(it, StatusChipVariant.Warning) }
+        private fun pendingAction(id: String): RowTrailing.Status? = actions[id]?.let { RowTrailing.Status(it, StatusChipVariant.Warning) }
 
         private fun reload(force: Boolean) {
             if (loading || actions.isNotEmpty()) return
@@ -386,29 +386,30 @@ class ConnectionsViewModel
                 }
                 if (!loadedOnce) _state.value = ListOfRowsUiState.Loading
             }
-            readJob = viewModelScope.launch {
-                val acceptedDeferred = async { fetchAccepted(force) }
-                val pendingDeferred = async { fetchPending(force) }
-                val sentDeferred = async { fetchSent(force) }
-                val blockedDeferred = async { fetchBlocked(force) }
-                val acceptedOk = acceptedDeferred.await()
-                val pendingOk = pendingDeferred.await()
-                val sentOk = sentDeferred.await()
-                val blockedOk = blockedDeferred.await()
-                loading = false
-                _refreshing.value = false
-                val staleFailure =
-                    listOf(repo.listCopy("accepted"), repo.pendingCopy(), connectionsRepo.sentCopy(), connectionsRepo.blockedCopy())
-                        .firstOrNull { it.showsRefreshFailure(StoreKind.PEOPLE) }
-                _refreshNotice.value = staleFailure?.let { RefreshNotice(it.fetchedAt, ::refresh) }
-                if (!loadedOnce && !acceptedOk && !pendingOk && !sentOk && !blockedOk) {
-                    _state.value =
-                        ListOfRowsUiState.Error("Couldn't load your connections. Try again.")
-                    return@launch
+            readJob =
+                viewModelScope.launch {
+                    val acceptedDeferred = async { fetchAccepted(force) }
+                    val pendingDeferred = async { fetchPending(force) }
+                    val sentDeferred = async { fetchSent(force) }
+                    val blockedDeferred = async { fetchBlocked(force) }
+                    val acceptedOk = acceptedDeferred.await()
+                    val pendingOk = pendingDeferred.await()
+                    val sentOk = sentDeferred.await()
+                    val blockedOk = blockedDeferred.await()
+                    loading = false
+                    _refreshing.value = false
+                    val staleFailure =
+                        listOf(repo.listCopy("accepted"), repo.pendingCopy(), connectionsRepo.sentCopy(), connectionsRepo.blockedCopy())
+                            .firstOrNull { it.showsRefreshFailure(StoreKind.PEOPLE) }
+                    _refreshNotice.value = staleFailure?.let { RefreshNotice(it.fetchedAt, ::refresh) }
+                    if (!loadedOnce && !acceptedOk && !pendingOk && !sentOk && !blockedOk) {
+                        _state.value =
+                            ListOfRowsUiState.Error("Couldn't load your connections. Try again.")
+                        return@launch
+                    }
+                    loadedOnce = true
+                    applyState()
                 }
-                loadedOnce = true
-                applyState()
-            }
         }
 
         private suspend fun fetchSent(force: Boolean): Boolean =
@@ -655,11 +656,15 @@ class ConnectionsViewModel
                 subtitleIcon = if (locality != null) PantopusIcon.MapPin else null,
                 bodyIcon = PantopusIcon.UserPlus,
                 destructiveAction =
-                    if (rel.id in actions) null else RowDestructiveAction(
-                        label = "Remove",
-                        testTag = "connections.row.${rel.id}.remove",
-                        onClick = { requestRemoval(rel.id) },
-                    ),
+                    if (rel.id in actions) {
+                        null
+                    } else {
+                        RowDestructiveAction(
+                            label = "Remove",
+                            testTag = "connections.row.${rel.id}.remove",
+                            onClick = { requestRemoval(rel.id) },
+                        )
+                    },
             )
         }
 
