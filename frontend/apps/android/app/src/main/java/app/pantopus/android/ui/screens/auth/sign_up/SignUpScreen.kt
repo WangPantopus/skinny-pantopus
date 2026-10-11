@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
@@ -27,6 +28,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -36,7 +38,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -94,7 +99,7 @@ object SignUpScreenTags {
     const val TERMS_LINKS = "signUpTermsLinks"
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun SignUpScreen(
     onClose: () -> Unit = {},
@@ -105,6 +110,12 @@ fun SignUpScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val termsRequester = remember { BringIntoViewRequester() }
+    var submitAttempt by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(submitAttempt) {
+        if (submitAttempt > 0 && !state.agreedToTerms) termsRequester.bringIntoView()
+    }
 
     LaunchedEffect(state.didSucceed) {
         if (state.didSucceed) {
@@ -139,11 +150,15 @@ fun SignUpScreen(
         title = "Create account",
         rightActionLabel = null,
         bottomActionLabel = "Create account",
-        isValid = state.isValid,
+        // A tap explains what is missing instead of silently disabling the form.
+        isValid = true,
         isDirty = state.hasInput,
         isSaving = state.isSubmitting,
         onClose = onClose,
-        onCommit = viewModel::submit,
+        onCommit = {
+            viewModel.submit()
+            submitAttempt += 1
+        },
     ) {
         Column(
             modifier = Modifier.fillMaxWidth().testTag(SignUpScreenTags.ROOT),
@@ -152,6 +167,7 @@ fun SignUpScreen(
             state.topLevelError?.let { error ->
                 RevealedErrorBanner(
                     error = error,
+                    submitAttempt = submitAttempt,
                     onDismiss = viewModel::clearTopLevelError,
                     modifier =
                         Modifier
@@ -271,15 +287,28 @@ fun SignUpScreen(
                 )
             }
 
-            TermsCheckbox(
-                isOn = state.agreedToTerms,
-                onToggle = viewModel::onTermsToggle,
-                onOpenLegal = onOpenLegal,
+            Column(
                 modifier =
                     Modifier
                         .padding(horizontal = Spacing.s4)
-                        .testTag(SignUpScreenTags.TERMS),
-            )
+                        .bringIntoViewRequester(termsRequester),
+                verticalArrangement = Arrangement.spacedBy(Spacing.s2),
+            ) {
+                TermsCheckbox(
+                    isOn = state.agreedToTerms,
+                    onToggle = viewModel::onTermsToggle,
+                    onOpenLegal = onOpenLegal,
+                    modifier = Modifier.testTag(SignUpScreenTags.TERMS),
+                )
+                if (state.hasAttemptedSubmit && !state.agreedToTerms) {
+                    Text(
+                        text = "Agree to the Terms and Privacy Policy to create your account.",
+                        style = PantopusTextStyle.small,
+                        color = PantopusColors.error,
+                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                    )
+                }
+            }
         }
     }
 }
@@ -559,7 +588,7 @@ private fun TermsCheckbox(
                         ),
                         RoundedCornerShape(Radii.xs),
                     )
-                    .clickable(onClick = onToggle)
+                    .toggleable(value = isOn, role = Role.Checkbox, onValueChange = { onToggle() })
                     .testTag(SignUpScreenTags.TERMS_TOGGLE)
                     .semantics {
                         contentDescription =
@@ -598,11 +627,12 @@ private fun TermsCheckbox(
 @Composable
 private fun RevealedErrorBanner(
     error: AuthError,
+    submitAttempt: Int,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val requester = remember { BringIntoViewRequester() }
-    LaunchedEffect(error) { requester.bringIntoView() }
+    LaunchedEffect(error, submitAttempt) { requester.bringIntoView() }
     ErrorBanner(error = error, onDismiss = onDismiss, modifier = modifier.bringIntoViewRequester(requester))
 }
 
