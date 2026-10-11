@@ -396,7 +396,8 @@ class ExploreMapViewModel
                 _activeKind.value == ExploreKind.Home ||
                     (_activeKind.value == null && (_filters.value.kinds.isEmpty() || ExploreKind.Home in _filters.value.kinds))
             // An empty public copy cannot establish an empty mixed map before the current Home check.
-            if (liveMode && includesHomes && (homesOnly || sorted.isEmpty())) {
+            val requiresHomeResult = includesHomes && (homesOnly || sorted.isEmpty())
+            if (liveMode && requiresHomeResult) {
                 if (!homeLayerChecked) {
                     _state.value = ExploreMapUiState.Loading
                     return
