@@ -27,7 +27,7 @@ import PlaceShell from './PlaceShell';
 import SetupBanner from '@/components/hub/SetupBanner';
 import { usePrimaryHome } from '@/lib/primaryHome';
 import { myHomesQuery as sharedMyHomesQuery } from '@/lib/myHomes';
-import { PLACE_FRESH_MS, gatedStaleTime, showsPlaceCopy, useAfterRecheck } from '@/lib/householdCopy';
+import { PLACE_FRESH_MS, gatedStaleTime, placeCopyGate, useAfterRecheck } from '@/lib/householdCopy';
 
 const REDIRECT_TO = encodeURIComponent('/app/place');
 
@@ -119,14 +119,15 @@ export default function PlaceDashboard() {
 
   // 2) Fetch its PlaceIntelligence (dependent on the active home id).
   // Switching homes changes the key, which re-queries the contract.
+  const showsCopy = placeCopyGate(myHomesQuery.data?.homes.find((home) => home.id === homeId));
   const intelQuery = useQuery({
     queryKey: homeId ? queryKeys.placeIntelligence(homeId) : ['place', 'intelligence', 'none'],
     queryFn: async () => api.place.getPlaceIntelligence(homeId as string),
     enabled: authed && !!homeId,
-    staleTime: gatedStaleTime(PLACE_FRESH_MS, showsPlaceCopy),
+    staleTime: gatedStaleTime(PLACE_FRESH_MS, showsCopy),
   });
   // A guest's or service provider's copy shows only once the re-check answers (decision 3).
-  const { data: intelligence, waiting: intelWaiting } = useAfterRecheck(intelQuery, showsPlaceCopy);
+  const { data: intelligence, waiting: intelWaiting } = useAfterRecheck(intelQuery, showsCopy);
 
   // ── States ───────────────────────────────────────────────
   // Coming back to Place shows what this tab already loaded in the first frame; the skeleton is
