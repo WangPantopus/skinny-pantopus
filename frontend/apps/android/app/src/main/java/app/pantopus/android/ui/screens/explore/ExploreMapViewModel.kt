@@ -235,7 +235,10 @@ class ExploreMapViewModel
             }
             // Public posts can appear while the independent Home access check is still running.
             allEntities = projectMarkers(posts.data.markers, center).filter { it.kind == ExploreKind.Post }
-            rebuild(keptSelection())
+            // A first empty public reply cannot yet say that the mixed map has no nearby Homes.
+            if (_state.value is ExploreMapUiState.Loaded || allEntities.isNotEmpty() || _activeKind.value == ExploreKind.Post) {
+                rebuild(keptSelection())
+            }
             val homes = homesDeferred.await()
             val gigs = gigsDeferred.await()
             val listings = listingsDeferred.await()
