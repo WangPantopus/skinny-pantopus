@@ -36,6 +36,7 @@ import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.place.PlaceSectionEnvelope
 import app.pantopus.android.data.api.models.place.PlaceSectionId
 import app.pantopus.android.data.api.models.place.PlaceTier
+import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.screens.place.PlacePresentation
 import app.pantopus.android.ui.screens.place.components.PlaceChip
 import app.pantopus.android.ui.screens.place.components.PlaceDensityCard
@@ -102,6 +103,7 @@ fun PlaceRiskDetailContent(
             viewModel.loadFridgeCards()
             onPauseOrDispose { }
         }
+        RefreshOnStoreChange(viewModel::loadFridgeCards)
         PlaceFridgeCardSection(viewModel)
     } else {
         PlaceLockedCard(

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -82,7 +83,10 @@ fun PlaceFridgeCardSection(viewModel: PlaceDetailViewModel) {
         when (val current = state) {
             is FridgeCardsUiState.Loading -> Unit
             is FridgeCardsUiState.Error ->
-                PlaceDetailCard { Text(current.message, fontSize = 13.5.sp, color = PantopusColors.appTextMuted) }
+                PlaceDetailCard {
+                    Text(current.message, fontSize = 13.5.sp, color = PantopusColors.appTextMuted)
+                    TextButton(onClick = viewModel::loadFridgeCards) { Text("Try again") }
+                }
             is FridgeCardsUiState.Loaded ->
                 current.cards.forEach { FridgeCardRow(it, viewModel) }
         }
