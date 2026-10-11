@@ -18,6 +18,7 @@ import app.pantopus.android.data.api.models.notifications.NotificationsListRespo
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.place.PlaceSectionId
 import app.pantopus.android.data.api.models.posts.PostDetailResponse
+import app.pantopus.android.data.api.models.settings.PrivacySettingsResponse
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsListResponse
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsNearbyResponse
 import app.pantopus.android.data.api.models.users.InviteCodeDto
@@ -48,6 +49,14 @@ object StoreTopics {
 
 /** The store's keys, one per endpoint and parameters it caches, with their kind and change topics (contract §4, §8). */
 object StoreKeys {
+    /** Search privacy preferences are copied in memory and removed after a PATCH. */
+    val privacySettings =
+        StoreKey<PrivacySettingsResponse>(
+            "api/privacy/settings",
+            kind = StoreKind.YOU,
+            topics = setOf(StoreTopics.PROFILE_ME),
+        )
+
     /** My Homes: one source for every screen that lists the viewer's homes. */
     val myHomes =
         StoreKey<MyHomesResponse>(

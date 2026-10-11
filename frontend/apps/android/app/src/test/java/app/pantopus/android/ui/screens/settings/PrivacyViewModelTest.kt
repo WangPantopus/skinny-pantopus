@@ -57,7 +57,8 @@ class PrivacyViewModelTest {
 
     @Before fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
-        coEvery { privacy.settings() } returns NetworkResult.Success(settingsResponse())
+        every { privacy.settingsCopy() } returns null
+        coEvery { privacy.settings(any()) } returns NetworkResult.Success(settingsResponse())
         coEvery { account.authMethods() } returns NetworkResult.Success(AuthMethodsResponse(hasPassword = true))
         // Mirrors the real coordinator: no host Activity → nothing can be verified.
         coEvery { stepUp.obtainToken(any(), any(), isNull(), any()) } returns
@@ -104,7 +105,7 @@ class PrivacyViewModelTest {
     // ---- Search privacy (GET / PATCH /api/privacy/settings) ----
 
     @Test fun search_privacy_card_reflects_loaded_settings() {
-        coEvery { privacy.settings() } returns
+        coEvery { privacy.settings(any()) } returns
             NetworkResult.Success(settingsResponse("mutuals", findableByName = true))
         val card = privacyVm().loadedGroups().group("searchPrivacy")
         assertEquals(
@@ -163,7 +164,7 @@ class PrivacyViewModelTest {
     }
 
     @Test fun search_privacy_load_failure_keeps_screen_and_swaps_helper() {
-        coEvery { privacy.settings() } returns NetworkResult.Failure(NetworkError.Server(500, null))
+        coEvery { privacy.settings(any()) } returns NetworkResult.Failure(NetworkError.Server(500, null))
         val groups = privacyVm().loadedGroups()
         assertEquals("a failed settings fetch must not blank the screen", 4, groups.size)
         assertEquals(
