@@ -259,13 +259,7 @@ fun PrivacySettingsScreen(
                     onSelectRadio = viewModel::onRadio,
                     onTapRow = { rowId ->
                         when (rowId) {
-                            "appLockOpenSettings" -> {
-                                val intent =
-                                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                        data = Uri.fromParts("package", context.packageName, null)
-                                    }
-                                runCatching { context.startActivity(intent) }
-                            }
+                            "appLockOpenSettings" -> context.openAppDetailsSettings()
                             "downloadData" -> onOpenDataExport()
                             "whatWeCollect" -> onOpenPrivacyPolicy()
                             else -> viewModel.onTapRow(rowId)
@@ -293,6 +287,14 @@ const val PRIVACY_SETTINGS_TOAST_TAG = "privacySettingsToast"
 
 private fun Context.notificationsAllowed(): Boolean =
     runCatching { NotificationManagerCompat.from(this).areNotificationsEnabled() }.getOrDefault(true)
+
+private fun Context.openAppDetailsSettings() {
+    val intent =
+        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+            data = Uri.fromParts("package", packageName, null)
+        }
+    runCatching { startActivity(intent) }
+}
 
 private fun Context.openAppNotificationSettings() {
     runCatching {
