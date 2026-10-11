@@ -229,6 +229,8 @@ class ConnectionsViewModel
 
         /** Initial load. Idempotent — re-running won't refetch when already loaded. */
         private var loading = false
+        private val _refreshing = MutableStateFlow(false)
+        val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
         private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
         val refreshNotice: StateFlow<RefreshNotice?> = _refreshNotice.asStateFlow()
 
@@ -375,6 +377,7 @@ class ConnectionsViewModel
         private fun reload(force: Boolean) {
             if (loading) return
             loading = true
+            _refreshing.value = force && loadedOnce
             if (!loadedOnce) {
                 val acceptedCopy = repo.listCopy("accepted").data
                 val pendingCopy = repo.pendingCopy().data
@@ -400,6 +403,7 @@ class ConnectionsViewModel
                 val sentOk = sentDeferred.await()
                 val blockedOk = blockedDeferred.await()
                 loading = false
+                _refreshing.value = false
                 val staleFailure =
                     listOf(repo.listCopy("accepted"), repo.pendingCopy(), connectionsRepo.sentCopy(), connectionsRepo.blockedCopy())
                         .firstOrNull { it.showsRefreshFailure(StoreKind.PEOPLE) }

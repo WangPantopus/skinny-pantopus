@@ -39,6 +39,7 @@ fun ConnectionsScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
+    val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val tabs by viewModel.tabs.collectAsStateWithLifecycle()
     val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
     val topBarAction by viewModel.topBarAction.collectAsStateWithLifecycle()
@@ -63,6 +64,7 @@ fun ConnectionsScreen(
         ListOfRowsScreen(
             title = "Connections",
             refreshNotice = refreshNotice,
+            refreshing = refreshing,
             state = state,
             onRefresh = { viewModel.refresh() },
             onEndReached = {},
