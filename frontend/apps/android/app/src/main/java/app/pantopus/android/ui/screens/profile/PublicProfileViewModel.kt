@@ -344,6 +344,8 @@ class PublicProfileViewModel
         val postsLoadFailed: StateFlow<Boolean> = _postsLoadFailed.asStateFlow()
 
         private var loading = false
+        private val _refreshing = MutableStateFlow(false)
+        val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
         private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
         val refreshNotice: StateFlow<RefreshNotice?> = _refreshNotice.asStateFlow()
 
@@ -354,6 +356,7 @@ class PublicProfileViewModel
         private fun startRead(force: Boolean) {
             if (loading) return
             loading = true
+            _refreshing.value = force && _state.value is PublicProfileUiState.Loaded
             if (_state.value !is PublicProfileUiState.Loaded) {
                 profileCopy().data?.let { profile ->
                     userId = profile.id
@@ -376,6 +379,7 @@ class PublicProfileViewModel
                     fetch(force)
                 } finally {
                     loading = false
+                    _refreshing.value = false
                 }
             }
         }
@@ -837,7 +841,11 @@ class PublicProfileViewModel
                 }
                 is NetworkResult.Failure -> {
                     _postsLoadFailed.value = true
-                    (_state.value as? PublicProfileUiState.Loaded)?.content?.posts.orEmpty()
+                    if (result.error.refusesStoredCopy) {
+                        emptyList()
+                    } else {
+                        (_state.value as? PublicProfileUiState.Loaded)?.content?.posts.orEmpty()
+                    }
                 }
             }
 
