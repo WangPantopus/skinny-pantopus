@@ -2081,7 +2081,7 @@ private fun usesSavedPageOfflineStrip(route: String?): Boolean =
             PantopusRoute.Messages.path, PantopusRoute.Pulse.path, ChildRoutes.PLACE_DASHBOARD, ChildRoutes.PLACE_DETAIL,
             ChildRoutes.PULSE_FEED, ChildRoutes.PULSE_POST, ChildRoutes.CHAT_CONVERSATION, ChildRoutes.PROFILE,
             ChildRoutes.PUBLIC_PROFILE, ChildRoutes.NOTIFICATIONS_ROUTE, ChildRoutes.CONNECTIONS_ROUTE, ChildRoutes.MY_POSTS,
-            ChildRoutes.SAVED_PLACES, ChildRoutes.RECENT_ACTIVITY, ChildRoutes.MENU,
+            ChildRoutes.SAVED_PLACES, ChildRoutes.RECENT_ACTIVITY, ChildRoutes.MENU, ChildRoutes.EXPLORE_ROUTE,
             ChildRoutes.SETTINGS_NOTIFICATIONS, ChildRoutes.SETTINGS_PRIVACY,
         )
 
