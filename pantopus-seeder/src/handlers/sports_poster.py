@@ -208,7 +208,7 @@ def _run(_event: dict[str, Any], _context: Any) -> dict[str, Any]:
                 source_display_name=item.get("source") or "curator",
                 category="sports",
                 region="national",
-                openai_api_key=secrets.openai_api_key,
+                anthropic_api_key=secrets.anthropic_api_key,
                 region_display_name="",
                 scope="national",
             )

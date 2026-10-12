@@ -51,7 +51,7 @@ class SeederSecrets(BaseModel):
     pantopus_api_base_url: str = Field(min_length=1)
     curator_email: str = Field(min_length=1)
     curator_password: str = Field(min_length=1)
-    openai_api_key: str = Field(min_length=1)
+    anthropic_api_key: str = Field(min_length=1)
 
     @field_validator("supabase_url", "pantopus_api_base_url")
     @classmethod
@@ -62,7 +62,7 @@ class SeederSecrets(BaseModel):
         "supabase_service_role_key",
         "curator_email",
         "curator_password",
-        "openai_api_key",
+        "anthropic_api_key",
     )
     @classmethod
     def validate_required_strings(cls, value: str, info: ValidationInfo) -> str:
@@ -130,7 +130,7 @@ def _load_from_secrets_manager(secret_name: str) -> SeederSecrets:
         pantopus_api_base_url=raw["PANTOPUS_API_BASE_URL"],
         curator_email=raw["CURATOR_EMAIL"],
         curator_password=raw["CURATOR_PASSWORD"],
-        openai_api_key=raw["OPENAI_API_KEY"],
+        anthropic_api_key=raw["ANTHROPIC_API_KEY"],
     )
 
 
@@ -142,7 +142,7 @@ def _load_from_env() -> SeederSecrets:
         pantopus_api_base_url=os.environ.get("PANTOPUS_API_BASE_URL", ""),
         curator_email=os.environ.get("CURATOR_EMAIL", ""),
         curator_password=os.environ.get("CURATOR_PASSWORD", ""),
-        openai_api_key=os.environ.get("OPENAI_API_KEY", ""),
+        anthropic_api_key=os.environ.get("ANTHROPIC_API_KEY", ""),
     )
 
 
