@@ -30,7 +30,7 @@ final class ManageTrainViewModelTests: XCTestCase {
 
     /// Offline VM seeded with the design fixture (no `load()` network).
     private func makeVM(content: ManageTrainContent = ManageTrainSampleData.active) -> ManageTrainViewModel {
-        ManageTrainViewModel(trainId: ManageTrainSampleData.trainId, api: makeAPI(), content: content)
+        ManageTrainViewModel(trainId: ManageTrainSampleData.trainId, api: makeAPI(), content: content) { "support-train-tests" }
     }
 
     func testLoadProjectsActiveFixture() async {
@@ -151,7 +151,7 @@ final class ManageTrainViewModelTests: XCTestCase {
             }
             """)
         ]
-        let vm = ManageTrainViewModel(trainId: "t9", api: makeAPI())
+        let vm = ManageTrainViewModel(trainId: "t9", api: makeAPI()) { "support-train-tests" }
         await vm.load()
         guard case let .loaded(content) = vm.state else {
             return XCTFail("Expected .loaded, got \(vm.state)")
@@ -169,7 +169,7 @@ final class ManageTrainViewModelTests: XCTestCase {
 
     func testLoadServerErrorSurfacesError() async {
         SequencedURLProtocol.sequence = [.status(500, body: "{\"error\":\"boom\"}")]
-        let vm = ManageTrainViewModel(trainId: "t9", api: makeAPI())
+        let vm = ManageTrainViewModel(trainId: "t9", api: makeAPI()) { "support-train-tests" }
         await vm.load()
         guard case .error = vm.state else {
             return XCTFail("Expected error, got \(vm.state)")

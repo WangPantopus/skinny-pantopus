@@ -87,31 +87,87 @@ extension View {
     /// that concern this screen (topics, or kinds after a reconnect).
     func refreshesOnStoreChange(
         affects: @escaping (Notification) -> Bool = { _ in true },
+        recheckOnAttach: Bool = false,
+        onBackground: (@MainActor () -> Bool)? = nil,
         perform action: @escaping @MainActor () async -> Void
     ) -> some View {
-        modifier(RefreshOnStoreChange(affects: affects, action: action))
+        modifier(RefreshOnStoreChange(
+            affects: affects,
+            recheckOnAttach: recheckOnAttach,
+            onBackground: onBackground,
+            action: action
+        ))
     }
 }
 
 private struct RefreshOnStoreChange: ViewModifier {
     let affects: (Notification) -> Bool
+    /// Opted-in screens load on actual window attachment instead of SwiftUI appearance.
+    let recheckOnAttach: Bool
+    /// Clears temporary-access content and returns whether resuming needs a re-check.
+    /// Opted-in screens also clear when their window detaches.
+    let onBackground: (@MainActor () -> Bool)?
     let action: @MainActor () async -> Void
     @State private var probe = WindowProbe()
+    @State private var recheckOnResume = false
 
     func body(content: Content) -> some View {
         content
-            .background(WindowProbeView(probe: probe))
+            .background(WindowProbeView(probe: probe, onAttach: attached, onDetach: detached))
             .onReceive(NotificationCenter.default.publisher(for: .screenStoreChanged)) { note in
-                guard probe.isOnScreen, affects(note) else { return }
-                Task { await action() }
+                guard canRefresh, UIApplication.shared.applicationState == .active, affects(note) else { return }
+                performIfVisible()
             }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
+                // Clear before the app snapshot and even if UIKit already
+                // detached this retained screen from its window.
+                let needsRecheck = onBackground?() ?? false
+                recheckOnResume = needsRecheck || recheckOnAttach
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                resumeIfNeeded()
+            }
+    }
+
+    private var canRefresh: Bool {
+        probe.isOnScreen && (!recheckOnAttach || probe.isTopNavigationScreen)
+    }
+
+    private func attached() {
+        if recheckOnAttach { recheckOnResume = true }
+        resumeIfNeeded()
+    }
+
+    private func detached() {
+        guard recheckOnAttach else { return }
+        _ = onBackground?()
+        recheckOnResume = true
+    }
+
+    private func resumeIfNeeded() {
+        // UIKit may reattach a retained screen after didBecomeActive. Keep
+        // the pending re-check until both conditions hold; hidden screens wait.
+        guard recheckOnResume, canRefresh, UIApplication.shared.applicationState == .active else { return }
+        recheckOnResume = false
+        performIfVisible()
+    }
+
+    private func performIfVisible() {
+        Task {
+            // A navigation transition may detach the screen after the signal
+            // but before this task starts. Preserve its pending re-check.
+            if recheckOnAttach, !canRefresh || UIApplication.shared.applicationState != .active {
+                recheckOnResume = true
+                return
+            }
+            await action()
+        }
     }
 }
 
-/// Whether a screen is really showing. `onAppear`/`onDisappear` can't tell:
-/// SwiftUI re-fires `onAppear` for a view two screens under the top of a
-/// stack with no matching `onDisappear`. UIKit takes covered screens (and
-/// unselected tabs) out of the window, so a view in the window is showing.
+/// SwiftUI can reattach a covered screen and fire its appearance callbacks
+/// while another navigation destination is on top. Sensitive callers also
+/// check the containing controller's position in every navigation stack.
 @MainActor
 private final class WindowProbe {
     weak var view: UIView?
@@ -119,21 +175,63 @@ private final class WindowProbe {
     var isOnScreen: Bool {
         view?.window != nil
     }
+
+    var isTopNavigationScreen: Bool {
+        var responder: UIResponder? = view
+        while let current = responder, !(current is UIViewController) {
+            responder = current.next
+        }
+        guard var controller = responder as? UIViewController else { return false }
+        while let parent = controller.parent {
+            // Use the stack's top, not visibleViewController: a screen must
+            // still recheck access while its own reservation sheet is open.
+            if let navigation = parent as? UINavigationController,
+               navigation.topViewController !== controller { return false }
+            if let tabs = parent as? UITabBarController,
+               tabs.selectedViewController !== controller { return false }
+            controller = parent
+        }
+        return true
+    }
 }
 
 private struct WindowProbeView: UIViewRepresentable {
     let probe: WindowProbe
+    let onAttach: @MainActor () -> Void
+    let onDetach: @MainActor () -> Void
 
-    func makeUIView(context _: Context) -> UIView {
-        let view = UIView()
+    func makeUIView(context _: Context) -> WindowProbeUIView {
+        let view = WindowProbeUIView()
         view.isHidden = true
         view.isUserInteractionEnabled = false
+        view.onAttach = onAttach
+        view.onDetach = onDetach
         probe.view = view
         return view
     }
 
-    func updateUIView(_ view: UIView, context _: Context) {
+    func updateUIView(_ view: WindowProbeUIView, context _: Context) {
         probe.view = view
+        view.onAttach = onAttach
+        view.onDetach = onDetach
+    }
+}
+
+private final class WindowProbeUIView: UIView {
+    var onAttach: (@MainActor () -> Void)?
+    var onDetach: (@MainActor () -> Void)?
+    private var windowChange = 0
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        windowChange &+= 1
+        let revision = windowChange
+        let attached = window != nil
+        // Run after SwiftUI's update; a newer transition supersedes this one.
+        Task { @MainActor [weak self] in
+            guard let self, windowChange == revision, (window != nil) == attached else { return }
+            if attached { onAttach?() } else { onDetach?() }
+        }
     }
 }
 
