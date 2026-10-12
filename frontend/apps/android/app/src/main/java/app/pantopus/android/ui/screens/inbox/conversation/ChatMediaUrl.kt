@@ -11,15 +11,13 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
  * any host, including one whose path contains `/api/chat/files/`.
  */
 internal object ChatMediaUrl {
+    private val chatFilePath = Regex("/api/chat/files/[^/]+")
+
     /** Only the authenticated chat proxy provides a bounded thumbnail; external URLs stay originals. */
     fun thumbnail(raw: String): String? {
         val url = resolve(raw)?.toHttpUrlOrNull() ?: return null
         val api = BuildConfig.PANTOPUS_API_BASE_URL.toHttpUrlOrNull() ?: return null
-        if (!ApiOrigin(api).matches(url) ||
-            url.pathSegments.size != 4 ||
-            url.pathSegments.take(3) != listOf("api", "chat", "files") ||
-            url.pathSegments.last().isBlank()
-        ) {
+        if (!ApiOrigin(api).matches(url) || !chatFilePath.matches(url.encodedPath)) {
             return null
         }
         return url.newBuilder().setQueryParameter("variant", "thumbnail").build().toString()
