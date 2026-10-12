@@ -43,10 +43,16 @@ non-skippable but still benefit from local state hoisting.
 `PantopusApplication` now implements `ImageLoaderFactory` and provides
 a process-wide loader sized to:
 - 15 % of available app memory (memory cache)
-- 2 % of app's disk under `cacheDir/image_cache` (disk cache)
+- A shared 100 MB storage limit by default (50, 100 or 250 MB in Storage & data),
+  reserving 20 MB for saved pages and the remainder for bounded thumbnails under
+  `cacheDir/image_cache_v2`. Images unused for 30 days are removed.
+
+Disk policy defaults to `READ_ONLY`; only known bounded thumbnail requests opt
+into writes. Original images still render through the memory cache. Initialization
+retires the legacy image cache so upgrades remove previously cached originals.
 
 So scrolling through avatar lists doesn't re-decode the same bitmap on
-every frame. (`PantopusApplication.kt:49-66`)
+every frame.
 
 ### 4. Compose compiler reports flag
 `app/build.gradle.kts` exposes a `-PcomposeCompilerReports=true`
@@ -63,8 +69,8 @@ The CI job documented below runs this on every PR and posts a diff
 comment when stability classes change.
 
 ### 5. Existing P3 wins
-- The API OkHttp client has no HTTP cache (replies carry private data
-  and must not reach disk); Coil keeps images in its own disk cache.
+- The API OkHttp client has no HTTP cache. ScreenStore persists only allowlisted
+  pages, keeping sensitive replies off disk; Coil separately caches bounded thumbnails.
 - Retry interceptor with exponential backoff covers transient 5xx /
   IOException on idempotent requests only.
 - All Retrofit DTOs use Moshi codegen (`@JsonClass(generateAdapter =
