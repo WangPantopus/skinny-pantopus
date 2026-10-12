@@ -277,7 +277,7 @@ fun ListOfRowsScreen(
                         RefreshableFill { ErrorBanner(state.message, onRetry = onRefresh) }
                 }
                 PullRefreshIndicator(
-                    refreshing = state is ListOfRowsUiState.Loading,
+                    refreshing = refreshing || state is ListOfRowsUiState.Loading,
                     state = pullState,
                     modifier = Modifier.align(Alignment.TopCenter),
                     contentColor = PantopusColors.primary600,
