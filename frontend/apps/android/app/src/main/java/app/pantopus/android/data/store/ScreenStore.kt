@@ -162,8 +162,8 @@ class ScreenStore
         }
 
         /**
-         * Returns the copy when it is fresh; otherwise reads it (sharing a read already in flight) and returns what the
-         * store holds afterwards. [force] reads even a fresh copy (pull to refresh, Retry, after an own edit). [fetch]
+         * Shares a read already in flight, otherwise returns a fresh copy or reads it and returns what the store
+         * holds afterwards. [force] reads even a fresh copy (pull to refresh, Retry, after an own edit). [fetch]
          * gets the stored ETag (null without a copy) and calls the endpoint through `conditionalApiCall`.
          */
         suspend fun <T : Any> read(
@@ -191,9 +191,9 @@ class ScreenStore
                         deleteSaved(key.id, account)
                     }
                     val current = slot.state.value
-                    if (!force && !slot.stale && current.isFresh(key.kind)) return current.cast()
                     val running = slot.inFlight?.takeIf { it.isActive }
                     if (running != null) return@synchronized slot to running
+                    if (!force && !slot.stale && current.isFresh(key.kind)) return current.cast()
                     val ticket = Ticket(generation, identity(account), slot.edits, slot.marks)
                     val etag = slot.etag.takeIf { current.data != null }
                     slot.state.value = current.copy(refreshing = true)
