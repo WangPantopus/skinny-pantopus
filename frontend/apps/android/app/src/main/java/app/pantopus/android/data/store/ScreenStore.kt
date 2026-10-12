@@ -481,6 +481,11 @@ class ScreenStore
                             }
                     }
                 if (BuildConfig.DEBUG) Timber.tag("ISStore").d("%s → %s", slot.key.id.replace(UUID, ":id"), slot.state.value.describe())
+                // The visible reader may have consumed a topic signal by joining this older flight. Release it
+                // before notifying again, so that reader rechecks the newer version instead of joining it twice.
+                // No signal without a newer mark: failed reads do not create a retry loop.
+                slot.inFlight = null
+                if (markedMeanwhile && !slot.state.value.failure.refusesStoredCopy) _changes.update { it + 1 }
             }
         }
 
