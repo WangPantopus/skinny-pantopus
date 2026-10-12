@@ -106,7 +106,8 @@ open class HomesRepository
          * one conditional request, shared with any read already in flight. [force] reads now (pull, own edits).
          */
         open suspend fun myHomesStored(force: Boolean = false): Stored<MyHomesResponse> =
-            store.read(StoreKeys.myHomes, force) { etag -> conditionalApiCall { api.myHomesConditional(etag) } }
+            // The viewer's own list of homes: saved on the phone so a cold start lands at once (contract §6).
+            store.read(StoreKeys.myHomes, force, persist = true) { etag -> conditionalApiCall { api.myHomesConditional(etag) } }
 
         /** The stored My Homes as it is now, without a request (null before the first read or after a wipe). */
         open fun myHomesCopy(): MyHomesResponse? = store.peek(StoreKeys.myHomes).data

@@ -6,12 +6,14 @@ import app.pantopus.android.data.api.ApiService
 import app.pantopus.android.data.api.models.auth.DeviceDescriptorDto
 import app.pantopus.android.data.api.services.AuthApi
 import app.pantopus.android.data.feed.FeedModerationStore
+import app.pantopus.android.data.network.NetworkMonitor
 import app.pantopus.android.data.observability.Observability
 import app.pantopus.android.data.realtime.SocketManager
 import app.pantopus.android.push.FcmTokenProvider
 import app.pantopus.android.push.NotificationDispatcher
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.flow.MutableStateFlow
 
 /**
  * Shared test doubles for the persistent-login layer so `AuthRepositoryTest`,
@@ -144,6 +146,7 @@ object AuthTestSupport {
         fcmTokenProvider: FcmTokenProvider = FakeFcmTokenProvider(),
         notifications: NotificationDispatcher = mockk(relaxed = true),
         accountDeviceData: AccountDeviceData = mockk(relaxed = true),
+        network: NetworkMonitor = mockk { every { isOnline } returns MutableStateFlow(true) },
     ): AuthRepository =
         AuthRepository(
             api = api,
@@ -163,5 +166,6 @@ object AuthTestSupport {
             fcmTokenProvider = fcmTokenProvider,
             notifications = notifications,
             accountDeviceData = accountDeviceData,
+            network = network,
         )
 }
