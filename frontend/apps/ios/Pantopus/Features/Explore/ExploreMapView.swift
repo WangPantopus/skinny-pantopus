@@ -373,16 +373,16 @@ public struct ExploreMapView: View {
                     Group {
                         if kind.isSquarePin {
                             RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-                                .fill(active ? Theme.Color.appTextInverse : kind.color)
+                                .fill(active ? Theme.Color.appSurface : kind.color)
                         } else {
-                            Circle().fill(active ? Theme.Color.appTextInverse : kind.color)
+                            Circle().fill(active ? Theme.Color.appSurface : kind.color)
                         }
                     }
                     .frame(width: 6, height: 6)
                 }
                 Text(label)
                     .font(.system(size: 11.5, weight: .semibold))
-                    .foregroundStyle(active ? Theme.Color.appTextInverse : Theme.Color.appTextStrong)
+                    .foregroundStyle(active ? Theme.Color.appSurface : Theme.Color.appTextStrong)
             }
             .frame(maxWidth: .infinity)
             .frame(height: 28)
