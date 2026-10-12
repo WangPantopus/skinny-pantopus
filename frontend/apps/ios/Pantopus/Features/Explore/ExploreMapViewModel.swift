@@ -4,15 +4,9 @@
 //
 //  A11.2 Explore / P1-F — view-model for the cross-type discovery map.
 //
-//  The production path fetches live discovery results for the viewport
-//  around the user from three routes and fans them into a homogeneous
-//  `[ExploreEntity]`:
-//    • `GET /api/gigs/in-bounds`     → `.task`  (carries price + bid count)
-//    • `GET /api/listings/in-bounds` → `.item`
-//    • `GET /api/posts/map`          → `.post` / `.spot` / `.home`
-//      (`layers=posts,businesses,homes` — `backend/routes/posts.js:1646`)
-//  Tasks stay on the gigs route rather than the map route's `tasks` layer
-//  because only the former carries price + bid count for the rail card.
+//  The launch path fetches public posts and private Homes independently
+//  from `GET /api/posts/map`. Home access always rechecks without a protocol
+//  cache; only public post projections survive a pause in this view-model.
 //  Filtering, sorting, and clustering run locally over the fetched window
 //  (mirrors `NearbyMapViewModel`). Previews / snapshots / tests seed
 //  deterministic content via `init(scenario:)`, bypassing the network.
@@ -43,13 +37,22 @@ public final class ExploreMapViewModel {
     /// Query/camera area; a saved or explicit area never impersonates device location.
     public private(set) var viewingCenter: UserCoordinate?
     private var explicitCenter: UserCoordinate?
+    private var configuredFocus: ExploreMapFocus?
+    private var hasConfiguredFocus = false
     private var fetchGeneration = 0
 
     /// Applied filter criteria. Surfaced so the view can seed the filter
     /// sheet + render the active-count badge.
     public private(set) var filters: ExploreFilterCriteria
 
+    public private(set) var homeCheckMessage: String?
+    public private(set) var isCheckingHomes = false
+    public private(set) var isCheckingPosts = false
+    public private(set) var postsFailureMessage: String?
     private let api: APIClient
+    private let store: ScreenStore
+    private let sessionScope: HomeClaimSessionScope
+    private var contentCacheGeneration: Int
     private let location: any LocationProviding
     /// Non-nil for the sample/preview path; nil for the live path.
     private let scenario: ExploreScenario?
@@ -69,9 +72,13 @@ public final class ExploreMapViewModel {
     /// tests; internal because `APIClient` is module-internal.
     init(
         api: APIClient,
-        location: any LocationProviding = DeviceLocationProvider.shared
+        location: any LocationProviding = DeviceLocationProvider.shared,
+        identity: (() -> String?)? = nil
     ) {
         self.api = api
+        store = ScreenStore.store(for: api)
+        sessionScope = HomeClaimSessionScope(api: api, identity: identity)
+        contentCacheGeneration = store.generation
         self.location = location
         scenario = nil
         allEntities = []
@@ -82,6 +89,9 @@ public final class ExploreMapViewModel {
     /// Sample/preview path — local sample entities, no network.
     public init(scenario: ExploreScenario) {
         api = .shared
+        store = .shared
+        sessionScope = HomeClaimSessionScope(api: .shared)
+        contentCacheGeneration = store.generation
         location = DeviceLocationProvider.shared
         self.scenario = scenario
         allEntities = ExploreMapSampleData.entities(for: scenario)
@@ -112,24 +122,32 @@ public final class ExploreMapViewModel {
     }
 
     public func configureFocus(_ focus: ExploreMapFocus?) {
-        fetchGeneration += 1
-        fetchTask?.cancel()
-        explicitCenter = focus.map { UserCoordinate(latitude: $0.latitude, longitude: $0.longitude, accuracyMeters: 0) }
+        guard scenario == nil else { return }
+        guard !hasConfiguredFocus || focus != configuredFocus else { return }
+        hasConfiguredFocus = true
+        configuredFocus = focus
+        let next = focus.map { UserCoordinate(latitude: $0.latitude, longitude: $0.longitude, accuracyMeters: 0) }
+        suspend()
+        allEntities = []
+        viewingCenter = nil
+        explicitCenter = next
+        rebuild(selectedId: nil)
     }
 
     /// A locate action explicitly requests the actual device area.
     public func locate() async {
-        fetchTask?.cancel()
-        fetchGeneration += 1
+        suspend()
         let generation = fetchGeneration
+        let cache = store.generation
         let coordinate = await location.requestCurrent(timeoutSeconds: 4)
-        guard generation == fetchGeneration else { return }
+        guard isCurrentRead(generation, cache: cache) else { return }
         guard let coordinate else {
             state = .error(message: "Turn on location to find your current area.")
             return
         }
         userCoordinate = coordinate
         explicitCenter = coordinate
+        allEntities = []
         await fetchAroundUser()
     }
 
@@ -204,76 +222,140 @@ public final class ExploreMapViewModel {
 
     // MARK: - Live fetch
 
-    /// Resolve the requested area before fetching the existing discovery routes.
-    /// A total failure surfaces as `.error`; a partial failure renders what loaded.
+    /// Posts and Homes have independent reads: a slow or refused Home check
+    /// must neither hide public posts nor make an unchecked Home layer look empty.
     private func fetchAroundUser() async {
-        fetchTask?.cancel()
-        fetchGeneration += 1
+        suspend()
+        guard sessionScope.isCurrent else { return }
         let generation = fetchGeneration
+        let cache = store.generation
+        homeCheckMessage = "Checking Home access…"
+        isCheckingHomes = true
+        isCheckingPosts = true
         let center: UserCoordinate
         do {
             guard let resolved = try await resolveCenter() else {
-                guard generation == fetchGeneration else { return }
-                state = .error(message: "Choose an area or turn on location to explore nearby.")
-                return
+                throw APIError.invalidResponse
             }
+            try requireCurrentRead(generation, cache: cache)
             center = resolved
         } catch {
-            guard generation == fetchGeneration else { return }
-            state = .error(message: "Couldn't load your selected area. Please try again.")
+            guard isCurrentRead(generation, cache: cache) else { return }
+            isCheckingHomes = false
+            isCheckingPosts = false
+            homeCheckMessage = "Couldn't check Home access. Try again."
+            if allEntities.isEmpty {
+                state = .error(message: "Choose an area or turn on location, then try again.")
+            }
             return
         }
-        guard generation == fetchGeneration else { return }
-        let halfDegLat = 0.012
-        let halfDegLon = 0.016
-        let minLat = center.latitude - halfDegLat
-        let maxLat = center.latitude + halfDegLat
-        let minLon = center.longitude - halfDegLon
-        let maxLon = center.longitude + halfDegLon
-
-        if case .loaded = state {} else { state = .loading }
-
+        viewingCenter = center
         let task = Task { @MainActor in
-            async let gigsResult: GigsInBoundsResponse? = try? await api.request(
-                GigsEndpoints.inBounds(minLat: minLat, minLon: minLon, maxLat: maxLat, maxLon: maxLon)
-            )
-            async let listingsResult: ListingsInBoundsResponse? = try? await api.request(
-                ListingsEndpoints.inBounds(south: minLat, west: minLon, north: maxLat, east: maxLon)
-            )
-            async let markersResult: PostsMapResponse? = try? await api.request(
-                PostsMapEndpoints.markers(
-                    south: minLat,
-                    west: minLon,
-                    north: maxLat,
-                    east: maxLon,
-                    layers: [.posts, .businesses, .homes],
-                    limit: 200
-                )
-            )
-            let gigs = await gigsResult
-            let listings = await listingsResult
-            let markers = await markersResult
-            guard generation == self.fetchGeneration, !Task.isCancelled else { return }
-            if gigs == nil, listings == nil, markers == nil {
-                state = .error(message: "Couldn't load the map.")
-                return
-            }
-            viewingCenter = center
-            allEntities = Self.project(
-                gigs: gigs?.gigs ?? [],
-                listings: listings?.listings ?? [],
-                markers: markers?.markers ?? [],
-                anchor: center
-            )
-            rebuild(selectedId: nil)
+            async let posts: Void = fetchLayer(.posts, center: center, generation: generation, cache: cache)
+            async let homes: Void = fetchLayer(.homes, center: center, generation: generation, cache: cache)
+            _ = await (posts, homes)
         }
         fetchTask = task
-        _ = await task.value
+        await task.value
+    }
+
+    private func fetchLayer(_ layer: PostsMapLayer, center: UserCoordinate, generation: Int, cache: Int) async {
+        let kind: ExploreKind = layer == .homes ? .home : .post
+        let route = PostsMapEndpoints.markers(
+            south: center.latitude - 0.012,
+            west: center.longitude - 0.016,
+            north: center.latitude + 0.012,
+            east: center.longitude + 0.016,
+            layers: [layer],
+            limit: 200
+        )
+        // Never reuse or retain a mixed/private protocol-cache response. The
+        // view-model alone keeps public post projections for this visit.
+        let endpoint = Endpoint(
+            method: route.method,
+            path: route.path,
+            query: route.query,
+            headers: ["Cache-Control": "no-store"],
+            cachePolicy: .reloadIgnoringLocalAndRemoteCacheData
+        ) { [weak self] in
+            guard let self else { throw CancellationError() }
+            try requireCurrentRead(generation, cache: cache)
+        }
+        do {
+            try requireCurrentRead(generation, cache: cache)
+            let result: PostsMapResponse = try await api.request(endpoint)
+            try requireCurrentRead(generation, cache: cache)
+            allEntities.removeAll { $0.kind == kind }
+            allEntities += Self.projectMarkers(result.markers, anchor: center).filter { $0.kind == kind }
+            if layer == .homes {
+                homeCheckMessage = nil
+                isCheckingHomes = false
+            } else {
+                postsFailureMessage = nil
+                isCheckingPosts = false
+            }
+            rebuild(selectedId: keptSelection())
+        } catch {
+            guard isCurrentRead(generation, cache: cache), !(error is CancellationError) else { return }
+            if layer == .homes {
+                allEntities.removeAll { $0.kind == .home }
+                homeCheckMessage = "Couldn't check Home access. Try again."
+                isCheckingHomes = false
+            } else {
+                if ScreenStore.isRefusal(error) { allEntities.removeAll { $0.kind == .post } }
+                postsFailureMessage = "Couldn't refresh posts. Try again."
+                isCheckingPosts = false
+            }
+            rebuild(selectedId: keptSelection())
+        }
+    }
+
+    private func isCurrentRead(_ generation: Int, cache: Int) -> Bool {
+        generation == fetchGeneration && cache == store.generation && sessionScope.isCurrent && !Task.isCancelled
+    }
+
+    private func requireCurrentRead(_ generation: Int, cache: Int) throws {
+        guard isCurrentRead(generation, cache: cache) else { throw CancellationError() }
+    }
+
+    /// Drop private markers, addresses, clusters and selections before leaving
+    /// the screen or taking the app snapshot, and retire every outstanding read.
+    public func suspend() {
+        guard scenario == nil else { return }
+        fetchGeneration += 1
+        fetchTask?.cancel()
+        fetchTask = nil
+        allEntities.removeAll { $0.kind != .post }
+        if !sessionScope.isCurrent || contentCacheGeneration != store.generation {
+            allEntities = []
+            userCoordinate = nil
+            viewingCenter = nil
+            explicitCenter = nil
+            hasConfiguredFocus = false
+        }
+        contentCacheGeneration = store.generation
+        isCheckingHomes = false
+        isCheckingPosts = false
+        homeCheckMessage = "Home access needs to be checked."
+        rebuild(selectedId: keptSelection())
+    }
+
+    var hasUnresolvedRead: Bool {
+        (activeKind != .post && homeCheckMessage != nil)
+            || (activeKind != .home && (isCheckingPosts || postsFailureMessage != nil))
+    }
+
+    func isAffected(by note: Notification) -> Bool {
+        if note.names(topic: ScreenTopic.homes, kind: .homes) || note.names(topic: ScreenTopic.posts) { return true }
+        let topics = note.userInfo?["topics"] as? Set<String> ?? []
+        return topics.contains { $0.hasPrefix("home:") || $0.hasPrefix("post:") }
     }
 
     private func resolveCenter() async throws -> UserCoordinate? {
         userCoordinate = location.cachedCoordinate()
         if let explicitCenter { return explicitCenter }
+        // Retain the chosen viewport within this visit, including while offline.
+        if let viewingCenter { return viewingCenter }
         let payload: ViewingLocationPayload = try await api.request(ViewingLocationEndpoints.current())
         if let selected = payload.viewingLocation {
             return UserCoordinate(latitude: selected.latitude, longitude: selected.longitude, accuracyMeters: 0)
