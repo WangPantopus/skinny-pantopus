@@ -555,16 +555,12 @@ public struct ExploreMapView: View {
         case let .error(message):
             errorBody(message)
         case let .loaded(loaded):
-            if viewModel.activeKind != .post, let message = viewModel.homeCheckMessage {
-                if viewModel.isCheckingHomes {
-                    ProgressView(message)
-                        .padding(Spacing.s3)
-                        .accessibilityIdentifier("exploreHomeCheck")
-                } else {
-                    mapReadNotice(message)
-                }
+            if viewModel.activeKind != .post, viewModel.isCheckingHomes {
+                ProgressView("Checking Home access…")
+                    .padding(Spacing.s3)
+                    .accessibilityIdentifier("exploreHomeCheck")
             }
-            if viewModel.activeKind != .home, let message = viewModel.postsFailureMessage {
+            if let message = readFailureNotice {
                 mapReadNotice(message)
             }
             if loaded.isEmpty {
@@ -583,18 +579,30 @@ public struct ExploreMapView: View {
         }
     }
 
+    private var readFailureNotice: String? {
+        let home = viewModel.activeKind != .post && !viewModel.isCheckingHomes ? viewModel.homeCheckMessage : nil
+        let posts = viewModel.activeKind != .home ? viewModel.postsFailureMessage : nil
+        if home != nil, posts != nil { return "Couldn't check Home access or refresh posts." }
+        return home ?? posts
+    }
+
     private func mapReadNotice(_ message: String) -> some View {
-        VStack(spacing: Spacing.s1) {
-            Text(message)
-                .font(.subheadline)
-                .foregroundStyle(Theme.Color.appTextSecondary)
-                .multilineTextAlignment(.center)
-            Button("Try again") { Task { await viewModel.refresh() } }
-                .font(.subheadline.bold())
-                .frame(minHeight: 44)
-                .accessibilityIdentifier("exploreAccessRetry")
+        ScrollView {
+            VStack(spacing: Spacing.s1) {
+                Text(message)
+                    .font(.subheadline)
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button("Try again") { Task { await viewModel.refresh() } }
+                    .font(.subheadline.bold())
+                    .frame(minHeight: 44)
+                    .accessibilityIdentifier("exploreAccessRetry")
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, Spacing.s3)
         }
-        .padding(.horizontal, Spacing.s3)
+        .frame(maxHeight: 160)
     }
 
     private func errorBody(_ message: String) -> some View {
