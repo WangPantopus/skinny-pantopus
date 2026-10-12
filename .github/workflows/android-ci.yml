@@ -170,6 +170,54 @@ jobs:
           echo "Disk after cleanup:"
           df -h
 
+      - name: Prepare bounded runner diagnostics
+        run: |
+          cat > "$RUNNER_TEMP/android-ci-run.sh" <<'BASH'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          (
+            sleep_pid=
+            trap 'kill "${sleep_pid:-}" 2>/dev/null || true' EXIT
+            while true; do
+              echo "::group::Android runner resources $(date -u +%FT%TZ)"
+              free -m
+              # Process names only: arguments and environment may contain secrets.
+              ps -eo pid,comm,rss,pcpu --sort=-rss | sed -n '1,9p'
+              echo "::endgroup::"
+              sleep 30 &
+              sleep_pid=$!
+              wait "$sleep_pid"
+              sleep_pid=
+            done
+          ) &
+          monitor_pid=$!
+          trap 'kill "$monitor_pid" 2>/dev/null || true; wait "$monitor_pid" 2>/dev/null || true' EXIT
+          "$@"
+          BASH
+
+      - name: Compile APKs before starting the emulator
+        # Keep the existing compiler heap limits, but release the compiler before
+        # booting the emulator instead of making both compete for the runner.
+        run: |
+          bash "$RUNNER_TEMP/android-ci-run.sh" ./gradlew \
+            :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon
+
+          # Kotlin normally exits shortly after the single-use Gradle client.
+          compiler_stopped=false
+          for attempt in {1..30}; do
+            jvm_processes=$(jps -l)
+            if ! awk '$2 == "org.jetbrains.kotlin.daemon.KotlinCompileDaemon" { found=1 } END { exit !found }' <<< "$jvm_processes"; then
+              compiler_stopped=true
+              break
+            fi
+            sleep 1
+          done
+          if [[ "$compiler_stopped" != true ]]; then
+            echo "::error::Kotlin compiler is still running before emulator startup."
+            exit 1
+          fi
+          echo "Kotlin compiler stopped before emulator startup."
+
       - name: Run Compose UI + instrumented tests
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -184,7 +232,7 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           working-directory: frontend/apps/android
-          script: ./gradlew connectedDebugAndroidTest --no-daemon
+          script: bash "$RUNNER_TEMP/android-ci-run.sh" ./gradlew connectedDebugAndroidTest --no-daemon
 
       - name: Upload instrumented test reports
         if: always()
