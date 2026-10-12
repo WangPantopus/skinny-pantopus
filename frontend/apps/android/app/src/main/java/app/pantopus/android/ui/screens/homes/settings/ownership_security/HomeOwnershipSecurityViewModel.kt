@@ -87,6 +87,9 @@ class HomeOwnershipSecurityViewModel
         private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
         val refreshNotice: StateFlow<RefreshNotice?> = _refreshNotice.asStateFlow()
 
+        private val _refreshing = MutableStateFlow(false)
+        val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
         /** Founder decision 3: who may see this screen from the store's copy, and what leaves with the screen. */
         private val gate = gates.create(homeId, listOf(HomeStoreKeys.security(homeId)))
         private var readGeneration = 0L
@@ -118,12 +121,14 @@ class HomeOwnershipSecurityViewModel
 
         fun suspendContent() {
             active = false
+            _refreshing.value = false
             readGeneration += 1
             if (!gate.showsCopy) clearCopy()
             gate.leave()
         }
 
         private fun clearCopy() {
+            _refreshing.value = false
             _refreshNotice.value = null
             policy = null
             _banner.value = null
@@ -137,10 +142,12 @@ class HomeOwnershipSecurityViewModel
         private fun read(force: Boolean) {
             if (!active) return
             val generation = ++readGeneration
+            _refreshing.value = force && _state.value is GroupedListUiState.Loaded
             if (policy == null) _state.value = GroupedListUiState.Loading
             viewModelScope.launch {
                 val stored = readSecurity(force, generation)
                 if (generation != readGeneration) return@launch
+                _refreshing.value = false
                 val data = stored.data
                 when {
                     // A change still saving wins over a copy read meanwhile; the save publishes its own answer.
