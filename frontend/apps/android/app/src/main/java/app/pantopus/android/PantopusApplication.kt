@@ -11,6 +11,7 @@ import app.pantopus.android.data.storage.StorageLimit
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.memory.MemoryCache
+import coil.request.CachePolicy
 import com.stripe.android.PaymentConfiguration
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
@@ -79,9 +80,9 @@ class PantopusApplication :
     /**
      * Coil image-loader factory. Caches:
      *   - 15 % of available app memory (~30–60 MB on a Pixel 6)
-     *   - on disk under `cacheDir/image_cache`, inside the one storage limit
+     *   - bounded thumbnails on disk under `cacheDir/image_cache_v2`, inside the one storage limit
      *     (Instant Screens §6, Storage & data's "Keep up to", 100 MB by default):
-     *     what the saved pages leave of it, least recently used first, and
+     *     the remainder after reserving 20 MB for saved pages, least recently used first, and
      *     nothing kept past 30 days unused ([ImageDiskCache])
      *
      * One process-wide loader keeps avatar / discovery imagery from
@@ -91,8 +92,10 @@ class PantopusApplication :
      *
      * Images use the main client's interceptors, which send the bearer only
      * to the API origin (chat photos at `/api/chat/files/:id` need it; other
-     * hosts get no credentials). Neither client has an HTTP cache: Coil's
-     * disk cache above keeps the image bytes, and API replies stay off disk.
+     * hosts get no credentials). Neither client has an HTTP cache. ScreenStore
+     * saves only allowlisted pages separately; sensitive API replies stay off disk.
+     * Unclassified images cannot write to disk, and initialization retires the
+     * legacy image cache so an upgrade cannot retain previously cached originals.
      */
     override fun newImageLoader(): ImageLoader {
         val disk = ImageDiskCache.build(this, StorageLimit(this).bytes)
@@ -106,6 +109,8 @@ class PantopusApplication :
         return ImageLoader
             .Builder(this)
             .okHttpClient(okHttp)
+            // An arbitrary image URL can be an original. Only bounded thumbnail callers opt into disk writes.
+            .diskCachePolicy(CachePolicy.READ_ONLY)
             .components { add(disk.requestInterceptor()) }
             .memoryCache {
                 disk.guardMemoryCache(
