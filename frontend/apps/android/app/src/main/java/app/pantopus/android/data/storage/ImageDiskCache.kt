@@ -159,13 +159,15 @@ class ImageDiskCache private constructor(
     }
 
     companion object {
-        const val DIRECTORY = "image_cache"
+        const val DIRECTORY = "image_cache_v2"
 
         fun build(
             context: Context,
             limitBytes: Long,
             now: Long = System.currentTimeMillis(),
         ): ImageDiskCache {
+            // Older loaders cached original uploads. Never reopen that cache under the thumbnail-only policy.
+            File(context.cacheDir, "image_cache").deleteRecursively()
             val directory = File(context.cacheDir, DIRECTORY)
             sweep(directory, now)
             return ImageDiskCache(DiskCache.Builder().directory(directory).maxSizeBytes(photoBudget(limitBytes)).build())
