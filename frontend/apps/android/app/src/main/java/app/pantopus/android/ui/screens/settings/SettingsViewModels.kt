@@ -17,6 +17,7 @@ import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.auth.SessionEndReason
 import app.pantopus.android.data.privacy.PrivacyRepository
 import app.pantopus.android.data.profile.ProfileRepository
+import app.pantopus.android.data.storage.StorageUsage
 import app.pantopus.android.data.support_trains.SupportTrainsRepository
 import app.pantopus.android.ui.components.ToastKind
 import app.pantopus.android.ui.components.ToastMessage
@@ -57,6 +58,9 @@ enum class SettingsRoute {
      * Settings index when `auth.state.value.user.isAdmin == true`.
      */
     ReviewClaims,
+
+    /** This phone → Storage & data (Instant Screens contract §7). */
+    StorageData,
 }
 
 // MARK: - Index
@@ -68,6 +72,7 @@ class SettingsIndexViewModel
         private val auth: AuthRepository,
         private val privacy: PrivacyRepository,
         private val profile: ProfileRepository,
+        private val storage: StorageUsage,
     ) : ViewModel() {
         val title: String = "Settings"
 
@@ -100,6 +105,9 @@ class SettingsIndexViewModel
         private var stripeConnected: Boolean? = null
         private var isAdmin: Boolean = false
 
+        /** What Pantopus keeps on this phone (Storage & data); null until measured. */
+        private var storageBytes: Long? = null
+
         /**
          * Entry and every Back from a sub-screen (Instant Screens): the index stays on screen, and a first entry shows
          * the stored profile at once. The block count is read again quietly (an unblock shows on return); the
@@ -115,6 +123,11 @@ class SettingsIndexViewModel
             }
             val shown = _state.value is GroupedListUiState.Loaded
             if (!shown) showStoredProfile()
+            // Measured on every entry and return: Clear cache, or browsing, changes it.
+            viewModelScope.launch {
+                storageBytes = storage.measure().total
+                if (_state.value is GroupedListUiState.Loaded) rebuild()
+            }
             viewModelScope.launch {
                 when (val blocks = privacy.blocks()) {
                     is NetworkResult.Success -> blockCount = blocks.data.blocks.size
@@ -167,6 +180,7 @@ class SettingsIndexViewModel
                 "legal" -> _navigation.value = SettingsRoute.Legal
                 "about" -> _navigation.value = SettingsRoute.About
                 "reviewClaims" -> _navigation.value = SettingsRoute.ReviewClaims
+                "storageData" -> _navigation.value = SettingsRoute.StorageData
                 "signOut" -> {
                     viewModelScope.launch {
                         auth.signOut()
@@ -263,6 +277,7 @@ class SettingsIndexViewModel
                                 ),
                         ),
                     )
+                    add(thisPhoneGroup())
                     add(
                         GroupedListGroup(
                             id = "payments",
@@ -327,6 +342,21 @@ class SettingsIndexViewModel
                     )
                 }
             _state.value = GroupedListUiState.Loaded(groups = groups)
+        }
+
+        /** Storage & data (Instant Screens contract §7), after Notifications; the size on the row once measured. */
+        private fun thisPhoneGroup(): GroupedListGroup {
+            val size: RowControl =
+                storageBytes?.let { RowControl.ChipStatus(StorageUsage.format(it), RowControl.ChipTone.Neutral, includesChevron = true) }
+                    ?: RowControl.Chevron
+            return GroupedListGroup(
+                id = "thisPhone",
+                overline = "This phone",
+                rows =
+                    listOf(
+                        GroupedListRow(id = "storageData", label = "Storage & data", subtext = "Photos and saved pages", control = size),
+                    ),
+            )
         }
 
         companion object {
