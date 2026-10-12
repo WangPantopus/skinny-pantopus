@@ -66,6 +66,15 @@ open class HomeTasksRepository
         /** The stored task list, without a request. */
         open fun storedHomeTasks(homeId: String): GetHomeTasksResponse? = store.peek(HomeStoreKeys.tasks(homeId)).data
 
+        /** Capture before a direct list read; Clear cache, account changes and newer edits retire this callback. */
+        open fun homeTasksWriter(homeId: String): (GetHomeTasksResponse) -> Unit = store.writer(HomeStoreKeys.tasks(homeId))
+
+        /** Capture before a direct task read, then call only after the session and exact task are validated. */
+        open fun homeTaskWriter(
+            homeId: String,
+            taskId: String,
+        ): (HomeTaskResponse) -> Unit = store.writer(HomeStoreKeys.task(homeId, taskId))
+
         /** A list just read directly (for example after an own edit) becomes the stored copy. */
         open fun rememberHomeTasks(
             homeId: String,
