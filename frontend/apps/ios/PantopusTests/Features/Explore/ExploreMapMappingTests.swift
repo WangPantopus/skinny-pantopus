@@ -73,8 +73,9 @@ final class ExploreMapMappingTests: XCTestCase {
     }
 
     private func makeVM(posts: SequencedURLProtocol.Response, homes: SequencedURLProtocol.Response) -> ExploreMapViewModel {
+        let locationBody = #"{"viewingLocation":null,"recentLocations":[],"homes":[],"businessLocations":[]}"#
         let session = SequencedURLProtocol.makeSession(routeResponses: [
-            "/api/location": [.status(200, body: "{\"viewingLocation\":null}")],
+            "/api/location": [.status(200, body: locationBody)],
             route(.posts): [posts],
             route(.homes): [homes]
         ])

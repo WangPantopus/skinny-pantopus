@@ -4,15 +4,9 @@
 //
 //  A11.2 Explore / P1-F — view-model for the cross-type discovery map.
 //
-//  The production path fetches live discovery results for the viewport
-//  around the user from three routes and fans them into a homogeneous
-//  `[ExploreEntity]`:
-//    • `GET /api/gigs/in-bounds`     → `.task`  (carries price + bid count)
-//    • `GET /api/listings/in-bounds` → `.item`
-//    • `GET /api/posts/map`          → `.post` / `.spot` / `.home`
-//      (`layers=posts,businesses,homes` — `backend/routes/posts.js:1646`)
-//  Tasks stay on the gigs route rather than the map route's `tasks` layer
-//  because only the former carries price + bid count for the rail card.
+//  The launch path fetches public posts and private Homes independently
+//  from `GET /api/posts/map`. Home access always rechecks without a protocol
+//  cache; only public post projections survive a pause in this view-model.
 //  Filtering, sorting, and clustering run locally over the fetched window
 //  (mirrors `NearbyMapViewModel`). Previews / snapshots / tests seed
 //  deterministic content via `init(scenario:)`, bypassing the network.
