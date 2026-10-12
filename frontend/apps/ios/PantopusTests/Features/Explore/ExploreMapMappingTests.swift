@@ -3,8 +3,8 @@
 //  PantopusTests
 //
 //  P1-F — covers the live wiring of the Explore discovery map:
-//    - gigs + listings in-bounds → unified ExploreEntity projection,
-//    - the live load() path (incl. total-failure → error),
+//    - independent post + Home reads → unified ExploreEntity projection,
+//    - the live load() path (including honest partial and total failures),
 //    - the distance + clustering helpers.
 //
 
@@ -60,101 +60,88 @@ final class ExploreMapMappingTests: XCTestCase {
 
     // MARK: - Live load() path
 
-    func testLiveLoadProjectsGigsAndListings() async {
-        SequencedURLProtocol.reset()
-        defer { SequencedURLProtocol.reset() }
+    private func route(_ layer: PostsMapLayer) -> String {
+        let endpoint = PostsMapEndpoints.markers(
+            south: anchor.latitude - 0.012,
+            west: anchor.longitude - 0.016,
+            north: anchor.latitude + 0.012,
+            east: anchor.longitude + 0.016,
+            layers: [layer]
+        )
+        let query = endpoint.query.keys.sorted().map { "\($0)=\(endpoint.query[$0] ?? "")" }.joined(separator: "&")
+        return endpoint.path + "?" + query
+    }
+
+    private func makeVM(posts: SequencedURLProtocol.Response, homes: SequencedURLProtocol.Response) -> ExploreMapViewModel {
         let session = SequencedURLProtocol.makeSession(routeResponses: [
-            "/api/location": [
-                .status(200, body: """
-                {"viewingLocation":null,"recentLocations":[],"homes":[],"businessLocations":[]}
-                """)
-            ],
-            "/api/gigs/in-bounds": [
-                .status(200, body: """
-                {"gigs":[{"id":"g1","title":"Mow lawn","price":40,"status":"open",\
-                "latitude":40.75,"longitude":-73.98,"bid_count":3}],"nearest_activity_center":null}
-                """)
-            ],
-            "/api/listings/in-bounds": [
-                .status(200, body: """
-                {"listings":[{"id":"l1","title":"Road bike","price":120,\
-                "latitude":40.751,"longitude":-73.981}],"nearest_activity_center":null}
-                """)
-            ]
+            "/api/location": [.status(200, body: "{\"viewingLocation\":null}")],
+            route(.posts): [posts],
+            route(.homes): [homes]
         ])
-        let vm = ExploreMapViewModel(
+        return ExploreMapViewModel(
             api: APIClient(session: session, retryPolicy: .none),
             location: StubLocationProvider(anchor)
+        ) { "explore-test-session" }
+    }
+
+    func testLiveLoadProjectsPostsAndHomes() async {
+        SequencedURLProtocol.reset()
+        defer { SequencedURLProtocol.reset() }
+        let vm = makeVM(
+            posts: .status(200, body: """
+            {"markers":[{"id":"p1","layer_type":"post","title":"Neighborhood update",
+            "latitude":40.75,"longitude":-73.98,"comment_count":3}]}
+            """),
+            homes: .status(200, body: """
+            {"markers":[{"id":"h1","layer_type":"home","address":"Fixture Home",
+            "latitude":40.751,"longitude":-73.981,"home_type":"house"}]}
+            """)
         )
         await vm.load()
         guard case let .loaded(loaded) = vm.state else {
             return XCTFail("Expected loaded, got \(vm.state)")
         }
         XCTAssertEqual(loaded.entities.count, 2)
-        let task = loaded.entities.first { $0.kind == .task }
-        let item = loaded.entities.first { $0.kind == .item }
-        XCTAssertEqual(task?.title, "Mow lawn")
-        XCTAssertEqual(task?.metaLead, "$40")
-        XCTAssertEqual(task?.badge?.text, "3 bids")
-        XCTAssertEqual(item?.title, "Road bike")
-        XCTAssertEqual(item?.metaLead, "$120")
+        let post = loaded.entities.first { $0.kind == .post }
+        let home = loaded.entities.first { $0.kind == .home }
+        XCTAssertEqual(post?.title, "Neighborhood update")
+        XCTAssertEqual(post?.badge?.text, "3 replies")
+        XCTAssertEqual(home?.title, "Fixture Home")
+        XCTAssertNil(vm.homeCheckMessage)
     }
 
     func testLiveLoadTotalFailureSurfacesError() async {
         SequencedURLProtocol.reset()
         defer { SequencedURLProtocol.reset() }
-        let session = SequencedURLProtocol.makeSession(routeResponses: [
-            "/api/location": [
-                .status(200, body: """
-                {"viewingLocation":null,"recentLocations":[],"homes":[],"businessLocations":[]}
-                """)
-            ],
-            "/api/gigs/in-bounds": [
-                .status(500, body: "{\"error\":\"boom\"}")
-            ],
-            "/api/listings/in-bounds": [
-                .status(500, body: "{\"error\":\"boom\"}")
-            ]
-        ])
-        let vm = ExploreMapViewModel(
-            api: APIClient(session: session, retryPolicy: .none),
-            location: StubLocationProvider(anchor)
+        let vm = makeVM(
+            posts: .status(500, body: "{\"error\":\"down\"}"),
+            homes: .status(500, body: "{\"error\":\"down\"}")
         )
         await vm.load()
-        guard case .error = vm.state else {
-            return XCTFail("Expected error, got \(vm.state)")
-        }
+        XCTAssertNotNil(vm.homeCheckMessage)
+        XCTAssertNotNil(vm.postsFailureMessage)
+        XCTAssertTrue(vm.hasUnresolvedRead, "Failures must not render a confirmed empty map")
+        XCTAssertFalse(vm.isCheckingHomes)
+        XCTAssertFalse(vm.isCheckingPosts)
     }
 
     func testPartialFailureRendersWhatLoaded() async {
         SequencedURLProtocol.reset()
         defer { SequencedURLProtocol.reset() }
-        let session = SequencedURLProtocol.makeSession(routeResponses: [
-            "/api/location": [
-                .status(200, body: """
-                {"viewingLocation":null,"recentLocations":[],"homes":[],"businessLocations":[]}
-                """)
-            ],
-            "/api/gigs/in-bounds": [
-                .status(200, body: """
-                {"gigs":[{"id":"g1","title":"Mow lawn","price":40,"status":"open",\
-                "latitude":40.75,"longitude":-73.98}],"nearest_activity_center":null}
-                """)
-            ],
-            "/api/listings/in-bounds": [
-                .status(500, body: "{\"error\":\"down\"}")
-            ]
-        ])
-        let vm = ExploreMapViewModel(
-            api: APIClient(session: session, retryPolicy: .none),
-            location: StubLocationProvider(anchor)
+        let vm = makeVM(
+            posts: .status(200, body: """
+            {"markers":[{"id":"p1","layer_type":"post","title":"Neighborhood update",
+            "latitude":40.75,"longitude":-73.98}]}
+            """),
+            homes: .status(403, body: "{\"error\":\"denied\"}")
         )
         await vm.load()
         guard case let .loaded(loaded) = vm.state else {
-            return XCTFail("Expected loaded (gigs only), got \(vm.state)")
+            return XCTFail("Expected loaded public posts, got \(vm.state)")
         }
         XCTAssertEqual(loaded.entities.count, 1)
-        XCTAssertEqual(loaded.entities.first?.kind, .task)
+        XCTAssertEqual(loaded.entities.first?.kind, .post)
+        XCTAssertNotNil(vm.homeCheckMessage)
     }
 
     // MARK: - Helpers

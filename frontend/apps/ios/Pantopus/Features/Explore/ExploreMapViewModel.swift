@@ -78,11 +78,12 @@ public final class ExploreMapViewModel {
     /// tests; internal because `APIClient` is module-internal.
     init(
         api: APIClient,
-        location: any LocationProviding = DeviceLocationProvider.shared
+        location: any LocationProviding = DeviceLocationProvider.shared,
+        identity: (() -> String?)? = nil
     ) {
         self.api = api
         store = ScreenStore.store(for: api)
-        sessionScope = HomeClaimSessionScope(api: api)
+        sessionScope = HomeClaimSessionScope(api: api, identity: identity)
         contentCacheGeneration = store.generation
         self.location = location
         scenario = nil
@@ -127,6 +128,7 @@ public final class ExploreMapViewModel {
     }
 
     public func configureFocus(_ focus: ExploreMapFocus?) {
+        guard scenario == nil else { return }
         guard !hasConfiguredFocus || focus != configuredFocus else { return }
         hasConfiguredFocus = true
         configuredFocus = focus
