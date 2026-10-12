@@ -53,7 +53,7 @@ final class StoreScreenshots: XCTestCase {
 
         // Hub → menu → Settings (T3.1 GroupedList).
         let menuButton = app.descendants(matching: .any)
-            .matching(identifier: "hubMenuButton").firstMatch
+            .matching(identifier: "place.menu").firstMatch
         if menuButton.waitForExistence(timeout: 3) {
             menuButton.tap()
             if app.descendants(matching: .any)
@@ -198,7 +198,8 @@ final class StoreScreenshots: XCTestCase {
         app.buttons["tab.place"].firstMatch.tap()
 
         // You tab → Me view (Personal identity by default).
-        app.buttons["hubAvatarButton"].firstMatch.tap()
+        app.buttons["place.menu"].firstMatch.tap()
+        app.buttons["navDrawer.contextPill.profile"].firstMatch.tap()
         _ = app.descendants(matching: .any)
             .matching(identifier: "meHeader_personal").firstMatch
             .waitForExistence(timeout: 5)
@@ -319,7 +320,7 @@ final class StoreScreenshots: XCTestCase {
         // Hub bell → Notifications center (T5.1 Notifications V2).
         app.buttons["tab.place"].firstMatch.tap()
         let hubBell = app.descendants(matching: .any)
-            .matching(identifier: "hubBellButton").firstMatch
+            .matching(identifier: "place.notifications").firstMatch
         if hubBell.waitForExistence(timeout: 3) {
             hubBell.tap()
             if app.descendants(matching: .any)
@@ -333,7 +334,8 @@ final class StoreScreenshots: XCTestCase {
         }
 
         // You tab → Edit Profile sheet.
-        app.buttons["hubAvatarButton"].firstMatch.tap()
+        app.buttons["place.menu"].firstMatch.tap()
+        app.buttons["navDrawer.contextPill.profile"].firstMatch.tap()
         let editProfile = app.buttons["youEditProfileButton"]
         if editProfile.waitForExistence(timeout: 3) {
             editProfile.tap()

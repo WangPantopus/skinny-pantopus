@@ -90,10 +90,10 @@ public final class RootTabModel {
     public var selected: RootTab = .place
     /// Unread Messages count rendered as the Messages (Mail) tab badge.
     public var messagesBadge: Int = 0
-    /// The Place stack is on its Hub root (kept current by `HubTabRoot`).
+    /// The Place stack is on its My homes root (kept current by `HubTabRoot`).
     public var placeAtRoot = false
     /// Changes each time the Place tab is tapped again while already on the
-    /// Hub root, so the Hub can land on Your Place again.
+    /// My homes root, so the tab can land on Your Place again.
     public var placeReselectedAtRoot: UUID?
     public init() {}
 }

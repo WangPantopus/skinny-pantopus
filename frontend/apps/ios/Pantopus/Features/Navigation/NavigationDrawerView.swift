@@ -285,10 +285,10 @@ struct NavigationDrawerView: View {
                             Circle().stroke(Theme.Color.primary100, lineWidth: 1)
                         }
                     VStack(alignment: .leading, spacing: 1) {
-                        Text("Back to Hub")
+                        Text("Back to Place")
                             .font(.system(size: 14, weight: .bold))
                             .foregroundStyle(Theme.Color.primaryInkStrong)
-                        Text("Return to your personal hub")
+                        Text("Return to your homes and places")
                             .font(.system(size: 11.5))
                             .foregroundStyle(Theme.Color.appTextSecondary)
                     }

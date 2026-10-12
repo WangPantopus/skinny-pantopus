@@ -237,7 +237,7 @@ class PlaceArrivalTest {
         assertEquals("a", response?.savedPlace?.userId)
     }
 
-    private fun model() = HomeTabHostViewModel(homes, saves, places, auth)
+    private fun model() = HomeTabHostViewModel(homes, saves, places, auth, mockk(relaxed = true))
 
     private fun savedPlace(userId: String) =
         SavedPlaceDto(

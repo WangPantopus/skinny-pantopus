@@ -55,10 +55,11 @@ final class NavigationSmokeTest: XCTestCase {
     }
 
     /// "You" is not a tab in the four-tab IA — it is a full-screen cover
-    /// opened from the Place tab's avatar button.
+    /// opened from the Place tab's menu.
     private func openYou(in app: XCUIApplication) {
         tabButton("place", in: app).tap()
-        app.buttons["hubAvatarButton"].firstMatch.tap()
+        app.buttons["place.menu"].firstMatch.tap()
+        app.buttons["navDrawer.contextPill.profile"].firstMatch.tap()
     }
 
     /// Chat lives in the Mail tab's Messages segment.
@@ -99,7 +100,7 @@ final class NavigationSmokeTest: XCTestCase {
             throw XCTSkip("Signed-in launch env not honoured.")
         }
         tabButton("place", in: app).tap()
-        assertReaches("hubScreen", in: app)
+        assertReaches("myHomesList", in: app)
     }
 
     func testTab_todayLanding() throws {
@@ -134,7 +135,7 @@ final class NavigationSmokeTest: XCTestCase {
         assertReaches("chatList", in: app)
     }
 
-    func testYou_avatarOpensMeScreen() throws {
+    func testYou_menuOpensMeScreen() throws {
         guard let app = launchSignedIn() else {
             throw XCTSkip("Signed-in launch env not honoured.")
         }
@@ -142,28 +143,28 @@ final class NavigationSmokeTest: XCTestCase {
         assertReaches("meScreen", in: app)
     }
 
-    // MARK: - Hub top bar (HubRoute .notifications + menu → navigation drawer)
+    // MARK: - Place actions (notifications + menu → navigation drawer)
 
-    func testHub_bellTapPushesNotifications() throws {
+    func testPlace_bellTapPushesNotifications() throws {
         guard let app = launchSignedIn() else {
             throw XCTSkip("Signed-in launch env not honoured.")
         }
         tabButton("place", in: app).tap()
-        let bell = app.buttons["hubBellButton"].firstMatch
+        let bell = app.buttons["place.notifications"].firstMatch
         XCTAssertTrue(bell.waitForExistence(timeout: 3))
         bell.tap()
         assertReaches("notifications", in: app)
     }
 
-    func testHub_menuTapPushesSettings() throws {
+    func testPlace_menuTapPushesSettings() throws {
         guard let app = launchSignedIn() else {
             throw XCTSkip("Signed-in launch env not honoured.")
         }
         tabButton("place", in: app).tap()
-        let menu = app.buttons["hubMenuButton"].firstMatch
+        let menu = app.buttons["place.menu"].firstMatch
         XCTAssertTrue(menu.waitForExistence(timeout: 3))
         menu.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.5)).tap()
-        // The Hub menu now opens the context-aware navigation drawer; Settings
+        // The Place menu opens the context-aware navigation drawer; Settings
         // lives as a row near the bottom of its scroll view.
         let settingsRow = app.buttons["navDrawer.item.settings"].firstMatch
         XCTAssertTrue(settingsRow.waitForExistence(timeout: 5))

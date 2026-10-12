@@ -520,12 +520,13 @@ public struct HubTabRoot: View {
     /// W3 — guards the one-shot Place auto-land so it fires at most once.
     @State private var didAutoLandPlace = false
     /// The landing found no home yet (or Add Home opened first). A home joined
-    /// or added later in this session lands Place when the Hub root reappears.
+    /// or added later in this session lands Place when My homes reappears.
     @State private var placeLandingNeedsHome = false
     /// A landing cut off mid-request (see `placeLandingDropped`); it runs again
     /// at the next chance.
     @State private var placeLandingOwed = false
     @State private var placeResolutionError: String?
+    @State private var placeUnreadCount = 0
     @State private var isResolvingPlace = false
     @State private var placeResolutionGeneration = 0
     /// P6.6 — share / mail system sheet driven by "Share listing",
@@ -711,9 +712,8 @@ public struct HubTabRoot: View {
             if !atRoot { placeLandingOwed = false }
             if atRoot, placeLandingNeedsHome || placeLandingOwed { Task { await resolvePlaceLanding() } }
         }
-        // Tapping Place again on the Hub root lands on Your Place again (a tap
-        // on Your Place still opens the Hub, which keeps its bell and tools),
-        // also when an earlier landing never finished.
+        // Reselecting Place from My homes returns to Your Place, including
+        // when an earlier landing never finished.
         .onChange(of: rootTabs.placeReselectedAtRoot) { _, token in
             guard token != nil, mode == .hub, path.isEmpty else { return }
             didAutoLandPlace = false
@@ -723,9 +723,8 @@ public struct HubTabRoot: View {
             // Cross-tab dispatch may select this tab *after* the pending
             // destination landed — re-attempt once ownership arrives.
             consumeDeepLinkIfNeeded(pending: router.pending)
-            // Leaving Place from the Hub root (after Back from Your Place): the
-            // next visit to the tab lands on Your Place again, quietly. Back
-            // itself still shows the Hub.
+            // Returning to the tab from My homes lands on Your Place again.
+            // Back itself still shows the Home list.
             if mode == .hub, old == owningTab, new != owningTab, path.isEmpty, didAutoLandPlace {
                 didAutoLandPlace = false
                 placeLandingNeedsHome = true
@@ -740,12 +739,9 @@ public struct HubTabRoot: View {
             navigationReady = true
             consumeAddHomeRequestIfNeeded()
             consumeDeepLinkIfNeeded(pending: router.pending)
-            // W3 — land the Place tab on the Place dashboard when the user
-            // has a primary home. One-shot at an empty stack so we never
-            // fight the user's navigation or an inbound deep link; Hub
-            // stays the stack root (reachable via back-swipe) and the
-            // no-home fallback. Hub-mode only — the Mail tab's instance
-            // roots at the mailbox and must not auto-land.
+            // Open Your Place for an accessible Home without overriding an
+            // inbound link. My homes is the setup/recovery fallback and the
+            // destination for Back. The Mail stack never auto-lands.
             await resolvePlaceLanding()
         }
         .fullScreenCover(item: $modalRoute) { item in
@@ -897,15 +893,26 @@ public struct HubTabRoot: View {
                             await resolvePlaceLanding()
                         }
                     } else {
-                        ScrollView { HubSkeleton() }
+                        PlaceDashboardSkeleton()
                             .background(Theme.Color.appBg)
                     }
                 } else {
-                    hub
+                    homesRoot
                 }
             }
-            .navigationTitle("Hub")
-            .toolbar(.hidden, for: .navigationBar)
+            .toolbar(.visible, for: .navigationBar)
+            .toolbar {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    PlaceBellButton(unreadCount: placeUnreadCount) { path.append(.notifications) }
+                    Button { showNavDrawer = true } label: {
+                        Icon(.menu, size: 20, color: Theme.Color.appText)
+                    }
+                    .accessibilityLabel("Menu")
+                    .accessibilityIdentifier("place.menu")
+                }
+            }
+            .task { await refreshPlaceUnread() }
+            .refreshesOnStoreChange { await refreshPlaceUnread() }
         case .mailbox:
             // The Mail tab: same destination universe, mailbox at the root.
             makeMailboxRoot { path.append($0) }
@@ -1298,65 +1305,23 @@ public struct HubTabRoot: View {
         }
     }
 
-    private var hub: some View {
-        HubView { intent in
-            switch intent {
-            case .openNotifications: path.append(.notifications)
-            case .openAudienceNotifications:
-                path.append(.notificationsZone(context: NotificationsZone.audience.rawValue))
-            case .openMenu: showNavDrawer = true
-            case .startVerification: Task { @MainActor in await startVerification() }
-            case .action(.addHome): path.append(.addHome)
-            case .action(.scanMail): path.append(.mailboxRoot)
-            case .action(.postTask): path.append(.quickPostGig(category: GigsCategory.all.rawValue))
-            case .action(.snapAndSell): path.append(.composeListing)
-            case .pillar(.mail): rootTabs.selected = .mail
-            case .pillar(.pulse):
-                rootTabs.selected = .nearby
-                NeighborhoodDoorStore.shared.pendingSurface = .pulse
-            case .pillar(.gigs):
-                rootTabs.selected = .nearby
-                NeighborhoodDoorStore.shared.pendingSurface = .tasks
-            case .pillar(.marketplace):
-                rootTabs.selected = .nearby
-                NeighborhoodDoorStore.shared.pendingSurface = .marketplace
-            case .openProfile: onOpenProfile()
-            case let .openDiscovery(item): path.append(Self.route(forDiscovery: item))
-            case .openDiscoverHub: path.append(.discoverHub)
-            case .openExploreMap: path.append(.explore)
-            case .openFindBusinesses: path.append(.discoverBusinesses)
-            case let .jumpBackIn(item):
-                if item.route.hasPrefix("/app/chat") {
-                    MailTabStore.shared.pendingSegment = .messages
-                    rootTabs.selected = .mail
-                } else {
-                    path.append(Self.route(forJumpBackIn: item))
-                }
-            case let .statusItem(item):
-                // `statusItems[].route` uses the same canonical web paths
-                // as `jumpBackIn[].route`, so they share one resolver.
-                if item.route.hasPrefix("/app/chat") {
-                    MailTabStore.shared.pendingSegment = .messages
-                    rootTabs.selected = .mail
-                } else {
-                    path.append(Self.route(
-                        forJumpBackIn: JumpBackItem(
-                            id: item.id,
-                            title: item.title,
-                            icon: item.icon,
-                            route: item.route
-                        )
-                    ))
-                }
-            // `openToday` taps the weather/today card → full Today briefing
-            // (A10.3 — weather, air, daylight, and neighbourhood signals).
-            case .openToday: path.append(.todayDetail(briefingDeliveryId: nil, briefingKind: nil))
-            case .openRecentActivity: path.append(.recentActivity)
-            }
-        }
+    /// The existing Home list supplies setup, joining and verification recovery.
+    /// Your Place still opens first for an accessible Home; Back returns here.
+    private var homesRoot: some View {
+        destination(for: .myHomes) { path.append($0) }
         #if DEBUG
-        .simultaneousGesture(debugTapGesture)
+            .simultaneousGesture(debugTapGesture)
         #endif
+    }
+
+    private func refreshPlaceUnread() async {
+        guard let unread = try? await ScreenStore.shared.load(
+            NotificationsEndpoints.unreadCount,
+            as: NotificationUnreadCountResponse.self,
+            kind: .notifications,
+            topics: [ScreenTopic.notifications]
+        ).value else { return }
+        placeUnreadCount = unread.personalBellCount
     }
 
     /// Project an `InboxConversationDestination.Mode` onto the
@@ -3560,9 +3525,9 @@ public struct HubTabRoot: View {
         }
     }
 
-    /// W3 — the primary home id used to auto-land the Home tab on Place.
+    /// W3 — the primary home id used to auto-land the Place tab on Your Place.
     /// Prefers the verified primary owner, else the first home; nil when
-    /// the user has no home (Hub stays the landing).
+    /// the user has no home (My homes stays the landing).
     /// Push the Place dashboard, and a group-detail page on top when the
     /// link named one. The dashboard always goes on first so Back lands
     /// there rather than leaving the stack — matching `.mailDay` above.
@@ -3618,7 +3583,7 @@ public struct HubTabRoot: View {
                 didAutoLandPlace = true
                 path.append(.placeDashboard(homeId: homeId))
             } else {
-                // No home yet: the Hub stays the landing, checked again quietly.
+                // No accessible home yet: keep My homes and check again quietly.
                 placeLandingNeedsHome = true
             }
         } catch {
@@ -3667,28 +3632,6 @@ public struct HubTabRoot: View {
         if didAutoLandPlace { return "landed" }
         if !path.isEmpty { return "navigated" }
         return rootTabs.selected == owningTab ? "link" : "other_tab"
-    }
-
-    /// The setup banner's "Verify your address": a Home that already waits on
-    /// verification continues there, as My Homes does (a filed claim's Waiting
-    /// Room, residency status, or ownership evidence); with none, Add Home.
-    private func startVerification() async {
-        let response = try? await HomesStoreReads.myHomes().value
-        guard rootTabs.selected == owningTab else { return }
-        path.append(Self.verificationRoute(response?.homes ?? []))
-    }
-
-    static func verificationRoute(_ homes: [MyHome]) -> HubRoute {
-        for entry in homes {
-            if entry.pendingClaimId != nil { return .waitingRoom(homeId: entry.id) }
-            if entry.accessKind == "private_setup" { return .residencyStatus(homeId: entry.id) }
-            switch MyHomesListViewModel.pendingVerification(for: entry) {
-            case .owner: return .claimOwnership(homeId: entry.id)
-            case .residency: return .residencyStatus(homeId: entry.id)
-            case nil: continue
-            }
-        }
-        return .addHome
     }
 
     private static func primaryHomeId() async throws -> String? {

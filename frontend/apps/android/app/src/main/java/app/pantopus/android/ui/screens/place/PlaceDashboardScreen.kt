@@ -726,7 +726,7 @@ private fun FullWidthShimmer(
 }
 
 @Composable
-private fun PlaceDashboardSkeleton() {
+internal fun PlaceDashboardSkeleton() {
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         Column(
             modifier = Modifier.padding(horizontal = 2.dp, vertical = 8.dp),

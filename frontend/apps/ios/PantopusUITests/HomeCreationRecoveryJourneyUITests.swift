@@ -171,8 +171,9 @@ final class HomeCreationRecoveryJourneyUITests: XCTestCase {
             XCTAssertFalse(frame.isEmpty)
             app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: frame.midX, dy: frame.midY)).tap()
         }
-        if !element("hubAvatarButton").waitForExistence(timeout: 2) { try press(element("place.back")) }
-        try press(element("hubAvatarButton"))
+        if !element("place.menu").waitForExistence(timeout: 2) { try press(element("place.back")) }
+        try press(element("place.menu"))
+        try press(element("navDrawer.contextPill.profile"))
         try press(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "My homes")).firstMatch)
         try press(app.buttons["Add a home"].firstMatch)
     }

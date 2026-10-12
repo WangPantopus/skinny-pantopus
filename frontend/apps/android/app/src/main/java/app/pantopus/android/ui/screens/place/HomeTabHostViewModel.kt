@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.routing.PlacePendingStore
 import app.pantopus.android.data.api.models.homes.MyHome
+import app.pantopus.android.data.api.models.notifications.personalBellCount
 import app.pantopus.android.data.api.models.place.PlacePreview
 import app.pantopus.android.data.api.models.saved_places.SavePlaceBody
 import app.pantopus.android.data.api.models.saved_places.SavedPlaceDto
@@ -12,10 +13,9 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.homes.HomesRepository
+import app.pantopus.android.data.notifications.NotificationsRepository
 import app.pantopus.android.data.place.PlaceRepository
 import app.pantopus.android.data.saved_places.SavedPlacesRepository
-import app.pantopus.android.ui.screens.homes.PendingVerification
-import app.pantopus.android.ui.screens.homes.pendingVerificationFor
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,11 +32,22 @@ class HomeTabHostViewModel
         private val savedPlacesRepository: SavedPlacesRepository,
         private val placeRepository: PlaceRepository,
         private val authRepository: AuthRepository,
+        private val notificationsRepository: NotificationsRepository,
     ) : ViewModel() {
         private val _landing = MutableStateFlow<HomeLanding>(HomeLanding.Loading)
         val landing = _landing.asStateFlow()
         private val _arrival = MutableStateFlow(PlaceArrivalState())
         val arrival = _arrival.asStateFlow()
+        private val _unreadCount = MutableStateFlow(0)
+        val unreadCount = _unreadCount.asStateFlow()
+
+        fun refreshUnread() {
+            viewModelScope.launch {
+                val unread = (notificationsRepository.unreadCount() as? NetworkResult.Success)?.data ?: return@launch
+                _unreadCount.value = unread.personalBellCount
+            }
+        }
+
         private var resolveJob: Job? = null
         private var previewJob: Job? = null
         private val userId: String? get() = (authRepository.state.value as? AuthRepository.State.SignedIn)?.user?.id
@@ -65,50 +76,40 @@ class HomeTabHostViewModel
                         when {
                             data != null -> landingFor(data.homes)
                             // Offline with a saved copy: the copy's landing stays.
-                            landed is HomeLanding.PlaceDashboard || landed == HomeLanding.Hub -> landed
+                            landed is HomeLanding.PlaceDashboard || landed == HomeLanding.Homes -> landed
                             else -> HomeLanding.Error(homes.failure.landingMessage())
                         }
                 }
         }
 
         private fun landingFor(homes: List<MyHome>): HomeLanding =
-            landingHome(homes)?.let { HomeLanding.PlaceDashboard(it.id) } ?: HomeLanding.Hub
-
-        /**
-         * Where the Hub's "Verify your address" goes: a Home that already waits on
-         * verification continues there, as My Homes does (a filed claim's Waiting
-         * Room, residency status, or ownership evidence); with none, Add Home.
-         */
-        suspend fun verificationTarget(): HubVerificationTarget {
-            val homes = (homesRepository.myHomes() as? NetworkResult.Success)?.data?.homes.orEmpty()
-            return homes.firstNotNullOfOrNull(::hubVerificationTargetFor) ?: HubVerificationTarget.AddHome
-        }
+            landingHome(homes)?.let { HomeLanding.PlaceDashboard(it.id) } ?: HomeLanding.Homes
 
         /**
          * The landed Home stopped being readable (left, removed, deleted): land on the
-         * account's next shared Home, or the Hub when there is none, as a relaunch would.
-         * Returns the Home to open, or null for the Hub.
+         * account's next shared Home, or My homes when there is none, as a relaunch would.
+         * Returns the Home to open, or null for My homes.
          */
         suspend fun replaceUnavailable(homeId: String): String? {
             relandOnReturn = false
             val homes = (homesRepository.myHomes() as? NetworkResult.Success)?.data?.homes.orEmpty().filter { it.id != homeId }
             val next = landingHome(homes)
-            _landing.value = next?.let { HomeLanding.PlaceDashboard(it.id) } ?: HomeLanding.Hub
+            _landing.value = next?.let { HomeLanding.PlaceDashboard(it.id) } ?: HomeLanding.Homes
             return next?.id
         }
 
         /**
-         * Re-checks quietly while the landing is the no-home Hub, so a home joined or added
-         * later in this session lands Place the next time the Hub root shows. No skeleton
-         * or error replaces the Hub on this check.
+         * Re-checks quietly while the landing is the no-home Home list, so a home joined or added
+         * later in this session lands Place the next time the Home list root shows. No skeleton
+         * or error replaces the list on this check.
          */
         fun refreshIfNoHome() {
-            if (_landing.value != HomeLanding.Hub || resolveJob?.isActive == true) return
+            if (_landing.value != HomeLanding.Homes || resolveJob?.isActive == true) return
             resolveJob =
                 viewModelScope.launch {
                     val homes = (homesRepository.myHomes() as? NetworkResult.Success)?.data?.homes ?: return@launch
                     val primary = landingHome(homes) ?: return@launch
-                    if (_landing.value == HomeLanding.Hub) _landing.value = HomeLanding.PlaceDashboard(primary.id)
+                    if (_landing.value == HomeLanding.Homes) _landing.value = HomeLanding.PlaceDashboard(primary.id)
                 }
         }
 
@@ -126,8 +127,8 @@ class HomeTabHostViewModel
 
         private var relandOnReturn = false
 
-        /** The user left Place for another tab from the Hub root; the next visit lands on Your Place again. */
-        fun markLeftFromHubRoot() {
+        /** The user left Place for another tab from the Home list root; the next visit lands on Your Place again. */
+        fun markLeftFromHomeList() {
             if (_landing.value is HomeLanding.PlaceDashboard) relandOnReturn = true
         }
 
@@ -219,35 +220,8 @@ sealed interface HomeLanding {
 
     data class PlaceDashboard(val homeId: String) : HomeLanding
 
-    data object Hub : HomeLanding
+    data object Homes : HomeLanding
 }
 
 private fun NetworkError?.landingMessage(): String =
     this?.displayMessage("Couldn't load your place. Please try again.") ?: "Couldn't load your place. Please try again."
-
-/** My Homes' choice for one Home, or null when it isn't waiting on verification. */
-private fun hubVerificationTargetFor(home: MyHome): HubVerificationTarget? =
-    when {
-        home.pendingClaimId != null -> HubVerificationTarget.WaitingRoom(home.id)
-        home.accessKind == "private_setup" -> HubVerificationTarget.Residency(home.id)
-        pendingVerificationFor(home) == PendingVerification.Owner -> HubVerificationTarget.ClaimOwnership(home.id)
-        pendingVerificationFor(home) == PendingVerification.Residency -> HubVerificationTarget.Residency(home.id)
-        else -> null
-    }
-
-/** The screen the Hub's "Verify your address" opens. */
-sealed interface HubVerificationTarget {
-    data object AddHome : HubVerificationTarget
-
-    data class WaitingRoom(
-        val homeId: String,
-    ) : HubVerificationTarget
-
-    data class Residency(
-        val homeId: String,
-    ) : HubVerificationTarget
-
-    data class ClaimOwnership(
-        val homeId: String,
-    ) : HubVerificationTarget
-}

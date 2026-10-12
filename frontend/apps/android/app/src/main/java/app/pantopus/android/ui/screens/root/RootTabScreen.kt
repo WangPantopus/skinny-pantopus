@@ -52,6 +52,7 @@ import app.pantopus.android.ui.components.InviteLinks
 import app.pantopus.android.ui.components.NavigationDrawer
 import app.pantopus.android.ui.components.NavigationDrawerContext
 import app.pantopus.android.ui.components.NavigationDrawerDestination
+import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.components.composeEmail
 import app.pantopus.android.ui.components.shareText
 import app.pantopus.android.ui.screens._internal.TokenGalleryScreen
@@ -241,14 +242,6 @@ import app.pantopus.android.ui.screens.homes.tasks.HouseholdTasksListScreen
 import app.pantopus.android.ui.screens.homes.verify_landlord.VERIFY_LANDLORD_HOME_ID_KEY
 import app.pantopus.android.ui.screens.homes.verify_landlord.VerifyLandlordWizardScreen
 import app.pantopus.android.ui.screens.homes.verify_landlord.postcard.POSTCARD_VERIFICATION_HOME_ID_KEY
-import app.pantopus.android.ui.screens.hub.ActionChipContent
-import app.pantopus.android.ui.screens.hub.DiscoveryCardContent
-import app.pantopus.android.ui.screens.hub.DiscoveryKind
-import app.pantopus.android.ui.screens.hub.HubNavigationIntent
-import app.pantopus.android.ui.screens.hub.HubScreen
-import app.pantopus.android.ui.screens.hub.JumpBackItem
-import app.pantopus.android.ui.screens.hub.PillarTile
-import app.pantopus.android.ui.screens.hub.sections.HubSkeleton
 import app.pantopus.android.ui.screens.hub.today.TodayDetailScreen
 import app.pantopus.android.ui.screens.identity_center.IdentityCenterScreen
 import app.pantopus.android.ui.screens.identity_center.IdentityKind
@@ -315,16 +308,15 @@ import app.pantopus.android.ui.screens.my_posts.MyPostsScreen
 import app.pantopus.android.ui.screens.my_tasks.MyTasksScreen
 import app.pantopus.android.ui.screens.nearby.NearbyScreen
 import app.pantopus.android.ui.screens.notifications.NotificationsScreen
-import app.pantopus.android.ui.screens.notifications.NotificationsZone
 import app.pantopus.android.ui.screens.offers.OffersScreen
 import app.pantopus.android.ui.screens.persona_dm.FanInboxScreen
 import app.pantopus.android.ui.screens.persona_dm.PersonaDmThreadScreen
 import app.pantopus.android.ui.screens.place.DeepLinkPlaceResolverViewModel
 import app.pantopus.android.ui.screens.place.HomeLanding
 import app.pantopus.android.ui.screens.place.HomeTabHostViewModel
-import app.pantopus.android.ui.screens.place.HubVerificationTarget
 import app.pantopus.android.ui.screens.place.PLACE_DASHBOARD_HOME_ID_KEY
 import app.pantopus.android.ui.screens.place.PlaceDashboardScreen
+import app.pantopus.android.ui.screens.place.PlaceDashboardSkeleton
 import app.pantopus.android.ui.screens.place.detail.PLACE_DETAIL_HOME_ID_KEY
 import app.pantopus.android.ui.screens.place.detail.PLACE_DETAIL_SLUG_KEY
 import app.pantopus.android.ui.screens.place.detail.PlaceDetailScreen
@@ -2089,7 +2081,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
     // (repurposed from "open Settings"; Settings now lives as a drawer row).
     val navDrawerState = rememberDrawerState(DrawerValue.Closed)
     val navDrawerScope = rememberCoroutineScope()
-    // Place tapped again on its Hub root: one event, so coming back to the Hub
+    // Place tapped again on its Home list root: one event, so coming back to the list
     // by Back later doesn't replay it.
     val placeReselects = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
     // Child screens keep the tab they were opened from lit (they used to fall
@@ -2315,7 +2307,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
             is DeepLinkRouter.Destination.HomeOwnersTransfer -> {
                 // Push the home's dashboard underneath so a back-tap from
                 // the transfer form lands somewhere useful rather than at
-                // the empty Hub root.
+                // the empty Home list root.
                 navController.navigate(ChildRoutes.homeDashboard(pending.id))
                 navController.navigate(ChildRoutes.transferOwnership(pending.id))
                 DeepLinkRouter.consume()
@@ -2575,18 +2567,15 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 modifier = Modifier.padding(padding),
             ) {
                 composable(PantopusRoute.Place.path) {
-                    // W3 — land the Home tab on the Place dashboard when the
-                    // user has a primary home. One-shot push over Hub so Hub
-                    // stays reachable (back) and is the no-home fallback;
-                    // parity with the iOS HubTabRoot auto-land.
+                    // Open Your Place for an accessible Home. My homes remains
+                    // the setup/recovery fallback and the destination for Back.
                     val placeHostVm: HomeTabHostViewModel = hiltViewModel()
                     val placeLanding by placeHostVm.landing.collectAsStateWithLifecycle()
-                    val verifyScope = rememberCoroutineScope()
                     var didLandPlace by rememberSaveable { mutableStateOf(false) }
-                    // Back on the Hub root (a child screen popped or the tab reselected):
+                    // Back on the Home list root (a child screen popped or the tab reselected):
                     // a home joined or added since the last check lands Place now. Coming
-                    // back from another tab after leaving the Hub root lands on Your Place
-                    // again; Back itself still shows the Hub.
+                    // back from another tab after leaving the Home list root lands on Your Place
+                    // again; Back itself still shows My homes.
                     LaunchedEffect(Unit) {
                         placeHostVm.refreshIfNoHome()
                         val homeId = placeHostVm.consumeReland()
@@ -2601,11 +2590,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onDispose {
                             val route = navController.currentDestination?.route
                             val otherTab = setOf(PantopusRoute.Today.path, PantopusRoute.Nearby.path, PantopusRoute.Mail.path)
-                            if (route in otherTab) placeHostVm.markLeftFromHubRoot()
+                            if (route in otherTab) placeHostVm.markLeftFromHomeList()
                         }
                     }
-                    // Tapping Place again on the Hub lands on Your Place again; a tap
-                    // on Your Place still opens the Hub, which keeps its bell and tools.
+                    // Reselecting Place from My homes returns to Your Place.
                     LaunchedEffect(Unit) {
                         placeReselects.collect {
                             placeHostVm.refreshIfNoHome()
@@ -2632,17 +2620,16 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         }
                     }
                     val landingError = placeLanding as? HomeLanding.Error
-                    // The Hub under Your Place loads once someone sees it. An owner's launch lands straight on
-                    // the dashboard, and composing the Hub first ran its whole request chain unseen.
-                    var hubShown by rememberSaveable { mutableStateOf(false) }
+                    // Load the Home list only when it is shown, after the dashboard landing settles.
+                    var homesShown by rememberSaveable { mutableStateOf(false) }
                     val linkPending = pendingDeepLink != null || app.pantopus.android.core.routing.PendingDeepLinkStore.peek() != null
                     val landingOnDashboard = placeLanding is HomeLanding.PlaceDashboard && !didLandPlace && !linkPending
-                    val landingSettled = placeLanding is HomeLanding.Hub || placeLanding is HomeLanding.PlaceDashboard
-                    val onHubRoot = backStackEntry?.destination?.route == PantopusRoute.Place.path
-                    val showHub = hubShown || (landingSettled && onHubRoot && !landingOnDashboard)
-                    SideEffect { if (showHub) hubShown = true }
-                    if (placeLanding is HomeLanding.Loading || (landingSettled && !showHub)) {
-                        HubSkeleton()
+                    val landingSettled = placeLanding is HomeLanding.Homes || placeLanding is HomeLanding.PlaceDashboard
+                    val onHomesRoot = backStackEntry?.destination?.route == PantopusRoute.Place.path
+                    val showHomes = homesShown || (landingSettled && onHomesRoot && !landingOnDashboard)
+                    SideEffect { if (showHomes) homesShown = true }
+                    if (placeLanding is HomeLanding.Loading || (landingSettled && !showHomes)) {
+                        PlaceDashboardSkeleton()
                     } else if (landingError != null) {
                         ErrorState(
                             headline = "Couldn't load your place",
@@ -2665,93 +2652,21 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         )
                     } else {
                         HubWithDebugFiveTap(navController = navController) {
-                            HubScreen(onIntent = { intent ->
-                                when (intent) {
-                                    HubNavigationIntent.OpenNotifications ->
-                                        navController.navigate(ChildRoutes.NOTIFICATIONS)
-                                    HubNavigationIntent.OpenAudienceNotifications ->
-                                        navController.navigate(
-                                            ChildRoutes.notificationsZone(NotificationsZone.Audience.rawValue),
-                                        )
-                                    HubNavigationIntent.OpenMenu ->
-                                        navDrawerScope.launch { navDrawerState.open() }
-                                    HubNavigationIntent.OpenProfile ->
-                                        navController.navigate(ChildRoutes.profile())
-                                    HubNavigationIntent.StartVerification ->
-                                        verifyScope.launch {
-                                            val route =
-                                                when (val target = placeHostVm.verificationTarget()) {
-                                                    HubVerificationTarget.AddHome -> ChildRoutes.ADD_HOME
-                                                    is HubVerificationTarget.WaitingRoom -> ChildRoutes.waitingRoom(target.homeId)
-                                                    is HubVerificationTarget.Residency -> ChildRoutes.homeResidency(target.homeId)
-                                                    is HubVerificationTarget.ClaimOwnership -> ChildRoutes.claimOwnership(target.homeId)
-                                                }
-                                            if (navController.currentDestination?.route == PantopusRoute.Place.path) {
-                                                navController.navigate(route)
-                                            }
-                                        }
-                                    is HubNavigationIntent.ActionTapped ->
-                                        when (intent.kind) {
-                                            ActionChipContent.Kind.AddHome ->
-                                                navController.navigate(ChildRoutes.ADD_HOME)
-                                            ActionChipContent.Kind.ScanMail ->
-                                                navController.navigate(ChildRoutes.MAILBOX_ROOT)
-                                            ActionChipContent.Kind.PostTask ->
-                                                navController.navigate(ChildRoutes.quickPostGig(GigsCategory.All.key))
-                                            ActionChipContent.Kind.SnapAndSell ->
-                                                navController.navigate(ChildRoutes.COMPOSE_LISTING)
-                                        }
-                                    is HubNavigationIntent.PillarTapped ->
-                                        when (intent.pillar) {
-                                            PillarTile.Pillar.Mail ->
-                                                navController.navigate(ChildRoutes.MAILBOX_ROOT)
-                                            PillarTile.Pillar.Pulse ->
-                                                navController.navigateToRootTab(PantopusRoute.Pulse)
-                                            PillarTile.Pillar.Marketplace ->
-                                                navController.navigateToRootTab(PantopusRoute.Marketplace)
-                                            // The Gigs door always opens the task list, not a
-                                            // task an earlier link left in the Tasks stack.
-                                            PillarTile.Pillar.Gigs ->
-                                                navController.navigateToRootTab(PantopusRoute.Tasks, restoreState = false)
-                                        }
-                                    is HubNavigationIntent.DiscoveryTapped ->
-                                        routeForDiscovery(intent.item).also { navController.navigate(it) }
-                                    HubNavigationIntent.OpenDiscoverHub ->
-                                        navController.navigate(ChildRoutes.DISCOVER_HUB)
-                                    HubNavigationIntent.OpenExploreMap ->
-                                        navController.navigate(ChildRoutes.EXPLORE)
-                                    HubNavigationIntent.OpenFindBusinesses ->
-                                        navController.navigate(ChildRoutes.DISCOVER_BUSINESSES)
-                                    is HubNavigationIntent.JumpBackTapped ->
-                                        if (intent.item.route.startsWith("/app/chat")) {
-                                            navController.navigateToRootTab(PantopusRoute.messagesTab)
-                                        } else {
-                                            navController.navigate(routeForJumpBackIn(intent.item))
-                                        }
-                                    // `statusItems[].route` uses the same canonical web
-                                    // paths as `jumpBackIn[].route`, so they share one
-                                    // resolver.
-                                    is HubNavigationIntent.StatusItemTapped ->
-                                        if (intent.item.route.startsWith("/app/chat")) {
-                                            navController.navigateToRootTab(PantopusRoute.messagesTab)
-                                        } else {
-                                            navController.navigate(
-                                                routeForJumpBackIn(
-                                                    JumpBackItem(
-                                                        id = intent.item.id,
-                                                        title = intent.item.title,
-                                                        icon = intent.item.icon,
-                                                        route = intent.item.route,
-                                                    ),
-                                                ),
-                                            )
-                                        }
-                                    HubNavigationIntent.OpenToday ->
-                                        navController.navigate(ChildRoutes.todayDetail())
-                                    HubNavigationIntent.OpenRecentActivity ->
-                                        navController.navigate(ChildRoutes.RECENT_ACTIVITY)
-                                }
-                            })
+                            val unreadCount by placeHostVm.unreadCount.collectAsStateWithLifecycle()
+                            RefreshOnStoreChange { placeHostVm.refreshUnread() }
+                            LaunchedEffect(Unit) { placeHostVm.refreshUnread() }
+                            MyHomesListScreen(
+                                onOpenHome = { homeId -> navController.navigate(ChildRoutes.homeDashboard(homeId)) },
+                                onOpenTasks = { homeId -> navController.navigate(ChildRoutes.homeTasks(homeId)) },
+                                onAddHome = { navController.navigate(ChildRoutes.ADD_HOME) },
+                                onFindHome = { navController.navigate(ChildRoutes.FIND_HOME) },
+                                onUploadOwnershipEvidence = { homeId -> navController.navigate(ChildRoutes.claimOwnership(homeId)) },
+                                onVerifyResidency = { homeId -> navController.navigate(ChildRoutes.homeResidency(homeId)) },
+                                onOpenWaitingRoom = { homeId -> navController.navigate(ChildRoutes.waitingRoom(homeId)) },
+                                onOpenNotifications = { navController.navigate(ChildRoutes.NOTIFICATIONS) },
+                                unreadCount = unreadCount,
+                                onOpenMenu = { navDrawerScope.launch { navDrawerState.open() } },
+                            )
                         }
                     }
                 }
@@ -2761,7 +2676,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onClaim = { navController.navigate(ChildRoutes.ADD_HOME) },
                         onOpenPlace = { homeId ->
                             // The ballot card is on this home's dashboard; the Place
-                            // tab alone can come back on its hub or a detail page.
+                            // tab alone can come back on My homes or a detail page.
                             navController.navigateToRootTab(PantopusRoute.Place)
                             val top = navController.currentBackStackEntry
                             val onDashboard =
@@ -7111,20 +7026,6 @@ private fun launchCutFeatureLabel(destination: DeepLinkRouter.Destination): Stri
     }
 
 /**
- * Dispatch a Hub discovery-card tap to the matching detail route. Items
- * whose detail screen isn't built yet land on the generic placeholder
- * with a labelled title.
- */
-private fun routeForDiscovery(item: DiscoveryCardContent): String =
-    when (item.kind) {
-        DiscoveryKind.Post -> ChildRoutes.pulsePost(item.id)
-        DiscoveryKind.Person -> ChildRoutes.publicProfile(item.id)
-        DiscoveryKind.Gig -> ChildRoutes.gigDetail(item.id)
-        DiscoveryKind.Business -> ChildRoutes.businessProfile(item.id)
-        DiscoveryKind.Unknown -> ChildRoutes.placeholder(item.title)
-    }
-
-/**
  * §1C-b — maps a navigation-drawer destination onto an existing route.
  * Destinations with no shipped native route fall back to the NotYetAvailable
  * placeholder. Home / Business destinations read the active id from [context]
@@ -7252,44 +7153,6 @@ private fun routeForUniversalSearch(destination: UniversalSearchDestination): St
         is UniversalSearchDestination.Business -> ChildRoutes.businessProfile(destination.businessId)
         is UniversalSearchDestination.Home -> ChildRoutes.homeDashboard(destination.homeId)
     }
-
-/**
- * Backend `jumpBackIn` items carry a canonical web route (e.g.
- * `/app/mailbox?scope=home&homeId=…`, `/app/homes/<id>/dashboard`,
- * `/app/chat`, `/gigs/new`). Map onto a native destination; fall back
- * to a labelled placeholder when nothing matches.
- */
-private fun routeForJumpBackIn(item: JumpBackItem): String {
-    val path = item.route
-    if (path.startsWith("/app/mailbox")) return ChildRoutes.MAILBOX_ROOT
-    homeIdFromRoute(path)?.let { return ChildRoutes.homeDashboard(it) }
-    if (path.startsWith("/app/chat")) return ChildRoutes.placeholder("Messages")
-    if (path.startsWith("/gigs/new")) return ChildRoutes.composeGig(GigsCategory.All.key)
-    if (path.startsWith("/gigs")) return ChildRoutes.GIGS_FEED
-    // Hub status pills: "N notifications" and "$X ready · Tap to withdraw".
-    // The wallet holds the balance and the Withdraw action.
-    if (path.startsWith("/app/notifications")) return ChildRoutes.NOTIFICATIONS
-    if (path.startsWith("/app/settings/payments") || path.startsWith("/app/wallet")) return ChildRoutes.WALLET
-    if (path.startsWith("/app/map")) return ChildRoutes.EXPLORE
-    businessIdFromDashboardRoute(path)?.let { return ChildRoutes.businessOwner(it) }
-    return ChildRoutes.placeholder(item.title)
-}
-
-/** Extracts `<id>` from `/app/businesses/<id>/dashboard`. */
-private fun businessIdFromDashboardRoute(route: String): String? {
-    val prefix = "/app/businesses/"
-    if (!route.startsWith(prefix)) return null
-    val segment = route.removePrefix(prefix).substringBefore('/').substringBefore('?')
-    return segment.takeIf { it.isNotEmpty() }
-}
-
-/** Extracts `<id>` from `/app/homes/<id>/dashboard`. */
-private fun homeIdFromRoute(route: String): String? {
-    val prefix = "/app/homes/"
-    if (!route.startsWith(prefix)) return null
-    val segment = route.removePrefix(prefix).substringBefore('/')
-    return segment.takeIf { it.isNotEmpty() }
-}
 
 /**
  * Two-letter initials derived from a display name. Falls back to `··`
