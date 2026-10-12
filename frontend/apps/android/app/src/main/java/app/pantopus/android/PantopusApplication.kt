@@ -11,6 +11,7 @@ import app.pantopus.android.data.storage.StorageLimit
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.memory.MemoryCache
+import coil.request.CachePolicy
 import com.stripe.android.PaymentConfiguration
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
@@ -106,6 +107,8 @@ class PantopusApplication :
         return ImageLoader
             .Builder(this)
             .okHttpClient(okHttp)
+            // An arbitrary image URL can be an original. Only bounded thumbnail callers opt into disk writes.
+            .diskCachePolicy(CachePolicy.READ_ONLY)
             .components { add(disk.requestInterceptor()) }
             .memoryCache {
                 disk.guardMemoryCache(

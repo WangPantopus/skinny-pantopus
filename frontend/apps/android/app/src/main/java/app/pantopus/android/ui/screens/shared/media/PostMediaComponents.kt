@@ -340,9 +340,12 @@ fun MediaStillTile(
     cacheOnDisk: Boolean = true,
 ) {
     val context = LocalContext.current
-    val model: Any =
-        remember(url, cacheOnDisk) {
-            if (cacheOnDisk) url else ImageRequest.Builder(context).data(url).diskCachePolicy(CachePolicy.READ_ONLY).build()
+    val model =
+        remember(context, url, cacheOnDisk) {
+            ImageRequest.Builder(context)
+                .data(url)
+                .diskCachePolicy(if (cacheOnDisk) CachePolicy.ENABLED else CachePolicy.READ_ONLY)
+                .build()
         }
     val base =
         if (onTap != null) {
