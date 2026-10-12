@@ -8,9 +8,14 @@ import app.pantopus.android.data.api.models.hub.HubResponse
 import app.pantopus.android.data.api.models.hub.HubTodayPayload
 import app.pantopus.android.data.api.models.hub.HubTodayResponse
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.conditionalApiCall
+import app.pantopus.android.data.api.net.failIf
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.HubApi
 import app.pantopus.android.data.api.services.HubExtrasApi
+import app.pantopus.android.data.store.ScreenStore
+import app.pantopus.android.data.store.StoreKeys
+import app.pantopus.android.data.store.Stored
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -21,6 +26,7 @@ class HubRepository
     constructor(
         private val api: HubApi,
         private val extrasApi: HubExtrasApi,
+        private val store: ScreenStore,
     ) {
         /**
          * `POST /api/hub/dismiss-density-milestone` — records the
@@ -38,6 +44,37 @@ class HubRepository
 
         /** `GET /api/hub`. */
         suspend fun overview(): NetworkResult<HubResponse> = safeApiCall { api.overview() }
+
+        /**
+         * The Hub's overview through the screens' store (Instant Screens; kind Homes, fresh 2 minutes, memory only):
+         * a fresh copy answers without a request, an older one is read again with its ETag. [force] reads now.
+         */
+        suspend fun overviewStored(force: Boolean = false): Stored<HubResponse> =
+            store.read(StoreKeys.hubOverview, force) { etag -> conditionalApiCall { api.overviewConditional(etag) } }
+
+        /** The stored overview as it is now (a first frame), without a request. */
+        fun overviewCopy(): HubResponse? = store.peek(StoreKeys.hubOverview).data
+
+        /** The Hub's Today card through the store (kind Today); a reply that says it failed keeps the last copy. */
+        suspend fun todayStored(force: Boolean = false): Stored<HubTodayResponse> =
+            store.read(StoreKeys.hubToday, force) { etag ->
+                conditionalApiCall { api.todayConditional(etag) }.failIf { it.today == null && it.error != null }
+            }
+
+        /** The stored Today card as it is now, without a request. */
+        fun todayCopy(): HubTodayResponse? = store.peek(StoreKeys.hubToday).data
+
+        /** The Hub's Discover rail for [filter] through the store (kind Nearby): a tab seen before shows at once. */
+        suspend fun discoveryStored(
+            filter: String,
+            force: Boolean = false,
+        ): Stored<HubDiscoveryResponse> =
+            store.read(StoreKeys.hubDiscovery(filter), force) { etag ->
+                conditionalApiCall { api.discoveryConditional(filter, StoreKeys.HUB_DISCOVERY_LIMIT, etag) }
+            }
+
+        /** The stored rail for [filter] as it is now, without a request. */
+        fun discoveryCopy(filter: String): HubDiscoveryResponse? = store.peek(StoreKeys.hubDiscovery(filter)).data
 
         /** `GET /api/hub/today`. */
         suspend fun today(): NetworkResult<HubTodayResponse> = safeApiCall { api.today() }
