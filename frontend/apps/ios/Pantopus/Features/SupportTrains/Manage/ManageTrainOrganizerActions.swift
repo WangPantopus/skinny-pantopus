@@ -211,19 +211,22 @@ public struct ManageDestructiveConfirm: Sendable, Hashable, Identifiable {
 public extension ManageTrainViewModel {
     /// Fan-out for the organizer-only feeds. Failures degrade to empty
     /// sections instead of blowing up the whole screen.
-    internal func loadOrganizerSurfaces() async {
+    internal func loadOrganizerSurfaces(read: Int, cache: Int) async {
         let reservations = try? await api.request(
             SupportTrainsEndpoints.reservations(supportTrainId: supportTrainId),
             as: SupportTrainReservationsResponse.self
         )
+        guard readIsCurrent(read, cache: cache) else { return }
         let organizers = try? await api.request(
             SupportTrainActionsEndpoints.organizers(supportTrainId: supportTrainId),
             as: SupportTrainOrganizersResponse.self
         )
+        guard readIsCurrent(read, cache: cache) else { return }
         let fundSummary = try? await api.request(
             SupportTrainActionsEndpoints.fund(supportTrainId: supportTrainId),
             as: SupportTrainFundDTO.self
         )
+        guard readIsCurrent(read, cache: cache) else { return }
         let helperIdentities = reservations?.reservations.filter { $0.status != "canceled" }.map { row -> String? in
             guard ["reserved", "delivered", "confirmed"].contains(row.status ?? "") else { return nil }
             if let id = row.helper?.id ?? row.userId, !id.isEmpty { return "user:\(id)" }

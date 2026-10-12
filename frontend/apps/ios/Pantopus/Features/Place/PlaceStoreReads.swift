@@ -33,12 +33,18 @@ enum PlaceStoreReads {
         savedPlaceId: String? = nil,
         sections: [PlaceSectionID]? = nil
     ) -> ScreenSnapshot<PlaceIntelligence>? {
+        guard allowsCopy(homeId: homeId, savedPlaceId: savedPlaceId) else { return nil }
         let store = ScreenStore.shared
         if let own = store.peek(endpoint(homeId: homeId, savedPlaceId: savedPlaceId, sections: sections), as: PlaceIntelligence.self) {
             return own.checkingAlerts()
         }
         guard sections != nil, savedPlaceId == nil else { return nil }
         return store.peek(endpoint(homeId: homeId, savedPlaceId: nil), as: PlaceIntelligence.self)?.checkingAlerts()
+    }
+
+    static func allowsCopy(homeId: String, savedPlaceId: String? = nil) -> Bool {
+        savedPlaceId != nil || HomesStoreReads.peekMyHomes()?.value.homes
+            .first { $0.id == homeId }?.showsCopyBeforeRecheck == true
     }
 
     /// The shared copy if fresh, else one (shared) request. `force` for pull
@@ -50,6 +56,16 @@ enum PlaceStoreReads {
         kind: ScreenDataKind,
         force: Bool = false
     ) async throws -> ScreenSnapshot<PlaceIntelligence> {
+        // The intelligence's viewer role does not carry an access expiry.
+        // My Homes supplies it; a temporary member must re-check even while
+        // the Place copy is fresh, and cannot keep the Today subset either.
+        let household: Bool
+        if savedPlaceId == nil {
+            let homes = try await HomesStoreReads.myHomes(force: force).value
+            household = homes.homes.first { $0.id == homeId }?.showsCopyBeforeRecheck == true
+        } else {
+            household = false
+        }
         // A fresh full copy (the dashboard's) serves a screen that wants only some sections.
         if !force, sections != nil, savedPlaceId == nil, let full = peek(homeId: homeId), full.isFresh {
             return full
@@ -57,7 +73,7 @@ enum PlaceStoreReads {
         // A saved place is the account's own address: no household check.
         var gate: (@Sendable (PlaceIntelligence) -> Bool)?
         if savedPlaceId == nil {
-            gate = { intelligence in PlaceStoreReads.showsBeforeRecheck(intelligence) }
+            gate = { intelligence in household && PlaceStoreReads.showsBeforeRecheck(intelligence) }
         }
         // Today turns over at midnight in the place's time zone (the last
         // copy names it); the phone's stands in until one has.
