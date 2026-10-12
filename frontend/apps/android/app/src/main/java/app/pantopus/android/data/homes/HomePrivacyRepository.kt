@@ -39,8 +39,10 @@ class HomePrivacyRepository
         suspend fun updatePrivacy(
             homeId: String,
             body: UpdateHomePrivacyRequest,
-        ): NetworkResult<HomePrivacyResponse> =
-            safeApiCall { api.updatePrivacy(homeId, body) }.also { result ->
-                if (result is NetworkResult.Success) store.put(HomeStoreKeys.privacy(homeId), result.data)
+        ): NetworkResult<HomePrivacyResponse> {
+            val remember = store.writer(HomeStoreKeys.privacy(homeId))
+            return safeApiCall { api.updatePrivacy(homeId, body) }.also { result ->
+                if (result is NetworkResult.Success) remember(result.data)
             }
+        }
     }
