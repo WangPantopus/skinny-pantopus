@@ -96,9 +96,11 @@ class SavedCopies
             fun matches(
                 topic: String?,
                 kinds: Set<StoreKind>,
-            ): Boolean = kind in kinds || topics.orEmpty().any {
-                it == topic || (it.endsWith(":*") && topic?.startsWith(it.dropLast(1)) == true)
-            }
+            ): Boolean =
+                kind in kinds ||
+                    topics.orEmpty().any {
+                        it == topic || (it.endsWith(":*") && topic?.startsWith(it.dropLast(1)) == true)
+                    }
         }
 
         /**
