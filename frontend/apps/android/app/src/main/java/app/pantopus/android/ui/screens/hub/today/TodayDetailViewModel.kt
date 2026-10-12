@@ -74,42 +74,43 @@ class TodayDetailViewModel
                 return
             }
             _state.value = TodayDetailUiState.Loading
-            readJob = viewModelScope.launch {
-                // Resolve the stored briefing first when the push carried one,
-                // so a briefing that outlives the live Today window still opens.
-                val briefing = fetchBriefing()
-                if (generation != readGeneration) return@launch
-                (briefing?.briefingKind ?: requestedKind)?.let { _headerTitle.value = titleForKind(it) }
-                val result = repository.todayDetail()
-                if (generation != readGeneration) return@launch
-                when (result) {
-                    is NetworkResult.Success -> {
-                        val payload = result.data
-                        val hasStoredSummary = !briefing?.summaryText.isNullOrEmpty()
-                        _state.value =
-                            if (!payload.isRenderable && !hasStoredSummary) {
-                                TodayDetailUiState.Error("Today's briefing isn't available right now.")
-                            } else {
-                                val content = TodayDetailMapper.fromPayload(payload, briefing)
-                                if (content.isAlert) {
-                                    TodayDetailUiState.Alert(content)
+            readJob =
+                viewModelScope.launch {
+                    // Resolve the stored briefing first when the push carried one,
+                    // so a briefing that outlives the live Today window still opens.
+                    val briefing = fetchBriefing()
+                    if (generation != readGeneration) return@launch
+                    (briefing?.briefingKind ?: requestedKind)?.let { _headerTitle.value = titleForKind(it) }
+                    val result = repository.todayDetail()
+                    if (generation != readGeneration) return@launch
+                    when (result) {
+                        is NetworkResult.Success -> {
+                            val payload = result.data
+                            val hasStoredSummary = !briefing?.summaryText.isNullOrEmpty()
+                            _state.value =
+                                if (!payload.isRenderable && !hasStoredSummary) {
+                                    TodayDetailUiState.Error("Today's briefing isn't available right now.")
                                 } else {
-                                    TodayDetailUiState.Populated(content)
+                                    val content = TodayDetailMapper.fromPayload(payload, briefing)
+                                    if (content.isAlert) {
+                                        TodayDetailUiState.Alert(content)
+                                    } else {
+                                        TodayDetailUiState.Populated(content)
+                                    }
                                 }
-                            }
-                    }
-                    is NetworkResult.Failure -> {
-                        // A stored briefing is enough to render on its own — RN
-                        // falls back the same way.
-                        _state.value =
-                            if (!briefing?.summaryText.isNullOrEmpty()) {
-                                TodayDetailUiState.Populated(TodayDetailMapper.fromPayload(null, briefing))
-                            } else {
-                                TodayDetailUiState.Error(result.error.displayMessage("Couldn't load Today."))
-                            }
+                        }
+                        is NetworkResult.Failure -> {
+                            // A stored briefing is enough to render on its own — RN
+                            // falls back the same way.
+                            _state.value =
+                                if (!briefing?.summaryText.isNullOrEmpty()) {
+                                    TodayDetailUiState.Populated(TodayDetailMapper.fromPayload(null, briefing))
+                                } else {
+                                    TodayDetailUiState.Error(result.error.displayMessage("Couldn't load Today."))
+                                }
+                        }
                     }
                 }
-            }
         }
 
         /**
