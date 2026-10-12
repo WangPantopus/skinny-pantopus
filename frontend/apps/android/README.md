@@ -80,9 +80,11 @@ feed screens; new code should depend on the smaller feature APIs.
   retries idempotent GET / HEAD up to 2 additional times on 502/503/504
   and `IOException`, with 300ms and ~900ms jittered delays.
   Non-idempotent methods are never retried.
-- **Cache.** The API client has no HTTP cache: replies carry private data
-  (door codes, medical cards, the wallet, the profile) and never go to disk.
-  Coil keeps images in its own cache at `cacheDir/image_cache/`.
+- **Cache.** The API client has no HTTP cache. ScreenStore saves only allowlisted
+  pages separately; sensitive replies (door codes, medical cards and wallet data)
+  stay off disk. Coil permits disk writes only for known bounded thumbnails at
+  `cacheDir/image_cache_v2/`. Initialization retires the legacy image cache,
+  including originals saved by older builds, while preserving saved pages and drafts.
 
 ## Icons
 

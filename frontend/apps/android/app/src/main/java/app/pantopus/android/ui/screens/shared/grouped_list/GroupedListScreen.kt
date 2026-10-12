@@ -25,6 +25,10 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.ExperimentalMaterialApi
+import androidx.compose.material.pullrefresh.PullRefreshIndicator
+import androidx.compose.material.pullrefresh.pullRefresh
+import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -89,6 +93,7 @@ data class GroupedListCallbacks(
 
 /** Top-level shell composable. */
 @Composable
+@OptIn(ExperimentalMaterialApi::class)
 @Suppress("LongParameterList")
 fun GroupedListScreen(
     title: String,
@@ -108,7 +113,11 @@ fun GroupedListScreen(
     header: (@Composable () -> Unit)? = null,
     /** Instant Screens contract §3: the quiet "Couldn't refresh. Showing 3:42 PM." line above the groups. */
     refreshNotice: RefreshNotice? = null,
+    /** An explicit pull reads now; background refreshes leave the indicator off. */
+    refreshing: Boolean = false,
+    onRefresh: (() -> Unit)? = null,
 ) {
+    val pullState = rememberPullRefreshState(refreshing = refreshing, onRefresh = { onRefresh?.invoke() })
     Column(
         modifier =
             Modifier
@@ -120,18 +129,30 @@ fun GroupedListScreen(
         if (refreshNotice != null && state is GroupedListUiState.Loaded) {
             RefreshFailedLine(refreshNotice, modifier = Modifier.padding(horizontal = Spacing.s4))
         }
-        when (state) {
-            is GroupedListUiState.Loading -> LoadingFrame()
-            is GroupedListUiState.Error -> ErrorFrame(message = state.message, onRetry = callbacks.onRetry)
-            is GroupedListUiState.Loaded ->
-                LoadedFrame(
-                    groups = state.groups,
-                    callbacks = callbacks,
-                    footerCaption = footerCaption,
-                    banner = banner,
-                    contentDimmed = contentDimmed,
-                    header = header,
+        Box(
+            Modifier.fillMaxSize().pullRefresh(pullState, enabled = onRefresh != null && state is GroupedListUiState.Loaded),
+        ) {
+            when (state) {
+                is GroupedListUiState.Loading -> LoadingFrame()
+                is GroupedListUiState.Error -> ErrorFrame(message = state.message, onRetry = callbacks.onRetry)
+                is GroupedListUiState.Loaded ->
+                    LoadedFrame(
+                        groups = state.groups,
+                        callbacks = callbacks,
+                        footerCaption = footerCaption,
+                        banner = banner,
+                        contentDimmed = contentDimmed,
+                        header = header,
+                    )
+            }
+            if (onRefresh != null) {
+                PullRefreshIndicator(
+                    refreshing = refreshing,
+                    state = pullState,
+                    modifier = Modifier.align(Alignment.TopCenter),
+                    contentColor = PantopusColors.primary600,
                 )
+            }
         }
     }
 }
