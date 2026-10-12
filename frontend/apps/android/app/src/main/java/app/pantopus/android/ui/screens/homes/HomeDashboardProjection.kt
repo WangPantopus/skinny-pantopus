@@ -6,6 +6,7 @@ import app.pantopus.android.data.api.models.homedashboard.HomeDashboardResponse
 import app.pantopus.android.data.api.models.homedashboard.HomeHealthScoreDto
 import app.pantopus.android.data.api.models.homes.BillDto
 import app.pantopus.android.data.api.models.homes.HomeAccessDto
+import app.pantopus.android.data.api.models.homes.HomeDetail
 import app.pantopus.android.ui.screens.shared.content_detail.GridTabsTab
 import app.pantopus.android.ui.screens.shared.content_detail.HomeHeroStat
 import app.pantopus.android.ui.screens.shared.content_detail.QuickActionTile
@@ -33,6 +34,36 @@ import kotlin.math.roundToInt
  */
 @Suppress("TooManyFunctions")
 object HomeDashboardProjection {
+    /** The dashboard's existing content mapping, separate from request and mutation state. */
+    fun content(
+        detail: HomeDetail,
+        dashboard: HomeDashboardResponse?,
+        access: HomeAccessDto?,
+        health: HomeHealthScoreDto?,
+        can: (String) -> Boolean,
+        securityBanner: HomeSecurityBannerContent?,
+    ): HomeDashboardContent =
+        HomeDashboardContent(
+            address = detail.address ?: detail.name ?: "Home",
+            verified = detail.ownershipStatus == "verified" || detail.owners.any { it.ownerStatus == "verified" },
+            isVerifiedOwner = detail.ownershipStatus == "verified",
+            stats =
+                stats(dashboard?.counts).filter {
+                    can(
+                        when (it.id) {
+                            "packages" -> "packages.view"
+                            "bills" -> "finance.view"
+                            else -> "tasks.view"
+                        },
+                    )
+                },
+            quickActions = quickActions(dashboard?.counts, access),
+            tabs = gatedTabs(access),
+            overview = overview(dashboard = dashboard, health = health),
+            attentionSummary = null,
+            securityBanner = securityBanner,
+        )
+
     /**
      * Grid-tab strip — static chrome, identical on iOS. This is the
      * ungated superset; [gatedTabs] applies the per-home permission
