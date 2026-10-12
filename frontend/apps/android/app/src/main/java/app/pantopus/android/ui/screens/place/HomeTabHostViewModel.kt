@@ -54,20 +54,25 @@ class HomeTabHostViewModel
                 loadPreview()
                 return
             }
-            _landing.value = HomeLanding.Loading
+            // A cold start lands at once on the saved My Homes copy (Instant Screens); the read below confirms it.
+            _landing.value = homesRepository.myHomesCopy()?.let { landingFor(it.homes) } ?: HomeLanding.Loading
             resolveJob =
                 viewModelScope.launch {
-                    // The shared My Homes copy when it is fresh (Instant Screens); a read otherwise.
                     val homes = homesRepository.myHomesStored()
                     val data = homes.data
+                    val landed = _landing.value
                     _landing.value =
-                        if (data != null) {
-                            landingHome(data.homes)?.let { HomeLanding.PlaceDashboard(it.id) } ?: HomeLanding.Hub
-                        } else {
-                            HomeLanding.Error(homes.failure.landingMessage())
+                        when {
+                            data != null -> landingFor(data.homes)
+                            // Offline with a saved copy: the copy's landing stays.
+                            landed is HomeLanding.PlaceDashboard || landed == HomeLanding.Hub -> landed
+                            else -> HomeLanding.Error(homes.failure.landingMessage())
                         }
                 }
         }
+
+        private fun landingFor(homes: List<MyHome>): HomeLanding =
+            landingHome(homes)?.let { HomeLanding.PlaceDashboard(it.id) } ?: HomeLanding.Hub
 
         /**
          * Where the Hub's "Verify your address" goes: a Home that already waits on

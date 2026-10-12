@@ -242,7 +242,7 @@ struct JustMovedCard: View {
                         .font(.system(size: 18, weight: .bold))
                         .kerning(-0.27)
                         .foregroundStyle(Theme.Color.appText)
-                    Text("Five things it can do for you now, before there are neighbors to meet.")
+                    Text("\(Self.steps.count) things it can do for you now, before there are neighbors to meet.")
                         .font(.system(size: 13.5))
                         .lineSpacing(3)
                         .foregroundStyle(Theme.Color.appTextStrong)
