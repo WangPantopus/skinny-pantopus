@@ -13,18 +13,29 @@ import { useQuery } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import { queryKeys } from '@/lib/query-keys';
 import { activeQueryClient } from '@/lib/active-query-client';
+import { gatedStaleTime, showsHomeCopy, useAfterRecheck } from '@/lib/householdCopy';
 
 export type PrimaryHomeReply = Awaited<ReturnType<typeof api.homes.getPrimaryHome>>;
 
 export const PRIMARY_HOME_FRESH_MS = 2 * 60 * 1000;
 
+function showsPrimaryCopy(reply: PrimaryHomeReply): boolean {
+  return reply.home === null || showsHomeCopy(reply.home);
+}
+
 export function primaryHomeQuery() {
-  return { queryKey: queryKeys.placePrimaryHome(), queryFn: () => api.homes.getPrimaryHome(), staleTime: PRIMARY_HOME_FRESH_MS };
+  return {
+    queryKey: queryKeys.placePrimaryHome(), queryFn: () => api.homes.getPrimaryHome(),
+    staleTime: gatedStaleTime(PRIMARY_HOME_FRESH_MS, showsPrimaryCopy),
+  };
 }
 
 /** The primary home, shown at once when it was loaded before. */
 export function usePrimaryHome(options?: { enabled?: boolean; retry?: boolean }) {
-  return useQuery({ ...primaryHomeQuery(), ...options });
+  const query = useQuery({ ...primaryHomeQuery(), ...options });
+  const { data, waiting } = useAfterRecheck(query, showsPrimaryCopy);
+  return { ...query, data, isPending: query.isPending || waiting, isLoading: query.isLoading || waiting,
+    isSuccess: query.isSuccess && data !== undefined };
 }
 
 /** The primary home for code outside rendering: the cached copy while fresh, else one shared request. */
