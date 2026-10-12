@@ -7,9 +7,9 @@ import com.squareup.moshi.JsonClass
 
 /**
  * One row from `GET /api/ai/conversations` — conversation metadata only.
- * The backend persists no message bodies (continuity rides the OpenAI
- * `response_id` server-side, `backend/services/ai/agentService.js:1003`),
- * so there is no per-conversation messages payload to mirror.
+ * The backend keeps each transcript server-side (`AIConversation.messages`,
+ * sent to Claude on every turn) and does not return it here, so there is no
+ * per-conversation messages payload to mirror.
  */
 @JsonClass(generateAdapter = true)
 data class AIConversationDto(

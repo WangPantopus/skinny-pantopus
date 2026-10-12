@@ -6,10 +6,15 @@
  * AI is a finisher, not the foundation — all facts come from source data.
  */
 
-const { getOpenAIClient } = require('../../config/openai');
+const { getAnthropicClient, resolveEffort, DRAFT_MODEL } = require('../../config/anthropic');
+const { complete } = require('../ai/llm');
 const logger = require('../../utils/logger');
 
-const DRAFT_MODEL = process.env.OPENAI_DRAFT_MODEL || 'gpt-4o-mini';
+const AI_EFFORT = resolveEffort(process.env.ANTHROPIC_DRAFT_EFFORT, 'low');
+// The briefing is ~45 words; max_tokens also covers the model's thinking.
+const AI_MAX_TOKENS = 1024;
+// Today waits on this call; the template briefing is the fallback.
+const AI_TIMEOUT_MS = 15000;
 
 // ── Signal-to-sentence templates ────────────────────────────────────
 
@@ -276,25 +281,26 @@ function validateAiOutput(text, signals) {
  * Attempt AI polish of the briefing.
  */
 async function aiPolish(signals, options) {
-  const openai = getOpenAIClient();
-  if (!openai) return null;
+  const client = getAnthropicClient();
+  if (!client) return null;
 
   const maxWords = options.maxWords || 45;
 
   try {
-    const response = await openai.chat.completions.create({
+    const response = await complete({
+      client,
       model: DRAFT_MODEL,
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT.replace('{maxWords}', String(maxWords)) },
-        { role: 'user', content: buildFactsPrompt(signals, options) },
-      ],
-      // A reasoning draft model spends part of this on reasoning before it
-      // writes; too small a budget returns empty text and the template wins.
-      max_completion_tokens: 1024,
+      system: SYSTEM_PROMPT.replace('{maxWords}', String(maxWords)),
+      messages: [{ role: 'user', content: buildFactsPrompt(signals, options) }],
+      effort: AI_EFFORT,
+      // Thinking spends part of this before the briefing is written; too small
+      // a budget returns empty text and the template wins.
+      maxTokens: AI_MAX_TOKENS,
+      timeoutMs: AI_TIMEOUT_MS,
     });
 
-    const text = response.choices?.[0]?.message?.content?.trim();
-    const tokensUsed = (response.usage?.prompt_tokens || 0) + (response.usage?.completion_tokens || 0);
+    const text = response.text.trim();
+    const tokensUsed = response.inputTokens + response.outputTokens;
 
     if (!validateAiOutput(text, signals)) {
       logger.warn('briefingComposer: AI validation failed, falling back to template');

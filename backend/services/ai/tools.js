@@ -2,7 +2,7 @@
  * AI Agent Tools — function definitions that the LLM can call.
  *
  * Each tool has:
- *   definition  – Schema sent to OpenAI (function calling format)
+ *   definition  – Schema sent to Claude (name, description, input_schema)
  *   execute     – Server-side implementation that runs when the LLM calls it
  *
  * Tools are sandboxed: they only access data the user is authorised to see.
@@ -22,26 +22,27 @@ const {
   validateMailSummary,
 } = require('./schemas');
 
-// ─── Tool Definitions (sent to OpenAI) ─────────────────────────────────────
+// ─── Tool Definitions (sent to Claude) ─────────────────────────────────────
+// Not `strict`: strict tool use compiles a grammar per schema on first use and
+// caps a request at 16 union-typed (nullable) parameters, which these tools
+// exceed together. Claude follows the schemas without it, and every executor
+// below treats a missing or null argument as "not given".
 
 const toolDefinitions = [
   {
-    type: 'function',
-    name: 'get_user_context',
+    name:'get_user_context',
     description: 'Get the current user\'s homes and saved places (label, city and state only), and recent activity counts. Never returns exact addresses.',
-    parameters: {
+    input_schema: {
       type: 'object',
       properties: {},
       required: [],
       additionalProperties: false,
     },
-    strict: true,
   },
   {
-    type: 'function',
-    name: 'get_place_alerts',
+    name:'get_place_alerts',
     description: 'Get active weather alerts (NOAA) near the user\'s home or a saved place. Provide the saved place label, or "primary" for their home or main place.',
-    parameters: {
+    input_schema: {
       type: 'object',
       properties: {
         place_label: {
@@ -52,13 +53,11 @@ const toolDefinitions = [
       required: ['place_label'],
       additionalProperties: false,
     },
-    strict: true,
   },
   {
-    type: 'function',
-    name: 'get_mail_item',
+    name:'get_mail_item',
     description: 'Get the content of a specific mail item for summarization. Requires the mail item ID.',
-    parameters: {
+    input_schema: {
       type: 'object',
       properties: {
         mail_item_id: {
@@ -69,13 +68,11 @@ const toolDefinitions = [
       required: ['mail_item_id'],
       additionalProperties: false,
     },
-    strict: true,
   },
   {
-    type: 'function',
-    name: 'create_gig_draft',
+    name:'create_gig_draft',
     description: 'Create a structured gig (task) draft. Call this when you have enough information to draft a task the user needs help with.',
-    parameters: {
+    input_schema: {
       type: 'object',
       properties: {
         title:              { type: 'string', description: 'Clear task title, max 60 chars' },
@@ -89,17 +86,15 @@ const toolDefinitions = [
         estimated_duration: { type: ['number', 'null'], description: 'Estimated hours to complete' },
         special_instructions: { type: ['string', 'null'], description: 'Any special instructions' },
       },
-      // strict mode requires every property to be in required; optional fields use null.
+      // Every property is required and optional ones are nullable, so the model always states each one.
       required: ['title', 'description', 'price', 'category', 'is_urgent', 'tags', 'schedule_type', 'pay_type', 'estimated_duration', 'special_instructions'],
       additionalProperties: false,
     },
-    strict: true,
   },
   {
-    type: 'function',
-    name: 'create_listing_draft',
+    name:'create_listing_draft',
     description: 'Create a structured marketplace listing draft. Call this when the user wants to sell, give away, or request an item.',
-    parameters: {
+    input_schema: {
       type: 'object',
       properties: {
         title:             { type: 'string', description: 'Clear, search-friendly title' },
@@ -116,13 +111,11 @@ const toolDefinitions = [
       required: ['title', 'description', 'price', 'isFree', 'category', 'condition', 'tags', 'listingType', 'deliveryAvailable', 'meetupPreference'],
       additionalProperties: false,
     },
-    strict: true,
   },
   {
-    type: 'function',
-    name: 'create_post_draft',
+    name:'create_post_draft',
     description: 'Create a structured community post draft. Call this when the user wants to share something with their neighborhood.',
-    parameters: {
+    input_schema: {
       type: 'object',
       properties: {
         content:    { type: 'string', description: 'Post text content, max 2000 chars' },
@@ -135,13 +128,11 @@ const toolDefinitions = [
       required: ['content', 'title', 'postType', 'purpose', 'visibility', 'tags'],
       additionalProperties: false,
     },
-    strict: true,
   },
   {
-    type: 'function',
-    name: 'summarize_mail_item',
+    name:'summarize_mail_item',
     description: 'Generate a structured summary of a mail item with recommended actions. Call this after retrieving mail content with get_mail_item.',
-    parameters: {
+    input_schema: {
       type: 'object',
       properties: {
         summary:    { type: 'string', description: '1-2 sentence summary' },
@@ -175,13 +166,11 @@ const toolDefinitions = [
       required: ['summary', 'key_facts', 'recommended_actions', 'urgency'],
       additionalProperties: false,
     },
-    strict: true,
   },
   {
-    type: 'function',
-    name: 'draft_support_train_from_story',
+    name:'draft_support_train_from_story',
     description: 'Draft a Support Train (community help coordination) from a free-text story. Returns a structured draft the user can review.',
-    parameters: {
+    input_schema: {
       type: 'object',
       properties: {
         story: {
@@ -197,13 +186,11 @@ const toolDefinitions = [
       required: ['story', 'support_modes_requested'],
       additionalProperties: false,
     },
-    strict: true,
   },
   {
-    type: 'function',
-    name: 'list_user_support_trains',
+    name:'list_user_support_trains',
     description: 'List Support Trains the current user organizes or participates in.',
-    parameters: {
+    input_schema: {
       type: 'object',
       properties: {
         status: {
@@ -215,13 +202,11 @@ const toolDefinitions = [
       required: ['status'],
       additionalProperties: false,
     },
-    strict: true,
   },
   {
-    type: 'function',
-    name: 'get_support_train_summary',
+    name:'get_support_train_summary',
     description: 'Get a summary of one Support Train, including open slots, recipient summary, and restriction chips.',
-    parameters: {
+    input_schema: {
       type: 'object',
       properties: {
         support_train_id: {
@@ -232,7 +217,6 @@ const toolDefinitions = [
       required: ['support_train_id'],
       additionalProperties: false,
     },
-    strict: true,
   },
 ];
 
@@ -324,8 +308,8 @@ async function _executeToolImpl(name, args, userId, _signal) {
     }
 
     case 'draft_support_train_from_story': {
-      // NOTE: We cannot call draftSupportTrain here because it makes an
-      // OpenAI API call (~5-30s) which exceeds TOOL_TIMEOUT_MS (5s).
+      // NOTE: We cannot call draftSupportTrain here because it makes a
+      // Claude call (up to 30s) which exceeds TOOL_TIMEOUT_MS (5s).
       // Instead, capture the user's intent and return a structured response
       // that the chat agent can present, prompting the user to confirm
       // and proceed via the Support Train creation flow.

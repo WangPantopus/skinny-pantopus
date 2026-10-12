@@ -107,7 +107,7 @@ function userWriteLimits(req, res, done) {
 /**
  * Limiter for home-scoped endpoints that send email or spend a vendor
  * call: invites (an email to an address the sender types) and the
- * ATTOM/OpenAI-backed property suggestions.
+ * ATTOM/Claude-backed property suggestions.
  *
  * These used to be covered incidentally by homeCreationLimiter, which
  * was mounted on ALL of /api/homes. Narrowing that limiter to the one

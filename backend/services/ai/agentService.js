@@ -1,11 +1,12 @@
 /**
  * AI Agent Service — core orchestrator for all AI features.
  *
- * Uses the OpenAI Responses API with:
+ * Uses the Claude Messages API (Sonnet 5.5) with:
  *   - Streaming for the chat agent
- *   - Function calling (tools) for data retrieval and draft creation
- *   - Structured output for single-turn drafts
- *   - previous_response_id for multi-turn conversation state
+ *   - Tool use for data retrieval and draft creation
+ *   - Structured outputs for single-turn drafts
+ *   - A stored transcript (AIConversation.messages) for multi-turn state: the
+ *     Messages API is stateless, so each turn is sent the conversation so far
  *
  * Handles:
  *   1. streamChat()        — Multi-turn chat agent with SSE streaming
@@ -14,12 +15,14 @@
  *   4. summarizeMail()     — Mail summarization with action extraction
  *   5. generatePlaceBrief() — Place brief from external data
  */
-const { getOpenAIClient } = require('../../config/openai');
+const { getAnthropicClient, resolveEffort, CHAT_MODEL, DRAFT_MODEL } = require('../../config/anthropic');
 const supabaseAdmin = require('../../config/supabaseAdmin');
 const logger = require('../../utils/logger');
 const { toolDefinitions, executeTool } = require('./tools');
 const prompts = require('./prompts');
 const schemas = require('./schemas');
+const { complete, emptyUsage, imageBlock, isTimeoutError, systemBlocks } = require('./llm');
+const { runAgentTurn, sanitizeHistory, compactForStorage } = require('./agentLoop');
 const { getAuthorizedMail } = require('./mailAccess');
 const noaa = require('../external/noaa');
 const { isLaunchFeatureEnabled } = require('../../utils/featureFlags');
@@ -49,17 +52,18 @@ function launchScopedChatInstructions() {
 These parts of Pantopus are not available yet: ${hidden.join('; ')}. Don't offer, suggest or draft them. If the user asks for one, say briefly that it isn't available in the app yet and help another way, for example with a community post.`;
 }
 
-const CHAT_MODEL = process.env.OPENAI_CHAT_MODEL || 'gpt-4o';
-const DRAFT_MODEL = process.env.OPENAI_DRAFT_MODEL || 'gpt-4o-mini';
+// Effort sets how long Claude thinks before it answers. `low` keeps time to
+// first token down (the default, `high`, is far slower) and suits chat and
+// extraction; raise a tier here only with a measured quality gain.
+const CHAT_EFFORT = resolveEffort(process.env.ANTHROPIC_CHAT_EFFORT, 'low');
+const DRAFT_EFFORT = resolveEffort(process.env.ANTHROPIC_DRAFT_EFFORT, 'low');
+// max_tokens covers the model's thinking as well as the reply; it is only a
+// ceiling (billing follows what is generated), so leave generous room.
+const CHAT_MAX_TOKENS = 4096;
+const DRAFT_MAX_TOKENS = 4096;
 const MAX_TOOL_ROUNDS = 5;         // Maximum tool-call → response rounds
 const AGENT_TIMEOUT_MS = 20000;    // 20s total timeout for streaming chat
 const DRAFT_TIMEOUT_MS = 30000;    // 30s for single-turn drafts
-
-function isAbortLikeError(err) {
-  if (!err) return false;
-  const msg = String(err.message || '').toLowerCase();
-  return err.name === 'AbortError' || msg.includes('aborted') || msg.includes('timeout');
-}
 
 // ─── Request Logging ────────────────────────────────────────────────────────
 
@@ -116,22 +120,50 @@ async function getOrCreateConversation(userId, conversationId) {
   return data;
 }
 
-async function updateConversation(conversationId, responseId, messageCount, title) {
+/**
+ * Save a finished turn. `messages` is the compact transcript the next turn is
+ * sent (omit it to leave the stored one alone).
+ */
+async function updateConversation(conversationId, { messages, messageCount, title }) {
   const update = {
-    response_id: responseId,
     message_count: messageCount,
     last_message_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
   if (title) update.title = title;
+  if (messages) update.messages = messages;
 
-  await supabaseAdmin
-    .from('AIConversation')
-    .update(update)
-    .eq('id', conversationId);
+  const save = (fields) => supabaseAdmin.from('AIConversation').update(fields).eq('id', conversationId);
+
+  let { error } = await save(update);
+  if (error && update.messages) {
+    // Whatever the cause, keep the counters moving and let the assistant answer
+    // without memory of this turn. The usual cause is a database where the
+    // `messages` column (migration ai_conversation_messages) isn't applied yet.
+    const missingColumn = ['PGRST204', '42703'].includes(error.code)
+      || (/column/i.test(error.message || '') && /messages/i.test(error.message || ''));
+    logger.warn(
+      missingColumn
+        ? 'AIConversation.messages is missing; is the migration applied?'
+        : 'AIConversation.messages could not be saved',
+      { conversationId, code: error.code, error: error.message },
+    );
+    delete update.messages;
+    ({ error } = await save(update));
+  }
+  if (error) {
+    logger.warn('Failed to update AI conversation', { conversationId, error: error.message });
+  }
 }
 
 // ─── 1. Streaming Chat Agent ────────────────────────────────────────────────
+
+/** The person's message as Claude's content: photos first, then the text. */
+function buildUserContent(text, images) {
+  const photos = (images || []).map(imageBlock).filter(Boolean);
+  if (photos.length === 0) return text;
+  return [...photos, { type: 'text', text }];
+}
 
 /**
  * Stream a chat response to an SSE writer.
@@ -142,16 +174,14 @@ async function updateConversation(conversationId, responseId, messageCount, titl
  * @param {string} params.message
  * @param {object} [params.coarseLocation]
  * @param {string[]} [params.images] — Image URLs to include as vision input
+ * @param {AbortSignal} [params.signal] — Aborts when the client disconnects, which stops the model call
  * @param {object} sseWriter — { write(event, data), end() }
  */
-async function streamChat({ userId, conversationId, message, coarseLocation, images }, sseWriter) {
+async function streamChat({ userId, conversationId, message, coarseLocation, images, signal }, sseWriter) {
   const startTime = Date.now();
-  let totalToolCalls = 0;
-  let inputTokens = 0;
-  let outputTokens = 0;
 
-  const openai = getOpenAIClient();
-  if (!openai) {
+  const client = getAnthropicClient();
+  if (!client) {
     sseWriter.write('error', { error: 'AI_UNAVAILABLE', message: 'AI features are not configured.' });
     sseWriter.end();
     return;
@@ -172,279 +202,156 @@ async function streamChat({ userId, conversationId, message, coarseLocation, ima
     userTextContent += `\n\n[User location context: ${coarseLocation.city || ''}, ${coarseLocation.state || ''}]`;
   }
 
+  const logChat = (fields) => logRequest({
+    userId,
+    conversationId: conversation.id,
+    endpoint: 'chat',
+    model: CHAT_MODEL,
+    promptVersion: prompts.VERSIONS.chat,
+    latencyMs: Date.now() - startTime,
+    ...fields,
+  });
+
+  // The whole turn, tool calls included, shares one deadline.
+  const deadline = AbortSignal.timeout(AGENT_TIMEOUT_MS);
+  const turnSignal = signal ? AbortSignal.any([signal, deadline]) : deadline;
+
+  // Filled in as rounds finish, so a timeout can still log what was used.
+  const usage = emptyUsage();
+  let turn;
   try {
-    // Build the initial Responses API input — multi-modal if images are present
-    let userMessageContent;
-    if (images && images.length > 0) {
-      const contentParts = images.map((imageUrl) => ({
-        type: 'input_image',
-        image_url: imageUrl,
-      }));
-      contentParts.push({ type: 'input_text', text: userTextContent });
-      userMessageContent = contentParts;
-    } else {
-      userMessageContent = userTextContent;
-    }
-
-    const input = [{ role: 'user', content: userMessageContent }];
-
-    const baseParams = {
-      model: CHAT_MODEL,
-      instructions: launchScopedChatInstructions(),
-      input,
-      tools: launchScopedChatTools(),
-      stream: true,
-      ...(conversation.response_id ? { previous_response_id: conversation.response_id } : {}),
-    };
-
     // Send conversation ID immediately
     sseWriter.write('conversation', {
       conversationId: conversation.id,
       isNew: !conversationId,
     });
 
-    let currentResponseId = null;
-    let fullText = '';
-    let drafts = [];
-    let round = 0;
-    let timedOut = false;
-
-    // Agent loop: stream → handle tool calls → stream again
-    while (round < MAX_TOOL_ROUNDS) {
-      round++;
-      const pendingToolCallsById = new Map();
-      let needsAnotherRound = false;
-
-      const extractCallId = (event = {}) => {
-        const direct = event.call_id || event.callId;
-        if (direct) return direct;
-
-        const item = event.item || event.output_item;
-        const fromItem = item?.call_id || item?.callId;
-        if (fromItem) return fromItem;
-
-        // Some SDK events include item_id. Only trust it if it already looks like a call ID.
-        if (typeof event.item_id === 'string' && event.item_id.startsWith('call_')) {
-          return event.item_id;
-        }
-        return null;
-      };
-
-      const upsertToolCall = ({ callId, name, argumentsJson }) => {
-        if (!callId) return;
-        const prev = pendingToolCallsById.get(callId) || {};
-        pendingToolCallsById.set(callId, {
-          callId,
-          name: name || prev.name,
-          arguments: argumentsJson !== undefined ? argumentsJson : prev.arguments,
-        });
-      };
-
-      const params = round === 1 ? baseParams : {
-        model: CHAT_MODEL,
-        instructions: baseParams.instructions,
-        input: baseParams.input,
-        tools: baseParams.tools,
-        stream: true,
-        ...(currentResponseId ? { previous_response_id: currentResponseId } : {}),
-      };
-
-      const stream = await openai.responses.create(params);
-
-      for await (const event of stream) {
-        // Track response ID
-        if (event.type === 'response.created' || event.type === 'response.completed') {
-          if (event.response?.id) {
-            currentResponseId = event.response.id;
-          }
-          // Track usage from the completed event
-          if (event.type === 'response.completed' && event.response?.usage) {
-            inputTokens += event.response.usage.input_tokens || 0;
-            outputTokens += event.response.usage.output_tokens || 0;
-          }
-        }
-
-        // Stream text deltas to client
-        if (event.type === 'response.output_text.delta') {
-          fullText += event.delta || '';
-          sseWriter.write('text_delta', { delta: event.delta });
-        }
-
-        // Collect function calls (arguments.done)
-        if (event.type === 'response.function_call_arguments.done') {
-          const callId = extractCallId(event);
-          upsertToolCall({
-            callId,
-            name: event.name || event.item?.name,
-            argumentsJson: event.arguments ?? event.item?.arguments,
+    turn = await runAgentTurn({
+      client,
+      model: CHAT_MODEL,
+      effort: CHAT_EFFORT,
+      maxTokens: CHAT_MAX_TOKENS,
+      maxRounds: MAX_TOOL_ROUNDS,
+      system: systemBlocks(launchScopedChatInstructions()),
+      tools: launchScopedChatTools(),
+      messages: [
+        ...sanitizeHistory(conversation.messages),
+        { role: 'user', content: buildUserContent(userTextContent, images) },
+      ],
+      signal: turnSignal,
+      usage,
+      onText: (delta) => sseWriter.write('text_delta', { delta }),
+      // Run one tool Claude asked for; a draft goes to the client as soon as it exists.
+      runTool: async (use) => {
+        const result = await executeTool(use.name, use.input || {}, userId);
+        if (result.draftType) {
+          sseWriter.write('draft', {
+            type: result.draftType,
+            draft: result.draft || result.summary,
+            valid: result.valid,
           });
-          if (!callId) {
-            logger.warn('AI tool call missing call_id', { userId, eventType: event.type, name: event.name || event.item?.name });
-          }
         }
-
-        // Collect function calls (output_item.done)
-        if (event.type === 'response.output_item.done' && event.item?.type === 'function_call') {
-          const callId = extractCallId(event);
-          upsertToolCall({
-            callId,
-            name: event.item?.name,
-            argumentsJson: event.item?.arguments,
-          });
-          if (!callId) {
-            logger.warn('AI function_call output item missing call_id', { userId, name: event.item?.name, itemId: event.item?.id || null });
-          }
-        }
-
-        // Collect any function calls from the final response snapshot too.
-        if (event.type === 'response.completed' && Array.isArray(event.response?.output)) {
-          for (const item of event.response.output) {
-            if (item?.type !== 'function_call') continue;
-            upsertToolCall({
-              callId: item.call_id || (typeof item.id === 'string' && item.id.startsWith('call_') ? item.id : null),
-              name: item.name,
-              argumentsJson: item.arguments,
-            });
-          }
-        }
-
-        // Check for timeout
-        if (Date.now() - startTime > AGENT_TIMEOUT_MS) {
-          logger.warn('Chat agent timeout', { userId, round, elapsed: Date.now() - startTime });
-          sseWriter.write('error', { error: 'TIMEOUT', message: 'Response took too long. Please try again.' });
-          timedOut = true;
-          break;
-        }
-      }
-
-      // On timeout, stop immediately — don't execute tools or loop again.
-      if (timedOut) break;
-
-      // Process tool calls if any
-      const pendingToolCalls = Array.from(pendingToolCallsById.values()).filter((tc) => tc.callId && tc.name);
-      if (pendingToolCalls.length > 0) {
-        totalToolCalls += pendingToolCalls.length;
-        needsAnotherRound = true;
-
-        // Execute all tool calls in parallel
-        const toolResults = await Promise.all(
-          pendingToolCalls.map(async (tc) => {
-            let args;
-            try {
-              args = JSON.parse(tc.arguments);
-            } catch {
-              args = {};
-            }
-            const result = await executeTool(tc.name, args, userId);
-
-            // If it's a draft, emit it to the client immediately
-            if (result.draftType) {
-              drafts.push(result);
-              sseWriter.write('draft', {
-                type: result.draftType,
-                draft: result.draft || result.summary,
-                valid: result.valid,
-              });
-            }
-
-            return {
-              type: 'function_call_output',
-              call_id: tc.callId,
-              output: JSON.stringify(result),
-            };
-          })
-        );
-
-        // Append tool outputs for the next round
-        baseParams.input = [...baseParams.input, ...toolResults];
-      }
-
-      if (!needsAnotherRound) break;
-      // If timed out after tool execution, set the flag and bail out.
-      if (Date.now() - startTime > AGENT_TIMEOUT_MS) {
-        logger.warn('Chat agent timeout (post-tool)', { userId, round, elapsed: Date.now() - startTime });
-        if (!timedOut) {
-          sseWriter.write('error', { error: 'TIMEOUT', message: 'Response took too long. Please try again.' });
-          timedOut = true;
-        }
-        break;
-      }
-    }
-
-    if (timedOut) {
-      // Timed out — close the stream without a done event, log as timeout, skip conversation update.
-      sseWriter.end();
-      await logRequest({
-        userId,
-        conversationId: conversation.id,
-        endpoint: 'chat',
-        model: CHAT_MODEL,
-        promptVersion: prompts.VERSIONS.chat,
-        status: 'timeout',
-        latencyMs: Date.now() - startTime,
-        inputTokens,
-        outputTokens,
-        toolCallsCount: totalToolCalls,
-      });
-    } else {
-      // Update conversation state
-      const newMessageCount = (conversation.message_count || 0) + 2; // user + assistant
-      // Auto-title on first message
-      const title = conversation.message_count === 0
-        ? message.slice(0, 60) + (message.length > 60 ? '…' : '')
-        : undefined;
-
-      await updateConversation(conversation.id, currentResponseId, newMessageCount, title);
-
-      // Send done event
-      sseWriter.write('done', {
-        conversationId: conversation.id,
-        usage: { inputTokens, outputTokens },
-        toolCalls: totalToolCalls,
-      });
-      sseWriter.end();
-
-      // Log
-      await logRequest({
-        userId,
-        conversationId: conversation.id,
-        endpoint: 'chat',
-        model: CHAT_MODEL,
-        promptVersion: prompts.VERSIONS.chat,
-        status: 'ok',
-        latencyMs: Date.now() - startTime,
-        inputTokens,
-        outputTokens,
-        toolCallsCount: totalToolCalls,
-      });
-    }
+        return {
+          type: 'tool_result',
+          tool_use_id: use.id,
+          content: JSON.stringify(result),
+          ...(result.error ? { is_error: true } : {}),
+        };
+      },
+    });
   } catch (err) {
+    const tokens = { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens };
+
+    if (signal?.aborted) {
+      // The client left. Nobody is reading, and the abort already stopped the model call.
+      logger.debug('AI chat SSE client disconnected', { userId });
+      sseWriter.end();
+      await logChat({ status: 'cancelled', ...tokens });
+      return;
+    }
+
+    if (deadline.aborted) {
+      // Timed out — close the stream without a done event, log as timeout, skip conversation update.
+      logger.warn('Chat agent timeout', { userId, elapsed: Date.now() - startTime });
+      sseWriter.write('error', { error: 'TIMEOUT', message: 'Response took too long. Please try again.' });
+      sseWriter.end();
+      await logChat({ status: 'timeout', ...tokens });
+      return;
+    }
+
     logger.error('streamChat error', { userId, error: err.message, stack: err.stack });
     sseWriter.write('error', {
       error: 'AI_ERROR',
       message: 'Something went wrong with the AI. Please try again.',
     });
     sseWriter.end();
-
-    await logRequest({
-      userId,
-      conversationId: conversation?.id,
-      endpoint: 'chat',
-      model: CHAT_MODEL,
-      promptVersion: prompts.VERSIONS.chat,
-      status: 'error',
-      latencyMs: Date.now() - startTime,
-      errorMessage: err.message,
-    });
+    await logChat({ status: 'error', errorMessage: err.message, ...tokens });
+    return;
   }
+
+  const logged = {
+    inputTokens: usage.inputTokens,
+    outputTokens: usage.outputTokens,
+    toolCallsCount: turn.toolCalls,
+  };
+
+  if (turn.outcome === 'refused' || turn.outcome === 'truncated' || turn.outcome === 'empty') {
+    // Claude declined, ran out of room mid tool call, or wrote nothing a person can
+    // read. Nothing is saved, so the exchange doesn't sit in the conversation and
+    // colour the turns after it.
+    const reason = {
+      refused: `refusal${turn.category ? `:${turn.category}` : ''}`,
+      truncated: 'max_tokens',
+      empty: `empty_reply${turn.stopReason ? `:${turn.stopReason}` : ''}`,
+    }[turn.outcome];
+    logger.warn('Chat turn not completed', { userId, reason });
+    sseWriter.write('error', {
+      error: 'AI_ERROR',
+      message: turn.outcome === 'refused'
+        ? "I can't help with that one. Try rephrasing, or ask about something else."
+        : 'Something went wrong with the AI. Please try again.',
+    });
+    sseWriter.end();
+    await logChat({ status: turn.outcome === 'refused' ? 'refusal' : 'error', errorMessage: reason, ...logged });
+    return;
+  }
+
+  // Update conversation state
+  const newMessageCount = (conversation.message_count || 0) + 2; // user + assistant
+  // Auto-title on first message
+  const title = conversation.message_count === 0
+    ? message.slice(0, 60) + (message.length > 60 ? '…' : '')
+    : undefined;
+
+  await updateConversation(conversation.id, {
+    // A turn that ran out of tool rounds has no answer to remember.
+    messages: turn.outcome === 'complete' ? compactForStorage(turn.messages) : undefined,
+    messageCount: newMessageCount,
+    title,
+  });
+
+  // Send done event
+  sseWriter.write('done', {
+    conversationId: conversation.id,
+    usage: { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens },
+    toolCalls: turn.toolCalls,
+  });
+  sseWriter.end();
+
+  // Log. A reply that stopped at its token ceiling was delivered, but cut short: say so.
+  await logChat({
+    status: 'ok',
+    ...(turn.stopReason === 'max_tokens' ? { errorMessage: 'max_tokens' } : {}),
+    ...logged,
+  });
 }
 
 // ─── 2. Single-turn Gig Draft ───────────────────────────────────────────────
 
 async function draftGig({ text, coarseLocation, context, userId }) {
   const startTime = Date.now();
-  const openai = getOpenAIClient();
-  if (!openai) {
+  const client = getAnthropicClient();
+  if (!client) {
     return { error: 'AI_UNAVAILABLE', fallback: true };
   }
 
@@ -459,21 +366,18 @@ async function draftGig({ text, coarseLocation, context, userId }) {
   }
 
   try {
-    const response = await openai.responses.create({
+    const response = await complete({
+      client,
       model: DRAFT_MODEL,
-      instructions: prompts.GIG_DRAFT_SYSTEM,
-      input: [{ role: 'user', content: userContent }],
-      text: {
-        format: {
-          type: 'json_schema',
-          name: 'gig_draft',
-          schema: schemas.gigDraftJsonSchemaStrict,
-          strict: true,
-        },
-      },
-    }, { signal: AbortSignal.timeout(DRAFT_TIMEOUT_MS) });
+      system: prompts.GIG_DRAFT_SYSTEM,
+      messages: [{ role: 'user', content: userContent }],
+      schema: schemas.claudeSchemas.gigDraft,
+      effort: DRAFT_EFFORT,
+      maxTokens: DRAFT_MAX_TOKENS,
+      timeoutMs: DRAFT_TIMEOUT_MS,
+    });
 
-    const outputText = response.output_text || '';
+    const outputText = response.text;
     let draft;
     try {
       draft = JSON.parse(outputText);
@@ -493,8 +397,8 @@ async function draftGig({ text, coarseLocation, context, userId }) {
       userId, endpoint: 'draft/gig', model: DRAFT_MODEL,
       promptVersion: prompts.VERSIONS.gig, status: valid ? 'ok' : 'schema_error',
       latencyMs: Date.now() - startTime, schemaValid: valid,
-      inputTokens: response.usage?.input_tokens,
-      outputTokens: response.usage?.output_tokens,
+      inputTokens: response.inputTokens,
+      outputTokens: response.outputTokens,
     });
 
     if (!valid) {
@@ -509,7 +413,7 @@ async function draftGig({ text, coarseLocation, context, userId }) {
       promptVersion: prompts.VERSIONS.gig, status: 'error',
       latencyMs: Date.now() - startTime, errorMessage: err.message,
     });
-    if (isAbortLikeError(err)) {
+    if (isTimeoutError(err)) {
       return { error: 'AI_TIMEOUT', message: 'AI draft timed out. Please try again.', fallback: true };
     }
     return { error: 'AI_UNAVAILABLE', message: 'AI is temporarily unavailable. Please create manually.', fallback: true };
@@ -520,8 +424,8 @@ async function draftGig({ text, coarseLocation, context, userId }) {
 
 async function draftListing({ text, coarseLocation, userId }) {
   const startTime = Date.now();
-  const openai = getOpenAIClient();
-  if (!openai) {
+  const client = getAnthropicClient();
+  if (!client) {
     return { error: 'AI_UNAVAILABLE', fallback: true };
   }
 
@@ -531,21 +435,18 @@ async function draftListing({ text, coarseLocation, userId }) {
   }
 
   try {
-    const response = await openai.responses.create({
+    const response = await complete({
+      client,
       model: DRAFT_MODEL,
-      instructions: prompts.LISTING_DRAFT_SYSTEM,
-      input: [{ role: 'user', content: userContent }],
-      text: {
-        format: {
-          type: 'json_schema',
-          name: 'listing_draft',
-          schema: schemas.listingDraftJsonSchemaStrict,
-          strict: true,
-        },
-      },
-    }, { signal: AbortSignal.timeout(DRAFT_TIMEOUT_MS) });
+      system: prompts.LISTING_DRAFT_SYSTEM,
+      messages: [{ role: 'user', content: userContent }],
+      schema: schemas.claudeSchemas.listingDraft,
+      effort: DRAFT_EFFORT,
+      maxTokens: DRAFT_MAX_TOKENS,
+      timeoutMs: DRAFT_TIMEOUT_MS,
+    });
 
-    const outputText = response.output_text || '';
+    const outputText = response.text;
     let draft;
     try {
       draft = JSON.parse(outputText);
@@ -565,8 +466,8 @@ async function draftListing({ text, coarseLocation, userId }) {
       userId, endpoint: 'draft/listing', model: DRAFT_MODEL,
       promptVersion: prompts.VERSIONS.listing, status: valid ? 'ok' : 'schema_error',
       latencyMs: Date.now() - startTime, schemaValid: valid,
-      inputTokens: response.usage?.input_tokens,
-      outputTokens: response.usage?.output_tokens,
+      inputTokens: response.inputTokens,
+      outputTokens: response.outputTokens,
     });
 
     if (!valid) {
@@ -581,7 +482,7 @@ async function draftListing({ text, coarseLocation, userId }) {
       promptVersion: prompts.VERSIONS.listing, status: 'error',
       latencyMs: Date.now() - startTime, errorMessage: err.message,
     });
-    if (isAbortLikeError(err)) {
+    if (isTimeoutError(err)) {
       return { error: 'AI_TIMEOUT', message: 'AI draft timed out. Please try again.', fallback: true };
     }
     return { error: 'AI_UNAVAILABLE', message: 'AI is temporarily unavailable. Please create manually.', fallback: true };
@@ -592,46 +493,41 @@ async function draftListing({ text, coarseLocation, userId }) {
 
 async function draftListingFromImages({ images, text, latitude, longitude, userId }) {
   const startTime = Date.now();
-  const openai = getOpenAIClient();
-  if (!openai) {
+  const client = getAnthropicClient();
+  if (!client) {
     return { error: 'AI_UNAVAILABLE', fallback: true };
   }
 
   const s3Service = require('../s3Service');
 
-  // Build content array with images + optional text
-  const contentParts = images.map((img) => {
-    let imageUrl;
-    if (img.startsWith('http') || img.startsWith('data:')) {
-      imageUrl = img;
-    } else {
-      imageUrl = s3Service.getPublicUrl(img);
-    }
-    return { type: 'input_image', image_url: imageUrl };
-  });
+  // Build content array with images + optional text. Claude reads JPEG, PNG,
+  // GIF and WebP; a photo in another format (HEIC) is left out.
+  const contentParts = images
+    .map((img) => imageBlock(img.startsWith('http') || img.startsWith('data:') ? img : s3Service.getPublicUrl(img)))
+    .filter(Boolean);
+  if (contentParts.length === 0) {
+    return { error: 'DRAFT_INVALID', message: 'Could not read those photos. Please try different ones or create manually.', fallback: true };
+  }
 
   let userPrompt = 'Describe this item for a marketplace listing.';
   if (text) {
     userPrompt = `${text}\n\nDescribe this item for a marketplace listing.`;
   }
-  contentParts.push({ type: 'input_text', text: userPrompt });
+  contentParts.push({ type: 'text', text: userPrompt });
 
   try {
-    const response = await openai.responses.create({
+    const response = await complete({
+      client,
       model: DRAFT_MODEL,
-      instructions: prompts.LISTING_DRAFT_SYSTEM,
-      input: [{ role: 'user', content: contentParts }],
-      text: {
-        format: {
-          type: 'json_schema',
-          name: 'listing_draft',
-          schema: schemas.listingDraftJsonSchemaStrict,
-          strict: true,
-        },
-      },
-    }, { signal: AbortSignal.timeout(DRAFT_TIMEOUT_MS) });
+      system: prompts.LISTING_DRAFT_SYSTEM,
+      messages: [{ role: 'user', content: contentParts }],
+      schema: schemas.claudeSchemas.listingDraft,
+      effort: DRAFT_EFFORT,
+      maxTokens: DRAFT_MAX_TOKENS,
+      timeoutMs: DRAFT_TIMEOUT_MS,
+    });
 
-    const outputText = response.output_text || '';
+    const outputText = response.text;
     let draft;
     try {
       draft = JSON.parse(outputText);
@@ -651,8 +547,8 @@ async function draftListingFromImages({ images, text, latitude, longitude, userI
       userId, endpoint: 'draft/listing-vision', model: DRAFT_MODEL,
       promptVersion: prompts.VERSIONS.listing, status: valid ? 'ok' : 'schema_error',
       latencyMs: Date.now() - startTime, schemaValid: valid,
-      inputTokens: response.usage?.input_tokens,
-      outputTokens: response.usage?.output_tokens,
+      inputTokens: response.inputTokens,
+      outputTokens: response.outputTokens,
     });
 
     if (!valid) {
@@ -686,7 +582,7 @@ async function draftListingFromImages({ images, text, latitude, longitude, userI
       promptVersion: prompts.VERSIONS.listing, status: 'error',
       latencyMs: Date.now() - startTime, errorMessage: err.message,
     });
-    if (isAbortLikeError(err)) {
+    if (isTimeoutError(err)) {
       return { error: 'AI_TIMEOUT', message: 'AI draft timed out. Please try again.', fallback: true };
     }
     return { error: 'AI_UNAVAILABLE', message: 'AI is temporarily unavailable. Please create manually.', fallback: true };
@@ -697,8 +593,8 @@ async function draftListingFromImages({ images, text, latitude, longitude, userI
 
 async function draftPost({ text, surface, coarseLocation, userId }) {
   const startTime = Date.now();
-  const openai = getOpenAIClient();
-  if (!openai) {
+  const client = getAnthropicClient();
+  if (!client) {
     return { error: 'AI_UNAVAILABLE', fallback: true };
   }
 
@@ -709,21 +605,18 @@ async function draftPost({ text, surface, coarseLocation, userId }) {
   }
 
   try {
-    const response = await openai.responses.create({
+    const response = await complete({
+      client,
       model: DRAFT_MODEL,
-      instructions: prompts.POST_DRAFT_SYSTEM,
-      input: [{ role: 'user', content: userContent }],
-      text: {
-        format: {
-          type: 'json_schema',
-          name: 'post_draft',
-          schema: schemas.postDraftJsonSchemaStrict,
-          strict: true,
-        },
-      },
-    }, { signal: AbortSignal.timeout(DRAFT_TIMEOUT_MS) });
+      system: prompts.POST_DRAFT_SYSTEM,
+      messages: [{ role: 'user', content: userContent }],
+      schema: schemas.claudeSchemas.postDraft,
+      effort: DRAFT_EFFORT,
+      maxTokens: DRAFT_MAX_TOKENS,
+      timeoutMs: DRAFT_TIMEOUT_MS,
+    });
 
-    const outputText = response.output_text || '';
+    const outputText = response.text;
     let draft;
     try {
       draft = JSON.parse(outputText);
@@ -743,8 +636,8 @@ async function draftPost({ text, surface, coarseLocation, userId }) {
       userId, endpoint: 'draft/post', model: DRAFT_MODEL,
       promptVersion: prompts.VERSIONS.post, status: valid ? 'ok' : 'schema_error',
       latencyMs: Date.now() - startTime, schemaValid: valid,
-      inputTokens: response.usage?.input_tokens,
-      outputTokens: response.usage?.output_tokens,
+      inputTokens: response.inputTokens,
+      outputTokens: response.outputTokens,
     });
 
     if (!valid) {
@@ -759,7 +652,7 @@ async function draftPost({ text, surface, coarseLocation, userId }) {
       promptVersion: prompts.VERSIONS.post, status: 'error',
       latencyMs: Date.now() - startTime, errorMessage: err.message,
     });
-    if (isAbortLikeError(err)) {
+    if (isTimeoutError(err)) {
       return { error: 'AI_TIMEOUT', message: 'AI draft timed out. Please try again.', fallback: true };
     }
     return { error: 'AI_UNAVAILABLE', message: 'AI is temporarily unavailable. Please create manually.', fallback: true };
@@ -770,8 +663,8 @@ async function draftPost({ text, surface, coarseLocation, userId }) {
 
 async function summarizeMail({ mailItemId, userId }) {
   const startTime = Date.now();
-  const openai = getOpenAIClient();
-  if (!openai) {
+  const client = getAnthropicClient();
+  if (!client) {
     return { error: 'AI_UNAVAILABLE', fallback: true };
   }
 
@@ -796,21 +689,18 @@ Content: ${item.content || item.preview_text || 'No content available'}
 Existing Key Facts: ${JSON.stringify(item.key_facts || [])}`;
 
   try {
-    const response = await openai.responses.create({
+    const response = await complete({
+      client,
       model: DRAFT_MODEL,
-      instructions: prompts.MAIL_SUMMARY_SYSTEM,
-      input: [{ role: 'user', content: mailContent }],
-      text: {
-        format: {
-          type: 'json_schema',
-          name: 'mail_summary',
-          schema: schemas.mailSummaryJsonSchemaStrict,
-          strict: true,
-        },
-      },
-    }, { signal: AbortSignal.timeout(DRAFT_TIMEOUT_MS) });
+      system: prompts.MAIL_SUMMARY_SYSTEM,
+      messages: [{ role: 'user', content: mailContent }],
+      schema: schemas.claudeSchemas.mailSummary,
+      effort: DRAFT_EFFORT,
+      maxTokens: DRAFT_MAX_TOKENS,
+      timeoutMs: DRAFT_TIMEOUT_MS,
+    });
 
-    const outputText = response.output_text || '';
+    const outputText = response.text;
     let summary;
     try {
       summary = JSON.parse(outputText);
@@ -829,8 +719,8 @@ Existing Key Facts: ${JSON.stringify(item.key_facts || [])}`;
       userId, endpoint: 'summarize/mail', model: DRAFT_MODEL,
       promptVersion: prompts.VERSIONS.mail, status: valid ? 'ok' : 'schema_error',
       latencyMs: Date.now() - startTime, schemaValid: valid,
-      inputTokens: response.usage?.input_tokens,
-      outputTokens: response.usage?.output_tokens,
+      inputTokens: response.inputTokens,
+      outputTokens: response.outputTokens,
     });
 
     return valid ? summary : { error: 'SUMMARY_INVALID', fallback: true };
@@ -849,8 +739,8 @@ Existing Key Facts: ${JSON.stringify(item.key_facts || [])}`;
 
 async function generatePlaceBrief({ placeId, userId }) {
   const startTime = Date.now();
-  const openai = getOpenAIClient();
-  if (!openai) {
+  const client = getAnthropicClient();
+  if (!client) {
     return { error: 'AI_UNAVAILABLE' };
   }
 
@@ -969,21 +859,18 @@ Weather Alerts (NOAA):
 ${alertsResult.alerts.map(a => `- ${a.event} (${a.severity}): ${a.headline}. ${a.instruction || ''}`).join('\n')}`;
 
   try {
-    const response = await openai.responses.create({
+    const response = await complete({
+      client,
       model: DRAFT_MODEL,
-      instructions: prompts.PLACE_BRIEF_SYSTEM,
-      input: [{ role: 'user', content: externalDataPrompt }],
-      text: {
-        format: {
-          type: 'json_schema',
-          name: 'place_brief',
-          schema: schemas.placeBriefJsonSchemaStrict,
-          strict: true,
-        },
-      },
-    }, { signal: AbortSignal.timeout(DRAFT_TIMEOUT_MS) });
+      system: prompts.PLACE_BRIEF_SYSTEM,
+      messages: [{ role: 'user', content: externalDataPrompt }],
+      schema: schemas.claudeSchemas.placeBrief,
+      effort: DRAFT_EFFORT,
+      maxTokens: DRAFT_MAX_TOKENS,
+      timeoutMs: DRAFT_TIMEOUT_MS,
+    });
 
-    const outputText = response.output_text || '';
+    const outputText = response.text;
     let briefData;
     try {
       briefData = JSON.parse(outputText);
@@ -1008,8 +895,8 @@ ${alertsResult.alerts.map(a => `- ${a.event} (${a.severity}): ${a.headline}. ${a
       userId, endpoint: 'place-brief', model: DRAFT_MODEL,
       promptVersion: prompts.VERSIONS.placeBrief, status: 'ok',
       latencyMs: Date.now() - startTime, cacheHit,
-      inputTokens: response.usage?.input_tokens,
-      outputTokens: response.usage?.output_tokens,
+      inputTokens: response.inputTokens,
+      outputTokens: response.outputTokens,
     });
 
     return brief;
@@ -1059,8 +946,8 @@ async function deleteConversation(userId, conversationId) {
 
 async function draftMailOpening({ intent, ink, recipientName, body, userId }) {
   const startTime = Date.now();
-  const openai = getOpenAIClient();
-  if (!openai) {
+  const client = getAnthropicClient();
+  if (!client) {
     return { suggestion: null, error: 'AI_UNAVAILABLE' };
   }
 
@@ -1070,20 +957,24 @@ async function draftMailOpening({ intent, ink, recipientName, body, userId }) {
   }
 
   try {
-    const response = await openai.responses.create({
+    const response = await complete({
+      client,
       model: DRAFT_MODEL,
-      instructions: prompts.MAIL_OPENING_SYSTEM,
-      input: [{ role: 'user', content: userContent }],
-    }, { signal: AbortSignal.timeout(DRAFT_TIMEOUT_MS) });
+      system: prompts.MAIL_OPENING_SYSTEM,
+      messages: [{ role: 'user', content: userContent }],
+      effort: DRAFT_EFFORT,
+      maxTokens: DRAFT_MAX_TOKENS,
+      timeoutMs: DRAFT_TIMEOUT_MS,
+    });
 
-    const suggestion = (response.output_text || '').trim();
+    const suggestion = response.text.trim();
 
     await logRequest({
       userId, endpoint: 'draft/mail-opening', model: DRAFT_MODEL,
       promptVersion: prompts.VERSIONS.mailOpening, status: suggestion ? 'ok' : 'empty',
       latencyMs: Date.now() - startTime,
-      inputTokens: response.usage?.input_tokens,
-      outputTokens: response.usage?.output_tokens,
+      inputTokens: response.inputTokens,
+      outputTokens: response.outputTokens,
     });
 
     if (!suggestion) {
