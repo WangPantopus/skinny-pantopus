@@ -593,6 +593,9 @@ server.listen(PORT, HOST, async () => {
   // Usernames made up from email addresses before October 7 stay hidden wherever a name or handle shows.
   if (process.env.NODE_ENV !== 'test') require('./utils/legacyUsernames').startLegacyUsernameRefresh();
 
+  // Compile the AI response schemas ahead of the first draft after a quiet day (staging and production only).
+  if (process.env.NODE_ENV !== 'test') require('./services/ai/warmup').startSchemaWarmup();
+
   // Start pg-boss queue workers (Tier 2 jobs)
   // Set PGBOSS_ENABLED=false when running a separate worker container.
   let pgBossBackedJobsStarted = false;
