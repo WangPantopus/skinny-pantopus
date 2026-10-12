@@ -17,7 +17,7 @@ October 4, 2026 · Status: proposal for founder review (no application code in t
 - No generic saved-item, action or watch tables (September 16). Proposals live in the agent's step log, and every change executes through the domain table that already owns the data.
 - The checklist's "Not now" list: paying bills by an assistant stays out of every stage, and new owner-scoped tables need the founder's explicit approval.
 - Migrations follow the build brief's rules.
-- The model provider today is OpenAI: the Responses API for chat and Whisper for transcription. The gateway keeps it swappable.
+- The model provider today is OpenAI: the Responses API for chat and Whisper for transcription. The gateway keeps it swappable. (Updated October 12: chat and drafts now run on Claude Sonnet 5.5 through the Messages API, which keeps nothing server-side, so the conversation is stored in `AIConversation.messages`; transcription answers "unavailable" until a speech-to-text service is chosen. The survey below describes the code as of October 4.)
 
 **Technical goals:** one agent behind the Today box and the existing AI chat; answers that cite sources and are checked against them; requests that survive disconnects and continue in the background; approvals bound to exact terms; visible memory; a full record of every step; cost budgets; and evaluation before every release.
 
