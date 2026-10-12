@@ -112,7 +112,8 @@ public struct TodayWidgetSnapshot: Codable, Sendable, Equatable {
 
 /// Storage constants and (de)coding shared by the writer and the widget.
 public enum TodayWidgetSnapshotContract {
-    public static let snapshotKey = "todaySnapshotV1"
+    public static let snapshotKey = "todaySnapshotV2"
+    static let legacySnapshotKey = "todaySnapshotV1"
     public static let widgetKind = "TodayWidget"
     /// Older than this, the widget asks to open the app instead.
     public static let stalenessSeconds: TimeInterval = 6 * 60 * 60

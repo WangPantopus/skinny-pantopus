@@ -67,9 +67,17 @@ public struct SupportTrainDetailView: View {
         .background(Theme.Color.appBg)
         .accessibilityIdentifier("supportTrainDetail")
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
-        .task { await viewModel.load() }
+        .onDisappear { viewModel.suspend() }
         // Someone took or left a slot (`supporttrain:{id}`): the open train re-reads.
-        .refreshesOnStoreChange(affects: { viewModel.isAffected(by: $0) }, perform: { await viewModel.refreshFromSignal() })
+        .refreshesOnStoreChange(
+            affects: { viewModel.isAffected(by: $0) },
+            recheckOnAttach: true,
+            onBackground: {
+                viewModel.suspend()
+                return true
+            },
+            perform: { await viewModel.refreshFromSignal() }
+        )
         .overlay(alignment: .bottom) { toastOverlay }
         .refreshFailureToast($viewModel.refreshFailureMessage)
         .sheet(item: $viewModel.reserveSelection, onDismiss: { viewModel.dismissReserve() }, content: { selection in
@@ -124,20 +132,24 @@ public struct SupportTrainDetailView: View {
         }
     }
 
-    @ViewBuilder
     private func reserveSheet(_ selection: ReserveSheetSelection) -> some View {
-        if let content = viewModel.currentContent {
-            ReserveSlotSheet(
-                selection: selection,
-                options: content.reserveOptions,
-                context: content.reserveContext,
-                isSubmitting: viewModel.isSubmitting,
-                onSubmit: { slotId, body in
-                    await viewModel.reserve(slotId: slotId, body: body)
-                },
-                onClose: { viewModel.dismissReserve() }
-            )
-        }
+        // Keep the same sheet alive even when access is refused. Removing it
+        // would discard the helper's unsent fields and leave a blank modal.
+        let content = viewModel.currentContent
+        return ReserveSlotSheet(
+            selection: selection,
+            options: content?.reserveOptions ?? [],
+            context: content?.reserveContext ?? ReserveSheetContext(
+                enabledModes: [], restrictionChips: [], contactlessPreferred: false
+            ),
+            isSubmitting: viewModel.isSubmitting,
+            recipientDetailsAvailable: viewModel.recipientDetailsAvailable,
+            onRetryRecipientDetails: { Task { await viewModel.refresh() } },
+            onSubmit: { slotId, body in
+                await viewModel.reserve(slotId: slotId, body: body)
+            },
+            onClose: { viewModel.dismissReserve() }
+        )
     }
 
     @ViewBuilder
