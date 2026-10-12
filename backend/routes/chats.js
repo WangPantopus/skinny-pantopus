@@ -33,6 +33,7 @@ const { incCounter, recordHistogram, getSnapshot } = require('../services/chatMe
 const pushService = require('../services/pushService');
 const rateLimit = require('express-rate-limit');
 const { pipeline } = require('stream/promises');
+const sharp = require('sharp');
 const { chosenUsernameOrNull } = require('../utils/personalUsername');
 const CHAT_DELETED_REDACT_DAYS = Math.max(parseInt(process.env.CHAT_DELETED_REDACT_DAYS || '180', 10) || 180, 1);
 const REDACTED_DELETED_MESSAGE = '[deleted message]';
@@ -3005,6 +3006,10 @@ router.get('/files/:fileId', tokenFromQuery, verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const { fileId } = req.params;
+    const thumbnail = req.query.variant === 'thumbnail';
+    if (req.query.variant !== undefined && !thumbnail) {
+      return res.status(400).json({ error: 'Unknown file variant' });
+    }
 
     // Look up the file record
     const { data: file, error: fileErr } = await supabaseAdmin
@@ -3042,6 +3047,9 @@ router.get('/files/:fileId', tokenFromQuery, verifyToken, async (req, res) => {
     if (await isGigRoomClosedTo(roomId, userId)) {
       return res.status(403).json({ error: 'Not authorized to access this file' });
     }
+    if (thumbnail && !STREAMED_CHAT_IMAGE_TYPES.has(file.mime_type)) {
+      return res.status(415).json({ error: 'Thumbnails are available only for images' });
+    }
 
     const trackAccess = () => supabaseAdmin
       .from('File')
@@ -3055,7 +3063,7 @@ router.get('/files/:fileId', tokenFromQuery, verifyToken, async (req, res) => {
     // repeat ask answers 304. A browser signed in by cookie keeps no copy on disk (Instant Screens contract §5).
     if (STREAMED_CHAT_IMAGE_TYPES.has(file.mime_type)) {
       res.set('Cache-Control', req._authMethod === 'cookie' ? 'private, no-store' : 'private, max-age=31536000, immutable');
-      res.set('ETag', `"chat-file-${file.id}"`);
+      res.set('ETag', `"chat-file-${file.id}${thumbnail ? '-thumbnail-v1' : ''}"`);
       if (req.fresh) return res.status(304).end();
       let object;
       try {
@@ -3066,10 +3074,16 @@ router.get('/files/:fileId', tokenFromQuery, verifyToken, async (req, res) => {
         }
         throw storageErr;
       }
-      res.type(file.mime_type);
-      if (Number.isSafeInteger(object.contentLength)) res.set('Content-Length', String(object.contentLength));
+      res.type(thumbnail ? 'image/webp' : file.mime_type);
+      if (!thumbnail && Number.isSafeInteger(object.contentLength)) res.set('Content-Length', String(object.contentLength));
       trackAccess();
-      return pipeline(object.body, res).catch((streamErr) => {
+      // Inline photos cache this bounded first frame, never the original bytes. Failed decoding must not
+      // fall back to the original; full-screen viewers keep the existing URL without a variant.
+      const streams = thumbnail
+        ? [object.body, sharp({ limitInputPixels: 64 * 1024 * 1024 }).rotate()
+          .resize(512, 512, { fit: 'inside', withoutEnlargement: true }).webp({ quality: 80 }), res]
+        : [object.body, res];
+      return pipeline(...streams).catch((streamErr) => {
         logger.warn('Chat file stream ended early', { requestId: req.requestId, fileId, error: streamErr.message });
       });
     }

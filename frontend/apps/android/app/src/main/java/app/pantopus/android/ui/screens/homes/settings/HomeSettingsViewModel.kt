@@ -126,6 +126,9 @@ class HomeSettingsViewModel
         private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
         val refreshNotice: StateFlow<RefreshNotice?> = _refreshNotice.asStateFlow()
 
+        private val _refreshing = MutableStateFlow(false)
+        val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
         /** Founder decision 3: who may see this screen from the store's copy, and what leaves with the screen. */
         private val gate =
             gates.create(homeId, listOf(HomeStoreKeys.detail(homeId), HomeStoreKeys.occupants(homeId), HomeStoreKeys.me(homeId)))
@@ -172,12 +175,14 @@ class HomeSettingsViewModel
 
         fun suspendContent() {
             active = false
+            _refreshing.value = false
             readGeneration += 1
             if (!gate.showsCopy) clearCopy()
             gate.leave()
         }
 
         private fun clearCopy() {
+            _refreshing.value = false
             loadedOnce = false
             viewerAccess = null
             currentName = ""
@@ -303,10 +308,14 @@ class HomeSettingsViewModel
         private fun read(force: Boolean) {
             if (!active) return
             val generation = ++readGeneration
+            _refreshing.value = force && loadedOnce
             if (!loadedOnce) _state.value = GroupedListUiState.Loading
             viewModelScope.launch {
                 val reads = readAll(force, generation)
-                if (generation == readGeneration) publish(reads)
+                if (generation == readGeneration) {
+                    _refreshing.value = false
+                    publish(reads)
+                }
             }
         }
 
