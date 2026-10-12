@@ -22,6 +22,7 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.gigs.GigExtrasRepository
 import app.pantopus.android.data.hub.HubRepository
 import app.pantopus.android.data.notifications.NotificationsRepository
+import app.pantopus.android.data.store.Stored
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -61,7 +62,14 @@ class HubViewModelTest {
             NetworkResult.Success(NotificationUnreadCountResponse(count = 0, byContext = null))
         coEvery { gigExtrasRepo.rebookable() } returns
             NetworkResult.Success(RebookableGigsResponse(rebookable = emptyList()))
+        // The Hub reads through the screens' store (Instant Screens); no copies before the first read here.
+        every { repo.overviewCopy() } returns null
+        every { repo.todayCopy() } returns null
+        every { repo.discoveryCopy(any()) } returns null
+        every { notificationsRepo.unreadCountCopy() } returns null
     }
+
+    private fun <T : Any> stored(data: T) = Stored(data, fetchedAt = System.currentTimeMillis())
 
     @After fun tearDown() {
         Dispatchers.resetMain()
@@ -136,10 +144,10 @@ class HubViewModelTest {
     @Test
     fun skeleton_to_populated() =
         runTest {
-            coEvery { repo.overview() } returns NetworkResult.Success(makeHub())
-            coEvery { repo.today() } returns NetworkResult.Success(HubTodayResponse(today = null, error = null))
-            coEvery { repo.discovery(any(), any()) } returns
-                NetworkResult.Success(HubDiscoveryResponse(items = emptyList()))
+            coEvery { repo.overviewStored(any()) } returns stored(makeHub())
+            coEvery { repo.todayStored(any()) } returns stored(HubTodayResponse(today = null, error = null))
+            coEvery { repo.discoveryStored(any(), any()) } returns
+                stored(HubDiscoveryResponse(items = emptyList()))
 
             val vm = HubViewModel(repo, prefs, notificationsRepo, gigExtrasRepo)
             assertTrue(vm.state.value is HubUiState.Skeleton)
@@ -152,11 +160,11 @@ class HubViewModelTest {
     @Test
     fun skeleton_to_firstRun() =
         runTest {
-            coEvery { repo.overview() } returns
-                NetworkResult.Success(makeHub(allDone = false, score = 0.2, homeCount = 0))
-            coEvery { repo.today() } returns NetworkResult.Success(HubTodayResponse(today = null, error = null))
-            coEvery { repo.discovery(any(), any()) } returns
-                NetworkResult.Success(HubDiscoveryResponse(items = emptyList()))
+            coEvery { repo.overviewStored(any()) } returns
+                stored(makeHub(allDone = false, score = 0.2, homeCount = 0))
+            coEvery { repo.todayStored(any()) } returns stored(HubTodayResponse(today = null, error = null))
+            coEvery { repo.discoveryStored(any(), any()) } returns
+                stored(HubDiscoveryResponse(items = emptyList()))
 
             val vm = HubViewModel(repo, prefs, notificationsRepo, gigExtrasRepo)
             vm.load()
@@ -167,14 +175,14 @@ class HubViewModelTest {
     @Test
     fun error_then_retry() =
         runTest {
-            coEvery { repo.overview() } returnsMany
+            coEvery { repo.overviewStored(any()) } returnsMany
                 listOf(
-                    NetworkResult.Failure(NetworkError.Server(code = 503, body = null)),
-                    NetworkResult.Success(makeHub()),
+                    Stored(failure = NetworkError.Server(code = 503, body = null)),
+                    stored(makeHub()),
                 )
-            coEvery { repo.today() } returns NetworkResult.Success(HubTodayResponse(today = null, error = null))
-            coEvery { repo.discovery(any(), any()) } returns
-                NetworkResult.Success(HubDiscoveryResponse(items = emptyList()))
+            coEvery { repo.todayStored(any()) } returns stored(HubTodayResponse(today = null, error = null))
+            coEvery { repo.discoveryStored(any(), any()) } returns
+                stored(HubDiscoveryResponse(items = emptyList()))
 
             val vm = HubViewModel(repo, prefs, notificationsRepo, gigExtrasRepo)
             vm.load()
@@ -186,10 +194,10 @@ class HubViewModelTest {
     @Test
     fun setup_banner_shows_then_dismisses() =
         runTest {
-            coEvery { repo.overview() } returns NetworkResult.Success(makeHub(allDone = false, score = 0.9, homeCount = 1))
-            coEvery { repo.today() } returns NetworkResult.Success(HubTodayResponse(today = null, error = null))
-            coEvery { repo.discovery(any(), any()) } returns
-                NetworkResult.Success(HubDiscoveryResponse(items = emptyList()))
+            coEvery { repo.overviewStored(any()) } returns stored(makeHub(allDone = false, score = 0.9, homeCount = 1))
+            coEvery { repo.todayStored(any()) } returns stored(HubTodayResponse(today = null, error = null))
+            coEvery { repo.discoveryStored(any(), any()) } returns
+                stored(HubDiscoveryResponse(items = emptyList()))
 
             val vm = HubViewModel(repo, prefs, notificationsRepo, gigExtrasRepo)
             vm.load()
@@ -204,10 +212,10 @@ class HubViewModelTest {
     @Test
     fun discovery_items_flow_through() =
         runTest {
-            coEvery { repo.overview() } returns NetworkResult.Success(makeHub())
-            coEvery { repo.today() } returns NetworkResult.Success(HubTodayResponse(today = null, error = null))
-            coEvery { repo.discovery(any(), any()) } returns
-                NetworkResult.Success(
+            coEvery { repo.overviewStored(any()) } returns stored(makeHub())
+            coEvery { repo.todayStored(any()) } returns stored(HubTodayResponse(today = null, error = null))
+            coEvery { repo.discoveryStored(any(), any()) } returns
+                stored(
                     HubDiscoveryResponse(
                         items =
                             listOf(

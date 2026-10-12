@@ -16,16 +16,25 @@ import app.pantopus.android.data.api.models.place.PlaceSectionId
 import app.pantopus.android.data.api.models.place.UnlistedProfile
 import app.pantopus.android.data.api.models.place.UnlistedRemovalStatus
 import app.pantopus.android.data.api.net.NetworkError
+import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.auth.AuthenticatedDispatchGuard
 import app.pantopus.android.data.homes.HomeAdminRepository
+import app.pantopus.android.data.homes.HomesRepository
+import app.pantopus.android.data.api.models.homes.showsCopyBeforeRecheck
+import app.pantopus.android.data.store.StoreKind
+import app.pantopus.android.data.store.Stored
+import app.pantopus.android.ui.components.RefreshNotice
+import kotlinx.coroutines.Job
 import app.pantopus.android.data.hub.NotificationPreferencesRepository
 import app.pantopus.android.data.place.PlaceRepository
+import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScope
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScopeFactory
 import app.pantopus.android.ui.screens.place.PlaceDetailGroup
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -67,6 +76,7 @@ class PlaceDetailViewModel
     constructor(
         private val repo: PlaceRepository,
         private val adminRepo: HomeAdminRepository,
+        private val homesRepo: HomesRepository,
         savedStateHandle: SavedStateHandle,
         sessionScopes: HomeClaimSessionScopeFactory,
         private val preferencesRepository: NotificationPreferencesRepository,
@@ -86,8 +96,13 @@ class PlaceDetailViewModel
             PlaceDetailGroup.fromSlug(savedStateHandle[PLACE_DETAIL_SLUG_KEY])
                 ?: PlaceDetailGroup.TODAY
 
-        private val _state = MutableStateFlow<PlaceDetailUiState>(PlaceDetailUiState.Loading)
+        private val copy = PlaceDetailCopy(repo, homesRepo, homeId, group, viewModelScope)
+        private val _state = copy.state
         val state: StateFlow<PlaceDetailUiState> = _state.asStateFlow()
+        val refreshing = copy.refreshing.asStateFlow()
+        val refreshNotice = copy.refreshNotice.asStateFlow()
+        private val visible: Boolean get() = copy.visible
+        private val pageGeneration: Long get() = copy.generation
 
         private val _pickupPrimerHomeId = MutableStateFlow<String?>(null)
         override val pickupPrimerHomeId = _pickupPrimerHomeId.asStateFlow()
@@ -118,14 +133,7 @@ class PlaceDetailViewModel
         private suspend fun pickupCurrent(): Boolean =
             calendarSession.confirmCurrent() && !appLock.isLocked.value && keyguard?.isDeviceLocked == false
 
-        private fun pickupDispatchGuard(): AuthenticatedDispatchGuard =
-            AuthenticatedDispatchGuard { credentials ->
-                viewModelScope.coroutineContext.ensureActive()
-                calendarSession.requireCurrent()
-                calendarSession.requireDispatchCredentials(credentials)
-                viewModelScope.coroutineContext.ensureActive()
-                check(!appLock.isLocked.value && keyguard?.isDeviceLocked == false)
-            }
+        private fun pickupDispatchGuard(): AuthenticatedDispatchGuard = pickupGuard(viewModelScope, calendarSession, appLock, keyguard)
 
         // ─── Address calendar (Wedge v2 D6) ────────────────────
         private val _calendarBusy = MutableStateFlow(false)
@@ -213,24 +221,18 @@ class PlaceDetailViewModel
             }
         }
 
-        fun load() {
-            if (_state.value is PlaceDetailUiState.Loaded) return
-            refresh()
-        }
+        fun load() = copy.load()
 
-        fun refresh() {
-            _state.value = PlaceDetailUiState.Loading
-            viewModelScope.launch {
-                _state.value =
-                    when (val result = repo.intelligence(homeId)) {
-                        is NetworkResult.Success -> PlaceDetailUiState.Loaded(result.data)
-                        is NetworkResult.Failure ->
-                            PlaceDetailUiState.Error(
-                                result.error.displayMessage("Couldn't load this place."),
-                                denied = result.error is NetworkError.Forbidden,
-                            )
-                    }
-            }
+        fun refresh() = copy.refresh()
+
+        fun suspendContent() {
+            if (!visible) return
+            copy.pause()
+            _letters.value = ResidencyLetterUiState.Loading
+            _claims.value = ResidencyClaimsUiState.Loading
+            _rateWatch.value = RateWatchUiState.Loading
+            _rentReport.value = RealRentUiState.Loading
+            _claimLinkToCopy.value = null
         }
 
         // ── Residency letters (Identity detail, T4) ──────────────
@@ -244,12 +246,15 @@ class PlaceDetailViewModel
         private var pendingLetterRequestId: String? = null
 
         fun loadLetters() {
+            if (!visible) return
+            val generation = pageGeneration
             viewModelScope.launch {
-                _letters.value =
+                val result =
                     when (val r = repo.residencyLetters(homeId)) {
                         is NetworkResult.Success -> ResidencyLetterUiState.Loaded(r.data.letters)
                         is NetworkResult.Failure -> ResidencyLetterUiState.Error(r.error.message)
                     }
+                if (generation == pageGeneration && visible) _letters.value = result
             }
         }
 
@@ -374,12 +379,15 @@ class PlaceDetailViewModel
         val claimLinkToCopy: StateFlow<String?> = _claimLinkToCopy.asStateFlow()
 
         fun loadClaims() {
+            if (!visible) return
+            val generation = pageGeneration
             viewModelScope.launch {
-                _claims.value =
+                val result =
                     when (val r = repo.residencyClaims(homeId)) {
                         is NetworkResult.Success -> ResidencyClaimsUiState.Loaded(r.data.claims)
                         is NetworkResult.Failure -> ResidencyClaimsUiState.Error(r.error.displayMessage("Couldn't load your claims."))
                     }
+                if (generation == pageGeneration && visible) _claims.value = result
             }
         }
 
@@ -531,13 +539,16 @@ class PlaceDetailViewModel
         val isSavingWatch: StateFlow<Boolean> = _isSavingWatch.asStateFlow()
 
         fun loadRateWatch() {
+            if (!visible) return
+            val generation = pageGeneration
             viewModelScope.launch {
-                _rateWatch.value =
+                val result =
                     when (val r = repo.recordWatch(homeId)) {
                         is NetworkResult.Success ->
                             r.data.watch?.let { RateWatchUiState.Loaded(it) } ?: RateWatchUiState.None
                         is NetworkResult.Failure -> RateWatchUiState.Error(r.error.displayMessage("Couldn't load your watch."))
                     }
+                if (generation == pageGeneration && visible) _rateWatch.value = result
             }
         }
 
@@ -547,6 +558,7 @@ class PlaceDetailViewModel
 
         fun setRateWatch(month: String) {
             if (month.isBlank()) return
+            val generation = pageGeneration
             viewModelScope.launch {
                 _isSavingWatch.value = true
                 _watchSaveError.value = null
@@ -557,7 +569,7 @@ class PlaceDetailViewModel
                 // typo into an apparent feature outage with no way back.
                 when (val r = repo.setRecordWatch(homeId, month.trim())) {
                     is NetworkResult.Success -> {
-                        _rateWatch.value =
+                        if (generation == pageGeneration && visible) _rateWatch.value =
                             r.data.watch?.let { RateWatchUiState.Loaded(it) } ?: RateWatchUiState.None
                     }
                     is NetworkResult.Failure ->
@@ -568,9 +580,10 @@ class PlaceDetailViewModel
         }
 
         fun removeRateWatch() {
+            val generation = pageGeneration
             viewModelScope.launch {
                 repo.removeRecordWatch(homeId)
-                _rateWatch.value = RateWatchUiState.None
+                if (generation == pageGeneration && visible) _rateWatch.value = RateWatchUiState.None
             }
         }
 
@@ -608,18 +621,21 @@ class PlaceDetailViewModel
         }
 
         fun loadRentReport() {
+            if (!visible) return
+            val generation = pageGeneration
             viewModelScope.launch {
                 // A stale save error must not outlive the composer it was
                 // written for — otherwise a fresh visit opens with a
                 // rejection the viewer never triggered.
                 _rentSaveError.value = null
                 _isEditingRent.value = false
-                _rentReport.value =
+                val result =
                     when (val r = repo.rentReport(homeId)) {
                         is NetworkResult.Success ->
                             r.data.report?.let { RealRentUiState.Loaded(it) } ?: RealRentUiState.None
                         is NetworkResult.Failure -> RealRentUiState.Error(r.error.displayMessage("Couldn't load your rent."))
                     }
+                if (generation == pageGeneration && visible) _rentReport.value = result
             }
         }
 
@@ -649,13 +665,14 @@ class PlaceDetailViewModel
                 _rentSaveError.value = RENT_AMOUNT_MESSAGE
                 return
             }
+            val generation = pageGeneration
             viewModelScope.launch {
                 _isSavingRent.value = true
                 _rentSaveError.value = null
                 when (val r = repo.setRentReport(homeId, amount, parseBedrooms(bedrooms))) {
                     is NetworkResult.Success -> {
                         _isEditingRent.value = false
-                        _rentReport.value =
+                        if (generation == pageGeneration && visible) _rentReport.value =
                             r.data.report?.let { RealRentUiState.Loaded(it) } ?: RealRentUiState.None
                         // The block band now includes this figure, so the
                         // section's own progress/standing is stale.
@@ -676,13 +693,14 @@ class PlaceDetailViewModel
          * controls; web disables on the pending mutation.
          */
         fun removeRentReport() {
+            val generation = pageGeneration
             viewModelScope.launch {
                 _isSavingRent.value = true
                 _rentSaveError.value = null
                 when (val r = repo.removeRentReport(homeId)) {
                     is NetworkResult.Success -> {
                         _isEditingRent.value = false
-                        _rentReport.value = RealRentUiState.None
+                        if (generation == pageGeneration && visible) _rentReport.value = RealRentUiState.None
                         refreshIntelligenceQuietly()
                     }
                     is NetworkResult.Failure ->
@@ -699,8 +717,11 @@ class PlaceDetailViewModel
          * last good render alone.
          */
         private suspend fun refreshIntelligenceQuietly() {
+            repo.forgetPlace(homeId)
+            if (!visible) return
+            val generation = pageGeneration
             val result = repo.intelligence(homeId)
-            if (result is NetworkResult.Success) {
+            if (result is NetworkResult.Success && generation == pageGeneration && visible) {
                 _state.value = PlaceDetailUiState.Loaded(result.data)
             }
         }
@@ -834,14 +855,7 @@ class PlaceDetailViewModel
              * not do it for them, and the confirmation must not imply we
              * did.
              */
-            internal fun removalSavedMessage(status: UnlistedRemovalStatus): String =
-                when (status) {
-                    UnlistedRemovalStatus.TODO -> "Marked as still to do."
-                    UnlistedRemovalStatus.REQUESTED -> "Noted — you've sent the request."
-                    UnlistedRemovalStatus.CONFIRMED -> "Noted — you've confirmed the removal."
-                    UnlistedRemovalStatus.RELISTED -> "Noted — the site has put you back."
-                    UnlistedRemovalStatus.UNKNOWN -> "Saved."
-                }
+            internal fun removalSavedMessage(status: UnlistedRemovalStatus): String = removalStatusMessage(status)
 
             /** Whatever the viewer typed, refused in their own terms. */
             internal const val RENT_AMOUNT_MESSAGE = "Enter the amount you pay each month, like 2150."
@@ -855,10 +869,6 @@ class PlaceDetailViewModel
             internal const val VERIFICATION_REQUIRED_MESSAGE =
                 "Verify your address to add your rent — a benchmark is only real if the people in it live there."
 
-            private const val FORBIDDEN_CODE = 403
-
-            /** Above this the figure is not a monthly rent, it is a typo. */
-            private val MAX_RENT_DOLLARS = BigDecimal.valueOf(Int.MAX_VALUE.toLong())
 
             /**
              * "$2,400", "2,400", "2400" and "2400.50" all name the same
@@ -872,34 +882,14 @@ class PlaceDetailViewModel
              * the decimal separator stays and is honoured, and anything
              * that is not a number at all is refused out loud.
              */
-            internal fun parseMonthlyRent(raw: String): Int? {
-                val cleaned = raw.filter { it.isDigit() || it == '.' }
-                if (cleaned.none { it.isDigit() }) return null
-                // "1.2.3" and "" are not numbers — refuse them out loud
-                // rather than sending some other figure than the one on
-                // screen.
-                val value = cleaned.toBigDecimalOrNull() ?: return null
-                val dollars = value.setScale(0, RoundingMode.HALF_UP)
-                val plausible = dollars > BigDecimal.ZERO && dollars <= MAX_RENT_DOLLARS
-                return if (plausible) dollars.toInt() else null
-            }
+            internal fun parseMonthlyRent(raw: String): Int? = parsedMonthlyRent(raw)
 
             /**
              * Blank means "use the home's own bedroom count" — the
              * server's documented fallback — so an empty field is
              * omitted, never sent as zero, which would mean STUDIO.
              */
-            internal fun parseBedrooms(raw: String): Int? {
-                val trimmed = raw.trim()
-                if (trimmed.isEmpty()) return null
-                // Parsed as a WHOLE number, never digit-filtered. Stripping
-                // non-digits turned "2.5" into 25, which the server clamps
-                // to 10 — a resident's rent silently joined the 10-bedroom
-                // cohort. A bedroom count that is not a plain integer is
-                // refused (null = omit) rather than reinterpreted.
-                val n = trimmed.toIntOrNull() ?: return null
-                return if (n in 0..MAX_BEDROOMS) n else null
-            }
+            internal fun parseBedrooms(raw: String): Int? = parsedBedrooms(raw)
 
             /**
              * A write failure in the resident's own terms. 403 carries
@@ -908,15 +898,7 @@ class PlaceDetailViewModel
              * 400 already does instead of the shared client's canned
              * "You don't have permission to do that."
              */
-            internal fun rentWriteMessage(
-                error: NetworkError,
-                fallback: String,
-            ): String =
-                when {
-                    error is NetworkError.Forbidden -> VERIFICATION_REQUIRED_MESSAGE
-                    error.code == FORBIDDEN_CODE -> error.displayMessage(VERIFICATION_REQUIRED_MESSAGE)
-                    else -> error.displayMessage(fallback)
-                }
+            internal fun rentWriteMessage(error: NetworkError, fallback: String): String = rentFailureMessage(error, fallback)
         }
     }
 
@@ -1032,3 +1014,153 @@ fun PlaceIntelligence.sectionsFor(group: PlaceDetailGroup): List<PlaceSectionEnv
 
 /** Find a single section across the payload. */
 fun PlaceIntelligence.section(id: PlaceSectionId): PlaceSectionEnvelope? = groups.flatMap { it.sections }.firstOrNull { it.sectionId == id }
+
+/** Above this the figure is not a monthly rent, it is a typo. */
+private val MAX_RENT_DOLLARS = BigDecimal.valueOf(Int.MAX_VALUE.toLong())
+
+private fun parsedMonthlyRent(raw: String): Int? {
+    val cleaned = raw.filter { it.isDigit() || it == '.' }
+    if (cleaned.none { it.isDigit() }) return null
+    // "1.2.3" and "" are not numbers — refuse them out loud
+    // rather than sending some other figure than the one on
+    // screen.
+    val value = cleaned.toBigDecimalOrNull() ?: return null
+    val dollars = value.setScale(0, RoundingMode.HALF_UP)
+    val plausible = dollars > BigDecimal.ZERO && dollars <= MAX_RENT_DOLLARS
+    return if (plausible) dollars.toInt() else null
+}
+
+private fun parsedBedrooms(raw: String): Int? {
+    val trimmed = raw.trim()
+    if (trimmed.isEmpty()) return null
+    // Parsed as a WHOLE number, never digit-filtered. Stripping
+    // non-digits turned "2.5" into 25, which the server clamps
+    // to 10 — a resident's rent silently joined the 10-bedroom
+    // cohort. A bedroom count that is not a plain integer is
+    // refused (null = omit) rather than reinterpreted.
+    val n = trimmed.toIntOrNull() ?: return null
+    return if (n in 0..MAX_BEDROOMS) n else null
+}
+
+
+private fun removalStatusMessage(status: UnlistedRemovalStatus): String =
+    when (status) {
+        UnlistedRemovalStatus.TODO -> "Marked as still to do."
+        UnlistedRemovalStatus.REQUESTED -> "Noted — you've sent the request."
+        UnlistedRemovalStatus.CONFIRMED -> "Noted — you've confirmed the removal."
+        UnlistedRemovalStatus.RELISTED -> "Noted — the site has put you back."
+        UnlistedRemovalStatus.UNKNOWN -> "Saved."
+    }
+
+private fun rentFailureMessage(
+    error: NetworkError,
+    fallback: String,
+): String =
+    when {
+        error is NetworkError.Forbidden -> PlaceDetailViewModel.VERIFICATION_REQUIRED_MESSAGE
+        error.code == java.net.HttpURLConnection.HTTP_FORBIDDEN -> error.displayMessage(PlaceDetailViewModel.VERIFICATION_REQUIRED_MESSAGE)
+        else -> error.displayMessage(fallback)
+    }
+
+
+/** Role-aware Place read state; the view model owns the page's independent forms and sensitive panels. */
+private class PlaceDetailCopy(
+    private val repo: PlaceRepository,
+    private val homes: HomesRepository,
+    private val homeId: String,
+    private val group: PlaceDetailGroup,
+    private val scope: CoroutineScope,
+) {
+    val state = MutableStateFlow<PlaceDetailUiState>(PlaceDetailUiState.Loading)
+    val refreshing = MutableStateFlow(false)
+    val refreshNotice = MutableStateFlow<RefreshNotice?>(null)
+    var visible = true
+        private set
+    var generation = 0L
+        private set
+    private var readJob: Job? = null
+    private val sensitive: Boolean get() = group == PlaceDetailGroup.IDENTITY || group == PlaceDetailGroup.MONEY
+
+    fun load() {
+        visible = true
+        read(force = false)
+    }
+
+    fun refresh() = read(force = true)
+
+    fun pause() {
+        if (!visible) return
+        visible = false
+        generation++
+        readJob?.cancel()
+        refreshing.value = false
+        if (!household() || sensitive) {
+            state.value = PlaceDetailUiState.Loading
+            refreshNotice.value = null
+        }
+        if (!household()) repo.forgetPlace(homeId)
+    }
+
+    private fun household(): Boolean = homes.myHomesCopy()?.homes?.any { it.id == homeId && it.showsCopyBeforeRecheck } == true
+
+    private fun current(version: Long): Boolean = visible && generation == version
+
+    private fun read(force: Boolean) {
+        if (readJob?.isActive == true || !visible) return
+        if (state.value !is PlaceDetailUiState.Loaded) {
+            val stored = repo.placeCopy(homeId)?.takeIf { household() && !sensitive && !it.nonResidentViewer }
+            state.value = stored?.let { PlaceDetailUiState.Loaded(it) } ?: PlaceDetailUiState.Loading
+        }
+        refreshing.value = force && state.value is PlaceDetailUiState.Loaded
+        val version = generation
+        readJob = scope.launch {
+            val stored = readAuthorized(force, version)
+            if (!current(version)) return@launch
+            refreshing.value = false
+            refreshNotice.value = RefreshNotice(stored.fetchedAt, ::refresh).takeIf { stored.showsRefreshFailure(StoreKind.PLACE) }
+            publish(stored)
+        }
+    }
+
+    private suspend fun readAuthorized(force: Boolean, version: Long): Stored<PlaceIntelligence> {
+        val access = homes.myHomesStored(force || !household())
+        if (!current(version)) return Stored()
+        val keep = household()
+        if (!keep) {
+            repo.forgetPlace(homeId)
+            state.value = PlaceDetailUiState.Loading
+        }
+        return when {
+            access.data?.homes?.none { it.id == homeId } != false -> Stored(failure = access.failure ?: NetworkError.NotFound)
+            !keep && access.failure != null -> Stored(failure = access.failure)
+            else -> repo.placeStored(homeId, force || !keep || sensitive, persist = keep)
+        }
+    }
+
+    private fun publish(stored: Stored<PlaceIntelligence>) {
+        val data = stored.data.takeUnless { (sensitive || !household()) && stored.failure != null }
+        when {
+            data != null -> state.value = PlaceDetailUiState.Loaded(data)
+            stored.failure.refusesStoredCopy -> state.value = failure(stored.failure)
+            state.value !is PlaceDetailUiState.Loaded -> state.value = failure(stored.failure)
+        }
+    }
+
+    private fun failure(error: NetworkError?): PlaceDetailUiState.Error = PlaceDetailUiState.Error(
+        error?.displayMessage("Couldn't load this place.") ?: "Couldn't load this place.",
+        denied = error is NetworkError.Forbidden,
+    )
+}
+
+private fun pickupGuard(
+    scope: CoroutineScope,
+    session: HomeClaimSessionScope,
+    appLock: AppLockManager,
+    keyguard: KeyguardManager?,
+): AuthenticatedDispatchGuard = AuthenticatedDispatchGuard { credentials ->
+    scope.coroutineContext.ensureActive()
+    session.requireCurrent()
+    session.requireDispatchCredentials(credentials)
+    scope.coroutineContext.ensureActive()
+    check(!appLock.isLocked.value && keyguard?.isDeviceLocked == false)
+}

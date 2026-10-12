@@ -12,8 +12,12 @@ import app.pantopus.android.data.api.models.support_trains.SupportTrainSlotDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.support_trains.SupportTrainsRepository
+import app.pantopus.android.data.store.Stored
 import app.pantopus.android.ui.components.SlotCalendarState
+import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimScopeTestFixture
+import app.pantopus.android.ui.screens.homes.claim_review.claimScopeFactory
 import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -43,6 +47,7 @@ class SupportTrainDetailViewModelTest {
     @Before
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        every { repo.detailCopy(any()) } returns Stored()
     }
 
     @After
@@ -52,7 +57,7 @@ class SupportTrainDetailViewModelTest {
 
     private fun makeVm(trainId: String): SupportTrainDetailViewModel {
         val handle = SavedStateHandle(mapOf(SupportTrainDetailViewModel.SUPPORT_TRAIN_ID_KEY to trainId))
-        return SupportTrainDetailViewModel(repo, handle)
+        return SupportTrainDetailViewModel(repo, handle, claimScopeFactory(HomeClaimScopeTestFixture()))
     }
 
     /** A slot date that is over no longer reads as open, so the dates here are relative to today. */

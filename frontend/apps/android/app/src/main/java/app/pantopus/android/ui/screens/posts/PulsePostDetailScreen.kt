@@ -107,16 +107,20 @@ fun PulsePostDetailScreen(
 ) {
     val context = LocalContext.current
     val state by viewModel.state.collectAsStateWithLifecycle()
+    app.pantopus.android.core.perf.ReportContentShown("post", state is PulsePostDetailUiState.Loaded)
     val composer by viewModel.composerText.collectAsStateWithLifecycle()
     val isSending by viewModel.isSendingComment.collectAsStateWithLifecycle()
     val toast by viewModel.toastMessage.collectAsStateWithLifecycle()
     val showsOverflow by viewModel.showsOverflowMenu.collectAsStateWithLifecycle()
     val didDelete by viewModel.didDeletePost.collectAsStateWithLifecycle()
+    val likePending by viewModel.likePending.collectAsStateWithLifecycle()
+    val savePending by viewModel.savePending.collectAsStateWithLifecycle()
     val isSaved by viewModel.isSaved.collectAsStateWithLifecycle()
     val isReposted by viewModel.isReposted.collectAsStateWithLifecycle()
     val selectedEmoji by viewModel.selectedReactionEmoji.collectAsStateWithLifecycle()
     val replyTarget by viewModel.replyTarget.collectAsStateWithLifecycle()
     val nearbyProviders by viewModel.nearbyProviders.collectAsStateWithLifecycle()
+    val commentsLoading by viewModel.commentsLoading.collectAsStateWithLifecycle()
 
     // Saveable, so an open Report, Delete or reply Delete dialog survives a theme, font-size or rotation change.
     var showsReportReasons by rememberSaveable { mutableStateOf(false) }
@@ -163,6 +167,7 @@ fun PulsePostDetailScreen(
                 val content = s.content
                 PulsePostDetailLoadedContent(
                     content = content,
+                    actionPending = likePending || savePending,
                     composerText = composer,
                     onComposerTextChange = { viewModel.setComposerText(it) },
                     isSending = isSending,
@@ -197,6 +202,7 @@ fun PulsePostDetailScreen(
                     onCommentReply = { row -> viewModel.beginReply(row.id, row.authorName) },
                     onCommentLike = { row -> viewModel.toggleCommentLike(row.id) },
                     onCommentDelete = { row -> commentPendingDeleteId = row.id },
+                    commentsLoading = commentsLoading,
                 )
             }
         }
@@ -382,6 +388,7 @@ fun PulsePostDetailLoadedContent(
     composerText: String,
     onComposerTextChange: (String) -> Unit,
     isSending: Boolean,
+    actionPending: Boolean = false,
     topBarAction: ContentDetailTopBarAction? = null,
     topBarSecondaryAction: ContentDetailTopBarAction? = null,
     onBack: () -> Unit = {},
@@ -399,6 +406,8 @@ fun PulsePostDetailLoadedContent(
     onCommentReply: ((PostCommentRow) -> Unit)? = null,
     onCommentLike: ((PostCommentRow) -> Unit)? = null,
     onCommentDelete: ((PostCommentRow) -> Unit)? = null,
+    /** Instant Screens: the post shows from its feed card while its comments load. */
+    commentsLoading: Boolean = false,
 ) {
     ContentDetailShell(
         title = "Post",
@@ -420,6 +429,13 @@ fun PulsePostDetailLoadedContent(
                     intent = content.intent,
                     onAvatarTap = { onOpenProfile(content.post.userId) },
                 )
+                if (actionPending) {
+                    Text(
+                        "Pending",
+                        color = PantopusColors.appTextSecondary,
+                        modifier = Modifier.padding(horizontal = Spacing.s4).testTag("postActionPending"),
+                    )
+                }
             }
         },
         body = {
@@ -451,6 +467,8 @@ fun PulsePostDetailLoadedContent(
                 onCommentLike = onCommentLike,
                 onCommentDelete = onCommentDelete,
                 repliesClosedNote = if (content.post.isRemovedByModerator) "Replies are off for this post." else null,
+                commentsLoading = commentsLoading,
+                loadingCommentCount = content.post.commentCount,
                 // Launch cuts #6/#4: "Nearby providers" is business discovery and broad provider search.
                 belowReactions =
                     if (nearbyProviders.isEmpty() || !(LaunchFeatures.businessDirectory && LaunchFeatures.openGigs)) {

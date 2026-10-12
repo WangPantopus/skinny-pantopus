@@ -64,6 +64,8 @@ import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
 import coil.compose.SubcomposeAsyncImage
+import coil.request.CachePolicy
+import coil.request.ImageRequest
 import kotlinx.coroutines.withTimeoutOrNull
 
 /** Tile heights per surface — feed cards are compact, detail is regular. */
@@ -322,14 +324,24 @@ fun PostMediaTile(
     }
 }
 
-/** Still image tile (Coil) with shimmer-free loading + error states. */
+/**
+ * Still image tile (Coil) with shimmer-free loading + error states. [cacheOnDisk] false (the full-screen viewer's
+ * originals): read from the disk cache when a tile saved the image, never written (contract §6: original-size photos
+ * are never cached automatically).
+ */
 @Composable
 fun MediaStillTile(
     url: String,
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Crop,
     onTap: (() -> Unit)? = null,
+    cacheOnDisk: Boolean = true,
 ) {
+    val context = LocalContext.current
+    val model: Any =
+        remember(url, cacheOnDisk) {
+            if (cacheOnDisk) url else ImageRequest.Builder(context).data(url).diskCachePolicy(CachePolicy.READ_ONLY).build()
+        }
     val base =
         if (onTap != null) {
             modifier.pointerInput(Unit) { detectTapGestures(onTap = { onTap() }) }
@@ -337,7 +349,7 @@ fun MediaStillTile(
             modifier
         }
     SubcomposeAsyncImage(
-        model = url,
+        model = model,
         contentDescription = null,
         contentScale = contentScale,
         modifier = base.background(PantopusColors.appSurfaceSunken),

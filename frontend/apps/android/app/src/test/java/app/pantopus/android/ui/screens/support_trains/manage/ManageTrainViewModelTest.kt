@@ -11,6 +11,10 @@ import app.pantopus.android.data.api.models.support_trains.SupportTrainSlotDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.support_trains.SupportTrainsRepository
+import app.pantopus.android.data.store.Stored
+import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimScopeTestFixture
+import app.pantopus.android.ui.screens.homes.claim_review.claimScopeFactory
+import io.mockk.every
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -42,6 +46,7 @@ class ManageTrainViewModelTest {
     @Before
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        every { repo.detailCopy(any()) } returns Stored()
         coEvery { repo.postUpdate(any(), any()) } returns NetworkResult.Success(Unit)
         coEvery { repo.complete(any()) } returns NetworkResult.Success(Unit)
         // S1 — `load()` now fans out to the organizer-only feeds as well.
@@ -59,7 +64,10 @@ class ManageTrainViewModelTest {
         SavedStateHandle(mapOf(ManageTrainViewModel.TRAIN_ID_KEY to trainId))
 
     /** Offline VM seeded with the design fixture (no `load()` network). */
-    private fun makeVm(): ManageTrainViewModel = ManageTrainViewModel(repo, savedState()).also { it.load(ManageTrainSampleData.active) }
+    private fun makeVm(): ManageTrainViewModel =
+        ManageTrainViewModel(repo, savedState(), claimScopeFactory(HomeClaimScopeTestFixture())).also {
+            it.load(ManageTrainSampleData.active)
+        }
 
     private fun slot(
         id: String,
@@ -201,7 +209,7 @@ class ManageTrainViewModelTest {
                         ),
                 )
             coEvery { repo.detail("t9") } returns NetworkResult.Success(dto)
-            val vm = ManageTrainViewModel(repo, savedState("t9"))
+            val vm = ManageTrainViewModel(repo, savedState("t9"), claimScopeFactory(HomeClaimScopeTestFixture()))
             vm.load()
             val loaded = vm.state.value.state as ManageTrainState.Loaded
             assertEquals("Meals for the Reyes family", loaded.content.title)
@@ -220,7 +228,7 @@ class ManageTrainViewModelTest {
     fun load_server_error_surfaces_error() =
         runTest {
             coEvery { repo.detail("t9") } returns NetworkResult.Failure(NetworkError.Server(500, null))
-            val vm = ManageTrainViewModel(repo, savedState("t9"))
+            val vm = ManageTrainViewModel(repo, savedState("t9"), claimScopeFactory(HomeClaimScopeTestFixture()))
             vm.load()
             assertTrue(vm.state.value.state is ManageTrainState.Error)
         }

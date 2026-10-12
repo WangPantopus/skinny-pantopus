@@ -7,10 +7,16 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.support_trains.CancelReservationBody
 import app.pantopus.android.data.api.models.support_trains.ReserveSlotBody
+import app.pantopus.android.data.api.models.support_trains.SupportTrainDetailDto
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
+import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.support_trains.SupportTrainsRepository
+import app.pantopus.android.data.store.StoreKind
+import app.pantopus.android.ui.components.RefreshNotice
+import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScopeFactory
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -43,22 +49,21 @@ data class SupportTrainDetailActionState(
 
 /**
  * A10.9 — VM for the participant-facing Support Train detail screen.
- * Distinct from the organizer-only `ReviewSignupsViewModel`. The
- * detail payload is not yet projected by the backend's
- * `GET /api/support-trains/:id`, so the VM resolves from a
- * deterministic stub ([SupportTrainDetailSampleData]) and chooses the
- * `populated` vs `fullyCovered` variant by inspecting the `trainId`.
+ * A bounded memory summary keeps the title and slots ready on return.
+ * The mixed recipient/delivery response is always checked for the open visit.
  *
  * The state machine matches the iOS [SupportTrainDetailViewModel]:
  * `Loading / Loaded / Error`. Fully-covered is **not** empty — it's a
  * celebrated loaded variant.
  */
 @HiltViewModel
+@Suppress("TooManyFunctions") // The existing helper actions and the private response lifecycle share one visit.
 class SupportTrainDetailViewModel
     @Inject
     constructor(
         private val repo: SupportTrainsRepository,
         savedStateHandle: SavedStateHandle,
+        sessionScopes: HomeClaimSessionScopeFactory,
     ) : ViewModel() {
         companion object {
             const val SUPPORT_TRAIN_ID_KEY = "supportTrainDetailId"
@@ -71,8 +76,12 @@ class SupportTrainDetailViewModel
             savedStateHandle.get<String>(SUPPORT_TRAIN_ID_KEY) ?: "sample-populated"
 
         private val _state =
-            MutableStateFlow<SupportTrainDetailUiState>(SupportTrainDetailUiState.Loading)
+            MutableStateFlow<SupportTrainDetailUiState>(summary())
         val state: StateFlow<SupportTrainDetailUiState> = _state.asStateFlow()
+        private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
+        val refreshNotice: StateFlow<RefreshNotice?> = _refreshNotice.asStateFlow()
+        private val _refreshing = MutableStateFlow(false)
+        val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
 
         /**
          * Optional offline override (previews / QA / tests). When null — the
@@ -82,36 +91,106 @@ class SupportTrainDetailViewModel
          */
         var resolve: ((String) -> SupportTrainDetailContent?)? = null
 
-        fun load() {
+        private val session = sessionScopes.create(viewModelScope)
+        private var active = true
+        private var readVersion = 0L
+        private var readJob: Job? = null
+        private val _action = MutableStateFlow(SupportTrainDetailActionState())
+        val action: StateFlow<SupportTrainDetailActionState> = _action.asStateFlow()
+
+        init {
             viewModelScope.launch {
-                // Keep a loaded train on screen while reloading (a helper action
-                // re-runs `load()`); mirrors Manage and iOS.
-                if (_state.value !is SupportTrainDetailUiState.Loaded) {
-                    _state.value = SupportTrainDetailUiState.Loading
-                }
-                val override = resolve
-                if (override != null) {
-                    val content = override(trainId)
-                    _state.value =
-                        if (content != null) {
-                            SupportTrainDetailUiState.Loaded(content)
-                        } else {
-                            SupportTrainDetailUiState.Error("Couldn't load this support train.")
-                        }
-                    return@launch
-                }
-                _state.value =
-                    when (val result = repo.detail(trainId)) {
-                        is NetworkResult.Success ->
-                            SupportTrainDetailUiState.Loaded(SupportTrainDetailProjection.project(result.data))
-                        is NetworkResult.Failure ->
-                            SupportTrainDetailUiState.Error(result.error.displayMessage("Couldn't load this train."))
+                session.invalidated.collect { ended ->
+                    if (ended) {
+                        suspendContent()
+                        _state.value = SupportTrainDetailUiState.Loading
+                        _refreshNotice.value = null
+                        _action.value = SupportTrainDetailActionState()
                     }
+                }
+            }
+        }
+
+        private fun summary(): SupportTrainDetailUiState =
+            repo.detailCopy(trainId).data?.let {
+                SupportTrainDetailUiState.Loaded(
+                    SupportTrainDetailProjection.project(it).copy(
+                        privateDetailsAvailable = false,
+                        reserveOptions = emptyList(),
+                        dock = SupportTrainDock.Closed("Refresh to sign up"),
+                    ),
+                )
+            } ?: SupportTrainDetailUiState.Loading
+
+        /** The recipient, delivery details and role leave with the visit; an unsent reserve draft stays. */
+        fun suspendContent() {
+            if (!active) return
+            active = false
+            readVersion++
+            readJob?.cancel()
+            _refreshing.value = false
+            _state.value = if (session.isCurrent) summary() else SupportTrainDetailUiState.Loading
+            _action.update { it.copy(pendingLeave = null, pendingEarlyDelivery = null) }
+        }
+
+        private suspend fun current(version: Long): Boolean {
+            val allowed = session.confirmCurrent()
+            return active && version == readVersion && allowed
+        }
+
+        fun load() {
+            active = true
+            readJob?.cancel()
+            val version = ++readVersion
+            val override = resolve
+            if (override != null) {
+                _state.value = override(trainId)?.let { SupportTrainDetailUiState.Loaded(it) }
+                    ?: SupportTrainDetailUiState.Error("Couldn't load this support train.")
+                return
+            }
+            if (session.isCurrent && _state.value !is SupportTrainDetailUiState.Loaded) {
+                _state.value = summary()
+            }
+            readJob = viewModelScope.launch {
+                try {
+                    if (!current(version)) return@launch
+                    val result = repo.detail(trainId)
+                    if (!current(version)) return@launch
+                    publish(result)
+                } finally {
+                    if (version == readVersion) _refreshing.value = false
+                }
+            }
+        }
+
+        private fun publish(result: NetworkResult<SupportTrainDetailDto>) {
+            val saved = repo.detailCopy(trainId)
+            _refreshNotice.value =
+                RefreshNotice(saved.fetchedAt) { refresh() }.takeIf {
+                    result is NetworkResult.Failure && saved.data != null &&
+                        System.currentTimeMillis() - saved.fetchedAt > StoreKind.SUPPORT_TRAINS.maxShownAgeMs
+                }
+            _state.value = when (result) {
+                is NetworkResult.Success -> SupportTrainDetailUiState.Loaded(SupportTrainDetailProjection.project(result.data))
+                is NetworkResult.Failure -> {
+                    val safe = summary()
+                    if (!result.error.refusesStoredCopy && safe is SupportTrainDetailUiState.Loaded) {
+                        safe
+                    } else {
+                        SupportTrainDetailUiState.Error(result.error.displayMessage("Couldn't load this train."))
+                    }
+                }
             }
         }
 
         fun refresh() {
+            _refreshing.value = _state.value is SupportTrainDetailUiState.Loaded
             load()
+        }
+
+        fun refreshFromSignal() {
+            if (!active || repo.detailIsCurrent(trainId)) return
+            if (_action.value.reserveSheet == null) load() else pendingReserveRefresh = true
         }
 
         /**
@@ -125,9 +204,6 @@ class SupportTrainDetailViewModel
 
         // ─── S1 · helper actions ───────────────────────────────────────
 
-        private val _action = MutableStateFlow(SupportTrainDetailActionState())
-        val action: StateFlow<SupportTrainDetailActionState> = _action.asStateFlow()
-
         /** A signup landed while the sheet was up — refresh on dismissal. */
         private var pendingReserveRefresh = false
 
@@ -136,6 +212,7 @@ class SupportTrainDetailViewModel
 
         /** Open the reserve sheet; pass a slot id to skip the picker step. */
         fun startReserve(slotId: String? = null) {
+            if (!active || !session.isCurrent || loadedContent?.privateDetailsAvailable != true) return
             val content = loadedContent
             if (content == null || content.reserveOptions.isEmpty()) {
                 _action.update { it.copy(error = NO_OPEN_DATES_NOTICE) }
@@ -152,7 +229,7 @@ class SupportTrainDetailViewModel
          */
         fun dismissReserve() {
             _action.update { it.copy(reserveSheet = null) }
-            if (pendingReserveRefresh) {
+            if (pendingReserveRefresh && active) {
                 pendingReserveRefresh = false
                 load()
             }
@@ -184,16 +261,19 @@ class SupportTrainDetailViewModel
             body: ReserveSlotBody,
             onResult: (String?) -> Unit,
         ) {
-            if (_action.value.isSubmitting) return
+            if (_action.value.isSubmitting || !active || !session.isCurrent || loadedContent?.privateDetailsAvailable != true) return
             _action.update { it.copy(isSubmitting = true) }
             viewModelScope.launch {
+                if (!session.confirmCurrent()) return@launch
                 when (val result = repo.reserve(trainId, slotId, body)) {
                     is NetworkResult.Success -> {
+                        if (!session.confirmCurrent()) return@launch
                         pendingReserveRefresh = true
                         _action.update { it.copy(isSubmitting = false, toast = "You're signed up") }
                         onResult(null)
                     }
                     is NetworkResult.Failure -> {
+                        if (!session.confirmCurrent()) return@launch
                         _action.update { it.copy(isSubmitting = false) }
                         onResult(reserveFailureMessage(result.error.displayMessage("Failed to reserve. Please try again.")))
                     }
@@ -265,18 +345,22 @@ class SupportTrainDetailViewModel
             failure: String,
             block: suspend () -> NetworkResult<Unit>,
         ) {
-            if (_action.value.isSubmitting) return
+            if (_action.value.isSubmitting || !active || !session.isCurrent || loadedContent?.privateDetailsAvailable != true) return
             _action.update { it.copy(isSubmitting = true, pendingLeave = null) }
             viewModelScope.launch {
+                if (!session.confirmCurrent()) return@launch
                 when (val result = block()) {
                     is NetworkResult.Success -> {
+                        if (!session.confirmCurrent()) return@launch
                         _action.update { it.copy(isSubmitting = false, toast = success) }
-                        load()
+                        if (active) load()
                     }
-                    is NetworkResult.Failure ->
+                    is NetworkResult.Failure -> {
+                        if (!session.confirmCurrent()) return@launch
                         _action.update {
                             it.copy(isSubmitting = false, error = result.error.displayMessage(failure))
                         }
+                    }
                 }
             }
         }

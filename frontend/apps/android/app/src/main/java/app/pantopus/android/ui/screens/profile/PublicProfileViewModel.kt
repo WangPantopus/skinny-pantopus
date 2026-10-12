@@ -9,6 +9,7 @@ import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.posts.MyPostDto
 import app.pantopus.android.data.api.models.profile.PublicProfileDto
 import app.pantopus.android.data.api.net.NetworkError
+import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.blocks.BlocksRepository
@@ -17,7 +18,9 @@ import app.pantopus.android.data.posts.PostsRepository
 import app.pantopus.android.data.profile.ProfileRepository
 import app.pantopus.android.data.relationships.RelationshipsRepository
 import app.pantopus.android.data.social.UserSocialRepository
+import app.pantopus.android.data.store.StoreKind
 import app.pantopus.android.ui.components.IdentityPillar
+import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.screens.shared.content_detail.bodies.ProfileReviewCard
 import app.pantopus.android.ui.screens.shared.content_detail.bodies.ProfileStatCell
 import app.pantopus.android.ui.screens.shared.content_detail.bodies.ProfileTab
@@ -340,15 +343,49 @@ class PublicProfileViewModel
         private val _postsLoadFailed = MutableStateFlow(false)
         val postsLoadFailed: StateFlow<Boolean> = _postsLoadFailed.asStateFlow()
 
-        fun load() {
-            if (_state.value is PublicProfileUiState.Loaded) return
-            refresh()
+        private var loading = false
+        private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
+        val refreshNotice: StateFlow<RefreshNotice?> = _refreshNotice.asStateFlow()
+
+        fun load() = startRead(force = false)
+
+        fun refresh() = startRead(force = true)
+
+        private fun startRead(force: Boolean) {
+            if (loading) return
+            loading = true
+            if (_state.value !is PublicProfileUiState.Loaded) {
+                profileCopy().data?.let { profile ->
+                    userId = profile.id
+                    profileKind = derivedKind(profile)
+                    val feed =
+                        if (profileKind == PublicProfileKind.Local) {
+                            posts.userPostsCopy(
+                                profile.id,
+                                50,
+                                includeArchived = false,
+                            ).data?.posts.orEmpty().map(::project)
+                        } else {
+                            emptyList()
+                        }
+                    _state.value = PublicProfileUiState.Loaded(build(profile, profileKind, feed))
+                }
+            }
+            viewModelScope.launch {
+                try {
+                    fetch(force)
+                } finally {
+                    loading = false
+                }
+            }
         }
 
-        fun refresh() {
-            _state.value = PublicProfileUiState.Loading
-            viewModelScope.launch { fetch() }
-        }
+        private fun profileIdentifier(): String = userId.takeIf { UserSocialRepository.isUuid(it) } ?: routeIdentifier.trim()
+
+        private fun profileCopy() =
+            profileIdentifier().let { identifier ->
+                if (UserSocialRepository.isUuid(identifier)) repo.publicProfileCopy(identifier) else social.publicProfileCopy(identifier)
+            }
 
         fun selectTab(tab: ProfileTab) {
             _selectedTab.value = tab
@@ -663,13 +700,13 @@ class PublicProfileViewModel
          * UUIDs resolve by id; handles resolve by username. Mirrors RN's
          * `fetchPublicProfileByIdentifier` (`src/app/user/[id].tsx:53-58`).
          */
-        private suspend fun loadProfile(): NetworkResult<PublicProfileDto> {
+        private suspend fun loadProfile(force: Boolean): NetworkResult<PublicProfileDto> {
             // Once loaded, a refresh goes by id: the owner may have just changed the username the route used.
-            val identifier = userId.takeIf { UserSocialRepository.isUuid(it) } ?: routeIdentifier.trim()
+            val identifier = profileIdentifier()
             return if (UserSocialRepository.isUuid(identifier)) {
-                repo.publicProfile(identifier)
+                repo.publicProfile(identifier, force)
             } else {
-                social.publicProfileByUsername(identifier)
+                social.publicProfileByUsername(identifier, force)
             }
         }
 
@@ -741,8 +778,11 @@ class PublicProfileViewModel
             }
         }
 
-        private suspend fun fetch() {
-            when (val result = loadProfile()) {
+        private suspend fun fetch(force: Boolean = true) {
+            val result = loadProfile(force)
+            val copy = profileCopy()
+            _refreshNotice.value = if (copy.showsRefreshFailure(StoreKind.PEOPLE)) RefreshNotice(copy.fetchedAt, ::refresh) else null
+            when (result) {
                 is NetworkResult.Success -> {
                     val profile = result.data
                     userId = profile.id
@@ -755,13 +795,25 @@ class PublicProfileViewModel
                     // returns plain posts, not tier-gated broadcasts, and
                     // feeding them into the broadcast card would invent a
                     // visibility chip the API never sent.
-                    val feed =
-                        if (kind == PublicProfileKind.Local) loadUserPosts(profile.id) else emptyList()
+                    val previous = (_state.value as? PublicProfileUiState.Loaded)?.content?.takeIf { it.profile.id == profile.id }
+                        val firstFrame = if (kind == PublicProfileKind.Local) {
+                            previous?.posts ?: posts.userPostsCopy(profile.id, 50, includeArchived = false)
+                                .data?.posts.orEmpty().map(::project)
+                        } else {
+                            emptyList()
+                        }
+                    _state.value = PublicProfileUiState.Loaded(build(profile, kind, firstFrame))
+                    val feed = if (kind == PublicProfileKind.Local) loadUserPosts(profile.id, force) else emptyList()
                     _state.value = PublicProfileUiState.Loaded(build(profile, kind, feed))
                     loadRelationship(profile.id)
                 }
                 is NetworkResult.Failure -> {
-                    _state.value = PublicProfileUiState.Error(friendlyMessage(result.error))
+                    if (_state.value !is PublicProfileUiState.Loaded ||
+                        result.error.refusesStoredCopy) {
+                        _canFollow.value = false
+                        _relationshipLoaded.value = false
+                        _state.value = PublicProfileUiState.Error(friendlyMessage(result.error))
+                    }
                 }
             }
         }
@@ -772,15 +824,18 @@ class PublicProfileViewModel
          * whole profile: the feed stays empty and [postsLoadFailed] makes it
          * offer Try again rather than the design's "Quiet for now" state.
          */
-        private suspend fun loadUserPosts(id: String): List<PublicProfilePost> =
-            when (val result = posts.userPosts(id)) {
+        private suspend fun loadUserPosts(
+            id: String,
+            force: Boolean,
+        ): List<PublicProfilePost> =
+            when (val result = posts.userPosts(id, force = force)) {
                 is NetworkResult.Success -> {
                     _postsLoadFailed.value = false
                     result.data.posts.map { project(it) }
                 }
                 is NetworkResult.Failure -> {
                     _postsLoadFailed.value = true
-                    emptyList()
+                    (_state.value as? PublicProfileUiState.Loaded)?.content?.posts.orEmpty()
                 }
             }
 
@@ -858,45 +913,7 @@ class PublicProfileViewModel
             )
         }
 
-        /**
-         * Header stat cells — reviews / rating / gigs, whichever the DTO
-         * actually carries, falling back to a single placeholder cell so the
-         * strip never renders empty.
-         */
-        private fun buildStatCells(profile: PublicProfileDto): List<ProfileStatCell> {
-            val stats = mutableListOf<ProfileStatCell>()
-            val reviewCount = profile.reviewCount ?: 0
-            if (reviewCount > 0 || profile.reviews.isNotEmpty()) {
-                stats +=
-                    ProfileStatCell(
-                        id = "reviews",
-                        value = "${profile.reviewCount ?: profile.reviews.size}",
-                        label = "Reviews",
-                    )
-            }
-            val rating = profile.averageRating ?: 0.0
-            if (rating > 0) {
-                stats +=
-                    ProfileStatCell(
-                        id = "rating",
-                        value = "%.1f".format(rating),
-                        label = "Rating",
-                    )
-            }
-            val gigsCompleted = profile.gigsCompleted ?: 0
-            val gigsPosted = profile.gigsPosted ?: 0
-            when {
-                // Launch cut #4 (Open Gigs): no gig count, like the hidden Gigs tab.
-                !LaunchFeatures.openGigs -> Unit
-                gigsCompleted > 0 ->
-                    stats += ProfileStatCell(id = "gigs", value = "$gigsCompleted", label = "Gigs")
-                gigsPosted > 0 ->
-                    stats += ProfileStatCell(id = "gigs", value = "$gigsPosted", label = "Gigs")
-            }
-            // No reviews or rating yet: no stats row (BeaconIdentityBlock hides an empty one)
-            // rather than a "— Activity" cell that reads as a broken stat.
-            return stats
-        }
+
 
         private fun buildReviewCards(profile: PublicProfileDto): List<ProfileReviewCard> =
             profile.reviews.map { r ->
@@ -983,41 +1000,9 @@ class PublicProfileViewModel
             )
         }
 
-        private fun neighborVerifications(
-            profile: PublicProfileDto,
-            isNew: Boolean,
-        ): List<NeighborVerification> {
-            val tile = if (isNew) NeighborVerification.Tile.Success else NeighborVerification.Tile.Primary
-            val trailing: NeighborVerification.Trailing =
-                if (isNew) NeighborVerification.Trailing.Status("Recent") else NeighborVerification.Trailing.Check
-            // Only what the payload shows: verified residency (method unknown) and
-            // the account's confirmed email. No server field records an ID check.
-            val items = mutableListOf<NeighborVerification>()
-            if (hasHomeResidency(profile)) {
-                items += NeighborVerification("address", PantopusIcon.Home, "Address", "Verified", tile, trailing)
-            }
-            if (profile.verified == true) {
-                items += NeighborVerification("email", PantopusIcon.Mail, "Email", "Confirmed", tile, trailing)
-            }
-            return items
-        }
 
-        private fun neighborSince(
-            iso: String?,
-            isNew: Boolean,
-        ): String? {
-            if (iso.isNullOrEmpty()) return if (isNew) "New here" else null
-            val instant =
-                try {
-                    Instant.parse(iso)
-                } catch (_: Throwable) {
-                    return if (isNew) "New here" else null
-                }
-            val days = Duration.between(instant, Instant.now()).toDays()
-            if (days < 14) return "Joined ${days.coerceAtLeast(0)} days ago"
-            val year = instant.atZone(java.time.ZoneId.systemDefault()).year
-            return "Neighbor since $year"
-        }
+
+
 
         /**
          * P6.5 — Kind heuristic. A profile with a verified residency
@@ -1126,4 +1111,76 @@ private fun relativeTimestamp(iso: String?): String {
         seconds < 604_800 -> "${seconds / 86_400}d ago"
         else -> instant.atZone(java.time.ZoneId.systemDefault()).toLocalDate().toString()
     }
+}
+
+/** Header stat cells from the existing DTO; an empty result hides the strip. */
+private fun buildStatCells(profile: PublicProfileDto): List<ProfileStatCell> {
+    val stats = mutableListOf<ProfileStatCell>()
+    val reviewCount = profile.reviewCount ?: 0
+    if (reviewCount > 0 || profile.reviews.isNotEmpty()) {
+        stats +=
+            ProfileStatCell(
+                id = "reviews",
+                value = "${profile.reviewCount ?: profile.reviews.size}",
+                label = "Reviews",
+            )
+    }
+    val rating = profile.averageRating ?: 0.0
+    if (rating > 0) {
+        stats +=
+            ProfileStatCell(
+                id = "rating",
+                value = "%.1f".format(rating),
+                label = "Rating",
+            )
+    }
+    val gigsCompleted = profile.gigsCompleted ?: 0
+    val gigsPosted = profile.gigsPosted ?: 0
+    when {
+        // Launch cut #4 (Open Gigs): no gig count, like the hidden Gigs tab.
+        !LaunchFeatures.openGigs -> Unit
+        gigsCompleted > 0 ->
+            stats += ProfileStatCell(id = "gigs", value = "$gigsCompleted", label = "Gigs")
+        gigsPosted > 0 ->
+            stats += ProfileStatCell(id = "gigs", value = "$gigsPosted", label = "Gigs")
+    }
+    // No reviews or rating yet: no stats row (BeaconIdentityBlock hides an empty one)
+    // rather than a "— Activity" cell that reads as a broken stat.
+    return stats
+}
+
+private fun neighborVerifications(
+    profile: PublicProfileDto,
+    isNew: Boolean,
+): List<NeighborVerification> {
+    val tile = if (isNew) NeighborVerification.Tile.Success else NeighborVerification.Tile.Primary
+    val trailing: NeighborVerification.Trailing =
+        if (isNew) NeighborVerification.Trailing.Status("Recent") else NeighborVerification.Trailing.Check
+    // Only what the payload shows: verified residency (method unknown) and
+    // the account's confirmed email. No server field records an ID check.
+    val items = mutableListOf<NeighborVerification>()
+    if (hasHomeResidency(profile)) {
+        items += NeighborVerification("address", PantopusIcon.Home, "Address", "Verified", tile, trailing)
+    }
+    if (profile.verified == true) {
+        items += NeighborVerification("email", PantopusIcon.Mail, "Email", "Confirmed", tile, trailing)
+    }
+    return items
+}
+
+private fun neighborSince(
+    iso: String?,
+    isNew: Boolean,
+): String? {
+    if (iso.isNullOrEmpty()) return if (isNew) "New here" else null
+    val instant =
+        try {
+            Instant.parse(iso)
+        } catch (_: Throwable) {
+            return if (isNew) "New here" else null
+        }
+    val days = Duration.between(instant, Instant.now()).toDays()
+    if (days < 14) return "Joined ${days.coerceAtLeast(0)} days ago"
+    val year = instant.atZone(java.time.ZoneId.systemDefault()).year
+    return "Neighbor since $year"
 }
