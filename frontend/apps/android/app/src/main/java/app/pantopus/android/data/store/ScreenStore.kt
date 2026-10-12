@@ -219,6 +219,22 @@ class ScreenStore
             _changes.update { it + 1 }
         }
 
+        /** An own write without a full replacement: retire earlier reads and saved copies before revalidation. */
+        fun markEdited(topic: String) {
+            synchronized(slots) {
+                slots.values.filter { it.key.matches(topic) }.forEach { slot ->
+                    slot.edits++
+                    slot.markStaleLocked()
+                    slot.etag = null
+                    slot.inFlight?.cancel()
+                    slot.inFlight = null
+                    slot.state.value = slot.state.value.copy(refreshing = false)
+                    deleteSaved(slot.key.id)
+                }
+            }
+            _changes.update { it + 1 }
+        }
+
         /** Capture before an asynchronous save, so its reply cannot populate another account or a cleared cache. */
         fun <T : Any> writer(key: StoreKey<T>): (T) -> Unit {
             val account = accountId() ?: return {}
