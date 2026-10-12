@@ -135,10 +135,13 @@ extension AuthManager {
 
     /// L1: renew a missing or lapsing access token, then hydrate the profile.
     private func renewAndHydrate(hadAccessToken: Bool) async {
+        let generation = requestSessionGeneration
         if !hadAccessToken || isAccessTokenExpiringSoon {
             // Only a refresh token, or an access token about to lapse:
             // renew first so the profile fetch never pays the 401 tax.
-            switch await refreshIfPossible() {
+            let outcome = await refreshIfPossible()
+            guard generation == requestSessionGeneration else { return }
+            switch outcome {
             case .rotated:
                 break
             case .authRejected:
@@ -163,6 +166,7 @@ extension AuthManager {
     /// `GET /api/users/profile` → `.signedIn`, with the offline-first
     /// fallbacks. Shared by the L1 and L2 paths.
     private func hydrateProfile(reinstall: Bool) async {
+        let generation = requestSessionGeneration
         let token = accessToken ?? ""
         let cached = loadCachedUser()
         // Best-effort hydration of the current user. A 401 here is recovered
@@ -170,12 +174,14 @@ extension AuthManager {
         // fails it surfaces as `.unauthorized` and we end the session.
         do {
             let response: ProfileResponse = try await apiClient.request(UsersEndpoints.profile())
+            try requireRequestSession(generation)
             let user = UserDTO(from: response.user)
             persistCachedUser(user)
             finishSignedIn(user, token: accessToken ?? token)
             afterSuccessfulRestore(user: user, reinstall: reinstall)
             logger.info("Session restored", metadata: ["userId": .string(user.id)])
         } catch let error as APIError {
+            guard generation == requestSessionGeneration else { return }
             switch error {
             case .unauthorized:
                 // The token is genuinely stale and refresh could not renew it.
@@ -199,6 +205,7 @@ extension AuthManager {
                 }
             }
         } catch {
+            guard generation == requestSessionGeneration, !(error is CancellationError) else { return }
             // Non-APIError (e.g. decoding) — treat as transient, never wipe.
             if let cached {
                 finishSignedIn(cached, token: token)
@@ -227,6 +234,7 @@ extension AuthManager {
     /// (`.signedOut`, hint kept, tokens left in place for a later launch
     /// once an OS lock exists): no OS lock ⇒ no one-tap resume.
     private func becomeResumable(trigger: String) {
+        invalidateRequestSession()
         setAccessToken(nil)
         guard presenceGate.isAvailable else {
             setState(.signedOut)
@@ -274,7 +282,10 @@ extension AuthManager {
     @discardableResult
     func resume(reason: String = "Continue signed in to Pantopus") async -> ResumeOutcome {
         guard case .resumable = state else { return .failed("Nothing to resume.") }
-        switch await presenceGate.verify(reason: reason) {
+        let generation = requestSessionGeneration
+        let presence = await presenceGate.verify(reason: reason)
+        guard generation == requestSessionGeneration else { return .cancelled }
+        switch presence {
         case .cancelled:
             Observability.shared.track("session_resume_cancel")
             return .cancelled
@@ -291,22 +302,12 @@ extension AuthManager {
             break
         }
         _ = ensureDeviceIdentity()
-        switch await refreshIfPossible() {
+        let outcome = await refreshIfPossible()
+        guard generation == requestSessionGeneration else { return .cancelled }
+        switch outcome {
         case .rotated:
             await hydrateProfile(reinstall: true)
-            if case .signedIn = state {
-                Observability.shared.track("session_resume_ok")
-                return .signedIn
-            }
-            // The profile fetch 401'd and its own refresh was refused:
-            // `handleUnauthorized()` already ended the session with the
-            // server's reason. Otherwise the fetch failed transiently and
-            // hydrateProfile fell back to the cached identity or
-            // `.signedOut` (tokens preserved).
-            if let reason = sessionEndReason {
-                return .rejected(reason)
-            }
-            return .transient
+            return resumedOutcome(generation: generation)
         case .authRejected:
             let reason = lastRefreshRejection ?? .expired
             lastRefreshRejection = nil
@@ -315,6 +316,23 @@ extension AuthManager {
         case .transient:
             return .transient
         }
+    }
+
+    private func resumedOutcome(generation: Int) -> ResumeOutcome {
+        if case .signedIn = state {
+            guard generation == requestSessionGeneration else { return .cancelled }
+            Observability.shared.track("session_resume_ok")
+            return .signedIn
+        }
+        // The profile fetch 401'd and its own refresh was refused:
+        // `handleUnauthorized()` already ended the session with the
+        // server's reason. Otherwise the fetch failed transiently and
+        // hydrateProfile fell back to the cached identity or
+        // `.signedOut` (tokens preserved).
+        if let reason = sessionEndReason {
+            return .rejected(reason)
+        }
+        return .transient
     }
 
     // MARK: - Refresh
@@ -327,6 +345,8 @@ extension AuthManager {
     /// reason stashed for `handleUnauthorized`); anything else (offline,
     /// timeout, 429, 5xx) ⇒ `.transient` and must not sign the user out.
     func performRefresh() async -> RefreshOutcome {
+        guard !Task.isCancelled else { return .transient }
+        let generation = requestSessionGeneration
         guard let stored = nonEmpty(store.get(SecureStoreKey.refreshToken)) else {
             return .authRejected
         }
@@ -344,6 +364,7 @@ extension AuthManager {
             logger.warning("Refresh failed transiently", metadata: ["error": .string("\(error)")])
             return .transient
         }
+        guard generation == requestSessionGeneration, !Task.isCancelled else { return .transient }
         switch raw.status {
         case 200..<300:
             return applyRefreshResponse(raw.data)
@@ -417,7 +438,9 @@ extension AuthManager {
     /// a 401 + replay. Ends the session only on a server rejection.
     func refreshIfExpiringSoon() async {
         guard case .signedIn = state, isAccessTokenExpiringSoon else { return }
-        if await refreshIfPossible() == .authRejected {
+        let generation = requestSessionGeneration
+        let outcome = await refreshIfPossible()
+        if generation == requestSessionGeneration, outcome == .authRejected {
             await handleUnauthorized()
         }
     }
@@ -429,7 +452,9 @@ extension AuthManager {
     /// failure or a successful rotation keeps the session.
     func confirmSessionAfterRevocationSignal() async {
         guard case .signedIn = state else { return }
-        if await refreshIfPossible() == .authRejected {
+        let generation = requestSessionGeneration
+        let outcome = await refreshIfPossible()
+        if generation == requestSessionGeneration, outcome == .authRejected {
             await handleUnauthorized()
         }
     }
@@ -514,6 +539,7 @@ extension AuthManager {
     /// (no suspension points, so the @MainActor serializes the reads).
     @discardableResult
     func clearLocalSession(preservingContentArrival: Bool = false, preservingLoginArrival: String? = nil) -> Bool {
+        invalidateRequestSession()
         let hadSession = accessToken != nil || store.get(SecureStoreKey.accessToken) != nil
         if preservingContentArrival {
             // Concurrent terminal responses after the first teardown must not

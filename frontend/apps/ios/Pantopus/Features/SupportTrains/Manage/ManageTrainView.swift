@@ -71,7 +71,16 @@ public struct ManageTrainView: View {
             content
         }
         .background(Theme.Color.appBg)
-        .task { await viewModel.load() }
+        .onDisappear { viewModel.suspend() }
+        .refreshesOnStoreChange(
+            affects: { $0.names(topic: ScreenTopic.supportTrain(viewModel.supportTrainId)) },
+            recheckOnAttach: true,
+            onBackground: {
+                viewModel.suspend()
+                return true
+            },
+            perform: { await viewModel.load() }
+        )
         .overlay(alignment: .bottom) { closeSheetOverlay }
         .overlay(alignment: .bottom) { toastOverlay }
         .accessibilityIdentifier("manageTrain")
@@ -186,7 +195,7 @@ public struct ManageTrainView: View {
         switch viewModel.state {
         case .loading:
             loadingBody
-        case let .loaded(content) where !content.viewerRole.isOrganizer:
+        case let .loaded(content) where viewModel.accessChecked && !content.viewerRole.isOrganizer:
             // Only organizers manage a train, and the server refuses everyone
             // else, so hand off rather than show controls that can only fail.
             loadingBody
@@ -252,6 +261,16 @@ public struct ManageTrainView: View {
                     isActive: content.isActive,
                     statusLabel: content.status.isEmpty ? "Unavailable" : content.status.capitalized
                 )
+
+                if viewModel.helpersFailed {
+                    VStack(alignment: .leading, spacing: Spacing.s2) {
+                        Text("Organizer details need to be checked again.")
+                            .font(.system(size: 13.5))
+                            .foregroundStyle(Theme.Color.appTextSecondary)
+                        Button("Retry organizer details") { Task { await viewModel.refresh() } }
+                            .accessibilityIdentifier("manageTrainRetryDetails")
+                    }
+                }
 
                 StatCellRow(cells: [
                     StatCellContent(id: "slots", value: content.slotFillValue, label: "Slots", tone: .success),
@@ -334,6 +353,7 @@ public struct ManageTrainView: View {
             .padding(.bottom, Spacing.s4)
         }
         .scrollDismissesKeyboard(.interactively)
+        .refreshable { await viewModel.refresh() }
         .safeAreaInset(edge: .bottom, spacing: Spacing.s0) { stickyCTA(content: content) }
         .accessibilityIdentifier("manageTrainScroll")
     }
