@@ -136,6 +136,8 @@ import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
 import coil.compose.AsyncImage
+import coil.request.CachePolicy
+import coil.request.ImageRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -2881,7 +2883,7 @@ private fun BubbleRow(
                                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                     body.imageUrls.take(3).forEach { url ->
                                         AsyncImage(
-                                            model = url,
+                                            model = inlinePhotoRequest(url),
                                             contentDescription = "AI prompt image",
                                             contentScale = ContentScale.Crop,
                                             modifier =
@@ -4221,7 +4223,7 @@ private fun PhotoBubble(
     ) {
         if (url != null) {
             AsyncImage(
-                model = url,
+                model = inlinePhotoRequest(url),
                 contentDescription = "Photo attachment",
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
@@ -4253,6 +4255,18 @@ private fun PhotoBubble(
                 modifier = Modifier.fillMaxSize(),
             )
         }
+    }
+}
+
+@Composable
+private fun inlinePhotoRequest(url: String): ImageRequest {
+    val context = LocalContext.current
+    return remember(context, url) {
+        val thumbnail = ChatMediaUrl.thumbnail(url)
+        ImageRequest.Builder(context)
+            .data(thumbnail ?: url)
+            .diskCachePolicy(if (thumbnail != null) CachePolicy.ENABLED else CachePolicy.READ_ONLY)
+            .build()
     }
 }
 
