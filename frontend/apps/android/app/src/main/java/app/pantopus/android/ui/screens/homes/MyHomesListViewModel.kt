@@ -3,12 +3,20 @@ package app.pantopus.android.ui.screens.homes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.homes.MyHome
+import app.pantopus.android.data.api.models.homes.MyHomesResponse
 import app.pantopus.android.data.api.models.homes.PersonalHomeResidencyRequest
+import app.pantopus.android.data.api.models.homes.showsCopyBeforeRecheck
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.homes.HomeAdminRepository
 import app.pantopus.android.data.homes.HomeResidencyProgressRepository
 import app.pantopus.android.data.homes.HomesRepository
+import app.pantopus.android.data.store.ScreenStore
+import app.pantopus.android.data.store.StoreKeys
+import app.pantopus.android.data.store.StoreKind
+import app.pantopus.android.data.store.Stored
+import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.components.StatusChipVariant
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScopeFactory
 import app.pantopus.android.ui.screens.shared.list_of_rows.BannerConfig
@@ -29,6 +37,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -144,6 +153,7 @@ class MyHomesListViewModel
         private val adminRepo: HomeAdminRepository,
         sessions: HomeClaimSessionScopeFactory,
         private val residencyRepo: HomeResidencyProgressRepository,
+        private val store: ScreenStore,
     ) : ViewModel() {
         private val session = sessions.create(viewModelScope)
         private var generation = 0L
@@ -165,6 +175,14 @@ class MyHomesListViewModel
         val pendingEvent = _pendingEvent.asStateFlow()
         private val _actionError = MutableStateFlow<String?>(null)
         val actionError = _actionError.asStateFlow()
+
+        /** Pull to refresh is reading while the rows stay (Instant Screens): the pull indicator only. */
+        private val _refreshing = MutableStateFlow(false)
+        val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
+        /** The quiet "Couldn't refresh. Showing 3:42 PM." line when a read fails on a copy past its max shown age. */
+        private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
+        val refreshNotice: StateFlow<RefreshNotice?> = _refreshNotice.asStateFlow()
         private var onOpenHome: (String) -> Unit = {}
         private var onOpenTasks: ((String) -> Unit)? = null
         private var onAddHome: () -> Unit = {}
@@ -177,6 +195,7 @@ class MyHomesListViewModel
                 session.invalidated.collect { invalid ->
                     if (invalid) {
                         suspendContent()
+                        entries = emptyList()
                         _state.value = ListOfRowsUiState.Error("Your session changed. Reopen your Homes list to continue.")
                     }
                 }
@@ -199,12 +218,16 @@ class MyHomesListViewModel
             this.onOpenWaitingRoom = onOpenWaitingRoom
         }
 
+        /**
+         * Pause and leave. Instant Screens: the Homes rows stay (shown again at once, then re-read) while every row is
+         * an owner's or household home (founder decision 3); a guest's or expiring home blanks the list and re-checks.
+         * The residency requests (verification) are read again on every visit.
+         */
         fun suspendContent() {
             generation++
             visible = false
             refreshJob?.cancel()
             refreshJob = null
-            entries = emptyList()
             historyJob?.cancel()
             historyJob = null
             requests = emptyList()
@@ -212,39 +235,67 @@ class MyHomesListViewModel
             homesError = null
             historyError = null
             loadingHistory = false
-            _state.value = ListOfRowsUiState.Loading
+            if (!entries.all { it.showsCopyBeforeRecheck }) {
+                store.remove(StoreKeys.myHomes)
+                entries = emptyList()
+            }
+            _state.value =
+                if (entries.isEmpty()) {
+                    ListOfRowsUiState.Loading
+                } else {
+                    ListOfRowsUiState.Loaded(
+                        listOf(RowSection(id = "my-homes", rows = entries.map { rowFor(it, generation) })),
+                        hasMore = false,
+                    )
+                }
             _banner.value = null
             _pendingEvent.value = null
             _actionError.value = null
+            _refreshing.value = false
         }
 
         private fun current(revision: Long) = visible && revision == generation && session.isCurrent
 
-        fun load() = refresh()
+        /** Entry and every return (Instant Screens): the stored Homes show at once and are re-read quietly. */
+        fun load() {
+            if (!visible) read(force = false)
+        }
 
-        fun refresh() {
+        /** Pull to refresh, Retry and after a delete: read now. */
+        fun refresh() = read(force = true)
+
+        private fun read(force: Boolean) {
             suspendContent()
             visible = true
             val revision = generation
+            if (entries.isEmpty()) {
+                val stored = repo.myHomesCopy()?.homes
+                if (stored != null && listChecksOut(stored) && stored.all { it.showsCopyBeforeRecheck }) entries = stored
+            }
+            if (entries.isNotEmpty()) render(revision)
+            _refreshing.value = force && entries.isNotEmpty()
             refreshJob =
                 viewModelScope.launch {
                     try {
                         session.requireCurrent()
-                        val result = repo.myHomes()
+                        val mayReuse = repo.myHomesCopy()?.homes?.all { it.showsCopyBeforeRecheck } == true
+                        val stored = repo.myHomesStored(force || !mayReuse)
                         session.requireCurrent()
                         if (!current(revision)) return@launch
-                        when (result) {
-                            is NetworkResult.Success -> {
-                                val homes = result.data.homes
-                                if (homes.any { !it.hasValidListContext } || homes.map { it.id }.distinct().size != homes.size) {
-                                    homesError = "Your Home list could not be verified. Retry."
-                                } else {
-                                    entries = homes
-                                }
+                        _refreshing.value = false
+                        _refreshNotice.value =
+                            RefreshNotice(stored.fetchedAt, ::refresh).takeIf { stored.showsRefreshFailure(StoreKind.HOMES) }
+                        val homes = stored.homesForPresentation(store)
+                        when {
+                            homes == null -> {
+                                entries = emptyList()
+                                homesError = (stored.failure ?: NetworkError.NotFound).displayMessage("Could not load your Homes. Retry.")
                             }
-                            is NetworkResult.Failure -> {
-                                homesError = result.error.displayMessage("Could not load your Homes. Retry.")
+                            !listChecksOut(homes) -> {
+                                entries = emptyList()
+                                homesError = "Your Home list could not be verified. Retry."
                             }
+                            else -> entries = homes
                         }
                         loadHistory(revision, null)
                     } catch (error: CancellationException) {
@@ -537,11 +588,6 @@ class MyHomesListViewModel
                 },
             )
 
-        private fun unitLabel(home: MyHome): String? {
-            if (home.accessKind == "verification") return null
-            return home.address2?.trim()?.takeIf { it.isNotEmpty() }?.let { homeUnitText(it) }
-        }
-
         private fun roleLabel(home: MyHome): String? =
             when (home.accessKind) {
                 "private_setup" -> "Your private Home"
@@ -562,3 +608,21 @@ class MyHomesListViewModel
                     }
             }
     }
+
+private fun unitLabel(home: MyHome): String? {
+    if (home.accessKind == "verification") return null
+    return home.address2?.trim()?.takeIf { it.isNotEmpty() }?.let { homeUnitText(it) }
+}
+
+/** A failed guest or expiring read never reuses a list from a previous visit. */
+private fun Stored<MyHomesResponse>.homesForPresentation(store: ScreenStore): List<MyHome>? {
+    val rows = data?.homes ?: return null
+    if (failure != null && rows.any { !it.showsCopyBeforeRecheck }) {
+        store.remove(StoreKeys.myHomes)
+        return null
+    }
+    return rows
+}
+
+private fun listChecksOut(homes: List<MyHome>): Boolean =
+    homes.none { !it.hasValidListContext } && homes.map { it.id }.distinct().size == homes.size
