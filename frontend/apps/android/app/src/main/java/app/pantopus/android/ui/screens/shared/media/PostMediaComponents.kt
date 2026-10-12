@@ -64,6 +64,8 @@ import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
 import coil.compose.SubcomposeAsyncImage
+import coil.request.CachePolicy
+import coil.request.ImageRequest
 import kotlinx.coroutines.withTimeoutOrNull
 
 /** Tile heights per surface — feed cards are compact, detail is regular. */
@@ -242,9 +244,11 @@ fun PostMediaTile(
         when (item.kind) {
             PostMediaKind.Image ->
                 MediaStillTile(
-                    url = item.url,
+                    url = item.thumbnailUrl ?: item.url,
                     onTap = onTap,
                     modifier = Modifier.fillMaxSize(),
+                    // Coil stores source bytes: a small view does not make the original a thumbnail.
+                    cacheOnDisk = item.thumbnailUrl != null,
                 )
             PostMediaKind.Video -> {
                 MediaStillTile(
@@ -322,14 +326,27 @@ fun PostMediaTile(
     }
 }
 
-/** Still image tile (Coil) with shimmer-free loading + error states. */
+/**
+ * Still image tile (Coil) with shimmer-free loading + error states. [cacheOnDisk] false (the full-screen viewer's
+ * originals): read from the disk cache when a tile saved the image, never written (contract §6: original-size photos
+ * are never cached automatically).
+ */
 @Composable
 fun MediaStillTile(
     url: String,
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Crop,
     onTap: (() -> Unit)? = null,
+    cacheOnDisk: Boolean = true,
 ) {
+    val context = LocalContext.current
+    val model =
+        remember(context, url, cacheOnDisk) {
+            ImageRequest.Builder(context)
+                .data(url)
+                .diskCachePolicy(if (cacheOnDisk) CachePolicy.ENABLED else CachePolicy.READ_ONLY)
+                .build()
+        }
     val base =
         if (onTap != null) {
             modifier.pointerInput(Unit) { detectTapGestures(onTap = { onTap() }) }
@@ -337,7 +354,7 @@ fun MediaStillTile(
             modifier
         }
     SubcomposeAsyncImage(
-        model = url,
+        model = model,
         contentDescription = null,
         contentScale = contentScale,
         modifier = base.background(PantopusColors.appSurfaceSunken),
@@ -478,9 +495,10 @@ fun LivePhotoTile(
         // a sibling of the scaled `mediaLayers`.
         Box(modifier = Modifier.fillMaxSize().scale(stillScale)) {
             MediaStillTile(
-                url = item.url,
+                url = if (showsReplayButton) item.url else item.thumbnailUrl ?: item.url,
                 contentScale = contentScale,
                 modifier = Modifier.fillMaxSize(),
+                cacheOnDisk = !showsReplayButton && item.thumbnailUrl != null,
             )
             if (clipAlpha > 0f) {
                 AndroidView(
