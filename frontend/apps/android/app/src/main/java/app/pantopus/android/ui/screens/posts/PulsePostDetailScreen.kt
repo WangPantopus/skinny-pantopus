@@ -6,7 +6,6 @@ import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,6 +17,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -35,10 +35,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.posts.PostDetailDto
 import app.pantopus.android.ui.components.EmptyState
+import app.pantopus.android.ui.components.RefreshFailedLine
+import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.components.Toast
 import app.pantopus.android.ui.components.ToastKind
@@ -107,6 +113,9 @@ fun PulsePostDetailScreen(
 ) {
     val context = LocalContext.current
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
+    val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
+    app.pantopus.android.core.perf.ReportContentShown("post", state is PulsePostDetailUiState.Loaded)
     val composer by viewModel.composerText.collectAsStateWithLifecycle()
     val isSending by viewModel.isSendingComment.collectAsStateWithLifecycle()
     val toast by viewModel.toastMessage.collectAsStateWithLifecycle()
@@ -117,13 +126,23 @@ fun PulsePostDetailScreen(
     val selectedEmoji by viewModel.selectedReactionEmoji.collectAsStateWithLifecycle()
     val replyTarget by viewModel.replyTarget.collectAsStateWithLifecycle()
     val nearbyProviders by viewModel.nearbyProviders.collectAsStateWithLifecycle()
+    val commentsLoading by viewModel.commentsLoading.collectAsStateWithLifecycle()
 
     // Saveable, so an open Report, Delete or reply Delete dialog survives a theme, font-size or rotation change.
     var showsReportReasons by rememberSaveable { mutableStateOf(false) }
     var showsDeleteConfirm by rememberSaveable { mutableStateOf(false) }
     var commentPendingDeleteId by rememberSaveable { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(Unit) { viewModel.load() }
+    LifecycleResumeEffect(Unit) {
+        viewModel.load()
+        onPauseOrDispose { }
+    }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            viewModel.postChanges.collect { viewModel.refetchInPlace() }
+        }
+    }
     LaunchedEffect(Unit) { viewModel.loadNearbyProviders() }
     LaunchedEffect(state) {
         if (state is PulsePostDetailUiState.Loaded) onContentLoaded()
@@ -150,7 +169,11 @@ fun PulsePostDetailScreen(
         viewModel.recordShare()
     }
 
-    Box(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg)) {
+    PullToRefreshBox(
+        isRefreshing = refreshing,
+        onRefresh = viewModel::refresh,
+        modifier = Modifier.fillMaxSize().background(PantopusColors.appBg),
+    ) {
         when (val s = state) {
             PulsePostDetailUiState.Loading -> LoadingLayout(onBack = onBack)
             is PulsePostDetailUiState.Error ->
@@ -163,6 +186,7 @@ fun PulsePostDetailScreen(
                 val content = s.content
                 PulsePostDetailLoadedContent(
                     content = content,
+                    refreshNotice = refreshNotice,
                     composerText = composer,
                     onComposerTextChange = { viewModel.setComposerText(it) },
                     isSending = isSending,
@@ -197,6 +221,7 @@ fun PulsePostDetailScreen(
                     onCommentReply = { row -> viewModel.beginReply(row.id, row.authorName) },
                     onCommentLike = { row -> viewModel.toggleCommentLike(row.id) },
                     onCommentDelete = { row -> commentPendingDeleteId = row.id },
+                    commentsLoading = commentsLoading,
                 )
             }
         }
@@ -399,6 +424,9 @@ fun PulsePostDetailLoadedContent(
     onCommentReply: ((PostCommentRow) -> Unit)? = null,
     onCommentLike: ((PostCommentRow) -> Unit)? = null,
     onCommentDelete: ((PostCommentRow) -> Unit)? = null,
+    /** Instant Screens: the post shows from its feed card while its comments load. */
+    commentsLoading: Boolean = false,
+    refreshNotice: RefreshNotice? = null,
 ) {
     ContentDetailShell(
         title = "Post",
@@ -408,6 +436,7 @@ fun PulsePostDetailLoadedContent(
         cta = { InlineReplyCta() },
         header = {
             Column(verticalArrangement = Arrangement.spacedBy(Spacing.s4)) {
+                refreshNotice?.let { RefreshFailedLine(it, Modifier.padding(horizontal = Spacing.s4)) }
                 if (content.post.isRemovedByModerator) {
                     RemovedPostNotice(modifier = Modifier.padding(horizontal = Spacing.s4))
                 }
@@ -451,6 +480,8 @@ fun PulsePostDetailLoadedContent(
                 onCommentLike = onCommentLike,
                 onCommentDelete = onCommentDelete,
                 repliesClosedNote = if (content.post.isRemovedByModerator) "Replies are off for this post." else null,
+                commentsLoading = commentsLoading,
+                loadingCommentCount = content.post.commentCount,
                 // Launch cuts #6/#4: "Nearby providers" is business discovery and broad provider search.
                 belowReactions =
                     if (nearbyProviders.isEmpty() || !(LaunchFeatures.businessDirectory && LaunchFeatures.openGigs)) {

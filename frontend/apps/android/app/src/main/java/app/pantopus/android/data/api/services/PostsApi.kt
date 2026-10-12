@@ -102,6 +102,13 @@ interface PostsApi {
         @Path("id") id: String,
     ): PostDetailResponse
 
+    /** `GET /api/posts/:id` through the screens' store (Instant Screens): a 304 keeps the copy. */
+    @GET("api/posts/{id}")
+    suspend fun detailConditional(
+        @Path("id") id: String,
+        @Header("If-None-Match") etag: String?,
+    ): Response<PostDetailResponse>
+
     /** `POST /api/posts/:id/like` — route `backend/routes/posts.js:2375`. */
     @POST("api/posts/{id}/like")
     suspend fun toggleLike(
