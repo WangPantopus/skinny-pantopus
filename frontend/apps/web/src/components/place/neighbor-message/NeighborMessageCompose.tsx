@@ -32,7 +32,8 @@ import { detailAddress } from '@/components/place/detail/sections';
 import VerifyPromptSheet from '@/components/place/VerifyPromptSheet';
 import NeighborMessageComposeView, { type ComposeRecipient } from './NeighborMessageComposeView';
 import { usePrimaryHome } from '@/lib/primaryHome';
-import { PLACE_FRESH_MS, gatedStaleTime, showsPlaceCopy, useAfterRecheck } from '@/lib/householdCopy';
+import { myHomesQuery as sharedMyHomesQuery } from '@/lib/myHomes';
+import { PLACE_FRESH_MS, gatedStaleTime, placeCopyGate, useAfterRecheck } from '@/lib/householdCopy';
 
 const REDIRECT_TO = encodeURIComponent('/app/place/neighbor-message');
 
@@ -72,14 +73,16 @@ export default function NeighborMessageCompose() {
   const home = homeQuery.data?.home ?? null;
   const homeId = home?.id ?? null;
 
+  const myHomesQuery = useQuery({ ...sharedMyHomesQuery(), enabled: authed && !!homeId });
+  const showsCopy = placeCopyGate(myHomesQuery.data?.homes.find((home) => home.id === homeId));
   const intelQuery = useQuery({
     queryKey: homeId ? queryKeys.placeIntelligence(homeId) : ['place', 'intelligence', 'none'],
     queryFn: () => api.place.getPlaceIntelligence(homeId as string),
     enabled: authed && !!homeId,
-    staleTime: gatedStaleTime(PLACE_FRESH_MS, showsPlaceCopy),
+    staleTime: gatedStaleTime(PLACE_FRESH_MS, showsCopy),
   });
   // A guest's or service provider's copy is used only once the re-check answers (decision 3).
-  const { data: intelligence, waiting: intelWaiting } = useAfterRecheck(intelQuery, showsPlaceCopy);
+  const { data: intelligence, waiting: intelWaiting } = useAfterRecheck(intelQuery, showsCopy);
 
   const templatesQuery = useQuery({
     queryKey: queryKeys.neighborMessageTemplates(),

@@ -134,6 +134,8 @@ final class AuthManager {
 
     private(set) var state: State = .unknown
     private(set) var accessToken: String?
+    /// Changes at sign-in/sign-out boundaries, but not during token rotation.
+    private(set) var requestSessionGeneration = 0
 
     /// When the user last signed in *interactively* (email/password or OAuth)
     /// — never stamped by a silent keychain restore. The post-login app-lock
@@ -254,6 +256,17 @@ final class AuthManager {
         accessToken = token
     }
 
+    func invalidateRequestSession() {
+        requestSessionGeneration += 1
+        refreshTask?.cancel()
+        refreshTask = nil
+    }
+
+    func requireRequestSession(_ generation: Int) throws {
+        guard requestSessionGeneration == generation else { throw CancellationError() }
+        try Task.checkCancellation()
+    }
+
     func setSessionEndReason(_ reason: SessionEndReason?) {
         sessionEndReason = reason
     }
@@ -279,8 +292,10 @@ final class AuthManager {
     @discardableResult
     func refreshCurrentUser() async -> UserDTO? {
         guard case .signedIn = state else { return nil }
+        let generation = requestSessionGeneration
         do {
             let response: ProfileResponse = try await apiClient.request(UsersEndpoints.profile())
+            try requireRequestSession(generation)
             let user = UserDTO(from: response.user)
             persistCachedUser(user)
             state = .signedIn(user)
@@ -336,6 +351,7 @@ final class AuthManager {
         guard let access = response.accessToken, !access.isEmpty else {
             throw AuthError.unknown
         }
+        invalidateRequestSession()
         // A session left over from before this login (e.g. "Use a different
         // account" on the Continue-as card) is superseded: revoke it
         // server-side with proof once the new one is safely persisted.
@@ -503,28 +519,14 @@ final class AuthManager {
 
     // MARK: - Refresh session
 
-    /// Single-flight access-token refresh. Concurrent callers (e.g. several
-    /// requests that 401 at once) share one in-flight network round-trip —
-    /// essential because the backend rotates refresh tokens and rejects a
-    /// replayed one as theft (`TOKEN_REUSE`). Returns a classified outcome so
-    /// the caller can tell a genuine auth rejection (sign out) from a
-    /// transient failure (keep the session). Does **not** sign out itself.
-    @discardableResult
-    func refreshIfPossible() async -> RefreshOutcome {
-        if let task = refreshTask {
-            return await task.value
-        }
-        let task = Task { await performRefresh() }
-        refreshTask = task
-        defer { refreshTask = nil }
-        return await task.value
-    }
-
     /// Imperative refresh used by call sites that want to force a token
     /// rotation and treat failure as a hard sign-out (e.g. tests, explicit
     /// "reconnect" affordances). Routes through the single-flight path.
     func refreshSession() async throws {
-        if await refreshIfPossible() == .rotated {
+        let generation = requestSessionGeneration
+        let outcome = await refreshIfPossible()
+        try requireRequestSession(generation)
+        if outcome == .rotated {
             return
         }
         logger.warning("Refresh failed, signing out")
@@ -562,5 +564,30 @@ final class AuthManager {
         lastRefreshRejection = nil
         logger.warning("Handling 401 after failed refresh — ending session", metadata: ["code": .string(reason.rawValue)])
         endSession(reason: reason)
+    }
+}
+
+/// A refresh belongs to its opening session, including its shared task.
+extension AuthManager {
+    /// Single-flight access-token refresh. Concurrent callers (e.g. several
+    /// requests that 401 at once) share one in-flight network round-trip —
+    /// essential because the backend rotates refresh tokens and rejects a
+    /// replayed one as theft (`TOKEN_REUSE`). Returns a classified outcome so
+    /// the caller can tell a genuine auth rejection (sign out) from a
+    /// transient failure (keep the session). Does **not** sign out itself.
+    @discardableResult
+    func refreshIfPossible() async -> RefreshOutcome {
+        let generation = requestSessionGeneration
+        if let task = refreshTask {
+            let outcome = await task.value
+            return generation == requestSessionGeneration ? outcome : .transient
+        }
+        let task = Task { await performRefresh() }
+        refreshTask = task
+        defer {
+            if generation == requestSessionGeneration { refreshTask = nil }
+        }
+        let outcome = await task.value
+        return generation == requestSessionGeneration ? outcome : .transient
     }
 }
