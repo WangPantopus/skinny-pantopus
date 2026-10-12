@@ -66,10 +66,20 @@ public struct ExploreMapView: View {
         .overlay(alignment: .bottom) { savedAffordanceOverlay }
         .onAppear { focusOnMap(focus) }
         .onChange(of: focus) { _, newValue in focusOnMap(newValue) }
-        .task(id: focus) {
-            viewModel.configureFocus(focus)
-            await viewModel.load()
-        }
+        .onDisappear { viewModel.suspend() }
+        .refreshesOnStoreChange(
+            affects: { viewModel.isAffected(by: $0) },
+            recheckOnAttach: true,
+            onBackground: {
+                viewModel.suspend()
+                return true
+            },
+            perform: {
+                viewModel.configureFocus(focus)
+                await viewModel.load()
+            }
+        )
+        .id(focus)
         .task { await savedStore.loadIfNeeded() }
         .sheet(isPresented: $showFilterSheet) {
             ExploreFilterSheet(
@@ -528,6 +538,9 @@ public struct ExploreMapView: View {
 
     private var headerCountLabel: String {
         guard case let .loaded(loaded) = viewModel.state else { return "Explore" }
+        if viewModel.activeKind == .home, viewModel.homeCheckMessage != nil { return "Homes" }
+        if loaded.isEmpty, viewModel.hasUnresolvedRead { return "Explore" }
+        if viewModel.activeKind == nil, viewModel.homeCheckMessage != nil { return "\(loaded.entities.count) posts" }
         var label = "\(loaded.entities.count) nearby"
         if viewModel.filters.activeCount > 0 {
             label += " · \(viewModel.filters.activeCount) filters on"
@@ -542,8 +555,24 @@ public struct ExploreMapView: View {
         case let .error(message):
             errorBody(message)
         case let .loaded(loaded):
+            if viewModel.activeKind != .post, let message = viewModel.homeCheckMessage {
+                if viewModel.isCheckingHomes {
+                    ProgressView(message)
+                        .padding(Spacing.s3)
+                        .accessibilityIdentifier("exploreHomeCheck")
+                } else {
+                    mapReadNotice(message)
+                }
+            }
+            if viewModel.activeKind != .home, let message = viewModel.postsFailureMessage {
+                mapReadNotice(message)
+            }
             if loaded.isEmpty {
-                emptyBody
+                if viewModel.activeKind != .home, viewModel.isCheckingPosts {
+                    ProgressView("Loading posts…").padding(Spacing.s3)
+                } else if !viewModel.hasUnresolvedRead {
+                    emptyBody
+                }
             } else {
                 switch viewModel.sheetStop {
                 case .collapsed: collapsedBody
@@ -552,6 +581,20 @@ public struct ExploreMapView: View {
                 }
             }
         }
+    }
+
+    private func mapReadNotice(_ message: String) -> some View {
+        VStack(spacing: Spacing.s1) {
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(Theme.Color.appTextSecondary)
+                .multilineTextAlignment(.center)
+            Button("Try again") { Task { await viewModel.refresh() } }
+                .font(.subheadline.bold())
+                .frame(minHeight: 44)
+                .accessibilityIdentifier("exploreAccessRetry")
+        }
+        .padding(.horizontal, Spacing.s3)
     }
 
     private func errorBody(_ message: String) -> some View {
