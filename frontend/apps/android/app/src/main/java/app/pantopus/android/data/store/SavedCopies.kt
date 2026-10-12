@@ -171,28 +171,37 @@ class SavedCopies
             if (topic == null && kinds.isEmpty()) return
             val folder = file(account, "").parentFile ?: return
             folder.listFiles()?.filter { it.extension == "json" }?.forEach { target ->
-                try {
-                    target.bufferedReader().use { reader ->
-                        val envelope = reader.readLine()?.let { envelopes.fromJson(it) } ?: return@use
-                        if (!envelope.legacy && !envelope.matches(topic, kinds)) return@use
-                        if (edited && !envelope.legacy) {
-                            target.delete()
-                        } else if (!envelope.stale || (edited && envelope.etag != null)) {
-                            // Older schema-2 copies lack topics. Keep their offline content, but require a check.
-                            val lastUsed = target.lastModified()
-                            write(target, envelope.copy(stale = true, etag = envelope.etag.takeUnless { edited }), reader.readText())
-                            target.setLastModified(lastUsed)
-                        }
-                    }
-                } catch (
-                    @Suppress("TooGenericExceptionCaught") error: Exception,
-                ) {
-                    // A copy whose invalidation cannot be recorded must not later look current.
-                    target.delete()
-                    Timber.w(error, "saved copy invalidation failed")
-                }
+                invalidateFile(target, topic, kinds, edited)
             }
             trim()
+        }
+
+        private fun invalidateFile(
+            target: File,
+            topic: String?,
+            kinds: Set<StoreKind>,
+            edited: Boolean,
+        ) {
+            try {
+                target.bufferedReader().use { reader ->
+                    val envelope = reader.readLine()?.let { envelopes.fromJson(it) } ?: return@use
+                    if (!envelope.legacy && !envelope.matches(topic, kinds)) return@use
+                    if (edited && !envelope.legacy) {
+                        target.delete()
+                    } else if (!envelope.stale || (edited && envelope.etag != null)) {
+                        // Older schema-2 copies lack topics. Keep their offline content, but require a check.
+                        val lastUsed = target.lastModified()
+                        write(target, envelope.copy(stale = true, etag = envelope.etag.takeUnless { edited }), reader.readText())
+                        target.setLastModified(lastUsed)
+                    }
+                }
+            } catch (
+                @Suppress("TooGenericExceptionCaught") error: Exception,
+            ) {
+                // A copy whose invalidation cannot be recorded must not later look current.
+                target.delete()
+                Timber.w(error, "saved copy invalidation failed")
+            }
         }
 
         private fun write(
