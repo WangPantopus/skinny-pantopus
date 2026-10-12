@@ -719,6 +719,14 @@ This does not verify store signing or an uploaded build.
 the manifest removes broad image/video read permissions in favor of the system
 photo picker. Signed release and physical-device checks remain open.
 
+**Map acceptance remains open:** the local Android configuration checked on
+October 11 has an empty `MAPS_API_KEY`. The founder must supply an approved
+[Maps SDK for Android key](https://developers.google.com/maps/documentation/android-sdk/get-api-key)
+before the owning stream rebuilds and verifies tiles, pin selection and camera
+gestures. Any console, SDK activation or billing change remains founder-owned.
+Household pins also need their pending backend coordinate-decoder repair and
+native access checks; passing data and offline checks alone does not close this gate.
+
 ### Listings (founder approves; L4 drafts)
 
 - [x] Founder approved the listing text, screenshots, privacy answers and the
