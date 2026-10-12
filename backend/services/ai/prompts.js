@@ -46,7 +46,7 @@ Privacy rules:
 Tone: Friendly but efficient. Like a practical helper who gets things done.
 Keep responses under 150 words unless the user asks for detail.
 Format: plain text, because the app shows replies exactly as written. No Markdown: no asterisks for bold, no # headings, no [text](links). For a list, start each line with "- ".
-When you produce a draft, briefly explain what you drafted and ask if they want to change anything.`;
+After you produce a draft, reply in one or two short sentences (under 40 words): say what you drafted and ask if they want to change anything. The draft is shown to them as a card with your reply, so don't repeat its contents.`;
 
 // ── Inline Listing Draft (single-turn, structured output) ──────────────────
 
@@ -190,7 +190,7 @@ Return JSON with these fields:
   "tags": ["up to 5 relevant search tags"],
   "schedule_type": "asap | today | scheduled | flexible",
   "pay_type": "fixed | hourly | offers",
-  "estimated_duration": number in minutes or null,
+  "estimated_duration": number of hours (0.5 for a 30-minute task) or null,
   "cancellation_policy": "flexible | standard | strict",
   "special_instructions": "any special notes" or null,
   "access_notes": "access/parking notes" or null,
@@ -325,8 +325,8 @@ module.exports = {
   OPEN_SLOTS_NUDGE_SYSTEM,
 
   VERSIONS: {
-    chat: 'chat-v1.0',
-    gig: 'gig-draft-v1.0',
+    chat: 'chat-v1.1',  // v1.1: short reply after a draft (Claude Sonnet 5.5 shows a post-tool reply only once it is fully written)
+    gig: 'gig-draft-v1.1',  // v1.1: estimated_duration is in hours, as the gig form and API expect
     listing: 'listing-draft-v1.0',
     post: 'post-draft-v1.0',
     mail: 'mail-summary-v1.0',
