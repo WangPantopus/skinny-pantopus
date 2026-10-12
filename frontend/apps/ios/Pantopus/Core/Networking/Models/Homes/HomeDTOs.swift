@@ -50,6 +50,7 @@ public struct HomeOccupancy: Decodable, Sendable, Hashable, Identifiable {
     public let isActive: Bool
     public let startAt: String?
     public let endAt: String?
+    public let accessEndAt: String?
     public let verificationStatus: String
 
     private enum CodingKeys: String, CodingKey {
@@ -58,6 +59,7 @@ public struct HomeOccupancy: Decodable, Sendable, Hashable, Identifiable {
         case isActive = "is_active"
         case startAt = "start_at"
         case endAt = "end_at"
+        case accessEndAt = "access_end_at"
         case verificationStatus = "verification_status"
     }
 }
