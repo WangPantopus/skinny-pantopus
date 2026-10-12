@@ -244,9 +244,11 @@ fun PostMediaTile(
         when (item.kind) {
             PostMediaKind.Image ->
                 MediaStillTile(
-                    url = item.url,
+                    url = item.thumbnailUrl ?: item.url,
                     onTap = onTap,
                     modifier = Modifier.fillMaxSize(),
+                    // Coil stores source bytes: a small view does not make the original a thumbnail.
+                    cacheOnDisk = item.thumbnailUrl != null,
                 )
             PostMediaKind.Video -> {
                 MediaStillTile(
@@ -490,9 +492,10 @@ fun LivePhotoTile(
         // a sibling of the scaled `mediaLayers`.
         Box(modifier = Modifier.fillMaxSize().scale(stillScale)) {
             MediaStillTile(
-                url = item.url,
+                url = if (showsReplayButton) item.url else item.thumbnailUrl ?: item.url,
                 contentScale = contentScale,
                 modifier = Modifier.fillMaxSize(),
+                cacheOnDisk = !showsReplayButton && item.thumbnailUrl != null,
             )
             if (clipAlpha > 0f) {
                 AndroidView(
