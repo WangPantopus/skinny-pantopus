@@ -80,6 +80,9 @@ class HomeSecurityViewModel
         private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
         val refreshNotice: StateFlow<RefreshNotice?> = _refreshNotice.asStateFlow()
 
+        private val _refreshing = MutableStateFlow(false)
+        val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
         /** Founder decision 3: who may see this screen from the store's copy, and what leaves with the screen. */
         private val gate = gates.create(homeId, listOf(HomeStoreKeys.privacy(homeId)))
         private var readGeneration = 0L
@@ -101,12 +104,14 @@ class HomeSecurityViewModel
 
         fun suspendContent() {
             active = false
+            _refreshing.value = false
             readGeneration += 1
             if (!gate.showsCopy) clearCopy()
             gate.leave()
         }
 
         private fun clearCopy() {
+            _refreshing.value = false
             _refreshNotice.value = null
             _toggles.clear()
             _state.value = GroupedListUiState.Loading
@@ -119,10 +124,12 @@ class HomeSecurityViewModel
         private fun read(force: Boolean) {
             if (!active) return
             val generation = ++readGeneration
+            _refreshing.value = force && _state.value is GroupedListUiState.Loaded
             if (_state.value !is GroupedListUiState.Loaded) _state.value = GroupedListUiState.Loading
             viewModelScope.launch {
                 val stored = readPrivacy(force, generation)
                 if (generation != readGeneration) return@launch
+                _refreshing.value = false
                 val data = stored.data
                 when {
                     // A toggle still saving wins over a copy read meanwhile; the save keeps or rolls back its own row.
