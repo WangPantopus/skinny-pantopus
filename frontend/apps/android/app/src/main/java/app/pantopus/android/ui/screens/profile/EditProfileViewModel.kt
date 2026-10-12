@@ -14,6 +14,7 @@ import app.pantopus.android.data.api.models.ai.AIDraftPostRequest
 import app.pantopus.android.data.api.models.users.ProfileUpdateRequest
 import app.pantopus.android.data.api.models.users.UserProfile
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.network.NetworkMonitor
 import app.pantopus.android.data.profile.ProfileRepository
@@ -318,16 +319,17 @@ class EditProfileViewModel
         /** Idempotent — refuses to refetch when already loaded. */
         fun load() {
             if (_state.value is EditProfileUiState.Loaded) return
-            repo.ownProfileCopy()?.user?.let(::seedProfile)
+            if (!isDirty) repo.ownProfileCopy()?.user?.let(::seedProfile)
             if (_state.value !is EditProfileUiState.Loaded) _state.value = EditProfileUiState.Loading
             viewModelScope.launch {
                 when (val result = repo.ownProfile()) {
                     is NetworkResult.Success -> {
                         // A quiet refresh cannot replace fields the person has started editing.
                         if (!isDirty) seedProfile(result.data.user)
+                        _state.value = EditProfileUiState.Loaded
                     }
                     is NetworkResult.Failure -> {
-                        if (_state.value !is EditProfileUiState.Loaded) {
+                        if (result.error.refusesStoredCopy || _state.value !is EditProfileUiState.Loaded) {
                             _state.value =
                                 EditProfileUiState.Error(
                                     result.error.message.ifBlank { "Couldn't load profile." },
