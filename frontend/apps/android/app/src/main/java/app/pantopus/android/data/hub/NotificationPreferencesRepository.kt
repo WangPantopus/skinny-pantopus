@@ -40,7 +40,9 @@ class NotificationPreferencesRepository
         suspend fun updatePreferences(
             patch: NotificationPreferencesPatch,
             dispatchGuard: AuthenticatedDispatchGuard? = null,
-        ): NetworkResult<NotificationPreferences> =
-            safeApiCall { NotificationPreferences.from(api.updatePreferences(patch, dispatchGuard).preferences) }
-                .also { if (it is NetworkResult.Success) store.put(StoreKeys.notificationPreferences, it.data) }
+        ): NetworkResult<NotificationPreferences> {
+            val remember = store.writer(StoreKeys.notificationPreferences)
+            return safeApiCall { NotificationPreferences.from(api.updatePreferences(patch, dispatchGuard).preferences) }
+                .also { if (it is NetworkResult.Success) remember(it.data) }
+        }
     }

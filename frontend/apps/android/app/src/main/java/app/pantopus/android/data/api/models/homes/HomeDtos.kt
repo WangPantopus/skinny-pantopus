@@ -37,6 +37,7 @@ data class HomeOccupancy(
     @Json(name = "start_at") val startAt: String?,
     @Json(name = "end_at") val endAt: String?,
     @Json(name = "verification_status") val verificationStatus: String,
+    @Json(name = "access_end_at") val accessEndAt: String? = null,
 )
 
 /**
@@ -98,6 +99,7 @@ val MyHome.showsCopyBeforeRecheck: Boolean
     get() =
         hasValidListContext &&
             occupancy?.endAt == null &&
+            occupancy?.accessEndAt == null &&
             when (accessKind) {
                 "private_setup" -> true
                 "shared" -> hasSharedAccess && roleBase in HOUSEHOLD_ROLE_BASES
