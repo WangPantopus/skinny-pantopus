@@ -66,10 +66,20 @@ public struct ExploreMapView: View {
         .overlay(alignment: .bottom) { savedAffordanceOverlay }
         .onAppear { focusOnMap(focus) }
         .onChange(of: focus) { _, newValue in focusOnMap(newValue) }
-        .task(id: focus) {
-            viewModel.configureFocus(focus)
-            await viewModel.load()
-        }
+        .onDisappear { viewModel.suspend() }
+        .refreshesOnStoreChange(
+            affects: { viewModel.isAffected(by: $0) },
+            recheckOnAttach: true,
+            onBackground: {
+                viewModel.suspend()
+                return true
+            },
+            perform: {
+                viewModel.configureFocus(focus)
+                await viewModel.load()
+            }
+        )
+        .id(focus)
         .task { await savedStore.loadIfNeeded() }
         .sheet(isPresented: $showFilterSheet) {
             ExploreFilterSheet(
@@ -373,16 +383,16 @@ public struct ExploreMapView: View {
                     Group {
                         if kind.isSquarePin {
                             RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-                                .fill(active ? Theme.Color.appTextInverse : kind.color)
+                                .fill(active ? Theme.Color.appSurface : kind.color)
                         } else {
-                            Circle().fill(active ? Theme.Color.appTextInverse : kind.color)
+                            Circle().fill(active ? Theme.Color.appSurface : kind.color)
                         }
                     }
                     .frame(width: 6, height: 6)
                 }
                 Text(label)
                     .font(.system(size: 11.5, weight: .semibold))
-                    .foregroundStyle(active ? Theme.Color.appTextInverse : Theme.Color.appTextStrong)
+                    .foregroundStyle(active ? Theme.Color.appSurface : Theme.Color.appTextStrong)
             }
             .frame(maxWidth: .infinity)
             .frame(height: 28)
@@ -528,6 +538,9 @@ public struct ExploreMapView: View {
 
     private var headerCountLabel: String {
         guard case let .loaded(loaded) = viewModel.state else { return "Explore" }
+        if viewModel.activeKind == .home, viewModel.homeCheckMessage != nil { return "Homes" }
+        if loaded.isEmpty, viewModel.hasUnresolvedRead { return "Explore" }
+        if viewModel.activeKind == nil, viewModel.homeCheckMessage != nil { return "\(loaded.entities.count) posts" }
         var label = "\(loaded.entities.count) nearby"
         if viewModel.filters.activeCount > 0 {
             label += " · \(viewModel.filters.activeCount) filters on"
@@ -542,8 +555,20 @@ public struct ExploreMapView: View {
         case let .error(message):
             errorBody(message)
         case let .loaded(loaded):
+            if viewModel.activeKind != .post, viewModel.isCheckingHomes {
+                ProgressView("Checking Home access…")
+                    .padding(Spacing.s3)
+                    .accessibilityIdentifier("exploreHomeCheck")
+            }
+            if let message = readFailureNotice {
+                mapReadNotice(message)
+            }
             if loaded.isEmpty {
-                emptyBody
+                if viewModel.activeKind != .home, viewModel.isCheckingPosts {
+                    ProgressView("Loading posts…").padding(Spacing.s3)
+                } else if !viewModel.hasUnresolvedRead {
+                    emptyBody
+                }
             } else {
                 switch viewModel.sheetStop {
                 case .collapsed: collapsedBody
@@ -552,6 +577,32 @@ public struct ExploreMapView: View {
                 }
             }
         }
+    }
+
+    private var readFailureNotice: String? {
+        let home = viewModel.activeKind != .post && !viewModel.isCheckingHomes ? viewModel.homeCheckMessage : nil
+        let posts = viewModel.activeKind != .home ? viewModel.postsFailureMessage : nil
+        if home != nil, posts != nil { return "Couldn't check Home access or refresh posts." }
+        return home ?? posts
+    }
+
+    private func mapReadNotice(_ message: String) -> some View {
+        ScrollView {
+            VStack(spacing: Spacing.s1) {
+                Text(message)
+                    .font(.subheadline)
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button("Try again") { Task { await viewModel.refresh() } }
+                    .font(.subheadline.bold())
+                    .frame(minHeight: 44)
+                    .accessibilityIdentifier("exploreAccessRetry")
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, Spacing.s3)
+        }
+        .frame(maxHeight: 160)
     }
 
     private func errorBody(_ message: String) -> some View {

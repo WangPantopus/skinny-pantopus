@@ -38,7 +38,11 @@ class HomeTaskNotificationArrivalTest {
     private val task = "b1000000-0000-4000-8000-000000000002"
     private val destination = DeepLinkRouter.Destination.HomeTask(home, task)
     private val identity = HomeClaimScopeTestFixture()
-    private val repo = mockk<HomeTasksRepository>(relaxUnitFun = true)
+    private val repo =
+        mockk<HomeTasksRepository>(relaxUnitFun = true).apply {
+            every { homeTasksWriter(any()) } returns {}
+            every { homeTaskWriter(any(), any()) } returns {}
+        }
     private lateinit var model: HouseholdTaskDetailViewModel
     private val response =
         HomeTaskResponse(
