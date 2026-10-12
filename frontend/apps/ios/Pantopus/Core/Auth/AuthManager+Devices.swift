@@ -227,14 +227,18 @@ extension AuthManager {
     /// purpose is password-only by contract (only `/reauthenticate` mints
     /// it), so the biometric path is skipped for it.
     func stepUp(purpose: StepUpPurpose, methods: [String] = []) async throws -> String {
+        let generation = requestSessionGeneration
         let serverAllowsDeviceKey = methods.isEmpty || methods.contains(StepUpMethod.deviceKey.rawValue)
         let serverAllowsPassword = methods.isEmpty || methods.contains(StepUpMethod.password.rawValue)
         if serverAllowsDeviceKey, purpose != .generic, canStepUpWithDeviceKey {
             do {
-                return try await stepUpWithDeviceKey(purpose: purpose)
+                let token = try await stepUpWithDeviceKey(purpose: purpose)
+                try requireRequestSession(generation)
+                return token
             } catch StepUpKeyError.cancelled {
                 throw StepUpError.cancelled
             } catch StepUpKeyError.invalidated, StepUpKeyError.notEnrolled {
+                try requireRequestSession(generation)
                 // Biometric re-enrolment (or a lost blob): drop the key and
                 // fall through to the password method.
                 StepUpKey.delete(from: store)
@@ -250,24 +254,30 @@ extension AuthManager {
                 logger.warning("Device-key step-up failed", metadata: ["error": .string("\(error)")])
             }
         }
+        try requireRequestSession(generation)
         guard serverAllowsPassword, let prompt = stepUpPasswordPrompt else { throw StepUpError.unavailable }
-        guard let password = await prompt(purpose) else { throw StepUpError.cancelled }
+        let password = await prompt(purpose)
+        try requireRequestSession(generation)
+        guard let password else { throw StepUpError.cancelled }
         return try await stepUpWithPassword(password, purpose: purpose)
     }
 
     /// `POST /api/auth/challenge {step_up}` → sign the raw challenge bytes
     /// with the step-up key → `POST /api/auth/step-up {device_key}`.
     func stepUpWithDeviceKey(purpose: StepUpPurpose) async throws -> String {
+        let generation = requestSessionGeneration
         let challenge: AuthChallengeResponse
         do {
             challenge = try await apiClient.request(AuthEndpoints.challenge(purpose: .stepUp))
         } catch let error as APIError {
             throw Self.mapStepUpError(error)
         }
+        try requireRequestSession(generation)
         guard let bytes = Base64URL.decode(challenge.challenge) else {
             throw StepUpError.server("Malformed challenge")
         }
         let signature = try await StepUpKey.sign(bytes, reason: Self.stepUpReason(for: purpose), in: store)
+        try requireRequestSession(generation)
         do {
             let response: StepUpResponse = try await apiClient.request(
                 AuthEndpoints.stepUp(
