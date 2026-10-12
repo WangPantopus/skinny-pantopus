@@ -21,7 +21,7 @@ const logger = require('../../utils/logger');
 const { toolDefinitions, executeTool } = require('./tools');
 const prompts = require('./prompts');
 const schemas = require('./schemas');
-const { complete, emptyUsage, imageBlock, isTimeoutError, systemBlocks } = require('./llm');
+const { complete, emptyUsage, imageBlock, isImageError, isTimeoutError, systemBlocks } = require('./llm');
 const { runAgentTurn, sanitizeHistory, compactForStorage } = require('./agentLoop');
 const { getAuthorizedMail } = require('./mailAccess');
 const noaa = require('../external/noaa');
@@ -282,7 +282,9 @@ async function streamChat({ userId, conversationId, message, coarseLocation, ima
     logger.error('streamChat error', { userId, error: err.message, stack: err.stack });
     sseWriter.write('error', {
       error: 'AI_ERROR',
-      message: 'Something went wrong with the AI. Please try again.',
+      message: isImageError(err)
+        ? "I couldn't read that photo. Please try a different one."
+        : 'Something went wrong with the AI. Please try again.',
     });
     sseWriter.end();
     await logChat({ status: 'error', errorMessage: err.message, ...tokens });
@@ -584,6 +586,9 @@ async function draftListingFromImages({ images, text, latitude, longitude, userI
     });
     if (isTimeoutError(err)) {
       return { error: 'AI_TIMEOUT', message: 'AI draft timed out. Please try again.', fallback: true };
+    }
+    if (isImageError(err)) {
+      return { error: 'DRAFT_INVALID', message: 'Could not read those photos. Please try different ones or create manually.', fallback: true };
     }
     return { error: 'AI_UNAVAILABLE', message: 'AI is temporarily unavailable. Please create manually.', fallback: true };
   }

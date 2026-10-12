@@ -280,7 +280,13 @@ function compactForStorage(messages) {
         photos += 1;
       }
     }
-    if (photos) kept.unshift({ type: 'text', text: photos === 1 ? '[Photo attached]' : `[${photos} photos attached]` });
+    if (photos) {
+      // Say the photo was seen. A bare "[Photo attached]" led Claude to doubt, and retract, its own earlier description.
+      const note = photos === 1
+        ? '[Photo attached. You saw it when you replied; it is not included again. Go by your earlier reply, or ask them to send it again if you need a closer look.]'
+        : `[${photos} photos attached. You saw them when you replied; they are not included again. Go by your earlier reply, or ask them to send them again if you need a closer look.]`;
+      kept.unshift({ type: 'text', text: note });
+    }
     if (kept.length) compact.push({ role: message.role, content: kept });
   }
 

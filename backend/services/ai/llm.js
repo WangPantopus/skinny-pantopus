@@ -63,6 +63,16 @@ function isTimeoutError(err) {
     || msg.includes('aborted') || msg.includes('timed out') || msg.includes('timeout');
 }
 
+/**
+ * True when Claude rejected a photo (a URL it couldn't fetch, a corrupt or oversized
+ * file, a type it doesn't read). Retrying won't help, so callers say so instead of
+ * calling the AI "unavailable".
+ */
+function isImageError(err) {
+  if (!(err instanceof Anthropic.BadRequestError)) return false;
+  return /image|download the file/i.test(String(err.error?.error?.message || err.message || ''));
+}
+
 /** A system prompt as a cacheable block. */
 function systemBlocks(text, { cache = true } = {}) {
   return [{ type: 'text', text, ...(cache ? { cache_control: { type: 'ephemeral' } } : {}) }];
@@ -182,6 +192,7 @@ module.exports = {
   emptyUsage,
   addUsage,
   isTimeoutError,
+  isImageError,
   systemBlocks,
   parseJsonObject,
   imageBlock,

@@ -174,7 +174,7 @@ async function chat(client) {
   await turn('turn 1 (tool call, streamed answer)', 'What weather alerts are active near my home?', { expectTool: 'get_place_alerts' });
   // Turn 2 is sent the stored transcript from turn 1: this is the stateless replay the old design never needed.
   await turn('turn 2 (replays the stored transcript)', 'Thanks. Write a short post telling neighbors to cover their plants tonight.', { expectTool: 'create_post_draft' });
-  await turn('turn 3 (plain follow-up, no tool)', 'Make it friendlier.');
+  await turn('turn 3 (follow-up revises the earlier draft)', 'Make it friendlier.', { expectTool: 'create_post_draft' });
 }
 
 (async () => {
