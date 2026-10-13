@@ -93,6 +93,32 @@ The feed service and post detail endpoint enforce a floor of `approx_area`
 via `leastPrecise()`. Posts always return `locationUnlocked: false` for
 non-authors.
 
+### Nearby Plans
+
+A plan is a `Post` (the public card) plus a `Plan` row. The exact place never
+goes on the Post: its point, venue name, street address and home live only on
+`Plan` (server-only table), and reach only the host and people who are in,
+through `PlanDetail` (`backend/services/plans/planService.js`).
+
+| Viewer | Point | Place, address, note, people |
+|--------|-------|------------------------------|
+| Host, people who are in | exact, in `place` | yes |
+| Anyone else allowed to see the plan | the public area point | never |
+
+- **The area point is stored on the Post** when the plan is made: the exact
+  point through `applyLocationPrecision` (`approx_area`; `neighborhood_only`
+  for playdates). The map layer, lists, distance bands and radius filters all
+  use the stored area point, never the exact one, so moving the viewer's
+  point (or a reported GPS fix) around can't trilaterate the exact place.
+- **Distances are bands** (`under_1_mi` … `about_5_mi`, none past 10 miles).
+- **Plan posts are kept out of the generic surfaces:** `distribution_targets`
+  is `{plans}` and `visibility` is `private`, so the Pulse feed, the posts map
+  layer, other people's profile lists and `GET /api/posts/:id` don't show them
+  to anyone but the host.
+- **Playdates** don't exist for viewers without a verified address (or with
+  the `plans_playdates` flag off), and show the part of the day instead of the
+  time until the viewer is in.
+
 ### Saved / Viewing Places
 
 These are per-user preferences stored locally or in `SavedPlace`.
@@ -229,3 +255,4 @@ See `backend/utils/verifiedCoordinateGuard.js`:
 - [x] Gig bid acceptance posts address system message to chat
 - [x] Listing reveal-address posts system message to chat
 - [x] `ListingAddressGrant` table with RLS policies created
+- [x] Nearby Plans: the exact place only in `PlanDetail` (host and people who are in); the Post holds the area point; bands and filters use the area point
