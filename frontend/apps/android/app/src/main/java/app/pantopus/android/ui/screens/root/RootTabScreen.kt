@@ -2112,7 +2112,7 @@ private fun usesSavedPageOfflineStrip(route: String?): Boolean =
             PantopusRoute.Messages.path, PantopusRoute.Pulse.path, ChildRoutes.PLACE_DASHBOARD, ChildRoutes.PLACE_DETAIL,
             ChildRoutes.PULSE_FEED, ChildRoutes.PULSE_POST, ChildRoutes.CHAT_CONVERSATION, ChildRoutes.PROFILE,
             ChildRoutes.PUBLIC_PROFILE, ChildRoutes.NOTIFICATIONS_ROUTE, ChildRoutes.CONNECTIONS_ROUTE, ChildRoutes.MY_POSTS,
-            ChildRoutes.SAVED_PLACES, ChildRoutes.RECENT_ACTIVITY, ChildRoutes.MENU,
+            ChildRoutes.SAVED_PLACES, ChildRoutes.RECENT_ACTIVITY, ChildRoutes.MENU, ChildRoutes.EXPLORE_ROUTE,
             ChildRoutes.SETTINGS_NOTIFICATIONS, ChildRoutes.SETTINGS_PRIVACY,
         )
 
@@ -2131,6 +2131,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
     val chatBadgeViewModel: ChatBadgeViewModel = hiltViewModel()
     val currentHandle by sessionViewModel.currentHandle.collectAsStateWithLifecycle()
     val online by sessionViewModel.isOnline.collectAsStateWithLifecycle()
+    val plansMapFlags by hiltViewModel<PlansGateViewModel>().flags.collectAsStateWithLifecycle()
     val liveInboxBadgeCount by chatBadgeViewModel.unreadMessages.collectAsStateWithLifecycle()
     // §1C-b — context-aware navigation drawer, opened from the Hub menu button
     // (repurposed from "open Settings"; Settings now lives as a drawer row).
@@ -2620,7 +2621,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
     ) {
         Scaffold(
             topBar = {
-                if (!online && usesSavedPageOfflineStrip(backStackEntry?.destination?.route)) {
+                val route = backStackEntry?.destination?.route
+                // Nearby while `plans` is on is the Plans map, which floats its own strip over the map.
+                val plansMap = plansMapFlags.plans && route == PantopusRoute.Nearby.path
+                if (!online && usesSavedPageOfflineStrip(route) && !plansMap) {
                     OfflineBannerHost(isOffline = true, modifier = Modifier.statusBarsPadding()) { }
                 }
             },
@@ -2657,7 +2661,11 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     // stays reachable (back) and is the no-home fallback;
                     // parity with the iOS HubTabRoot auto-land.
                     val placeHostVm: HomeTabHostViewModel = hiltViewModel()
-                    app.pantopus.android.ui.components.RefreshOnStoreChange(placeHostVm::resolve)
+                    // A store change re-evaluates the landing, except under the address review: resolving there resets
+                    // its preview and save state, and after Save it would replace "Saved privately" with the Hub.
+                    app.pantopus.android.ui.components.RefreshOnStoreChange {
+                        if (placeHostVm.landing.value != HomeLanding.Review) placeHostVm.resolve()
+                    }
                     val placeLanding by placeHostVm.landing.collectAsStateWithLifecycle()
                     val verifyScope = rememberCoroutineScope()
                     var didLandPlace by rememberSaveable { mutableStateOf(false) }
