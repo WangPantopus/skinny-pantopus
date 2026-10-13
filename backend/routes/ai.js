@@ -46,6 +46,9 @@ const chatSchema = Joi.object({
     state: Joi.string().max(50),
   }).optional(),
   images: Joi.array().items(Joi.string().uri()).max(5).optional(),
+  // The draft cards this app can show beyond the original ones (e.g. "pickup_schedule").
+  // Unknown names are ignored, so older servers and newer apps get along.
+  cards: Joi.array().items(Joi.string().max(40)).max(20).optional(),
 });
 
 const draftGigSchema = Joi.object({
@@ -116,7 +119,7 @@ router.get('/health', (req, res) => {
 // ─── Streaming Chat ─────────────────────────────────────────────────────────
 
 router.post('/chat', verifyToken, aiChatLimiter, validate(chatSchema), asyncHandler(async (req, res) => {
-  const { message, conversationId, coarseLocation, images } = req.body;
+  const { message, conversationId, coarseLocation, images, cards } = req.body;
   const userId = req.user.id;
 
   // Set up SSE headers
@@ -157,7 +160,7 @@ router.post('/chat', verifyToken, aiChatLimiter, validate(chatSchema), asyncHand
   });
 
   await agentService.streamChat(
-    { userId, conversationId, message, coarseLocation, images, signal: clientGone.signal },
+    { userId, conversationId, message, coarseLocation, images, cards, signal: clientGone.signal },
     sseWriter
   );
 }));

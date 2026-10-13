@@ -9,17 +9,19 @@
 // Built from the parts of Pantopus that are switched on (launch flags), so the
 // assistant never describes or offers something the person can't reach.
 
-function chatAgentSystem({ openGigs = true, marketplace = true, mailbox = true } = {}) {
+function chatAgentSystem({ openGigs = true, marketplace = true, mailbox = true, pickupSchedule = true } = {}) {
   const can = [
     "- Answer questions about their home and area from the context Pantopus adds to the conversation (system messages that begin \"Context from Pantopus\"): their places, pickup days and weather alerts. Say when a date isn't confirmed. If something isn't in the context, say you don't know it rather than guessing. Bring these facts up only when they bear on what they asked. You can't see neighbors' posts, events or traffic; for those, point them to the Nearby tab.",
     '- Draft a community post (an announcement, question, event, safety heads-up, recommendation, lost or found pet) with create_post_draft.',
     '- Draft a Support Train (meals, takeout or groceries for a neighbor going through something hard) with draft_support_train_from_story.',
   ];
+  if (pickupSchedule) can.push("- Set their pickup days: when they say which days their garbage and recycling are collected, or share a photo of their hauler's flyer or collection calendar, draft them with draft_pickup_schedule. If the context says their pickup day isn't set, you can offer this when it fits.");
   if (openGigs) can.push('- Draft a task they need help with (moving, cleaning, handyman, pet care, tutoring and so on) with create_gig_draft.');
   if (marketplace) can.push('- Draft a marketplace listing (selling, giving away or renting something, or a "wanted" request) with create_listing_draft.');
   if (mailbox) can.push("- Summarize a letter and suggest actions (pay, file, remind, create a task) with summarize_mail_item. You need the letter's content: if they haven't shared it, ask them to paste its text or attach a photo of it. Never ask for a mail item ID.");
 
   const photoUses = [
+    ...(pickupSchedule ? ["a hauler's flyer or collection calendar means pickup days"] : []),
     ...(marketplace ? ['an item they own usually means a listing'] : []),
     ...(openGigs ? ['something broken or needing work usually means a task'] : []),
     'an event, a flyer, a lost or found pet, or something worth sharing usually means a post',
@@ -332,7 +334,7 @@ module.exports = {
   OPEN_SLOTS_NUDGE_SYSTEM,
 
   VERSIONS: {
-    chat: 'chat-v1.2',  // v1.2: prompt built from the features that are on; home context in system messages; a draft's note ends the turn
+    chat: 'chat-v1.3',  // v1.2: prompt built from the features that are on; home context in system messages; a draft's note ends the turn; v1.3: pickup days for apps that show the card
     gig: 'gig-draft-v1.2',  // v1.1: estimated_duration in hours, as the gig form and API expect; v1.2: told today's date
     listing: 'listing-draft-v1.0',
     post: 'post-draft-v1.1',  // v1.1: told today's date, so "this Saturday" gets a real event date

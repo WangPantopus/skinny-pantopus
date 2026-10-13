@@ -28,6 +28,7 @@ const {
 const { runAgentTurn, sanitizeHistory, compactForStorage } = require('./agentLoop');
 const { buildChatContext, lastContextText, userTimeZone, CONTEXT_HEADER } = require('./chatContext');
 const { photoBlocks } = require('./photos');
+const { refreshPickupDraft } = require('./pickupDraft');
 const { getAuthorizedMail } = require('./mailAccess');
 const noaa = require('../external/noaa');
 const { isLaunchFeatureEnabled } = require('../../utils/featureFlags');
@@ -37,10 +38,12 @@ const { isLaunchFeatureEnabled } = require('../../utils/featureFlags');
 // drafts would lead to hidden composers). The drafting code itself stays.
 // Launch cut #10 (Mailbox): it doesn't read or summarize mail either.
 // Gift funds (cut #9) aren't offered as a Support Train kind of help.
-function launchScopedChatTools() {
+// The pickup-days card goes only to apps that say they can show it (`cards`).
+function launchScopedChatTools({ pickupSchedule = false } = {}) {
   const giftFunds = isLaunchFeatureEnabled('gift_funds');
   return toolDefinitions
     .filter((tool) => {
+      if (tool.name === 'draft_pickup_schedule') return pickupSchedule;
       if (tool.name === 'create_gig_draft') return isLaunchFeatureEnabled('open_gigs');
       if (tool.name === 'create_listing_draft') return isLaunchFeatureEnabled('marketplace');
       if (['get_mail_item', 'summarize_mail_item'].includes(tool.name)) return isLaunchFeatureEnabled('mailbox');
@@ -63,11 +66,12 @@ function withoutGiftFunds(tool) {
   };
 }
 
-function launchScopedChatInstructions() {
+function launchScopedChatInstructions({ pickupSchedule = false } = {}) {
   return prompts.chatAgentSystem({
     openGigs: isLaunchFeatureEnabled('open_gigs'),
     marketplace: isLaunchFeatureEnabled('marketplace'),
     mailbox: isLaunchFeatureEnabled('mailbox'),
+    pickupSchedule,
   });
 }
 
@@ -77,6 +81,7 @@ const TOOL_STATUS = {
   create_gig_draft: 'Drafting your task…',
   create_listing_draft: 'Drafting your listing…',
   draft_support_train_from_story: 'Drafting your Support Train…',
+  draft_pickup_schedule: 'Drafting your pickup days…',
   get_place_alerts: 'Checking alerts near your place…',
   get_user_context: 'Looking at your places…',
   list_user_support_trains: 'Looking up your Support Trains…',
@@ -232,7 +237,7 @@ function buildUserContent({ message, photos, unreadable, timeZone, coarseLocatio
  * @param {AbortSignal} [params.signal] — Aborts when the client disconnects, which stops the model call
  * @param {object} sseWriter — { write(event, data), end() }
  */
-async function streamChat({ userId, conversationId, message, coarseLocation, images, signal }, sseWriter) {
+async function streamChat({ userId, conversationId, message, coarseLocation, images, cards, signal }, sseWriter) {
   const startTime = Date.now();
 
   const client = getAnthropicClient();
@@ -299,8 +304,10 @@ async function streamChat({ userId, conversationId, message, coarseLocation, ima
     ...(systemMessages && newContext ? [{ role: 'system', content: newContext }] : []),
   ];
 
-  // The tools this deployment offers; a call to any other name is answered as unknown.
-  const tools = launchScopedChatTools();
+  // The tools this deployment offers, and the cards this app can show; a call to any
+  // other name is answered as unknown.
+  const pickupSchedule = Array.isArray(cards) && cards.includes('pickup_schedule');
+  const tools = launchScopedChatTools({ pickupSchedule });
   const toolNames = tools.map((tool) => tool.name);
   const ran = new Map();
 
@@ -327,7 +334,7 @@ async function streamChat({ userId, conversationId, message, coarseLocation, ima
       maxRounds: MAX_TOOL_ROUNDS,
       // The tools and this prompt are the same for everyone, so one cache entry serves every
       // conversation; an hour keeps it warm between the pilot's sparse messages.
-      system: systemBlocks(launchScopedChatInstructions(), { ttl: '1h' }),
+      system: systemBlocks(launchScopedChatInstructions({ pickupSchedule }), { ttl: '1h' }),
       tools,
       messages,
       signal: turnSignal,
@@ -1065,6 +1072,7 @@ const DRAFT_TYPES = {
   create_gig_draft: 'gig',
   create_listing_draft: 'listing',
   draft_support_train_from_story: 'support_train',
+  draft_pickup_schedule: 'pickup_schedule',
 };
 // Lines the app adds to a person's message, which aren't theirs to see again.
 const APP_LINES = [
@@ -1081,10 +1089,30 @@ function personText(text) {
   return shown.trim();
 }
 
+/** What a stored tool call returned (its tool_result), parsed; null when it can't be read. */
+function storedResults(messages) {
+  const results = new Map();
+  for (const message of messages) {
+    if (message.role !== 'user' || !Array.isArray(message.content)) continue;
+    for (const block of message.content) {
+      if (block.type !== 'tool_result') continue;
+      const text = typeof block.content === 'string' ? block.content : block.content?.find?.((part) => part.type === 'text')?.text;
+      try {
+        results.set(block.tool_use_id, JSON.parse(text));
+      } catch {
+        // Not a draft's result; nothing to show from it.
+      }
+    }
+  }
+  return results;
+}
+
 /** The stored transcript as the apps show it: the person's messages, the replies, and the drafts as cards. */
 function displayMessages(stored) {
   const items = [];
-  for (const message of sanitizeHistory(stored)) {
+  const history = sanitizeHistory(stored);
+  const results = storedResults(history);
+  for (const message of history) {
     if (message.role === 'system') continue;
     const blocks = typeof message.content === 'string' ? [{ type: 'text', text: message.content }] : message.content;
     if (message.role === 'user') {
@@ -1107,9 +1135,14 @@ function displayMessages(stored) {
       if (text.trim()) items.push({ role: 'assistant', text: text.trim() });
       text = '';
       const { note: _note, ...fields } = block.input || {};
-      const draft = block.name === 'draft_support_train_from_story'
-        ? { story: fields.story, support_modes_requested: fields.support_modes_requested || ['meal'] }
-        : fields;
+      let draft = fields;
+      if (block.name === 'draft_support_train_from_story') {
+        draft = { story: fields.story, support_modes_requested: fields.support_modes_requested || ['meal'] };
+      } else if (block.name === 'draft_pickup_schedule') {
+        // The card is what the tool returned (it knows the home), with the next pickup brought up to date.
+        draft = refreshPickupDraft(results.get(block.id)?.draft);
+        if (!draft) continue;
+      }
       items.push({ role: 'assistant', draft: { type: DRAFT_TYPES[block.name], draft } });
     }
     if (text.trim()) items.push({ role: 'assistant', text: text.trim() });

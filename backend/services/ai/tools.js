@@ -14,6 +14,7 @@ const { getAuthorizedMail } = require('./mailAccess');
 const { listEffectivelyOpenSlots } = require('../supportTrainSlotAvailability');
 const { resolveLocation } = require('../context/locationResolver');
 const { escapeIlike } = require('../../utils/escapeIlike');
+const { draftPickupSchedule } = require('./pickupDraft');
 
 const {
   validateGigDraft,
@@ -196,6 +197,36 @@ const toolDefinitions = [
     },
   },
   {
+    // Offered only to apps that can show the card (agentService).
+    name:'draft_pickup_schedule',
+    description: "Draft the days their garbage and recycling are collected, from what they say or a photo of their hauler's flyer, schedule or calendar. It appears as a card they check and then save to their home; nothing is saved until they do. Fill in only what they told you or the photo shows and leave the rest null: the home's saved days are kept for anything left null.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        garbage_weekday: {
+          type: ['string', 'null'],
+          enum: ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU', null],
+          description: 'The weekday garbage is collected; garbage is always weekly. Null when they did not say.',
+        },
+        recycling_frequency: {
+          type: ['string', 'null'],
+          enum: ['weekly', 'biweekly', 'none', null],
+          description: 'weekly, biweekly (every other week), none (no recycling collection), or null when they did not say.',
+        },
+        recycling_next_date: {
+          type: ['string', 'null'],
+          description: 'With weekly or biweekly: the date of one recycling collection, YYYY-MM-DD. Any collection date works; for every other week it fixes which weeks. Null otherwise.',
+        },
+        note: {
+          type: ['string', 'null'],
+          description: `${DRAFT_NOTE} Nothing changes until they tap Save on the card: write about the draft, never as if their schedule were already set, saved or changed.`,
+        },
+      },
+      required: ['garbage_weekday', 'recycling_frequency', 'recycling_next_date', 'note'],
+      additionalProperties: false,
+    },
+  },
+  {
     name:'list_user_support_trains',
     description: 'List Support Trains the current user organizes or participates in.',
     input_schema: {
@@ -239,6 +270,7 @@ const DRAFT_CLOSINGS = {
   create_gig_draft: "Here's a draft task. Change anything you like, then post it.",
   create_listing_draft: "Here's a draft listing. Change anything you like, then post it.",
   draft_support_train_from_story: 'I have what I need to start a Support Train. Open the card to set it up.',
+  draft_pickup_schedule: 'Here are your pickup days. Check them, then save them to your home.',
 };
 
 /**
@@ -250,7 +282,11 @@ function closingForDrafts(calls) {
     && !call.result.error && call.result.valid !== false);
   if (!finished) return null;
   const notes = calls.map((call) => call.result.note).filter((note) => typeof note === 'string' && note.trim());
-  return notes.length ? notes.join(' ') : DRAFT_CLOSINGS[calls[0].name];
+  if (!notes.length) return DRAFT_CLOSINGS[calls[0].name];
+  // A note can read as if the change were made ("recycling is set to none"); the
+  // pickup card changes nothing until it is saved.
+  const saveFirst = calls.some((call) => call.name === 'draft_pickup_schedule') ? ' Nothing changes until you tap Save.' : '';
+  return notes.join(' ') + saveFirst;
 }
 
 const TOOL_TIMEOUT_MS = 5000;
@@ -369,6 +405,9 @@ async function _executeToolImpl(name, args, userId, _signal) {
         note: args.note || null,
       };
     }
+
+    case 'draft_pickup_schedule':
+      return draftPickupSchedule(args, userId);
 
     case 'list_user_support_trains': {
       try {
