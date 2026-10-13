@@ -119,7 +119,7 @@ struct PlanGoingSection: View {
                 message: "It's now \(PlanScreenLines.when(card)). Still coming?"
             )
             HStack(spacing: 10) {
-                Button("Can't make it") { onConfirm(.cantMakeIt) }
+                Button("Can't make it") { onConfirm(.cantMakeIt(host: card.host.displayName)) }
                     .planButton(.secondary, size: .small)
                 Button("Still coming") { Task { _ = await viewModel.stillComing(true) } }
                     .planButton(.primary, size: .small)

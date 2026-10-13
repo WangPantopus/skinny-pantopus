@@ -157,6 +157,8 @@ enum PlanConfirmation: Identifiable, Equatable {
     case withdraw(host: String)
     case leaveWaitlist
     case cantMakeIt(host: String)
+    /// "Can't make it" to the host's "Still coming?" (H11): answers it and leaves.
+    case notComing(host: String)
     case blockHost(name: String)
     case removeGuest(name: String, requestId: String, atHome: Bool)
 
@@ -165,6 +167,7 @@ enum PlanConfirmation: Identifiable, Equatable {
         case .withdraw: "withdraw"
         case .leaveWaitlist: "leaveWaitlist"
         case .cantMakeIt: "cantMakeIt"
+        case .notComing: "notComing"
         case .blockHost: "blockHost"
         case let .removeGuest(_, requestId, _): "remove.\(requestId)"
         }
@@ -174,7 +177,7 @@ enum PlanConfirmation: Identifiable, Equatable {
         switch self {
         case .withdraw: "Withdraw your request?"
         case .leaveWaitlist: "Leave the waitlist?"
-        case .cantMakeIt: "Can't make it?"
+        case .cantMakeIt, .notComing: "Can't make it?"
         case let .blockHost(name): "Block \(PlanCardLines.firstName(name))?"
         case let .removeGuest(name, _, _): "Remove \(PlanCardLines.firstName(name))?"
         }
@@ -186,7 +189,7 @@ enum PlanConfirmation: Identifiable, Equatable {
             "\(PlanCardLines.firstName(host)) won't see it anymore."
         case .leaveWaitlist:
             "You'll lose your place in line."
-        case let .cantMakeIt(host):
+        case let .cantMakeIt(host), let .notComing(host):
             "We'll tell \(PlanCardLines.firstName(host)), and your spot goes to the next person waiting."
         case .blockHost:
             "You won't see each other's plans, requests or messages."
@@ -201,7 +204,7 @@ enum PlanConfirmation: Identifiable, Equatable {
         switch self {
         case .withdraw: "Withdraw"
         case .leaveWaitlist: "Leave"
-        case .cantMakeIt: "I can't make it"
+        case .cantMakeIt, .notComing: "I can't make it"
         case .blockHost: "Block"
         case .removeGuest: "Remove"
         }
@@ -216,6 +219,8 @@ enum PlanConfirmation: Identifiable, Equatable {
             await viewModel.withdraw() ? "You left the waitlist" : nil
         case .cantMakeIt:
             await viewModel.withdraw() ? "We told the host" : nil
+        case .notComing:
+            await viewModel.stillComing(false) ? "We told the host" : nil
         case .blockHost:
             await viewModel.blockHost() ? "Blocked" : nil
         case let .removeGuest(_, requestId, _):
