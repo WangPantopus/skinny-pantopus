@@ -276,7 +276,10 @@ public struct ChatConversationView: View {
             isPresented: $photosPickerPresented,
             selection: $photosPickerSelection,
             maxSelectionCount: 5,
-            matching: .any(of: [.images, .videos])
+            // The assistant reads photos only. `.compatible` hands over a JPEG for an
+            // iPhone's HEIC photo, which neither the assistant nor Android and web can open.
+            matching: mode == .aiAssistant ? PHPickerFilter.images : PHPickerFilter.any(of: [.images, .videos]),
+            preferredItemEncoding: .compatible
         )
         .onChange(of: photosPickerSelection) { _, items in
             handlePickedPhotos(items)
@@ -521,8 +524,10 @@ public struct ChatConversationView: View {
         Task {
             for item in items.prefix(5) {
                 guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
-                let mimeType = item.supportedContentTypes.first?.preferredMIMEType ?? "image/jpeg"
-                let ext = item.supportedContentTypes.first?.preferredFilenameExtension ?? "jpg"
+                // Name the file by what was handed over (a JPEG in place of a HEIC, say).
+                let sniffed = ChatImageSniffer.type(of: data)
+                let mimeType = sniffed?.mimeType ?? item.supportedContentTypes.first?.preferredMIMEType ?? "image/jpeg"
+                let ext = sniffed?.fileExtension ?? item.supportedContentTypes.first?.preferredFilenameExtension ?? "jpg"
                 await MainActor.run {
                     viewModel.queueAttachment(
                         kind: mimeType.hasPrefix("image/") ? .image : .document,
@@ -1216,6 +1221,7 @@ extension ChatConversationView {
             content: bubble,
             rowWidth: rowWidth,
             incomingInitials: incomingInitials,
+            aiStatus: viewModel.aiStatus,
             onLockedAction: { upgradePromptPresented = true },
             onReply: { viewModel.beginReply(to: bubble.id) },
             onEdit: { viewModel.beginEdit(messageId: bubble.id) },
@@ -1227,7 +1233,21 @@ extension ChatConversationView {
                 selectedMessageIds = [bubble.id]
             },
             onReact: { reaction in Task { await viewModel.react(messageId: bubble.id, reaction: reaction) } },
-            onUseAIDraft: onUseAIDraft,
+            onUseAIDraft: { draft in
+                // A pickup-days card saves here; once saved it opens Today, where the days show.
+                if let pickup = draft.pickup {
+                    if pickup.save == .saved, let today = URL(string: "pantopus://today") {
+                        DeepLinkRouter.shared.handle(url: today)
+                    } else {
+                        Task { await viewModel.savePickupSchedule(draft) }
+                    }
+                    return
+                }
+                // Leave without the keyboard up: coming back with it still raised
+                // hides the composer behind it.
+                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                onUseAIDraft(draft)
+            },
             onOpenGig: openGigDetail,
             onOpenListing: openListingDetail,
             onOpenLocation: openLocationInMaps,
@@ -2486,6 +2506,8 @@ private struct ChatBubbleRow: View {
     let content: ChatBubbleContent
     let rowWidth: CGFloat
     let incomingInitials: String?
+    /// What the assistant is doing while a reply is pending ("Drafting your post…").
+    var aiStatus: String?
     let onLockedAction: @MainActor () -> Void
     let onReply: @MainActor () -> Void
     let onEdit: @MainActor () -> Void
@@ -3082,7 +3104,7 @@ private struct ChatBubbleRow: View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
             aiTag
             if text.isEmpty, estimate == nil, drafts.isEmpty {
-                ChatAIThinkingRow()
+                ChatAIThinkingRow(status: aiStatus)
             } else {
                 Text(text)
                     .font(.system(size: 13.5))
@@ -3149,10 +3171,18 @@ private struct ChatBubbleRow: View {
                     .foregroundStyle(Theme.Color.appText)
                     .lineLimit(2)
                 if let summary = draft.summary, summary != draft.title {
+                    // In the scrolling thread SwiftUI otherwise settles on one line.
                     Text(summary)
                         .font(.system(size: 11.5))
                         .foregroundStyle(Theme.Color.appTextSecondary)
-                        .lineLimit(3)
+                        .lineLimit(draft.pickup == nil ? 3 : nil)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if case let .failed(message) = draft.pickup?.save {
+                    Text(message)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Theme.Color.error)
+                        .accessibilityIdentifier("chatAIPickupError")
                 }
                 if let price = draft.priceLabel {
                     Text(price)
@@ -3173,6 +3203,7 @@ private struct ChatBubbleRow: View {
                         .frame(minHeight: 34)
                     }
                     .buttonStyle(.plain)
+                    .disabled(draft.pickup?.save == .saving)
                     .accessibilityIdentifier("chatAIDraftUse_\(draft.type)")
                 }
             }
@@ -3192,6 +3223,8 @@ private struct ChatBubbleRow: View {
             case "gig": "Task Draft"
             case "listing": "Listing Draft"
             case "post": "Post Draft"
+            case "support_train": "Support Train"
+            case "pickup_schedule": "Pickup days"
             case "mail_summary": "Mail Summary"
             default: "Draft"
             }
@@ -3202,6 +3235,14 @@ private struct ChatBubbleRow: View {
             case "gig": "Use in task composer"
             case "listing": "Use in listing composer"
             case "post": "Use in Pulse composer"
+            case "support_train": "Set up the Support Train"
+            case "pickup_schedule":
+                switch draft.pickup?.save {
+                case .saving: "Saving…"
+                case .saved: "Saved. See them on Today"
+                case .failed: "Try again"
+                case nil: "Save to my home"
+                }
             default: "Use draft"
             }
         }
@@ -3211,6 +3252,8 @@ private struct ChatBubbleRow: View {
             case "gig": .hammer
             case "listing": .tag
             case "post": .pencil
+            case "support_train": .utensils
+            case "pickup_schedule": .calendar
             case "mail_summary": .mailbox
             default: .sparkles
             }
@@ -3218,7 +3261,7 @@ private struct ChatBubbleRow: View {
 
         private var accent: Color {
             switch draft.type {
-            case "listing": Theme.Color.success
+            case "listing", "pickup_schedule": Theme.Color.success
             case "mail_summary": Theme.Color.warning
             default: Theme.Color.magic
             }
@@ -3226,7 +3269,7 @@ private struct ChatBubbleRow: View {
 
         private var background: Color {
             switch draft.type {
-            case "listing": Theme.Color.successBg
+            case "listing", "pickup_schedule": Theme.Color.successBg
             case "mail_summary": Theme.Color.warningBg
             default: Theme.Color.magicBg
             }
@@ -3416,6 +3459,8 @@ private struct ChatReadReceipt: View {
 /// stream is in flight and no text has arrived yet. A pulsing sparkles
 /// glyph plus muted copy (the design's shimmer gradient, simplified).
 private struct ChatAIThinkingRow: View {
+    /// What the assistant is doing ("Drafting your post…"); "Thinking…" until it says.
+    var status: String?
     @State private var pulsing = false
 
     var body: some View {
@@ -3424,12 +3469,12 @@ private struct ChatAIThinkingRow: View {
                 .opacity(pulsing ? 1 : 0.55)
                 .scaleEffect(pulsing ? 1.12 : 1)
                 .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: pulsing)
-            Text("Thinking…")
+            Text(status ?? "Thinking…")
                 .font(.system(size: 12.5, weight: .medium))
                 .foregroundStyle(Theme.Color.appTextMuted)
         }
         .onAppear { pulsing = true }
-        .accessibilityLabel("Pantopus AI is thinking")
+        .accessibilityLabel(status ?? "Pantopus AI is thinking")
         .accessibilityIdentifier("chatAIThinking")
     }
 }
@@ -3822,5 +3867,17 @@ private struct ChatTopicStrip: View {
         case "business": .building2
         default: .messageCircle
         }
+    }
+}
+
+/// The format a picked photo's bytes are actually in, so its upload is named
+/// and typed by what was handed over, not by what the library first offered.
+enum ChatImageSniffer {
+    static func type(of data: Data) -> (mimeType: String, fileExtension: String)? {
+        let head = [UInt8](data.prefix(12))
+        if head.count >= 3, head[0] == 0xFF, head[1] == 0xD8, head[2] == 0xFF { return ("image/jpeg", "jpg") }
+        if head.count >= 4, head[0] == 0x89, head[1] == 0x50, head[2] == 0x4E, head[3] == 0x47 { return ("image/png", "png") }
+        if head.count >= 12, head[8] == 0x57, head[9] == 0x45, head[10] == 0x42, head[11] == 0x50 { return ("image/webp", "webp") }
+        return nil
     }
 }

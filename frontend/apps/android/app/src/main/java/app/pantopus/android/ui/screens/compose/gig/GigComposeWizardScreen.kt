@@ -5,9 +5,7 @@ package app.pantopus.android.ui.screens.compose.gig
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
-import android.media.MediaRecorder
 import android.net.Uri
-import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -153,66 +151,6 @@ fun GigComposeWizardScreen(
         }
     }
 
-    // A12.8 — voice-note recording (mic tool button). RECORD_AUDIO is a
-    // runtime permission; the recorder writes an m4a/AAC file into the
-    // cache dir, which is transcribed via `POST /api/ai/transcribe`.
-    var isRecording by remember { mutableStateOf(false) }
-    var recorder by remember { mutableStateOf<MediaRecorder?>(null) }
-    val voiceNoteFile = remember { File(context.cacheDir, "gigComposeVoiceNote.m4a") }
-
-    fun startRecording() {
-        if (isRecording) return
-        runCatching {
-            val mediaRecorder =
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    MediaRecorder(context)
-                } else {
-                    @Suppress("DEPRECATION")
-                    MediaRecorder()
-                }
-            mediaRecorder.setAudioSource(MediaRecorder.AudioSource.MIC)
-            mediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-            mediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-            mediaRecorder.setOutputFile(voiceNoteFile.absolutePath)
-            mediaRecorder.prepare()
-            mediaRecorder.start()
-            recorder = mediaRecorder
-            isRecording = true
-        }.onFailure {
-            recorder?.release()
-            recorder = null
-            isRecording = false
-        }
-    }
-
-    fun stopRecordingAndTranscribe() {
-        val active = recorder ?: return
-        isRecording = false
-        recorder = null
-        runCatching {
-            active.stop()
-            active.release()
-        }
-        runCatching { voiceNoteFile.readBytes() }
-            .getOrNull()
-            ?.takeIf { it.isNotEmpty() && it.size <= VOICE_NOTE_MAX_BYTES }
-            ?.let { viewModel.transcribeAudio("voice-note.m4a", "audio/mp4", it) }
-    }
-
-    val micPermissionLauncher =
-        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            if (granted) startRecording()
-        }
-
-    fun onMicTap() {
-        when {
-            isRecording -> stopRecordingAndTranscribe()
-            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
-                PackageManager.PERMISSION_GRANTED -> startRecording()
-            else -> micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-        }
-    }
-
     LaunchedEffect(preselectedCategoryKey) {
         viewModel.preselectCategoryIfNeeded(GigComposeCategory.fromRawKey(preselectedCategoryKey))
     }
@@ -262,8 +200,6 @@ fun GigComposeWizardScreen(
                     MagicDescribeStep(
                         state = state,
                         vm = viewModel,
-                        isRecording = isRecording,
-                        onMicTap = ::onMicTap,
                         onImageTap = {
                             photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                         },
@@ -293,9 +229,6 @@ fun GigComposeWizardScreen(
         onPickFile = { filePicker.launch("*/*") },
     )
 }
-
-/** A12.8 — backend transcribe cap (25 MB Whisper limit). */
-private const val VOICE_NOTE_MAX_BYTES = 25 * 1024 * 1024
 
 /**
  * P0.2 — copy a picked content URI to bytes + mime for the multipart

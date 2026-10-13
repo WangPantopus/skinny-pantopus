@@ -41,19 +41,27 @@ public struct ChatInitialTopic: Sendable, Hashable {
 }
 
 public struct AIChatStreamRequest: Encodable, Sendable {
+    /// Draft cards this app shows beyond the original ones; the server offers
+    /// the matching tools only to apps that list them.
+    public static let supportedCards = ["pickup_schedule"]
+
     public let message: String
     public let conversationId: String?
     public let images: [String]?
+    public let cards: [String]
 
     public init(message: String, conversationId: String? = nil, images: [String]? = nil) {
         self.message = message
         self.conversationId = conversationId
         self.images = images
+        cards = Self.supportedCards
     }
 }
 
 public enum AIChatStreamEvent: Sendable, Equatable {
     case conversation(id: String)
+    /// What the assistant is doing while a tool runs ("Drafting your post…").
+    case status(String)
     case textDelta(String)
     case draft(ChatAIDraftCard)
     case done
@@ -94,7 +102,11 @@ final class AIChatStreamClient: AIChatStreaming, @unchecked Sendable {
                     urlRequest.httpBody = try JSONEncoder().encode(request)
                     let (bytes, response) = try await session.bytes(for: urlRequest)
                     guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-                        continuation.yield(.error("Failed to connect to AI."))
+                        let status = (response as? HTTPURLResponse)?.statusCode
+                        // 429: the hourly limit (backend/middleware/rateLimiter.js aiChatLimiter), not a connection problem.
+                        continuation.yield(.error(status == 429
+                                ? "You've reached this hour's limit for Pantopus AI. Please try again later."
+                                : "Failed to connect to AI."))
                         continuation.finish()
                         return
                     }
@@ -135,6 +147,10 @@ final class AIChatStreamClient: AIChatStreaming, @unchecked Sendable {
             if let id = object["conversationId"] as? String {
                 continuation.yield(.conversation(id: id))
             }
+        case "status":
+            if let message = object["message"] as? String, !message.isEmpty {
+                continuation.yield(.status(message))
+            }
         case "text_delta":
             if let delta = object["delta"] as? String {
                 continuation.yield(.textDelta(delta))
@@ -152,30 +168,79 @@ final class AIChatStreamClient: AIChatStreaming, @unchecked Sendable {
         }
     }
 
-    private static func parseDraft(_ object: [String: Any]) -> ChatAIDraftCard? {
+    static func parseDraft(_ object: [String: Any]) -> ChatAIDraftCard? {
         let type = (object["type"] as? String) ?? "draft"
         let valid = (object["valid"] as? Bool) ?? true
         let draft = object["draft"] as? [String: Any] ?? [:]
-        let title = (draft["title"] as? String)
+        let story = (draft["story"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let content = (draft["content"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let title = type == "support_train"
+            ? "Support Train"
+            : (draft["title"] as? String)
             ?? (draft["summary"] as? String)
             ?? (draft["content"] as? String)
             ?? "\(type.capitalized) draft"
         let summary = (draft["description"] as? String)
             ?? (draft["content"] as? String)
             ?? (draft["summary"] as? String)
+            ?? story
         let price: String? = {
             if let price = draft["price"] { return "$\(price)" }
             if let amount = draft["amount"] { return "$\(amount)" }
             return nil
         }()
+        // "Use draft" carries the text into the composer it opens.
+        let headline = (draft["title"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+        let prefill: ChatAIDraftPrefill? =
+            switch type {
+            case "post":
+                content.flatMap { $0.isEmpty ? nil : ChatAIDraftPrefill(body: $0, postType: draft["postType"] as? String, title: headline) }
+            case "support_train": story.flatMap { $0.isEmpty ? nil : ChatAIDraftPrefill(body: $0) }
+            default: nil
+            }
         return ChatAIDraftCard(
             id: "\(type)_\(UUID().uuidString)",
             type: type,
             title: title,
             summary: summary,
             priceLabel: price,
-            valid: valid
+            valid: valid,
+            prefill: prefill,
+            pickup: type == "pickup_schedule" ? pickupSchedule(from: draft) : nil
         )
+    }
+
+    /// A pickup-days card's schedule, or nil when the draft lacks the home or the garbage day.
+    static func pickupSchedule(from draft: [String: Any]) -> ChatAIPickupSchedule? {
+        guard let homeId = draft["home_id"] as? String, !homeId.isEmpty,
+              let weekday = draft["garbage_weekday"] as? String, !weekday.isEmpty else { return nil }
+        return ChatAIPickupSchedule(
+            homeId: homeId,
+            garbageWeekday: weekday,
+            recyclingFrequency: (draft["recycling_frequency"] as? String) ?? "not_set",
+            recyclingNextDate: draft["recycling_next_date"] as? String
+        )
+    }
+
+    /// A restored draft's fields (`GET /api/ai/conversations/:id/messages`) as
+    /// the stream's JSON objects, so restored and live cards are built alike.
+    static func foundationValue(_ value: JSONValue) -> Any {
+        switch value {
+        case let .string(text):
+            return text
+        case let .number(number):
+            // A whole number reads "$80", as JSONSerialization's numbers do, not "$80.0".
+            if number.rounded() == number, abs(number) < 1e15 { return Int(number) }
+            return number
+        case let .bool(flag):
+            return flag
+        case let .object(object):
+            return object.mapValues { foundationValue($0) }
+        case let .array(items):
+            return items.map { foundationValue($0) }
+        case .null:
+            return NSNull()
+        }
     }
 }
 
@@ -326,6 +391,10 @@ public final class ChatConversationViewModel {
     /// send disc for a stop button (A15.3) while this is set.
     public private(set) var isAIStreaming: Bool = false
 
+    /// What the assistant is doing while a tool runs ("Drafting your post…"),
+    /// shown in place of "Thinking…" until the reply or its card arrives.
+    public private(set) var aiStatus: String?
+
     /// Local pre-send queue. Backend upload/send wiring is out of scope
     /// for this phase, but the UI can still render and remove queued
     /// attachments deterministically.
@@ -353,7 +422,8 @@ public final class ChatConversationViewModel {
         ChatPromptChip(id: "price", label: "Price a task", icon: .hammer),
         ChatPromptChip(id: "draft", label: "Draft a Pulse post", icon: .pencil),
         ChatPromptChip(id: "mail", label: "Summarize mail", icon: .mailbox),
-        ChatPromptChip(id: "neighbor", label: "Find a neighbor", icon: .search)
+        // The assistant can't look people up (it points to Search); it can start a Support Train.
+        ChatPromptChip(id: "support_train", label: "Start a Support Train", icon: .utensils)
     ]
 
     /// Quick-start chips for a human DM's empty state.
@@ -363,12 +433,19 @@ public final class ChatConversationViewModel {
         ChatPromptChip(id: "listing", label: "Share a listing", icon: .tag)
     ]
 
-    /// First-launch scope (launch cut #4, Open gigs): the assistant doesn't price tasks, so
-    /// "Price a task" gives way to the nearby question the web assistant offers.
+    /// First-launch scope. Launch cut #4 (Open gigs): the assistant doesn't price tasks, so
+    /// "Price a task" gives way to the nearby question the web assistant offers. Launch cut #10
+    /// (Mailbox): "Summarize mail" gives way to a home question it answers from the home's calendar.
     static var launchAICapabilities: [ChatPromptChip] {
         defaultAICapabilities.map { chip in
-            guard chip.id == "price", !LaunchFeatures.openGigs else { return chip }
-            return ChatPromptChip(id: "nearby", label: "What's happening nearby?", icon: .mapPin)
+            switch chip.id {
+            case "price" where !LaunchFeatures.openGigs:
+                ChatPromptChip(id: "nearby", label: "What's happening nearby?", icon: .mapPin)
+            case "mail" where !LaunchFeatures.mailbox:
+                ChatPromptChip(id: "pickup", label: "When's my pickup?", icon: .calendar)
+            default:
+                chip
+            }
         }
     }
 
@@ -601,16 +678,10 @@ public final class ChatConversationViewModel {
     /// Restore the most recent Ask-Pantopus conversation across app
     /// relaunches: `GET /api/ai/conversations` returns summaries ordered
     /// newest-updated first, and `POST /api/ai/chat` resumes server-side
-    /// state when handed that conversation id. No-op when the session
-    /// store already holds an id (same-session reopen).
-    ///
-    /// TODO: render restored history — the backend exposes only the
-    /// conversation LIST (`backend/routes/ai.js:358`); there is no
-    /// per-conversation messages endpoint (no AI message rows exist —
-    /// history lives in the provider's `previous_response_id` state,
-    /// `backend/services/ai/agentService.js:68`). When a messages route
-    /// lands, seed `messages` here via `localMessage(...)` with user vs
-    /// assistant rows by role.
+    /// state when handed that conversation id. Its earlier turns are shown
+    /// too, so the assistant never refers to something the person can't
+    /// see. No-op when the session store already holds an id (same-session
+    /// reopen).
     private func restoreAIConversationIfNeeded() async {
         guard case .ai = mode, aiConversationId == nil,
               !aiConversationStore.didStartFresh(forUserId: currentUserId) else { return }
@@ -619,9 +690,64 @@ public final class ChatConversationViewModel {
             guard let latest = response.conversations.first else { return }
             aiConversationId = latest.id
             aiConversationStore.setConversationId(latest.id, forUserId: currentUserId)
+            await loadAIHistory(conversationId: latest.id)
         } catch {
             // Non-fatal — the thread simply starts a fresh conversation.
             logger.warning("AI conversation restore failed: \(error)")
+        }
+    }
+
+    /// Seed the thread with a restored conversation's turns
+    /// (`GET /api/ai/conversations/:id/messages`). A draft and the note
+    /// after it share one reply, as they did when it streamed. A server
+    /// without the route (404) leaves the thread empty, as before.
+    private func loadAIHistory(conversationId: String) async {
+        guard messages.isEmpty else { return }
+        do {
+            let history: AIConversationMessagesResponse = try await api.request(
+                AIEndpoints.conversationMessages(id: conversationId)
+            )
+            // A message sent (or "New chat") while this loaded wins.
+            guard messages.isEmpty, aiConversationId == conversationId else { return }
+            var restored: [ChatMessageDTO] = []
+            var drafts: [String: [ChatAIDraftCard]] = [:]
+            var openReplyId: String?
+            for (index, item) in history.messages.enumerated() {
+                let id = "ai_history_\(index)"
+                if item.role == "user" {
+                    openReplyId = nil
+                    let text = item.text ?? ""
+                    let photos = item.photos ?? 0
+                    let shown = text.isEmpty && photos > 0 ? (photos == 1 ? "Sent a photo" : "Sent \(photos) photos") : text
+                    restored.append(localMessage(id: id, text: shown, userId: currentUserId, type: "text"))
+                } else if let draft = item.draft {
+                    let replyId = openReplyId ?? id
+                    if openReplyId == nil {
+                        restored.append(localMessage(id: replyId, text: "", userId: "ai", type: "ai_reply"))
+                        openReplyId = replyId
+                    }
+                    let object: [String: Any] = [
+                        "type": draft.type,
+                        "valid": true,
+                        "draft": draft.draft.mapValues { AIChatStreamClient.foundationValue($0) }
+                    ]
+                    if let card = AIChatStreamClient.parseDraft(object) {
+                        drafts[replyId, default: []].append(card)
+                    }
+                } else if let text = item.text, !text.isEmpty {
+                    if let replyId = openReplyId, let at = restored.firstIndex(where: { $0.id == replyId }) {
+                        restored[at] = localMessage(id: replyId, text: text, userId: "ai", type: "ai_reply")
+                        openReplyId = nil
+                    } else {
+                        restored.append(localMessage(id: id, text: text, userId: "ai", type: "ai_reply"))
+                    }
+                }
+            }
+            messages = restored
+            aiDraftsByMessageId = drafts
+            rebuild()
+        } catch {
+            logger.warning("AI conversation history unavailable: \(error)")
         }
     }
 
@@ -935,16 +1061,21 @@ public final class ChatConversationViewModel {
                         guard !Task.isCancelled else { break }
                         aiConversationId = id
                         aiConversationStore.setConversationId(id, forUserId: currentUserId)
+                    case let .status(message):
+                        aiStatus = message
                     case let .textDelta(delta):
+                        aiStatus = nil
                         streamedText += delta
                         replaceLocalMessage(id: assistantId, text: streamedText, type: "ai_reply", userId: "ai")
                     case let .draft(draft):
+                        aiStatus = nil
                         aiDraftsByMessageId[assistantId, default: []].append(draft)
                         rebuild()
                     case let .error(message):
+                        aiStatus = nil
                         replaceLocalMessage(id: assistantId, text: message, type: "ai_reply", userId: "ai")
                     case .done:
-                        break
+                        aiStatus = nil
                     }
                 }
             } catch {
@@ -964,6 +1095,7 @@ public final class ChatConversationViewModel {
         aiStreamTask = task
         await task.value
         aiStreamTask = nil
+        aiStatus = nil
         isAIStreaming = false
     }
 
@@ -1144,6 +1276,44 @@ public final class ChatConversationViewModel {
         socketTasks.forEach { $0.cancel() }
         socketTasks.removeAll()
         activeThreadTracker.clear(owner: ObjectIdentifier(self))
+    }
+
+    // MARK: - Pickup-days card
+
+    /// A pickup-days card's Save: the household's days through the pickup
+    /// calendar route, as the Today editor saves them. The card shows how it went.
+    public func savePickupSchedule(_ card: ChatAIDraftCard) async {
+        guard let pickup = card.pickup, pickup.save != .saving, pickup.save != .saved else { return }
+        updatePickup(card.id) { $0.save = .saving }
+        let request = SetPickupDayRequest(
+            weekday: pickup.garbageWeekday,
+            recyclingFrequency: pickup.recyclingFrequency,
+            recyclingNextDate: pickup.recyclingFrequency == "not_set" ? nil : pickup.recyclingNextDate
+        )
+        do {
+            let _: AddressCalendarResponse = try await api.request(
+                AddressCalendarEndpoints.setPickupDay(homeId: pickup.homeId, request: request)
+            )
+            updatePickup(card.id) { $0.save = .saved }
+        } catch let APIError.forbidden(message) {
+            updatePickup(card.id) {
+                $0.save = .failed(message ?? "You don't have permission to change this household's pickup schedule.")
+            }
+        } catch {
+            updatePickup(card.id) { $0.save = .failed("Couldn't save your pickup days. Try again.") }
+        }
+    }
+
+    private func updatePickup(_ cardId: String, _ change: (inout ChatAIPickupSchedule) -> Void) {
+        guard let messageId = aiDraftsByMessageId.first(where: { $0.value.contains { $0.id == cardId } })?.key else { return }
+        aiDraftsByMessageId[messageId] = aiDraftsByMessageId[messageId]?.map { card in
+            guard card.id == cardId, var pickup = card.pickup else { return card }
+            change(&pickup)
+            var updated = card
+            updated.pickup = pickup
+            return updated
+        }
+        rebuild()
     }
 
     // MARK: - Typing (A15)
