@@ -20,6 +20,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -32,6 +36,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -79,6 +84,8 @@ sealed interface PlanRowEnd {
 /**
  * The plan row (board P2): a 44 dp tile, the title (16/21 semibold) and one line of when, where and distance, and
  * one thing at the end. At large text both lines wrap instead of cutting off, and a status or note moves under them.
+ * When the words don't fit on one line each, they take two, and a status moves under them (as on iOS), so a title or
+ * a distance is never cut off.
  */
 @Composable
 fun PlanRow(
@@ -92,7 +99,11 @@ fun PlanRow(
     onClick: (() -> Unit)? = null,
 ) {
     val large = LocalDensity.current.fontScale >= LARGE_TEXT_SCALE
-    val endBelow = large && (end is PlanRowEnd.Status || end is PlanRowEnd.Note)
+    var crowded by remember(title, subtitle, end) { mutableStateOf(false) }
+    val endBelow = endGoesBelow(end, large, crowded)
+    val (titleLines, subtitleLines) = rowLines(large, crowded)
+    // A line cut off at one line each: the row lays out again as crowded (a no-op at large text).
+    val onLayout: (TextLayoutResult) -> Unit = { if (it.hasVisualOverflow) crowded = true }
     Column(modifier = modifier.fillMaxWidth()) {
         if (!first) PlanDivider()
         Row(
@@ -121,17 +132,19 @@ fun PlanRow(
                     text = title,
                     style = PantopusTextStyle.body.copy(fontWeight = FontWeight.SemiBold, lineHeight = 21.sp),
                     color = PantopusColors.appText,
-                    maxLines = if (large) 3 else 1,
+                    maxLines = titleLines,
                     overflow = TextOverflow.Ellipsis,
+                    onTextLayout = onLayout,
                 )
                 Text(
                     text = subtitle,
                     style = PantopusTextStyle.small.copy(fontSize = 13.sp, lineHeight = 18.sp),
                     color = PantopusColors.appTextSecondary,
-                    maxLines = if (large) 4 else 1,
+                    maxLines = subtitleLines,
                     overflow = TextOverflow.Ellipsis,
+                    onTextLayout = onLayout,
                 )
-                // At large text a status or note goes under the two lines so it doesn't squeeze the title.
+                // At large text, or when the words are crowded, the end goes under them so it doesn't squeeze the title.
                 if (endBelow) {
                     Box(modifier = Modifier.padding(top = Spacing.s1)) { PlanRowEndSlot(end) }
                 }
@@ -140,6 +153,24 @@ fun PlanRow(
         }
     }
 }
+
+/** A status or note goes under the words at large text; a status also when the words are crowded (as on iOS). */
+private fun endGoesBelow(
+    end: PlanRowEnd,
+    large: Boolean,
+    crowded: Boolean,
+): Boolean = (large && (end is PlanRowEnd.Status || end is PlanRowEnd.Note)) || (crowded && end is PlanRowEnd.Status)
+
+/** Lines for the title and the second line: one each (board P2), two when crowded, more at large text. */
+private fun rowLines(
+    large: Boolean,
+    crowded: Boolean,
+): Pair<Int, Int> =
+    when {
+        large -> 3 to 4
+        crowded -> 2 to 2
+        else -> 1 to 1
+    }
 
 @Composable
 private fun PlanRowEndSlot(end: PlanRowEnd) {

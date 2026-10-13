@@ -34,6 +34,7 @@ enum class StoreKind(
     NEARBY(2 * MINUTE, DAY, StoreTier.EVERYDAY, true),
     POST(MINUTE, DAY, StoreTier.EVERYDAY, false),
     MESSAGES_LIST(30 * SECOND, DAY, StoreTier.HOUSEHOLD, true),
+    CONVERSATION(0, DAY, StoreTier.HOUSEHOLD, false),
     NOTIFICATIONS(30 * SECOND, DAY, StoreTier.EVERYDAY, false),
     YOU(10 * MINUTE, 7 * DAY, StoreTier.EVERYDAY, true),
     PEOPLE(5 * MINUTE, DAY, StoreTier.EVERYDAY, false),
