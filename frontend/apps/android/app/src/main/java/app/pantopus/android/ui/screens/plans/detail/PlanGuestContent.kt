@@ -118,10 +118,11 @@ internal fun detailsLine(plan: PlanDto): String? {
     return parts.takeIf { it.isNotEmpty() }?.joinToString(" · ")
 }
 
-/** "paddles", "balls" or "gear": what a pickup host brings extra (H4 "I have extra paddles"). */
+/** "paddles", "rackets", "balls" or "gear": what a pickup host brings extra (H4 "I have extra paddles"). */
 internal fun extraGearWord(sport: String?): String =
     when (sport) {
-        "pickleball", "tennis" -> "paddles"
+        "pickleball" -> "paddles"
+        "tennis" -> "rackets"
         "basketball", "soccer", "volleyball" -> "balls"
         else -> "gear"
     }
@@ -187,7 +188,7 @@ internal fun ColumnScope.PlanBeforeInBody(plan: PlanDto) {
             PlanInfoLine(PantopusIcon.Calendar, PlanFormat.whenLine(plan, long = true))
             PlanInfoLine(PantopusIcon.MapPin, whereLine(plan))
             if (plan.isPlaydate) {
-                KidsAgeBand.rangeLabel(plan.details?.kidsAgeBands)?.let { PlanInfoLine(PantopusIcon.AdultChild, "Kids ages $it") }
+                KidsAgeBand.rangeLabel(plan.details?.kidsAgeBands)?.let { PlanInfoLine(PantopusIcon.AdultChild, "Kids $it") }
             }
         }
     }
@@ -256,7 +257,12 @@ internal fun askFooter(plan: PlanDto): AskFooter {
                         action = AskAction.Location,
                     )
                 PlanCannotAsk.TOO_FAR ->
-                    AskFooter("Too far to join", enabled = false, caption = "Plans take people within 5 miles.", action = AskAction.None)
+                    AskFooter(
+                        "Too far to join",
+                        enabled = false,
+                        caption = "This plan is for neighbors who live or are close by.",
+                        action = AskAction.None,
+                    )
                 PlanCannotAsk.FULL_USE_WAITLIST ->
                     AskFooter(
                         "Join the waitlist",
@@ -314,7 +320,8 @@ private fun YourRequestCard(plan: PlanDto) {
         val coming =
             if (plan.isPlaydate) {
                 val kids = mine.kidsCount ?: 1
-                "You + $kids ${if (kids == 1) "kid" else "kids"}"
+                listOfNotNull("You + $kids ${if (kids == 1) "kid" else "kids"}", KidsAgeBand.rangeLabel(mine.kidsAgeBands))
+                    .joinToString(" · ")
             } else {
                 val size = mine.partySize ?: 1
                 if (size <= 1) "Just you" else "You + ${size - 1}"
@@ -458,7 +465,7 @@ internal fun PlaydateLocked(
                 color = PantopusColors.appText,
                 modifier = Modifier.semantics { heading() },
             )
-            Text(text = "A neighbor shared this with you.", style = PantopusTextStyle.small, color = PantopusColors.appTextSecondary)
+            Text(text = "Someone shared this with you.", style = PantopusTextStyle.small, color = PantopusColors.appTextSecondary)
         }
         Column(modifier = Modifier.fillMaxWidth().planCard().padding(Spacing.s4), verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
             PlanIconTile(PantopusIcon.Lock, PantopusColors.appSurfaceSunken, PantopusColors.appTextStrong, size = 48.dp, glyph = 22.dp)

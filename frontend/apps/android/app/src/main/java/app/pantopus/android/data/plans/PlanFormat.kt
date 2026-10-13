@@ -42,14 +42,14 @@ object PlanFormat {
 
     fun zone(timezone: String?): ZoneId = timezone?.let { runCatching { ZoneId.of(it) }.getOrNull() } ?: ZoneId.systemDefault()
 
-    /** `under_1_mi` → "under 1 mi"; `about_2_mi` → "about 2 mi". */
+    /** `under_1_mi` → "under 1 mi"; `about_2_mi` → "about 2 mi" (non-breaking spaces: a band never splits across lines). */
     fun distance(band: String?): String? =
         when (band) {
-            "under_1_mi" -> "under 1 mi"
-            "about_1_mi" -> "about 1 mi"
-            "about_2_mi" -> "about 2 mi"
-            "about_3_mi" -> "about 3 mi"
-            "about_5_mi" -> "about 5 mi"
+            "under_1_mi" -> "under\u00A01\u00A0mi"
+            "about_1_mi" -> "about\u00A01\u00A0mi"
+            "about_2_mi" -> "about\u00A02\u00A0mi"
+            "about_3_mi" -> "about\u00A03\u00A0mi"
+            "about_5_mi" -> "about\u00A05\u00A0mi"
             else -> null
         }
 
@@ -222,7 +222,7 @@ object PlanFormat {
                 parts += whenText
                 if (plan.isPlaydate) {
                     area?.let { parts += it }
-                    KidsAgeBand.rangeLabel(plan.details?.kidsAgeBands)?.let { parts += "ages $it" }
+                    KidsAgeBand.rangeLabel(plan.details?.kidsAgeBands)?.let { parts += it }
                 } else {
                     if (start != null && relativeDay(start.toLocalDate(), today) == null && plan.planState != PlanState.LIVE) {
                         area?.let { parts += it }

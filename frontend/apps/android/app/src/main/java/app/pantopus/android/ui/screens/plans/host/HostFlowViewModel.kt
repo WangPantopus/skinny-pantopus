@@ -476,7 +476,6 @@ class HostFlowViewModel
                                     when (result.error.planCode) {
                                         "not_near" -> "You can host within 3 miles of where you live or where you are now."
                                         "needs_verified_address" -> "Playdates are for neighbors with a verified address."
-                                        "too_many_plans" -> "You have 3 upcoming plans. Cancel one or wait until one ends."
                                         else -> result.error.planMessage
                                     },
                             )

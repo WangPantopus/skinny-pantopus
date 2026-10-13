@@ -65,8 +65,8 @@ struct PlansAreaPicker: View {
     }
 
     private var places: [PlanChoiceOption<PlansCenterSource>] {
-        var options = [PlanChoiceOption(id: PlansCenterSource.gps, label: "Where I am")]
-        if viewModel.homeCenter != nil { options.append(PlanChoiceOption(id: .home, label: "My home")) }
+        var options = [PlanChoiceOption(id: PlansCenterSource.gps, label: "Use my location")]
+        if viewModel.homeCenter != nil { options.append(PlanChoiceOption(id: .home, label: "Use my home")) }
         return options
     }
 }
