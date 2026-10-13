@@ -91,8 +91,10 @@ struct PlanPreviewScreen: View {
                     .foregroundStyle(Theme.Color.appTextSecondary)
                 HStack(spacing: 10) {
                     PlanAvatar(name: model.hostName, size: 30)
-                    (Text(model.hostName)
-                        .fontWeight(.semibold) + Text(" · \(model.spots) \(model.kind == .playdate ? "families" : "spots")"))
+                    Text(model.hostName).fontWeight(.semibold).planFont(.small).foregroundStyle(Theme.Color.appText)
+                    // As neighbors will see it on the card (board H7).
+                    if model.verifiedAddress { PlanVerifiedLabel(text: "Verified") }
+                    Text("· \(model.spots) \(model.kind == .playdate ? "families" : "spots")")
                         .planFont(.small)
                         .foregroundStyle(Theme.Color.appText)
                 }

@@ -74,6 +74,7 @@ struct PlanPlacePicker: View {
             TextField("Search parks, courts, cafés", text: $query)
                 .planFont(.body)
                 .submitLabel(.search)
+                .accessibilityLabel("Search places")
                 .accessibilityIdentifier("planPlaceSearch")
         }
         .padding(.horizontal, 14)

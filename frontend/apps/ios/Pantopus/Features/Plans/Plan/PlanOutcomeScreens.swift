@@ -183,6 +183,7 @@ struct PlanCancelSheet: View {
                 VStack(alignment: .leading, spacing: Spacing.s2) {
                     Text.planOverline("Add a note · optional")
                     TextField("Sorry, something came up.", text: $note, axis: .vertical)
+                        .accessibilityLabel("Add a note, optional")
                         .planFont(.body)
                         .lineLimit(2...4)
                         .padding(.horizontal, 14)

@@ -34,7 +34,7 @@ struct PlansMapView: View {
         GeometryReader { geo in
             let height = geo.size.height
             let bottomInset = geo.safeAreaInsets.bottom
-            let sheetHeight = max(140, height * viewModel.shownStop.fraction - dragOffset) + bottomInset
+            let sheetHeight = max(140, stopHeight(screen: height) - dragOffset) + bottomInset
             ZStack(alignment: .top) {
                 mapLayer
                 // The list pulled all the way up covers the map: its chrome steps aside (F2).
@@ -55,6 +55,9 @@ struct PlansMapView: View {
                 sheet(height: sheetHeight, screenHeight: height, bottomInset: bottomInset)
             }
             .ignoresSafeArea(edges: .bottom)
+            .onChange(of: height + bottomInset, initial: true) { _, mapHeight in
+                if abs(viewModel.mapPoints - mapHeight) > 1 { viewModel.mapPoints = mapHeight }
+            }
         }
         .background(Theme.Color.appBg)
         .task { await viewModel.start() }
@@ -69,6 +72,14 @@ struct PlansMapView: View {
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("plansMap")
+    }
+
+    /// The sheet at its stop; a tapped pin's card fits its content, up to half.
+    private func stopHeight(screen height: CGFloat) -> CGFloat {
+        let stop = height * viewModel.shownStop.fraction
+        guard viewModel.selectedId != nil, viewModel.shownStop == .half, viewModel.cardHeight > 0 else { return stop }
+        // The grab handle and its spacing sit above the card.
+        return min(stop, viewModel.cardHeight + 25)
     }
 
     private var showsHostButton: Bool {
@@ -272,7 +283,9 @@ struct PlansMapView: View {
             }
             .padding(.bottom, bottomInset)
             .frame(maxWidth: .infinity)
-            .frame(height: height)
+            // Content taller than the stop (the largest text) runs off the bottom, never over the map.
+            .frame(height: height, alignment: .top)
+            .clipped()
             .background(
                 UnevenRoundedRectangle(topLeadingRadius: Radii.xl3, topTrailingRadius: Radii.xl3, style: .continuous)
                     .fill(Theme.Color.appSurface)
