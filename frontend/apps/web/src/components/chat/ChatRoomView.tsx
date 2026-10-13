@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery } from '@tanstack/react-query';
@@ -85,13 +85,20 @@ export default function ChatRoomView({
     [representedUserIds],
   );
 
-  useEffect(() => {
-    if (!currentUserId) { setRepresentedUserIds([]); return; }
-    const represented = new Set<string>([String(currentUserId)]);
+  // Every live `chat:<room>` signal refetches the room as a new object (our own read receipt sends one too),
+  // so the lookups below key on who is in the room, not on the room object.
+  const participantIdsKey = useMemo(() => {
     const participants = Array.isArray(roomInfo?.participants) ? roomInfo.participants : [];
-    const participantIds: string[] = Array.from(
+    return Array.from(
       new Set(participants.map((p: Record<string, any>) => String((p?.user_id as string) || ((p?.user as Record<string, any>)?.id as string) || '')).filter(Boolean)),
-    );
+    ).sort().join(',');
+  }, [roomInfo]);
+
+  useEffect(() => {
+    if (!currentUserId) { setRepresentedUserIds((prev) => (prev.length ? [] : prev)); return; }
+    const represented = new Set<string>([String(currentUserId)]);
+    const participantIds = participantIdsKey ? participantIdsKey.split(',') : [];
+    let cancelled = false;
     Promise.all(
       participantIds.map(async (candidateId) => {
         if (!candidateId || candidateId === String(currentUserId)) return;
@@ -102,8 +109,13 @@ export default function ChatRoomView({
           }
         } catch {}
       }),
-    ).then(() => setRepresentedUserIds(Array.from(represented)));
-  }, [roomInfo, currentUserId]);
+    ).then(() => {
+      if (cancelled) return;
+      const next = Array.from(represented).sort();
+      setRepresentedUserIds((prev) => (prev.length === next.length && prev.every((id, i) => id === next[i]) ? prev : next));
+    });
+    return () => { cancelled = true; };
+  }, [participantIdsKey, currentUserId]);
 
   // ── Pre-bid status ────────────────────────────────────
   const loadPreBidStatus = useCallback(async () => {
@@ -118,8 +130,11 @@ export default function ChatRoomView({
   useEffect(() => { loadPreBidStatus(); }, [loadPreBidStatus]);
 
   // ── Historical messages from other rooms ──────────────
-  useEffect(() => {
-    if (!roomInfo || !currentUserId) { setHistoricalMessages([]); setHistoricalRoomId(null); return; }
+  // The person this room is with, once we know which participants we represent (before that, we would pick
+  // ourselves, and a "conversation with yourself" spans every room we're in). The history and its read
+  // receipt load once per person: keyed on the room object, each receipt's own signal reloaded them in a loop.
+  const historyPeerId = useMemo(() => {
+    if (!roomInfo || !currentUserId || !representedUserIds.includes(String(currentUserId))) return null;
     const participants = roomInfo?.participants || [];
     const nonCurrent = participants.filter((p: Record<string, any>) => !isRepresented((p.user_id as string) || ((p.user as Record<string, any>)?.id as string)));
     const ownerParticipant = participants.find((p: Record<string, any>) => p.role === 'owner');
@@ -129,23 +144,29 @@ export default function ChatRoomView({
       : (ownerParticipant || nonCurrent[0])) as Record<string, any> | undefined;
     const otherUser = other?.user as Record<string, any> | undefined;
     const otherUserId = otherUser?.id as string | undefined;
-    if (!otherUserId) { setHistoricalMessages([]); setHistoricalRoomId(null); return; }
+    return otherUserId && !isRepresented(otherUserId) ? String(otherUserId) : null;
+  }, [roomInfo, currentUserId, representedUserIds, isRepresented]);
 
+  useEffect(() => {
+    if (!historyPeerId) { setHistoricalMessages([]); setHistoricalRoomId(null); return; }
+    let cancelled = false;
     (async () => {
       try {
-        try { await ((api.chat as Record<string, any>).markConversationAsRead as ((id: string, opts?: Record<string, any>) => Promise<void>) | undefined)?.(String(otherUserId), { ...(asBusinessUserId ? { asBusinessUserId } : {}) }); } catch {}
-        const convResp = await ((api.chat as Record<string, any>).getConversationMessages as ((id: string, opts?: Record<string, any>) => Promise<{ messages?: ChatMessage[]; roomIds?: string[] }>) | undefined)?.(String(otherUserId), {
+        try { await ((api.chat as Record<string, any>).markConversationAsRead as ((id: string, opts?: Record<string, any>) => Promise<void>) | undefined)?.(historyPeerId, { ...(asBusinessUserId ? { asBusinessUserId } : {}) }); } catch {}
+        const convResp = await ((api.chat as Record<string, any>).getConversationMessages as ((id: string, opts?: Record<string, any>) => Promise<{ messages?: ChatMessage[]; roomIds?: string[] }>) | undefined)?.(historyPeerId, {
           limit: 1000,
           ...(asBusinessUserId ? { asBusinessUserId } : {}),
         });
+        if (cancelled) return;
         const allConvMessages = (convResp?.messages || []).filter(Boolean);
         setHistoricalMessages(allConvMessages.filter((m: ChatMessage) => String(m?.room_id || '') !== String(roomId)));
         const roomIds = Array.isArray(convResp?.roomIds) ? convResp.roomIds : [];
         const firstOtherRoomId = roomIds.find((rid: string) => String(rid) !== String(roomId)) || null;
         setHistoricalRoomId(firstOtherRoomId ? String(firstOtherRoomId) : null);
-      } catch { setHistoricalMessages([]); setHistoricalRoomId(null); }
+      } catch { if (!cancelled) { setHistoricalMessages([]); setHistoricalRoomId(null); } }
     })();
-  }, [roomInfo, currentUserId, roomId, representedUserIds, asBusinessUserId, isRepresented]);
+    return () => { cancelled = true; };
+  }, [historyPeerId, roomId, asBusinessUserId]);
 
   // ── Ownership check ───────────────────────────────────
   const isOwnMessage = useCallback(

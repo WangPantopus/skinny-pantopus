@@ -1431,6 +1431,12 @@ router.post('/conversations/:otherUserId/read', verifyToken, async (req, res) =>
       readTargetUserId = asBusinessUserId;
     }
 
+    // Same rule as starting a chat: a "conversation with yourself" (or with the business you read for) would
+    // match every room the reader is in and mark them all read.
+    if (String(otherUserId) === String(readTargetUserId)) {
+      return res.status(400).json({ error: 'Cannot mark a conversation with yourself as read' });
+    }
+
     const { data: mineRows, error: mineErr } = await supabaseAdmin
       .from('ChatParticipant')
       .select('room_id')
