@@ -33,6 +33,9 @@ import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.core.identity.ProfileChanges
 import app.pantopus.android.core.perf.ReportContentShown
 import app.pantopus.android.ui.components.PrimaryButton
+import app.pantopus.android.ui.components.RefreshFailedLine
+import app.pantopus.android.ui.components.RefreshNotice
+import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.screens.hub.sections.HubActionStrip
 import app.pantopus.android.ui.screens.hub.sections.HubDiscoveryRail
 import app.pantopus.android.ui.screens.hub.sections.HubFirstRunHero
@@ -61,7 +64,11 @@ fun HubScreen(
     onIntent: (HubNavigationIntent) -> Unit = {},
     viewModel: HubViewModel = hiltViewModel(),
 ) {
+    RefreshOnStoreChange(viewModel::load)
     val state by viewModel.state.collectAsStateWithLifecycle()
+    // Instant Screens: only a pull or Retry with the hub on screen shows the indicator; the hub never blanks for it.
+    val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
+    val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
     ReportContentShown("hub", state is HubUiState.Populated || state is HubUiState.FirstRun)
     val discoveryFilter by viewModel.discoveryFilter.collectAsStateWithLifecycle()
     val discoveryLoading by viewModel.discoveryLoading.collectAsStateWithLifecycle()
@@ -78,7 +85,7 @@ fun HubScreen(
 
     val pullState =
         rememberPullRefreshState(
-            refreshing = state is HubUiState.Skeleton,
+            refreshing = refreshing,
             onRefresh = viewModel::refresh,
         )
 
@@ -95,6 +102,7 @@ fun HubScreen(
             is HubUiState.FirstRun ->
                 FirstRunLayout(
                     content = current.content,
+                    refreshNotice = refreshNotice,
                     onIntent = onIntent,
                     discoveryFilter = discoveryFilter,
                     discoveryLoading = discoveryLoading,
@@ -105,6 +113,7 @@ fun HubScreen(
             is HubUiState.Populated ->
                 PopulatedLayout(
                     content = current.content,
+                    refreshNotice = refreshNotice,
                     onIntent = onIntent,
                     onDismissBanner = viewModel::dismissSetupBanner,
                     onDismissStatusItem = viewModel::dismissStatusItem,
@@ -118,7 +127,7 @@ fun HubScreen(
             is HubUiState.Error -> ErrorLayout(current.message, viewModel::refresh)
         }
         PullRefreshIndicator(
-            refreshing = state is HubUiState.Skeleton,
+            refreshing = refreshing,
             state = pullState,
             modifier = Modifier.align(Alignment.TopCenter),
             contentColor = PantopusColors.primary600,
@@ -138,6 +147,7 @@ private fun PopulatedLayout(
     onDiscoveryFilterChange: (HubDiscoveryFilter) -> Unit,
     discoveryFailed: Boolean = false,
     onRetryDiscovery: () -> Unit = {},
+    refreshNotice: RefreshNotice? = null,
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -168,6 +178,9 @@ private fun PopulatedLayout(
         // Rendered unconditionally: the empty set is the design's
         // "All caught up" pill, not a hidden section (RN
         // `HubActionStrip.tsx:33-38`).
+        refreshNotice?.let { notice ->
+            item(key = "refreshNotice") { RefreshFailedLine(notice, Modifier.padding(horizontal = Spacing.s4)) }
+        }
         item(key = "statusStrip") {
             HubStatusStrip(
                 items = content.statusItems,
@@ -234,6 +247,7 @@ private fun FirstRunLayout(
     onDiscoveryFilterChange: (HubDiscoveryFilter) -> Unit,
     discoveryFailed: Boolean = false,
     onRetryDiscovery: () -> Unit = {},
+    refreshNotice: RefreshNotice? = null,
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
@@ -254,6 +268,7 @@ private fun FirstRunLayout(
                 onBellTap = { onIntent(HubNavigationIntent.OpenNotifications) },
                 onMenuTap = { onIntent(HubNavigationIntent.OpenMenu) },
             )
+            refreshNotice?.let { RefreshFailedLine(it, Modifier.padding(horizontal = Spacing.s4)) }
             HubFirstRunHero(content = content) { onIntent(HubNavigationIntent.StartVerification) }
             HubPillarGrid(content.pillars) { onIntent(HubNavigationIntent.PillarTapped(it)) }
             HubDiscoveryRail(
