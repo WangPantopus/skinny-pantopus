@@ -122,7 +122,9 @@ router.post('/chat', verifyToken, aiChatLimiter, validate(chatSchema), asyncHand
   // Set up SSE headers
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
+    // no-transform: a compressing proxy (the web app's Next server, which forwards /api) would
+    // otherwise gzip the stream and hold every event until the turn ends.
+    'Cache-Control': 'no-cache, no-transform',
     'Connection': 'keep-alive',
     'X-Accel-Buffering': 'no',    // Disable nginx buffering
   });
