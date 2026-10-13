@@ -11,14 +11,19 @@
  */
 const { addUsage, emptyUsage } = require('./llm');
 
-// A stored conversation keeps the last 60 messages (about 20 turns with their
-// tool calls). Older turns are dropped whole, so what is kept still starts on a
-// person's message and never splits a tool call from its result.
+// A stored conversation keeps at most 60 messages (about 20 turns with their
+// tool calls). Past that it is cut back to about 40, so the start of the history,
+// which is what the prompt cache matches on, stays put for several turns instead
+// of moving (and missing the cache) on every one. Older turns are dropped whole,
+// so what is kept still starts on a person's message and never splits a tool
+// call from its result.
 const MAX_STORED_MESSAGES = 60;
+const TRIMMED_STORED_MESSAGES = 40;
 // Tool results are only context for follow-ups; the full text is not worth keeping.
 const MAX_STORED_TOOL_RESULT_CHARS = 4000;
 // What one turn is sent of the stored transcript, whatever it holds: older turns
-// are left out (not deleted) until it fits, so a bloated row can't slow every reply.
+// are left out until it fits, so a bloated row can't slow every reply. (The turn
+// is saved from what it was sent, so they are dropped then.)
 const MAX_REPLAY_CHARS = 200_000;
 
 const isBlank = (text) => typeof text !== 'string' || text.trim() === '';
@@ -58,11 +63,15 @@ function raceAbort(promise, signal) {
  *                                       still have what the finished rounds used when the turn throws.
  * @param {(use: object) => Promise<object>} p.runTool   Runs one tool_use block, resolves to its tool_result block.
  * @param {(delta: string) => void} p.onText             Called with each piece of reply text as it streams.
+ * @param {(name: string) => void} [p.onToolStart]       Called when Claude starts a tool call, before its input is complete.
+ * @param {(uses: object[]) => (string|null)} [p.finishAfterTools]  After a round's tools ran: the closing line that ends
+ *                                       the turn there (a draft is the answer, shown as a card), or null to carry on.
  * @returns {Promise<{messages: Array, usage: object, toolCalls: number, outcome: string, stopReason: string|null, category?: string|null}>}
  *   outcome: 'complete' | 'refused' | 'truncated' | 'empty' | 'tool_limit'. Rejects when the signal aborts or the API fails.
  */
 async function runAgentTurn({
   client, model, system, tools, messages, effort, maxTokens, maxRounds, signal, runTool, onText,
+  onToolStart, finishAfterTools,
   usage = emptyUsage(),
 }) {
   const working = [...messages];
@@ -72,6 +81,9 @@ async function runAgentTurn({
   const finish = (outcome, extra = {}) => ({ messages: working, usage, toolCalls, outcome, stopReason, ...extra });
 
   for (let round = 1; round <= maxRounds; round++) {
+    // The last round has to answer in words: a turn that ends on yet another tool
+    // call has nothing to show or remember. (Changing tool_choice keeps the cache.)
+    const mustAnswer = maxRounds > 1 && round === maxRounds;
     const stream = client.messages.stream({
       model,
       max_tokens: maxTokens,
@@ -84,7 +96,18 @@ async function runAgentTurn({
       // each later turn re-reads what came before instead of re-processing it.
       cache_control: { type: 'ephemeral' },
       output_config: { effort },
+      ...(mustAnswer ? { tool_choice: { type: 'none' } } : {}),
     }, { signal });
+
+    if (onToolStart) {
+      // A tool call starts well before its input is complete (a draft takes a second
+      // or two to write), so the person can be told what is happening meanwhile.
+      stream.on('streamEvent', (event) => {
+        if (event.type === 'content_block_start' && event.content_block?.type === 'tool_use') {
+          onToolStart(event.content_block.name);
+        }
+      });
+    }
 
     let roundSpoke = false;
     stream.on('text', (delta) => {
@@ -128,6 +151,17 @@ async function runAgentTurn({
     // All results go back in one message, which is what keeps Claude calling tools in parallel.
     const results = await raceAbort(Promise.all(uses.map((use) => runTool(use))), signal);
     working.push({ role: 'user', content: results });
+
+    // A draft is the answer: the person already sees it as a card. End the turn with
+    // its closing line rather than a second request that would only describe it
+    // (on Claude Sonnet 5.5 a reply after a tool result arrives all at once, late).
+    const closing = finishAfterTools ? finishAfterTools(uses) : null;
+    if (typeof closing === 'string' && closing.trim()) {
+      if (spoke) onText('\n\n');
+      onText(closing.trim());
+      working.push({ role: 'assistant', content: [{ type: 'text', text: closing.trim() }] });
+      return finish('complete');
+    }
   }
 
   return finish('tool_limit');
@@ -172,8 +206,14 @@ function replayableBlock(block) {
 }
 
 function replayableMessage(message) {
-  if (!isObject(message) || (message.role !== 'user' && message.role !== 'assistant')) return null;
-  if (typeof message.content === 'string') return isBlank(message.content) ? null : message;
+  if (!isObject(message)) return null;
+  if (message.role === 'system') {
+    // Pantopus's context for a turn (agentService), kept as plain text.
+    return typeof message.content === 'string' && !isBlank(message.content) ? { role: 'system', content: message.content } : null;
+  }
+  if (message.role !== 'user' && message.role !== 'assistant') return null;
+  // Rebuilt rather than passed through, so a stray key in a stored row can't reach the API.
+  if (typeof message.content === 'string') return isBlank(message.content) ? null : { role: message.role, content: message.content };
   if (!Array.isArray(message.content)) return null;
   const content = message.content.map(replayableBlock).filter(Boolean);
   return content.length ? { role: message.role, content } : null;
@@ -207,6 +247,14 @@ function sanitizeHistory(stored) {
   const kept = [];
   for (let i = first; i < messages.length; i++) {
     const message = messages[i];
+
+    if (message.role === 'system') {
+      // The API takes a system message only right after a user message; Pantopus adds
+      // its context right after the person's message, and anything else is dropped.
+      const previous = kept[kept.length - 1];
+      if (previous && isTurnStart(previous)) kept.push(message);
+      continue;
+    }
 
     const calls = message.role === 'assistant' ? toolUseIds(message) : [];
     if (calls.length) {
@@ -258,6 +306,10 @@ const scrubDeep = (value) => JSON.parse(JSON.stringify(value, (_key, v) => (type
 function compactForStorage(messages) {
   const compact = [];
   for (const message of messages) {
+    if (message.role === 'system') {
+      if (typeof message.content === 'string' && !isBlank(message.content)) compact.push({ role: 'system', content: scrub(message.content) });
+      continue;
+    }
     const blocks = typeof message.content === 'string'
       ? [{ type: 'text', text: message.content }]
       : blocksOf(message);
@@ -291,7 +343,7 @@ function compactForStorage(messages) {
   }
 
   if (compact.length <= MAX_STORED_MESSAGES) return compact;
-  let start = compact.length - MAX_STORED_MESSAGES;
+  let start = compact.length - TRIMMED_STORED_MESSAGES;
   while (start < compact.length && !isTurnStart(compact[start])) start++;
   return compact.slice(start);
 }

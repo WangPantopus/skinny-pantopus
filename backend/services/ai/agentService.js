@@ -18,11 +18,16 @@
 const { getAnthropicClient, resolveEffort, CHAT_MODEL, DRAFT_MODEL } = require('../../config/anthropic');
 const supabaseAdmin = require('../../config/supabaseAdmin');
 const logger = require('../../utils/logger');
-const { toolDefinitions, executeTool } = require('./tools');
+const { toolDefinitions, executeTool, closingForDrafts } = require('./tools');
 const prompts = require('./prompts');
 const schemas = require('./schemas');
-const { complete, emptyUsage, imageBlock, isImageError, isTimeoutError, systemBlocks } = require('./llm');
+const {
+  AIRefusalError, complete, emptyUsage, imageBlock, isImageError, isTimeoutError, systemBlocks,
+  supportsSystemMessages, describeNow, todayLine,
+} = require('./llm');
 const { runAgentTurn, sanitizeHistory, compactForStorage } = require('./agentLoop');
+const { buildChatContext, lastContextText, userTimeZone, CONTEXT_HEADER } = require('./chatContext');
+const { photoBlocks } = require('./photos');
 const { getAuthorizedMail } = require('./mailAccess');
 const noaa = require('../external/noaa');
 const { isLaunchFeatureEnabled } = require('../../utils/featureFlags');
@@ -31,26 +36,61 @@ const { isLaunchFeatureEnabled } = require('../../utils/featureFlags');
 // chat assistant neither offers nor drafts listings or open tasks (their
 // drafts would lead to hidden composers). The drafting code itself stays.
 // Launch cut #10 (Mailbox): it doesn't read or summarize mail either.
+// Gift funds (cut #9) aren't offered as a Support Train kind of help.
 function launchScopedChatTools() {
-  return toolDefinitions.filter((tool) => {
-    if (tool.name === 'create_gig_draft') return isLaunchFeatureEnabled('open_gigs');
-    if (tool.name === 'create_listing_draft') return isLaunchFeatureEnabled('marketplace');
-    if (['get_mail_item', 'summarize_mail_item'].includes(tool.name)) return isLaunchFeatureEnabled('mailbox');
-    return true;
-  });
+  const giftFunds = isLaunchFeatureEnabled('gift_funds');
+  return toolDefinitions
+    .filter((tool) => {
+      if (tool.name === 'create_gig_draft') return isLaunchFeatureEnabled('open_gigs');
+      if (tool.name === 'create_listing_draft') return isLaunchFeatureEnabled('marketplace');
+      if (['get_mail_item', 'summarize_mail_item'].includes(tool.name)) return isLaunchFeatureEnabled('mailbox');
+      return true;
+    })
+    .map((tool) => (tool.name === 'draft_support_train_from_story' && !giftFunds ? withoutGiftFunds(tool) : tool));
+}
+
+function withoutGiftFunds(tool) {
+  const modes = tool.input_schema.properties.support_modes_requested;
+  return {
+    ...tool,
+    input_schema: {
+      ...tool.input_schema,
+      properties: {
+        ...tool.input_schema.properties,
+        support_modes_requested: { ...modes, items: { ...modes.items, enum: modes.items.enum.filter((mode) => mode !== 'gift_funds') } },
+      },
+    },
+  };
 }
 
 function launchScopedChatInstructions() {
-  const hidden = [];
-  if (!isLaunchFeatureEnabled('open_gigs')) hidden.push('posting tasks (gigs) for neighbors to bid on');
-  if (!isLaunchFeatureEnabled('marketplace')) hidden.push('marketplace listings (selling, giving away, renting or wanted items)');
-  if (!isLaunchFeatureEnabled('mailbox')) hidden.push('the mailbox (received mail, Mail Day, the vault)');
-  if (!hidden.length) return prompts.CHAT_AGENT_SYSTEM;
-  return `${prompts.CHAT_AGENT_SYSTEM}
-
-## Not available right now
-These parts of Pantopus are not available yet: ${hidden.join('; ')}. Don't offer, suggest or draft them. If the user asks for one, say briefly that it isn't available in the app yet and help another way, for example with a community post.`;
+  return prompts.chatAgentSystem({
+    openGigs: isLaunchFeatureEnabled('open_gigs'),
+    marketplace: isLaunchFeatureEnabled('marketplace'),
+    mailbox: isLaunchFeatureEnabled('mailbox'),
+  });
 }
+
+// What the person sees while a tool runs (SSE `status`; older apps ignore the event).
+const TOOL_STATUS = {
+  create_post_draft: 'Drafting your post…',
+  create_gig_draft: 'Drafting your task…',
+  create_listing_draft: 'Drafting your listing…',
+  draft_support_train_from_story: 'Drafting your Support Train…',
+  get_place_alerts: 'Checking alerts near your place…',
+  get_user_context: 'Looking at your places…',
+  list_user_support_trains: 'Looking up your Support Trains…',
+  get_support_train_summary: 'Looking up that Support Train…',
+  get_mail_item: 'Reading your mail…',
+  summarize_mail_item: 'Summarizing your mail…',
+};
+
+// A draft Claude declined to write: not an outage, so not "try again later".
+const DECLINED = {
+  error: 'AI_DECLINED',
+  message: "Pantopus AI can't help with this one. You can still write it yourself.",
+  fallback: true,
+};
 
 // Effort sets how long Claude thinks before it answers. `low` keeps time to
 // first token down (the default, `high`, is far slower) and suits chat and
@@ -158,15 +198,30 @@ async function updateConversation(conversationId, { messages, messageCount, titl
 
 // ─── 1. Streaming Chat Agent ────────────────────────────────────────────────
 
-/** The person's message as Claude's content: photos first, then the text. */
-function buildUserContent(text, images) {
-  const photos = (images || []).map(imageBlock).filter(Boolean);
-  if (photos.length === 0) return text;
-  return [...photos, { type: 'text', text }];
+/**
+ * The person's message as Claude's content: photos first, then the text, then
+ * the app's lines (when it was sent, which the model can't know, and the coarse
+ * location the client reports).
+ */
+function buildUserContent({ message, photos, unreadable, timeZone, coarseLocation, contextText }) {
+  let text = message;
+  if (unreadable) {
+    text += `\n\n[${unreadable} of the ${photos.length + unreadable} photos couldn't be opened, so they aren't included.]`;
+  }
+  text += `\n\n[Sent: ${describeNow(timeZone)}]`;
+  if (coarseLocation) {
+    text += `\n[User location context: ${coarseLocation.city || ''}, ${coarseLocation.state || ''}]`;
+  }
+  // A model without system messages gets Pantopus's context at the top of the message instead.
+  if (contextText) text = `${contextText}\n\n${text}`;
+  return photos.length ? [...photos, { type: 'text', text }] : text;
 }
 
 /**
  * Stream a chat response to an SSE writer.
+ *
+ * Events: conversation, status (a tool started; older apps ignore it), text_delta,
+ * draft, then done or error.
  *
  * @param {object} params
  * @param {string} params.userId
@@ -187,6 +242,13 @@ async function streamChat({ userId, conversationId, message, coarseLocation, ima
     return;
   }
 
+  // Pantopus's context and the photos are read while the conversation loads.
+  const contextRead = buildChatContext(userId).catch((err) => {
+    logger.warn('Chat context failed', { userId, error: err.message });
+    return { text: null, timeZone: undefined };
+  });
+  const photosRead = images?.length ? photoBlocks(images, userId) : Promise.resolve([]);
+
   let conversation;
   try {
     conversation = await getOrCreateConversation(userId, conversationId);
@@ -194,12 +256,6 @@ async function streamChat({ userId, conversationId, message, coarseLocation, ima
     sseWriter.write('error', { error: 'CONVERSATION_ERROR', message: 'Could not load conversation.' });
     sseWriter.end();
     return;
-  }
-
-  // Build the user message with optional location context
-  let userTextContent = message;
-  if (coarseLocation) {
-    userTextContent += `\n\n[User location context: ${coarseLocation.city || ''}, ${coarseLocation.state || ''}]`;
   }
 
   const logChat = (fields) => logRequest({
@@ -212,12 +268,49 @@ async function streamChat({ userId, conversationId, message, coarseLocation, ima
     ...fields,
   });
 
+  const [context, photoResults] = await Promise.all([contextRead, photosRead]);
+  const photos = photoResults.filter(Boolean);
+  if (images?.length && photos.length === 0) {
+    // Answering without the photo would only confuse: say it couldn't be opened.
+    sseWriter.write('error', { error: 'AI_ERROR', message: "I couldn't open that photo. Try a JPEG or PNG, or a different photo." });
+    sseWriter.end();
+    await logChat({ status: 'error', errorMessage: 'unreadable_photos' });
+    return;
+  }
+
+  // Pantopus's context follows the person's message, as a system message (operator
+  // authority, appended so the cached history stays put), and only when it changed.
+  const systemMessages = supportsSystemMessages(CHAT_MODEL);
+  const history = sanitizeHistory(conversation.messages).filter((m) => systemMessages || m.role !== 'system');
+  const newContext = context.text && context.text !== lastContextText(history) ? context.text : null;
+  const messages = [
+    ...history,
+    {
+      role: 'user',
+      content: buildUserContent({
+        message,
+        photos,
+        unreadable: (images?.length || 0) - photos.length,
+        timeZone: context.timeZone,
+        coarseLocation,
+        contextText: systemMessages ? null : newContext,
+      }),
+    },
+    ...(systemMessages && newContext ? [{ role: 'system', content: newContext }] : []),
+  ];
+
+  // The tools this deployment offers; a call to any other name is answered as unknown.
+  const tools = launchScopedChatTools();
+  const toolNames = tools.map((tool) => tool.name);
+  const ran = new Map();
+
   // The whole turn, tool calls included, shares one deadline.
   const deadline = AbortSignal.timeout(AGENT_TIMEOUT_MS);
   const turnSignal = signal ? AbortSignal.any([signal, deadline]) : deadline;
 
   // Filled in as rounds finish, so a timeout can still log what was used.
   const usage = emptyUsage();
+  let firstTextMs = null;
   let turn;
   try {
     // Send conversation ID immediately
@@ -233,17 +326,23 @@ async function streamChat({ userId, conversationId, message, coarseLocation, ima
       maxTokens: CHAT_MAX_TOKENS,
       maxRounds: MAX_TOOL_ROUNDS,
       system: systemBlocks(launchScopedChatInstructions()),
-      tools: launchScopedChatTools(),
-      messages: [
-        ...sanitizeHistory(conversation.messages),
-        { role: 'user', content: buildUserContent(userTextContent, images) },
-      ],
+      tools,
+      messages,
       signal: turnSignal,
       usage,
-      onText: (delta) => sseWriter.write('text_delta', { delta }),
+      onText: (delta) => {
+        if (firstTextMs === null) firstTextMs = Date.now() - startTime;
+        sseWriter.write('text_delta', { delta });
+      },
+      onToolStart: (name) => sseWriter.write('status', { tool: name, message: TOOL_STATUS[name] || 'Working on it…' }),
       // Run one tool Claude asked for; a draft goes to the client as soon as it exists.
       runTool: async (use) => {
-        const result = await executeTool(use.name, use.input || {}, userId);
+        const name = toolNames.find((known) => known === use.name)
+          || toolNames.find((known) => known.toLowerCase() === String(use.name).toLowerCase());
+        const result = name
+          ? await executeTool(name, use.input || {}, userId)
+          : { error: `Unknown tool: ${use.name}. The tools are: ${toolNames.join(', ')}.` };
+        ran.set(use.id, { name, result });
         if (result.draftType) {
           sseWriter.write('draft', {
             type: result.draftType,
@@ -258,6 +357,8 @@ async function streamChat({ userId, conversationId, message, coarseLocation, ima
           ...(result.error ? { is_error: true } : {}),
         };
       },
+      // Drafts that came out valid are the answer: the turn ends at their cards.
+      finishAfterTools: (uses) => closingForDrafts(uses.map((use) => ran.get(use.id))),
     });
   } catch (err) {
     const tokens = { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens };
@@ -295,7 +396,18 @@ async function streamChat({ userId, conversationId, message, coarseLocation, ima
     inputTokens: usage.inputTokens,
     outputTokens: usage.outputTokens,
     toolCallsCount: turn.toolCalls,
+    cacheHit: usage.cacheReadTokens > 0,
   };
+  // Time to the first words (or to the draft's closing line) is the latency people feel.
+  logger.info('AI chat turn', {
+    userId,
+    outcome: turn.outcome,
+    firstTextMs,
+    totalMs: Date.now() - startTime,
+    toolCalls: turn.toolCalls,
+    cacheReadTokens: usage.cacheReadTokens,
+    contextAdded: Boolean(newContext),
+  });
 
   if (turn.outcome === 'refused' || turn.outcome === 'truncated' || turn.outcome === 'empty') {
     // Claude declined, ran out of room mid tool call, or wrote nothing a person can
@@ -361,6 +473,8 @@ async function draftGig({ text, coarseLocation, context, userId }) {
   if (coarseLocation) {
     userContent += `\n\n[Location: ${coarseLocation.city || ''}, ${coarseLocation.state || ''}]`;
   }
+  // "Saturday morning" needs today's date to become a schedule.
+  userContent += `\n${todayLine(await userTimeZone(userId))}`;
   if (context) {
     if (context.budgetHint) userContent += `\n[Budget hint: ${context.budgetHint}]`;
     if (context.timeHint) userContent += `\n[Time hint: ${context.timeHint}]`;
@@ -412,9 +526,10 @@ async function draftGig({ text, coarseLocation, context, userId }) {
     logger.error('draftGig error', { userId, error: err.message });
     await logRequest({
       userId, endpoint: 'draft/gig', model: DRAFT_MODEL,
-      promptVersion: prompts.VERSIONS.gig, status: 'error',
+      promptVersion: prompts.VERSIONS.gig, status: err instanceof AIRefusalError ? 'refusal' : 'error',
       latencyMs: Date.now() - startTime, errorMessage: err.message,
     });
+    if (err instanceof AIRefusalError) return { ...DECLINED };
     if (isTimeoutError(err)) {
       return { error: 'AI_TIMEOUT', message: 'AI draft timed out. Please try again.', fallback: true };
     }
@@ -481,9 +596,10 @@ async function draftListing({ text, coarseLocation, userId }) {
     logger.error('draftListing error', { userId, error: err.message });
     await logRequest({
       userId, endpoint: 'draft/listing', model: DRAFT_MODEL,
-      promptVersion: prompts.VERSIONS.listing, status: 'error',
+      promptVersion: prompts.VERSIONS.listing, status: err instanceof AIRefusalError ? 'refusal' : 'error',
       latencyMs: Date.now() - startTime, errorMessage: err.message,
     });
+    if (err instanceof AIRefusalError) return { ...DECLINED };
     if (isTimeoutError(err)) {
       return { error: 'AI_TIMEOUT', message: 'AI draft timed out. Please try again.', fallback: true };
     }
@@ -581,9 +697,10 @@ async function draftListingFromImages({ images, text, latitude, longitude, userI
     logger.error('draftListingFromImages error', { userId, error: err.message });
     await logRequest({
       userId, endpoint: 'draft/listing-vision', model: DRAFT_MODEL,
-      promptVersion: prompts.VERSIONS.listing, status: 'error',
+      promptVersion: prompts.VERSIONS.listing, status: err instanceof AIRefusalError ? 'refusal' : 'error',
       latencyMs: Date.now() - startTime, errorMessage: err.message,
     });
+    if (err instanceof AIRefusalError) return { ...DECLINED };
     if (isTimeoutError(err)) {
       return { error: 'AI_TIMEOUT', message: 'AI draft timed out. Please try again.', fallback: true };
     }
@@ -608,6 +725,8 @@ async function draftPost({ text, surface, coarseLocation, userId }) {
   if (coarseLocation) {
     userContent += `\n[Location: ${coarseLocation.city || ''}, ${coarseLocation.state || ''}]`;
   }
+  // An event "this Saturday" gets its real date only if the model knows today's.
+  userContent += `\n${todayLine(await userTimeZone(userId))}`;
 
   try {
     const response = await complete({
@@ -654,9 +773,10 @@ async function draftPost({ text, surface, coarseLocation, userId }) {
     logger.error('draftPost error', { userId, error: err.message });
     await logRequest({
       userId, endpoint: 'draft/post', model: DRAFT_MODEL,
-      promptVersion: prompts.VERSIONS.post, status: 'error',
+      promptVersion: prompts.VERSIONS.post, status: err instanceof AIRefusalError ? 'refusal' : 'error',
       latencyMs: Date.now() - startTime, errorMessage: err.message,
     });
+    if (err instanceof AIRefusalError) return { ...DECLINED };
     if (isTimeoutError(err)) {
       return { error: 'AI_TIMEOUT', message: 'AI draft timed out. Please try again.', fallback: true };
     }
@@ -684,7 +804,9 @@ async function summarizeMail({ mailItemId, userId }) {
     return { error: 'MAIL_NOT_FOUND', message: 'Mail item not found.' };
   }
 
-  const mailContent = `Subject: ${item.subject || 'N/A'}
+  // "Overdue" and "due soon" are judged against today's date, which the model can't know.
+  const mailContent = `${todayLine(await userTimeZone(userId))}
+Subject: ${item.subject || 'N/A'}
 From: ${item.sender_display || 'Unknown'}
 Category: ${item.category || 'N/A'}
 Type: ${item.type || 'N/A'}
@@ -733,9 +855,10 @@ Existing Key Facts: ${JSON.stringify(item.key_facts || [])}`;
     logger.error('summarizeMail error', { userId, mailItemId, error: err.message });
     await logRequest({
       userId, endpoint: 'summarize/mail', model: DRAFT_MODEL,
-      promptVersion: prompts.VERSIONS.mail, status: 'error',
+      promptVersion: prompts.VERSIONS.mail, status: err instanceof AIRefusalError ? 'refusal' : 'error',
       latencyMs: Date.now() - startTime, errorMessage: err.message,
     });
+    if (err instanceof AIRefusalError) return { error: 'AI_DECLINED', fallback: true };
     return { error: 'AI_UNAVAILABLE', fallback: true };
   }
 }
@@ -933,6 +1056,87 @@ async function listConversations(userId) {
   return data || [];
 }
 
+// ─── Conversation History (what the apps show after a relaunch) ─────────────
+
+const DRAFT_TYPES = {
+  create_post_draft: 'post',
+  create_gig_draft: 'gig',
+  create_listing_draft: 'listing',
+  draft_support_train_from_story: 'support_train',
+};
+// Lines the app adds to a person's message, which aren't theirs to see again.
+const APP_LINES = [
+  /\n*\[(?:Sent|User location context): [^\]\n]*\]/g,
+  /\n*\[\d+ of the \d+ photos couldn't be opened[^\]\n]*\]/g,
+];
+// The note that stands in for a stored photo (agentLoop.compactForStorage).
+const PHOTO_NOTE = /^\[(?:Photo attached|(\d+) photos attached)\./;
+
+function personText(text) {
+  // A model without system messages got Pantopus's context at the top of the message.
+  let shown = text.startsWith(CONTEXT_HEADER) && text.includes('\n\n') ? text.slice(text.indexOf('\n\n') + 2) : text;
+  for (const line of APP_LINES) shown = shown.replace(line, '');
+  return shown.trim();
+}
+
+/** The stored transcript as the apps show it: the person's messages, the replies, and the drafts as cards. */
+function displayMessages(stored) {
+  const items = [];
+  for (const message of sanitizeHistory(stored)) {
+    if (message.role === 'system') continue;
+    const blocks = typeof message.content === 'string' ? [{ type: 'text', text: message.content }] : message.content;
+    if (message.role === 'user') {
+      if (!blocks.some((block) => block.type !== 'tool_result')) continue;
+      let photos = 0;
+      const texts = [];
+      for (const block of blocks) {
+        if (block.type !== 'text') continue;
+        const note = PHOTO_NOTE.exec(block.text);
+        if (note) photos += note[1] ? Number(note[1]) : 1;
+        else texts.push(block.text);
+      }
+      items.push({ role: 'user', text: personText(texts.join('\n')), photos });
+      continue;
+    }
+    let text = '';
+    for (const block of blocks) {
+      if (block.type === 'text') text += (text ? '\n\n' : '') + block.text;
+      if (block.type !== 'tool_use' || !DRAFT_TYPES[block.name]) continue;
+      if (text.trim()) items.push({ role: 'assistant', text: text.trim() });
+      text = '';
+      const { note: _note, ...fields } = block.input || {};
+      const draft = block.name === 'draft_support_train_from_story'
+        ? { story: fields.story, support_modes_requested: fields.support_modes_requested || ['meal'] }
+        : fields;
+      items.push({ role: 'assistant', draft: { type: DRAFT_TYPES[block.name], draft } });
+    }
+    if (text.trim()) items.push({ role: 'assistant', text: text.trim() });
+  }
+  return items;
+}
+
+/**
+ * One of the person's conversations, for display. null when it isn't theirs or
+ * doesn't exist; an empty list when the database has no transcripts yet.
+ */
+async function getConversationMessages(userId, conversationId) {
+  const { data, error } = await supabaseAdmin
+    .from('AIConversation')
+    .select('id, title, messages')
+    .eq('id', conversationId)
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) {
+    // Most likely the messages column (migration ai_conversation_messages) isn't applied yet.
+    logger.warn('getConversationMessages error', { userId, conversationId, code: error.code, error: error.message });
+    const { data: row } = await supabaseAdmin.from('AIConversation').select('id, title')
+      .eq('id', conversationId).eq('user_id', userId).maybeSingle();
+    return row ? { conversationId: row.id, title: row.title, messages: [] } : null;
+  }
+  if (!data) return null;
+  return { conversationId: data.id, title: data.title, messages: displayMessages(data.messages) };
+}
+
 async function deleteConversation(userId, conversationId) {
   const { error } = await supabaseAdmin
     .from('AIConversation')
@@ -1008,5 +1212,6 @@ module.exports = {
   generatePlaceBrief,
   draftMailOpening,
   listConversations,
+  getConversationMessages,
   deleteConversation,
 };

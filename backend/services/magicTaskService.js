@@ -14,7 +14,7 @@
  *   low    (< 0.5) — ask one clarifying question
  */
 const { getAnthropicClient, resolveModel, resolveEffort } = require('../config/anthropic');
-const { complete, isTimeoutError, parseJsonObject } = require('./ai/llm');
+const { complete, isTimeoutError, parseJsonObject, todayLine } = require('./ai/llm');
 const { parseTaskText } = require('./taskParser');
 const logger = require('../utils/logger');
 
@@ -352,9 +352,10 @@ async function llmExtract(userText, deterministicFields = {}, context = {}) {
       contextHints.push(`Deterministic parser found category="${deterministicFields.category}"`);
     }
 
-    const userMessage = contextHints.length > 0
+    // "Saturday morning" becomes a schedule only against today's date.
+    const userMessage = (contextHints.length > 0
       ? `User message: "${userText}"\n\nHints from deterministic parser:\n${contextHints.join('\n')}`
-      : `User message: "${userText}"`;
+      : `User message: "${userText}"`) + `\n\n${todayLine(context.timeZone)}`;
 
     // The task has too many optional fields for a response schema (the API caps
     // optional parameters at 24), so the prompt asks for JSON and it is parsed
@@ -579,6 +580,7 @@ function computeOverallConfidence(fieldConfidence) {
  * @param {object} context — Optional context hints
  * @param {string} [context.homeId] — User's home ID (for location_mode=home)
  * @param {object} [context.location] — Pre-locked location { lat, lng }
+ * @param {string} [context.timeZone] — The person's time zone, for today's date (set by the route)
  * @param {string} [context.locationMode] — Pre-locked location mode
  * @returns {Promise<object>} — { draft, confidence, fieldConfidence, clarifyingQuestion, source }
  */

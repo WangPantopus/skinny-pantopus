@@ -10,7 +10,7 @@
  *   - photos (a base64 image block) are read;
  *   - how long each kind of call takes at the configured effort.
  *
- * Usage (about 15 small requests, a few cents):
+ * Usage (about 14 small requests, a few cents):
  *   ANTHROPIC_API_KEY=sk-ant-... node backend/scripts/ai-smoke.js
  *   ANTHROPIC_API_KEY=sk-ant-... node backend/scripts/ai-smoke.js --drafts-only
  *   ANTHROPIC_API_KEY=sk-ant-... node backend/scripts/ai-smoke.js --chat-only
@@ -28,7 +28,7 @@ const llm = require('../services/ai/llm');
 const loop = require('../services/ai/agentLoop');
 const prompts = require('../services/ai/prompts');
 const schemas = require('../services/ai/schemas');
-const { toolDefinitions, executeTool } = require('../services/ai/tools');
+const { toolDefinitions, executeTool, closingForDrafts } = require('../services/ai/tools');
 
 const args = new Set(process.argv.slice(2));
 const draftsOnly = args.has('--drafts-only');
@@ -138,43 +138,75 @@ async function runChatTool(use) {
   const canned = {
     get_user_context: { homes: [{ label: 'Home', city: 'Vancouver', state: 'WA' }], saved_places: [], recent_activity: { gigs_posted: 0, listings_posted: 0, posts_made: 0 } },
     get_place_alerts: { place: { label: 'Home', city: 'Vancouver', state: 'WA' }, alerts: [{ event: 'Frost Advisory', severity: 'Minor', headline: 'Frost possible tonight', instruction: 'Cover sensitive plants.' }], source: 'smoke', fetched_at: new Date().toISOString() },
+    list_user_support_trains: { support_trains: [{ id: '00000000-0000-4000-8000-000000000001', title: 'Meals for the Garcia family', status: 'active', published_at: new Date().toISOString() }] },
   };
   const result = use.name in canned ? canned[use.name] : await executeTool(use.name, use.input || {}, 'smoke-user');
   return { type: 'tool_result', tool_use_id: use.id, content: JSON.stringify(result), ...(result.error ? { is_error: true } : {}) };
 }
 
+// The context streamChat adds after the person's message (chatContext.buildChatContext), canned.
+const CONTEXT = `Context from Pantopus (facts about this person's home as of ${new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).format(new Date())}; not written by them):
+- Home: Vancouver, WA.
+- Garbage: next Tuesday, set by their household.
+- Recycling: next Tuesday in two weeks, set by their household.
+- Weather alerts near their home (National Weather Service):
+  - Frost Advisory (Minor): Frost possible tonight from 2 AM to 9 AM: Cover sensitive plants and bring pets inside.`;
+
 async function chat(client) {
-  console.log(`\nChat agent (${CHAT_MODEL}, effort ${CHAT_EFFORT}, ${toolDefinitions.length} tools)`);
-  const system = llm.systemBlocks(prompts.CHAT_AGENT_SYSTEM);
+  // The launch tool set: no gig, listing or mail tools.
+  const tools = toolDefinitions.filter((t) => !['create_gig_draft', 'create_listing_draft', 'get_mail_item', 'summarize_mail_item'].includes(t.name));
+  console.log(`\nChat agent (${CHAT_MODEL}, effort ${CHAT_EFFORT}, ${tools.length} tools)`);
+  const system = llm.systemBlocks(prompts.chatAgentSystem({ openGigs: false, marketplace: false, mailbox: false }));
   let stored = [];
 
-  async function turn(label, message, { expectTool } = {}) {
+  async function turn(label, message, { expectTool, expectNoTool, withContext, expectClosing } = {}) {
     await attempt(`chat: ${label}`, async () => {
       const start = Date.now();
       let firstTextMs = null;
+      let statusMs = null;
       const usage = llm.emptyUsage();
+      const ran = new Map();
+      let closed = false;
       const history = loop.sanitizeHistory(stored);
+      const sent = `${message}\n\n[Sent: ${llm.describeNow('America/Los_Angeles')}]`;
+      const messages = [...history, { role: 'user', content: sent }, ...(withContext ? [{ role: 'system', content: CONTEXT }] : [])];
       const result = await loop.runAgentTurn({
-        client, model: CHAT_MODEL, system, tools: toolDefinitions, effort: CHAT_EFFORT, maxTokens: 4096, maxRounds: 5,
-        messages: [...history, { role: 'user', content: message }],
-        signal: AbortSignal.timeout(60000), usage, runTool: runChatTool,
+        client, model: CHAT_MODEL, system, tools, effort: CHAT_EFFORT, maxTokens: 4096, maxRounds: 5,
+        messages, signal: AbortSignal.timeout(60000), usage,
+        runTool: async (use) => {
+          const block = await runChatTool(use);
+          ran.set(use.id, { name: use.name, result: JSON.parse(block.content) });
+          return block;
+        },
         onText: () => { if (firstTextMs === null) firstTextMs = Date.now() - start; },
+        onToolStart: () => { if (statusMs === null) statusMs = Date.now() - start; },
+        finishAfterTools: (uses) => {
+          const closing = closingForDrafts(uses.map((use) => ran.get(use.id)));
+          if (closing) closed = true;
+          return closing;
+        },
       });
       addUsage(usage);
       if (result.outcome !== 'complete') throw new Error(`turn ended as "${result.outcome}"`);
       // Only what this turn produced, not the tool calls replayed from earlier turns.
-      const toolNames = result.messages.slice(history.length + 1).flatMap((m) => (Array.isArray(m.content) ? m.content : [])).filter((b) => b.type === 'tool_use').map((b) => b.name);
+      const produced = result.messages.slice(messages.length);
+      const toolNames = produced.flatMap((m) => (Array.isArray(m.content) ? m.content : [])).filter((b) => b.type === 'tool_use').map((b) => b.name);
       if (expectTool && !toolNames.includes(expectTool)) throw new Error(`expected a ${expectTool} call, got [${toolNames.join(', ') || 'none'}]`);
+      if (expectNoTool && toolNames.length) throw new Error(`expected an answer from the context, got tool calls [${toolNames.join(', ')}]`);
+      // A draft turn ends at the card: one request, closed by the draft's note.
+      if (expectClosing && !closed) throw new Error('expected the draft to end the turn at its card');
       stored = loop.compactForStorage(result.messages);
       if (loop.sanitizeHistory(stored).length !== stored.length) throw new Error('the stored transcript does not survive sanitizing');
-      return `first text ${firstTextMs} ms, tools [${toolNames.join(', ') || 'none'}], cache read ${usage.cacheReadTokens} tokens`;
+      const reply = produced.filter((m) => m.role === 'assistant').flatMap((m) => m.content).filter((b) => b.type === 'text').map((b) => b.text).join(' ');
+      return `first text ${firstTextMs} ms${statusMs !== null ? `, status ${statusMs} ms` : ''}, tools [${toolNames.join(', ') || 'none'}], cache read ${usage.cacheReadTokens}: "${reply.slice(0, 80)}"`;
     });
   }
 
-  await turn('turn 1 (tool call, streamed answer)', 'What weather alerts are active near my home?', { expectTool: 'get_place_alerts' });
+  await turn('turn 1 (answered from the context, no tool)', 'Is anything going on near my home I should know about tonight?', { expectNoTool: true, withContext: true });
   // Turn 2 is sent the stored transcript from turn 1: this is the stateless replay the old design never needed.
-  await turn('turn 2 (replays the stored transcript)', 'Thanks. Write a short post telling neighbors to cover their plants tonight.', { expectTool: 'create_post_draft' });
-  await turn('turn 3 (follow-up revises the earlier draft)', 'Make it friendlier.', { expectTool: 'create_post_draft' });
+  await turn('turn 2 (draft ends the turn at its card)', 'Thanks. Write a short post telling neighbors to cover their plants tonight.', { expectTool: 'create_post_draft', expectClosing: true });
+  await turn('turn 3 (follow-up revises the earlier draft)', 'Make it friendlier.', { expectTool: 'create_post_draft', expectClosing: true });
+  await turn('turn 4 (a tool turn: status, then the answer)', 'Do I have any Support Trains going right now?', { expectTool: 'list_user_support_trains' });
 }
 
 (async () => {

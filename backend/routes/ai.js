@@ -361,6 +361,15 @@ router.get('/conversations', verifyToken, asyncHandler(async (req, res) => {
   res.json({ conversations });
 }));
 
+// A conversation's history, so an app can show it again after a relaunch.
+router.get('/conversations/:id/messages', verifyToken, asyncHandler(async (req, res) => {
+  const { error: invalid } = Joi.string().uuid().validate(req.params.id);
+  if (invalid) return res.status(404).json({ error: 'Conversation not found' });
+  const conversation = await agentService.getConversationMessages(req.user.id, req.params.id);
+  if (!conversation) return res.status(404).json({ error: 'Conversation not found' });
+  res.json(conversation);
+}));
+
 router.delete('/conversations/:id', verifyToken, asyncHandler(async (req, res) => {
   const { id } = req.params;
   const deleted = await agentService.deleteConversation(req.user.id, id);

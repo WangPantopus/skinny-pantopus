@@ -78,6 +78,41 @@ function systemBlocks(text, { cache = true } = {}) {
   return [{ type: 'text', text, ...(cache ? { cache_control: { type: 'ephemeral' } } : {}) }];
 }
 
+// Models that take `role: "system"` messages inside `messages` (no beta needed);
+// Claude Sonnet 5 and older models answer 400 to them.
+const SYSTEM_MESSAGE_MODELS = /^claude-(sonnet-5-5|haiku-5-5|opus-5-5|opus-5|opus-4-8|fable-5|fable-5-1|mythos-5|mythos-5-1)$/;
+
+/** True when `model` accepts mid-conversation system messages. */
+function supportsSystemMessages(model) {
+  return SYSTEM_MESSAGE_MODELS.test(String(model || ''));
+}
+
+// The model can't know the date. Anything that writes dates ("this Saturday",
+// "overdue", an event's start) is told it, in the person's time zone.
+const DEFAULT_TIMEZONE = 'America/Los_Angeles';
+
+function formatInZone(timeZone, now, options) {
+  try {
+    return new Intl.DateTimeFormat('en-US', { timeZone, ...options }).format(now);
+  } catch {
+    return new Intl.DateTimeFormat('en-US', { timeZone: DEFAULT_TIMEZONE, ...options }).format(now);
+  }
+}
+
+/** "Monday, October 12, 2026 at 6:10 PM PDT" */
+function describeNow(timeZone = DEFAULT_TIMEZONE, now = new Date()) {
+  return formatInZone(timeZone || DEFAULT_TIMEZONE, now, {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short',
+  });
+}
+
+/** "[Today: Monday, October 12, 2026 (America/Los_Angeles)]", the line a single-turn draft's input ends with. */
+function todayLine(timeZone = DEFAULT_TIMEZONE, now = new Date()) {
+  const zone = timeZone || DEFAULT_TIMEZONE;
+  const day = formatInZone(zone, now, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  return `[Today: ${day} (${zone})]`;
+}
+
 /**
  * One non-streaming call.
  *
@@ -194,7 +229,11 @@ module.exports = {
   isTimeoutError,
   isImageError,
   systemBlocks,
+  supportsSystemMessages,
+  describeNow,
+  todayLine,
   parseJsonObject,
   imageBlock,
   DEFAULT_MAX_TOKENS,
+  DEFAULT_TIMEZONE,
 };

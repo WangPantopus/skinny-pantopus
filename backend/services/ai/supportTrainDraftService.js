@@ -9,7 +9,8 @@ const supabaseAdmin = require('../../config/supabaseAdmin');
 const logger = require('../../utils/logger');
 const prompts = require('./prompts');
 const schemas = require('./schemas');
-const { complete, isTimeoutError } = require('./llm');
+const { AIRefusalError, complete, isTimeoutError, todayLine } = require('./llm');
+const { userTimeZone } = require('./chatContext');
 
 const DRAFT_TIMEOUT_MS = parseInt(process.env.ANTHROPIC_DRAFT_TIMEOUT_MS, 10) || 30000;
 // The story names allergies and dietary restrictions, so the draft thinks a
@@ -73,6 +74,8 @@ async function draftSupportTrain({ story, supportModesRequested, recipientRefere
       : homeReference.home_id || JSON.stringify(homeReference);
     userContent += `\n[Home: ${homeLabel}]`;
   }
+  // "Starting Monday" or "for the next two weeks" are read against today's date.
+  userContent += `\n${todayLine(await userTimeZone(userId))}`;
 
   try {
     const response = await complete({
@@ -123,9 +126,13 @@ async function draftSupportTrain({ story, supportModesRequested, recipientRefere
     logger.error('draftSupportTrain error', { userId, error: err.message });
     await logRequest({
       userId, endpoint: 'draft/support_train', model: DRAFT_MODEL,
-      promptVersion: prompts.VERSIONS.supportTrain, status: 'error',
+      promptVersion: prompts.VERSIONS.supportTrain, status: err instanceof AIRefusalError ? 'refusal' : 'error',
       latencyMs: Date.now() - startTime, errorMessage: err.message,
     });
+    if (err instanceof AIRefusalError) {
+      // Declined, not down: retrying won't help.
+      return { error: 'AI_DECLINED', message: "Pantopus AI can't help with this one. You can still write it yourself.", fallback: true };
+    }
     if (isTimeoutError(err)) {
       return { error: 'AI_TIMEOUT', message: 'AI draft timed out. Please try again.', fallback: true };
     }
