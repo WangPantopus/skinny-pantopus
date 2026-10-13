@@ -36,14 +36,6 @@ const JITTER_KEY = process.env.LOCATION_JITTER_SECRET
 const APPROX_AREA_CELLS_PER_DEGREE = 200;
 
 /**
- * How far an approx_area point can be shown from the true point, in degrees on
- * each axis: half a cell, plus the ±0.005° offset, plus 0.0005° of rounding.
- * Searches that decide on shown points widen their query of true points by at
- * least this much (backend/services/marketplace/locationPrivacy.js).
- */
-const APPROX_AREA_MAX_SHIFT_DEGREES = 0.5 / APPROX_AREA_CELLS_PER_DEGREE + 0.005 + 0.0005;
-
-/**
  * Two independent, stable pseudo-random values in [0, 1) for a grid cell.
  * @returns {[number, number]}
  */
@@ -157,6 +149,15 @@ function applyLocationPrecision(obj, precision, isOwner = false, opts = {}) {
 }
 
 /**
+ * No point applyLocationPrecision returns is further than this from the stored
+ * point on either axis, in degrees: approx_area moves it less than 0.008° and
+ * neighborhood_only at most 0.005°. A query that filters by area widens its box
+ * by this much and then keeps the rows whose displayed point is inside, so the
+ * viewer's box or radius never tests the stored point.
+ */
+const MAX_DISPLAY_OFFSET_DEGREES = 0.01;
+
+/**
  * Determine effective precision for a gig based on viewer relationship.
  *
  * @param {Object} gig           The gig row
@@ -210,8 +211,8 @@ function leastPrecise(a, b) {
 }
 
 module.exports = {
-  APPROX_AREA_MAX_SHIFT_DEGREES,
   applyLocationPrecision,
+  MAX_DISPLAY_OFFSET_DEGREES,
   resolveGigPrecision,
   precisionRank,
   leastPrecise,

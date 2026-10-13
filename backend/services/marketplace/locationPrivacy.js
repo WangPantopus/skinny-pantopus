@@ -30,7 +30,7 @@
 const supabaseAdmin = require('../../config/supabaseAdmin');
 const logger = require('../../utils/logger');
 const {
-  APPROX_AREA_MAX_SHIFT_DEGREES,
+  MAX_DISPLAY_OFFSET_DEGREES,
   applyLocationPrecision,
 } = require('../../utils/locationPrivacy');
 
@@ -205,10 +205,9 @@ async function applyLocationPrivacyBatch(listings, viewerUserId, opts = {}) {
 /**
  * Area searches read stored points from the area widened by this margin, which
  * finds every listing whose shown point could be inside it, and then keep only
- * the listings whose search point is (listingSearchPoint). A shown point is
- * never more than APPROX_AREA_MAX_SHIFT_DEGREES from the stored one on an axis.
+ * the listings whose search point is (listingSearchPoint).
  */
-const SEARCH_MARGIN_DEGREES = APPROX_AREA_MAX_SHIFT_DEGREES + 0.001;
+const SEARCH_MARGIN_DEGREES = MAX_DISPLAY_OFFSET_DEGREES;
 
 // The margin as a distance: its diagonal where a degree of longitude is longest.
 const SEARCH_MARGIN_METERS = Math.ceil(SEARCH_MARGIN_DEGREES * 111320 * Math.SQRT2);

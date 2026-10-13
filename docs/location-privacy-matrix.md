@@ -79,9 +79,9 @@ viewers as well.
 
 **Searches use the shown point.** Every area filter, count, distance and sort
 order a viewer gets is computed from the point that viewer is shown, never from
-the stored point. The API reads stored points from the area widened by the
-largest shift (`APPROX_AREA_MAX_SHIFT_DEGREES` plus a small margin; for radius
-searches the same margin in meters), applies location privacy, and keeps the
+the stored point. The API reads stored points from the area widened by
+`MAX_DISPLAY_OFFSET_DEGREES` (for radius searches, the same margin in meters),
+applies location privacy, and keeps the
 listings whose shown point is inside the requested area. A listing shown without
 a point (`neighborhood_only`, `none`) is placed by its approximate point, which
 is never returned. Searches read at most 500 candidates near the area, newest
