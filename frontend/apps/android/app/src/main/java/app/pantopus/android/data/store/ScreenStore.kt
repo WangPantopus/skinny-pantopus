@@ -351,6 +351,11 @@ class ScreenStore
             _changes.update { it + 1 }
         }
 
+        /** Screens on show read again without marking anything: an entry still fresh and unmarked sends nothing. */
+        fun recheckShown() {
+            _changes.update { it + 1 }
+        }
+
         /** Drops one entry, e.g. after the item was deleted. */
         fun remove(key: StoreKey<*>) {
             val account = accountId() ?: return
