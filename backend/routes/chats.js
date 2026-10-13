@@ -37,6 +37,9 @@ const sharp = require('sharp');
 const { chosenUsernameOrNull } = require('../utils/personalUsername');
 const CHAT_DELETED_REDACT_DAYS = Math.max(parseInt(process.env.CHAT_DELETED_REDACT_DAYS || '180', 10) || 180, 1);
 const REDACTED_DELETED_MESSAGE = '[deleted message]';
+// Read marks update only rows with something unread (NULL counts too, so the unread trigger's `+ 1` works again).
+// A repeated read is then no write, and the database's change signal doesn't reach every member of the room.
+const HAS_UNREAD = 'unread_count.neq.0,unread_count.is.null';
 const LOCAL_PROFILE_IDENTITY_SELECT = [
   'id',
   'user_id',
@@ -1428,6 +1431,12 @@ router.post('/conversations/:otherUserId/read', verifyToken, async (req, res) =>
       readTargetUserId = asBusinessUserId;
     }
 
+    // Same rule as starting a chat: a "conversation with yourself" (or with the business you read for) would
+    // match every room the reader is in and mark them all read.
+    if (String(otherUserId) === String(readTargetUserId)) {
+      return res.status(400).json({ error: 'Cannot mark a conversation with yourself as read' });
+    }
+
     const { data: mineRows, error: mineErr } = await supabaseAdmin
       .from('ChatParticipant')
       .select('room_id')
@@ -1472,7 +1481,8 @@ router.post('/conversations/:otherUserId/read', verifyToken, async (req, res) =>
         last_read_at: stamp
       })
       .in('room_id', sharedRoomIds)
-      .in('user_id', usersToClear);
+      .in('user_id', usersToClear)
+      .or(HAS_UNREAD);
 
     if (updateErr) {
       logger.error('Error updating participants for conversation read', { requestId: req.requestId, userId, otherUserId, error: updateErr.message });
@@ -2224,7 +2234,7 @@ router.post('/rooms/:roomId/read', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    // Update participant's read state directly
+    // Update participant's read state directly; with nothing unread there is no row to change (count stays 0)
     const { data, error } = await supabaseAdmin
       .from('ChatParticipant')
       .update({
@@ -2233,6 +2243,7 @@ router.post('/rooms/:roomId/read', verifyToken, async (req, res) => {
       })
       .eq('room_id', roomIdStr)
       .eq('user_id', readTargetUserId)
+      .or(HAS_UNREAD)
       .select('unread_count')
       .maybeSingle();
     
