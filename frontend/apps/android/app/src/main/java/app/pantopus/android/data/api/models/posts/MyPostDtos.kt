@@ -30,6 +30,8 @@ data class MyPostDto(
     @Json(name = "archived_at") val archivedAt: String? = null,
     /** Who wrote it; the Saved tab's rows (other people's posts) name the author. */
     val author: PostAuthorBriefDto? = null,
+    /** Saved-list order is the bookmark time, which can differ from when the post was written. */
+    val savedAt: String? = null,
 )
 
 /** The author field a saved-post row shows (`author.displayName` on `GET /api/posts/saved`). */

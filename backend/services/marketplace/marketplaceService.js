@@ -15,7 +15,12 @@ const supabaseAdmin = require('../../config/supabaseAdmin');
 const logger = require('../../utils/logger');
 const { escapeIlike } = require('../../utils/escapeIlike');
 const s3 = require('../s3Service');
-const { applyLocationPrivacyBatch } = require('./locationPrivacy');
+const {
+  applyLocationPrivacyBatch,
+  applyLocationPrivacyWithSearchPoints,
+  isPointInBounds,
+  widenBounds,
+} = require('./locationPrivacy');
 const { LISTING_CATEGORIES } = require('../../constants/marketplace');
 const { hydrateListingCreatorIdentities } = require('../../utils/listingCreatorIdentity');
 const {
@@ -33,6 +38,12 @@ const METERS_PER_MILE = 1609.34;
 const DEFAULT_DISCOVERY_RADIUS_METERS = Math.round(100 * METERS_PER_MILE);
 const GLOBAL_RADIUS_METERS = Math.round(25000 * METERS_PER_MILE);
 const WORLD_BOUNDS = { south: -90, west: -180, north: 90, east: 180 };
+
+// Area searches read stored points from a widened area and then decide on the
+// point each viewer is shown (locationPrivacy.js), so they read up to this many
+// candidates, newest first. PostgREST returns at most 1000 rows.
+const AREA_SEARCH_CANDIDATE_LIMIT = 500;
+const AREA_COUNT_CANDIDATE_LIMIT = 1000;
 
 const LISTING_BROWSE_SELECT = `
   id, user_id, title, description, price, is_free,
@@ -80,15 +91,9 @@ function normalizeMediaUrls(mediaUrls) {
 // Row normalizer
 // ---------------------------------------------------------------------------
 
-function normalizeListingRow(row, savedIds = new Set(), refLat = null, refLng = null) {
+function normalizeListingRow(row, savedIds = new Set()) {
   const mediaUrls = normalizeMediaUrls(row.media_urls);
   const firstImage = mediaUrls.length > 0 ? mediaUrls[0] : null;
-
-  // Use DB-computed distance when available (nearest sort RPC), fall back to JS haversine
-  let distanceMeters = row.distance_meters ?? null;
-  if (distanceMeters == null && refLat != null && refLng != null && row.latitude != null && row.longitude != null) {
-    distanceMeters = haversineDistance(refLat, refLng, row.latitude, row.longitude);
-  }
 
   return {
     id: row.id,
@@ -128,7 +133,8 @@ function normalizeListingRow(row, savedIds = new Set(), refLat = null, refLng = 
     expires_at: row.expires_at || null,
     created_at: row.created_at,
     updated_at: row.updated_at,
-    distance_meters: distanceMeters,
+    // Measured from the point the viewer is shown, after location privacy.
+    distance_meters: null,
     userHasSaved: savedIds.has(row.id),
     // Project the raw/enriched User row through the serializer wall so only
     // the public identity shape reaches clients.
@@ -149,6 +155,12 @@ function haversineDistance(lat1, lng1, lat2, lng2) {
     Math.sin(dLat / 2) ** 2 +
     Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+/** Meters from (lat, lng) to the point a shown listing displays, or null without one. */
+function shownDistanceMeters(listing, lat, lng) {
+  if (listing.latitude == null || listing.longitude == null || lat == null || lng == null) return null;
+  return haversineDistance(lat, lng, listing.latitude, listing.longitude);
 }
 
 // ---------------------------------------------------------------------------
@@ -321,6 +333,9 @@ async function browseListings({
   includeRemote = true,  // false → exclude NULL-coordinate listings
 }) {
   const parsedLimit = Math.min(Math.max(Number(limit) || 30, 1), 100);
+  const bounds = { south: Number(south), west: Number(west), north: Number(north), east: Number(east) };
+  const searchBounds = widenBounds(bounds);
+  const sortByDistance = sort === 'nearest' && refLat != null && refLng != null && !remoteOnly;
 
   // 1. Build base query
   let query = supabaseAdmin
@@ -334,12 +349,13 @@ async function browseListings({
     // Only remote (NULL-coordinate) listings
     query = query.is('latitude', null);
   } else {
-    // Bounding box for located listings
+    // Stored points in the widened box; the box itself is tested on the point
+    // each viewer is shown (step 6a).
     query = query
-      .gte('latitude', south)
-      .lte('latitude', north)
-      .gte('longitude', west)
-      .lte('longitude', east);
+      .gte('latitude', searchBounds.south)
+      .lte('latitude', searchBounds.north)
+      .gte('longitude', searchBounds.west)
+      .lte('longitude', searchBounds.east);
 
     // Exclude remote listings when explicitly asked (e.g. "nearby" pill)
     query = query.not('latitude', 'is', null).not('longitude', 'is', null);
@@ -406,109 +422,97 @@ async function browseListings({
     }
     query = query.order('price', { ascending: false, nullsFirst: false }).order('id', { ascending: false });
   } else if (sort === 'nearest') {
-    // Nearest sort is handled via a dedicated PostGIS RPC — but if
-    // no reference point is provided, fall back to newest ordering.
-    if (refLat == null || refLng == null) {
-      query = query.order('created_at', { ascending: false }).order('id', { ascending: false });
-    }
+    // Nearest is ordered by the distance to each shown point (step 6a), so the
+    // candidates are read newest first; without a reference point it stays that way.
+    query = query.order('created_at', { ascending: false }).order('id', { ascending: false });
   }
 
-  // 6. Limit (fetch extra to determine hasMore)
+  // 6. Limit (fetch extra to determine hasMore). Located rows are tested on
+  //    shown points after the query, so read up to the candidate limit.
   const fetchLimit = parsedLimit + 1;
-  const useNearestRpc = sort === 'nearest' && refLat != null && refLng != null && !remoteOnly;
-  if (!useNearestRpc) query = query.limit(fetchLimit);
+  const queryLimit = remoteOnly ? fetchLimit : AREA_SEARCH_CANDIDATE_LIMIT;
+  query = query.limit(queryLimit);
 
   // Execute query
   let listings;
   let fuzzyMatch = false;
-  if (useNearestRpc) {
-    // Use PostGIS RPC for database-level distance sort + cursor pagination
-    const rpcParams = {
-      p_south: south,
-      p_west: west,
-      p_north: north,
-      p_east: east,
-      p_ref_lat: refLat,
-      p_ref_lng: refLng,
-      p_category: category || null,
-      p_listing_type: listingType || null,
-      p_is_free: isFree === true || isFree === 'true' ? true : (isFree === false || isFree === 'false' ? false : null),
-      p_is_wanted: isWanted === true || isWanted === 'true' ? true : null,
-      p_condition: condition || null,
-      p_min_price: minPrice != null ? parseFloat(minPrice) : null,
-      p_max_price: maxPrice != null ? parseFloat(maxPrice) : null,
-      p_layer: layer || null,
-      p_trust_only: trustOnly === true || trustOnly === 'true',
-      p_search: (search && search.trim()) || null,
-      p_created_after: _createdAfter || null,
-      p_cursor_distance: decodedCursor?.distance_meters ?? null,
-      p_cursor_id: decodedCursor?.id ?? null,
-      p_limit: fetchLimit,
-    };
-    const { data: rpcData, error: rpcError } = await supabaseAdmin.rpc(
-      'browse_listings_by_distance',
-      rpcParams,
-    );
-    if (rpcError) {
-      logger.error('marketplace.browse.rpc_error', { error: rpcError.message });
-      throw new Error(`Nearest browse query failed: ${rpcError.message}`);
+  const { data: rawListings, error } = await query;
+  if (error) {
+    logger.error('marketplace.browse.query_error', {
+      error: error.message,
+      details: error.details,
+      hint: error.hint,
+      code: error.code,
+      sort,
+      search,
+    });
+    throw new Error(`Browse query failed: ${error.message}`);
+  }
+  listings = rawListings || [];
+
+  // Fuzzy fallback: if full-text search returned 0 results, try ilike matching
+  if (listings.length === 0 && search && search.trim()) {
+    const trimmed = search.trim();
+    let fuzzyQuery = supabaseAdmin
+      .from('Listing')
+      .select(LISTING_BROWSE_SELECT)
+      .eq('status', 'active')
+      .is('archived_at', null)
+      .or(`title.ilike.%${escapeIlike(trimmed)}%,description.ilike.%${escapeIlike(trimmed)}%`);
+
+    // Re-apply bounding box
+    if (south != null) fuzzyQuery = fuzzyQuery.gte('latitude', searchBounds.south);
+    if (north != null) fuzzyQuery = fuzzyQuery.lte('latitude', searchBounds.north);
+    if (west != null) fuzzyQuery = fuzzyQuery.gte('longitude', searchBounds.west);
+    if (east != null) fuzzyQuery = fuzzyQuery.lte('longitude', searchBounds.east);
+
+    // Re-apply filters
+    if (category) fuzzyQuery = fuzzyQuery.eq('category', category);
+    if (listingType) fuzzyQuery = fuzzyQuery.eq('listing_type', listingType);
+    if (isFree === true || isFree === 'true') fuzzyQuery = fuzzyQuery.eq('is_free', true);
+    if (isFree === false || isFree === 'false') fuzzyQuery = fuzzyQuery.eq('is_free', false);
+    if (isWanted === true || isWanted === 'true') fuzzyQuery = fuzzyQuery.eq('is_wanted', true);
+    if (condition) fuzzyQuery = fuzzyQuery.eq('condition', condition);
+    if (layer) fuzzyQuery = fuzzyQuery.eq('layer', layer);
+    if (trustOnly === true || trustOnly === 'true') fuzzyQuery = fuzzyQuery.eq('is_address_attached', true);
+    if (minPrice != null) fuzzyQuery = fuzzyQuery.gte('price', parseFloat(minPrice));
+    if (maxPrice != null) fuzzyQuery = fuzzyQuery.lte('price', parseFloat(maxPrice));
+    fuzzyQuery = fuzzyQuery.or('expires_at.is.null,expires_at.gt.' + new Date().toISOString());
+
+    fuzzyQuery = fuzzyQuery
+      .order('created_at', { ascending: false })
+      .limit(queryLimit);
+
+    const { data: fuzzyData } = await fuzzyQuery;
+    if (fuzzyData && fuzzyData.length > 0) {
+      listings = fuzzyData;
+      fuzzyMatch = true;
     }
-    listings = rpcData || [];
+  }
 
-  } else {
-    const { data: rawListings, error } = await query;
-    if (error) {
-      logger.error('marketplace.browse.query_error', {
-        error: error.message,
-        details: error.details,
-        hint: error.hint,
-        code: error.code,
-        sort,
-        search,
-      });
-      throw new Error(`Browse query failed: ${error.message}`);
-    }
-    listings = rawListings || [];
-
-    // Fuzzy fallback: if full-text search returned 0 results, try ilike matching
-    if (listings.length === 0 && search && search.trim()) {
-      const trimmed = search.trim();
-      let fuzzyQuery = supabaseAdmin
-        .from('Listing')
-        .select(LISTING_BROWSE_SELECT)
-        .eq('status', 'active')
-        .is('archived_at', null)
-        .or(`title.ilike.%${escapeIlike(trimmed)}%,description.ilike.%${escapeIlike(trimmed)}%`);
-
-      // Re-apply bounding box
-      if (south != null) fuzzyQuery = fuzzyQuery.gte('latitude', south);
-      if (north != null) fuzzyQuery = fuzzyQuery.lte('latitude', north);
-      if (west != null) fuzzyQuery = fuzzyQuery.gte('longitude', west);
-      if (east != null) fuzzyQuery = fuzzyQuery.lte('longitude', east);
-
-      // Re-apply filters
-      if (category) fuzzyQuery = fuzzyQuery.eq('category', category);
-      if (listingType) fuzzyQuery = fuzzyQuery.eq('listing_type', listingType);
-      if (isFree === true || isFree === 'true') fuzzyQuery = fuzzyQuery.eq('is_free', true);
-      if (isFree === false || isFree === 'false') fuzzyQuery = fuzzyQuery.eq('is_free', false);
-      if (isWanted === true || isWanted === 'true') fuzzyQuery = fuzzyQuery.eq('is_wanted', true);
-      if (condition) fuzzyQuery = fuzzyQuery.eq('condition', condition);
-      if (layer) fuzzyQuery = fuzzyQuery.eq('layer', layer);
-      if (trustOnly === true || trustOnly === 'true') fuzzyQuery = fuzzyQuery.eq('is_address_attached', true);
-      if (minPrice != null) fuzzyQuery = fuzzyQuery.gte('price', parseFloat(minPrice));
-      if (maxPrice != null) fuzzyQuery = fuzzyQuery.lte('price', parseFloat(maxPrice));
-      fuzzyQuery = fuzzyQuery.or('expires_at.is.null,expires_at.gt.' + new Date().toISOString());
-
-      fuzzyQuery = fuzzyQuery
-        .order('created_at', { ascending: false })
-        .limit(fetchLimit);
-
-      const { data: fuzzyData } = await fuzzyQuery;
-      if (fuzzyData && fuzzyData.length > 0) {
-        listings = fuzzyData;
-        fuzzyMatch = true;
+  // 6a. Keep the located listings whose point, as this viewer is shown it, is
+  //     in the box, and order "nearest" by the distance to that point, so neither
+  //     depends on a stored point (locationPrivacy.js).
+  if (!remoteOnly) {
+    const placed = await applyLocationPrivacyWithSearchPoints(listings, userId);
+    let located = listings
+      .map((row, i) => ({
+        row,
+        point: placed[i].point,
+        distance: sortByDistance ? shownDistanceMeters(placed[i].listing, refLat, refLng) : null,
+      }))
+      .filter(({ point }) => isPointInBounds(point, bounds));
+    if (sortByDistance) {
+      // ORDER BY distance ASC NULLS LAST, id ASC, with a (distance_meters, id) cursor
+      const key = ({ distance, row }) => [distance ?? Infinity, String(row.id)];
+      const compare = (a, b) => (a[0] - b[0]) || (a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : 0);
+      located.sort((a, b) => compare(key(a), key(b)));
+      if (decodedCursor) {
+        const after = [decodedCursor.distance_meters ?? Infinity, String(decodedCursor.id)];
+        located = located.filter(c => compare(key(c), after) > 0);
       }
     }
+    listings = located.slice(0, fetchLimit).map(({ row }) => row);
   }
 
   // 6b. Fetch remote (NULL-coordinate) listings when includeRemote is true
@@ -593,9 +597,13 @@ async function browseListings({
   const savedIds = await getSavedListingIds(userId, listingIds);
 
   // 9. Normalize all rows
-  listings = listings.map(row => normalizeListingRow(row, savedIds, refLat, refLng));
+  listings = listings.map(row => normalizeListingRow(row, savedIds));
 
-  // 10. (nearest sort is now handled by PostGIS RPC — no JS post-sort needed)
+  // 10. Apply location privacy, then measure distances from the shown points
+  listings = await applyLocationPrivacyBatch(listings, userId);
+  if (refLat != null && refLng != null) {
+    for (const listing of listings) listing.distance_meters = shownDistanceMeters(listing, refLat, refLng);
+  }
 
   // 11. Determine hasMore and trim
   const hasMore = listings.length > parsedLimit;
@@ -626,11 +634,8 @@ async function browseListings({
     totalInBounds = listings.length + (hasMore ? 1 : 0);
   }
 
-  // 14. Apply location privacy transformation (after distance calc & cursor build)
-  const privacySafeListings = await applyLocationPrivacyBatch(listings, userId);
-
   return {
-    listings: privacySafeListings,
+    listings,
     pagination: {
       next_cursor: nextCursor,
       has_more: hasMore,
@@ -644,19 +649,29 @@ async function browseListings({
   };
 }
 
-// Background count query
+// Background count query. It counts the listings whose point, as a signed-out
+// viewer is shown it, is in the box: the cached counts are served to everyone.
 async function runCountQuery(south, west, north, east, filterOpts, cacheKey) {
+  const bounds = { south: Number(south), west: Number(west), north: Number(north), east: Number(east) };
+  const searchBounds = widenBounds(bounds);
+  const countShownInBounds = async (candidates) => {
+    const { data, error } = await candidates.limit(AREA_COUNT_CANDIDATE_LIMIT);
+    if (error) throw error;
+    const placed = await applyLocationPrivacyWithSearchPoints(data || [], null);
+    return placed.filter(({ point }) => isPointInBounds(point, bounds)).length;
+  };
+
   let query = supabaseAdmin
     .from('Listing')
-    .select('id', { count: 'exact', head: true })
+    .select('id, latitude, longitude, location_precision')
     .eq('status', 'active')
     .is('archived_at', null)
     .not('latitude', 'is', null)
     .not('longitude', 'is', null)
-    .gte('latitude', south)
-    .lte('latitude', north)
-    .gte('longitude', west)
-    .lte('longitude', east)
+    .gte('latitude', searchBounds.south)
+    .lte('latitude', searchBounds.north)
+    .gte('longitude', searchBounds.west)
+    .lte('longitude', searchBounds.east)
     .or('expires_at.is.null,expires_at.gt.' + new Date().toISOString());
 
   if (filterOpts.category) query = query.eq('category', filterOpts.category);
@@ -673,26 +688,24 @@ async function runCountQuery(south, west, north, east, filterOpts, cacheKey) {
     query = query.textSearch('search_vector', filterOpts.search.trim(), { type: 'websearch' });
   }
 
-  const { count: total, error: totalErr } = await query;
-  if (totalErr) throw totalErr;
+  const total = await countShownInBounds(query);
 
   // Free count
   let freeQuery = supabaseAdmin
     .from('Listing')
-    .select('id', { count: 'exact', head: true })
+    .select('id, latitude, longitude, location_precision')
     .eq('status', 'active')
     .is('archived_at', null)
     .eq('is_free', true)
     .not('latitude', 'is', null)
     .not('longitude', 'is', null)
-    .gte('latitude', south)
-    .lte('latitude', north)
-    .gte('longitude', west)
-    .lte('longitude', east)
+    .gte('latitude', searchBounds.south)
+    .lte('latitude', searchBounds.north)
+    .gte('longitude', searchBounds.west)
+    .lte('longitude', searchBounds.east)
     .or('expires_at.is.null,expires_at.gt.' + new Date().toISOString());
 
-  const { count: free, error: freeErr } = await freeQuery;
-  if (freeErr) throw freeErr;
+  const free = await countShownInBounds(freeQuery);
 
   _countCache.set(cacheKey, {
     total: total || 0,
@@ -794,26 +807,31 @@ async function discoverListings({ lat, lng, radius = DEFAULT_DISCOVERY_RADIUS_ME
  */
 async function buildCategoryClusters({ south, west, north, east }) {
   // Supabase JS client doesn't support GROUP BY, so we fetch a sample and
-  // aggregate in JS. Fetch up to 200 recent active listings in bounds.
-  const { data: listings, error } = await supabaseAdmin
+  // aggregate in JS: up to 200 recent active listings whose point, as a
+  // signed-out viewer is shown it, is in bounds (the sections are cached for everyone).
+  const bounds = { south, west, north, east };
+  const searchBounds = widenBounds(bounds);
+  const { data: candidates, error } = await supabaseAdmin
     .from('Listing')
-    .select('category, price, created_at, media_urls')
+    .select('id, latitude, longitude, location_precision, category, price, created_at, media_urls')
     .eq('status', 'active')
     .is('archived_at', null)
     .not('latitude', 'is', null)
     .not('longitude', 'is', null)
-    .gte('latitude', south)
-    .lte('latitude', north)
-    .gte('longitude', west)
-    .lte('longitude', east)
+    .gte('latitude', searchBounds.south)
+    .lte('latitude', searchBounds.north)
+    .gte('longitude', searchBounds.west)
+    .lte('longitude', searchBounds.east)
     .or('expires_at.is.null,expires_at.gt.' + new Date().toISOString())
     .order('created_at', { ascending: false })
-    .limit(200);
+    .limit(AREA_SEARCH_CANDIDATE_LIMIT);
 
   if (error) {
     logger.warn('marketplace.discover.cluster_error', { error: error.message });
     return [];
   }
+  const placed = await applyLocationPrivacyWithSearchPoints(candidates || [], null);
+  const listings = (candidates || []).filter((_, i) => isPointInBounds(placed[i].point, bounds)).slice(0, 200);
 
   // Aggregate by category
   const catMap = {};
@@ -923,29 +941,38 @@ async function autocompleteListings({ query: searchQuery, lat, lng, limit = 5 })
   const parsedLimit = Math.min(Number(limit) || 5, 10);
 
   // Title matches
-  const titleQuery = supabaseAdmin
+  let titleQuery = supabaseAdmin
     .from('Listing')
-    .select('title')
+    .select('title, id, latitude, longitude, location_precision')
     .eq('status', 'active')
     .is('archived_at', null)
     .ilike('title', `%${cleanQuery}%`)
-    .or('expires_at.is.null,expires_at.gt.' + new Date().toISOString())
-    .limit(parsedLimit * 3); // Fetch extra for deduplication
+    .or('expires_at.is.null,expires_at.gt.' + new Date().toISOString());
 
-  // If location provided, prefer nearby results
+  // If location provided, prefer nearby results: listings whose point, as a
+  // signed-out viewer is shown it, is in the box (read from the widened box).
+  let bounds = null;
   if (lat != null && lng != null) {
-    const bounds = boundingBoxFromCenter(parseFloat(lat), parseFloat(lng), 16000);
-    titleQuery
-      .gte('latitude', bounds.south)
-      .lte('latitude', bounds.north)
-      .gte('longitude', bounds.west)
-      .lte('longitude', bounds.east);
+    bounds = boundingBoxFromCenter(parseFloat(lat), parseFloat(lng), 16000);
+    const searchBounds = widenBounds(bounds);
+    titleQuery = titleQuery
+      .gte('latitude', searchBounds.south)
+      .lte('latitude', searchBounds.north)
+      .gte('longitude', searchBounds.west)
+      .lte('longitude', searchBounds.east);
   }
+  // Fetch extra for deduplication
+  titleQuery = titleQuery.limit(bounds ? AREA_SEARCH_CANDIDATE_LIMIT : parsedLimit * 3);
 
-  const { data: titleRows, error: titleErr } = await titleQuery;
+  const { data: candidates, error: titleErr } = await titleQuery;
 
   if (titleErr) {
     logger.warn('marketplace.autocomplete.title_error', { error: titleErr.message });
+  }
+  let titleRows = candidates || [];
+  if (bounds) {
+    const placed = await applyLocationPrivacyWithSearchPoints(titleRows, null);
+    titleRows = titleRows.filter((_, i) => isPointInBounds(placed[i].point, bounds));
   }
 
   // Deduplicate titles (case-insensitive)
@@ -970,14 +997,108 @@ async function autocompleteListings({ query: searchQuery, lat, lng, limit = 5 })
 }
 
 // ---------------------------------------------------------------------------
+// Area searches for the RPC-backed routes (routes/listings.js)
+// ---------------------------------------------------------------------------
+
+/**
+ * Applies location privacy for the viewer to stored rows read from a widened
+ * box (locationPrivacy.widenBounds) and keeps those whose search point is inside
+ * `bounds`, in their order.
+ */
+async function showListingsInBounds(rows, viewerUserId, bounds) {
+  const placed = await applyLocationPrivacyWithSearchPoints(rows, viewerUserId);
+  return placed.filter(({ point }) => isPointInBounds(point, bounds)).map(({ listing }) => listing);
+}
+
+/**
+ * Picks, from stored rows read from a widened radius (locationPrivacy.widenRadiusMeters),
+ * remote listings and those whose search point, as the viewer is shown it, is
+ * within radiusMeters of (latitude, longitude). Each comes with the distance to
+ * its shown point (null without one). sortByDistance orders by that distance
+ * (none last), then newest; otherwise the rows keep their order. The rows are
+ * returned as stored: normalize them, then apply location privacy.
+ *
+ * @returns {Promise<Array<{ row: object, distanceMeters: ?number }>>}
+ */
+async function pickListingsWithinRadius(rows, viewerUserId, { latitude, longitude, radiusMeters, sortByDistance = false }) {
+  const placed = await applyLocationPrivacyWithSearchPoints(rows, viewerUserId);
+  const picked = [];
+  placed.forEach(({ listing, point }, i) => {
+    if (point && haversineDistance(latitude, longitude, point.latitude, point.longitude) > radiusMeters) return;
+    const distance = shownDistanceMeters(listing, latitude, longitude);
+    picked.push({ row: rows[i], distanceMeters: distance == null ? null : Math.round(distance) });
+  });
+  if (sortByDistance) {
+    picked.sort((a, b) => ((a.distanceMeters ?? Infinity) - (b.distanceMeters ?? Infinity))
+      || String(b.row.created_at).localeCompare(String(a.row.created_at))
+      || String(a.row.id).localeCompare(String(b.row.id)));
+  }
+  return picked;
+}
+
+// Boxes searched, in degrees either side of the center, for the point to
+// suggest when an area has no listings.
+const NEAREST_LISTING_SEARCH_SPANS = [0.1, 0.5, 2, 10];
+
+/**
+ * The point to suggest when a map area has no listings: the shown point nearest
+ * to (latitude, longitude) among listings shown on a map, or null. It is chosen
+ * by shown points only, so the answer says nothing about a stored point.
+ */
+async function findNearestListingPoint({ latitude, longitude, viewerUserId }) {
+  for (const span of NEAREST_LISTING_SEARCH_SPANS) {
+    const bounds = {
+      south: Math.max(latitude - span, -90),
+      west: longitude - span,
+      north: Math.min(latitude + span, 90),
+      east: longitude + span,
+    };
+    const searchBounds = widenBounds(bounds);
+    const { data, error } = await supabaseAdmin
+      .from('Listing')
+      .select('id, user_id, latitude, longitude, location_precision')
+      .eq('status', 'active')
+      .is('archived_at', null)
+      .in('location_precision', ['exact_place', 'approx_area'])
+      .gte('latitude', searchBounds.south)
+      .lte('latitude', searchBounds.north)
+      .gte('longitude', searchBounds.west)
+      .lte('longitude', searchBounds.east)
+      .or('expires_at.is.null,expires_at.gt.' + new Date().toISOString())
+      .order('created_at', { ascending: false })
+      .limit(AREA_SEARCH_CANDIDATE_LIMIT);
+    if (error) {
+      logger.warn('marketplace.nearest_listing.error', { error: error.message });
+      return null;
+    }
+
+    let nearest = null;
+    let nearestDistance = Infinity;
+    for (const listing of await showListingsInBounds(data || [], viewerUserId, bounds)) {
+      const distance = shownDistanceMeters(listing, latitude, longitude);
+      if (distance != null && distance < nearestDistance) {
+        nearest = listing;
+        nearestDistance = distance;
+      }
+    }
+    if (nearest) return { latitude: nearest.latitude, longitude: nearest.longitude };
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
 // Exports
 // ---------------------------------------------------------------------------
 
 module.exports = {
+  AREA_SEARCH_CANDIDATE_LIMIT,
   browseListings,
   discoverListings,
   searchListings,
   autocompleteListings,
+  findNearestListingPoint,
+  pickListingsWithinRadius,
+  showListingsInBounds,
   // Exported for testing / reuse
   normalizeListingRow,
   boundingBoxFromCenter,

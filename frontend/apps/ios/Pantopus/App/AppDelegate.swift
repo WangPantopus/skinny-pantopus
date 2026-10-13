@@ -83,7 +83,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
             intentIdentifiers: [],
             options: []
         )
-        UNUserNotificationCenter.current().setNotificationCategories([pickup, task, taskDoneOnly])
+        // Nearby Plans: PLAN_REQUEST, PLAN_REMINDER and PLAN_CHANGED with their buttons.
+        UNUserNotificationCenter.current().setNotificationCategories(Set([pickup, task, taskDoneOnly] + PlanPushActions.categories))
     }
 
     private func requestNotificationPermission() {
@@ -161,6 +162,12 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
                 ActiveChatThreadTracker.shared.isViewingRoom(roomId)
             }
             if isViewingThread { return [] }
+        }
+        // A Nearby Plans notice while the app is open: the plan on screen,
+        // the map and Today read again (a "You're in" plays the reveal).
+        if let type, type.hasPrefix("plan_") {
+            let planId = userInfo["plan_id"] as? String
+            await MainActor.run { PlansStoreReads.changed(planId: planId) }
         }
         // First-launch scope: a push for a feature hidden for the first
         // launch shows no banner while the app is open (its tap would land nowhere).
@@ -247,6 +254,7 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
             // Briefing / monthly-receipt pushes carry no `link` — compose one
             // from `type` + `briefingKind` + `briefingDeliveryId`.
             ?? DeepLinkRouter.pushFallbackPath(userInfo: userInfo)
+        let planPayload = PlanPushPayload(category: category, userInfo: userInfo)
         let reminder = ReminderPayload(
             category: category,
             recipient: recipient,
@@ -273,6 +281,10 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
             }
             if action == "BINS_OUT" || action == "TASK_DONE" {
                 await handleBackgroundReminder(action, payload: reminder)
+                return
+            }
+            if PlanPushActions.all.contains(action) {
+                await PlanPushActions.handle(action: action, payload: planPayload)
                 return
             }
             guard action == UNNotificationDefaultActionIdentifier else { return }
