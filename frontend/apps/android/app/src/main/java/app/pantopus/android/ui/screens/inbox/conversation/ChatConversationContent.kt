@@ -244,12 +244,14 @@ data class ChatEstimate(
     val confidence: String,
 )
 
-/** A draft's text for the composer it opens: a post's body (and its type), or a Support Train's story. */
+/** A draft's text for the composer it opens: a post's body (with its type and headline), or a Support Train's story. */
 @Immutable
 data class ChatAIDraftPrefill(
     val body: String,
     /** The assistant's post type (`lost_found`, `event`, …), for posts. */
     val postType: String? = null,
+    /** A post's headline, when the draft has one. */
+    val title: String? = null,
 )
 
 @Immutable

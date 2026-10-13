@@ -29,6 +29,9 @@ import javax.inject.Singleton
 /** The hourly limit (backend/middleware/rateLimiter.js aiChatLimiter). */
 private const val HTTP_TOO_MANY_REQUESTS = 429
 
+/** A text field, or null when it is missing, blank or JSON null (`optString` reads JSON null as "null"). */
+private fun JSONObject.text(name: String): String? = if (isNull(name)) null else optString(name).trim().ifEmpty { null }
+
 sealed interface AIChatStreamEvent {
     data class Conversation(val id: String) : AIChatStreamEvent
 
@@ -173,30 +176,23 @@ class AIChatRepository
             val type = json.optString("type", "draft")
             val valid = json.optBoolean("valid", true)
             val draft = json.optJSONObject("draft") ?: JSONObject()
-            val story = draft.optString("story").trim()
-            val content = draft.optString("content").trim()
+            val story = draft.text("story")
+            val content = draft.text("content")
             val title =
                 if (type == "support_train") {
                     "Support Train"
                 } else {
-                    draft.optString("title").takeIf { it.isNotBlank() }
-                        ?: draft.optString("summary").takeIf { it.isNotBlank() }
-                        ?: draft.optString("content").takeIf { it.isNotBlank() }
+                    draft.text("title")
+                        ?: draft.text("summary")
+                        ?: content
                         ?: "${type.replaceFirstChar { it.uppercase() }} draft"
                 }
-            val summary =
-                draft.optString("description").takeIf { it.isNotBlank() }
-                    ?: draft.optString("content").takeIf { it.isNotBlank() }
-                    ?: draft.optString("summary").takeIf { it.isNotBlank() }
-                    ?: story.takeIf { it.isNotBlank() }
+            val summary = draft.text("description") ?: content ?: draft.text("summary") ?: story
             // "Use draft" carries the text into the composer it opens.
             val prefill =
                 when (type) {
-                    "post" ->
-                        content.takeIf { it.isNotBlank() }?.let { body ->
-                            ChatAIDraftPrefill(body, draft.optString("postType").takeIf { it.isNotBlank() })
-                        }
-                    "support_train" -> story.takeIf { it.isNotBlank() }?.let { ChatAIDraftPrefill(it) }
+                    "post" -> content?.let { ChatAIDraftPrefill(it, postType = draft.text("postType"), title = draft.text("title")) }
+                    "support_train" -> story?.let { ChatAIDraftPrefill(it) }
                     else -> null
                 }
             val price =

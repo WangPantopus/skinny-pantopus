@@ -392,6 +392,7 @@ public final class PulseComposeViewModel {
         postId: String? = nil,
         businessAuthorId: String? = nil,
         taskShare: PulseTaskShare? = nil,
+        prefillTitle: String? = nil,
         prefillBody: String? = nil,
         api: APIClient = .shared,
         multipartUploader: MultipartUploader = .shared,
@@ -433,11 +434,15 @@ public final class PulseComposeViewModel {
             }
         }
         // Sports-lane starter prompts open the composer with the body
-        // pre-filled — RN `FeedScreen.tsx:296` (`setComposeText`).
-        if let prefillBody, !prefillBody.isEmpty, taskShare == nil {
-            var snapshot = fields[.body] ?? FormFieldState(id: PulseComposeField.body.rawValue, originalValue: "")
-            snapshot.value = prefillBody
-            fields[.body] = snapshot
+        // pre-filled — RN `FeedScreen.tsx:296` (`setComposeText`); a
+        // Pantopus AI post draft brings its headline too.
+        if taskShare == nil {
+            for (field, value) in [(PulseComposeField.title, prefillTitle), (PulseComposeField.body, prefillBody)] {
+                guard let value, !value.isEmpty else { continue }
+                var snapshot = fields[field] ?? FormFieldState(id: field.rawValue, originalValue: "")
+                snapshot.value = value
+                fields[field] = snapshot
+            }
         }
         baselineIdentity = self.identity
         baselineVisibility = visibility

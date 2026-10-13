@@ -1411,8 +1411,12 @@ private object ChildRoutes {
 
     /** Optional Sports-lane starter prompt seeded into the draft body. */
     const val COMPOSE_BODY_KEY = "prefillBody"
+
+    /** Optional headline seeded into the draft (a Pantopus AI post draft's title). */
+    const val COMPOSE_TITLE_KEY = "prefillTitle"
     const val COMPOSE_POST =
-        "feed/compose?$COMPOSE_INTENT_KEY={$COMPOSE_INTENT_KEY}&$COMPOSE_BODY_KEY={$COMPOSE_BODY_KEY}"
+        "feed/compose?$COMPOSE_INTENT_KEY={$COMPOSE_INTENT_KEY}&$COMPOSE_BODY_KEY={$COMPOSE_BODY_KEY}" +
+            "&$COMPOSE_TITLE_KEY={$COMPOSE_TITLE_KEY}"
 
     /** P3.5 — Edit an existing Pulse post. Re-uses the compose flow. */
     const val EDIT_POST_POST_ID_KEY = "postId"
@@ -1496,9 +1500,11 @@ private object ChildRoutes {
     fun composePost(
         intent: String,
         prefillBody: String = "",
+        prefillTitle: String = "",
     ): String =
         "feed/compose?$COMPOSE_INTENT_KEY=${java.net.URLEncoder.encode(intent, "UTF-8").replace("+", "%20")}" +
-            "&$COMPOSE_BODY_KEY=${java.net.URLEncoder.encode(prefillBody, "UTF-8").replace("+", "%20")}"
+            "&$COMPOSE_BODY_KEY=${java.net.URLEncoder.encode(prefillBody, "UTF-8").replace("+", "%20")}" +
+            "&$COMPOSE_TITLE_KEY=${java.net.URLEncoder.encode(prefillTitle, "UTF-8").replace("+", "%20")}"
 
     /** Build the start-a-Support-Train path with a story to start from. */
     fun startSupportTrain(story: String): String =
@@ -2052,7 +2058,7 @@ private fun routeForAIDraft(draft: ChatAIDraftCard): String =
         "gig" -> ChildRoutes.composeGig(GigsCategory.All.key)
         "listing" -> ChildRoutes.COMPOSE_LISTING
         "post" ->
-            draft.prefill?.let { ChildRoutes.composePost(PulseIntent.fromPostType(it.postType).key, it.body) }
+            draft.prefill?.let { ChildRoutes.composePost(PulseIntent.fromPostType(it.postType).key, it.body, it.title.orEmpty()) }
                 ?: ChildRoutes.composePost(PulseIntent.Ask.key)
         "support_train" -> ChildRoutes.startSupportTrain(draft.prefill?.body.orEmpty())
         else -> ChildRoutes.composePost(PulseIntent.Ask.key)
@@ -5421,6 +5427,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 defaultValue = PulseIntent.All.key
                             },
                             navArgument(ChildRoutes.COMPOSE_BODY_KEY) {
+                                type = NavType.StringType
+                                defaultValue = ""
+                            },
+                            navArgument(ChildRoutes.COMPOSE_TITLE_KEY) {
                                 type = NavType.StringType
                                 defaultValue = ""
                             },

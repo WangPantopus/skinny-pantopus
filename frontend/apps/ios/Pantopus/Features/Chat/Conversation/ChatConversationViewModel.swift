@@ -184,9 +184,11 @@ final class AIChatStreamClient: AIChatStreaming, @unchecked Sendable {
             return nil
         }()
         // "Use draft" carries the text into the composer it opens.
+        let headline = (draft["title"] as? String).flatMap { $0.isEmpty ? nil : $0 }
         let prefill: ChatAIDraftPrefill? =
             switch type {
-            case "post": content.flatMap { $0.isEmpty ? nil : ChatAIDraftPrefill(body: $0, postType: draft["postType"] as? String) }
+            case "post":
+                content.flatMap { $0.isEmpty ? nil : ChatAIDraftPrefill(body: $0, postType: draft["postType"] as? String, title: headline) }
             case "support_train": story.flatMap { $0.isEmpty ? nil : ChatAIDraftPrefill(body: $0) }
             default: nil
             }

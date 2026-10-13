@@ -20,7 +20,7 @@ public enum InboxRoute: Hashable {
     case composeListing
     case composePost(intent: String)
     /// An assistant draft opened in the Pulse composer with its text.
-    case composePostDraft(intent: String, body: String)
+    case composePostDraft(intent: String, title: String?, body: String)
     /// An assistant Support Train card opened in the start wizard with its story.
     case startSupportTrain(story: String)
     /// A person's public profile, opened from a DM header.
@@ -296,9 +296,9 @@ public struct InboxTabRoot: View {
                 if !path.isEmpty { path.removeLast() }
             }
         case let .composePost(intent):
-            postComposer(intent: intent, body: nil)
-        case let .composePostDraft(intent, body):
-            postComposer(intent: intent, body: body)
+            postComposer(intent: intent, title: nil, body: nil)
+        case let .composePostDraft(intent, title, body):
+            postComposer(intent: intent, title: title, body: body)
         case let .startSupportTrain(story):
             supportTrainStart(story: story)
         case let .publicProfile(userId):
@@ -356,7 +356,11 @@ public struct InboxTabRoot: View {
             .composeListing
         case "post":
             if let prefill = draft.prefill {
-                .composePostDraft(intent: PulseIntent.from(postType: prefill.postType).rawValue, body: prefill.body)
+                .composePostDraft(
+                    intent: PulseIntent.from(postType: prefill.postType).rawValue,
+                    title: prefill.title,
+                    body: prefill.body
+                )
             } else {
                 .composePost(intent: PulseIntent.ask.rawValue)
             }
@@ -396,9 +400,10 @@ public struct InboxTabRoot: View {
 // MARK: - Pantopus AI draft destinations
 
 private extension InboxTabRoot {
-    func postComposer(intent: String, body: String?) -> some View {
+    func postComposer(intent: String, title: String?, body: String?) -> some View {
         PulseComposeFlowView(
             prefillFeedIntent: PulseIntent(rawValue: intent),
+            prefillTitle: title,
             prefillBody: body,
             onCancel: { if !path.isEmpty { path.removeLast() } },
             onPosted: { _ in if !path.isEmpty { path.removeLast() } }

@@ -273,16 +273,19 @@ public struct ChatAIDraftCard: Identifiable, Sendable, Hashable {
     public var prefill: ChatAIDraftPrefill?
 }
 
-/// A draft's text for the composer it opens: a post's body (and its type),
-/// or a Support Train's story.
+/// A draft's text for the composer it opens: a post's body (with its type
+/// and headline), or a Support Train's story.
 public struct ChatAIDraftPrefill: Sendable, Hashable {
     public let body: String
     /// The assistant's post type (`lost_found`, `event`, …), for posts.
     public let postType: String?
+    /// A post's headline, when the draft has one.
+    public let title: String?
 
-    public init(body: String, postType: String? = nil) {
+    public init(body: String, postType: String? = nil, title: String? = nil) {
         self.body = body
         self.postType = postType
+        self.title = title
     }
 }
 
