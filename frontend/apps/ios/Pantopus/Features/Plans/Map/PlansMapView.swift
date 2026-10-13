@@ -17,6 +17,9 @@ struct PlansMapView: View {
     @State private var camera: MapCameraPosition = .automatic
     @State private var dragOffset: CGFloat = 0
     @State private var showsAreaPicker = false
+    /// When a pin was last tapped: the same touch also reaches the map's own
+    /// tap (which clears a selection) and must not undo the pin's.
+    @State private var pinTappedAt: Date?
     @State private var flags = PlansFlags.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -116,7 +119,10 @@ struct PlansMapView: View {
         .onMapCameraChange(frequency: .onEnd) { context in
             viewModel.cameraChanged(context.region)
         }
-        .onTapGesture { if viewModel.selectedId != nil { withSheetAnimation { viewModel.clearSelection() } } }
+        .onTapGesture {
+            if let pinTappedAt, Date().timeIntervalSince(pinTappedAt) < 0.5 { return }
+            if viewModel.selectedId != nil { withSheetAnimation { viewModel.clearSelection() } }
+        }
     }
 
     /// F4 and F5 dim the map under their sheet.
@@ -174,6 +180,7 @@ struct PlansMapView: View {
     }
 
     private func select(_ pin: PlanPinDTO) {
+        pinTappedAt = Date()
         withSheetAnimation { viewModel.select(pin) }
         // Keep the pin above the half-open sheet: center the camera below it.
         let span = viewModel.lastRegion?.span ?? MKCoordinateSpan(latitudeDelta: 0.03, longitudeDelta: 0.03)
@@ -194,7 +201,8 @@ struct PlansMapView: View {
         let span = PlansClustering.span(toOpen: cluster)
         withAnimation(reduceMotion ? nil : .easeOut(duration: 0.35)) {
             camera = .region(MKCoordinateRegion(
-                center: CLLocationCoordinate2D(latitude: cluster.latitude, longitude: cluster.longitude),
+                // A little south, so the pins land above the sheet, not under it.
+                center: CLLocationCoordinate2D(latitude: cluster.latitude - span * 0.2, longitude: cluster.longitude),
                 span: MKCoordinateSpan(latitudeDelta: span, longitudeDelta: span)
             ))
         }
