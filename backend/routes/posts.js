@@ -1978,16 +1978,7 @@ router.get('/map', verifyToken, async (req, res) => {
         let homeCount = 0;
         for (const h of (homes || [])) {
           if (homeCount >= lim) break;
-          let lat = null, lon = null;
-          if (h.location) {
-            if (typeof h.location === 'object' && h.location.coordinates) {
-              lon = h.location.coordinates[0];
-              lat = h.location.coordinates[1];
-            } else if (typeof h.location === 'string') {
-              const m = h.location.match(/POINT\(([^ ]+) ([^ ]+)\)/);
-              if (m) { lon = parseFloat(m[1]); lat = parseFloat(m[2]); }
-            }
-          }
+          const { latitude: lat, longitude: lon } = resolveHomeCoordinates(h);
           if (lat != null && lon != null && lat >= s && lat <= n && lon >= w && lon <= e) {
             results.push({
               layer_type: 'home',
