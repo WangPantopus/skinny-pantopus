@@ -56,7 +56,7 @@ private val reportReasons =
         "safety" to "Something unsafe",
         "inappropriate" to "Inappropriate",
         "harassment" to "Harassment",
-        "spam" to "Spam",
+        "spam" to "Spam or a scam",
         "misinformation" to "Not a real plan",
         "other" to "Something else",
     )
