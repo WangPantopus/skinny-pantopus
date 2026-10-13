@@ -90,10 +90,10 @@ public final class RootTabModel {
     public var selected: RootTab = .place
     /// Unread Messages count rendered as the Messages (Mail) tab badge.
     public var messagesBadge: Int = 0
-    /// The Place stack is on its My homes root (kept current by `HubTabRoot`).
+    /// The Place stack is on its root (kept current by `HubTabRoot`).
     public var placeAtRoot = false
-    /// Changes each time the Place tab is tapped again while already on the
-    /// My homes root, so the tab can land on Your Place again.
+    /// Changes each time the Place tab is tapped again while already on its
+    /// root, so the root scrolls back to the top.
     public var placeReselectedAtRoot: UUID?
     public init() {}
 }
@@ -340,8 +340,8 @@ public struct RootTabView: View {
         Binding(
             get: { model.selected },
             set: { tab in
-                // Read before UIKit pops a deeper stack: only a tap on the Hub
-                // root itself asks for Your Place again.
+                // Read before UIKit pops a deeper stack: only a tap on the root
+                // itself scrolls it back to the top.
                 if tab == .place, model.selected == .place, model.placeAtRoot {
                     model.placeReselectedAtRoot = UUID()
                 }

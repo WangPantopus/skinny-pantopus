@@ -187,6 +187,9 @@ final class HomeCreationRecoveryJourneyUITests: XCTestCase {
     }
 
     private func requirePrivateHome(_ home: [String: Any]) throws {
+        // Add Home ends on Your Place for the new Home; its row is in My homes.
+        try press(element("place.menu"))
+        try press(element("navDrawer.item.my-homes"))
         XCTAssertTrue(element("myHomesList").waitForExistence(timeout: 20))
         let id = try XCTUnwrap(home["id"] as? String)
         let destination = app.buttons["myHomes.row_" + id + ".continue"]

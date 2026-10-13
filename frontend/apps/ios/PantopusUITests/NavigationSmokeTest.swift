@@ -100,7 +100,9 @@ final class NavigationSmokeTest: XCTestCase {
             throw XCTSkip("Signed-in launch env not honoured.")
         }
         tabButton("place", in: app).tap()
-        assertReaches("myHomesList", in: app)
+        // Every Place root (Your Place, the saved address, first run, My homes
+        // for pending entries) carries the menu.
+        assertReaches("place.menu", in: app)
     }
 
     func testTab_todayLanding() throws {
