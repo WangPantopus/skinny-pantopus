@@ -20,10 +20,11 @@ import kotlin.math.roundToInt
 /*
  * The resident's house in the living sky, drawn from its county record ([SkyHome], from the Your
  * Home section's outline): one, one and a half, two or three storeys, a gable, hip or flat roof, an
- * attached or detached garage with a door per car or a carport, a chimney when it has a fireplace,
- * and a pool. With nothing on record it is the scene's first house: 40 × 26 dp under a gable, with a
- * chimney. All one silhouette in the horizon's colour; only the windows, the door and the garage
- * doors catch the light. Parity twin of iOS `TodaySkyHouse.swift`; the numbers match.
+ * attached or detached garage with a door per car or a carport (right of the house, clear of the
+ * reading), a chimney when it has a fireplace, and a pool. With nothing on record it is the scene's
+ * first house: 40 × 26 dp under a gable, with a chimney. All one silhouette in the horizon's colour;
+ * only the windows, the door and the garage doors catch the light. Parity twin of iOS
+ * `TodaySkyHouse.swift`; the numbers match.
  */
 
 /** The house with its door on the ground line at [origin]. */
@@ -69,7 +70,7 @@ internal fun DrawScope.paintHouse(
                     else -> 0.25f
                 },
             )
-        drawRoundRect(water, Offset(x + home.width / 2 - 1, y + 1.5f), Size(16f, 3.5f), CornerRadius(1.5f))
+        drawRoundRect(water, Offset(x - home.width / 2 - 15, y + 1.5f), Size(16f, 3.5f), CornerRadius(1.5f))
     }
 }
 
@@ -109,7 +110,7 @@ private fun DrawScope.paintWindows(
 }
 
 /**
- * An attached or detached garage left of the house with a door per car, under a roof like the
+ * An attached or detached garage right of the house with a door per car, under a roof like the
  * house's; or a carport, a roof on two posts.
  */
 private fun DrawScope.paintGarage(
@@ -123,17 +124,18 @@ private fun DrawScope.paintGarage(
     when (home.garage) {
         SkyHome.Garage.NONE -> Unit
         SkyHome.Garage.CARPORT -> {
-            val left = x - home.width / 2 - 20
+            val left = x + home.width / 2 - 1
             drawRect(house, Offset(left, y - 17), Size(21f, 2.5f))
-            listOf(left + 1, left + 10).forEach { drawRect(house, Offset(it, y - 15), Size(1.6f, 15f)) }
+            listOf(left + 9, left + 18).forEach { drawRect(house, Offset(it, y - 15), Size(1.6f, 15f)) }
         }
         SkyHome.Garage.ATTACHED, SkyHome.Garage.DETACHED -> {
             val attached = home.garage == SkyHome.Garage.ATTACHED
             val width = home.garageWidth
-            val left = x - home.width / 2 - width - if (attached) 0f else 5f
+            val left = x + home.width / 2 + if (attached) 0f else 5f
             val top = y - 18
             // An attached garage tucks under the house's wall, so no seam shows.
-            drawRect(house, Offset(left, top), Size(width + if (attached) 2f else 0f, 18f))
+            val tuck = if (attached) 2f else 0f
+            drawRect(house, Offset(left - tuck, top), Size(width + tuck, 18f))
             drawPath(roofPath(home.roof, left, left + width, top, 9f), house)
             if (snow) drawSnow(snowLine(home.roof, left, left + width, top, 9f))
             val doors = home.garageSpaces

@@ -166,8 +166,13 @@ struct TodaySkyGround {
             if season == .autumn, !still { paintFallingLeaves(round) }
         }
 
+        // Past a garage the pine needs more room; on a narrow card it gives
+        // way rather than crossing the edge. (Without one, as in the widgets,
+        // it stands where it always has.)
+        let pineX = Double(origin.x) + 35 + home.rightReach
+        guard home.garage == .none || pineX + 9 <= scene.width - 2 else { return }
         var pine = context
-        pine.translateBy(x: origin.x + 35 + home.rightReach, y: origin.y + 3)
+        pine.translateBy(x: pineX, y: origin.y + 3)
         pine.rotate(by: .radians(lean * 0.7))
         var needles = Path()
         needles.move(to: CGPoint(x: -9, y: -6))

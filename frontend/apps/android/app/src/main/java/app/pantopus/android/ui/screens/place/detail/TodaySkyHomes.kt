@@ -62,8 +62,15 @@ data class SkyHome(
     val garageWidth: Float
         get() = 8f + 8f * garageSpaces
 
-    /** How far the home reaches left of its door, roof and garage included: the bins stand just past it. */
+    /** How far the home reaches left of its door, roof included: the bins stand just past it. */
     val leftReach: Float
+        get() = if (kind == Kind.HOUSE) width / 2 + 5 else halfWidth
+
+    /**
+     * How far it reaches right of its door, roof and garage included (the garage stands right of the
+     * house, clear of the reading's chips): the trees stand just past it.
+     */
+    val rightReach: Float
         get() =
             if (kind != Kind.HOUSE) {
                 halfWidth
@@ -75,10 +82,6 @@ data class SkyHome(
                     Garage.CARPORT -> width / 2 + 21
                 }
             }
-
-    /** How far it reaches right of its door: the trees stand just past it. */
-    val rightReach: Float
-        get() = if (kind == Kind.HOUSE) width / 2 + 5 else halfWidth
 
     /** Half the width a townhouse row, block or mobile home takes on the ground. */
     private val halfWidth: Float

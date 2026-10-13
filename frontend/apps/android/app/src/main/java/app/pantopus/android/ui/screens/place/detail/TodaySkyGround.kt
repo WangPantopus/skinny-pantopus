@@ -180,8 +180,12 @@ internal class TodaySkyGround(
                 if (season == SkySeason.AUTUMN && !still) paintFallingLeaves()
             }
         }
+        // Past a garage the pine needs more room; on a narrow card it gives way rather than crossing the
+        // edge. (Without one, as in the widgets, it stands where it always has.)
+        val pineX = origin.x + 35 + home.rightReach
+        if (home.garage != SkyHome.Garage.NONE && pineX + 9 > scene.width - 2) return
         withTransform({
-            translate(origin.x + 35 + home.rightReach, origin.y + 3)
+            translate(pineX, origin.y + 3)
             rotateRad(lean * 0.7f, pivot = Offset.Zero)
         }) {
             drawRect(tones.house, Offset(-1.5f, -7f), Size(3f, 8f))

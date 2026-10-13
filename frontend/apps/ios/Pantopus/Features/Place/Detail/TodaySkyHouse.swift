@@ -5,11 +5,12 @@
 //  The resident's house in the living sky, drawn from its county record
 //  (`SkyHome`, from the Your Home section's outline): one, one and a half,
 //  two or three storeys, a gable, hip or flat roof, an attached or detached
-//  garage with a door per car or a carport, a chimney when it has a
-//  fireplace, and a pool. With nothing on record it is the scene's first
-//  house: 40 × 26 points under a gable, with a chimney. All one silhouette
-//  in the horizon's colour; only the windows, the door and the garage doors
-//  catch the light. Parity twin of Android's `TodaySkyHouse.kt`.
+//  garage with a door per car or a carport (right of the house, clear of
+//  the reading), a chimney when it has a fireplace, and a pool. With
+//  nothing on record it is the scene's first house: 40 × 26 points under a
+//  gable, with a chimney. All one silhouette in the horizon's colour; only
+//  the windows, the door and the garage doors catch the light. Parity twin
+//  of Android's `TodaySkyHouse.kt`.
 //
 
 import SwiftUI
@@ -49,7 +50,7 @@ extension TodaySkyGround {
         if home.pool {
             let water = SkyPalette.pool.mixed(with: tones.house, by: night ? 0.7 : lit ? 0.45 : 0.25)
             context.fill(
-                Path(roundedRect: CGRect(x: x + home.width / 2 - 1, y: y + 1.5, width: 16, height: 3.5), cornerRadius: 1.5),
+                Path(roundedRect: CGRect(x: x - home.width / 2 - 15, y: y + 1.5, width: 16, height: 3.5), cornerRadius: 1.5),
                 with: .color(water.color)
             )
         }
@@ -79,7 +80,7 @@ extension TodaySkyGround {
         }
     }
 
-    /// An attached or detached garage left of the house with a door per car,
+    /// An attached or detached garage right of the house with a door per car,
     /// under a roof like the house's; or a carport, a roof on two posts.
     private func paintGarage(_ context: GraphicsContext, _ tones: Tones, at origin: CGPoint) {
         let x = Double(origin.x)
@@ -89,17 +90,18 @@ extension TodaySkyGround {
         case .none:
             return
         case .carport:
-            let left = x - home.width / 2 - 20
+            let left = x + home.width / 2 - 1
             context.fill(Path(CGRect(x: left, y: y - 17, width: 21, height: 2.5)), with: .color(color))
-            for post in [left + 1, left + 10] {
+            for post in [left + 9, left + 18] {
                 context.fill(Path(CGRect(x: post, y: y - 15, width: 1.6, height: 15)), with: .color(color))
             }
         case .attached, .detached:
             let width = home.garageWidth
-            let left = x - home.width / 2 - width - (home.garage == .detached ? 5 : 0)
+            let attached = home.garage == .attached
+            let left = x + home.width / 2 + (attached ? 0 : 5)
             let top = y - 18
             // An attached garage tucks under the house's wall, so no seam shows.
-            let walls = CGRect(x: left, y: top, width: width + (home.garage == .attached ? 2 : 0), height: 18)
+            let walls = CGRect(x: left - (attached ? 2 : 0), y: top, width: width + (attached ? 2 : 0), height: 18)
             context.fill(Path(walls), with: .color(color))
             context.fill(Self.roof(home.roof, left: left, right: left + width, top: top, ridge: 9), with: .color(color))
             if weather == .snow {

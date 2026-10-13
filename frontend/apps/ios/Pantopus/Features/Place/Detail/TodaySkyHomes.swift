@@ -93,9 +93,16 @@ struct SkyHome: Equatable {
         Double(8 + 8 * garageSpaces)
     }
 
-    /// How far the home reaches left of its door, roof and garage included:
-    /// the bins stand just past it.
+    /// How far the home reaches left of its door, roof included: the bins
+    /// stand just past it.
     var leftReach: Double {
+        kind == .house ? width / 2 + 5 : halfWidth
+    }
+
+    /// How far it reaches right of its door, roof and garage included (the
+    /// garage stands right of the house, clear of the reading's chips): the
+    /// trees stand just past it.
+    var rightReach: Double {
         guard kind == .house else { return halfWidth }
         return switch garage {
         case .none: width / 2 + 5
@@ -103,11 +110,6 @@ struct SkyHome: Equatable {
         case .detached: width / 2 + 5 + garageWidth + 5
         case .carport: width / 2 + 21
         }
-    }
-
-    /// How far it reaches right of its door: the trees stand just past it.
-    var rightReach: Double {
-        kind == .house ? width / 2 + 5 : halfWidth
     }
 
     /// Half the width a townhouse row, block or mobile home takes on the ground.
