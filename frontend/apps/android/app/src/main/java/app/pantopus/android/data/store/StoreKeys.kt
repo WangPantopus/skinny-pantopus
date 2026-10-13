@@ -49,6 +49,7 @@ object StoreTopics {
 }
 
 /** The store's keys, one per endpoint and parameters it caches, with their kind and change topics (contract §4, §8). */
+@Suppress("TooManyFunctions") // Declarative endpoint keys form the single audited cache allowlist.
 object StoreKeys {
     /** Private bookmarks use the account-scoped phone copy so saved-place Today can open offline. */
     val savedPlaces =
