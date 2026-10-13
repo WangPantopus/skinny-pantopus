@@ -3,7 +3,6 @@
 package app.pantopus.android.ui.screens.compose.gig
 
 import androidx.lifecycle.SavedStateHandle
-import app.pantopus.android.data.ai.AiTranscriptionRepository
 import app.pantopus.android.data.api.models.gigs.CareDetailsDto
 import app.pantopus.android.data.api.models.gigs.GigTemplateDto
 import app.pantopus.android.data.api.models.gigs.GigTemplateSeedDto
@@ -46,7 +45,6 @@ import org.junit.Test
 class GigComposeMagicTest {
     private val repo: GigsRepository = mockk(relaxed = true)
     private val filesRepo: FilesRepository = mockk(relaxed = true)
-    private val transcriptionRepo: AiTranscriptionRepository = mockk(relaxed = true)
     private val networkMonitor: NetworkMonitor =
         mockk<NetworkMonitor>(relaxed = true).also {
             every { it.isOnline } returns MutableStateFlow(true)
@@ -68,7 +66,6 @@ class GigComposeMagicTest {
             SavedStateHandle(),
             networkMonitor,
             filesRepo,
-            transcriptionRepo,
             mockk(relaxed = true),
             mockk(relaxed = true),
             mockk(relaxed = true),

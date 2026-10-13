@@ -3,7 +3,7 @@
 // Chat agent, draft generation, mail summarization, place brief
 // ============================================================
 
-import apiClient, { get, post, del, getApiBaseUrl, fetchAuthHeaders, refreshAuthSession } from '../client';
+import { get, post, del, getApiBaseUrl, fetchAuthHeaders, refreshAuthSession } from '../client';
 import type {
   AIDraftGigRequest,
   AIDraftGigResponse,
@@ -30,6 +30,8 @@ export function streamChat(
   data: AIChatRequest,
   handlers: {
     onConversation?: (data: { conversationId: string; isNew: boolean }) => void;
+    /** What the assistant is doing while a tool runs ("Drafting your post…"). */
+    onStatus?: (data: { tool: string; message: string }) => void;
     onTextDelta?: (delta: string) => void;
     onDraft?: (data: { type: string; draft: unknown; valid: boolean }) => void;
     onError?: (data: { error: string; message: string }) => void;
@@ -44,6 +46,9 @@ export function streamChat(
       switch (eventName) {
         case 'conversation':
           handlers.onConversation?.(parsed);
+          break;
+        case 'status':
+          handlers.onStatus?.(parsed);
           break;
         case 'text_delta':
           handlers.onTextDelta?.(parsed.delta);
@@ -127,6 +132,10 @@ export function streamChat(
 
     const decoder = new TextDecoder();
     let buffer = '';
+    // An event can straddle two network chunks (its blank line arriving in the
+    // next one), so its name and data outlive a single chunk.
+    let currentEvent = '';
+    let currentData = '';
 
     try {
       while (true) {
@@ -138,9 +147,6 @@ export function streamChat(
         // Parse SSE events from buffer
         const lines = buffer.split('\n');
         buffer = lines.pop() || ''; // Keep incomplete last line in buffer
-
-        let currentEvent = '';
-        let currentData = '';
 
         for (const line of lines) {
           if (line.startsWith('event: ')) {
@@ -253,42 +259,4 @@ export async function getConversations(): Promise<{ conversations: AIConversatio
  */
 export async function deleteConversation(id: string): Promise<{ message: string }> {
   return del<{ message: string }>(`/api/ai/conversations/${id}`);
-}
-
-// ─── Audio Transcription ─────────────────────────────────────
-
-export interface TranscriptionResult {
-  text: string;
-  duration_seconds: number | null;
-}
-
-/**
- * Transcribe an audio file via Whisper.
- * Accepts a file URI (React Native) or File object (web).
- */
-export async function transcribeAudio(
-  audio: string | File,
-  filename?: string,
-): Promise<TranscriptionResult> {
-  const formData = new FormData();
-
-  if (typeof audio === 'string') {
-    // React Native: audio is a file URI
-    formData.append('audio', {
-      uri: audio,
-      name: filename || 'recording.m4a',
-      type: 'audio/m4a',
-    } as any);
-  } else {
-    // Web: audio is a File object
-    formData.append('audio', audio);
-  }
-
-  const response = await apiClient.post<TranscriptionResult>(
-    '/api/ai/transcribe',
-    formData,
-    { headers: { 'Content-Type': 'multipart/form-data' } },
-  );
-
-  return response.data;
 }
