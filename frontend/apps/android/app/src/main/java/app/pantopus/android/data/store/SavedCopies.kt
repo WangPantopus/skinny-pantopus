@@ -15,8 +15,8 @@ import java.security.MessageDigest
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** Contract §6 "Saved copy": at most 20 MB of saved pages… */
-private const val MAX_BYTES = 20L * 1024 * 1024
+/** Contract §6 "Saved copy": at most 20 MB of saved pages (photos get the rest of the storage limit)… */
+const val SAVED_PAGES_MAX_BYTES = 20L * 1024 * 1024
 
 /** …and nothing older than 7 days is read (a saved household copy is shown for at most 7 days, contract §5). */
 private const val MAX_AGE_MS = 7L * 24 * 60 * 60 * 1000
@@ -27,7 +27,7 @@ private const val SCHEMA = 2
 /**
  * The screens' store on the phone (Instant Screens contract §6 "Saved copy", §5 "At rest on Android"): one file per
  * entry under `cacheDir/screen-store/<account>/`, never in backups. Each file holds an envelope line (schema, app build,
- * when the copy was read, its ETag) and the reply's JSON on the next line, written atomically (temporary file, sync,
+ * when the copy was read, its ETag, topics, kind and staleness) and the reply's JSON on the next line, written atomically (temporary file, sync,
  * rename) as [app.pantopus.android.data.payments.PersistentPendingRefundStore] does. File and folder names are hashes:
  * no account id, home id or token appears in them.
  *
@@ -78,6 +78,17 @@ class SavedCopies
             val data: T,
             val fetchedAt: Long,
             val etag: String?,
+            val stale: Boolean,
+            /** Written before copies carried topics and kind: any mark applies to it. */
+            val legacy: Boolean = false,
+        )
+
+        /** One invalidation: a topic or kinds, own edit or not, for copies fetched at or before [upTo]. */
+        data class Mark(
+            val topic: String? = null,
+            val kinds: Set<StoreKind> = emptySet(),
+            val edited: Boolean = false,
+            val upTo: Long = Long.MAX_VALUE,
         )
 
         @JsonClass(generateAdapter = true)
@@ -86,7 +97,21 @@ class SavedCopies
             val build: String,
             val fetchedAt: Long,
             val etag: String?,
-        )
+            val topics: Set<String>? = null,
+            val kind: StoreKind? = null,
+            val stale: Boolean = false,
+        ) {
+            val legacy: Boolean get() = topics == null || kind == null
+
+            fun matches(
+                topic: String?,
+                kinds: Set<StoreKind>,
+            ): Boolean =
+                kind in kinds ||
+                    topics.orEmpty().any {
+                        it == topic || (it.endsWith(":*") && topic?.startsWith(it.dropLast(1)) == true)
+                    }
+        }
 
         /**
          * The saved copy of [keyId] for [account], or null. Small files, read on the caller's thread so a screen's
@@ -111,7 +136,7 @@ class SavedCopies
                 } else {
                     // Least recently used goes first: reading counts as use.
                     file.setLastModified(now)
-                    Copy(data, envelope.fetchedAt, envelope.etag)
+                    Copy(data, envelope.fetchedAt, envelope.etag, envelope.stale, envelope.legacy)
                 }
             } catch (
                 @Suppress("TooGenericExceptionCaught") error: Exception,
@@ -123,36 +148,91 @@ class SavedCopies
             }
         }
 
-        /** Saves [data] for [keyId], replacing any older copy, then trims the folder to its budget. Never throws. */
+        /** Saves [data] for [key], replacing any older copy, then trims the folder to its budget. Never throws. */
         fun <T : Any> save(
             account: String,
-            keyId: String,
-            type: Type,
+            key: StoreKey<*>,
             data: T,
             fetchedAt: Long,
             etag: String?,
+            stale: Boolean,
         ) {
-            val target = file(account, keyId)
-            val folder = target.parentFile ?: return
+            val type = key.type ?: return
+            val target = file(account, key.id)
             try {
-                if (!folder.isDirectory && !folder.mkdirs()) return
-                val body = envelopes.toJson(Envelope(SCHEMA, build, fetchedAt, etag)) + "\n" + moshi.adapter<T>(type).toJson(data)
-                val temporary = File.createTempFile("entry-", ".tmp", folder)
-                try {
-                    FileOutputStream(temporary).use { output ->
-                        output.write(body.toByteArray(Charsets.UTF_8))
-                        output.fd.sync()
-                    }
-                    Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
-                } finally {
-                    temporary.delete()
-                }
+                val envelope = Envelope(SCHEMA, build, fetchedAt, etag, key.topics, key.kind, stale)
+                write(target, envelope, moshi.adapter<T>(type).toJson(data))
                 trim()
             } catch (
                 @Suppress("TooGenericExceptionCaught") error: Exception,
             ) {
                 // The phone copy is an optimization: a type that can't be written, or a full disk, never breaks a read.
                 Timber.w(error, "saved copy not written")
+            }
+        }
+
+        /**
+         * Invalidation also reaches entries whose memory slot has gone, and survives a process restart. Runs off the
+         * caller's thread; [guard] wraps each file's work (the store's lock and wipe check), one file at a time.
+         */
+        fun invalidate(
+            account: String,
+            mark: Mark,
+            guard: (() -> Unit) -> Unit = { it() },
+        ) {
+            if (mark.topic == null && mark.kinds.isEmpty()) return
+            val folder = file(account, "").parentFile ?: return
+            folder.listFiles()?.filter { it.extension == "json" }?.forEach { target -> guard { invalidateFile(target, mark) } }
+            guard { trim() }
+        }
+
+        private fun invalidateFile(
+            target: File,
+            mark: Mark,
+        ) {
+            if (!target.isFile) return
+            val edited = mark.edited
+            try {
+                target.bufferedReader().use { reader ->
+                    val envelope = reader.readLine()?.let { envelopes.fromJson(it) } ?: return@use
+                    // A copy saved after the mark came from a later read and keeps its own state.
+                    if (envelope.fetchedAt > mark.upTo) return@use
+                    if (!envelope.legacy && !envelope.matches(mark.topic, mark.kinds)) return@use
+                    if (edited && !envelope.legacy) {
+                        target.delete()
+                    } else if (!envelope.stale || (edited && envelope.etag != null)) {
+                        // Older schema-2 copies lack topics. Keep their offline content, but require a check.
+                        val lastUsed = target.lastModified()
+                        write(target, envelope.copy(stale = true, etag = envelope.etag.takeUnless { edited }), reader.readText())
+                        target.setLastModified(lastUsed)
+                    }
+                }
+            } catch (
+                @Suppress("TooGenericExceptionCaught") error: Exception,
+            ) {
+                // A copy whose invalidation cannot be recorded must not later look current.
+                target.delete()
+                Timber.w(error, "saved copy invalidation failed")
+            }
+        }
+
+        private fun write(
+            target: File,
+            envelope: Envelope,
+            data: String,
+        ) {
+            val folder = target.parentFile ?: return
+            if (!folder.isDirectory && !folder.mkdirs()) return
+            val body = envelopes.toJson(envelope) + "\n" + data
+            val temporary = File.createTempFile("entry-", ".tmp", folder)
+            try {
+                FileOutputStream(temporary).use { output ->
+                    output.write(body.toByteArray(Charsets.UTF_8))
+                    output.fd.sync()
+                }
+                Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+            } finally {
+                temporary.delete()
             }
         }
 
@@ -172,14 +252,14 @@ class SavedCopies
         /** Bytes the saved pages take now (the Storage & data screen). */
         fun sizeBytes(): Long = root.walkBottomUp().filter { it.isFile }.sumOf { it.length() }
 
-        /** Least recently used first, until the folder fits [MAX_BYTES]. */
+        /** Least recently used first, until the folder fits [SAVED_PAGES_MAX_BYTES]. */
         private fun trim() {
             val files = root.walkBottomUp().filter { it.isFile && it.name.endsWith(".json") }.toMutableList()
             var total = files.sumOf { it.length() }
-            if (total <= MAX_BYTES) return
+            if (total <= SAVED_PAGES_MAX_BYTES) return
             files.sortBy { it.lastModified() }
             for (file in files) {
-                if (total <= MAX_BYTES) break
+                if (total <= SAVED_PAGES_MAX_BYTES) break
                 total -= file.length()
                 file.delete()
             }

@@ -8,7 +8,6 @@
 //  `ManualPickerStep` based on `form.composeMode`.
 //
 
-import AVFoundation
 import PhotosUI
 import SwiftUI
 
@@ -326,10 +325,6 @@ private struct MagicDescribeCard: View {
     @FocusState.Binding var isFocused: Bool
     let onPickPhotos: () -> Void
 
-    @State private var audioRecorder: AVAudioRecorder?
-    @State private var isRecording = false
-    @State private var isMicDenied = false
-
     private var text: Binding<String> {
         Binding(
             get: { viewModel.form.describeText },
@@ -350,9 +345,6 @@ private struct MagicDescribeCard: View {
         )
         .clipShape(RoundedRectangle(cornerRadius: Radii.xl, style: .continuous))
         .accessibilityIdentifier("gigCompose.describe.card")
-        .onAppear {
-            isMicDenied = AVAudioApplication.shared.recordPermission == .denied
-        }
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
@@ -427,12 +419,12 @@ private struct MagicDescribeCard: View {
     }
 
     @ViewBuilder private var statusBadge: some View {
-        if viewModel.isParsingDraft || viewModel.isTranscribing {
+        if viewModel.isParsingDraft {
             HStack(spacing: Spacing.s1) {
                 ProgressView()
                     .controlSize(.mini)
                     .tint(Theme.Color.magic)
-                Text(viewModel.isTranscribing ? "TRANSCRIBING" : "PARSING")
+                Text("PARSING")
                     .font(.system(size: 10, weight: .bold))
                     .tracking(0.4)
                     .foregroundStyle(Theme.Color.magic)
@@ -459,17 +451,6 @@ private struct MagicDescribeCard: View {
 
     private var toolRow: some View {
         HStack(spacing: Spacing.s2) {
-            if !isMicDenied {
-                toolButton(
-                    icon: isRecording ? .x : .mic,
-                    identifier: "gigCompose.describe.mic",
-                    label: isRecording ? "Stop recording" : "Record a voice note",
-                    action: toggleRecording
-                )
-            }
-            if isRecording {
-                RecordingIndicator { toggleRecording() }
-            }
             toolButton(
                 icon: .image,
                 identifier: "gigCompose.describe.image",
@@ -512,85 +493,6 @@ private struct MagicDescribeCard: View {
         .buttonStyle(.plain)
         .accessibilityIdentifier(identifier)
         .accessibilityLabel(label)
-    }
-
-    // MARK: Recording
-
-    private func toggleRecording() {
-        if isRecording {
-            stopRecording()
-        } else {
-            Task { await startRecording() }
-        }
-    }
-
-    private func startRecording() async {
-        let granted = await AVAudioApplication.requestRecordPermission()
-        guard granted else {
-            isMicDenied = true
-            return
-        }
-        do {
-            let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.record, mode: .default)
-            try session.setActive(true)
-            let url = FileManager.default.temporaryDirectory
-                .appendingPathComponent("gig-describe-\(UUID().uuidString).m4a")
-            let settings: [String: Any] = [
-                AVFormatIDKey: kAudioFormatMPEG4AAC,
-                AVSampleRateKey: 44100,
-                AVNumberOfChannelsKey: 1,
-                AVEncoderAudioQualityKey: AVAudioQuality.medium.rawValue
-            ]
-            let recorder = try AVAudioRecorder(url: url, settings: settings)
-            recorder.record()
-            audioRecorder = recorder
-            isRecording = true
-        } catch {
-            // Recording unavailable (simulator without input, etc.) —
-            // degrade silently; typing still works.
-            audioRecorder = nil
-            isRecording = false
-        }
-    }
-
-    private func stopRecording() {
-        let url = audioRecorder?.url
-        audioRecorder?.stop()
-        audioRecorder = nil
-        isRecording = false
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-        guard let url, let data = try? Data(contentsOf: url) else { return }
-        Task { await viewModel.appendTranscribedAudio(data) }
-        try? FileManager.default.removeItem(at: url)
-    }
-}
-
-/// Pulsing red dot + "Stop" while a voice note records.
-private struct RecordingIndicator: View {
-    let onStop: () -> Void
-    @State private var pulsing = false
-
-    var body: some View {
-        Button(action: onStop) {
-            HStack(spacing: Spacing.s1) {
-                Circle()
-                    .fill(Theme.Color.errorSolid)
-                    .frame(width: 8, height: 8)
-                    .opacity(pulsing ? 0.35 : 1)
-                    .animation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true), value: pulsing)
-                Text("Stop")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(Theme.Color.error)
-            }
-            .padding(.horizontal, Spacing.s2)
-            .frame(height: 32)
-            .background(Theme.Color.errorBg)
-            .clipShape(RoundedRectangle(cornerRadius: Radii.sm, style: .continuous))
-        }
-        .buttonStyle(.plain)
-        .onAppear { pulsing = true }
-        .accessibilityLabel("Recording, tap to stop")
     }
 }
 

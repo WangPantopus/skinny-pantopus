@@ -6,10 +6,12 @@ import app.pantopus.android.core.routing.PendingDeepLinkStore
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.PostHogAnalytics
 import app.pantopus.android.data.observability.Observability
+import app.pantopus.android.data.storage.ImageDiskCache
+import app.pantopus.android.data.storage.StorageLimit
 import coil.ImageLoader
 import coil.ImageLoaderFactory
-import coil.disk.DiskCache
 import coil.memory.MemoryCache
+import coil.request.CachePolicy
 import com.stripe.android.PaymentConfiguration
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
@@ -78,18 +80,25 @@ class PantopusApplication :
     /**
      * Coil image-loader factory. Caches:
      *   - 15 % of available app memory (~30–60 MB on a Pixel 6)
-     *   - 2 % of available disk under `cacheDir/image_cache` (~100 MB)
+     *   - bounded thumbnails on disk under `cacheDir/image_cache_v2`, inside the one storage limit
+     *     (Instant Screens §6, Storage & data's "Keep up to", 100 MB by default):
+     *     the remainder after reserving 20 MB for saved pages, least recently used first, and
+     *     nothing kept past 30 days unused ([ImageDiskCache])
      *
-     * Sized per the P13 budget (`docs/perf_budgets.md`). One process-wide
-     * loader keeps avatar / discovery / mailbox imagery from re-decoding
-     * during fast scrolls.
+     * One process-wide loader keeps avatar / discovery imagery from
+     * re-decoding during fast scrolls. Saved images are shown without asking
+     * the server again (`respectCacheHeaders(false)`): chat photos came back
+     * blank from their second view when a revalidation was answered 304.
      *
      * Images use the main client's interceptors, which send the bearer only
      * to the API origin (chat photos at `/api/chat/files/:id` need it; other
-     * hosts get no credentials). Neither client has an HTTP cache: Coil's
-     * disk cache above keeps the image bytes, and API replies stay off disk.
+     * hosts get no credentials). Neither client has an HTTP cache. ScreenStore
+     * saves only allowlisted pages separately; sensitive API replies stay off disk.
+     * Unclassified images cannot write to disk, and initialization retires the
+     * legacy image cache so an upgrade cannot retain previously cached originals.
      */
     override fun newImageLoader(): ImageLoader {
+        val disk = ImageDiskCache.build(this, StorageLimit(this).bytes)
         val okHttp =
             EntryPointAccessors
                 .fromApplication(this, CoilNetworkEntryPoint::class.java)
@@ -100,18 +109,16 @@ class PantopusApplication :
         return ImageLoader
             .Builder(this)
             .okHttpClient(okHttp)
+            // An arbitrary image URL can be an original. Only bounded thumbnail callers opt into disk writes.
+            .diskCachePolicy(CachePolicy.READ_ONLY)
+            .components { add(disk.requestInterceptor()) }
             .memoryCache {
-                MemoryCache
-                    .Builder(this)
-                    .maxSizePercent(IMAGE_CACHE_MEMORY_PERCENT)
-                    .build()
-            }.diskCache {
-                DiskCache
-                    .Builder()
-                    .directory(File(cacheDir, "image_cache"))
-                    .maxSizePercent(IMAGE_CACHE_DISK_PERCENT)
-                    .build()
-            }.crossfade(true)
+                disk.guardMemoryCache(
+                    MemoryCache.Builder(this).maxSizePercent(IMAGE_CACHE_MEMORY_PERCENT).build(),
+                )
+            }.diskCache { disk }
+            .respectCacheHeaders(false)
+            .crossfade(true)
             .build()
     }
 
@@ -123,7 +130,6 @@ class PantopusApplication :
 
     private companion object {
         const val IMAGE_CACHE_MEMORY_PERCENT = 0.15
-        const val IMAGE_CACHE_DISK_PERCENT = 0.02
         const val LEGACY_HTTP_CACHE_DIR = "pantopus-http"
     }
 }

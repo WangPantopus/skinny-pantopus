@@ -16,6 +16,7 @@ import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.posts.MatchedBusinessesRepository
 import app.pantopus.android.data.posts.PostsRepository
 import app.pantopus.android.data.posts.PulsePostsRefreshNotifier
+import app.pantopus.android.data.store.Stored
 import app.pantopus.android.ui.screens.shared.content_detail.headers.PostIntent
 import app.pantopus.android.ui.screens.shared.media.PostMediaKind
 import com.squareup.moshi.Moshi
@@ -51,7 +52,11 @@ class PulsePostDetailViewModelTest {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         every { authRepo.state } returns authState
         authState.value = AuthRepository.State.SignedOut
+        // The post reads through the screens' store (Instant Screens); no copy and no feed card here.
+        every { repo.detailCopy("p1") } returns Stored()
     }
+
+    private fun stored(response: PostDetailResponse) = Stored(response, fetchedAt = System.currentTimeMillis())
 
     @After fun tearDown() {
         Dispatchers.resetMain()
@@ -117,7 +122,7 @@ class PulsePostDetailViewModelTest {
 
     @Test fun load_happy_path() =
         runTest {
-            coEvery { repo.detail("p1") } returns NetworkResult.Success(sampleResponse())
+            coEvery { repo.detailStored("p1", any()) } returns stored(sampleResponse())
             val vm = makeVm()
             vm.load()
             val loaded = vm.state.value as PulsePostDetailUiState.Loaded
@@ -138,8 +143,8 @@ class PulsePostDetailViewModelTest {
                         "avatarUrl":"https://example.com/beacon.png"
                     }""",
                 )!!
-            coEvery { repo.detail("p1") } returns
-                NetworkResult.Success(PostDetailResponse(post = samplePost().copy(creator = author)))
+            coEvery { repo.detailStored("p1", any()) } returns
+                stored(PostDetailResponse(post = samplePost().copy(creator = author)))
             val vm = makeVm()
             vm.load()
 
@@ -159,10 +164,10 @@ class PulsePostDetailViewModelTest {
         runTest {
             // A like tells lists showing the post to refetch, this screen included: the refetch then
             // returns the liked post.
-            coEvery { repo.detail("p1") } returnsMany
+            coEvery { repo.detailStored("p1", any()) } returnsMany
                 listOf(
-                    NetworkResult.Success(sampleResponse()),
-                    NetworkResult.Success(PostDetailResponse(post = samplePost(likeCount = 4, userHasLiked = true))),
+                    stored(sampleResponse()),
+                    stored(PostDetailResponse(post = samplePost(likeCount = 4, userHasLiked = true))),
                 )
             coEvery { repo.toggleLike("p1", any()) } returns
                 NetworkResult.Success(PostLikeResponse(liked = true, likeCount = 4))
@@ -176,7 +181,7 @@ class PulsePostDetailViewModelTest {
 
     @Test fun reaction_rollback_on_failure() =
         runTest {
-            coEvery { repo.detail("p1") } returns NetworkResult.Success(sampleResponse())
+            coEvery { repo.detailStored("p1", any()) } returns stored(sampleResponse())
             coEvery { repo.toggleLike("p1", any()) } returns
                 NetworkResult.Failure(NetworkError.Server(500, "boom"))
             val vm = makeVm()
@@ -194,7 +199,7 @@ class PulsePostDetailViewModelTest {
             // chips, so tapReaction should only ever be invoked for
             // `.Helpful`. The safety guard in the VM returns silently
             // for the others — no toast, no state change.
-            coEvery { repo.detail("p1") } returns NetworkResult.Success(sampleResponse())
+            coEvery { repo.detailStored("p1", any()) } returns stored(sampleResponse())
             val vm = makeVm()
             vm.load()
             vm.tapReaction(PostReactionKind.Heart)
@@ -214,7 +219,7 @@ class PulsePostDetailViewModelTest {
                     isDeleted = false,
                     author = creator(),
                 )
-            coEvery { repo.detail("p1") } returns NetworkResult.Success(sampleResponse())
+            coEvery { repo.detailStored("p1", any()) } returns stored(sampleResponse())
             coEvery { repo.createComment("p1", any()) } returns
                 NetworkResult.Success(PostCommentCreateResponse(comment = reply))
             val vm = makeVm()
@@ -227,7 +232,7 @@ class PulsePostDetailViewModelTest {
 
     @Test fun not_found_emits_friendly_error() =
         runTest {
-            coEvery { repo.detail("p1") } returns NetworkResult.Failure(NetworkError.NotFound)
+            coEvery { repo.detailStored("p1", any()) } returns Stored(failure = NetworkError.NotFound)
             val vm = makeVm()
             vm.load()
             val errorState = vm.state.value as PulsePostDetailUiState.Error
@@ -247,7 +252,7 @@ class PulsePostDetailViewModelTest {
                     mediaThumbnails = listOf("https://cdn/thumb.jpg", ""),
                     mediaLiveUrls = listOf("https://cdn/clip.mov", ""),
                 )
-            coEvery { repo.detail("p1") } returns NetworkResult.Success(PostDetailResponse(withMedia))
+            coEvery { repo.detailStored("p1", any()) } returns stored(PostDetailResponse(withMedia))
             val vm = makeVm()
             vm.load()
             val media = (vm.state.value as PulsePostDetailUiState.Loaded).content.media
@@ -281,8 +286,8 @@ class PulsePostDetailViewModelTest {
                     createdAt = "2026-04-30T12:06:00.000Z",
                     author = creator("u3", "Sam Lee"),
                 )
-            coEvery { repo.detail("p1") } returns
-                NetworkResult.Success(PostDetailResponse(samplePost(comments = listOf(top, reply))))
+            coEvery { repo.detailStored("p1", any()) } returns
+                stored(PostDetailResponse(samplePost(comments = listOf(top, reply))))
             val vm = makeVm()
             vm.load()
             val loaded = vm.state.value as PulsePostDetailUiState.Loaded

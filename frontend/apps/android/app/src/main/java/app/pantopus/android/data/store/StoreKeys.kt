@@ -2,21 +2,39 @@ package app.pantopus.android.data.store
 
 import app.pantopus.android.data.api.models.businesses.MyBusinessesResponse
 import app.pantopus.android.data.api.models.chats.UnifiedConversationsResponse
+import app.pantopus.android.data.api.models.connections.BlockedRelationshipsResponse
+import app.pantopus.android.data.api.models.connections.SentRequestsResponse
+import app.pantopus.android.data.api.models.feed.FeedResponse
 import app.pantopus.android.data.api.models.homedashboard.HomeDashboardResponse
 import app.pantopus.android.data.api.models.homes.MyHomesResponse
 import app.pantopus.android.data.api.models.homes.showsCopyBeforeRecheck
+import app.pantopus.android.data.api.models.hub.HubDiscoveryResponse
+import app.pantopus.android.data.api.models.hub.HubResponse
+import app.pantopus.android.data.api.models.hub.HubTodayResponse
 import app.pantopus.android.data.api.models.hub.NotificationPreferences
+import app.pantopus.android.data.api.models.location.SavedViewingArea
+import app.pantopus.android.data.api.models.location.ViewingLocationPayload
 import app.pantopus.android.data.api.models.neighborhood.NeighborhoodCells
 import app.pantopus.android.data.api.models.neighborhood.NeighborhoodMeter
 import app.pantopus.android.data.api.models.notifications.NotificationUnreadCountResponse
 import app.pantopus.android.data.api.models.notifications.NotificationsListResponse
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.place.PlaceSectionId
+import app.pantopus.android.data.api.models.posts.MyPostsResponse
+import app.pantopus.android.data.api.models.posts.PostDetailResponse
+import app.pantopus.android.data.api.models.posts.SavedPostsResponse
+import app.pantopus.android.data.api.models.postsmap.PostsMapResponse
+import app.pantopus.android.data.api.models.profile.PublicProfileDto
+import app.pantopus.android.data.api.models.relationships.PendingRequestsResponse
+import app.pantopus.android.data.api.models.relationships.RelationshipsListResponse
+import app.pantopus.android.data.api.models.saved_places.SavedPlacesListResponse
+import app.pantopus.android.data.api.models.support_trains.SupportTrainDetailDto
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsListResponse
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsNearbyResponse
 import app.pantopus.android.data.api.models.users.InviteCodeDto
 import app.pantopus.android.data.api.models.users.InviteProgressDto
 import app.pantopus.android.data.api.models.users.ProfileResponse
+import app.pantopus.android.data.posts.FeedQuery
 
 /** Change topics (contract §8) that more than one key or repository names. */
 object StoreTopics {
@@ -29,12 +47,67 @@ object StoreTopics {
     /** The viewer's conversation list: a chat created or left, a message sent or read. */
     const val CHATS = "chats"
 
+    /** Client-only: the viewer posted, edited or deleted a post, so the feeds' first pages go out of date. */
+    const val POSTS = "posts"
+
     /** The viewer's list of homes: a home added, claimed, verified, left or deleted. */
     const val HOMES = "homes"
+
+    /** Today: a task, pickup day, calendar or briefing change (contract §8). */
+    const val TODAY = "today"
 }
 
 /** The store's keys, one per endpoint and parameters it caches, with their kind and change topics (contract §4, §8). */
+@Suppress("TooManyFunctions") // Declarative endpoint keys form the single audited cache allowlist.
 object StoreKeys {
+    fun relationships(
+        status: String?,
+        limit: Int = 50,
+        offset: Int = 0,
+    ) = StoreKey<RelationshipsListResponse>(
+        "api/relationships",
+        mapOf("status" to status, "limit" to limit.toString(), "offset" to offset.toString()),
+        kind = StoreKind.PEOPLE,
+        topics = setOf(StoreTopics.PROFILE_ME),
+    )
+
+    val pendingConnections =
+        StoreKey<PendingRequestsResponse>(
+            "api/relationships/requests/pending",
+            kind = StoreKind.PEOPLE,
+            topics = setOf(StoreTopics.PROFILE_ME),
+        )
+    val sentConnections =
+        StoreKey<SentRequestsResponse>(
+            "api/relationships/requests/sent",
+            kind = StoreKind.PEOPLE,
+            topics = setOf(StoreTopics.PROFILE_ME),
+        )
+    val blockedConnections =
+        StoreKey<BlockedRelationshipsResponse>(
+            "api/relationships/blocked",
+            kind = StoreKind.PEOPLE,
+            topics = setOf(StoreTopics.PROFILE_ME),
+        )
+
+    /** Private bookmarks use the account-scoped phone copy so saved-place Today can open offline. */
+    val savedPlaces =
+        StoreKey<SavedPlacesListResponse>(
+            "api/saved-places",
+            kind = StoreKind.YOU,
+            topics = setOf(StoreTopics.HOMES, StoreTopics.TODAY),
+            type = SavedPlacesListResponse::class.java,
+        )
+
+    /** Public Today facts for the viewer's saved place; a deleted bookmark refuses the copy. */
+    fun savedPlaceToday(id: String) =
+        StoreKey<PlaceIntelligence>(
+            "api/saved-places/$id/today",
+            kind = StoreKind.TODAY,
+            topics = setOf(StoreTopics.TODAY, "place:$id"),
+            type = PlaceIntelligence::class.java,
+        )
+
     /** My Homes: one source for every screen that lists the viewer's homes. */
     val myHomes =
         StoreKey<MyHomesResponse>(
@@ -84,6 +157,14 @@ object StoreKeys {
             topics = setOf("supporttrain:*"),
         )
 
+    /** Memory-only title and slots; the mixed detail reply's sensitive fields never enter this key. */
+    fun supportTrain(id: String) =
+        StoreKey<SupportTrainDetailDto>(
+            "api/activities/support-trains/$id",
+            kind = StoreKind.SUPPORT_TRAINS,
+            topics = setOf("supporttrain:$id"),
+        )
+
     /** Support Trains near [latitude], [longitude] (rounded with [roundCoordinate] before they get here). */
     fun nearbySupportTrains(
         latitude: Double,
@@ -99,6 +180,92 @@ object StoreKeys {
     fun roundCoordinate(value: Double): Double = kotlin.math.round(value * COORDINATE_SCALE) / COORDINATE_SCALE
 
     private const val COORDINATE_SCALE = 1000.0
+
+    /** The area the viewer chose in the Nearby context bar (`GET /api/location`; kind You: fresh 10 minutes). */
+    val viewingLocation = StoreKey<ViewingLocationPayload>("api/location", kind = StoreKind.YOU, topics = setOf(StoreTopics.PROFILE_ME))
+
+    /** Client-only: the chosen area (or none) outlives the process, so saved Pulse and map pages open cold and offline. */
+    val viewingArea =
+        StoreKey<SavedViewingArea>("client/viewing-area", kind = StoreKind.YOU, type = SavedViewingArea::class.java)
+
+    /** Post pins only; household pins must always pass their own current access check. */
+    @Suppress("LongParameterList")
+    fun mapPosts(
+        south: Double,
+        west: Double,
+        north: Double,
+        east: Double,
+        postType: String?,
+        surface: String?,
+    ) = StoreKey<PostsMapResponse>(
+        "api/posts/map",
+        mapOf(
+            "south" to south.toString(),
+            "west" to west.toString(),
+            "north" to north.toString(),
+            "east" to east.toString(),
+            "layers" to "posts",
+            "limit" to "200",
+            "postType" to postType?.takeIf(String::isNotBlank),
+            "surface" to surface?.takeIf(String::isNotBlank),
+        ),
+        kind = StoreKind.NEARBY,
+        topics = setOf(StoreTopics.POSTS, StoreTopics.PROFILE_ME),
+        type = PostsMapResponse::class.java,
+        saveWhen = { reply -> reply.markers.all { it.layerType == "post" } },
+    )
+
+    /** The first page of one feed query (contract §4 "Nearby": fresh 2 minutes); later pages are never stored. */
+    fun feedFirstPage(query: FeedQuery) =
+        StoreKey<FeedResponse>(
+            "api/posts/feed",
+            mapOf(
+                "surface" to query.surface,
+                "latitude" to query.latitude?.toString(),
+                "longitude" to query.longitude?.toString(),
+                "radiusMiles" to query.radiusMiles?.toString(),
+                "postType" to query.postType,
+                "topic" to query.topic,
+                "sportsMode" to query.sportsMode,
+                "eventKey" to query.eventKey,
+                "limit" to FeedQuery.PAGE_SIZE.toString(),
+            ),
+            kind = StoreKind.NEARBY,
+            topics = setOf(StoreTopics.POSTS),
+            type = FeedResponse::class.java,
+        )
+
+    fun publicProfile(
+        identifier: String,
+        byUsername: Boolean = false,
+    ) = StoreKey<PublicProfileDto>(
+        "api/users/${if (byUsername) "username" else "id"}/$identifier",
+        kind = StoreKind.PEOPLE,
+        topics = setOf("profile:$identifier", StoreTopics.PROFILE_ME, StoreTopics.CHATS),
+    )
+
+    fun userPosts(
+        userId: String,
+        limit: Int,
+        includeArchived: Boolean,
+    ) = StoreKey<MyPostsResponse>(
+        "api/posts/user/$userId",
+        mapOf("limit" to limit.toString(), "include_archived" to includeArchived.takeIf { it }?.toString()),
+        kind = StoreKind.POST,
+        topics = setOf(StoreTopics.POSTS, "profile:$userId"),
+    )
+
+    fun savedPosts(limit: Int) =
+        StoreKey<SavedPostsResponse>(
+            "api/posts/saved",
+            mapOf("limit" to limit.toString()),
+            kind = StoreKind.POST,
+            topics = setOf(StoreTopics.POSTS, StoreTopics.PROFILE_ME),
+        )
+
+    /** One post and its comments (contract §4 "A post": fresh 1 minute, never saved on the phone). */
+    fun post(postId: String) =
+        StoreKey<PostDetailResponse>("api/posts/$postId", kind = StoreKind.POST, topics = setOf("post:$postId", StoreTopics.POSTS))
 
     /**
      * The Messages list (contract §4 "Messages list"): names, last-message previews and unread counts, fresh for 30
@@ -152,6 +319,33 @@ object StoreKeys {
             kind = StoreKind.NOTIFICATIONS,
             topics = setOf(StoreTopics.NOTIFICATIONS),
         )
+
+    /**
+     * The Hub (the Place tab without a home): its overview, kind Homes (fresh 2 minutes), in memory only: the reply
+     * carries bill status items and recent notifications, which are never saved on the phone. A name saved, a home, a
+     * notification, a chat or Today changing marks it.
+     */
+    val hubOverview =
+        StoreKey<HubResponse>(
+            "api/hub",
+            kind = StoreKind.HOMES,
+            topics = setOf(StoreTopics.HOMES, StoreTopics.NOTIFICATIONS, StoreTopics.CHATS, StoreTopics.TODAY, StoreTopics.PROFILE_ME),
+        )
+
+    /** The Hub's Today card (kind Today: fresh 10 minutes; a reply that says it failed keeps the last copy). */
+    val hubToday = StoreKey<HubTodayResponse>("api/hub/today", kind = StoreKind.TODAY, topics = setOf(StoreTopics.TODAY))
+
+    /** The Hub's Discover rail for one filter tab (kind Nearby: fresh 2 minutes). */
+    fun hubDiscovery(filter: String) =
+        StoreKey<HubDiscoveryResponse>(
+            "api/hub/discovery",
+            mapOf("filter" to filter, "limit" to HUB_DISCOVERY_LIMIT.toString()),
+            kind = StoreKind.NEARBY,
+            topics = setOf(StoreTopics.HOMES),
+        )
+
+    /** How many Discover cards the Hub asks for. */
+    const val HUB_DISCOVERY_LIMIT = 10
 
     /** The first page of one notifications list (a zone's context, all or unread); later pages are never stored. */
     fun notificationsFirstPage(

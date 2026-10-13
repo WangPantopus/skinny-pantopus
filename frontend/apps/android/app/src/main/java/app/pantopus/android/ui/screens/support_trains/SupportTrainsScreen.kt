@@ -21,6 +21,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsScreen
 
 /** Test tag on the Support Trains screen root container. */
@@ -75,6 +76,7 @@ fun SupportTrainsScreen(
         }
         viewModel.load()
     }
+    RefreshOnStoreChange(viewModel::load)
 
     Box(modifier = Modifier.fillMaxSize().testTag(SUPPORT_TRAINS_TAG)) {
         ListOfRowsScreen(

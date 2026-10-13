@@ -79,6 +79,8 @@ fun MediaViewerDialog(
                             url = item.url,
                             contentScale = ContentScale.Fit,
                             modifier = Modifier.fillMaxSize(),
+                            // Originals are never written to the disk cache (Instant Screens §6).
+                            cacheOnDisk = false,
                         )
                     PostMediaKind.Video ->
                         ViewerVideoSlide(

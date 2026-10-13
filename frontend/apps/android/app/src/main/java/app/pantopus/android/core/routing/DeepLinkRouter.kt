@@ -368,6 +368,15 @@ object DeepLinkRouter {
          */
         data object CreatorAudienceMembers : Destination
 
+        /** Nearby Plans: `/plans/:id` opens the plan (J1 to J8, or H9 for its host). Behind the `plans` flag. */
+        data class Plan(val id: String) : Destination
+
+        /** Nearby Plans: `/plans/:id/requests` opens the host's requests (H10). */
+        data class PlanRequests(val id: String) : Destination
+
+        /** Nearby Plans: `/plans/new` opens the host flow (H1). */
+        data object NewPlan : Destination
+
         data class Unknown(val uri: String) : Destination
     }
 
@@ -393,6 +402,21 @@ object DeepLinkRouter {
     fun bindSignedInUserIdProvider(provider: () -> String?) {
         signedInUserIdProvider = provider
     }
+
+    /** Nearby Plans' server flag for the signed-in person, bound once from `PlansFeature`. */
+    @Volatile
+    private var plansEnabledProvider: () -> Boolean = { false }
+
+    fun bindPlansEnabledProvider(provider: () -> Boolean) {
+        plansEnabledProvider = provider
+    }
+
+    /** True when [destination] is a Plans page. Those open only while the `plans` flag is on. */
+    fun isPlansDestination(destination: Destination): Boolean =
+        destination is Destination.Plan || destination is Destination.PlanRequests || destination == Destination.NewPlan
+
+    /** True while Nearby Plans is on for the signed-in person. */
+    fun plansEnabled(): Boolean = plansEnabledProvider()
 
     fun handle(uri: Uri) {
         // Browser OAuth callbacks belong to the in-flight sign-in attempt:
@@ -539,11 +563,17 @@ object DeepLinkRouter {
                 key.startsWith("booking_") -> setOf(LaunchFeature.PUBLIC_SCHEDULING)
                 else -> LAUNCH_CUT_NOTIFICATION_TYPES[key].orEmpty()
             } + mailboxNotificationFeatures(key)
-        if (!typeFeatures.all(LaunchFeatures::isEnabled)) return false
+        // Nearby Plans' notifications show only while the `plans` flag is on for this person.
+        val plansOff = key.startsWith("plan_") && !plansEnabled()
+        if (plansOff || !typeFeatures.all(LaunchFeatures::isEnabled)) return false
         val path = notificationPath(type, link)?.takeIf { it.isNotBlank() } ?: return true
         val normalized = Paths.normalizeIncoming(path)
-        return Paths.isOAuthCallback(normalized) || isLaunchAvailable(resolveString(normalized))
+        return Paths.isOAuthCallback(normalized) || isLinkAvailable(resolveString(normalized))
     }
+
+    /** [isLaunchAvailable], and for a Plans page also the `plans` flag. */
+    private fun isLinkAvailable(destination: Destination): Boolean =
+        (!isPlansDestination(destination) || plansEnabled()) && isLaunchAvailable(destination)
 
     /** Mail notifications (`mail_new`, `mail_summary`, `home_mail_removed` …) come from the Mailbox (#10). */
     private fun mailboxNotificationFeatures(key: String): Set<LaunchFeature> =
@@ -857,6 +887,18 @@ object DeepLinkRouter {
                     Destination.HomeDetail(id)
                 } else {
                     Destination.Unknown(raw)
+                }
+            }
+            "plans" -> {
+                // Nearby Plans: `/plans/new`, `/plans/:id` and `/plans/:id/requests` (brief section 7).
+                val id = segments.getOrNull(1)
+                val trailing = segments.getOrNull(2)
+                when {
+                    id == "new" && segments.size == 2 -> Destination.NewPlan
+                    id.isNullOrBlank() -> Destination.Unknown(raw)
+                    segments.size == 2 -> Destination.Plan(id)
+                    trailing == "requests" && segments.size == 3 -> Destination.PlanRequests(id)
+                    else -> Destination.Unknown(raw)
                 }
             }
             "businesses" -> {

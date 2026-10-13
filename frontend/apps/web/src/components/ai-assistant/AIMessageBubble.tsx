@@ -7,9 +7,11 @@ import { AIDraftCard } from './AIDraftCard';
 interface AIMessageBubbleProps {
   message: AIChatMessage;
   isStreaming?: boolean;
+  /** What the assistant is doing while a tool runs ("Drafting your post…"). */
+  statusText?: string | null;
 }
 
-export function AIMessageBubble({ message, isStreaming }: AIMessageBubbleProps) {
+export function AIMessageBubble({ message, isStreaming, statusText }: AIMessageBubbleProps) {
   const isUser = message.role === 'user';
 
   return (
@@ -61,6 +63,9 @@ export function AIMessageBubble({ message, isStreaming }: AIMessageBubbleProps) 
         {/* Streaming placeholder when no content yet */}
         {isStreaming && !message.content && message.role === 'assistant' && (
           <div className="px-3.5 py-2.5 rounded-2xl rounded-bl-md bg-app-surface-sunken">
+            {statusText && !message.drafts?.length && (
+              <span className="text-xs text-app-text-muted mr-2">{statusText}</span>
+            )}
             <span className="inline-flex gap-1">
               <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
               <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />

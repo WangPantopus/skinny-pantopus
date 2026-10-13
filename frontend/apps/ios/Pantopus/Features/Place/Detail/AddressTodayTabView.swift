@@ -110,9 +110,15 @@ struct AddressTodayTabView: View {
             ) { openBallot() }
                 .id(detail.savedPlaceId ?? detail.homeId)
         } else if loadFailed {
-            couldNotLoad
+            VStack(spacing: 0) {
+                if PlansFlags.shared.plans { PlansTodayCards().padding(.horizontal, Spacing.s4) }
+                couldNotLoad
+            }
         } else {
-            noPlace
+            VStack(spacing: 0) {
+                if PlansFlags.shared.plans { PlansTodayCards().padding(.horizontal, Spacing.s4) }
+                noPlace
+            }
         }
     }
 
@@ -282,6 +288,8 @@ private struct AddressTodayLoaded: View {
                 case let .loaded(intel):
                     ScrollView {
                         VStack(alignment: .leading, spacing: 0) {
+                            // Nearby Plans on the day (A1, A2): nothing unless the `plans` flag is on.
+                            if PlansFlags.shared.plans { PlansTodayCards() }
                             if savedAnchorMatches {
                                 StatusChip("Saved place · Only you", variant: .neutral)
                                     .padding(.bottom, 12)
