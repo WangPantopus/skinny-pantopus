@@ -20,7 +20,7 @@ final class TapTargetAudit: XCTestCase {
         app.launchEnvironment["UI_TESTS_STUB_API"] = "1"
         app.launchEnvironment["UI_TESTS_DISABLE_NOTIFICATIONS"] = "1"
         app.launch()
-        guard app.staticTexts["Hub"].waitForExistence(timeout: 5) else {
+        guard app.buttons["place.menu"].firstMatch.waitForExistence(timeout: 5) else {
             app.terminateAfterSkippedLaunch()
             return nil
         }
@@ -55,9 +55,9 @@ final class TapTargetAudit: XCTestCase {
         }
     }
 
-    func testHubTabHasNoUndersizedTapTargets() throws {
+    func testPlaceTabHasNoUndersizedTapTargets() throws {
         guard let app = launch() else { throw XCTSkip("UI test launch hooks not honoured.") }
-        auditButtons(in: app, screenName: "Hub")
+        auditButtons(in: app, screenName: "Place")
     }
 
     func testYouTabHasNoUndersizedTapTargets() throws {

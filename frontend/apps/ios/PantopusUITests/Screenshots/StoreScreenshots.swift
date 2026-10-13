@@ -33,8 +33,8 @@ final class StoreScreenshots: XCTestCase {
         // limited network for the stub API, simulator boot timing, etc.)
         // skip the screenshot capture instead of failing the suite. The
         // production beta-lane invocation (`fastlane snapshot`) gets a
-        // fully-stubbed simulator and lands on Hub reliably.
-        guard app.staticTexts["Hub"].waitForExistence(timeout: 5) else {
+        // fully-stubbed simulator and lands on the Place tab's root reliably.
+        guard app.buttons["place.menu"].firstMatch.waitForExistence(timeout: 5) else {
             app.terminateAfterSkippedLaunch()
             return nil
         }
@@ -48,10 +48,10 @@ final class StoreScreenshots: XCTestCase {
             throw XCTSkip("UI test launch hooks not honoured.")
         }
 
-        // 1. Hub populated
-        snapshot("01_Hub_populated")
+        // 1. Your Place
+        snapshot("01_YourPlace")
 
-        // Hub → menu → Settings (T3.1 GroupedList).
+        // Your Place → menu → Settings (T3.1 GroupedList).
         let menuButton = app.descendants(matching: .any)
             .matching(identifier: "place.menu").firstMatch
         if menuButton.waitForExistence(timeout: 3) {
@@ -91,64 +91,6 @@ final class StoreScreenshots: XCTestCase {
             app.buttons["groupedListBackButton"].firstMatch.tap()
         }
 
-        // 2. MyHomes — open via the You tab → Edit profile is on the
-        //    same surface; MyHomes lives off the Hub via the addHome /
-        //    pillar paths. Use the You tab → Edit Profile button only
-        //    after capturing the Hub-rooted screens.
-        // For reliability we drive each screen via its accessibility
-        // identifier, falling back to the tab bar where needed.
-
-        // Hub → Pulse pillar → Nearby door presents the Pulse sheet
-        // (four-tab IA: Pulse lives behind the density-gated door).
-        let pulsePillar = app.descendants(matching: .any)
-            .matching(identifier: "hub.pillar.pulse").firstMatch
-        if pulsePillar.waitForExistence(timeout: 3) {
-            pulsePillar.tap()
-            _ = app.descendants(matching: .any)
-                .matching(identifier: "pulseFeed").firstMatch
-                .waitForExistence(timeout: 5)
-            snapshot("02_PulseFeed")
-            app.swipeDown(velocity: .fast)
-            app.buttons["tab.place"].firstMatch.tap()
-        }
-
-        // Hub → Mail pillar → MailboxList
-        let mailPillar = app.descendants(matching: .any)
-            .matching(identifier: "hub.pillar.mail").firstMatch
-        if mailPillar.waitForExistence(timeout: 3) {
-            mailPillar.tap()
-            _ = app.descendants(matching: .any)
-                .matching(identifier: "listOfRowsContainer").firstMatch
-                .waitForExistence(timeout: 5)
-            snapshot("04_MailboxList")
-
-            // MailboxList → first row → MailboxItemDetail
-            let firstRow = app.cells.firstMatch
-            if firstRow.waitForExistence(timeout: 3) {
-                firstRow.tap()
-                _ = app.descendants(matching: .any)
-                    .matching(identifier: "mailboxItemDetailShell").firstMatch
-                    .waitForExistence(timeout: 5)
-                snapshot("05_MailboxItemDetail_package")
-            }
-        }
-
-        // Back to the Place tab.
-        app.buttons["tab.place"].firstMatch.tap()
-
-        // Hub → Marketplace pillar → Nearby door presents the sheet.
-        let marketplacePillar = app.descendants(matching: .any)
-            .matching(identifier: "hub.pillar.marketplace").firstMatch
-        if marketplacePillar.waitForExistence(timeout: 3) {
-            marketplacePillar.tap()
-            _ = app.descendants(matching: .any)
-                .matching(identifier: "marketplace").firstMatch
-                .waitForExistence(timeout: 5)
-            snapshot("11_Marketplace")
-            app.swipeDown(velocity: .fast)
-            app.buttons["tab.place"].firstMatch.tap()
-        }
-
         // Nearby tab → the density-gated door.
         app.buttons["tab.nearby"].firstMatch.tap()
         if app.descendants(matching: .any)
@@ -157,32 +99,6 @@ final class StoreScreenshots: XCTestCase {
             snapshot("10_NearbyDoor")
         }
         app.buttons["tab.place"].firstMatch.tap()
-
-        // Hub → Gigs pillar → Nearby door presents the Tasks sheet.
-        let gigsPillar = app.descendants(matching: .any)
-            .matching(identifier: "hub.pillar.gigs").firstMatch
-        if gigsPillar.waitForExistence(timeout: 3) {
-            gigsPillar.tap()
-            _ = app.descendants(matching: .any)
-                .matching(identifier: "gigsFeed").firstMatch
-                .waitForExistence(timeout: 5)
-            snapshot("09_GigsFeed")
-
-            // Drill into the first gig row → T2.6 TransactionalDetailShell.
-            let firstGigRow = app.descendants(matching: .any)
-                .matching(identifier: "gigsRow_g_demo").firstMatch
-            if firstGigRow.waitForExistence(timeout: 3) {
-                firstGigRow.tap()
-                if app.descendants(matching: .any)
-                    .matching(identifier: "contentDetailShell").firstMatch
-                    .waitForExistence(timeout: 5) {
-                    snapshot("12_GigDetail")
-                }
-                app.buttons["contentDetailBackButton"].firstMatch.tap()
-            }
-            app.swipeDown(velocity: .fast)
-            app.buttons["tab.place"].firstMatch.tap()
-        }
 
         // Mail tab → Messages segment → Chat list.
         app.buttons["tab.mail"].firstMatch.tap()
@@ -317,12 +233,12 @@ final class StoreScreenshots: XCTestCase {
             app.buttons["tokenAcceptDecline"].firstMatch.tap()
         }
 
-        // Hub bell → Notifications center (T5.1 Notifications V2).
+        // Your Place bell → Notifications center (T5.1 Notifications V2).
         app.buttons["tab.place"].firstMatch.tap()
-        let hubBell = app.descendants(matching: .any)
+        let bell = app.descendants(matching: .any)
             .matching(identifier: "place.notifications").firstMatch
-        if hubBell.waitForExistence(timeout: 3) {
-            hubBell.tap()
+        if bell.waitForExistence(timeout: 3) {
+            bell.tap()
             if app.descendants(matching: .any)
                 .matching(identifier: "notifications").firstMatch
                 .waitForExistence(timeout: 5) {

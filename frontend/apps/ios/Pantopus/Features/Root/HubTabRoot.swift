@@ -497,7 +497,7 @@ public enum HubRoute: Hashable {
 }
 
 /// Which surface roots a `HubTabRoot` stack (wedge Phase 1 four-tab IA).
-/// `.hub` is the Place tab (Hub root + Place auto-land, unchanged);
+/// `.hub` is the Place tab (its root is the person's place: see `PlaceRoot`);
 /// `.mailbox` roots the same stack — same `HubRoute` destination
 /// universe — at the Mailbox, powering the Mail tab without duplicating
 /// the mailbox cluster's wiring.

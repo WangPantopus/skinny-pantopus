@@ -3,8 +3,8 @@
 //  PantopusTests
 //
 //  P6.2 — design-reference baseline tripwires for the Report-User sheet
-//  states. Mirrors `RecentActivitySnapshotTests`: asserts the baseline
-//  PNG exists at `PantopusTests/__Snapshots__/report-user-sheet/<state>-ios.png`
+//  states. Asserts the baseline PNG exists at
+//  `PantopusTests/__Snapshots__/report-user-sheet/<state>-ios.png`
 //  and is a valid PNG. The first PR ships the file with `XCTSkip` so
 //  the gate exists without failing CI on missing images; the baselines
 //  land in the follow-up render harness commit.

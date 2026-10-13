@@ -29,7 +29,7 @@ final class A11yLabelAudit: XCTestCase {
         app.launchEnvironment["UI_TESTS_STUB_API"] = "1"
         app.launchEnvironment["UI_TESTS_DISABLE_NOTIFICATIONS"] = "1"
         app.launch()
-        guard app.staticTexts["Hub"].waitForExistence(timeout: 5) else {
+        guard app.buttons["place.menu"].firstMatch.waitForExistence(timeout: 5) else {
             app.terminateAfterSkippedLaunch()
             return nil
         }
@@ -50,9 +50,9 @@ final class A11yLabelAudit: XCTestCase {
         }
     }
 
-    func testHubButtonsAllLabelled() throws {
+    func testPlaceButtonsAllLabelled() throws {
         guard let app = launch() else { throw XCTSkip("UI test launch hooks not honoured.") }
-        auditLabels(in: app, screenName: "Hub")
+        auditLabels(in: app, screenName: "Place")
     }
 
     func testYouTabButtonsAllLabelled() throws {

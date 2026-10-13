@@ -23,7 +23,7 @@ final class DynamicTypeAudit: XCTestCase {
         // Forces the simulator's preferred content size category.
         app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryXXXL"]
         app.launch()
-        guard app.staticTexts["Hub"].waitForExistence(timeout: 5) else {
+        guard app.buttons["place.menu"].firstMatch.waitForExistence(timeout: 5) else {
             app.terminateAfterSkippedLaunch()
             return nil
         }
@@ -34,7 +34,7 @@ final class DynamicTypeAudit: XCTestCase {
     /// We don't compute pixel widths here — that's fragile across devices —
     /// but we do verify the elements are still rendered and hittable
     /// (proves the layout didn't collapse them off-screen).
-    func testHubRendersAtXXXLarge() throws {
+    func testPlaceRendersAtXXXLarge() throws {
         guard let app = launch() else { throw XCTSkip("UI test launch hooks not honoured.") }
         for tab in ["place", "today", "nearby", "mail"] {
             XCTAssertTrue(
@@ -42,7 +42,7 @@ final class DynamicTypeAudit: XCTestCase {
                 "Tab \(tab) missing at xxxLarge."
             )
         }
-        XCTAssertTrue(app.staticTexts["Hub"].exists)
+        XCTAssertTrue(app.buttons["place.menu"].firstMatch.exists)
     }
 
     func testEditProfileRendersAtXXXLarge() throws {

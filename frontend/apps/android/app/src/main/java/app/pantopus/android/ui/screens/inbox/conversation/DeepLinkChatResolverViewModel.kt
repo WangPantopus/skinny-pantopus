@@ -12,11 +12,10 @@ import javax.inject.Inject
 
 /**
  * On-demand resolution for chat links (`/chat/<roomId>`, what chat pushes
- * carry), sibling of `DeepLinkPlaceResolverViewModel`. A direct room with
- * exactly one other person, who the viewer has not blocked, opens that
- * person's thread as the Messages list does, so its details keep Report and
- * Block. Anything else, or a failed read, returns null and the link opens
- * the room exactly as before. iOS mirrors this in
+ * carry). A direct room with exactly one other person, who the viewer has
+ * not blocked, opens that person's thread as the Messages list does, so its
+ * details keep Report and Block. Anything else, or a failed read, returns
+ * null and the link opens the room exactly as before. iOS mirrors this in
  * `InboxTabRoot.linkedConversation`. Fetches nothing until a link needs it.
  */
 @HiltViewModel
