@@ -1551,16 +1551,7 @@ class ChatConversationViewModel
             force: Boolean = false,
         ) {
             val context = historyContext()
-            if (initial || context != historyCopyContext) {
-                if (context != historyCopyContext) historyPage = null
-                historyCopyContext = context
-                updateHistoryCopy =
-                    when (val target = context.mode) {
-                        is ChatThreadMode.Room -> repo.roomHistoryUpdater(target.id)
-                        is ChatThreadMode.Person -> repo.conversationHistoryUpdater(target.otherUserId, context.topicId)
-                        ChatThreadMode.Ai -> null
-                    }
-            }
+            if (initial || context != historyCopyContext) followHistoryCopy(context)
             val copied = initial && !quiet && showHistoryCopy()
             val keepMessages = quiet || copied
             viewModelScope.launch {
@@ -1590,19 +1581,32 @@ class ChatConversationViewModel
                 // The topic changed while this page was in flight (the opening topic
                 // resolves alongside the first fetch); the fetch for it owns the thread.
                 if (context != historyContext()) return@launch
-                if (before == null && response is NetworkResult.Success) historyPage = response.data
-                publishHistoryPage(response, keepMessages, initial)
+                publishHistoryPage(response, keepMessages, initial, firstPage = before == null)
             }
+        }
+
+        /** A first-page read (or a new thread or topic): the copy writer follows the read's context. */
+        private fun followHistoryCopy(context: HistoryReadContext) {
+            if (context != historyCopyContext) historyPage = null
+            historyCopyContext = context
+            updateHistoryCopy =
+                when (val target = context.mode) {
+                    is ChatThreadMode.Room -> repo.roomHistoryUpdater(target.id)
+                    is ChatThreadMode.Person -> repo.conversationHistoryUpdater(target.otherUserId, context.topicId)
+                    ChatThreadMode.Ai -> null
+                }
         }
 
         private fun publishHistoryPage(
             response: NetworkResult<ChatMessagesResponse>,
             keepMessages: Boolean,
             initial: Boolean,
+            firstPage: Boolean,
         ) {
             when (response) {
                 is NetworkResult.Success -> {
                     historyRefusal = null
+                    if (firstPage) historyPage = response.data
                     val keptOlder = placePage(response.data.messages, keepMessages)
                     retireConfirmedSends(response.data.messages)
                     updateActiveRooms(response.data)
