@@ -131,7 +131,8 @@ struct PlanRequestsScreen: View {
         }
         .refreshesOnPlansChange { await viewModel.load() }
         .alert(
-            "Share your address?",
+            // The brief's words (section 6), as on Android.
+            "Accepting shares your address with them",
             isPresented: Binding(get: { pendingAccept != nil }, set: { if !$0 { pendingAccept = nil } }),
             presenting: pendingAccept
         ) { request in
@@ -141,7 +142,8 @@ struct PlanRequestsScreen: View {
             }
             Button("Not now", role: .cancel) {}
         } message: { request in
-            Text("Accepting \(PlanCardLines.firstName(request.user.displayName)) shares your address with them.")
+            let first = PlanCardLines.firstName(request.user.displayName)
+            Text("\(first) will see your address, your note and who's going. You'll be asked once for this plan.")
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("planRequests")
@@ -303,14 +305,15 @@ struct PlanRequestCard: View {
         return parts.joined(separator: " · ")
     }
 
-    /// "Me + 1", "Just me" (the words the guest picked); for a playdate "2 kids · ages 2–5".
+    /// "Just Priya", "Priya + 1" (as the host's push says it); for a playdate "2 kids · ages 2–5".
     private var party: String {
         if kind == .playdate {
             let kids = request.kidsCount ?? 1
             let ages = PlanRowModel.ages(request.kidsAgeBands).map { " · \($0)" } ?? ""
             return "\(kids) kid\(kids == 1 ? "" : "s")\(ages)"
         }
-        return request.partySize <= 1 ? "Just me" : "Me + \(request.partySize - 1)"
+        let name = PlanCardLines.firstName(request.user.displayName)
+        return request.partySize <= 1 ? "Just \(name)" : "\(name) + \(request.partySize - 1)"
     }
 }
 

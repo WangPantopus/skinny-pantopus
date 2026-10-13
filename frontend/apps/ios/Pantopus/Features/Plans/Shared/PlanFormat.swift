@@ -13,14 +13,14 @@ import Foundation
 enum PlanFormat {
     // MARK: - Distance
 
-    /// "under 1 mi", "about 2 mi".
+    /// "under 1 mi", "about 2 mi" (non-breaking spaces: a band never splits across lines).
     static func distance(_ band: PlanDistanceBand?) -> String? {
         switch band {
-        case .under1Mi: "under 1 mi"
-        case .about1Mi: "about 1 mi"
-        case .about2Mi: "about 2 mi"
-        case .about3Mi: "about 3 mi"
-        case .about5Mi: "about 5 mi"
+        case .under1Mi: "under\u{00A0}1\u{00A0}mi"
+        case .about1Mi: "about\u{00A0}1\u{00A0}mi"
+        case .about2Mi: "about\u{00A0}2\u{00A0}mi"
+        case .about3Mi: "about\u{00A0}3\u{00A0}mi"
+        case .about5Mi: "about\u{00A0}5\u{00A0}mi"
         case nil: nil
         }
     }
