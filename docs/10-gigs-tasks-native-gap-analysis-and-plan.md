@@ -47,7 +47,7 @@ stubs called out below.
 | # | Gap | RN reference | iOS today | Android today |
 |---|---|---|---|---|
 | G1 | **Photo upload pipeline.** Composer photos are placeholder IDs; nothing is uploaded. Backend expects URLs from `POST /api/files/upload`. | `useAttachments` → upload → URLs in `attachments` | placeholder IDs ("until P15.5") | sample tones only, `FilesApi` unwired |
-| G2 | **Real AI Magic Draft.** Native "Magic Task" is a local keyword matcher. RN calls `POST /api/ai/draft/gig` (OpenAI structured parse: title/desc/price/category/urgency/tags/schedule/clarifying questions). | `api.magicTask.getMagicDraft` | keyword match | keyword match |
+| G2 | **Real AI Magic Draft.** Native "Magic Task" is a local keyword matcher. RN calls `POST /api/ai/draft/gig` (Claude structured parse: title/desc/price/category/urgency/tags/schedule/clarifying questions). | `api.magicTask.getMagicDraft` | keyword match | keyword match |
 | G3 | **Date/time pickers.** Android one-time schedule taps insert a hard-coded "now+24h" placeholder. | native pickers per platform | DatePicker wired | placeholder ("calendar P18 follow-up") |
 | G4 | **Server-side list filtering.** iOS fetches then filters client-side (budget/schedule/posted-within); backend supports `price_min/max`, `deadline`, `schedule_type`, etc. Wasteful + breaks pagination correctness. | server params | client-side | partially server-side |
 
