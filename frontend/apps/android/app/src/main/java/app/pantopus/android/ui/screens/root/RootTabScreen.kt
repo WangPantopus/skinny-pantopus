@@ -55,6 +55,8 @@ import app.pantopus.android.core.LaunchFeature
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.core.perf.ScreenTiming
 import app.pantopus.android.core.routing.DeepLinkRouter
+import app.pantopus.android.data.analytics.Analytics
+import app.pantopus.android.data.analytics.AnalyticsEvent
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.InviteLinks
 import app.pantopus.android.ui.components.NavigationDrawer
@@ -7005,6 +7007,7 @@ private fun PlaceTabRoot(
             // Another Home is another dashboard, with its own state.
             is HomeLanding.Home ->
                 key(current.homeId) {
+                    PlaceRootViewed("home")
                     PlaceDashboardDestination(
                         navController = navController,
                         homeId = current.homeId,
@@ -7014,7 +7017,8 @@ private fun PlaceTabRoot(
                         scrollToTop = scrollToTop,
                     )
                 }
-            HomeLanding.Homes ->
+            HomeLanding.Homes -> {
+                PlaceRootViewed("homes")
                 MyHomesListScreen(
                     onOpenHome = { homeId -> navController.navigate(ChildRoutes.homeDashboard(homeId)) },
                     onOpenTasks = { homeId -> navController.navigate(ChildRoutes.homeTasks(homeId)) },
@@ -7027,8 +7031,10 @@ private fun PlaceTabRoot(
                     unreadCount = unreadCount,
                     onOpenMenu = onOpenMenu,
                 )
+            }
             is HomeLanding.SavedPlace ->
                 key(current.place.id) {
+                    PlaceRootViewed("saved_place")
                     SavedPlaceRootScreen(
                         place = current.place,
                         unreadCount = unreadCount,
@@ -7041,6 +7047,7 @@ private fun PlaceTabRoot(
                 }
             HomeLanding.FirstRun ->
                 Box(modifier = Modifier.fillMaxSize().testTag("place.firstRun")) {
+                    PlaceRootViewed("first_run")
                     PlaceLaunchScreen(
                         onSignIn = {},
                         onCreateAccount = {},
@@ -7050,6 +7057,15 @@ private fun PlaceTabRoot(
                 }
         }
     }
+}
+
+/**
+ * `screen.place.viewed` each time a settled root shows, as the Hub sent `screen.hub.viewed`: first shown, back from a
+ * pushed screen or another tab, or replaced by another Home. Not for the skeleton or the error.
+ */
+@Composable
+private fun PlaceRootViewed(root: String) {
+    LaunchedEffect(Unit) { Analytics.track(AnalyticsEvent.ScreenPlaceViewed(root)) }
 }
 
 /** Your Place for one Home, with the same doors whether it is the Place tab's root or pushed on top by a link. */
