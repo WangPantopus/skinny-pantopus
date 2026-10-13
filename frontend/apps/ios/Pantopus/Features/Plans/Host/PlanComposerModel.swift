@@ -344,14 +344,13 @@ final class PlanComposerModel {
         case .watchParty:
             spots = 8
             approval = .approveEach
-            start = nextHour
-            end = nextHour.addingTimeInterval(3 * 3600)
+            start = Self.sensibleStart(for: kind, calendar: calendar)
+            end = start.addingTimeInterval(3 * 3600)
         case .playdate:
             spots = 4
             approval = .approveEach
             whereKind = .publicPlace
-            let tomorrow = calendar.date(byAdding: .day, value: 1, to: Date()) ?? Date()
-            start = calendar.date(bySettingHour: 10, minute: 0, second: 0, of: tomorrow) ?? nextHour
+            start = Self.sensibleStart(for: kind, calendar: calendar)
             end = start.addingTimeInterval(90 * 60)
         case .pickupGame:
             spots = 2
@@ -366,14 +365,31 @@ final class PlanComposerModel {
         case .walkCoffee:
             spots = 6
             approval = .verifiedAuto
-            start = nextHour
-            end = nextHour.addingTimeInterval(3600)
+            start = Self.sensibleStart(for: kind, calendar: calendar)
+            end = start.addingTimeInterval(3600)
         }
         if !canHostAtHome { whereKind = .publicPlace }
     }
 }
 
 extension PlanComposerModel {
+    /// Two hours from now on the hour, unless that falls at night (or, for a
+    /// playdate, outside the daytime): then the next sensible time, a playdate
+    /// at 10 AM, a walk at 8 AM, a watch party at 7 PM (as on Android).
+    static func sensibleStart(for kind: PlanKind, now: Date = Date(), calendar: Calendar = .current) -> Date {
+        let later = now.addingTimeInterval(2 * 3600)
+        let soon = calendar.dateInterval(of: .hour, for: later)?.start ?? later
+        let (earliest, latest, preferred) = switch kind {
+        case .playdate: (8, 18, 10)
+        case .walkCoffee: (7, 21, 8)
+        case .watchParty, .pickupGame: (8, 21, 19)
+        }
+        let hour = calendar.component(.hour, from: soon)
+        if hour >= earliest, hour < latest { return soon }
+        let day = hour >= latest ? calendar.date(byAdding: .day, value: 1, to: soon) ?? soon : soon
+        return calendar.date(bySettingHour: preferred, minute: 0, second: 0, of: day) ?? soon
+    }
+
     /// A5 "Host again": the same plan, same time next week.
     func repeatPlan(_ plan: PlanDetailDTO) {
         let card = plan.card
