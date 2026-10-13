@@ -60,7 +60,7 @@ enum PlansMarker: Hashable, Identifiable {
 enum PlansClustering {
     /// Pins closer than this many points on screen join a cluster.
     static let clusterPoints = 44.0
-    /// About how many points tall the map is (near enough for clustering).
+    /// How many points tall the map is, until it's measured.
     static let mapPoints = 800.0
     /// Close up (a span under this), plans sharing one point sit side by side.
     static let fanSpan = 0.012
@@ -75,7 +75,7 @@ enum PlansClustering {
     /// selected pin never hides in a cluster; a cluster holding a plan you host,
     /// are in or asked to join carries that badge. Clusters come after pins and
     /// the selected pin last, so they draw (and take taps) on top.
-    static func markers(_ pins: [PlanPinDTO], span: Double, selectedId: String?) -> [PlansMarker] {
+    static func markers(_ pins: [PlanPinDTO], span: Double, mapPoints: Double = mapPoints, selectedId: String?) -> [PlansMarker] {
         var result: [PlansMarker] = []
         var loose: [PlanPinDTO] = []
         if span < fanSpan {
@@ -97,12 +97,12 @@ enum PlansClustering {
         } else {
             loose = pins
         }
-        let degreesPerPoint = max(span, 0.0001) / mapPoints
+        let degreesPerPoint = max(span, 0.0001) / max(mapPoints, 1)
         var groups: [[PlanPinDTO]] = []
         for pin in loose {
             let index = pin.id == selectedId ? nil : groups.firstIndex { group in
                 guard let leader = group.first, leader.id != selectedId else { return false }
-                return points(between: leader, and: pin, degreesPerPoint: degreesPerPoint) < clusterPoints
+                return points(between: middle(of: [leader]), and: middle(of: [pin]), degreesPerPoint: degreesPerPoint) < clusterPoints
             }
             if let index {
                 groups[index].append(pin)
@@ -110,6 +110,7 @@ enum PlansClustering {
                 groups.append([pin])
             }
         }
+        mergeCrowded(&groups, selectedId: selectedId, degreesPerPoint: degreesPerPoint)
         for group in groups {
             if group.count == 1, let pin = group.first {
                 result.append(.pin(pin))
@@ -136,7 +137,41 @@ enum PlansClustering {
         return max(max(cluster.maxLatitude - cluster.minLatitude, cluster.maxLongitude - cluster.minLongitude) * 2.2, 0.003)
     }
 
-    private static func points(between first: PlanPinDTO, and second: PlanPinDTO, degreesPerPoint: Double) -> Double {
+    /// A cluster sits at the middle of its pins, which can land on another
+    /// cluster or pin: groups whose middles are too close merge, until none are.
+    private static func mergeCrowded(_ groups: inout [[PlanPinDTO]], selectedId: String?, degreesPerPoint: Double) {
+        var merging = true
+        while merging {
+            merging = false
+            search: for first in groups.indices {
+                guard !groups[first].contains(where: { $0.id == selectedId }) else { continue }
+                for second in groups.indices where second > first {
+                    guard !groups[second].contains(where: { $0.id == selectedId }) else { continue }
+                    let gap = points(between: middle(of: groups[first]), and: middle(of: groups[second]), degreesPerPoint: degreesPerPoint)
+                    if gap < clusterPoints {
+                        groups[first] += groups[second]
+                        groups.remove(at: second)
+                        merging = true
+                        break search
+                    }
+                }
+            }
+        }
+    }
+
+    private static func middle(of group: [PlanPinDTO]) -> CLLocationCoordinate2D {
+        let count = Double(max(group.count, 1))
+        return CLLocationCoordinate2D(
+            latitude: group.map(\.latitude).reduce(0, +) / count,
+            longitude: group.map(\.longitude).reduce(0, +) / count
+        )
+    }
+
+    private static func points(
+        between first: CLLocationCoordinate2D,
+        and second: CLLocationCoordinate2D,
+        degreesPerPoint: Double
+    ) -> Double {
         let dy = (first.latitude - second.latitude) / degreesPerPoint
         let dx = (first.longitude - second.longitude) * cos(first.latitude * .pi / 180) / degreesPerPoint
         return (dx * dx + dy * dy).squareRoot()

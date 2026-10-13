@@ -33,6 +33,8 @@ struct PlanTextInput: View {
     var multiline = false
     var limit = 120
     var identifier: String?
+    /// What VoiceOver calls the field once it has text (the placeholder goes then).
+    var label: String?
 
     var body: some View {
         Group {
@@ -54,6 +56,7 @@ struct PlanTextInput: View {
         .onChange(of: text) { _, new in
             if new.count > limit { text = String(new.prefix(limit)) }
         }
+        .accessibilityLabel(label ?? placeholder)
         .accessibilityIdentifier(identifier ?? placeholder)
     }
 }

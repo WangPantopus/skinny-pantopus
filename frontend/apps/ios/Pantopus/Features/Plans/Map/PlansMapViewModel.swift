@@ -67,6 +67,8 @@ final class PlansMapViewModel {
     private(set) var selectedId: String?
     private(set) var selectedCard: PlanCardDTO?
     private(set) var selectedFailed = false
+    /// The tapped pin's card, measured: its sheet takes this height, up to half (board F3).
+    var cardHeight: CGFloat = 0
     /// The viewer's home, for "Use my home instead".
     private(set) var homeCenter: UserCoordinate?
     /// "Use my location" was refused or found no fix.
@@ -78,6 +80,8 @@ final class PlansMapViewModel {
     @ObservationIgnored private(set) var lastRegion: MKCoordinateRegion?
 
     private var span: Double = 0.06
+    /// The map's height on screen, so pins join clusters at the same distance on every phone.
+    var mapPoints = PlansClustering.mapPoints
     private var viewport: PlansViewport?
     private var pinsTask: Task<Void, Never>?
     private let api: APIClient
@@ -286,6 +290,7 @@ final class PlansMapViewModel {
         PlansClustering.markers(
             pins.filter { kindFilter == nil || $0.kind == kindFilter },
             span: span,
+            mapPoints: mapPoints,
             selectedId: selectedId
         )
     }

@@ -15,6 +15,8 @@ struct PlansSheetContent: View {
     let actions: PlansMapActions
     let onStop: (PlansSheetStop) -> Void
 
+    @Environment(\.dynamicTypeSize) private var typeSize
+
     var body: some View {
         Group {
             switch viewModel.phase {
@@ -50,22 +52,21 @@ struct PlansSheetContent: View {
     private var peek: some View {
         let cards = viewModel.visibleCards
         return VStack(alignment: .leading, spacing: 2) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(peekTitle)
-                    .planFont(.h4)
-                    .foregroundStyle(Theme.Color.appText)
-                    .accessibilityAddTraits(.isHeader)
-                Spacer(minLength: Spacing.s2)
-                if cards.count > 2 {
-                    Button("See all \(cards.count)") { onStop(.full) }
-                        .planFont(.smallStrong)
-                        .foregroundStyle(Theme.Color.primaryInk)
-                        .frame(minHeight: 44)
-                        .accessibilityIdentifier("plansSeeAll")
+            // Side by side; stacked when the text is too large for one line.
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .firstTextBaseline) {
+                    peekTitleText
+                    Spacer(minLength: Spacing.s2)
+                    seeAll(count: cards.count)
+                }
+                VStack(alignment: .leading, spacing: 0) {
+                    peekTitleText
+                    seeAll(count: cards.count)
                 }
             }
-            // The two soonest near you (your own plans among them).
-            let first = Array(cards.prefix(2))
+            // The two soonest near you (your own plans among them); one at the
+            // largest text sizes, so the row has room for its words.
+            let first = Array(cards.prefix(typeSize.isAccessibilitySize ? 1 : 2))
             ForEach(Array(first.enumerated()), id: \.element.id) { index, card in
                 PlanRow(model: rowModel(card).withTrailing(.chevron), showsDivider: index > 0) {
                     actions.openPlan(card, card.id, .view)
@@ -77,6 +78,26 @@ struct PlansSheetContent: View {
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .padding(.vertical, Spacing.s3)
             }
+        }
+        // Whole lines even when the stop is too short for them (the largest
+        // text): the sheet cuts off the bottom instead of shrinking the words.
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var peekTitleText: some View {
+        Text(peekTitle)
+            .planFont(.h4)
+            .foregroundStyle(Theme.Color.appText)
+            .accessibilityAddTraits(.isHeader)
+    }
+
+    @ViewBuilder private func seeAll(count: Int) -> some View {
+        if count > 2 {
+            Button("See all \(count)") { onStop(.full) }
+                .planFont(.smallStrong)
+                .foregroundStyle(Theme.Color.primaryInk)
+                .frame(minHeight: 44)
+                .accessibilityIdentifier("plansSeeAll")
         }
     }
 

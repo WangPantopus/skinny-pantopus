@@ -63,6 +63,7 @@ struct PlanPinCard: View {
                     .padding(.top, 2)
             }
             .padding(.bottom, Spacing.s4)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { viewModel.cardHeight = $0 }
         }
         .scrollIndicators(.hidden)
     }
