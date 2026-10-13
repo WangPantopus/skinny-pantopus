@@ -36,6 +36,14 @@ const JITTER_KEY = process.env.LOCATION_JITTER_SECRET
 const APPROX_AREA_CELLS_PER_DEGREE = 200;
 
 /**
+ * How far an approx_area point can be shown from the true point, in degrees on
+ * each axis: half a cell, plus the ±0.005° offset, plus 0.0005° of rounding.
+ * Searches that decide on shown points widen their query of true points by at
+ * least this much (backend/services/marketplace/locationPrivacy.js).
+ */
+const APPROX_AREA_MAX_SHIFT_DEGREES = 0.5 / APPROX_AREA_CELLS_PER_DEGREE + 0.005 + 0.0005;
+
+/**
  * Two independent, stable pseudo-random values in [0, 1) for a grid cell.
  * @returns {[number, number]}
  */
@@ -202,6 +210,7 @@ function leastPrecise(a, b) {
 }
 
 module.exports = {
+  APPROX_AREA_MAX_SHIFT_DEGREES,
   applyLocationPrecision,
   resolveGigPrecision,
   precisionRank,

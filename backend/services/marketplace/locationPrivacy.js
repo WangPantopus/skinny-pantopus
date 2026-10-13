@@ -8,43 +8,40 @@
  * Rules by location_precision × reveal_policy:
  *
  *   exact_place + public          → exact coordinates returned
- *   exact_place + any other       → non-owners get hash-blurred ±0.003° (~300 m)
- *   approx_area  (any policy)     → non-owners get hash-blurred ±0.005° (~500 m)
+ *   exact_place + any other       → non-owners get the approximate point
+ *   approx_area  (any policy)     → non-owners get the approximate point
  *   neighborhood_only             → non-owners get null lat/lng, keep location_name
  *   none                          → non-owners get null lat/lng/name/address
  *
+ * The approximate point is the shared approx_area rule in utils/locationPrivacy.js:
+ * the point's 0.005° grid cell, moved by an offset keyed with LOCATION_JITTER_SECRET.
+ * It is stable across requests, every listing posted from one place shows the same
+ * point, and it can't be traced back to the stored point without the secret.
+ *
  * location_address is always nulled for non-owners unless reveal_policy is "public".
- * Owners always see their own exact data.
+ * Owners and address grantees always see their exact data.
  * Null viewer is treated as non-owner.
  *
- * Blur is deterministic per listing (hash-based on listing ID) so the blurred
- * position is stable across requests.
+ * Area searches, distances and sort orders must use the point the viewer is
+ * shown, never the stored one: a filter, count or distance computed from the
+ * stored point gives it away. See listingSearchPoint and widenBounds.
  */
 
-const crypto = require('crypto');
 const supabaseAdmin = require('../../config/supabaseAdmin');
 const logger = require('../../utils/logger');
+const {
+  APPROX_AREA_MAX_SHIFT_DEGREES,
+  applyLocationPrecision,
+} = require('../../utils/locationPrivacy');
 
-// ---------------------------------------------------------------------------
-// Deterministic hash-based offset
-// ---------------------------------------------------------------------------
-
-/**
- * Produce a stable pseudo-random offset in [-magnitude, +magnitude] for a
- * given listing ID and axis ('lat' | 'lng').  Uses HMAC-SHA256 so the mapping
- * is unpredictable without the key, yet perfectly repeatable.
- */
-const BLUR_HMAC_KEY = 'marketplace-location-blur-v1';
-
-function hashOffset(listingId, axis, magnitude) {
-  const hmac = crypto.createHmac('sha256', BLUR_HMAC_KEY);
-  hmac.update(`${listingId}:${axis}`);
-  const buf = hmac.digest();
-  // Use the first 4 bytes as an unsigned 32-bit integer
-  const uint32 = buf.readUInt32BE(0);
-  // Map to [-1, +1) then scale by magnitude
-  const normalized = (uint32 / 0xFFFFFFFF) * 2 - 1;
-  return normalized * magnitude;
+/** Replaces the listing's point with the shared approximate point. */
+function approximate(listing) {
+  if (listing.latitude == null || listing.longitude == null) {
+    listing.latitude = null;
+    listing.longitude = null;
+    return;
+  }
+  applyLocationPrecision(listing, 'approx_area', false, { setUnlockedFlag: false, stripAddress: false });
 }
 
 // ---------------------------------------------------------------------------
@@ -102,19 +99,11 @@ function applyLocationPrivacy(listing, viewerUserId, opts = {}) {
         // Return exact — no transformation
         break;
       }
-      // Blur ±0.003° (~300 m)
-      if (out.latitude != null && out.longitude != null) {
-        out.latitude = out.latitude + hashOffset(out.id, 'lat', 0.003);
-        out.longitude = out.longitude + hashOffset(out.id, 'lng', 0.003);
-      }
+      approximate(out);
       break;
 
     case 'approx_area':
-      // Blur ±0.005° (~500 m)
-      if (out.latitude != null && out.longitude != null) {
-        out.latitude = out.latitude + hashOffset(out.id, 'lat', 0.005);
-        out.longitude = out.longitude + hashOffset(out.id, 'lng', 0.005);
-      }
+      approximate(out);
       out.location_address = null;
       break;
 
@@ -133,10 +122,7 @@ function applyLocationPrivacy(listing, viewerUserId, opts = {}) {
 
     default:
       // Unknown precision — treat as approx_area (safe default)
-      if (out.latitude != null && out.longitude != null) {
-        out.latitude = out.latitude + hashOffset(out.id, 'lat', 0.005);
-        out.longitude = out.longitude + hashOffset(out.id, 'lng', 0.005);
-      }
+      approximate(out);
       out.location_address = null;
       break;
   }
@@ -158,19 +144,22 @@ async function fetchGrantsForViewer(viewerUserId, listingIds) {
   const map = new Map();
   if (!viewerUserId || !listingIds || listingIds.length === 0) return map;
 
+  // Area searches pass hundreds of candidate ids, too many for a URL filter, so
+  // read the viewer's grants and match them here.
   const { data, error } = await supabaseAdmin
     .from('ListingAddressGrant')
     .select('listing_id')
-    .eq('grantee_user_id', viewerUserId)
-    .in('listing_id', listingIds);
+    .eq('grantee_user_id', viewerUserId);
 
   if (error) {
     logger.warn('fetchGrantsForViewer failed, proceeding without grants', { error: error.message });
     return map;
   }
 
+  const wanted = new Set(listingIds.map(String));
   for (const row of data || []) {
     const lid = String(row.listing_id);
+    if (!wanted.has(lid)) continue;
     if (!map.has(lid)) map.set(lid, new Set());
     map.get(lid).add(String(viewerUserId));
   }
@@ -209,10 +198,76 @@ async function applyLocationPrivacyBatch(listings, viewerUserId, opts = {}) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Searching by the shown point
+// ---------------------------------------------------------------------------
+
+/**
+ * Area searches read stored points from the area widened by this margin, which
+ * finds every listing whose shown point could be inside it, and then keep only
+ * the listings whose search point is (listingSearchPoint). A shown point is
+ * never more than APPROX_AREA_MAX_SHIFT_DEGREES from the stored one on an axis.
+ */
+const SEARCH_MARGIN_DEGREES = APPROX_AREA_MAX_SHIFT_DEGREES + 0.001;
+
+// The margin as a distance: its diagonal where a degree of longitude is longest.
+const SEARCH_MARGIN_METERS = Math.ceil(SEARCH_MARGIN_DEGREES * 111320 * Math.SQRT2);
+
+/** The box to read stored points from for a search by shown points inside `bounds`. */
+function widenBounds({ south, west, north, east }) {
+  return {
+    south: Math.max(south - SEARCH_MARGIN_DEGREES, -90),
+    west: west - SEARCH_MARGIN_DEGREES,
+    north: Math.min(north + SEARCH_MARGIN_DEGREES, 90),
+    east: east + SEARCH_MARGIN_DEGREES,
+  };
+}
+
+/** The radius to read stored points from for a search by shown points within `radiusMeters`. */
+function widenRadiusMeters(radiusMeters) {
+  // The extra 1% covers PostGIS measuring on the spheroid and haversine on a sphere.
+  return Math.ceil(radiusMeters * 1.01) + SEARCH_MARGIN_METERS;
+}
+
+/**
+ * The point area searches, distances and sort orders use for a listing, given
+ * its stored row and the copy the viewer is shown: the shown point, or for a
+ * listing shown without one (neighborhood_only, none) its approximate point,
+ * which is never returned. Null when the listing has no stored point (remote).
+ */
+function listingSearchPoint(stored, shown) {
+  if (shown.latitude != null && shown.longitude != null) {
+    return { latitude: shown.latitude, longitude: shown.longitude };
+  }
+  if (stored.latitude == null || stored.longitude == null) return null;
+  const point = { latitude: stored.latitude, longitude: stored.longitude };
+  approximate(point);
+  return point;
+}
+
+/**
+ * applyLocationPrivacyBatch, with each shown listing paired with its search point.
+ *
+ * @returns {Promise<Array<{ listing: object, point: ?{ latitude: number, longitude: number } }>>}
+ */
+async function applyLocationPrivacyWithSearchPoints(listings, viewerUserId, opts = {}) {
+  const shown = await applyLocationPrivacyBatch(listings, viewerUserId, opts);
+  return shown.map((listing, i) => ({ listing, point: listingSearchPoint(listings[i], listing) }));
+}
+
+function isPointInBounds(point, { south, west, north, east }) {
+  return point != null
+    && point.latitude >= south && point.latitude <= north
+    && point.longitude >= west && point.longitude <= east;
+}
+
 module.exports = {
   applyLocationPrivacy,
   applyLocationPrivacyBatch,
+  applyLocationPrivacyWithSearchPoints,
   fetchGrantsForViewer,
-  // Exported for testing
-  hashOffset,
+  isPointInBounds,
+  listingSearchPoint,
+  widenBounds,
+  widenRadiusMeters,
 };
