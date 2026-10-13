@@ -9,7 +9,7 @@ coordinates MUST pass through `applyLocationPrecision()` before serialization.**
 | Level              | Coordinate Treatment            | Address Text       | Map Pin         |
 |--------------------|---------------------------------|--------------------|-----------------|
 | `exact_place`      | Full lat/lng (6+ decimals)      | Full address       | Exact pin       |
-| `approx_area`      | Rounded to ~0.005 (~500m jitter)| City, State only   | Fuzzy circle    |
+| `approx_area`      | Grid cell + keyed ~500m offset (below) | City, State only | Fuzzy circle |
 | `neighborhood_only`| Rounded to ~0.01 (~1km)         | Neighborhood/City  | Area indicator  |
 | `none`             | `null` / omitted                | Omitted            | No pin          |
 
@@ -63,19 +63,47 @@ address.
 |--------------------------------|--------------------------------------------|---------------------|
 | Creator                        | exact (always)                              | `true`             |
 | Address grantee (in `ListingAddressGrant`) | exact                       | `true`             |
-| Browsing (not creator, no grant)| Respect `location_precision` field         | `false`            |
-| `reveal_policy = after_interest` | `approx_area` until grant issued          | `false` → `true`   |
+| Browsing, `approx_area`        | the approximate point (below)               | `false`            |
+| Browsing, `exact_place`        | the approximate point, unless `reveal_policy = public` | `false`  |
+| Browsing, `neighborhood_only`  | none; `location_name` kept                  | `false`            |
+| Browsing, `none`               | none; no name or address                    | `false`            |
 
 Default `location_precision`: **`approx_area`**
+
+Browsing viewers get the same point as posts: the grid-cell point under
+[Approximate-area points](#approximate-area-points). Every listing from one
+address shows one stable point, and it can't be recomputed without
+`LOCATION_JITTER_SECRET`. Listing responses are built without `reveal_policy`,
+so in practice an `exact_place` listing shows the approximate point to browsing
+viewers as well.
+
+**Searches use the shown point.** Every area filter, count, distance and sort
+order a viewer gets is computed from the point that viewer is shown, never from
+the stored point. The API reads stored points from the area widened by
+`MAX_DISPLAY_OFFSET_DEGREES` (for radius searches, the same margin in meters),
+applies location privacy, and keeps the
+listings whose shown point is inside the requested area. A listing shown without
+a point (`neighborhood_only`, `none`) is placed by its approximate point, which
+is never returned. Searches read at most 500 candidates near the area, newest
+first (1000 for counts). Specifically:
+
+- `GET /api/listings/browse`, `/discover`, `/autocomplete`, `/in-bounds`, `/nearby`,
+  `/search` and `/carousel` filter, measure `distance_meters` and order "nearest"
+  by shown points. The "nearest" cursor carries the shown distance.
+- Counts (`total_in_bounds`, `free_count`) and Discover's category sections are
+  counted on the points a signed-out viewer is shown, because they are cached
+  for everyone. Discover's cached sections are built as a signed-out viewer.
+- `nearest_activity_center` (empty map) is the nearest shown point among
+  listings shown on a map.
+- The `listing:new` socket event carries the point a signed-out viewer is shown.
+- `find_listings_in_bounds_v2` returns stored points to the API and only the
+  service role may run it.
 
 **Progressive disclosure:** Listing authors can explicitly reveal their address
 to a buyer via `POST /api/listings/:id/reveal-address`. This creates a row in
 the `ListingAddressGrant` table. The grantee then receives exact coordinates
 and `locationUnlocked: true`. Authors can list grants (`GET`) and revoke them
 (`DELETE`). A system message is posted to the listing chat upon grant creation.
-
-> Already partially enforced in `GET /api/listings/:id` (listings.js:1060-1073).
-> This document codifies and extends that behavior.
 
 ### Posts (Feed)
 
@@ -92,6 +120,38 @@ author set `location_precision = exact_place` and `reveal_policy = public`.
 The feed service and post detail endpoint enforce a floor of `approx_area`
 via `leastPrecise()`. Posts always return `locationUnlocked: false` for
 non-authors.
+
+A post made with the composer's "current location" target stores the device's
+GPS fix, which differs by a few metres from post to post. Non-authors see the
+grid-cell point described under [Approximate-area points](#approximate-area-points),
+so every post from the same spot shows the same pin.
+
+### Nearby Plans
+
+A plan is a `Post` (the public card) plus a `Plan` row. The exact place never
+goes on the Post: its point, venue name, street address and home live only on
+`Plan` (server-only table), and reach only the host and people who are in,
+through `PlanDetail` (`backend/services/plans/planService.js`).
+
+| Viewer | Point | Place, address, note, people |
+|--------|-------|------------------------------|
+| Host, people who are in | exact, in `place` | yes |
+| Anyone else allowed to see the plan | the public area point | never |
+
+- **The area point is stored on the Post** when the plan is made: the exact
+  point through `applyLocationPrecision` (`approx_area`, the grid-cell point
+  under [Approximate-area points](#approximate-area-points); `neighborhood_only`
+  for playdates). The map layer, lists, distance bands and radius filters all
+  use the stored area point, never the exact one, so moving the viewer's
+  point (or a reported GPS fix) around can't trilaterate the exact place.
+- **Distances are bands** (`under_1_mi` … `about_5_mi`, none past 10 miles).
+- **Plan posts are kept out of the generic surfaces:** `distribution_targets`
+  is `{plans}` and `visibility` is `private`, so the Pulse feed, the posts map
+  layer, other people's profile lists and `GET /api/posts/:id` don't show them
+  to anyone but the host.
+- **Playdates** don't exist for viewers without a verified address (or with
+  the `plans_playdates` flag off), and show the part of the day instead of the
+  time until the viewer is in.
 
 ### Saved / Viewing Places
 
@@ -115,9 +175,29 @@ leastPrecise(a, b)
 
 - If `isOwner === true` → return coordinates unchanged, `locationUnlocked: true`
 - If `precision === 'exact_place'` → return coordinates unchanged, `locationUnlocked: true`
-- If `precision === 'approx_area'` → jitter ±0.005 (~500m), strip address, `locationUnlocked: false`
+- If `precision === 'approx_area'` → grid-cell point (below), strip address, `locationUnlocked: false`
 - If `precision === 'neighborhood_only'` → round to 2 decimals (~1km), strip address, `locationUnlocked: false`
 - If `precision === 'none'` → null out lat/lng, strip address and location_name, `locationUnlocked: false`
+
+#### Approximate-area points
+
+`approx_area` never offsets the true point directly. It uses the fixed grid of
+0.005° cells (200 per degree; about 555 m north–south and 390 m east–west at
+45.6°N):
+
+1. Find the cell that holds the true point: `floor(lat × 200)`, `floor(lng × 200)`.
+2. Move the cell's center by up to ±0.005° on each axis. The offset is an HMAC
+   of the cell's indices keyed with `LOCATION_JITTER_SECRET` (falling back to
+   the service-role key), so it can't be recomputed without the secret.
+3. Round to 3 decimals.
+
+Every point in the same cell therefore gets the same displayed point, and it
+stays the same across reloads. Posting again from the same spot with a slightly
+different GPS fix shows the same pin and reveals no more than one post would;
+averaging many posts no longer narrows down where they were made. The displayed
+point is less than 0.008° from the true point on each axis. A place within a few
+metres of a cell edge can fall in either cell, so its posts may show two pins.
+Owners (`isOwner`) always keep their exact values.
 
 `backend/services/marketplace/locationPrivacy.js` exports:
 
@@ -126,9 +206,13 @@ applyLocationPrivacy(listing, viewerUserId, opts)
 // opts.grantedUserIds — Set of user IDs with address grants
 applyLocationPrivacyBatch(listings, viewerUserId, opts)
 // opts.grantsByListingId — Map<listingId, Set<userId>>
+applyLocationPrivacyWithSearchPoints(listings, viewerUserId, opts)
+// the shown listings, each with the point searches may use
+widenBounds(bounds), widenRadiusMeters(radiusMeters), isPointInBounds(point, bounds)
 ```
 
 - Grantees (users in `ListingAddressGrant`) get exact coords + `locationUnlocked: true`
+- Browsing viewers get the approximate point from `applyLocationPrecision`
 
 ### API Response Flag
 
@@ -149,14 +233,17 @@ All entity endpoints now include a `locationUnlocked` boolean:
 | `GET /api/posts/:id`                    | Post     | Fixed (permanent blur for non-authors) |
 | `GET /api/posts/map` (tasks layer)      | Post     | Fixed (`resolveGigPrecision` per gig) |
 | `GET /api/posts/map` (offers layer)     | Post     | Fixed (`resolveGigPrecision` per gig) |
+| `GET /api/posts/map` (posts layer)      | Post     | Fixed (displayed points only, see [Post Map Rules](#post-map-rules)) |
+| `GET /api/posts/map` (`nearest_activity_center`) | Post | Fixed (`findNearestMapPost`, see [Post Map Rules](#post-map-rules)) |
 | `GET /api/listings/:id`                 | Listing  | Fixed (grant-aware, `locationUnlocked`) |
-| `GET /api/listings` (browse)            | Listing  | Fixed |
-| `GET /api/listings/search` (RPC)        | Listing  | Fixed (viewer-aware) |
+| `GET /api/listings/browse`, `/discover`, `/autocomplete` | Listing | Fixed (filters, counts, distances and order on shown points) |
+| `GET /api/listings/search` (RPC)        | Listing  | Fixed (radius and distances on shown points) |
 | `GET /api/listings/search` (fallback)   | Listing  | Fixed (viewer-aware) |
 | `GET /api/listings/user/:userId`        | Listing  | Fixed (viewer-aware) |
-| `GET /api/listings/carousel`            | Listing  | Fixed (viewer-aware) |
-| `GET /api/listings/in-bounds`           | Listing  | Fixed (`applyLocationPrivacyBatch`) |
-| `GET /api/listings/nearby`              | Listing  | Fixed (`applyLocationPrivacyBatch`) |
+| `GET /api/listings/carousel`            | Listing  | Fixed (radius, ranking and one-per-seller on shown points) |
+| `GET /api/listings/in-bounds`           | Listing  | Fixed (box on shown points; stored points from the RPC) |
+| `GET /api/listings/nearby`              | Listing  | Fixed (radius, distances and order on shown points) |
+| `listing:new` socket event              | Listing  | Fixed (signed-out viewer's point) |
 | `POST /api/listings/:id/reveal-address` | Listing  | New (creates grant + chat msg) |
 | `GET /api/listings/:id/address-grants`  | Listing  | New (author-only) |
 | `DELETE /api/listings/:id/address-grants/:userId` | Listing | New (revoke grant) |
@@ -197,6 +284,28 @@ verified addresses must NEVER appear on public map surfaces:
 **Verification does NOT equal public visibility.** A verified home address
 confirms the user lives there; it does not make the location public.
 
+### Post Map Rules
+
+`GET /api/posts/map` works only with the points a viewer is shown, never with
+a post's stored point:
+
+- **Pins.** A post's pin is its displayed point for this viewer: the location
+  rule above, applied once (an author sees their own posts exactly). A post
+  with no displayed point (`none`) has no pin and isn't returned.
+- **Viewport.** A post is in a viewport only when its displayed point is. The
+  query searches stored points in the viewport widened by
+  `DISPLAYED_POINT_MAX_SHIFT_DEGREES` (0.01°, more than the rule ever moves a
+  point), then keeps the posts displayed inside the viewport itself.
+- **Empty-viewport hint (`nearest_activity_center`).** Sent only when the posts
+  layer was requested and came back empty. It is the displayed point of the
+  nearest post the viewer's map would show (same surface, post type, mute, hide,
+  block and politics filters), measured from the viewport center to displayed
+  points and searched within ±0.1°, ±1° and ±10°, then anywhere
+  (`feedService.findNearestMapPost`). Moving the map to it shows that post's pin.
+- `find_nearest_activity_center` has no post branch since
+  `20261013052405_nearest_activity_without_posts.sql`; it still serves gigs,
+  businesses and listings.
+
 ### Verified Coordinate Guard
 
 Rows with `geocode_mode: 'verified'` are protected from non-verified overwrites.
@@ -213,11 +322,13 @@ See `backend/utils/verifiedCoordinateGuard.js`:
 - [x] Gig nearby/in-bounds/browse enforce location privacy
 - [x] Post detail enforces permanent blur for non-authors (`leastPrecise`)
 - [x] Feed service enforces permanent blur on every row
+- [x] `approx_area` points come from the fixed grid cell, so repeat posts from one spot show one pin
 - [x] Posts/map tasks+offers layers enforce per-gig privacy
 - [x] Listing detail enforces location_precision + grant-awareness + `locationUnlocked`
 - [x] Listing browse enforces location_precision
 - [x] Listing search/user/carousel pass viewer ID for privacy
 - [x] Listing in-bounds/nearby enforce `applyLocationPrivacyBatch`
+- [x] Listing area filters, counts, distances, "nearest" order, the empty-map point and the new-listing event use shown points
 - [x] Listing address grants: create, list, revoke endpoints
 - [x] Business discovery returns exact (intentional, owner-controlled)
 - [x] Business map markers include `verified` flag based on address decision_status
@@ -229,3 +340,5 @@ See `backend/utils/verifiedCoordinateGuard.js`:
 - [x] Gig bid acceptance posts address system message to chat
 - [x] Listing reveal-address posts system message to chat
 - [x] `ListingAddressGrant` table with RLS policies created
+- [x] Posts map pins, viewport and empty-viewport hint use displayed points only
+- [x] Nearby Plans: the exact place only in `PlanDetail` (host and people who are in); the Post holds the area point; bands and filters use the area point

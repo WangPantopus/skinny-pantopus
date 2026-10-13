@@ -457,6 +457,14 @@ sealed interface ChatTimelineRow {
     data class TopicDivider(val id: String, val label: String) : ChatTimelineRow {
         override val rowId: String = "topic_$id"
     }
+
+    /**
+     * A line the server writes into a room (`message_type: "system"`), shown centered and quiet: a plan's chat
+     * says "Alex is on the way" and "Sam let in Priya + 1" this way (Nearby Plans board A4).
+     */
+    data class SystemNote(val id: String, val text: String) : ChatTimelineRow {
+        override val rowId: String = "system_$id"
+    }
 }
 
 @Immutable

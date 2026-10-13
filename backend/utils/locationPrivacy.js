@@ -22,13 +22,27 @@ const JITTER_KEY = process.env.LOCATION_JITTER_SECRET
   || 'pantopus-location-jitter-dev-only';
 
 /**
- * Two independent, stable pseudo-random values in [0, 1) for a coordinate pair.
+ * Grid for approximate-area points: 200 cells per degree, so each cell is 0.005°
+ * a side (about 555 m north–south and 390 m east–west at 45.6°N), about the size
+ * of the offset added inside it.
+ *
+ * Keying the offset on the exact coordinates gave every slightly different GPS
+ * fix its own independent offset. Someone who posted several times from home
+ * published several independent samples around it, and their average closed in
+ * on the home (about 100 m after 10 posts). Keying on the grid cell instead gives
+ * every point in a cell the same displayed point, so repeat posts from one place
+ * show one pin and reveal no more than a single post.
+ */
+const APPROX_AREA_CELLS_PER_DEGREE = 200;
+
+/**
+ * Two independent, stable pseudo-random values in [0, 1) for a grid cell.
  * @returns {[number, number]}
  */
-function keyedJitterSeeds(lat, lng) {
+function keyedJitterSeeds(cellLat, cellLng) {
   const digest = crypto
     .createHmac('sha256', JITTER_KEY)
-    .update(`${lat},${lng}`)
+    .update(`cell:${cellLat},${cellLng}`)
     .digest();
 
   return [
@@ -82,14 +96,20 @@ function applyLocationPrecision(obj, precision, isOwner = false, opts = {}) {
 
   switch (precision) {
     case 'approx_area': {
-      // Jitter ±0.005 (~500m), keyed so the offset is stable for a given
-      // coordinate pair but cannot be recomputed by anyone without the secret.
+      // Snap to the grid cell, then move the cell's center by up to ±0.005
+      // (~500m), keyed on the cell: the displayed point depends only on the
+      // cell, stays stable across reloads and can't be recomputed without the
+      // secret.
       if (lat != null && lng != null) {
-        const [seedLat, seedLng] = keyedJitterSeeds(lat, lng);
+        const cellLat = Math.floor(lat * APPROX_AREA_CELLS_PER_DEGREE);
+        const cellLng = Math.floor(lng * APPROX_AREA_CELLS_PER_DEGREE);
+        const [seedLat, seedLng] = keyedJitterSeeds(cellLat, cellLng);
+        const centerLat = (cellLat + 0.5) / APPROX_AREA_CELLS_PER_DEGREE;
+        const centerLng = (cellLng + 0.5) / APPROX_AREA_CELLS_PER_DEGREE;
         const jitterLat = (seedLat - 0.5) * 0.01;  // ±0.005
         const jitterLng = (seedLng - 0.5) * 0.01;
-        obj[latField] = Math.round((lat + jitterLat) * 1000) / 1000;  // 3 decimal places
-        obj[lngField] = Math.round((lng + jitterLng) * 1000) / 1000;
+        obj[latField] = Math.round((centerLat + jitterLat) * 1000) / 1000;  // 3 decimal places
+        obj[lngField] = Math.round((centerLng + jitterLng) * 1000) / 1000;
       }
       if (stripAddress) {
         obj.location_address = null;
@@ -127,6 +147,15 @@ function applyLocationPrecision(obj, precision, isOwner = false, opts = {}) {
 
   return obj;
 }
+
+/**
+ * No point applyLocationPrecision returns is further than this from the stored
+ * point on either axis, in degrees: approx_area moves it less than 0.008° and
+ * neighborhood_only at most 0.005°. A query that filters by area widens its box
+ * by this much and then keeps the rows whose displayed point is inside, so the
+ * viewer's box or radius never tests the stored point.
+ */
+const MAX_DISPLAY_OFFSET_DEGREES = 0.01;
 
 /**
  * Determine effective precision for a gig based on viewer relationship.
@@ -181,9 +210,20 @@ function leastPrecise(a, b) {
   return precisionRank(a) >= precisionRank(b) ? a : b;
 }
 
+/**
+ * The furthest, in degrees of latitude or longitude, that applyLocationPrecision
+ * moves a point: approx_area moves it less than 0.01° and neighborhood_only at
+ * most 0.005°. A query that must return everything displayed inside a box
+ * searches stored points in the box widened by this much, then keeps what is
+ * displayed inside the box itself.
+ */
+const DISPLAYED_POINT_MAX_SHIFT_DEGREES = 0.01;
+
 module.exports = {
   applyLocationPrecision,
+  MAX_DISPLAY_OFFSET_DEGREES,
   resolveGigPrecision,
   precisionRank,
   leastPrecise,
+  DISPLAYED_POINT_MAX_SHIFT_DEGREES,
 };
