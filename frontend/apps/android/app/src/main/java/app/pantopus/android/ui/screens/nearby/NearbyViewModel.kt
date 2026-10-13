@@ -5,7 +5,10 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.neighborhood.NeighborhoodCells
 import app.pantopus.android.data.api.models.neighborhood.NeighborhoodMeter
 import app.pantopus.android.data.api.net.displayMessage
+import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.neighborhood.NeighborhoodRepository
+import app.pantopus.android.data.store.StoreKind
+import app.pantopus.android.ui.components.RefreshNotice
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,6 +30,11 @@ class NearbyViewModel
     ) : ViewModel() {
         private val _state = MutableStateFlow<NearbyUiState>(NearbyUiState.Loading)
         val state: StateFlow<NearbyUiState> = _state.asStateFlow()
+        private var reading = false
+        private val _refreshing = MutableStateFlow(false)
+        val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+        private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
+        val refreshNotice: StateFlow<RefreshNotice?> = _refreshNotice.asStateFlow()
 
         /**
          * Tab entry and every return (Instant Screens): what's on screen stays and is read again quietly once the
@@ -48,21 +56,30 @@ class NearbyViewModel
         }
 
         private fun read(force: Boolean) {
+            if (reading) return
+            reading = true
+            _refreshing.value = force && _state.value is NearbyUiState.Loaded
             viewModelScope.launch {
-                val meter = viewModelScope.async { repository.meterStored(force) }
-                val cells = viewModelScope.async { repository.cellsStored(force) }
-                val meterStored = meter.await()
-                val cellsStored = cells.await()
-                val data = meterStored.data
-                when {
-                    data != null -> _state.value = NearbyUiState.Loaded(meter = data, cells = cellsStored.data?.takeIf(::isReady))
-                    // A failed read keeps what's on screen; only an empty screen shows the error.
-                    _state.value !is NearbyUiState.Loaded ->
-                        _state.value =
-                            NearbyUiState.Error(
-                                meterStored.failure?.displayMessage("We couldn't load your neighborhood meter.")
-                                    ?: "We couldn't load your neighborhood meter.",
-                            )
+                try {
+                    val meter = async { repository.meterStored(force) }
+                    val cells = async { repository.cellsStored(force) }
+                    val meterStored = meter.await()
+                    val cellsStored = cells.await()
+                    val failedCopy = listOf(meterStored, cellsStored).firstOrNull { it.showsRefreshFailure(StoreKind.NEARBY) }
+                    _refreshNotice.value = failedCopy?.let { RefreshNotice(it.fetchedAt, ::refresh) }
+                    val data = meterStored.data
+                    when {
+                        data != null -> _state.value = NearbyUiState.Loaded(meter = data, cells = cellsStored.data?.takeIf(::isReady))
+                        _state.value !is NearbyUiState.Loaded || meterStored.failure.refusesStoredCopy ->
+                            _state.value =
+                                NearbyUiState.Error(
+                                    meterStored.failure?.displayMessage("We couldn't load your neighborhood meter.")
+                                        ?: "We couldn't load your neighborhood meter.",
+                                )
+                    }
+                } finally {
+                    reading = false
+                    _refreshing.value = false
                 }
             }
         }
