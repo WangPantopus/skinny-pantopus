@@ -7,6 +7,7 @@ import app.pantopus.android.data.api.models.identity.HomeMirrorDto
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.identity.IdentityCenterRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -42,21 +43,27 @@ class PlacePrivacyMirrorViewModel
         private val _state = MutableStateFlow<PrivacyMirrorUiState>(PrivacyMirrorUiState.Loading)
         val state: StateFlow<PrivacyMirrorUiState> = _state.asStateFlow()
 
-        fun load() {
-            if (_state.value is PrivacyMirrorUiState.Loaded) return
-            refresh()
+        private var readJob: Job? = null
+
+        fun load() = refresh()
+
+        fun suspendContent() {
+            readJob?.cancel()
+            _state.value = PrivacyMirrorUiState.Loading
         }
 
         fun refresh() {
+            readJob?.cancel()
             _state.value = PrivacyMirrorUiState.Loading
-            viewModelScope.launch {
-                _state.value =
-                    when (val r = repository.homeMirror(homeId)) {
-                        is NetworkResult.Success -> PrivacyMirrorUiState.Loaded(r.data)
-                        is NetworkResult.Failure ->
-                            PrivacyMirrorUiState.Error("We couldn't load the preview. Only a member of this home can see it.")
-                    }
-            }
+            readJob =
+                viewModelScope.launch {
+                    _state.value =
+                        when (val r = repository.homeMirror(homeId)) {
+                            is NetworkResult.Success -> PrivacyMirrorUiState.Loaded(r.data)
+                            is NetworkResult.Failure ->
+                                PrivacyMirrorUiState.Error("We couldn't load the preview. Only a member of this home can see it.")
+                        }
+                }
         }
     }
 
