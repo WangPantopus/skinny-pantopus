@@ -68,7 +68,13 @@ class ChatRepository
 
         /** An own edit to a conversation (contract §8: a message sent or read, a chat created): the list reads again. */
         private fun <T> NetworkResult<T>.chatsChanged(): NetworkResult<T> =
-            also { if (it is NetworkResult.Success) store.markEdited(StoreTopics.CHATS) }
+            also {
+                if (it is NetworkResult.Success) {
+                    store.markEdited(StoreTopics.CHAT_LIST)
+                    // Reading/sending a message must not cancel a history access check already in flight.
+                    store.markStale(StoreTopics.CHATS)
+                }
+            }
 
         suspend fun unifiedConversations(
             limit: Int = 100,
@@ -127,6 +133,19 @@ class ChatRepository
             otherUserId: String,
             topicId: String?,
         ): ChatMessagesResponse? = store.peek(StoreKeys.conversationMessages(otherUserId, topicId, HISTORY_LIMIT)).data
+
+        fun roomHistoryUpdater(roomId: String): (ChatMessagesResponse) -> Unit =
+            historyUpdater(StoreKeys.roomMessages(roomId, HISTORY_LIMIT))
+
+        fun conversationHistoryUpdater(
+            otherUserId: String,
+            topicId: String?,
+        ): (ChatMessagesResponse) -> Unit = historyUpdater(StoreKeys.conversationMessages(otherUserId, topicId, HISTORY_LIMIT))
+
+        private fun historyUpdater(key: StoreKey<ChatMessagesResponse>): (ChatMessagesResponse) -> Unit {
+            val update = store.memoryUpdater(key)
+            return { response -> update(boundedHistory(response)) }
+        }
 
         /** Pagination and reconnect bypass the first-page store; an access refusal still retires that copy. */
         private fun NetworkResult<ChatMessagesResponse>.forgetRefusedHistory(
