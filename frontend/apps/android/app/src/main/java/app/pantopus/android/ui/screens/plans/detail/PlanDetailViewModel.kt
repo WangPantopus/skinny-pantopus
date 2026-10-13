@@ -191,7 +191,7 @@ class PlanDetailViewModel
                     it.copy(
                         notice =
                             when (result) {
-                                is NetworkResult.Success -> "Thanks. Pantopus will look at this plan."
+                                is NetworkResult.Success -> "Thanks. We'll look into it."
                                 is NetworkResult.Failure -> result.error.planMessage
                             },
                     )
