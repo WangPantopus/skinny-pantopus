@@ -219,6 +219,22 @@ class ScreenStore
             _changes.update { it + 1 }
         }
 
+        /** An own write without a full replacement: retire earlier reads and saved copies before revalidation. */
+        fun markEdited(topic: String) {
+            synchronized(slots) {
+                slots.values.filter { it.key.matches(topic) }.forEach { slot ->
+                    slot.edits++
+                    slot.markStaleLocked()
+                    slot.etag = null
+                    slot.inFlight?.cancel()
+                    slot.inFlight = null
+                    slot.state.value = slot.state.value.copy(refreshing = false)
+                    deleteSaved(slot.key.id)
+                }
+            }
+            _changes.update { it + 1 }
+        }
+
         /** Capture before an asynchronous save, so its reply cannot populate another account or a cleared cache. */
         fun <T : Any> writer(key: StoreKey<T>): (T) -> Unit {
             val account = accountId() ?: return {}
@@ -482,6 +498,11 @@ class ScreenStore
                             }
                     }
                 if (BuildConfig.DEBUG) Timber.tag("ISStore").d("%s → %s", slot.key.id.replace(UUID, ":id"), slot.state.value.describe())
+                // The visible reader may have consumed a topic signal by joining this older flight. Release it
+                // before notifying again, so that reader rechecks the newer version instead of joining it twice.
+                // No signal without a newer mark: failed reads do not create a retry loop.
+                slot.inFlight = null
+                if (markedMeanwhile && !slot.state.value.failure.refusesStoredCopy) _changes.update { it + 1 }
             }
         }
 
