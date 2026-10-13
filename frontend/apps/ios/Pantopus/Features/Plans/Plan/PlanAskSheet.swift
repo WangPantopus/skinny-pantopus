@@ -90,7 +90,7 @@ struct PlanAskSheet: View {
 
     /// "Seahawks game · Sun 1:25 PM", or the part of the day for a playdate.
     private var subtitle: String {
-        let short = card.details?.game?.label.map { "\($0) game" } ?? card.title
+        let short = card.details?.game.map { "\($0.label) game" } ?? card.title
         let calendar = PlanFormat.calendar(for: card.timezone)
         guard let start = card.startsAtDate else {
             return "\(short) · \(PlanFormat.dayPartPhrase(card.dayPart, day: card.startsOnDate, calendar: calendar))"

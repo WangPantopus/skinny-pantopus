@@ -148,7 +148,7 @@ struct PlanRequestsScreen: View {
 
     private func summary(_ card: PlanCardDTO) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("\(card.details?.game?.label.map { "\($0) game" } ?? card.title) · \(PlanScreenLines.when(card))")
+            Text("\(card.details?.game.map { "\($0.label) game" } ?? card.title) · \(PlanScreenLines.when(card))")
                 .planFont(.small)
                 .monospacedDigit()
                 .foregroundStyle(Theme.Color.appTextSecondary)

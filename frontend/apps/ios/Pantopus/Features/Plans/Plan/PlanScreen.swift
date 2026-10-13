@@ -277,7 +277,7 @@ struct PlanScreen: View {
 
     @ViewBuilder private var toastView: some View {
         if let toast {
-            ToastView(message: toast)
+            ToastView(message: ToastMessage(text: toast))
                 .padding(.bottom, 96)
                 .task(id: toast) {
                     try? await Task.sleep(for: .seconds(2.5))
