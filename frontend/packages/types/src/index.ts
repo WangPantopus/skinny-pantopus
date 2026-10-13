@@ -74,6 +74,7 @@ export type {
   AIDraftType,
   AIChatDraft,
   SupportTrainChatDraft,
+  PickupScheduleChatDraft,
   AIChatMessage,
   AIConversation,
   AIStreamEvent,

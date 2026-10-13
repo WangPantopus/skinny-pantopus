@@ -5059,6 +5059,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onUseAIDraft = { draft ->
                             navController.navigate(routeForAIDraft(draft))
                         },
+                        // A saved pickup-days card opens Today, where the days now show.
+                        onOpenToday = { navController.navigateToRootTab(PantopusRoute.Today) },
                         onOpenGig = { gigId -> navController.navigate(ChildRoutes.gigDetail(gigId)) },
                         onOpenListing = { listingId -> navController.navigate(ChildRoutes.listingDetail(listingId)) },
                         arrivalRoomId = arrivalRoomId,

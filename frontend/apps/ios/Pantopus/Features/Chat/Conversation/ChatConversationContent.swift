@@ -271,6 +271,27 @@ public struct ChatAIDraftCard: Identifiable, Sendable, Hashable {
     public let valid: Bool
     /// What "Use draft" carries into the composer.
     public var prefill: ChatAIDraftPrefill?
+    /// A pickup-days card's schedule and where its Save stands.
+    public var pickup: ChatAIPickupSchedule?
+}
+
+/// The household's pickup days as the assistant read them. Save writes them
+/// through `PUT /api/homes/:id/calendar/pickup-day`, as the Today editor does.
+public struct ChatAIPickupSchedule: Sendable, Hashable {
+    public let homeId: String
+    /// MO TU WE TH FR SA SU
+    public let garbageWeekday: String
+    /// `not_set`, `weekly` or `biweekly`.
+    public let recyclingFrequency: String
+    public let recyclingNextDate: String?
+    /// Nil until the person taps Save.
+    public var save: ChatAIPickupSave?
+}
+
+public enum ChatAIPickupSave: Sendable, Hashable {
+    case saving
+    case saved
+    case failed(String)
 }
 
 /// A draft's text for the composer it opens: a post's body (with its type

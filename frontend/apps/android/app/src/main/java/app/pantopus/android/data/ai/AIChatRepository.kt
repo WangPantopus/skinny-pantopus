@@ -9,6 +9,7 @@ import app.pantopus.android.data.api.services.AIApi
 import app.pantopus.android.data.auth.TokenStorage
 import app.pantopus.android.ui.screens.inbox.conversation.ChatAIDraftCard
 import app.pantopus.android.ui.screens.inbox.conversation.ChatAIDraftPrefill
+import app.pantopus.android.ui.screens.inbox.conversation.ChatAIPickupSchedule
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -28,6 +29,25 @@ import javax.inject.Singleton
 
 /** The hourly limit (backend/middleware/rateLimiter.js aiChatLimiter). */
 private const val HTTP_TOO_MANY_REQUESTS = 429
+
+/** Draft cards this app shows beyond the original ones (`cards` in the chat request). */
+private val AI_CARDS = listOf("pickup_schedule")
+
+/** A pickup-days card's schedule; null for other drafts, or when the draft lacks the home or the garbage day. */
+private fun pickupOf(
+    type: String,
+    draft: JSONObject,
+): ChatAIPickupSchedule? {
+    if (type != "pickup_schedule") return null
+    val homeId = draft.text("home_id") ?: return null
+    val weekday = draft.text("garbage_weekday") ?: return null
+    return ChatAIPickupSchedule(
+        homeId = homeId,
+        garbageWeekday = weekday,
+        recyclingFrequency = draft.text("recycling_frequency") ?: "not_set",
+        recyclingNextDate = draft.text("recycling_next_date"),
+    )
+}
 
 /** A text field, or null when it is missing, blank or JSON null (`optString` reads JSON null as "null"). */
 private fun JSONObject.text(name: String): String? = if (isNull(name)) null else optString(name).trim().ifEmpty { null }
@@ -98,6 +118,9 @@ class AIChatRepository
                         .apply {
                             if (!conversationId.isNullOrBlank()) put("conversationId", conversationId)
                             if (images.isNotEmpty()) put("images", org.json.JSONArray(images))
+                            // The cards this app shows beyond the original ones; the server offers
+                            // the matching tools only to apps that list them.
+                            put("cards", org.json.JSONArray(AI_CARDS))
                         }
                         .toString()
                         .toRequestBody("application/json".toMediaType())
@@ -209,6 +232,7 @@ class AIChatRepository
                 priceLabel = price,
                 valid = valid,
                 prefill = prefill,
+                pickup = pickupOf(type, draft),
             )
         }
     }

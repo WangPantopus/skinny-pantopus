@@ -254,6 +254,30 @@ data class ChatAIDraftPrefill(
     val title: String? = null,
 )
 
+/**
+ * The household's pickup days as the assistant read them. Save writes them through
+ * `PUT /api/homes/:id/calendar/pickup-day`, as the Today editor does.
+ */
+@Immutable
+data class ChatAIPickupSchedule(
+    val homeId: String,
+    /** MO TU WE TH FR SA SU */
+    val garbageWeekday: String,
+    /** `not_set`, `weekly` or `biweekly`. */
+    val recyclingFrequency: String,
+    val recyclingNextDate: String? = null,
+    /** Null until the person taps Save. */
+    val save: ChatAIPickupSave? = null,
+)
+
+sealed interface ChatAIPickupSave {
+    data object Saving : ChatAIPickupSave
+
+    data object Saved : ChatAIPickupSave
+
+    data class Failed(val message: String) : ChatAIPickupSave
+}
+
 @Immutable
 data class ChatAIDraftCard(
     val id: String,
@@ -264,6 +288,8 @@ data class ChatAIDraftCard(
     val valid: Boolean = true,
     /** What "Use draft" carries into the composer. */
     val prefill: ChatAIDraftPrefill? = null,
+    /** A pickup-days card's schedule and where its Save stands. */
+    val pickup: ChatAIPickupSchedule? = null,
 ) {
     /** Launch cut: a task (#4) or listing (#3) draft opens a composer hidden for the first launch. */
     val isLaunchAvailable: Boolean

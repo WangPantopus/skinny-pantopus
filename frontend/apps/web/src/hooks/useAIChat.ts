@@ -4,6 +4,10 @@ import { useState, useCallback, useRef } from 'react';
 import * as api from '@pantopus/api';
 import type { AIChatMessage, AIChatDraft } from '@pantopus/types';
 
+// The draft cards this app shows beyond the original ones (AIDraftCard); the
+// server offers the matching tools only to apps that list them.
+const AI_CARDS = ['pickup_schedule'];
+
 /**
  * Hook for the AI Chat Agent with SSE streaming.
  *
@@ -65,6 +69,7 @@ export function useAIChat() {
           message: text,
           conversationId: conversationId || undefined,
           coarseLocation,
+          cards: AI_CARDS,
         },
         {
           onConversation: (data) => {

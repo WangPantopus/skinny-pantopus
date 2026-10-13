@@ -1227,6 +1227,15 @@ extension ChatConversationView {
             },
             onReact: { reaction in Task { await viewModel.react(messageId: bubble.id, reaction: reaction) } },
             onUseAIDraft: { draft in
+                // A pickup-days card saves here; once saved it opens Today, where the days show.
+                if let pickup = draft.pickup {
+                    if pickup.save == .saved, let today = URL(string: "pantopus://today") {
+                        DeepLinkRouter.shared.handle(url: today)
+                    } else {
+                        Task { await viewModel.savePickupSchedule(draft) }
+                    }
+                    return
+                }
                 // Leave without the keyboard up: coming back with it still raised
                 // hides the composer behind it.
                 UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
@@ -3134,10 +3143,18 @@ private struct ChatBubbleRow: View {
                     .foregroundStyle(Theme.Color.appText)
                     .lineLimit(2)
                 if let summary = draft.summary, summary != draft.title {
+                    // In the scrolling thread SwiftUI otherwise settles on one line.
                     Text(summary)
                         .font(.system(size: 11.5))
                         .foregroundStyle(Theme.Color.appTextSecondary)
-                        .lineLimit(3)
+                        .lineLimit(draft.pickup == nil ? 3 : nil)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if case let .failed(message) = draft.pickup?.save {
+                    Text(message)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Theme.Color.error)
+                        .accessibilityIdentifier("chatAIPickupError")
                 }
                 if let price = draft.priceLabel {
                     Text(price)
@@ -3158,6 +3175,7 @@ private struct ChatBubbleRow: View {
                         .frame(minHeight: 34)
                     }
                     .buttonStyle(.plain)
+                    .disabled(draft.pickup?.save == .saving)
                     .accessibilityIdentifier("chatAIDraftUse_\(draft.type)")
                 }
             }
@@ -3178,6 +3196,7 @@ private struct ChatBubbleRow: View {
             case "listing": "Listing Draft"
             case "post": "Post Draft"
             case "support_train": "Support Train"
+            case "pickup_schedule": "Pickup days"
             case "mail_summary": "Mail Summary"
             default: "Draft"
             }
@@ -3189,6 +3208,13 @@ private struct ChatBubbleRow: View {
             case "listing": "Use in listing composer"
             case "post": "Use in Pulse composer"
             case "support_train": "Set up the Support Train"
+            case "pickup_schedule":
+                switch draft.pickup?.save {
+                case .saving: "Saving…"
+                case .saved: "Saved. See them on Today"
+                case .failed: "Try again"
+                case nil: "Save to my home"
+                }
             default: "Use draft"
             }
         }
@@ -3199,6 +3225,7 @@ private struct ChatBubbleRow: View {
             case "listing": .tag
             case "post": .pencil
             case "support_train": .utensils
+            case "pickup_schedule": .calendar
             case "mail_summary": .mailbox
             default: .sparkles
             }
@@ -3206,7 +3233,7 @@ private struct ChatBubbleRow: View {
 
         private var accent: Color {
             switch draft.type {
-            case "listing": Theme.Color.success
+            case "listing", "pickup_schedule": Theme.Color.success
             case "mail_summary": Theme.Color.warning
             default: Theme.Color.magic
             }
@@ -3214,7 +3241,7 @@ private struct ChatBubbleRow: View {
 
         private var background: Color {
             switch draft.type {
-            case "listing": Theme.Color.successBg
+            case "listing", "pickup_schedule": Theme.Color.successBg
             case "mail_summary": Theme.Color.warningBg
             default: Theme.Color.magicBg
             }

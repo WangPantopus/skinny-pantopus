@@ -41,14 +41,20 @@ public struct ChatInitialTopic: Sendable, Hashable {
 }
 
 public struct AIChatStreamRequest: Encodable, Sendable {
+    /// Draft cards this app shows beyond the original ones; the server offers
+    /// the matching tools only to apps that list them.
+    public static let supportedCards = ["pickup_schedule"]
+
     public let message: String
     public let conversationId: String?
     public let images: [String]?
+    public let cards: [String]
 
     public init(message: String, conversationId: String? = nil, images: [String]? = nil) {
         self.message = message
         self.conversationId = conversationId
         self.images = images
+        cards = Self.supportedCards
     }
 }
 
@@ -199,7 +205,20 @@ final class AIChatStreamClient: AIChatStreaming, @unchecked Sendable {
             summary: summary,
             priceLabel: price,
             valid: valid,
-            prefill: prefill
+            prefill: prefill,
+            pickup: type == "pickup_schedule" ? pickupSchedule(from: draft) : nil
+        )
+    }
+
+    /// A pickup-days card's schedule, or nil when the draft lacks the home or the garbage day.
+    static func pickupSchedule(from draft: [String: Any]) -> ChatAIPickupSchedule? {
+        guard let homeId = draft["home_id"] as? String, !homeId.isEmpty,
+              let weekday = draft["garbage_weekday"] as? String, !weekday.isEmpty else { return nil }
+        return ChatAIPickupSchedule(
+            homeId: homeId,
+            garbageWeekday: weekday,
+            recyclingFrequency: (draft["recycling_frequency"] as? String) ?? "not_set",
+            recyclingNextDate: draft["recycling_next_date"] as? String
         )
     }
 
@@ -1257,6 +1276,44 @@ public final class ChatConversationViewModel {
         socketTasks.forEach { $0.cancel() }
         socketTasks.removeAll()
         activeThreadTracker.clear(owner: ObjectIdentifier(self))
+    }
+
+    // MARK: - Pickup-days card
+
+    /// A pickup-days card's Save: the household's days through the pickup
+    /// calendar route, as the Today editor saves them. The card shows how it went.
+    public func savePickupSchedule(_ card: ChatAIDraftCard) async {
+        guard let pickup = card.pickup, pickup.save != .saving, pickup.save != .saved else { return }
+        updatePickup(card.id) { $0.save = .saving }
+        let request = SetPickupDayRequest(
+            weekday: pickup.garbageWeekday,
+            recyclingFrequency: pickup.recyclingFrequency,
+            recyclingNextDate: pickup.recyclingFrequency == "not_set" ? nil : pickup.recyclingNextDate
+        )
+        do {
+            let _: AddressCalendarResponse = try await api.request(
+                AddressCalendarEndpoints.setPickupDay(homeId: pickup.homeId, request: request)
+            )
+            updatePickup(card.id) { $0.save = .saved }
+        } catch let APIError.forbidden(message) {
+            updatePickup(card.id) {
+                $0.save = .failed(message ?? "You don't have permission to change this household's pickup schedule.")
+            }
+        } catch {
+            updatePickup(card.id) { $0.save = .failed("Couldn't save your pickup days. Try again.") }
+        }
+    }
+
+    private func updatePickup(_ cardId: String, _ change: (inout ChatAIPickupSchedule) -> Void) {
+        guard let messageId = aiDraftsByMessageId.first(where: { $0.value.contains { $0.id == cardId } })?.key else { return }
+        aiDraftsByMessageId[messageId] = aiDraftsByMessageId[messageId]?.map { card in
+            guard card.id == cardId, var pickup = card.pickup else { return card }
+            change(&pickup)
+            var updated = card
+            updated.pickup = pickup
+            return updated
+        }
+        rebuild()
     }
 
     // MARK: - Typing (A15)

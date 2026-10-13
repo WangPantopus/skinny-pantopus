@@ -201,7 +201,7 @@ export interface NeighborhoodPulse {
 
 // ─── AI Chat ─────────────────────────────────────────────────
 
-export type AIDraftType = 'gig' | 'listing' | 'post' | 'mail_summary' | 'support_train';
+export type AIDraftType = 'gig' | 'listing' | 'post' | 'mail_summary' | 'support_train' | 'pickup_schedule';
 
 /** A Support Train the assistant has the story for; the start flow drafts the rest. */
 export interface SupportTrainChatDraft {
@@ -209,9 +209,23 @@ export interface SupportTrainChatDraft {
   support_modes_requested?: string[];
 }
 
+/**
+ * A household's pickup days as the assistant read them. Save writes them through
+ * PUT /api/homes/:id/calendar/pickup-day, as the Today editor does.
+ */
+export interface PickupScheduleChatDraft {
+  home_id: string;
+  title: string;
+  /** "Garbage every Tuesday. Recycling every other Tuesday, next on Tuesday, October 20." */
+  summary: string;
+  garbage_weekday: 'MO' | 'TU' | 'WE' | 'TH' | 'FR' | 'SA' | 'SU';
+  recycling_frequency: 'not_set' | 'weekly' | 'biweekly';
+  recycling_next_date: string | null;
+}
+
 export interface AIChatDraft {
   type: AIDraftType;
-  draft: GigDraft | ListingDraft | PostDraft | MailSummary | SupportTrainChatDraft;
+  draft: GigDraft | ListingDraft | PostDraft | MailSummary | SupportTrainChatDraft | PickupScheduleChatDraft;
   valid: boolean;
 }
 
@@ -250,6 +264,8 @@ export interface AIChatRequest {
   conversationId?: string;
   coarseLocation?: { city?: string; state?: string };
   images?: string[];
+  /** Draft cards this app can show beyond the original ones, e.g. 'pickup_schedule'. */
+  cards?: string[];
 }
 
 export interface AIDraftGigRequest {

@@ -16,9 +16,11 @@ import app.pantopus.android.data.api.models.chats.FindOrCreateTopicBody
 import app.pantopus.android.data.api.models.chats.SendChatMessageBody
 import app.pantopus.android.data.api.models.chats.resolvedText
 import app.pantopus.android.data.api.models.chats.resolvedType
+import app.pantopus.android.data.api.models.place.SetPickupDayRequest
 import app.pantopus.android.data.api.models.profile.UserReportRequest
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.api.net.readableForbiddenMessage
 import app.pantopus.android.data.api.services.GeoApi
 import app.pantopus.android.data.blocks.BlocksRepository
@@ -29,6 +31,7 @@ import app.pantopus.android.data.links.LinkPreview
 import app.pantopus.android.data.links.LinkPreviewRepository
 import app.pantopus.android.data.listings.ListingsRepository
 import app.pantopus.android.data.location.LocationProvider
+import app.pantopus.android.data.place.PlaceRepository
 import app.pantopus.android.data.profile.UserReportsRepository
 import app.pantopus.android.data.realtime.SocketManager
 import app.pantopus.android.data.upload.UploadFile
@@ -74,6 +77,7 @@ class ChatConversationViewModel
         private val linkPreviewRepo: LinkPreviewRepository,
         private val aiSession: AIConversationSession,
         private val activeChatThread: ActiveChatThread,
+        private val placeRepository: PlaceRepository,
     ) : ViewModel() {
         private val _state = MutableStateFlow<ChatConversationUiState>(ChatConversationUiState.Loading)
         val state: StateFlow<ChatConversationUiState> = _state.asStateFlow()
@@ -391,6 +395,43 @@ class ChatConversationViewModel
                         Timber.w("restore AI conversation failed: ${result.error.message}")
                 }
             }
+        }
+
+        /**
+         * A pickup-days card's Save: the household's days through the pickup calendar
+         * route, exactly as the Today editor saves them. The card shows how it went.
+         */
+        fun savePickupSchedule(card: ChatAIDraftCard) {
+            val pickup = card.pickup ?: return
+            if (pickup.save == ChatAIPickupSave.Saving || pickup.save == ChatAIPickupSave.Saved) return
+            updatePickup(card.id) { it.copy(save = ChatAIPickupSave.Saving) }
+            viewModelScope.launch {
+                val request =
+                    SetPickupDayRequest(
+                        weekday = pickup.garbageWeekday,
+                        recyclingFrequency = pickup.recyclingFrequency,
+                        recyclingNextDate = pickup.recyclingNextDate.takeIf { pickup.recyclingFrequency != "not_set" },
+                    )
+                val save =
+                    when (val result = placeRepository.setPickupDay(pickup.homeId, request)) {
+                        is NetworkResult.Success -> ChatAIPickupSave.Saved
+                        is NetworkResult.Failure ->
+                            ChatAIPickupSave.Failed(result.error.displayMessage("Couldn't save your pickup days. Try again."))
+                    }
+                updatePickup(card.id) { it.copy(save = save) }
+            }
+        }
+
+        private fun updatePickup(
+            cardId: String,
+            change: (ChatAIPickupSchedule) -> ChatAIPickupSchedule,
+        ) {
+            val messageId = aiDraftsByMessageId.entries.firstOrNull { (_, cards) -> cards.any { it.id == cardId } }?.key ?: return
+            aiDraftsByMessageId[messageId] =
+                aiDraftsByMessageId[messageId].orEmpty().map { card ->
+                    if (card.id == cardId) card.copy(pickup = card.pickup?.let(change)) else card
+                }
+            rebuild()
         }
 
         /**

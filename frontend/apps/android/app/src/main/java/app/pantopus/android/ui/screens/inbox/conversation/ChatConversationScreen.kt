@@ -166,6 +166,7 @@ fun ChatConversationScreen(
     chrome: ChatConversationChrome = ChatConversationChrome(),
     onBack: () -> Unit = {},
     onUseAIDraft: (ChatAIDraftCard) -> Unit = {},
+    onOpenToday: () -> Unit = {},
     onOpenGig: (String) -> Unit = {},
     onOpenListing: (String) -> Unit = {},
     onContentLoaded: () -> Unit = {},
@@ -439,7 +440,14 @@ fun ChatConversationScreen(
                             },
                             selectedMessageIds = if (isSelectionMode) selectedMessageIds else emptySet(),
                             onBubbleTap = { if (isSelectionMode) viewModel.toggleSelection(it.id) },
-                            onUseAIDraft = onUseAIDraft,
+                            // A pickup-days card saves here; once saved it opens Today. Other drafts open composers.
+                            onUseAIDraft = { draft ->
+                                when {
+                                    draft.pickup == null -> onUseAIDraft(draft)
+                                    draft.pickup.save == ChatAIPickupSave.Saved -> onOpenToday()
+                                    else -> viewModel.savePickupSchedule(draft)
+                                }
+                            },
                             onOpenGig = onOpenGig,
                             onOpenListing = onOpenListing,
                             onOpenLocation = { lat, lng ->
@@ -4398,13 +4406,13 @@ private fun AiDraftCard(
 ) {
     val accent =
         when (draft.type) {
-            "listing" -> PantopusColors.success
+            "listing", "pickup_schedule" -> PantopusColors.success
             "mail_summary" -> PantopusColors.warning
             else -> PantopusColors.magic
         }
     val background =
         when (draft.type) {
-            "listing" -> PantopusColors.successBg
+            "listing", "pickup_schedule" -> PantopusColors.successBg
             "mail_summary" -> PantopusColors.warningBg
             else -> PantopusColors.magicBg
         }
@@ -4414,6 +4422,7 @@ private fun AiDraftCard(
             "listing" -> PantopusIcon.Tag
             "post" -> PantopusIcon.Pencil
             "support_train" -> PantopusIcon.Utensils
+            "pickup_schedule" -> PantopusIcon.Calendar
             "mail_summary" -> PantopusIcon.Mailbox
             else -> PantopusIcon.Sparkles
         }
@@ -4423,6 +4432,7 @@ private fun AiDraftCard(
             "listing" -> "Listing Draft"
             "post" -> "Post Draft"
             "support_train" -> "Support Train"
+            "pickup_schedule" -> "Pickup days"
             "mail_summary" -> "Mail Summary"
             else -> "Draft"
         }
@@ -4462,9 +4472,12 @@ private fun AiDraftCard(
                 text = draft.summary,
                 fontSize = 11.5.sp,
                 color = PantopusColors.appTextSecondary,
-                maxLines = 3,
+                maxLines = if (draft.pickup != null) Int.MAX_VALUE else 3,
                 overflow = TextOverflow.Ellipsis,
             )
+        }
+        (draft.pickup?.save as? ChatAIPickupSave.Failed)?.let {
+            Text(text = it.message, fontSize = 11.5.sp, color = PantopusColors.error, modifier = Modifier.testTag("chatAIPickupError"))
         }
         draft.priceLabel?.let {
             Text(text = it, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = accent)
@@ -4476,23 +4489,30 @@ private fun AiDraftCard(
                 modifier =
                     Modifier
                         .heightIn(min = 34.dp)
-                        .clickable { onUse(draft) },
+                        .clickable(enabled = draft.pickup?.save != ChatAIPickupSave.Saving) { onUse(draft) },
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(5.dp),
             ) {
-                Text(text = draftActionTitle(draft.type), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = accent)
+                Text(text = draftActionTitle(draft), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = accent)
                 PantopusIconImage(icon = PantopusIcon.ArrowRight, contentDescription = null, size = 11.dp, tint = accent)
             }
         }
     }
 }
 
-private fun draftActionTitle(type: String): String =
-    when (type) {
+private fun draftActionTitle(draft: ChatAIDraftCard): String =
+    when (draft.type) {
         "gig" -> "Use in task composer"
         "listing" -> "Use in listing composer"
         "post" -> "Use in Pulse composer"
         "support_train" -> "Set up the Support Train"
+        "pickup_schedule" ->
+            when (draft.pickup?.save) {
+                ChatAIPickupSave.Saving -> "Saving…"
+                ChatAIPickupSave.Saved -> "Saved. See them on Today"
+                is ChatAIPickupSave.Failed -> "Try again"
+                null -> "Save to my home"
+            }
         else -> "Use draft"
     }
 
