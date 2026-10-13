@@ -40,7 +40,10 @@ CREATE TABLE public."Plan" (
   place_address text CHECK (place_address IS NULL OR char_length(place_address) <= 300),
   place_latitude double precision NOT NULL CHECK (place_latitude BETWEEN -90 AND 90),
   place_longitude double precision NOT NULL CHECK (place_longitude BETWEEN -180 AND 180),
-  place_home_id uuid REFERENCES public."Home"(id) ON DELETE SET NULL,
+  -- The host's home for a plan at home. No foreign key on purpose: the plan keeps
+  -- its own copy of the point and address, and Home deletion stays governed by
+  -- its explicit policy (home_delete_eligibility), which this table doesn't join.
+  place_home_id uuid,
   timezone text NOT NULL DEFAULT 'America/Los_Angeles',
   status text NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'cancelled', 'ended')),
   cancel_note text CHECK (cancel_note IS NULL OR char_length(cancel_note) <= 280),
