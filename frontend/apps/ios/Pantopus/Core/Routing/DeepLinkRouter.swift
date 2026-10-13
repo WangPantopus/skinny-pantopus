@@ -210,6 +210,13 @@ final class DeepLinkRouter {
         /// `/app/persona?tab=followers` — `persona_follow_request` and
         /// `persona_follow`. Opens "Your audience" (requests and members).
         case creatorAudienceMembers
+        /// `/plans/:id` — a Nearby Plan (share links, plan pushes). Opens in
+        /// the Nearby stack; dropped while the `plans` flag is off.
+        case plan(id: String)
+        /// `/plans/:id/requests` — the host's requests (H10).
+        case planRequests(id: String)
+        /// `/plans/new` — the host composer (H1).
+        case planNew
         case unknown(URL)
     }
 
@@ -523,6 +530,11 @@ final class DeepLinkRouter {
             return .home
         case "nearby":
             return segments.count == 1 ? .nearby : .unknown(url)
+        case "plans", "plan":
+            // `/plans/new`, `/plans/:id`, `/plans/:id/requests`.
+            guard let id = segments.dropFirst().first, !id.isEmpty else { return .nearby }
+            if id == "new" { return .planNew }
+            return segments.dropFirst(2).first == "requests" ? .planRequests(id: id) : .plan(id: id)
         case "notifications":
             return .notifications
         case "support-trains", "support_train":

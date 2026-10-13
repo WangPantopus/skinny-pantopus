@@ -48,7 +48,9 @@ public final class ChatListViewModel {
     private var hiddenKeys: Set<String> = []
     private var mutedKeys: Set<String> = []
     /// Always-pinned synthetic AI assistant row.
-    private let aiRow: ConversationRowContent = .init(
+    /// The pinned assistant row. The empty state shows it too: before a
+    /// first conversation it is the only way into the assistant.
+    let aiRow: ConversationRowContent = .init(
         id: "ai_assistant",
         variant: .aiAssistant,
         displayName: "Pantopus AI",
@@ -56,7 +58,7 @@ public final class ChatListViewModel {
         avatarURL: nil,
         identityChip: nil,
         verified: false,
-        preview: "Summaries, drafts, neighborhood help.",
+        preview: "Pickup days, alerts, posts and more.",
         timeLabel: "now",
         unread: 0,
         pinned: true,
