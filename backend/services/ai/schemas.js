@@ -238,6 +238,20 @@ const supportTrainDraftJsonSchema = {
 // model always states each one and the schema has no optional parameters,
 // which the API caps at 24 per request.
 
+// ─── Pickup Schedule Reading (a hauler's flyer, for the pickup editor) ─────
+
+const pickupScheduleJsonSchema = {
+  type: 'object',
+  properties: {
+    garbage_weekday:     { type: ['string', 'null'], enum: ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU', null] },
+    recycling_frequency: { type: ['string', 'null'], enum: ['weekly', 'biweekly', 'none', null] },
+    recycling_next_date: { type: ['string', 'null'], pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
+    note:                { type: ['string', 'null'], maxLength: 300 },
+  },
+  required: ['garbage_weekday', 'recycling_frequency', 'recycling_next_date', 'note'],
+  additionalProperties: false,
+};
+
 const gigDraftJsonSchemaStrict = {
   ...gigDraftJsonSchema,
   required: Object.keys(gigDraftJsonSchema.properties),
@@ -266,6 +280,11 @@ const placeBriefJsonSchemaStrict = {
 const supportTrainDraftJsonSchemaStrict = {
   ...supportTrainDraftJsonSchema,
   required: Object.keys(supportTrainDraftJsonSchema.properties),
+};
+
+const pickupScheduleJsonSchemaStrict = {
+  ...pickupScheduleJsonSchema,
+  required: Object.keys(pickupScheduleJsonSchema.properties),
 };
 
 // ─── Claude structured-output schemas ──────────────────────────────────────
@@ -331,6 +350,7 @@ const claudeSchemas = {
   mailSummary: toClaudeSchema(mailSummaryJsonSchemaStrict),
   placeBrief: toClaudeSchema(placeBriefJsonSchemaStrict),
   supportTrainDraft: toClaudeSchema(supportTrainDraftJsonSchemaStrict),
+  pickupSchedule: toClaudeSchema(pickupScheduleJsonSchemaStrict),
 };
 
 // ─── Compile validators ────────────────────────────────────────────────────
@@ -341,6 +361,7 @@ const validatePostDraft    = ajv.compile(postDraftJsonSchema);
 const validateMailSummary  = ajv.compile(mailSummaryJsonSchema);
 const validatePlaceBrief            = ajv.compile(placeBriefJsonSchema);
 const validateSupportTrainDraft    = ajv.compile(supportTrainDraftJsonSchema);
+const validatePickupSchedule       = ajv.compile(pickupScheduleJsonSchema);
 
 module.exports = {
   // Schemas sent to Claude as `output_config.format.schema`
@@ -360,6 +381,8 @@ module.exports = {
   placeBriefJsonSchemaStrict,
   supportTrainDraftJsonSchema,
   supportTrainDraftJsonSchemaStrict,
+  pickupScheduleJsonSchema,
+  pickupScheduleJsonSchemaStrict,
 
   // Compiled validators (for server-side validation)
   validateGigDraft,
@@ -368,4 +391,5 @@ module.exports = {
   validateMailSummary,
   validatePlaceBrief,
   validateSupportTrainDraft,
+  validatePickupSchedule,
 };

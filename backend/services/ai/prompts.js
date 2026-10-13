@@ -304,6 +304,19 @@ Output:
   "missing_required_fields": ["recipient", "address", "co_organizer"]
 }`;
 
+// ── Pickup Schedule Reading (single-turn, structured output) ───────────────
+// Fills the pickup editor from a photo of a hauler's flyer; the person checks
+// the fields and saves them with the editor's own Save.
+
+const PICKUP_SCHEDULE_SYSTEM = `You read a household's trash collection schedule from a photo of their hauler's or city's flyer, notice or collection calendar, or from what they wrote. Return JSON with these fields:
+
+- garbage_weekday: the weekday garbage is collected, as MO TU WE TH FR SA SU. Garbage is weekly. Null when it isn't shown.
+- recycling_frequency: weekly, biweekly (every other week), none (the schedule says recycling isn't collected), or null when recycling isn't shown.
+- recycling_next_date: for weekly or biweekly recycling, the date of one recycling collection, YYYY-MM-DD. For every other week it decides which weeks, so take it from the schedule: when it names a recycling week ("your recycling week starts Monday, October 19"), use the recycling weekday in that week. Work out dates from today's date at the end of the message. Null when you can't tell which weeks.
+- note: one short sentence shown under the filled-in schedule: the assumption that matters most, or what the schedule shows that the editor doesn't keep (yard waste, holiday changes). Null when there is nothing to say. The person saves the schedule themselves, so never say it is saved or set.
+
+Only report what the schedule or their words show; never guess a day. Don't repeat account numbers, phone numbers or addresses. If the photo isn't a collection schedule, return nulls and a note saying what it seems to be instead.`;
+
 // ── Open Slots Nudge (single-turn, plain text output) ─────────────────────
 
 const OPEN_SLOTS_NUDGE_SYSTEM = `You are Pantopus, helping an organizer gently remind people about open support slots.
@@ -332,6 +345,7 @@ module.exports = {
   MAIL_OPENING_SYSTEM,
   SUPPORT_TRAIN_DRAFT_SYSTEM,
   OPEN_SLOTS_NUDGE_SYSTEM,
+  PICKUP_SCHEDULE_SYSTEM,
 
   VERSIONS: {
     chat: 'chat-v1.3',  // v1.2: prompt built from the features that are on; home context in system messages; a draft's note ends the turn; v1.3: pickup days for apps that show the card
@@ -343,5 +357,6 @@ module.exports = {
     mailOpening: 'mail-opening-v1.0',
     supportTrain: 'support-train-draft-v1.1',  // v1.1: told today's date
     openSlotsNudge: 'open-slots-nudge-v1.0',
+    pickupSchedule: 'pickup-schedule-v1.0',
   },
 };

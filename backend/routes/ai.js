@@ -6,6 +6,7 @@
  *   POST /chat                   — Streaming chat agent (SSE)
  *   POST /draft/listing          — Single-turn listing draft
  *   POST /draft/post             — Single-turn post draft
+ *   POST /draft/pickup-schedule  — Pickup days from a flyer photo, for the Today editor
  *   POST /draft/mail-opening    — Mail opening line suggestion
  *   POST /summarize/mail         — Mail summarization
  *   GET  /place-brief            — Place brief with external data
@@ -234,6 +235,24 @@ router.post('/draft/post', verifyToken, aiDraftLimiter, validate(draftPostSchema
     return res.status(aiErrorStatus(result.error)).json(result);
   }
 
+  res.json(result);
+}));
+
+// ─── Pickup Days from a Flyer ───────────────────────────────────────────────
+// Fills the pickup editor; the editor's own Save writes the days.
+
+const draftPickupScheduleSchema = Joi.object({
+  // The person's own uploads (POST /api/upload/ai-media).
+  images: Joi.array().items(Joi.string().uri()).min(1).max(3),
+  text: Joi.string().max(1000),
+}).or('images', 'text');
+
+router.post('/draft/pickup-schedule', verifyToken, aiDraftLimiter, validate(draftPickupScheduleSchema), asyncHandler(async (req, res) => {
+  const { images, text } = req.body;
+  const result = await agentService.readPickupSchedule({ images, text, userId: req.user.id });
+  if (result.error) {
+    return res.status(aiErrorStatus(result.error)).json(result);
+  }
   res.json(result);
 }));
 
