@@ -1,11 +1,5 @@
 package app.pantopus.android.ui.screens.place.detail
 
-import android.Manifest
-import android.content.pm.PackageManager
-import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,22 +15,17 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.sp
-import androidx.core.content.ContextCompat
-import androidx.core.content.FileProvider
 import app.pantopus.android.data.ai.PickupFlyerReading
 import app.pantopus.android.data.api.models.ai.AIPickupScheduleReadingDto
 import app.pantopus.android.ui.components.GhostButton
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.Spacing
 import kotlinx.coroutines.launch
-import java.io.File
-import java.util.UUID
 
 /**
  * "Read a flyer" at the top of the pickup editor: a photo of the household's hauler's flyer, taken
@@ -56,7 +45,7 @@ internal fun PickupFlyerControl(
     var failed by rememberSaveable { mutableStateOf(false) }
     var choosing by remember { mutableStateOf(false) }
     val sources =
-        rememberFlyerPhotoSources { photo, afterwards ->
+        rememberReadingSources("pickup-flyer") { photo, afterwards ->
             reading = true
             onReadingChange(true)
             message = null
@@ -119,59 +108,4 @@ internal fun PickupFlyerControl(
             )
         }
     }
-}
-
-/** The ways to hand over a flyer photo. */
-private class FlyerPhotoSources(
-    val hasCamera: Boolean,
-    val takePhoto: () -> Unit,
-    val choosePhoto: () -> Unit,
-)
-
-/**
- * The camera, which writes into a cache file that is deleted once read, and the photo picker. [read] gets
- * the photo and what to do once the reading is over.
- */
-@Composable
-private fun rememberFlyerPhotoSources(read: (Uri, () -> Unit) -> Unit): FlyerPhotoSources {
-    val context = LocalContext.current
-    // Saveable so a process death during capture still finds the file.
-    var cameraFile by rememberSaveable { mutableStateOf<String?>(null) }
-    val library =
-        rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-            if (uri != null) read(uri) {}
-        }
-    val camera =
-        rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { taken ->
-            val file = cameraFile?.let(::File)
-            cameraFile = null
-            when {
-                file == null -> Unit
-                // The photo is only needed until it's read.
-                taken -> read(FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)) { file.delete() }
-                else -> file.delete()
-            }
-        }
-    val takePhoto = {
-        val file = File(context.cacheDir, "pickup-flyer-${UUID.randomUUID()}.jpg")
-        cameraFile = file.path
-        // No camera app (or a broken resolver) must not crash the editor.
-        runCatching { camera.launch(FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)) }
-            .onFailure { cameraFile = null }
-        Unit
-    }
-    // CAMERA is declared in the manifest, so the TakePicture intent needs the runtime grant.
-    val cameraPermission =
-        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            if (granted) takePhoto()
-        }
-    val hasCamera = remember(context) { context.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY) }
-    return FlyerPhotoSources(
-        hasCamera = hasCamera,
-        takePhoto = {
-            val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
-            if (granted) takePhoto() else cameraPermission.launch(Manifest.permission.CAMERA)
-        },
-        choosePhoto = { library.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
-    )
 }

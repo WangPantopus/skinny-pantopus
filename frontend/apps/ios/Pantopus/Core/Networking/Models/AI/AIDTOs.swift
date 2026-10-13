@@ -175,3 +175,33 @@ public struct AIDraftPickupScheduleResponse: Decodable, Sendable, Hashable {
     /// One sentence about what the flyer shows that the editor doesn't keep (yard waste, holidays).
     public let note: String?
 }
+
+/// `POST /api/ai/draft/radon-result`: a radon test result read from a photo or
+/// PDF of the lab's report, for the Today radon sheet to fill in. The report
+/// isn't kept, and nothing is saved until the person taps the sheet's Save.
+public struct AIRadonReportResponse: Decodable, Sendable, Hashable {
+    public struct Result: Decodable, Sendable, Hashable {
+        /// The result in pCi/L (converted when the report gave Bq/m³).
+        public let valuePci: Double?
+        /// The report gave the result as below this limit ("<0.4").
+        public let belowLimit: Bool?
+        /// `YYYY-MM-DD`: the day the test ended.
+        public let testedOn: String?
+        /// `short_term`, `long_term`, or nil when the report doesn't say.
+        public let testKind: String?
+        /// "Short-term test, October 1 to October 3, 2026: 5.2 pCi/L. From …"
+        public let summary: String?
+
+        private enum CodingKeys: String, CodingKey {
+            case summary
+            case valuePci = "value_pci"
+            case belowLimit = "below_limit"
+            case testedOn = "tested_on"
+            case testKind = "test_kind"
+        }
+    }
+
+    public let result: Result
+    /// One sentence on how the report was read (which of several results, a missing date).
+    public let note: String?
+}

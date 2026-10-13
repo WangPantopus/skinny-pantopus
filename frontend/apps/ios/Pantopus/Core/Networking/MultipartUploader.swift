@@ -666,6 +666,27 @@ public final class MultipartUploader: @unchecked Sendable {
         }
     }
 
+    /// Read a home's radon result from one photo or PDF of the lab's report
+    /// (`POST /api/ai/draft/radon-result`, field `file`; route
+    /// `backend/routes/ai.js:281`). The server reads the report in memory and
+    /// doesn't keep it; nothing is saved until the radon sheet's own Save.
+    public func readRadonReport(file: MultipartFile) async throws -> AIRadonReportResponse {
+        let boundary = "PantopusBoundary-\(UUID().uuidString)"
+        let url = environment.apiBaseURL.appendingPathComponent("/api/ai/draft/radon-result")
+        let body = Self.buildBody(boundary: boundary, file: file)
+        let (data, http) = try await performUpload(to: url, boundary: boundary, body: body)
+        switch http.statusCode {
+        case 200..<300:
+            return try JSONDecoder().decode(AIRadonReportResponse.self, from: data)
+        case 401:
+            throw APIError.unauthorized
+        case 400..<500:
+            throw APIError.clientError(status: http.statusCode, message: String(data: data, encoding: .utf8))
+        default:
+            throw APIError.server(status: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
+        }
+    }
+
     /// Assemble a `multipart/form-data` body. Internal so tests can
     /// assert the exact byte layout without making a network call.
     static func buildBody(
