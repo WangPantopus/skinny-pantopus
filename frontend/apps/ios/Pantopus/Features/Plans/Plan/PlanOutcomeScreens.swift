@@ -37,7 +37,12 @@ struct PlanNotThisTimeScreen: View {
                             .monospacedDigit()
                             .foregroundStyle(Theme.Color.appTextSecondary)
                     }
-                    PlanBanner(tone: .neutral, icon: .info, title: "This one didn't work out", message: reason)
+                    PlanBanner(
+                        tone: .neutral,
+                        icon: .info,
+                        title: status == .removed ? "You're no longer on this plan" : "This one didn't work out",
+                        message: reason
+                    )
                     if !otherPlans.isEmpty {
                         VStack(alignment: .leading, spacing: 0) {
                             Text.planOverline("Other plans this week").padding(.bottom, 2)
@@ -75,8 +80,8 @@ struct PlanNotThisTimeScreen: View {
     private var reason: String {
         let host = PlanCardLines.firstName(card.host.displayName)
         switch status {
-        case .expired: return "\(host) didn't get to your request before it started."
-        case .removed: return "\(host) can't fit you this time."
+        case .expired: return "It started before \(host) could answer."
+        case .removed: return "\(host) made a change to who's coming."
         default: return "\(host) couldn't fit you this time."
         }
     }
@@ -247,9 +252,9 @@ struct PlanCancelSheet: View {
         let going = (viewModel.plan?.people ?? []).filter { !$0.isHost }.count
         let asked = viewModel.card?.requestsCount ?? viewModel.hostRequests?.pending.count ?? 0
         var told: [String] = []
-        if going > 0 { told.append("the \(going) \(going == 1 ? "person" : "people") who \(going == 1 ? "is" : "are") in") }
+        if going > 0 { told.append(going == 1 ? "the 1 person who's in" : "the \(going) people who are in") }
         if asked > 0 { told.append("the \(asked) who asked") }
-        let tell = told.isEmpty ? "" : "We'll tell \(told.joined(separator: " and ")). "
+        let tell = told.isEmpty ? "Nobody has joined yet. " : "We'll tell \(told.joined(separator: " and ")). "
         return tell + "The pin comes off the map and the chat closes."
     }
 }
