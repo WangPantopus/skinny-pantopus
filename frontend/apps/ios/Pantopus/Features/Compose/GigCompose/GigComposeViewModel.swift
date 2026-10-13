@@ -129,9 +129,6 @@ final class GigComposeViewModel: WizardModel, WizardDraftSaving {
     /// flight; the describe card shows a subtle "Parsing" indicator.
     private(set) var isParsingDraft = false
 
-    /// True while a recorded voice note is being transcribed.
-    private(set) var isTranscribing = false
-
     /// B.3 — clarifying question returned by the parser, surfaced as a
     /// hint under the describe card. Cleared on fallback / failure.
     private(set) var clarifyingQuestion: String?
@@ -507,32 +504,6 @@ extension GigComposeViewModel {
         let name = membership.business.name ?? membership.business.username
         guard let name, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
         return name
-    }
-
-    // MARK: - Voice note → transcription
-
-    /// Push a recorded `.m4a` through `POST /api/ai/transcribe` and
-    /// append the text to the describe field (which re-kicks the parse).
-    /// Failures are silent — the recording UI simply resets.
-    func appendTranscribedAudio(_ data: Data) async {
-        guard !data.isEmpty else { return }
-        isTranscribing = true
-        defer { isTranscribing = false }
-        do {
-            let response = try await uploader.transcribeAudio(
-                MultipartFile(
-                    fieldName: "audio",
-                    filename: "describe.m4a",
-                    mimeType: "audio/m4a",
-                    data: data
-                )
-            )
-            let text = response.text.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !text.isEmpty else { return }
-            setDescribeText(form.describeText.isEmpty ? text : form.describeText + " " + text)
-        } catch {
-            // Silent — mic stays available for another take.
-        }
     }
 
     // MARK: - Field updates

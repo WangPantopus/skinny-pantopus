@@ -134,7 +134,7 @@ struct PlanDetailsForm: View {
                                 .foregroundStyle(Theme.Color.appText)
                             Text(model.home.map { home in
                                 "Your home\(home.city.map { " in \($0)" } ?? "")"
-                            } ?? "Add your home in Place first")
+                            } ?? "Add your home to host there")
                                 .planFont(.small)
                                 .foregroundStyle(Theme.Color.appTextSecondary)
                         }
@@ -166,7 +166,7 @@ struct PlanDetailsForm: View {
     }
 
     private var placeSubtitle: String {
-        guard let place = model.place else { return "Parks, courts, cafés and more" }
+        guard let place = model.place else { return "Parks, courts, trails, libraries, cafés" }
         return [place.category?.capitalized, "public place"].compactMap { $0 }.joined(separator: " · ")
     }
 

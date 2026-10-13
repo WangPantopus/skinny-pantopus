@@ -10,6 +10,7 @@ import app.pantopus.android.data.api.models.hub.NotificationPreferencesPatch
 import app.pantopus.android.data.api.models.hub.QuietHoursPatch
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.hub.NotificationPreferencesRepository
+import app.pantopus.android.data.plans.PlansFeature
 import app.pantopus.android.data.store.StoreKind
 import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.components.ToastKind
@@ -55,6 +56,8 @@ class NotificationSettingsViewModel
     @Inject
     constructor(
         private val repository: NotificationPreferencesRepository,
+        /** Nearby Plans' flags, for the quiet-hours note (none in tests). */
+        private val plansFeature: PlansFeature? = null,
     ) : ViewModel() {
         val title: String = "Notifications"
 
@@ -410,6 +413,7 @@ class NotificationSettingsViewModel
             GroupedListGroup(
                 id = GroupId.QUIET_HOURS,
                 overline = "Quiet hours",
+                helper = plansQuietHelper(prefs),
                 rows =
                     buildList {
                         add(
@@ -446,6 +450,14 @@ class NotificationSettingsViewModel
                         }
                     },
             )
+
+        /** Plans holds its notifications overnight even with Quiet Hours off (backend planNotifications.js), so say so here. */
+        private fun plansQuietHelper(prefs: NotificationPreferences): String? =
+            when {
+                plansFeature?.flags?.value?.plans != true -> null
+                prefs.quietHoursEnabled -> "Plans notifications wait until your quiet hours end."
+                else -> "Plans notifications at night wait until 8 AM unless you set quiet hours."
+            }
 
         private fun locationGroup(prefs: NotificationPreferences): GroupedListGroup =
             GroupedListGroup(

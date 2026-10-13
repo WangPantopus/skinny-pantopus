@@ -131,7 +131,8 @@ struct PlanRequestsScreen: View {
         }
         .refreshesOnPlansChange { await viewModel.load() }
         .alert(
-            "Share your address?",
+            // The brief's words (section 6), as on Android.
+            "Accepting shares your address with them",
             isPresented: Binding(get: { pendingAccept != nil }, set: { if !$0 { pendingAccept = nil } }),
             presenting: pendingAccept
         ) { request in
@@ -141,7 +142,8 @@ struct PlanRequestsScreen: View {
             }
             Button("Not now", role: .cancel) {}
         } message: { request in
-            Text("Accepting \(PlanCardLines.firstName(request.user.displayName)) shares your address with them.")
+            let first = PlanCardLines.firstName(request.user.displayName)
+            Text("\(first) will see your address, your note and who's going. You'll be asked once for this plan.")
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("planRequests")
@@ -187,7 +189,7 @@ struct PlanRequestsScreen: View {
     @ViewBuilder private var requestList: some View {
         if let pending = viewModel.requests?.pending {
             if pending.isEmpty {
-                Text("No requests waiting.")
+                Text("No requests right now. We'll tell you when someone asks.")
                     .planFont(.small)
                     .foregroundStyle(Theme.Color.appTextSecondary)
             }
@@ -294,23 +296,28 @@ struct PlanRequestCard: View {
             parts.append(distance.prefix(1).uppercased() + distance.dropFirst() + " away")
         }
         if request.user.hostedBefore { parts.append("you hosted them before") }
-        if let joined = request.user.plansJoined {
-            parts.append(joined == 0 ? "new to Pantopus" : "joined \(joined) plan\(joined == 1 ? "" : "s")")
+        if let joined = request.user.plansJoined, joined > 0 {
+            parts.append("joined \(joined) plan\(joined == 1 ? "" : "s")")
         }
         if let mutual = request.user.mutualConnections, mutual > 0 {
             parts.append("\(mutual) mutual connection\(mutual == 1 ? "" : "s")")
         }
+        // Only when nothing else speaks for them (as on Android).
+        if (request.user.plansJoined ?? 0) == 0, (request.user.mutualConnections ?? 0) == 0, !request.user.hostedBefore {
+            parts.append("new to Pantopus")
+        }
         return parts.joined(separator: " · ")
     }
 
-    /// "Me + 1", "Just me" (the words the guest picked); for a playdate "2 kids · ages 2–5".
+    /// "Just Priya", "Priya + 1" (as the host's push says it); for a playdate "2 kids · ages 2–5".
     private var party: String {
         if kind == .playdate {
             let kids = request.kidsCount ?? 1
             let ages = PlanRowModel.ages(request.kidsAgeBands).map { " · \($0)" } ?? ""
             return "\(kids) kid\(kids == 1 ? "" : "s")\(ages)"
         }
-        return request.partySize <= 1 ? "Just me" : "Me + \(request.partySize - 1)"
+        let name = PlanCardLines.firstName(request.user.displayName)
+        return request.partySize <= 1 ? "Just \(name)" : "\(name) + \(request.partySize - 1)"
     }
 }
 
