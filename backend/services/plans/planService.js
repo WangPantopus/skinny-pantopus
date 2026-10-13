@@ -408,7 +408,9 @@ function myRequestView(plan, request, { waitlistPosition = null } = {}) {
     waitlist_position: waitlistPosition,
     decided_by: request.decided_by || null,
     decided_at: iso(request.decided_at),
-    created_at: iso(request.created_at),
+    // When they last asked (an ask after withdrawing, leaving or expiring counts; changing who's coming doesn't),
+    // the same time the host's RequestView shows.
+    created_at: iso(request.queued_at || request.created_at),
     asks_left: Math.max(0, rules.LIMITS.asksPerPlan - (request.ask_count || 1)),
     feedback: request.feedback || null,
   };
