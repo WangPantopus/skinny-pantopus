@@ -47,8 +47,11 @@ async function planPins(user, box, query = {}) {
     : null;
   const viewer = await loadViewer(user, { point, gps });
 
-  let kinds = String(query.kinds || '').split(',').map((k) => k.trim()).filter((k) => rules.KINDS.includes(k));
-  if (!viewer.seesPlaydates) kinds = (kinds.length ? kinds : rules.KINDS).filter((k) => k !== 'playdate');
+  const asked = String(query.kinds || '').split(',').map((k) => k.trim()).filter((k) => rules.KINDS.includes(k));
+  let kinds = asked.length ? asked : rules.KINDS;
+  if (!viewer.seesPlaydates) kinds = kinds.filter((k) => k !== 'playdate');
+  // Only kinds this viewer can't see (kinds=playdate without a verified address): no pins, not every pin.
+  if (kinds.length === 0) return [];
   const window = rules.WINDOWS.includes(query.window) ? query.window : 'week';
 
   // A little wider than the box: a plan the viewer is in shows at its exact place.
