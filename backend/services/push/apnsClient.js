@@ -88,8 +88,12 @@ function buildPayload({ title, body, data } = {}) {
       sound: 'default',
     },
   };
-  // Only native pilot reminder categories may opt into OS action buttons.
-  if (['PICKUP_REMINDER', 'TASK_REMINDER', 'TASK_REMINDER_DONE_ONLY'].includes(data?.category)) {
+  // Only native pilot reminder categories and the Nearby Plans categories
+  // (services/plans/planNotifications.js) may opt into OS action buttons.
+  if ([
+    'PICKUP_REMINDER', 'TASK_REMINDER', 'TASK_REMINDER_DONE_ONLY',
+    'PLAN_REQUEST', 'PLAN_REMINDER', 'PLAN_CHANGED',
+  ].includes(data?.category)) {
     payload.aps.category = data.category;
   }
   for (const [key, value] of Object.entries(data || {})) {
