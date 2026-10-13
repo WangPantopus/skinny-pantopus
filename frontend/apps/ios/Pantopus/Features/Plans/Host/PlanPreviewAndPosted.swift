@@ -241,7 +241,10 @@ struct PlanPostedScreen: View {
                             .overlay(Icon(.link, size: 22, color: Theme.Color.primary700))
                         VStack(alignment: .leading, spacing: 0) {
                             Text("Invite friends").planFont(.bodyStrong).foregroundStyle(Theme.Color.appText)
-                            Text("They see the plan's card, never your address.").planFont(.small)
+                            Text(plan.card.placeKind == .home
+                                ? "They see the plan's card, never your address."
+                                : "They see the plan's card and its area.")
+                                .planFont(.small)
                                 .foregroundStyle(Theme.Color.appTextSecondary)
                         }
                     }
