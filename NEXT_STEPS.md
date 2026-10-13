@@ -114,7 +114,7 @@ The ordered steps, with exact values and checks, are in the [launch checklist](d
   - [ ] Create an Anthropic Console workspace with a spend limit and an API key.
   - [ ] Apply migration `20261012070833_ai_conversation_messages.sql` to each hosted database before the backend release. The API still answers without it, but forgets earlier turns of a chat.
   - [ ] Set `ANTHROPIC_API_KEY` on the hosted backend (staging, then production) and add it to the seeder's AWS secrets (`pantopus/seeder/staging`, `pantopus/seeder/production`) before deploying the seeder Lambdas, which refuse to start without it. Afterwards remove `OPENAI_API_KEY`, `OPENAI_CHAT_MODEL` and `OPENAI_DRAFT_MODEL`.
-  - [ ] Decide on voice-note transcription. Claude takes no audio, so `/api/ai/transcribe` now answers "unavailable". Its only callers are the voice-note buttons in the Open Gigs composer (off in the launch cut). Options: on-device speech recognition, another speech-to-text service, or drop it.
+  - [x] Decide on voice-note transcription. Decided October 12: drop it. Claude takes no audio and phone keyboards already dictate; `/api/ai/transcribe` keeps answering "unavailable" for older app builds, and the follow-up app change removes the voice-note buttons from the Open Gigs composer (off in the launch cut).
 - [ ] Production keys the backend reads; the database baseline adopted in production; TestFlight; a Play internal testing track.
   - [x] iOS release settings, privacy manifests and the production API host are on master (PR 1567).
   - [x] Android targets API 36 as Google Play requires (PR 1601, merged October 6; the main screens checked on an Android 16 emulator), and API dates now parse on Android 8–13 (PR 1650).
