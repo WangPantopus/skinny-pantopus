@@ -226,7 +226,7 @@ private fun NetworkError?.landingMessage(): String =
     this?.displayMessage("Couldn't load your place. Please try again.") ?: "Couldn't load your place. Please try again."
 
 /** My Homes' choice for one Home, or null when it isn't waiting on verification. */
-private fun hubVerificationTargetFor(home: MyHome): HubVerificationTarget? =
+internal fun hubVerificationTargetFor(home: MyHome): HubVerificationTarget? =
     when {
         home.pendingClaimId != null -> HubVerificationTarget.WaitingRoom(home.id)
         home.accessKind == "private_setup" -> HubVerificationTarget.Residency(home.id)

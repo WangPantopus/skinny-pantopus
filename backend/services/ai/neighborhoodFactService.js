@@ -18,6 +18,7 @@
 const crypto = require('crypto');
 const supabaseAdmin = require('../../config/supabaseAdmin');
 const { decodeGeohashBbox } = require('../../utils/geohash');
+const { isInCascadiaRegion } = require('../../utils/geo');
 const logger = require('../../utils/logger');
 const { getSeasonalContext } = require('./seasonalEngine');
 
@@ -156,6 +157,7 @@ const SAFETY_TIPS = [
     body: 'The Cascadia subduction zone is overdue for a major earthquake. Secure tall furniture and have a family plan.',
     source: 'PNW Safety',
     cta: 'Ask neighbors about preparedness',
+    cascadiaOnly: true,
   },
   {
     title: 'Wildfire Smoke Prep',
@@ -424,10 +426,12 @@ function generateSeasonalFacts(geohash, seasonalCtx, neighborhoodPreview, week, 
 
 /**
  * Generate safety tips — deterministically pick 1 from the pool per week.
+ * A Cascadia-only tip is offered only to cells in the Cascadia region.
  */
-function generateSafetyFacts(geohash, week, year) {
+function generateSafetyFacts(geohash, week, year, inCascadia = false) {
   const seed = `${geohash}:safety:${week}:${year}`;
-  const picked = deterministicPick(SAFETY_TIPS, seed, 1);
+  const pool = inCascadia ? SAFETY_TIPS : SAFETY_TIPS.filter((tip) => !tip.cascadiaOnly);
+  const picked = deterministicPick(pool, seed, 1);
   return picked.map((tip, i) => ({
     id: makeFactId(geohash, 'safety_tip', week, year, i),
     type: 'safety_tip',
@@ -637,7 +641,10 @@ async function generateNeighborhoodFacts(geohash, options = {}) {
     geohash, seasonalCtx, neighborhoodPreview, week, year,
   );
 
-  const safetyFacts = generateSafetyFacts(geohash, week, year);
+  const safetyFacts = generateSafetyFacts(
+    geohash, week, year,
+    isInCascadiaRegion(seasonalCoords.latitude, seasonalCoords.longitude),
+  );
 
   const localResourceFacts = generateLocalResourceFacts(geohash, week, year);
 

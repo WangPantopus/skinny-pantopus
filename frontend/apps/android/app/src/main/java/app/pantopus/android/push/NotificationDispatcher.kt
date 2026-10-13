@@ -78,6 +78,13 @@ class NotificationDispatcher
                 nameRes = R.string.notif_channel_system,
                 importance = NotificationManager.IMPORTANCE_DEFAULT,
             ),
+
+            /** Nearby Plans: requests, yes and no, reminders, changes, cancellations. */
+            PLANS(
+                id = "pantopus.plans",
+                nameRes = R.string.notif_channel_plans,
+                importance = NotificationManager.IMPORTANCE_HIGH,
+            ),
         }
 
         /**
@@ -96,6 +103,8 @@ class NotificationDispatcher
             val date: String? = null,
             val recipientUserId: String? = null,
             val pushType: String? = null,
+            val planId: String? = null,
+            val requestId: String? = null,
         )
 
         /**
@@ -156,6 +165,7 @@ class NotificationDispatcher
                 homeId = HomeTaskNotificationRoute.canonicalId(data["homeId"] ?: data["home_id"]),
                 taskId = HomeTaskNotificationRoute.canonicalId(data["taskId"] ?: data["task_id"]),
                 date = data["pickupDate"] ?: data["date"], recipientUserId = data["recipient_user_id"], pushType = data["type"],
+                planId = data["plan_id"], requestId = data["request_id"],
             )
         }
 
@@ -201,6 +211,8 @@ class NotificationDispatcher
         internal fun channelFor(type: String?): Channel {
             val key = type?.lowercase() ?: return Channel.SYSTEM
             return when {
+                key.startsWith("plan_") -> Channel.PLANS
+
                 key == "chat" ||
                     key.startsWith("chat_") ||
                     key == "new_message" ||
@@ -248,6 +260,7 @@ class NotificationDispatcher
                     .setContentIntent(contentIntent)
                     .setPriority(routing.channel.toCompatPriority())
                     .apply { addReminderActions(this, routing, notificationId) }
+                    .apply { addPlanActions(this, routing, notificationId) }
                     .build()
 
             val nm = NotificationManagerCompat.from(appContext)
@@ -315,6 +328,57 @@ class NotificationDispatcher
             } else {
                 addTaskReminderActions(builder, routing, session, ::background)
             }
+        }
+
+        /**
+         * Nearby Plans' buttons (board A3): Accept and Decline on a request, On my way and Can't make it on a
+         * reminder, Still coming and Can't make it on a change. They run in the background for the person the push
+         * names, on this session only; the ones that share an address or leave a plan need the phone unlocked.
+         */
+        private fun addPlanActions(
+            builder: NotificationCompat.Builder,
+            routing: Routing,
+            notificationId: Int,
+        ) {
+            val buttons = PlanActionReceiver.buttonsFor(routing.category) ?: return
+            val planId = routing.planId ?: return
+            val session = planActionSession(routing) ?: return
+            buttons.forEachIndexed { index, button ->
+                val intent =
+                    Intent(appContext, PlanActionReceiver::class.java).apply {
+                        action = button.action
+                        data = Uri.parse("pantopus-plan-action://$notificationId/${button.action}")
+                        putExtra(PlanActionReceiver.PLAN, planId)
+                        putExtra(PlanActionReceiver.REQUEST, routing.requestId)
+                        putExtra(PlanActionReceiver.RECIPIENT, routing.recipientUserId)
+                        putExtra(PlanActionReceiver.SESSION, session)
+                        putExtra(PlanActionReceiver.NOTIFICATION_ID, notificationId)
+                        putExtra(PlanActionReceiver.TITLE, routing.title)
+                    }
+                val pending =
+                    PendingIntent.getBroadcast(
+                        appContext,
+                        notificationId * PLAN_ACTION_SLOTS + index,
+                        intent,
+                        PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE,
+                    )
+                builder.addAction(
+                    NotificationCompat.Action
+                        .Builder(0, button.label, pending)
+                        .setAuthenticationRequired(button.needsUnlock)
+                        .build(),
+                )
+            }
+        }
+
+        /**
+         * The session the Plans buttons are bound to, or null when the push isn't for the signed-in person on this
+         * session (or a request push lacks its request id): then the notification shows without buttons.
+         */
+        private fun planActionSession(routing: Routing): String? {
+            if (routing.category == PlanActionReceiver.CATEGORY_REQUEST && routing.requestId == null) return null
+            val identity = runCatching { runBlocking { tokens.sessionIdentity() } }.getOrNull()
+            return ReminderActionReceiver.sessionFingerprint(identity)?.takeIf { identity?.first == routing.recipientUserId }
         }
 
         private fun addTaskReminderActions(
@@ -385,3 +449,6 @@ class NotificationDispatcher
                 else -> NotificationCompat.PRIORITY_DEFAULT
             }
     }
+
+/** Request codes per notification: room for every Plans button on one notification. */
+private const val PLAN_ACTION_SLOTS = 4

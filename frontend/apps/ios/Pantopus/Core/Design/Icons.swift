@@ -445,6 +445,14 @@ public enum PantopusIcon: String, CaseIterable, Sendable {
     case link2Off = "link-2-off"
     case calendarSearch = "calendar-search"
     case gitMerge = "git-merge"
+    // Nearby Plans (board P1): one glyph per plan kind, drawn on the pins,
+    // swatches and tiles.
+    case planWatch = "plan-watch"
+    case planPlaydate = "plan-playdate"
+    case planPickup = "plan-pickup"
+    case planWalk = "plan-walk"
+    /// The outlined location arrow (Plans: "Show my location", Directions).
+    case locationArrow = "location-arrow"
 
     /// SF Symbol name used to render this icon. Chosen for closest visual
     /// parity with the Lucide source; designers can later swap the
@@ -806,6 +814,13 @@ public enum PantopusIcon: String, CaseIterable, Sendable {
         case .link2Off: "link"
         case .calendarSearch: "magnifyingglass"
         case .gitMerge: "arrow.triangle.merge"
+        // Nearby Plans: watch party, playdate (an adult and a child), pickup
+        // game (a ball) and walk & coffee.
+        case .planWatch: "tv"
+        case .planPlaydate: "figure.and.child.holdinghands"
+        case .planPickup: "tennisball"
+        case .planWalk: "cup.and.saucer"
+        case .locationArrow: "location"
         }
     }
 }

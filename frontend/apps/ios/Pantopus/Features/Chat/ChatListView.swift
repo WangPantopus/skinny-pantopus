@@ -71,6 +71,15 @@ public struct ChatListView: View {
     }
 
     private var emptyFrame: some View {
+        VStack(spacing: Spacing.s0) {
+            // Pantopus AI stays reachable before the first conversation.
+            ConversationRow(content: viewModel.aiRow) { onOpenConversation(viewModel.aiRow) }
+            emptyMessage
+        }
+        .accessibilityIdentifier("chatListEmpty")
+    }
+
+    private var emptyMessage: some View {
         VStack(spacing: 14) {
             Spacer()
             Icon(.send, size: 30, strokeWidth: 1.8, color: Theme.Color.primaryInk)
@@ -119,7 +128,6 @@ public struct ChatListView: View {
         }
         .padding(Spacing.s5)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .accessibilityIdentifier("chatListEmpty")
     }
 
     private func populatedFrame(_ rows: [ConversationRowContent]) -> some View {

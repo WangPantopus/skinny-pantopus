@@ -16,6 +16,11 @@
 //  dispatcher selects this tab and stashes the surface; presenting the
 //  sheet mounts the tab root, which then consumes `router.pending`.
 //
+//  Nearby Plans: with the `plans` flag on, Nearby opens on the map
+//  (`PlansMapView`, board F1) and Pulse and Connections move into the list
+//  under it (F2). With it off, Nearby is exactly the screen above. Plan
+//  links and the Host button arrive through `PlansNavigator`.
+//
 
 import SwiftUI
 
@@ -23,28 +28,58 @@ public struct NeighborhoodTabRoot: View {
     @Environment(RootTabModel.self) private var rootTabs
     @State private var door = NeighborhoodDoorStore.shared
     @State private var presentedSurface: NeighborhoodDoorStore.Surface?
+    @State private var plansFlags = PlansFlags.shared
+    @State private var plans = PlansNavigator.shared
+    @State private var plansPath: [PlansRoute] = []
+    @State private var hostRequest: PlansHostRequest?
+    /// The plan just posted, opened once the composer has gone.
+    @State private var postedPlanId: String?
 
     public init() {}
 
     public var body: some View {
-        NavigationStack {
-            NeighborhoodView(
-                onOpenSurface: { surface in
-                    presentedSurface = surface
-                },
-                onClaimPlace: {
-                    // The claim flow lives in the Place tab's stack — its
-                    // hub root carries the add-home / verification CTAs.
-                    rootTabs.selected = .place
-                },
-                // Launch cut #1: NeighborhoodView hides the Beacons row.
-                onOpenBeacons: { DeepLinkRouter.shared.handle(path: "/beacons") },
-                onOpenConnections: { DeepLinkRouter.shared.handle(path: "/connections") }
-            )
+        NavigationStack(path: $plansPath) {
+            Group {
+                if plansFlags.plans {
+                    PlansMapView(actions: plansActions)
+                } else {
+                    NeighborhoodView(
+                        onOpenSurface: { surface in
+                            presentedSurface = surface
+                        },
+                        onClaimPlace: {
+                            // The claim flow lives in the Place tab's stack — its
+                            // hub root carries the add-home / verification CTAs.
+                            rootTabs.selected = .place
+                        },
+                        // Launch cut #1: NeighborhoodView hides the Beacons row.
+                        onOpenBeacons: { DeepLinkRouter.shared.handle(path: "/beacons") },
+                        onOpenConnections: { DeepLinkRouter.shared.handle(path: "/connections") }
+                    )
+                }
+            }
             .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(for: PlansRoute.self) { route in
+                PlansDestination(route: route, path: $plansPath) { hostRequest = PlansHostRequest(start: $0) }
+            }
         }
         .sheet(item: $presentedSurface) { surface in
             surfaceRoot(surface)
+        }
+        .fullScreenCover(item: $hostRequest, onDismiss: openPostedPlan) { request in
+            PlanComposerRoot(start: request.start) { posted in
+                postedPlanId = posted
+                hostRequest = nil
+            }
+        }
+        .onChange(of: plans.pending) { _, _ in consumePlansHandOff() }
+        .onChange(of: plans.pendingHost) { _, _ in consumePlansHandOff() }
+        .onChange(of: plansFlags.plans) { _, isOn in
+            // Plans switched off: back to today's Nearby, nothing of Plans left open.
+            if !isOn {
+                plansPath = []
+                hostRequest = nil
+            }
         }
         .onChange(of: door.pendingSurface) { _, pending in
             presentPendingSurfaceIfNeeded(pending)
@@ -55,12 +90,53 @@ public struct NeighborhoodTabRoot: View {
             // presented surface sheet; dismiss the sheet so the destination
             // is actually visible instead of rendering behind it.
             if selected != .nearby { presentedSurface = nil }
+            consumePlansHandOff()
         }
         .task {
             presentPendingSurfaceIfNeeded(door.pendingSurface)
+            consumePlansHandOff()
         }
         .onAppear {
             presentPendingSurfaceIfNeeded(door.pendingSurface)
+            consumePlansHandOff()
+        }
+    }
+
+    /// "See your plan" (H8): pushed after the composer is gone, since a screen
+    /// pushed under a full-screen cover never learns it came on screen.
+    private func openPostedPlan() {
+        if let id = postedPlanId {
+            postedPlanId = nil
+            plansPath = [.plan(id: id, intent: .view)]
+        }
+        consumePlansHandOff()
+    }
+
+    /// What the Plans map can open.
+    private var plansActions: PlansMapActions {
+        PlansMapActions(
+            openPlan: { card, id, intent in
+                if let card { PlansStoreReads.seed(card) }
+                plansPath.append(.plan(id: id, intent: intent))
+            },
+            host: { start in hostRequest = PlansHostRequest(start: start) },
+            openPulse: { presentedSurface = .pulse },
+            openConnections: { DeepLinkRouter.shared.handle(path: "/connections") }
+        )
+    }
+
+    /// A plan link, a push or a Today card asked for a Plans screen.
+    private func consumePlansHandOff() {
+        guard rootTabs.selected == .nearby, plansFlags.plans else { return }
+        presentedSurface = nil
+        // Not under the composer: it waits until the composer is gone.
+        if let route = plans.pending, hostRequest == nil {
+            plans.pending = nil
+            plansPath = [route]
+        }
+        if let request = plans.pendingHost {
+            plans.pendingHost = nil
+            hostRequest = request
         }
     }
 

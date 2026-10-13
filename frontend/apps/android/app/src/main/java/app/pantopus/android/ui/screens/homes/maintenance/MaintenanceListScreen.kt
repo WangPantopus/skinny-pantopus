@@ -32,7 +32,7 @@ fun MaintenanceListScreen(
     onOpenIssues: (() -> Unit)? = null,
     viewModel: MaintenanceListViewModel = hiltViewModel(),
 ) {
-    HomeCopyLifecycle(viewModel::load, viewModel::suspendContent)
+    HomeCopyLifecycle(viewModel::load, viewModel::suspendContent, observeStoreChanges = true)
     val state by viewModel.state.collectAsStateWithLifecycle()
     ReportContentShown("home_maintenance", state.showsContent())
     val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
