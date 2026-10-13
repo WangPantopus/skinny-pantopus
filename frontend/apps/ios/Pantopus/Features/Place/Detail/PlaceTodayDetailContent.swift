@@ -1436,6 +1436,8 @@ private final class RadonTodayState {
     func readReport(_ file: MultipartFile?) async {
         choosingReport = false
         guard sheet == "yes", retained == nil, !busy, !readingReport else { return }
+        // VoiceOver hears what the message under the button now says (Android's is a live region).
+        defer { if let reportMessage { AccessibilityNotification.Announcement(reportMessage).post() } }
         guard let file else {
             reportMessage = "Couldn't open that file. Choose a photo, or a PDF of 10 MB or less."
             reportFailed = true

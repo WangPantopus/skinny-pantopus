@@ -1165,7 +1165,7 @@ private fun RadonDateField(
     val context = LocalContext.current
     GhostButton(
         "Date: ${state.selectedDate.format(DateTimeFormatter.ofPattern("MMM d"))}",
-        isEnabled = !state.busy && state.retained == null,
+        isEnabled = !state.busy && !state.readingReport && state.retained == null,
         onClick = {
             val date = state.selectedDate
             android.app.DatePickerDialog(
