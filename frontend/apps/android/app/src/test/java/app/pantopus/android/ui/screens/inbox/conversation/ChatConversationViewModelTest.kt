@@ -106,6 +106,7 @@ class ChatConversationViewModelTest {
             linkPreviewRepo,
             aiSession,
             activeChatThread,
+            mockk(relaxed = true),
         ).also { viewModels.add(it) }
 
     private val counterpartyPerson =

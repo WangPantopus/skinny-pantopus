@@ -104,7 +104,8 @@ function parseGps(raw) {
  * @param {{ id: string, role?: string }} user  req.user
  * @param {{ gps?: object, point?: { latitude: number, longitude: number } }} [opts]
  *   gps: a fix the app sent with this request (counts as a location for 5 minutes);
- *   point: where the app is looking from (the map or list center), used for distances.
+ *   point: where the app is looking from (the map or list center), used for distances
+ *   only when the person has no home, saved place or fresh fix.
  */
 async function loadViewer(user, opts = {}) {
   const userId = String(user.id);
@@ -126,13 +127,18 @@ async function loadViewer(user, opts = {}) {
     locations.push({ kind: 'saved_place', latitude: Number(place.latitude), longitude: Number(place.longitude) });
   }
 
-  // Where distances are measured from: the point the app is looking from,
-  // then a fresh fix, then the first home, then a saved place.
+  // Where distances are measured from: the person's own place (the first home,
+  // else a saved place), so one plan shows one distance on every screen, in
+  // both apps and after every action, whatever the request carried. Without
+  // one: a fresh fix, then the point the app is looking from.
+  const ownPlace = locations.find((l) => l.kind === 'home' || l.kind === 'saved_place');
   let origin = null;
-  if (opts.point && Number.isFinite(opts.point.latitude) && Number.isFinite(opts.point.longitude)) {
+  if (ownPlace) {
+    origin = { latitude: ownPlace.latitude, longitude: ownPlace.longitude };
+  } else if (gps) {
+    origin = { latitude: gps.latitude, longitude: gps.longitude };
+  } else if (opts.point && Number.isFinite(opts.point.latitude) && Number.isFinite(opts.point.longitude)) {
     origin = { latitude: opts.point.latitude, longitude: opts.point.longitude };
-  } else if (locations.length > 0) {
-    origin = { latitude: locations[0].latitude, longitude: locations[0].longitude };
   }
 
   return {

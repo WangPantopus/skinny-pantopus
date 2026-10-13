@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import { launchFeatures } from '@/lib/featureFlags';
+import { AI_SUPPORT_TRAIN_STORY_KEY } from '@/components/ai-assistant/AIDraftCard';
 import { getAuthToken } from '@pantopus/api';
 import {
   AlertCircle, ArrowLeft, ArrowRight, Calendar, ChefHat, ChevronDown, ChevronUp,
@@ -101,6 +102,18 @@ export default function NewSupportTrainPage() {
 
   // ── Step 1 state ─────────────────────────────────────────────
   const [story, setStory] = useState('');
+  // A Support Train card from Pantopus AI opens this page with its story (read once).
+  useEffect(() => {
+    try {
+      const fromAssistant = sessionStorage.getItem(AI_SUPPORT_TRAIN_STORY_KEY);
+      if (fromAssistant) {
+        sessionStorage.removeItem(AI_SUPPORT_TRAIN_STORY_KEY);
+        setStory(fromAssistant.slice(0, 2000));
+      }
+    } catch {
+      // Storage blocked: start empty.
+    }
+  }, []);
   const [selectedModes, setSelectedModes] = useState<string[]>([]);
   const [drafting, setDrafting] = useState(false);
   const [draftError, setDraftError] = useState<string | null>(null);
