@@ -1598,12 +1598,13 @@ private struct RadonTodaySheet: View {
                         )
                     }
                 }
-                .disabled(state.busy || state.retained != nil)
+                // A reading in progress fills these fields; nothing is typed over it meanwhile.
+                .disabled(state.busy || state.readingReport || state.retained != nil)
                 if let error = state.error { Text(error).foregroundStyle(Theme.Color.error) }
                 PrimaryButton(
                     title: tested ? "Save" : "Add reminder",
                     isLoading: state.busy,
-                    isEnabled: !state.busy && (state.retained != nil || valid)
+                    isEnabled: !state.busy && !state.readingReport && (state.retained != nil || valid)
                 ) { await state.save() }
                     .accessibilityIdentifier("radonSheetCommit")
             }

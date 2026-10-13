@@ -1100,7 +1100,7 @@ private fun RadonTaskSheet(state: RadonTodayState) {
             GhostButton(
                 if (tested) "Save" else "Add reminder",
                 isLoading = state.busy,
-                isEnabled = !state.busy && (state.retained != null || valid),
+                isEnabled = !state.busy && !state.readingReport && (state.retained != null || valid),
                 onClick = { state.lifetime.launch { state.save() } },
             )
             GhostButton("Close", isEnabled = !state.busy, onClick = { state.sheet = null })
@@ -1115,7 +1115,8 @@ private fun RadonTestedFields(
     value: Double?,
 ) {
     val links = LocalUriHandler.current
-    val editable = !state.busy && state.retained == null
+    // A reading in progress fills these fields; nothing is typed over it meanwhile.
+    val editable = !state.busy && !state.readingReport && state.retained == null
     if (state.readsReports) {
         RadonReportControl(
             reading = state.readingReport,
