@@ -437,12 +437,13 @@ class ScreenStore
             }
             val marks = pendingDiskMarks.filter { it.account == account && it.covers(slot.key, copy) }
             val edited = marks.any { it.mark.edited }
-            // A queued own edit retires a current-format copy; its disk work is deleting the file.
-            if (edited && !copy.legacy) return
-            slot.etag = copy.etag.takeUnless { edited }
-            slot.stale = copy.stale || marks.isNotEmpty()
-            slot.persist = true
-            slot.state.value = Stored(copy.data, fetchedAt = copy.fetchedAt)
+            // A queued own edit retires a current-format copy (its disk work is deleting the file): it is not shown.
+            if (!edited || copy.legacy) {
+                slot.etag = copy.etag.takeUnless { edited }
+                slot.stale = copy.stale || marks.isNotEmpty()
+                slot.persist = true
+                slot.state.value = Stored(copy.data, fetchedAt = copy.fetchedAt)
+            }
         }
 
         /** Writes a confirmed reply to the phone off the caller's thread, when the entry may be saved. */
