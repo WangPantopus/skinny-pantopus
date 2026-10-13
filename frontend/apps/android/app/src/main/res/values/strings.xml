@@ -9,6 +9,7 @@
     <string name="notif_channel_mail">Mail</string>
     <string name="notif_channel_gig_bid">Gig bids</string>
     <string name="notif_channel_system">System</string>
+    <string name="notif_channel_plans">Plans</string>
     <!-- P6b — ongoing active-task status mirror (silent, low importance). -->
     <string name="notif_channel_active_task">Active task</string>
 

@@ -19,6 +19,10 @@ public enum InboxRoute: Hashable {
     case composeGig(category: String)
     case composeListing
     case composePost(intent: String)
+    /// An assistant draft opened in the Pulse composer with its text.
+    case composePostDraft(intent: String, title: String?, body: String)
+    /// An assistant Support Train card opened in the start wizard with its story.
+    case startSupportTrain(story: String)
     /// A person's public profile, opened from a DM header.
     case publicProfile(userId: String)
 }
@@ -292,11 +296,11 @@ public struct InboxTabRoot: View {
                 if !path.isEmpty { path.removeLast() }
             }
         case let .composePost(intent):
-            PulseComposeFlowView(
-                prefillFeedIntent: PulseIntent(rawValue: intent),
-                onCancel: { if !path.isEmpty { path.removeLast() } },
-                onPosted: { _ in if !path.isEmpty { path.removeLast() } }
-            )
+            postComposer(intent: intent, title: nil, body: nil)
+        case let .composePostDraft(intent, title, body):
+            postComposer(intent: intent, title: title, body: body)
+        case let .startSupportTrain(story):
+            supportTrainStart(story: story)
         case let .publicProfile(userId):
             profileDestination(userId: userId)
         }
@@ -342,6 +346,8 @@ public struct InboxTabRoot: View {
         return joined.isEmpty ? "··" : joined
     }
 
+    /// Where an assistant draft's "Use" goes. Posts and Support Trains carry
+    /// their text, so the composer opens with the draft instead of empty.
     private func draftRoute(for draft: ChatAIDraftCard) -> InboxRoute {
         switch draft.type {
         case "gig":
@@ -349,7 +355,17 @@ public struct InboxTabRoot: View {
         case "listing":
             .composeListing
         case "post":
-            .composePost(intent: PulseIntent.ask.rawValue)
+            if let prefill = draft.prefill {
+                .composePostDraft(
+                    intent: PulseIntent.from(postType: prefill.postType).rawValue,
+                    title: prefill.title,
+                    body: prefill.body
+                )
+            } else {
+                .composePost(intent: PulseIntent.ask.rawValue)
+            }
+        case "support_train":
+            .startSupportTrain(story: draft.prefill?.body ?? "")
         default:
             .composePost(intent: PulseIntent.ask.rawValue)
         }
@@ -378,6 +394,39 @@ public struct InboxTabRoot: View {
                 online: false
             )
         }
+    }
+}
+
+// MARK: - Pantopus AI draft destinations
+
+private extension InboxTabRoot {
+    func postComposer(intent: String, title: String?, body: String?) -> some View {
+        PulseComposeFlowView(
+            prefillFeedIntent: PulseIntent(rawValue: intent),
+            prefillTitle: title,
+            prefillBody: body,
+            onCancel: { if !path.isEmpty { path.removeLast() } },
+            onPosted: { _ in if !path.isEmpty { path.removeLast() } }
+        )
+    }
+
+    /// The start-a-Support-Train wizard, opened from a Pantopus AI card with its story.
+    func supportTrainStart(story: String) -> some View {
+        StartSupportTrainWizardView(
+            viewModel: StartSupportTrainWizardViewModel(prefillReason: story),
+            onDismiss: {
+                Task { @MainActor in if !path.isEmpty { path.removeLast() } }
+            },
+            onOpenTrain: { trainId in
+                // The train opens where Support Trains live (the Hub), as its link does.
+                Task { @MainActor in
+                    if !path.isEmpty { path.removeLast() }
+                    if let url = URL(string: "pantopus://support-trains/\(trainId)") {
+                        DeepLinkRouter.shared.handle(url: url)
+                    }
+                }
+            }
+        )
     }
 }
 

@@ -115,7 +115,9 @@ final class IconTests: XCTestCase {
         "layout-template", "panel-bottom", "square-mouse-pointer",
         "text-cursor-input", "hand-pointer", "wand-2",
         // Calendarly — second batch surfaced during per-screen parity sweep.
-        "arrow-right-circle", "link-2-off", "calendar-search", "git-merge"
+        "arrow-right-circle", "link-2-off", "calendar-search", "git-merge",
+        // Nearby Plans (board P1) — one glyph per plan kind.
+        "plan-watch", "plan-playdate", "plan-pickup", "plan-walk", "location-arrow"
     ]
 
     func testInventoryMatches() {

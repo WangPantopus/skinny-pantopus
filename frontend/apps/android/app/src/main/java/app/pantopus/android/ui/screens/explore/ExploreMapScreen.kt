@@ -45,6 +45,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -71,10 +72,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.R
 import app.pantopus.android.data.api.models.saved_places.SavedPlaceDto
 import app.pantopus.android.data.location.UserCoordinate
+import app.pantopus.android.ui.components.RefreshFailedLine
+import app.pantopus.android.ui.components.RefreshNotice
+import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.screens.saved_places.PendingSavePlace
 import app.pantopus.android.ui.screens.saved_places.SaveBookmarkButton
@@ -121,6 +126,7 @@ fun ExploreMapScreen(
     savedPlacesStore: SavedPlacesStoreViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
     val activeKind by viewModel.activeKind.collectAsStateWithLifecycle()
     val activeSort by viewModel.activeSort.collectAsStateWithLifecycle()
     val sheetStop by viewModel.sheetStop.collectAsStateWithLifecycle()
@@ -133,10 +139,12 @@ fun ExploreMapScreen(
     val saveToast by savedPlacesStore.toast.collectAsStateWithLifecycle()
     var showFilters by remember { mutableStateOf(false) }
 
-    LaunchedEffect(focus) {
+    LifecycleResumeEffect(focus) {
         viewModel.configureFocus(focus)
         viewModel.load()
+        onPauseOrDispose { viewModel.suspendContent() }
     }
+    RefreshOnStoreChange(viewModel::load)
     LaunchedEffect(Unit) { savedPlacesStore.loadIfNeeded() }
 
     val cameraState =
@@ -147,16 +155,14 @@ fun ExploreMapScreen(
                     if (viewingCenter == null) 1f else 15f,
                 )
         }
+    var positionedCenter by rememberSaveable { mutableStateOf<String?>(null) }
     LaunchedEffect(viewingCenter) {
         viewingCenter?.let { coord ->
-            cameraState.position = CameraPosition.fromLatLngZoom(LatLng(coord.latitude, coord.longitude), 15f)
-        }
-    }
-    LaunchedEffect(focus) {
-        focus?.let { target ->
-            viewModel.selectEntity(null)
-            viewModel.setSheetStop(ExploreSheetStop.Standard)
-            cameraState.position = CameraPosition.fromLatLngZoom(LatLng(target.latitude, target.longitude), 15f)
+            val key = "${coord.latitude},${coord.longitude}"
+            if (positionedCenter != key) {
+                cameraState.position = CameraPosition.fromLatLngZoom(LatLng(coord.latitude, coord.longitude), 15f)
+                positionedCenter = key
+            }
         }
     }
 
@@ -216,6 +222,7 @@ fun ExploreMapScreen(
         )
         ExploreBottomSheet(
             state = state,
+            refreshNotice = refreshNotice,
             activeSort = activeSort,
             activeFilterCount = filters.activeCount,
             sheetStop = sheetStop,
@@ -846,6 +853,7 @@ private fun ExploreMapControlButton(
 @Composable
 private fun ExploreBottomSheet(
     state: ExploreMapUiState,
+    refreshNotice: RefreshNotice?,
     activeSort: ExploreSort,
     activeFilterCount: Int,
     sheetStop: ExploreSheetStop,
@@ -897,6 +905,7 @@ private fun ExploreBottomSheet(
                 .testTag("exploreSheet"),
     ) {
         ExploreDragHandle()
+        refreshNotice?.let { RefreshFailedLine(it) }
         ExploreSheetHeader(
             countLabel = exploreHeaderCountLabel(state, activeFilterCount),
             activeFilterCount = activeFilterCount,
