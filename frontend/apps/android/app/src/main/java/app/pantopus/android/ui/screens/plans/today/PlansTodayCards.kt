@@ -278,7 +278,12 @@ private fun HowWasItCard(
         }
         if (answered != null) {
             Text(
-                text = "Thanks for telling us.",
+                text =
+                    if (answered == "not_right") {
+                        "Thanks for telling us. Someone from Pantopus will look at it."
+                    } else {
+                        "Thanks. Glad you went."
+                    },
                 style = PantopusTextStyle.body.copy(fontWeight = FontWeight.SemiBold),
                 color = PantopusColors.appText,
             )

@@ -393,6 +393,27 @@ private fun PlansMap(
         delay(VIEWPORT_SETTLE_MS)
         reportViewport()
     }
+    // F1's first look (as on iOS): once the plans near a new location are read, frame them and you between the area
+    // pill and chips and the list, so no pin opens under them or off the edge. Later camera moves are the person's own.
+    var framedFor by rememberSaveable { mutableStateOf<String?>(null) }
+    val nearbyPoints =
+        remember(state.pins, state.list) {
+            state.pins.mapNotNull { latLngOf(it.latitude, it.longitude) } +
+                state.list.mapNotNull { latLngOf(it.area?.latitude, it.area?.longitude) }
+        }
+    LaunchedEffect(location, nearbyPoints.isNotEmpty(), googleMap != null) {
+        val loc = location ?: return@LaunchedEffect
+        if (googleMap == null || nearbyPoints.isEmpty() || state.selectedId != null || state.postedId != null) return@LaunchedEffect
+        val key = "${loc.source}:${loc.latitude}:${loc.longitude}"
+        if (framedFor == key) return@LaunchedEffect
+        framedFor = key
+        delay(VIEWPORT_SETTLE_MS)
+        val bounds = framedBounds(LatLng(loc.latitude, loc.longitude), nearbyPoints)
+        val pinRoom = with(density) { PIN_ROOM.roundToPx() }
+        camera.animateOrMove(CameraUpdateFactory.newLatLngBounds(bounds, pinRoom), if (reduceMotion) 1 else FRAME_MS)
+        delay(VIEWPORT_SETTLE_MS)
+        reportViewport()
+    }
     LaunchedEffect(zoomOutMiles) {
         if (zoomOutMiles <= 0 || location == null) return@LaunchedEffect
         onZoomedOut()
@@ -516,6 +537,30 @@ private fun PlansMap(
 }
 
 private const val START_ZOOM = 14f
+private const val FRAME_MS = 450
+
+/** Room around the framed plans: a pin's head stands above its point, its tag hangs under it. */
+private val PIN_ROOM = 56.dp
+
+/** At least about 2 miles across, so one plan next door isn't street level (as on iOS). */
+private const val MIN_HALF_SPAN_DEGREES = 0.0145
+
+private fun latLngOf(
+    latitude: Double?,
+    longitude: Double?,
+): LatLng? = if (latitude != null && longitude != null) LatLng(latitude, longitude) else null
+
+/** You and the plans near you, at least about 2 miles across. */
+private fun framedBounds(
+    you: LatLng,
+    points: List<LatLng>,
+): LatLngBounds {
+    val bounds = LatLngBounds.builder().include(you).apply { points.forEach { include(it) } }.build()
+    val center = bounds.center
+    return bounds
+        .including(LatLng(center.latitude + MIN_HALF_SPAN_DEGREES, center.longitude))
+        .including(LatLng(center.latitude - MIN_HALF_SPAN_DEGREES, center.longitude))
+}
 private const val VIEWPORT_SETTLE_MS = 350L
 private const val SELECT_MS = 350
 private const val CLUSTER_MS = 400
