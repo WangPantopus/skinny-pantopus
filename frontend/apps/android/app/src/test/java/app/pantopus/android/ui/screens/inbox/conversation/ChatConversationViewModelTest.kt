@@ -122,6 +122,10 @@ class ChatConversationViewModelTest {
 
     @Before fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        every { repo.roomMessagesCopy(any()) } returns null
+        every { repo.conversationMessagesCopy(any(), any()) } returns null
+        every { repo.roomHistoryUpdater(any()) } returns {}
+        every { repo.conversationHistoryUpdater(any(), any()) } returns {}
         every { socket.connectionState } returns MutableStateFlow(SocketManager.ConnectionState.Disconnected)
         every { socket.eventsOf(any()) } returns emptyFlow()
         coEvery { socket.emitWithAck(any(), any(), any()) } returns null
@@ -195,7 +199,7 @@ class ChatConversationViewModelTest {
 
     @Test fun load_projects_canonical_backend_message_field() =
         runTest {
-            coEvery { repo.conversationMessages(any(), any(), any(), any(), any()) } returns
+            coEvery { repo.conversationMessages(any(), any(), any(), any(), any(), any()) } returns
                 NetworkResult.Success(
                     ChatMessagesResponse(
                         messages = listOf(canonicalMessage(id = "m1", userId = "u_other", text = "Hey neighbor")),
@@ -219,7 +223,7 @@ class ChatConversationViewModelTest {
 
     @Test fun load_produces_loaded_with_day_divider_and_bubbles() =
         runTest {
-            coEvery { repo.conversationMessages(any(), any(), any(), any(), any()) } returns
+            coEvery { repo.conversationMessages(any(), any(), any(), any(), any(), any()) } returns
                 NetworkResult.Success(
                     ChatMessagesResponse(
                         messages =
@@ -250,7 +254,7 @@ class ChatConversationViewModelTest {
      */
     @Test fun load_keeps_backend_oldest_first_order() =
         runTest {
-            coEvery { repo.conversationMessages(any(), any(), any(), any(), any()) } returns
+            coEvery { repo.conversationMessages(any(), any(), any(), any(), any(), any()) } returns
                 NetworkResult.Success(
                     ChatMessagesResponse(
                         messages =
@@ -283,7 +287,7 @@ class ChatConversationViewModelTest {
 
     @Test fun load_subscribes_to_backend_socket_event_names() =
         runTest {
-            coEvery { repo.conversationMessages(any(), any(), any(), any(), any()) } returns
+            coEvery { repo.conversationMessages(any(), any(), any(), any(), any(), any()) } returns
                 NetworkResult.Success(ChatMessagesResponse(messages = emptyList(), hasMore = false))
             val vm = makeViewModel()
             vm.configure(
@@ -303,7 +307,7 @@ class ChatConversationViewModelTest {
             every { socket.connectionState } returns MutableStateFlow(SocketManager.ConnectionState.Connected)
             coEvery { socket.emitWithAck(eq("room:join"), any(), any()) } returns
                 org.json.JSONObject("""{"success":true,"messages":[]}""")
-            coEvery { repo.conversationMessages(any(), any(), any(), any(), any()) } returns
+            coEvery { repo.conversationMessages(any(), any(), any(), any(), any(), any()) } returns
                 NetworkResult.Success(
                     ChatMessagesResponse(
                         messages = listOf(message(id = "m1", userId = "u_other", text = "hi")),
@@ -424,7 +428,7 @@ class ChatConversationViewModelTest {
 
     @Test fun send_failure_marks_optimistic_bubble_as_failed() =
         runTest {
-            coEvery { repo.conversationMessages(any(), any(), any(), any(), any()) } returns
+            coEvery { repo.conversationMessages(any(), any(), any(), any(), any(), any()) } returns
                 NetworkResult.Success(ChatMessagesResponse(messages = emptyList(), hasMore = false))
             coEvery { repo.sendMessage(any<SendChatMessageBody>()) } returns
                 NetworkResult.Failure(NetworkError.Server(500, null))
@@ -454,7 +458,7 @@ class ChatConversationViewModelTest {
      */
     @Test fun send_creates_direct_room_and_posts_bare_client_message_id() =
         runTest {
-            coEvery { repo.conversationMessages(any(), any(), any(), any(), any()) } returns
+            coEvery { repo.conversationMessages(any(), any(), any(), any(), any(), any()) } returns
                 NetworkResult.Success(ChatMessagesResponse(messages = emptyList(), hasMore = false))
             coEvery { repo.createDirectChat("u_other") } returns
                 NetworkResult.Success(CreateDirectChatResponse(roomId = "r9"))
@@ -494,7 +498,7 @@ class ChatConversationViewModelTest {
      */
     @Test fun retry_reuses_client_message_id_without_clobbering_composer() =
         runTest {
-            coEvery { repo.conversationMessages(any(), any(), any(), any(), any()) } returns
+            coEvery { repo.conversationMessages(any(), any(), any(), any(), any(), any()) } returns
                 NetworkResult.Success(ChatMessagesResponse(messages = emptyList(), hasMore = false))
             val bodies = mutableListOf<SendChatMessageBody>()
             coEvery { repo.sendMessage(capture(bodies)) } returnsMany
@@ -540,7 +544,7 @@ class ChatConversationViewModelTest {
      */
     @Test fun refetch_keeps_failed_pending_row() =
         runTest {
-            coEvery { repo.conversationMessages(any(), any(), any(), any(), any()) } returns
+            coEvery { repo.conversationMessages(any(), any(), any(), any(), any(), any()) } returns
                 NetworkResult.Success(
                     ChatMessagesResponse(messages = listOf(message(id = "m1", userId = "u_other", text = "hi")), hasMore = false),
                 )
@@ -573,7 +577,7 @@ class ChatConversationViewModelTest {
             val bodySlot = slot<SendChatMessageBody>()
             coEvery { repo.sendMessage(capture(bodySlot)) } returns
                 NetworkResult.Failure(NetworkError.Server(500, null))
-            coEvery { repo.conversationMessages(any(), any(), any(), any(), any()) } answers {
+            coEvery { repo.conversationMessages(any(), any(), any(), any(), any(), any()) } answers {
                 val rows =
                     if (bodySlot.isCaptured) {
                         listOf(
@@ -622,7 +626,7 @@ class ChatConversationViewModelTest {
      */
     @Test fun reply_to_cross_room_message_drops_reply_to_id() =
         runTest {
-            coEvery { repo.conversationMessages(any(), any(), any(), any(), any()) } returns
+            coEvery { repo.conversationMessages(any(), any(), any(), any(), any(), any()) } returns
                 NetworkResult.Success(
                     ChatMessagesResponse(
                         messages =
@@ -670,7 +674,7 @@ class ChatConversationViewModelTest {
      */
     @Test fun reply_to_optimistic_row_drops_reply_to_id() =
         runTest {
-            coEvery { repo.conversationMessages(any(), any(), any(), any(), any()) } returns
+            coEvery { repo.conversationMessages(any(), any(), any(), any(), any(), any()) } returns
                 NetworkResult.Success(ChatMessagesResponse(messages = emptyList(), hasMore = false))
             val bodies = mutableListOf<SendChatMessageBody>()
             coEvery { repo.sendMessage(capture(bodies)) } returnsMany
@@ -707,7 +711,7 @@ class ChatConversationViewModelTest {
 
     @Test fun load_failure_transitions_error() =
         runTest {
-            coEvery { repo.conversationMessages(any(), any(), any(), any(), any()) } returns
+            coEvery { repo.conversationMessages(any(), any(), any(), any(), any(), any()) } returns
                 NetworkResult.Failure(NetworkError.Server(500, "boom"))
             val vm = makeViewModel()
             vm.configure(
@@ -735,7 +739,7 @@ class ChatConversationViewModelTest {
                     hasMore = false,
                 )
             coEvery {
-                repo.conversationMessages(any(), any(), any(), any(), any())
+                repo.conversationMessages(any(), any(), any(), any(), any(), any())
             } returnsMany listOf(NetworkResult.Success(initial), NetworkResult.Success(older))
             val vm = makeViewModel()
             vm.configure(
@@ -770,7 +774,7 @@ class ChatConversationViewModelTest {
                     hasMore = false,
                 )
             coEvery {
-                repo.conversationMessages(any(), any(), any(), any(), any())
+                repo.conversationMessages(any(), any(), any(), any(), any(), any())
             } returnsMany listOf(NetworkResult.Success(first), NetworkResult.Success(second))
             val vm = makeViewModel()
             vm.configure(
@@ -793,7 +797,7 @@ class ChatConversationViewModelTest {
 
     @Test fun reply_send_includes_reply_to_id() =
         runTest {
-            coEvery { repo.conversationMessages(any(), any(), any(), any(), any()) } returns
+            coEvery { repo.conversationMessages(any(), any(), any(), any(), any(), any()) } returns
                 NetworkResult.Success(
                     ChatMessagesResponse(messages = listOf(message(id = "m1", userId = "u_other", text = "hi")), hasMore = false),
                 )
@@ -819,7 +823,7 @@ class ChatConversationViewModelTest {
 
     @Test fun edit_updates_message_and_clears_edit_state() =
         runTest {
-            coEvery { repo.conversationMessages(any(), any(), any(), any(), any()) } returns
+            coEvery { repo.conversationMessages(any(), any(), any(), any(), any(), any()) } returns
                 NetworkResult.Success(
                     ChatMessagesResponse(messages = listOf(message(id = "m1", userId = "u_me", text = "old")), hasMore = false),
                 )
@@ -848,7 +852,7 @@ class ChatConversationViewModelTest {
 
     @Test fun delete_removes_owned_message() =
         runTest {
-            coEvery { repo.conversationMessages(any(), any(), any(), any(), any()) } returns
+            coEvery { repo.conversationMessages(any(), any(), any(), any(), any(), any()) } returns
                 NetworkResult.Success(
                     ChatMessagesResponse(messages = listOf(message(id = "m1", userId = "u_me", text = "bye")), hasMore = false),
                 )
@@ -867,7 +871,7 @@ class ChatConversationViewModelTest {
 
     @Test fun queued_attachment_uploads_and_sends_file_ids() =
         runTest {
-            coEvery { repo.roomMessages(any(), any(), any(), any()) } returns
+            coEvery { repo.roomMessages(any(), any(), any(), any(), any()) } returns
                 NetworkResult.Success(ChatMessagesResponse(messages = emptyList(), hasMore = false))
             val uploadKeys = mutableListOf<String>()
             coEvery { uploadRepo.uploadChatMedia(eq("r1"), any(), capture(uploadKeys)) } returnsMany
@@ -947,7 +951,7 @@ class ChatConversationViewModelTest {
                 NetworkResult.Success(FindOrCreateTopicResponse(topic, true))
             coEvery { repo.conversationTopics("u_other") } returns
                 NetworkResult.Success(ConversationTopicsResponse(listOf(topic)))
-            coEvery { repo.conversationMessages(any(), any(), any(), any(), any()) } returns
+            coEvery { repo.conversationMessages(any(), any(), any(), any(), any(), any()) } returns
                 NetworkResult.Success(ChatMessagesResponse(messages = emptyList(), hasMore = false))
             val vm = makeViewModel()
             vm.configure(
@@ -958,14 +962,14 @@ class ChatConversationViewModelTest {
             )
             vm.load()
             coVerify { repo.findOrCreateTopic("u_other", any()) }
-            coVerify { repo.conversationMessages("u_other", null, null, 60, "t1") }
+            coVerify { repo.conversationMessages("u_other", null, null, 100, "t1", false) }
             assertEquals("t1", vm.selectedTopicId.value)
             assertEquals("Lamp", vm.topics.value.first().title)
         }
 
     @Test fun load_maps_gig_offer_metadata_to_rich_card() =
         runTest {
-            coEvery { repo.roomMessages("r1", any(), any(), any()) } returns
+            coEvery { repo.roomMessages("r1", any(), any(), any(), any()) } returns
                 NetworkResult.Success(
                     ChatMessagesResponse(
                         messages =
@@ -1059,7 +1063,7 @@ class ChatConversationViewModelTest {
                         listOf(ChatTopic(id = "t1", topicType = "task", title = "Fence repair", status = "open")),
                     ),
                 )
-            coEvery { repo.conversationMessages(any(), any(), any(), any(), any()) } returns
+            coEvery { repo.conversationMessages(any(), any(), any(), any(), any(), any()) } returns
                 NetworkResult.Success(
                     ChatMessagesResponse(
                         messages =
@@ -1102,7 +1106,7 @@ class ChatConversationViewModelTest {
      */
     @Test fun pre_bid_limit_failure_sets_send_limit_notice() =
         runTest {
-            coEvery { repo.roomMessages(any(), any(), any(), any()) } returns
+            coEvery { repo.roomMessages(any(), any(), any(), any(), any()) } returns
                 NetworkResult.Success(ChatMessagesResponse(messages = emptyList(), hasMore = false))
             coEvery { repo.sendMessage(any<SendChatMessageBody>()) } returns
                 NetworkResult.Failure(
@@ -1138,7 +1142,7 @@ class ChatConversationViewModelTest {
     /** A non-PRE_BID 4xx must not raise the pre-bid banner. */
     @Test fun generic_client_error_does_not_set_send_limit_notice() =
         runTest {
-            coEvery { repo.roomMessages(any(), any(), any(), any()) } returns
+            coEvery { repo.roomMessages(any(), any(), any(), any(), any()) } returns
                 NetworkResult.Success(ChatMessagesResponse(messages = emptyList(), hasMore = false))
             coEvery { repo.sendMessage(any<SendChatMessageBody>()) } returns
                 NetworkResult.Failure(NetworkError.ClientError(400, """{"error":"Invalid payload"}"""))
@@ -1156,7 +1160,7 @@ class ChatConversationViewModelTest {
 
     @Test fun bulk_delete_removes_selected_messages_and_exits_selection() =
         runTest {
-            coEvery { repo.conversationMessages(any(), any(), any(), any(), any()) } returns
+            coEvery { repo.conversationMessages(any(), any(), any(), any(), any(), any()) } returns
                 NetworkResult.Success(
                     ChatMessagesResponse(
                         messages =
@@ -1194,7 +1198,7 @@ class ChatConversationViewModelTest {
 
     @Test fun selection_mode_rejects_optimistic_rows() =
         runTest {
-            coEvery { repo.conversationMessages(any(), any(), any(), any(), any()) } returns
+            coEvery { repo.conversationMessages(any(), any(), any(), any(), any(), any()) } returns
                 NetworkResult.Success(ChatMessagesResponse(messages = emptyList(), hasMore = false))
             coEvery { repo.sendMessage(any<SendChatMessageBody>()) } returns
                 NetworkResult.Failure(NetworkError.Server(500, null))
@@ -1220,7 +1224,7 @@ class ChatConversationViewModelTest {
 
     @Test fun block_user_calls_blocks_repo_and_signals_success() =
         runTest {
-            coEvery { repo.conversationMessages(any(), any(), any(), any(), any()) } returns
+            coEvery { repo.conversationMessages(any(), any(), any(), any(), any(), any()) } returns
                 NetworkResult.Success(ChatMessagesResponse(messages = emptyList(), hasMore = false))
             coEvery { blocksRepo.block("u_other") } returns NetworkResult.Success(Unit)
             val vm = makeViewModel()
@@ -1238,7 +1242,7 @@ class ChatConversationViewModelTest {
 
     @Test fun report_user_calls_reports_repo_and_signals_success() =
         runTest {
-            coEvery { repo.conversationMessages(any(), any(), any(), any(), any()) } returns
+            coEvery { repo.conversationMessages(any(), any(), any(), any(), any(), any()) } returns
                 NetworkResult.Success(ChatMessagesResponse(messages = emptyList(), hasMore = false))
             val bodySlot = slot<UserReportRequest>()
             coEvery { reportsRepo.report("u_other", capture(bodySlot)) } returns
