@@ -353,7 +353,10 @@ struct PlanWaitlistSection: View {
             tone: .neutral,
             icon: .list,
             title: "You're \(PlanRowModel.ordinal(card.viewer?.waitlistPosition ?? 1)) on the waitlist",
-            message: "If someone can't make it, you're in. We'll tell you right away."
+            // Only an automatic plan lets the next person in by itself; otherwise the host decides.
+            message: card.howPeopleGetIn == "automatic"
+                ? "If someone can't make it, you're in. We'll tell you right away."
+                : "If someone can't make it, \(PlanCardLines.firstName(card.host.displayName)) can let you in. We'll tell you right away."
         )
         VStack(alignment: .leading, spacing: Spacing.s2) {
             PlanTypeTag(kind: card.kind)
@@ -386,7 +389,8 @@ struct PlanWaitlistSection: View {
                 PlanAvatar(name: card.host.displayName, url: card.host.avatarUrl)
                 VStack(alignment: .leading, spacing: 0) {
                     Text(card.host.displayName).planFont(.bodyStrong).foregroundStyle(Theme.Color.appText)
-                    Text(card.howPeopleGetIn == "automatic" ? "Lets in anyone nearby automatically" : PlanCardLines.approval(card))
+                    // The rule that applies (anyone nearby, verified neighbors, people hosted before), never a guess.
+                    Text(PlanCardLines.approval(card))
                         .planFont(.small)
                         .foregroundStyle(Theme.Color.appTextSecondary)
                 }
