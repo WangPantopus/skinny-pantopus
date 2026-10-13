@@ -23,6 +23,7 @@ import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.auth.OAuthSessionStore
 import app.pantopus.android.data.auth.TokenStorage
 import app.pantopus.android.data.chats.ActiveChatThread
+import app.pantopus.android.data.plans.PlansFeature
 import app.pantopus.android.data.store.StoreSync
 import app.pantopus.android.push.PushTokenSyncer
 import app.pantopus.android.push.ReminderActionReceiver
@@ -69,6 +70,9 @@ class MainActivity : FragmentActivity() {
     /** Instant Screens §8: the change signal and the catch-up marks for the screens' store. */
     @Inject lateinit var storeSync: StoreSync
 
+    /** Nearby Plans' server flags: read at sign-in and on every foreground. */
+    @Inject lateinit var plansFeature: PlansFeature
+
     /**
      * App-wide [ToastController]. Survives configuration changes via the
      * Activity instance. Feature view-models can grab the same instance
@@ -101,6 +105,7 @@ class MainActivity : FragmentActivity() {
         enableEdgeToEdge()
         secureWindowController.bind(this)
         storeSync.start()
+        plansFeature.start()
         observeAppLockPrivacyHold()
         lifecycleScope.launch {
             authRepository.state.collect { pilotEvents.authChanged() }
@@ -133,6 +138,7 @@ class MainActivity : FragmentActivity() {
         pilotEvents.enterForeground()
         appLockManager.appDidBecomeActive()
         storeSync.foregrounded()
+        plansFeature.foregrounded()
         launchPushTokenSync()
     }
 

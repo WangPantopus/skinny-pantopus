@@ -1978,16 +1978,7 @@ router.get('/map', verifyToken, async (req, res) => {
         let homeCount = 0;
         for (const h of (homes || [])) {
           if (homeCount >= lim) break;
-          let lat = null, lon = null;
-          if (h.location) {
-            if (typeof h.location === 'object' && h.location.coordinates) {
-              lon = h.location.coordinates[0];
-              lat = h.location.coordinates[1];
-            } else if (typeof h.location === 'string') {
-              const m = h.location.match(/POINT\(([^ ]+) ([^ ]+)\)/);
-              if (m) { lon = parseFloat(m[1]); lat = parseFloat(m[2]); }
-            }
-          }
+          const { latitude: lat, longitude: lon } = resolveHomeCoordinates(h);
           if (lat != null && lon != null && lat >= s && lat <= n && lon >= w && lon <= e) {
             results.push({
               layer_type: 'home',
@@ -2005,21 +1996,34 @@ router.get('/map', verifyToken, async (req, res) => {
       }
     }
 
-    // When viewport is empty, find the nearest activity center
+    // ── Plans layer (Nearby Plans) ──
+    // Only while the `plans` flag is on for this viewer; the area point for everyone,
+    // the exact place for the host and people who are in (services/plans/planMap.js).
+    if (enabledLayers.includes('plans')) {
+      try {
+        const { planPins } = require('../services/plans/planMap');
+        results.push(...await planPins(req.user, { south: s, west: w, north: n, east: e }, req.query));
+      } catch (error) {
+        logger.error('Error fetching map plans', { error: error.message, userId });
+        if (enabledLayers.filter(Boolean).every(layer => layer === 'plans')) throw error;
+      }
+    }
+
+    // When the viewport is empty, point to the nearest post this viewer's map would
+    // show, at the point it would show it (docs/location-privacy-matrix.md), never a
+    // stored point or a post they can't see.
     let nearest_activity_center = null;
-    if (results.length === 0) {
-      const centerLat = (s + n) / 2;
-      const centerLon = (w + e) / 2;
-      const { data: nearestRows } = await supabaseAdmin.rpc('find_nearest_activity_center', {
-        p_center_lat: centerLat,
-        p_center_lon: centerLon,
-        p_content_type: 'post',
-      });
-      if (nearestRows && nearestRows.length > 0) {
-        nearest_activity_center = {
-          latitude: nearestRows[0].latitude,
-          longitude: nearestRows[0].longitude,
-        };
+    if (results.length === 0 && enabledLayers.includes('posts')) {
+      try {
+        nearest_activity_center = await feedService.findNearestMapPost({
+          userId,
+          surface: surface || 'place',
+          postType: postType || null,
+          latitude: (s + n) / 2,
+          longitude: (w + e) / 2,
+        });
+      } catch (error) {
+        logger.warn('Nearest map post lookup failed', { error: error.message, userId });
       }
     }
 

@@ -38,6 +38,14 @@ const FUNNEL_EVENT_TYPES = Object.freeze([
   'reminder_sent',
   'reminder_action',
   'suggestion_decision',
+  // Nearby Plans, all recorded by the backend's Plans routes (meta: plan_id, kind).
+  'plan_viewed',
+  'plan_created',
+  'plan_requested',
+  'plan_accepted',
+  'plan_attended',
+  'plan_hosted_again',
+  'plan_share_opened',
 ]);
 
 // Only these pilot events are accepted from an authenticated app. Delivery
