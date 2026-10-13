@@ -451,6 +451,8 @@ public enum PantopusIcon: String, CaseIterable, Sendable {
     case planPlaydate = "plan-playdate"
     case planPickup = "plan-pickup"
     case planWalk = "plan-walk"
+    /// The outlined location arrow (Plans: "Show my location", Directions).
+    case locationArrow = "location-arrow"
 
     /// SF Symbol name used to render this icon. Chosen for closest visual
     /// parity with the Lucide source; designers can later swap the
@@ -818,6 +820,7 @@ public enum PantopusIcon: String, CaseIterable, Sendable {
         case .planPlaydate: "figure.and.child.holdinghands"
         case .planPickup: "tennisball"
         case .planWalk: "cup.and.saucer"
+        case .locationArrow: "location"
         }
     }
 }
