@@ -190,14 +190,14 @@ final class PlanComposerModel {
     /// What's still missing, in a sentence; nil when the draft can be previewed.
     var problem: String? {
         if kind == .playdate, kidsAges.isEmpty { return "Pick the kids' ages." }
-        if effectiveTitle.trimmingCharacters(in: .whitespaces).isEmpty { return "Add a title." }
+        if effectiveTitle.trimmingCharacters(in: .whitespaces).isEmpty { return "Give your plan a title." }
         if whereKind == .publicPlace, place == nil { return "Choose a place." }
         if whereKind == .home, home == nil { return "Add your home to host there, or choose a public place." }
         let span = end.timeIntervalSince(effectiveStart)
         if span < 15 * 60 { return "A plan lasts at least 15 minutes." }
         if span > 8 * 3600 { return "A plan lasts at most 8 hours." }
-        if effectiveStart > Date().addingTimeInterval(14 * 86400) { return "Plans start within the next 14 days." }
-        if effectiveStart < Date().addingTimeInterval(-60), !(kind == .pickupGame && startsNow) { return "Pick a time from now on." }
+        if effectiveStart > Date().addingTimeInterval(14 * 86400) { return "Plans can start up to 14 days from now." }
+        if effectiveStart < Date().addingTimeInterval(-60), !(kind == .pickupGame && startsNow) { return "Pick a time that hasn't passed." }
         return nil
     }
 
