@@ -100,6 +100,8 @@ const reconcilePaymentRefunds = require('./reconcilePaymentRefunds');
 const authRegistryPrune = require('./authRegistryPrune');
 // Support Train reminders
 const { runSupportTrainReminders } = require('./supportTrainReminders');
+// Nearby Plans: held pushes, reminders, lifecycle and the host's summary
+const { runPlansTick } = require('./planJobs');
 const { runBookingReminders } = require('./bookingReminders');
 // Payment health alerting
 const { checkAndAlertStuckPayments } = require('../routes/paymentOps');
@@ -671,6 +673,15 @@ function startJobs(options = {}) {
   // Sends 24h and day-of reminders to helpers, nudges organizers
   // about unfilled slots within the next 7 days.
   scheduleCron('9,39 * * * *', wrapJob('supportTrainReminders', runSupportTrainReminders), {
+    scheduled: true,
+    timezone: 'UTC',
+  });
+
+  // ─── Nearby Plans ───
+  // Every 5 minutes: held pushes (quiet hours, ask bundles), expiring asks, ending
+  // plans, closing chats 24h after the end, reminders and the 8 AM host summary.
+  // Every send is claimed first, so overlapping runners don't repeat a notice.
+  scheduleCron('*/5 * * * *', wrapJob('plansTick', runPlansTick), {
     scheduled: true,
     timezone: 'UTC',
   });

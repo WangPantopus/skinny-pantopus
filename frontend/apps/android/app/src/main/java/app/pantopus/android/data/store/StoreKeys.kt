@@ -21,6 +21,7 @@ import app.pantopus.android.data.api.models.place.PlaceSectionId
 import app.pantopus.android.data.api.models.posts.PostDetailResponse
 import app.pantopus.android.data.api.models.postsmap.PostsMapResponse
 import app.pantopus.android.data.api.models.saved_places.SavedPlacesListResponse
+import app.pantopus.android.data.api.models.support_trains.SupportTrainDetailDto
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsListResponse
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsNearbyResponse
 import app.pantopus.android.data.api.models.users.InviteCodeDto
@@ -117,6 +118,14 @@ object StoreKeys {
             mapOf("limit" to "20", "offset" to "0"),
             kind = StoreKind.SUPPORT_TRAINS,
             topics = setOf("supporttrain:*"),
+        )
+
+    /** Memory-only title and slots; the mixed detail reply's sensitive fields never enter this key. */
+    fun supportTrain(id: String) =
+        StoreKey<SupportTrainDetailDto>(
+            "api/activities/support-trains/$id",
+            kind = StoreKind.SUPPORT_TRAINS,
+            topics = setOf("supporttrain:$id"),
         )
 
     /** Support Trains near [latitude], [longitude] (rounded with [roundCoordinate] before they get here). */
