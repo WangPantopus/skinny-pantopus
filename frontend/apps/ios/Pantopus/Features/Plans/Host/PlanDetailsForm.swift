@@ -53,7 +53,7 @@ struct PlanDetailsForm: View {
 
     private var titleField: some View {
         PlanFormField(label: "Title") {
-            PlanTextInput(placeholder: titlePlaceholder, text: $model.title, identifier: "planTitle")
+            PlanTextInput(placeholder: titlePlaceholder, text: $model.title, identifier: "planTitle", label: "Title")
         }
     }
 
@@ -223,7 +223,14 @@ struct PlanDetailsForm: View {
 
     private var noteField: some View {
         PlanFormField(label: model.kind == .playdate ? "Note for families who are in" : "Note for people who are in", locked: true) {
-            PlanTextInput(placeholder: notePlaceholder, text: $model.guestNote, multiline: true, limit: 500, identifier: "planGuestNote")
+            PlanTextInput(
+                placeholder: notePlaceholder,
+                text: $model.guestNote,
+                multiline: true,
+                limit: 500,
+                identifier: "planGuestNote",
+                label: "Note for people who are in"
+            )
         }
     }
 
@@ -244,7 +251,8 @@ struct PlanDetailsForm: View {
                 text: $model.about,
                 multiline: true,
                 limit: 500,
-                identifier: "planAbout"
+                identifier: "planAbout",
+                label: "About, everyone sees this"
             )
         }
     }

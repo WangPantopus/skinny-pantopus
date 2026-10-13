@@ -182,6 +182,7 @@ struct PlanAskSheet: View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
             Text.planOverline("Say hi · optional")
             TextField("Add a short hello", text: $note, axis: .vertical)
+                .accessibilityLabel("Say hi, optional")
                 .planFont(.body)
                 .lineLimit(3...6)
                 .focused($noteFocused)
