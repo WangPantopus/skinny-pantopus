@@ -42,6 +42,7 @@ import app.pantopus.android.ui.screens.plans.components.PlanTile
 import app.pantopus.android.ui.screens.plans.components.PlanTypeTag
 import app.pantopus.android.ui.screens.plans.components.PlanVerifiedBadge
 import app.pantopus.android.ui.screens.plans.components.planCard
+import app.pantopus.android.ui.screens.plans.detail.PlanAreaPreviewMap
 import app.pantopus.android.ui.screens.plans.map.PlanRowsSkeleton
 import app.pantopus.android.ui.screens.plans.map.planH3
 import app.pantopus.android.ui.theme.PantopusColors
@@ -372,9 +373,14 @@ private fun NeighborsCard(
                     PlanFormat.timeRange(start.atZone(ui.zone), end?.atZone(ui.zone))
         }
     val near = ui.home?.city?.let { "Near $it" } ?: "Your area"
+    val point = previewPoint(ui)
     Column(modifier = Modifier.fillMaxWidth().planCard()) {
         Box(modifier = Modifier.fillMaxWidth().height(120.dp).background(PantopusColors.appSurfaceSunken)) {
-            PlanAreaGlow(color = kind.colors.accent, radiusPx = 180f, modifier = Modifier.fillMaxSize())
+            if (point != null) {
+                PlanAreaPreviewMap(center = point, kind = kind, modifier = Modifier.fillMaxSize())
+            } else {
+                PlanAreaGlow(color = kind.colors.accent, radiusPx = 180f, modifier = Modifier.fillMaxSize())
+            }
         }
         Column(
             modifier = Modifier.padding(start = Spacing.s4, end = Spacing.s4, top = 14.dp, bottom = Spacing.s4),
@@ -407,6 +413,16 @@ private fun NeighborsCard(
         }
     }
 }
+
+/** Where the preview map centers: the picked place, or the home for a plan at home (the host's own preview only). */
+private fun previewPoint(ui: HostUi): LatLng? =
+    if (ui.draft.atHome) {
+        val lat = ui.home?.latitude
+        val lng = ui.home?.longitude
+        if (lat != null && lng != null) LatLng(lat, lng) else null
+    } else {
+        ui.draft.place?.let { LatLng(it.latitude, it.longitude) }
+    }
 
 private fun dayPartOf(hour: Int): String =
     when (hour) {
