@@ -754,7 +754,12 @@ async function listMine(viewer) {
   const visible = [...all.values()].filter((plan) => isVisibleTo(plan, viewer) && plan.status !== 'cancelled');
   const ctx = await loadCardContext(visible, viewer);
 
-  const out = { hosting: [], going: [], asked: [], waitlisted: [], recent: [] };
+  const out = {
+    hosting: [], going: [], asked: [], waitlisted: [], recent: [],
+    // The viewer's own standing, so the apps can lead people without a verified address to "Verify your
+    // address" instead of a playdate they can't ask to join or host.
+    viewer: { verified_address: Boolean(viewer.verified), sees_playdates: Boolean(viewer.seesPlaydates) },
+  };
   for (const plan of visible.sort(soonestFirst)) {
     const ended = new Date(endsAt(plan)).getTime() <= Date.now() || plan.status === 'ended';
     const card = buildCard(plan, viewer, ctx);
