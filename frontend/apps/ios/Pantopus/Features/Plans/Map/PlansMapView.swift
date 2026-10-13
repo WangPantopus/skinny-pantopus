@@ -58,7 +58,7 @@ struct PlansMapView: View {
         }
         .background(Theme.Color.appBg)
         .task { await viewModel.start() }
-        .refreshesOnStoreChange(affects: PlansStoreReads.affects) { await viewModel.start() }
+        .refreshesOnPlansChange { await viewModel.start() }
         .onChange(of: viewModel.recenterRequest) { _, _ in recenter() }
         .onChange(of: viewModel.widenRequest) { _, _ in widen() }
         .sheet(isPresented: $showsAreaPicker) {

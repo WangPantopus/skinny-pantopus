@@ -129,7 +129,7 @@ struct PlanRequestsScreen: View {
             }
             await viewModel.load()
         }
-        .refreshesOnStoreChange(affects: PlansStoreReads.affects) { await viewModel.load() }
+        .refreshesOnPlansChange { await viewModel.load() }
         .alert(
             "Share your address?",
             isPresented: Binding(get: { pendingAccept != nil }, set: { if !$0 { pendingAccept = nil } }),

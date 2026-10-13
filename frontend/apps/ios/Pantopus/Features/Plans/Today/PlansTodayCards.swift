@@ -133,7 +133,7 @@ struct PlansTodayCards: View {
         // Space below the cards only when there are any.
         .padding(.bottom, model.hosting.isEmpty && model.going.isEmpty && model.recent.isEmpty ? 0 : Spacing.s4)
         .task(id: flags.plans) { await model.load() }
-        .refreshesOnStoreChange(affects: PlansStoreReads.affects) { await model.load() }
+        .refreshesOnPlansChange { await model.load() }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("plansToday")
     }
