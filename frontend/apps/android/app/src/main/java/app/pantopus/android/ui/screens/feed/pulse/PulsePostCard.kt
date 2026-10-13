@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -455,7 +456,8 @@ private fun ReactionStrip(
             ReactionPill(
                 reaction = reaction,
                 active = content.userHasReacted && reaction.kind == content.reactions.firstOrNull()?.kind,
-                onClick = if (reaction.isInteractive && !content.likePending) onPrimary else null,
+                onClick = if (reaction.isInteractive) onPrimary else null,
+                enabled = !content.likePending,
                 postId = content.id,
             )
         }
@@ -468,8 +470,10 @@ private fun ReactionStrip(
                 modifier =
                     Modifier
                         .size(24.dp)
-                        .clickable(enabled = !content.savePending, onClick = onToggleSave)
+                        // Keep consuming taps while pending so they cannot open the surrounding post card.
+                        .clickable { if (!content.savePending) onToggleSave() }
                         .semantics {
+                            if (content.savePending) disabled()
                             contentDescription =
                                 if (content.actions.isSaved) "Remove bookmark" else "Save post"
                         }
@@ -574,17 +578,19 @@ private fun ReactionPill(
     reaction: PulseReaction,
     active: Boolean,
     onClick: (() -> Unit)?,
+    enabled: Boolean,
     postId: String,
 ) {
     val tint = if (active) PantopusColors.primary600 else PantopusColors.appTextSecondary
     val base =
         Modifier
             .semantics {
+                if (onClick != null && !enabled) disabled()
                 contentDescription = "${reaction.label.ifEmpty { "Heart reaction" }}, ${reaction.count}"
             }
     val withClick =
         if (onClick != null) {
-            base.clickable(onClick = onClick).testTag("pulseReaction_${postId}_${reaction.kind.key}")
+            base.clickable { if (enabled) onClick() }.testTag("pulseReaction_${postId}_${reaction.kind.key}")
         } else {
             base
         }
