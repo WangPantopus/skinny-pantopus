@@ -22,7 +22,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -37,7 +40,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.ui.components.RefreshFailedLine
+import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -61,6 +67,7 @@ private const val DIVIDER_INSET_DP = 70
  * exposes an overflow action sheet (Open on map / Share place / Remove).
  * Removal is optimistic and offers an Undo snackbar.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SavedPlacesScreen(
     onBack: () -> Unit,
@@ -69,13 +76,19 @@ fun SavedPlacesScreen(
     viewModel: SavedPlacesViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
+    val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
     val selectedFilter by viewModel.selectedFilter.collectAsStateWithLifecycle()
     val actionTarget by viewModel.actionTarget.collectAsStateWithLifecycle()
     val undo by viewModel.undo.collectAsStateWithLifecycle()
     val toast by viewModel.toast.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
-    LaunchedEffect(Unit) { viewModel.load() }
+    LifecycleResumeEffect(Unit) {
+        viewModel.load()
+        onPauseOrDispose { }
+    }
+    RefreshOnStoreChange(viewModel::load)
     LaunchedEffect(toast) {
         if (toast != null) {
             delay(TOAST_DISMISS_DELAY_MS)
@@ -89,7 +102,9 @@ fun SavedPlacesScreen(
         }
     }
 
-    Box(
+    PullToRefreshBox(
+        isRefreshing = refreshing,
+        onRefresh = viewModel::refresh,
         modifier =
             Modifier
                 .fillMaxSize()
@@ -98,6 +113,7 @@ fun SavedPlacesScreen(
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             SavedPlacesTopBar(state = state, onBack = onBack)
+            refreshNotice?.let { RefreshFailedLine(it) }
             when (val s = state) {
                 is SavedPlacesUiState.Loading -> SavedPlacesLoadingList()
                 is SavedPlacesUiState.Loaded -> {
@@ -435,6 +451,7 @@ private fun SavedPlacesEmpty(onSavePlace: () -> Unit) {
         modifier =
             Modifier
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
                 .background(PantopusColors.appSurfaceMuted)
                 .padding(horizontal = Spacing.s6)
                 .testTag("savedPlaces.empty"),
@@ -501,6 +518,7 @@ private fun SavedPlacesError(
         modifier =
             Modifier
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
                 .background(PantopusColors.appSurfaceMuted)
                 .padding(Spacing.s5)
                 .testTag("savedPlaces.error"),

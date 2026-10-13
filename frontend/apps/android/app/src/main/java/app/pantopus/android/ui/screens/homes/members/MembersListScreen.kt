@@ -52,7 +52,7 @@ fun MembersListScreen(
     onReviewResidency: () -> Unit = {},
     viewModel: MembersListViewModel = hiltViewModel(),
 ) {
-    HomeCopyLifecycle(viewModel::load, viewModel::suspendContent)
+    HomeCopyLifecycle(viewModel::load, viewModel::suspendContent, observeStoreChanges = true)
     val state by viewModel.state.collectAsStateWithLifecycle()
     ReportContentShown("home_members", state.showsContent())
     val tabs by viewModel.tabs.collectAsStateWithLifecycle()

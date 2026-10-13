@@ -76,9 +76,14 @@ private const val SCREEN_TAG: String = "startSupportTrainWizard"
 fun StartSupportTrainWizardScreen(
     onDismiss: () -> Unit = {},
     onOpenTrain: (String) -> Unit = {},
+    /** The story from a Pantopus AI Support Train card, which the organizer reviews in the reason step. */
+    initialStory: String? = null,
     viewModel: StartSupportTrainViewModel = hiltViewModel(),
 ) {
     val form by viewModel.form.collectAsStateWithLifecycle()
+    LaunchedEffect(initialStory) {
+        if (!initialStory.isNullOrBlank() && form.reason.isBlank()) viewModel.updateReason(initialStory.trim())
+    }
     val beneficiaryResults by viewModel.beneficiaryResults.collectAsStateWithLifecycle()
     val selectedBeneficiary by viewModel.selectedBeneficiary.collectAsStateWithLifecycle()
     val isSearching by viewModel.isSearching.collectAsStateWithLifecycle()

@@ -2,6 +2,8 @@ package app.pantopus.android.data.store
 
 import app.pantopus.android.data.api.models.businesses.MyBusinessesResponse
 import app.pantopus.android.data.api.models.chats.UnifiedConversationsResponse
+import app.pantopus.android.data.api.models.connections.BlockedRelationshipsResponse
+import app.pantopus.android.data.api.models.connections.SentRequestsResponse
 import app.pantopus.android.data.api.models.feed.FeedResponse
 import app.pantopus.android.data.api.models.homedashboard.HomeDashboardResponse
 import app.pantopus.android.data.api.models.homes.MyHomesResponse
@@ -10,6 +12,7 @@ import app.pantopus.android.data.api.models.hub.HubDiscoveryResponse
 import app.pantopus.android.data.api.models.hub.HubResponse
 import app.pantopus.android.data.api.models.hub.HubTodayResponse
 import app.pantopus.android.data.api.models.hub.NotificationPreferences
+import app.pantopus.android.data.api.models.location.SavedViewingArea
 import app.pantopus.android.data.api.models.location.ViewingLocationPayload
 import app.pantopus.android.data.api.models.neighborhood.NeighborhoodCells
 import app.pantopus.android.data.api.models.neighborhood.NeighborhoodMeter
@@ -17,8 +20,16 @@ import app.pantopus.android.data.api.models.notifications.NotificationUnreadCoun
 import app.pantopus.android.data.api.models.notifications.NotificationsListResponse
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.place.PlaceSectionId
+import app.pantopus.android.data.api.models.posts.MyPostsResponse
 import app.pantopus.android.data.api.models.posts.PostDetailResponse
+import app.pantopus.android.data.api.models.posts.SavedPostsResponse
+import app.pantopus.android.data.api.models.postsmap.PostsMapResponse
+import app.pantopus.android.data.api.models.profile.PublicProfileDto
+import app.pantopus.android.data.api.models.relationships.PendingRequestsResponse
+import app.pantopus.android.data.api.models.relationships.RelationshipsListResponse
+import app.pantopus.android.data.api.models.saved_places.SavedPlacesListResponse
 import app.pantopus.android.data.api.models.settings.PrivacySettingsResponse
+import app.pantopus.android.data.api.models.support_trains.SupportTrainDetailDto
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsListResponse
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsNearbyResponse
 import app.pantopus.android.data.api.models.users.InviteCodeDto
@@ -48,13 +59,62 @@ object StoreTopics {
 }
 
 /** The store's keys, one per endpoint and parameters it caches, with their kind and change topics (contract §4, §8). */
+@Suppress("TooManyFunctions") // Declarative endpoint keys form the single audited cache allowlist.
 object StoreKeys {
+    fun relationships(
+        status: String?,
+        limit: Int = 50,
+        offset: Int = 0,
+    ) = StoreKey<RelationshipsListResponse>(
+        "api/relationships",
+        mapOf("status" to status, "limit" to limit.toString(), "offset" to offset.toString()),
+        kind = StoreKind.PEOPLE,
+        topics = setOf(StoreTopics.PROFILE_ME),
+    )
+
+    val pendingConnections =
+        StoreKey<PendingRequestsResponse>(
+            "api/relationships/requests/pending",
+            kind = StoreKind.PEOPLE,
+            topics = setOf(StoreTopics.PROFILE_ME),
+        )
+    val sentConnections =
+        StoreKey<SentRequestsResponse>(
+            "api/relationships/requests/sent",
+            kind = StoreKind.PEOPLE,
+            topics = setOf(StoreTopics.PROFILE_ME),
+        )
+    val blockedConnections =
+        StoreKey<BlockedRelationshipsResponse>(
+            "api/relationships/blocked",
+            kind = StoreKind.PEOPLE,
+            topics = setOf(StoreTopics.PROFILE_ME),
+        )
+
     /** Search privacy preferences are copied in memory and removed after a PATCH. */
     val privacySettings =
         StoreKey<PrivacySettingsResponse>(
             "api/privacy/settings",
             kind = StoreKind.YOU,
             topics = setOf(StoreTopics.PROFILE_ME),
+        )
+
+    /** Private bookmarks use the account-scoped phone copy so saved-place Today can open offline. */
+    val savedPlaces =
+        StoreKey<SavedPlacesListResponse>(
+            "api/saved-places",
+            kind = StoreKind.YOU,
+            topics = setOf(StoreTopics.HOMES, StoreTopics.TODAY),
+            type = SavedPlacesListResponse::class.java,
+        )
+
+    /** Public Today facts for the viewer's saved place; a deleted bookmark refuses the copy. */
+    fun savedPlaceToday(id: String) =
+        StoreKey<PlaceIntelligence>(
+            "api/saved-places/$id/today",
+            kind = StoreKind.TODAY,
+            topics = setOf(StoreTopics.TODAY, "place:$id"),
+            type = PlaceIntelligence::class.java,
         )
 
     /** My Homes: one source for every screen that lists the viewer's homes. */
@@ -106,6 +166,14 @@ object StoreKeys {
             topics = setOf("supporttrain:*"),
         )
 
+    /** Memory-only title and slots; the mixed detail reply's sensitive fields never enter this key. */
+    fun supportTrain(id: String) =
+        StoreKey<SupportTrainDetailDto>(
+            "api/activities/support-trains/$id",
+            kind = StoreKind.SUPPORT_TRAINS,
+            topics = setOf("supporttrain:$id"),
+        )
+
     /** Support Trains near [latitude], [longitude] (rounded with [roundCoordinate] before they get here). */
     fun nearbySupportTrains(
         latitude: Double,
@@ -125,6 +193,37 @@ object StoreKeys {
     /** The area the viewer chose in the Nearby context bar (`GET /api/location`; kind You: fresh 10 minutes). */
     val viewingLocation = StoreKey<ViewingLocationPayload>("api/location", kind = StoreKind.YOU, topics = setOf(StoreTopics.PROFILE_ME))
 
+    /** Client-only: the chosen area (or none) outlives the process, so saved Pulse and map pages open cold and offline. */
+    val viewingArea =
+        StoreKey<SavedViewingArea>("client/viewing-area", kind = StoreKind.YOU, type = SavedViewingArea::class.java)
+
+    /** Post pins only; household pins must always pass their own current access check. */
+    @Suppress("LongParameterList")
+    fun mapPosts(
+        south: Double,
+        west: Double,
+        north: Double,
+        east: Double,
+        postType: String?,
+        surface: String?,
+    ) = StoreKey<PostsMapResponse>(
+        "api/posts/map",
+        mapOf(
+            "south" to south.toString(),
+            "west" to west.toString(),
+            "north" to north.toString(),
+            "east" to east.toString(),
+            "layers" to "posts",
+            "limit" to "200",
+            "postType" to postType?.takeIf(String::isNotBlank),
+            "surface" to surface?.takeIf(String::isNotBlank),
+        ),
+        kind = StoreKind.NEARBY,
+        topics = setOf(StoreTopics.POSTS, StoreTopics.PROFILE_ME),
+        type = PostsMapResponse::class.java,
+        saveWhen = { reply -> reply.markers.all { it.layerType == "post" } },
+    )
+
     /** The first page of one feed query (contract §4 "Nearby": fresh 2 minutes); later pages are never stored. */
     fun feedFirstPage(query: FeedQuery) =
         StoreKey<FeedResponse>(
@@ -143,6 +242,34 @@ object StoreKeys {
             kind = StoreKind.NEARBY,
             topics = setOf(StoreTopics.POSTS),
             type = FeedResponse::class.java,
+        )
+
+    fun publicProfile(
+        identifier: String,
+        byUsername: Boolean = false,
+    ) = StoreKey<PublicProfileDto>(
+        "api/users/${if (byUsername) "username" else "id"}/$identifier",
+        kind = StoreKind.PEOPLE,
+        topics = setOf("profile:$identifier", StoreTopics.PROFILE_ME, StoreTopics.CHATS),
+    )
+
+    fun userPosts(
+        userId: String,
+        limit: Int,
+        includeArchived: Boolean,
+    ) = StoreKey<MyPostsResponse>(
+        "api/posts/user/$userId",
+        mapOf("limit" to limit.toString(), "include_archived" to includeArchived.takeIf { it }?.toString()),
+        kind = StoreKind.POST,
+        topics = setOf(StoreTopics.POSTS, "profile:$userId"),
+    )
+
+    fun savedPosts(limit: Int) =
+        StoreKey<SavedPostsResponse>(
+            "api/posts/saved",
+            mapOf("limit" to limit.toString()),
+            kind = StoreKind.POST,
+            topics = setOf(StoreTopics.POSTS, StoreTopics.PROFILE_ME),
         )
 
     /** One post and its comments (contract §4 "A post": fresh 1 minute, never saved on the phone). */

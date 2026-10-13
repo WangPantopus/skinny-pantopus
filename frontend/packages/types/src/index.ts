@@ -73,6 +73,8 @@ export type {
   UserNotificationPreferences,
   AIDraftType,
   AIChatDraft,
+  SupportTrainChatDraft,
+  PickupScheduleChatDraft,
   AIChatMessage,
   AIConversation,
   AIStreamEvent,

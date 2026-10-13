@@ -4,11 +4,16 @@ package app.pantopus.android.ui.screens.feed.map
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.data.api.models.postsmap.PostsMapResponse
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.location.LocationProvider
 import app.pantopus.android.data.location.UserCoordinate
-import app.pantopus.android.data.postsmap.PostsMapLayer
+import app.pantopus.android.data.location.ViewingLocationRepository
 import app.pantopus.android.data.postsmap.PostsMapRepository
+import app.pantopus.android.data.saved_places.SavedPlacesRepository
+import app.pantopus.android.data.store.StoreKind
+import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.screens.explore.ExploreEntity
 import app.pantopus.android.ui.screens.explore.ExploreKind
 import app.pantopus.android.ui.screens.explore.ExploreMapViewModel
@@ -110,6 +115,8 @@ class FeedMapViewModel
     constructor(
         private val postsMapRepository: PostsMapRepository,
         private val locationProvider: LocationProvider,
+        private val viewingLocation: ViewingLocationRepository,
+        private val savedPlaces: SavedPlacesRepository,
     ) : ViewModel() {
         private val _state = MutableStateFlow<FeedMapUiState>(FeedMapUiState.Loading)
         val state: StateFlow<FeedMapUiState> = _state.asStateFlow()
@@ -132,6 +139,25 @@ class FeedMapViewModel
         private var userCoordinate: UserCoordinate? = null
         private var pendingRegion: FeedMapRegion? = null
         private var debounceJob: Job? = null
+        private var readJob: Job? = null
+        private var fetchGeneration = 0
+        private var shownRegion: FeedMapRegion? = null
+        private var shownQuery: FeedMapQuery? = null
+        private var selectedArea: Pair<Double, Double>? = null
+        private var defaultArea: Pair<Double, Double>? = null
+        private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
+        val refreshNotice = _refreshNotice.asStateFlow()
+
+        private fun launchRead(block: suspend () -> Unit) {
+            readJob?.cancel()
+            fetchGeneration++
+            readJob = viewModelScope.launch { block() }
+        }
+
+        fun suspendContent() {
+            readJob?.cancel()
+            fetchGeneration++
+        }
 
         /**
          * Entering Map mode, or the surface / chip-row filter changed while
@@ -141,32 +167,72 @@ class FeedMapViewModel
         fun activate(next: FeedMapQuery) {
             val changed = next != query
             query = next
-            viewModelScope.launch {
+            launchRead {
+                val areaChanged = updateSelectedArea() ?: return@launchRead
                 if (!isReady) {
                     initializeMap()
-                } else if (changed) {
-                    fetchMarkers(pendingRegion ?: _region.value)
+                } else {
+                    val target =
+                        when {
+                            areaChanged -> _region.value
+                            changed -> pendingRegion ?: _region.value
+                            else -> shownRegion ?: _region.value
+                        }
+                    fetchMarkers(target)
                 }
             }
         }
 
         fun refresh() {
-            viewModelScope.launch { fetchMarkers(pendingRegion ?: _region.value) }
+            if (!isReady) {
+                activate(query)
+            } else {
+                launchRead { fetchMarkers(pendingRegion ?: _region.value, force = true) }
+            }
+        }
+
+        /** The map shares the feed's chosen area; returning inside its window adds no location request. */
+        private suspend fun updateSelectedArea(): Boolean? {
+            val result = viewingLocation.current()
+            if (result !is NetworkResult.Success) {
+                if (isReady && !(result as NetworkResult.Failure).error.refusesStoredCopy) return false
+                isReady = false
+                _refreshNotice.value = null
+                _state.value = FeedMapUiState.Error("Couldn't load your selected area. Please try again.")
+                return null
+            }
+            val next = result.data.viewingLocation?.let { it.latitude to it.longitude }
+            // The list feed also falls back to the first Home, then the newest saved place.
+            defaultArea =
+                result.data.homes.firstNotNullOfOrNull { home ->
+                    home.latitude?.let { lat -> home.longitude?.let { lon -> lat to lon } }
+                }
+            if (next == selectedArea) return false
+            selectedArea = next
+            if (next != null) {
+                _region.value = _region.value.copy(latitude = next.first, longitude = next.second)
+                pendingRegion = null
+                _viewportDirty.value = false
+            } else {
+                isReady = false
+            }
+            return next != null
         }
 
         private suspend fun initializeMap() {
             if (userCoordinate == null) {
-                userCoordinate = locationProvider.cachedCoordinate() ?: locationProvider.requestCurrent()
+                userCoordinate = locationProvider.cachedCoordinate()
+                if (selectedArea == null && userCoordinate == null) userCoordinate = locationProvider.requestCurrent()
             }
-            userCoordinate?.let { coord ->
-                _region.value =
-                    FeedMapRegion(
-                        latitude = coord.latitude,
-                        longitude = coord.longitude,
-                        latitudeDelta = FeedMapRegion.Fallback.latitudeDelta,
-                        longitudeDelta = FeedMapRegion.Fallback.longitudeDelta,
-                    )
+            val center =
+                selectedArea ?: userCoordinate?.let { it.latitude to it.longitude } ?: defaultArea
+                    ?: savedPlaces.listStored().data?.savedPlaces?.firstOrNull()?.let { it.latitude to it.longitude }
+            if (center == null) {
+                _refreshNotice.value = null
+                _state.value = FeedMapUiState.Error("Choose an area or turn on location to explore nearby.")
+                return
             }
+            _region.value = _region.value.copy(latitude = center.first, longitude = center.second)
             fetchMarkers(_region.value)
             isReady = true
         }
@@ -195,8 +261,8 @@ class FeedMapViewModel
             debounceJob = null
             val target = pendingRegion ?: _region.value
             _region.value = target
-            viewModelScope.launch {
-                fetchMarkers(target)
+            launchRead {
+                fetchMarkers(target, force = true)
                 pendingRegion = null
                 _viewportDirty.value = false
             }
@@ -207,9 +273,9 @@ class FeedMapViewModel
          * and refetch (RN `useFeedMap.ts:160`).
          */
         fun recenter() {
-            viewModelScope.launch {
+            launchRead {
                 locationProvider.requestCurrent()?.let { userCoordinate = it }
-                val coord = userCoordinate ?: return@launch
+                val coord = userCoordinate ?: return@launchRead
                 val next =
                     FeedMapRegion(
                         latitude = coord.latitude,
@@ -240,7 +306,7 @@ class FeedMapViewModel
             _region.value = next
             pendingRegion = null
             _viewportDirty.value = false
-            viewModelScope.launch { fetchMarkers(next) }
+            launchRead { fetchMarkers(next, force = true) }
         }
 
         fun selectEntity(id: String?) {
@@ -248,55 +314,75 @@ class FeedMapViewModel
             _state.value = current.copy(selectedId = id)
         }
 
-        private suspend fun fetchMarkers(target: FeedMapRegion) {
-            if (_state.value !is FeedMapUiState.Loaded) _state.value = FeedMapUiState.Loading
-            val anchor =
-                userCoordinate ?: UserCoordinate(target.latitude, target.longitude, 0.0)
-            val result =
-                postsMapRepository.markers(
-                    south = target.south,
-                    west = target.west,
-                    north = target.north,
-                    east = target.east,
-                    layers = listOf(PostsMapLayer.Posts),
-                    postType = query.postType,
-                    surface = query.surface.backendSurface,
+        private suspend fun fetchMarkers(
+            target: FeedMapRegion,
+            force: Boolean = false,
+        ) {
+            val generation = ++fetchGeneration
+            val requestedQuery = query
+            val sameView = shownRegion == target && shownQuery == requestedQuery
+            val copy =
+                postsMapRepository.postsCopy(
+                    target.south,
+                    target.west,
+                    target.north,
+                    target.east,
+                    requestedQuery.postType,
+                    requestedQuery.surface.backendSurface,
                 )
-            when (result) {
-                is NetworkResult.Failure -> {
-                    _state.value = FeedMapUiState.Error(result.error.message)
-                }
-                is NetworkResult.Success -> {
-                    // RN filters the response down to `layer_type === 'post'`
-                    // (`src/hooks/feed/useFeedMap.ts:60`); the shared projector
-                    // does the same by ignoring every other layer.
-                    val entities =
-                        ExploreMapViewModel
-                            .projectMarkers(result.data.markers, anchor)
-                            .filter { it.kind == ExploreKind.Post }
-                    val hint =
-                        result.data.nearestActivityCenter?.let {
-                            FeedMapRegion(
-                                latitude = it.latitude,
-                                longitude = it.longitude,
-                                latitudeDelta = target.latitudeDelta,
-                                longitudeDelta = target.longitudeDelta,
-                            )
-                        }
-                    _state.value =
-                        FeedMapUiState.Loaded(
-                            entities = entities.sortedBy { it.distanceMiles },
-                            markers =
-                                ExploreMapViewModel.cluster(
-                                    entities,
-                                    clusterRadius(target),
-                                ),
-                            userCoordinate = userCoordinate,
-                            selectedId = null,
-                            nearestActivityCenter = hint,
-                        )
+            if (!sameView || _state.value !is FeedMapUiState.Loaded) {
+                _refreshNotice.value = null
+                if (copy.data != null) {
+                    publish(copy.data, target, requestedQuery, keepSelection = false)
+                } else {
+                    _state.value = FeedMapUiState.Loading
                 }
             }
+            val stored =
+                postsMapRepository.postsStored(
+                    target.south,
+                    target.west,
+                    target.north,
+                    target.east,
+                    requestedQuery.postType,
+                    requestedQuery.surface.backendSurface,
+                    force,
+                )
+            if (generation != fetchGeneration || requestedQuery != query) return
+            _refreshNotice.value =
+                if (stored.showsRefreshFailure(StoreKind.NEARBY)) RefreshNotice(stored.fetchedAt, ::refresh) else null
+            if (stored.data == null) {
+                shownRegion = null
+                shownQuery = null
+                _state.value = FeedMapUiState.Error(stored.failure?.message ?: "Couldn't load the map. Try again.")
+            } else {
+                publish(stored.data, target, requestedQuery, keepSelection = sameView)
+            }
+        }
+
+        private fun publish(
+            data: PostsMapResponse,
+            target: FeedMapRegion,
+            requestedQuery: FeedMapQuery,
+            keepSelection: Boolean,
+        ) {
+            val anchor = userCoordinate ?: UserCoordinate(target.latitude, target.longitude, 0.0)
+            val selected = if (keepSelection) (_state.value as? FeedMapUiState.Loaded)?.selectedId else null
+            val entities = ExploreMapViewModel.projectMarkers(data.markers, anchor).filter { it.kind == ExploreKind.Post }
+            val hint =
+                data.nearestActivityCenter?.let {
+                    FeedMapRegion(it.latitude, it.longitude, target.latitudeDelta, target.longitudeDelta)
+                }
+            shownRegion = target
+            shownQuery = requestedQuery
+            _state.value =
+                FeedMapUiState.Loaded(
+                    entities = entities.sortedBy { it.distanceMiles },
+                    markers = ExploreMapViewModel.cluster(entities, clusterRadius(target)),
+                    userCoordinate = userCoordinate,
+                    selectedId = selected.takeIf { id -> entities.any { it.id == id } },
+                    nearestActivityCenter = hint,
+                )
         }
 
         /** Widen the cluster radius as the camera zooms out and vice versa. */
