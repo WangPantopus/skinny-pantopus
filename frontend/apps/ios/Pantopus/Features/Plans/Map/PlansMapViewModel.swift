@@ -76,6 +76,9 @@ final class PlansMapViewModel {
     var sheetStop: PlansSheetStop = .peek
     /// Bumped to ask the view to move the camera to `center`.
     private(set) var recenterRequest = 0
+    /// Bumped once the plans around a new center are read: the view frames them (F1).
+    private(set) var fitRequest = 0
+    @ObservationIgnored private var fitsAfterPins = false
     /// Where the camera last settled.
     @ObservationIgnored private(set) var lastRegion: MKCoordinateRegion?
 
@@ -161,6 +164,7 @@ final class PlansMapViewModel {
         PlansStoreReads.lastCenter = coordinate
         if source == .gps { PlansStoreReads.lastFix = (coordinate, Date()) }
         phase = .ready
+        fitsAfterPins = true
         recenterRequest += 1
         async let name: Void = loadAreaName(for: coordinate)
         async let everything: Void = loadAll(force: false)
@@ -261,6 +265,10 @@ final class PlansMapViewModel {
         do {
             let snapshot = try await PlansStoreReads.pins(viewport, kinds: [], window: window, store: store, force: force)
             pins = snapshot.value.markers
+            if fitsAfterPins {
+                fitsAfterPins = false
+                if !pins.isEmpty { fitRequest += 1 }
+            }
             if let selectedId, !pins.contains(where: { $0.id == selectedId }), selectedCard == nil { clearSelection() }
         } catch {
             // Pins on screen stay; the list explains a failed read.
