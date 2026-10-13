@@ -40,6 +40,7 @@ object StoreTopics {
 
     /** The viewer's conversation list: a chat created or left, a message sent or read. */
     const val CHATS = "chats"
+    const val CHAT_LIST = "chat-list"
 
     /** Client-only: the viewer posted, edited or deleted a post, so the feeds' first pages go out of date. */
     const val POSTS = "posts"
@@ -207,7 +208,7 @@ object StoreKeys {
             "api/chat/unified-conversations",
             mapOf("limit" to "100"),
             kind = StoreKind.MESSAGES_LIST,
-            topics = setOf(StoreTopics.CHATS),
+            topics = setOf(StoreTopics.CHATS, StoreTopics.CHAT_LIST),
             type = UnifiedConversationsResponse::class.java,
         )
 
