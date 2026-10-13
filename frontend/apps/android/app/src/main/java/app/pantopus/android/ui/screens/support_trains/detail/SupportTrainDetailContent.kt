@@ -237,6 +237,8 @@ data class SupportTrainDetailContent(
     val deliveryInstructions: String? = null,
     /** The organizers' updates, newest first (the train's latest 10). */
     val updates: List<TrainUpdateCard> = emptyList(),
+    /** False on the retained title/slots while this visit rechecks the mixed private response. */
+    val privateDetailsAvailable: Boolean = true,
 ) {
     val isFullyCovered: Boolean get() = typeDates.isFullyCovered
 }
