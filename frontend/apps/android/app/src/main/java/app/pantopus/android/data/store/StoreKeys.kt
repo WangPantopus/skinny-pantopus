@@ -22,6 +22,7 @@ import app.pantopus.android.data.api.models.posts.MyPostsResponse
 import app.pantopus.android.data.api.models.posts.PostDetailResponse
 import app.pantopus.android.data.api.models.posts.SavedPostsResponse
 import app.pantopus.android.data.api.models.postsmap.PostsMapResponse
+import app.pantopus.android.data.api.models.profile.PublicProfileDto
 import app.pantopus.android.data.api.models.saved_places.SavedPlacesListResponse
 import app.pantopus.android.data.api.models.support_trains.SupportTrainDetailDto
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsListResponse
@@ -199,6 +200,15 @@ object StoreKeys {
             topics = setOf(StoreTopics.POSTS),
             type = FeedResponse::class.java,
         )
+
+    fun publicProfile(
+        identifier: String,
+        byUsername: Boolean = false,
+    ) = StoreKey<PublicProfileDto>(
+        "api/users/${if (byUsername) "username" else "id"}/$identifier",
+        kind = StoreKind.PEOPLE,
+        topics = setOf("profile:$identifier", StoreTopics.PROFILE_ME, StoreTopics.CHATS),
+    )
 
     fun userPosts(
         userId: String,
