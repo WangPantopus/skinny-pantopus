@@ -7,7 +7,6 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.identity.MadeUpUsername
 import app.pantopus.android.data.api.models.homes.showsCopyBeforeRecheck
 import app.pantopus.android.data.auth.AuthRepository
-import app.pantopus.android.data.chats.ChatRepository
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.data.neighborhood.NeighborhoodRepository
 import app.pantopus.android.data.network.NetworkMonitor
@@ -39,7 +38,6 @@ class RootSessionViewModel
         private val homes: HomesRepository,
         private val place: PlaceRepository,
         private val nearby: NeighborhoodRepository,
-        private val chats: ChatRepository,
         private val savedPlaces: SavedPlacesRepository,
         network: NetworkMonitor,
         @ApplicationContext private val context: Context,
@@ -83,7 +81,6 @@ class RootSessionViewModel
                 }
                 launch { if (mayPrefetch()) nearby.meterStored() }
                 launch { if (mayPrefetch()) nearby.cellsStored() }
-                launch { if (mayPrefetch()) chats.conversationsStored() }
             }
 
         /** The drawer's "<name> · Your profile": the person's name, or a username they chose; never a made-up one. */
