@@ -125,6 +125,7 @@ extension View {
 
 extension Text {
     /// An upper-case section label ("YOUR PLANS", "TODAY").
+    @MainActor
     static func planOverline(_ copy: String) -> some View {
         Text(verbatim: copy.uppercased())
             .planFont(.overline)

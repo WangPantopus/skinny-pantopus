@@ -66,6 +66,15 @@ struct PlanHeaderMap: View {
             }
             .mapStyle(.standard(pointsOfInterest: .excludingAll))
             .onChange(of: revealToken) { _, _ in reveal(proxy) }
+            .onChange(of: place) { _, newPlace in
+                guard newPlace != nil else { return }
+                // The exact place arrived: frame it, unless the reveal does (it
+                // starts in this same update and frames the place as it ends).
+                Task { @MainActor in
+                    guard !revealing else { return }
+                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.35)) { frame() }
+                }
+            }
         }
         .frame(height: Self.height)
         .sensoryFeedback(.success, trigger: landed)
@@ -135,11 +144,19 @@ struct PlanHeaderMap: View {
 
     // MARK: - Camera and the reveal
 
+    /// Where the exact place (or the area, before it) sits in the header: below
+    /// the middle, clear of the status bar and the buttons over the map.
+    private static let focusY: CGFloat = 150
+
     private func frame() {
         let target = place.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) } ?? areaCoordinate
         // The area's diameter in meters over the share of the header it fills.
         let meters = isNeighborhood ? 1000.0 / 1.27 : 500.0 / 0.72
-        camera = .region(MKCoordinateRegion(center: target, latitudinalMeters: meters, longitudinalMeters: meters))
+        // The region fills the header's height, so the camera's center sits
+        // north of the target by the gap between the middle and `focusY`.
+        let north = Double(Self.focusY - Self.height / 2) * meters / Double(Self.height) / 111_000
+        let center = CLLocationCoordinate2D(latitude: target.latitude + north, longitude: target.longitude)
+        camera = .region(MKCoordinateRegion(center: center, latitudinalMeters: meters, longitudinalMeters: meters))
     }
 
     private func reveal(_ proxy: MapProxy) {
@@ -178,6 +195,8 @@ struct PlanHeaderMap: View {
             areaOffset = .zero
             areaScale = 1
             areaOpacity = 1
+            // The pin landed: bring the exact place to the header's focus.
+            withAnimation(.easeInOut(duration: 0.35)) { frame() }
         }
     }
 }

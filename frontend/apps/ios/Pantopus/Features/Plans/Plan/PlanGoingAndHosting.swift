@@ -31,7 +31,7 @@ struct PlanGoingSection: View {
             tone: .success,
             icon: .check,
             title: "You're in",
-            message: "\(hostFirst) said yes\(justNow ? " · just now" : "")"
+            message: yesLine
         )
         .offset(y: bannerShift)
         .opacity(bannerOpacity)
@@ -94,6 +94,14 @@ struct PlanGoingSection: View {
 
     private var hostFirst: String {
         PlanCardLines.firstName(card.host.displayName)
+    }
+
+    /// "Sam said yes · just now", or "You got in right away" when a rule let them in.
+    private var yesLine: String {
+        let request = viewModel.plan?.myRequest
+        let said = request?.decidedBy == "rule" ? "You got in right away" : "\(hostFirst) said yes"
+        let recent = PlanTime.parse(request?.decidedAt).map { Date().timeIntervalSince($0) < 300 } ?? justNow
+        return recent ? "\(said) · just now" : said
     }
 
     private func placeLine(_ place: PlanPlaceDTO) -> some View {

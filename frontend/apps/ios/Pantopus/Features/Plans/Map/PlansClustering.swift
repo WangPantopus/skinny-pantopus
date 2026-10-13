@@ -23,6 +23,8 @@ struct PlansCluster: Hashable, Identifiable {
     let maxLatitude: Double
     let minLongitude: Double
     let maxLongitude: Double
+    /// Your own standing on a plan in it (hosting, in, asked), so a cluster never hides it.
+    let badge: PlanPinLook.Badge?
 
     /// Every plan in it sits on one point (about 30 m): zooming in never separates them.
     var isOnePoint: Bool {
@@ -66,7 +68,9 @@ enum PlansClustering {
     static let fanStep = 56.0
 
     /// The markers for these pins at a camera span (latitude degrees). The
-    /// selected pin, and pins you host or are in, never hide in a cluster.
+    /// selected pin never hides in a cluster; a cluster holding a plan you host,
+    /// are in or asked to join carries that badge. Clusters come after pins and
+    /// the selected pin last, so they draw (and take taps) on top.
     static func markers(_ pins: [PlanPinDTO], span: Double, selectedId: String?) -> [PlansMarker] {
         var result: [PlansMarker] = []
         var loose: [PlanPinDTO] = []
@@ -93,9 +97,8 @@ enum PlansClustering {
         let degreesPerPoint = max(span, 0.0001) / mapPoints
         var groups: [[PlanPinDTO]] = []
         for pin in loose {
-            let solo = pin.id == selectedId || pin.isHosting || pin.isIn
-            let index = solo ? nil : groups.firstIndex { group in
-                guard let leader = group.first, leader.id != selectedId, !leader.isHosting, !leader.isIn else { return false }
+            let index = pin.id == selectedId ? nil : groups.firstIndex { group in
+                guard let leader = group.first, leader.id != selectedId else { return false }
                 return points(between: leader, and: pin, degreesPerPoint: degreesPerPoint) < clusterPoints
             }
             if let index {
@@ -111,7 +114,15 @@ enum PlansClustering {
                 result.append(.cluster(cluster(group)))
             }
         }
-        return result
+        return result.sorted { layer($0, selectedId) < layer($1, selectedId) }
+    }
+
+    /// Drawing order: pins, then clusters, then the selected pin.
+    private static func layer(_ marker: PlansMarker, _ selectedId: String?) -> Int {
+        switch marker {
+        case let .pin(pin, _): pin.id == selectedId ? 2 : 0
+        case .cluster: 1
+        }
     }
 
     /// Where to move the camera for a tapped cluster: around its pins, close
@@ -138,6 +149,15 @@ enum PlansClustering {
         for pin in group where !kinds.contains(pin.kind) {
             kinds.append(pin.kind)
         }
+        let badge: PlanPinLook.Badge? = if group.contains(where: \.isHosting) {
+            .hosting
+        } else if group.contains(where: \.isIn) {
+            .going
+        } else if group.contains(where: { $0.viewerRequestStatus == .pending || $0.viewerRequestStatus == .waitlisted }) {
+            .waiting
+        } else {
+            nil
+        }
         return PlansCluster(
             id: group.first?.id ?? UUID().uuidString,
             latitude: lats.reduce(0, +) / Double(lats.count),
@@ -147,7 +167,8 @@ enum PlansClustering {
             minLatitude: lats.min() ?? 0,
             maxLatitude: lats.max() ?? 0,
             minLongitude: lons.min() ?? 0,
-            maxLongitude: lons.max() ?? 0
+            maxLongitude: lons.max() ?? 0,
+            badge: badge
         )
     }
 }

@@ -133,6 +133,16 @@ struct PlanPinView: View {
     }
 
     private func badgeView(_ badge: PlanPinLook.Badge) -> some View {
+        PlanPinBadge(badge: badge)
+            .offset(x: size * 0.47, y: -size * 0.47)
+    }
+}
+
+/// Board P1's 18 pt badge: in (green check), hosting (sky flag), asked (dark clock).
+struct PlanPinBadge: View {
+    let badge: PlanPinLook.Badge
+
+    var body: some View {
         let fill: Color = switch badge {
         case .going: Theme.Color.successSolid
         case .hosting: Theme.Color.primary600
@@ -143,13 +153,12 @@ struct PlanPinView: View {
         case .hosting: .flag
         case .waiting: .clock
         }
-        return RoundedRectangle(cornerRadius: 6, style: .continuous)
+        RoundedRectangle(cornerRadius: 6, style: .continuous)
             .fill(fill)
             .frame(width: 18, height: 18)
             .overlay(Icon(icon, size: 11, strokeWidth: 3, color: badge == .waiting ? Theme.Color.appSurface : Theme.Color.appTextInverse))
             .padding(2)
             .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Theme.Color.appSurface))
-            .offset(x: size * 0.47, y: -size * 0.47)
     }
 }
 
@@ -157,6 +166,7 @@ struct PlanPinView: View {
 struct PlanClusterView: View {
     let count: Int
     let kinds: [PlanKind]
+    var badge: PlanPinLook.Badge?
 
     var body: some View {
         VStack(spacing: 3) {
@@ -176,6 +186,9 @@ struct PlanClusterView: View {
         .padding(2.5)
         .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.Color.appSurface))
         .shadow(color: .black.opacity(0.22), radius: 4, x: 0, y: 3)
+        .overlay(alignment: .topTrailing) {
+            if let badge { PlanPinBadge(badge: badge).offset(x: 9, y: -9) }
+        }
         .frame(minWidth: 44, minHeight: 44)
         .contentShape(Rectangle())
     }

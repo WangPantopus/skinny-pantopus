@@ -94,10 +94,10 @@ struct PlansMapView: View {
                 case let .cluster(cluster):
                     Annotation("", coordinate: marker.coordinate, anchor: .center) {
                         Button { zoom(to: cluster) } label: {
-                            PlanClusterView(count: cluster.count, kinds: cluster.kinds)
+                            PlanClusterView(count: cluster.count, kinds: cluster.kinds, badge: cluster.badge)
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("\(cluster.count) plans here")
+                        .accessibilityLabel(PlansPinSpeech.label(for: cluster))
                         .accessibilityHint("Zooms in")
                     }
                     .annotationTitles(.hidden)
@@ -327,6 +327,17 @@ private struct PlansArea {
 
 /// What VoiceOver reads for a pin: "Watch party, Sunday 1:25 PM, about 1 mile, 3 spots left".
 enum PlansPinSpeech {
+    /// "3 plans here, one you're in".
+    static func label(for cluster: PlansCluster) -> String {
+        let yours: String? = switch cluster.badge {
+        case .hosting: "one you're hosting"
+        case .going: "one you're in"
+        case .waiting: "one you asked to join"
+        case nil: nil
+        }
+        return ["\(cluster.count) plans here", yours].compactMap { $0 }.joined(separator: ", ")
+    }
+
     static func label(for pin: PlanPinDTO, card: PlanCardDTO?, center: UserCoordinate?) -> String {
         var parts = [pin.kind.spokenTitle]
         if pin.state == .live {

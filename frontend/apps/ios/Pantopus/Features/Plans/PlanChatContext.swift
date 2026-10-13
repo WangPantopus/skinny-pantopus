@@ -22,7 +22,9 @@ struct ChatPlanContext {
 }
 
 private struct ChatPlanContextKey: EnvironmentKey {
-    static let defaultValue: ChatPlanContext? = nil
+    static var defaultValue: ChatPlanContext? {
+        nil
+    }
 }
 
 extension EnvironmentValues {

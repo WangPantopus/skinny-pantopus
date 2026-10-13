@@ -46,8 +46,11 @@ enum PlansStoreReads {
             as: PlanPinsResponse.self,
             kind: .nearby,
             topics: [ScreenTopic.plans],
-            force: force
-        ) { !$0.carriesExactPoints }
+            force: force,
+            // Named: as a trailing closure it would bind to `failedIf` and fail every reply.
+            showsBeforeRecheck: { !$0.carriesExactPoints },
+            failedIf: nil
+        )
     }
 
     /// The list under the map.
@@ -64,8 +67,10 @@ enum PlansStoreReads {
             as: PlansListResponse.self,
             kind: .nearby,
             topics: [ScreenTopic.plans],
-            force: force
-        ) { !$0.carriesPrivateTimes }
+            force: force,
+            showsBeforeRecheck: { !$0.carriesPrivateTimes },
+            failedIf: nil
+        )
     }
 
     /// Your plans: hosting, going, asked, waitlisted (the list and Today).
@@ -75,8 +80,10 @@ enum PlansStoreReads {
             as: MyPlansResponse.self,
             kind: .nearby,
             topics: [ScreenTopic.plans],
-            force: force
-        ) { !$0.carriesPrivateTimes }
+            force: force,
+            showsBeforeRecheck: { !$0.carriesPrivateTimes },
+            failedIf: nil
+        )
     }
 
     static func peekMine(store: ScreenStore = .shared) -> MyPlansResponse? {
