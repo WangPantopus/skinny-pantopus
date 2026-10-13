@@ -170,9 +170,8 @@ struct PlanAskSheet: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityElement(children: .ignore)
             .accessibilityLabel("I'll stay with my kids the whole time")
-            .accessibilityAddTraits(staysWithKids ? [.isButton, .isSelected] : .isButton)
+            .accessibilityAddTraits(staysWithKids ? .isSelected : [])
             .accessibilityIdentifier("planAskStays")
         }
     }

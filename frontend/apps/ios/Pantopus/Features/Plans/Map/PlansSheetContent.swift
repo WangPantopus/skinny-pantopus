@@ -50,18 +50,16 @@ struct PlansSheetContent: View {
     private var peek: some View {
         let cards = viewModel.visibleCards
         return VStack(alignment: .leading, spacing: 2) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(peekTitle)
-                    .planFont(.h4)
-                    .foregroundStyle(Theme.Color.appText)
-                    .accessibilityAddTraits(.isHeader)
-                Spacer(minLength: Spacing.s2)
-                if cards.count > 2 {
-                    Button("See all \(cards.count)") { onStop(.full) }
-                        .planFont(.smallStrong)
-                        .foregroundStyle(Theme.Color.primaryInk)
-                        .frame(minHeight: 44)
-                        .accessibilityIdentifier("plansSeeAll")
+            // Side by side; stacked when the text is too large for one line.
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .firstTextBaseline) {
+                    peekTitleText
+                    Spacer(minLength: Spacing.s2)
+                    seeAll(count: cards.count)
+                }
+                VStack(alignment: .leading, spacing: 0) {
+                    peekTitleText
+                    seeAll(count: cards.count)
                 }
             }
             // The two soonest near you (your own plans among them).
@@ -77,6 +75,23 @@ struct PlansSheetContent: View {
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .padding(.vertical, Spacing.s3)
             }
+        }
+    }
+
+    private var peekTitleText: some View {
+        Text(peekTitle)
+            .planFont(.h4)
+            .foregroundStyle(Theme.Color.appText)
+            .accessibilityAddTraits(.isHeader)
+    }
+
+    @ViewBuilder private func seeAll(count: Int) -> some View {
+        if count > 2 {
+            Button("See all \(count)") { onStop(.full) }
+                .planFont(.smallStrong)
+                .foregroundStyle(Theme.Color.primaryInk)
+                .frame(minHeight: 44)
+                .accessibilityIdentifier("plansSeeAll")
         }
     }
 

@@ -145,6 +145,8 @@ struct PlanRow: View {
     var showsDivider = true
     let onTap: () -> Void
 
+    @Environment(\.dynamicTypeSize) private var typeSize
+
     var body: some View {
         Button(action: onTap) {
             VStack(spacing: 0) {
@@ -155,11 +157,11 @@ struct PlanRow: View {
                         Text(model.title)
                             .planFont(.rowTitle)
                             .foregroundStyle(Theme.Color.appText)
-                            .lineLimit(1)
+                            .lineLimit(lines)
                         Text(model.subtitle)
                             .planFont(.footnote)
                             .foregroundStyle(Theme.Color.appTextSecondary)
-                            .lineLimit(1)
+                            .lineLimit(lines)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     trailing
@@ -169,10 +171,14 @@ struct PlanRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityElement(children: .ignore)
+        // The button is the one element VoiceOver stops on, with the spoken line.
         .accessibilityLabel(model.accessibilityLabel + trailingSpoken)
-        .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier("planRow.\(model.id)")
+    }
+
+    /// One line each (board P2); at the largest text sizes they wrap instead of cutting off.
+    private var lines: Int {
+        typeSize.isAccessibilitySize ? 3 : 1
     }
 
     @ViewBuilder private var trailing: some View {
