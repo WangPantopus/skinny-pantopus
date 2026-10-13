@@ -9,6 +9,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import app.pantopus.android.data.api.models.place.PlaceHouseShape
 import app.pantopus.android.ui.theme.SkyPalette
 import app.pantopus.android.ui.theme.SkyPalette.mixed
 
@@ -20,27 +21,151 @@ import app.pantopus.android.ui.theme.SkyPalette.mixed
  * `TodaySkyHomes.swift`; the numbers match.
  */
 
-/** The shape the scene draws for the resident's home. */
-enum class SkyHome(
-    /** Half the width it takes on the ground, for the bins and the trees. */
-    val halfWidth: Float,
-    val chimney: Boolean,
+/**
+ * The resident's home as the scene draws it: its kind and, for a house, the outline the county
+ * record gives ([PlaceHouseShape]). What the record doesn't say keeps the scene's first house: one
+ * storey, 40 dp wide, a gable roof and a chimney.
+ */
+data class SkyHome(
+    val kind: Kind = Kind.HOUSE,
+    /** 1, 1.5, 2 or 3; null draws the first house's one storey. */
+    val stories: Double? = null,
+    /** The walls' width, dp. */
+    val width: Float = 40f,
+    val roof: Roof = Roof.GABLE,
+    val garage: Garage = Garage.NONE,
+    /** One door per car, 1 to 3. */
+    val garageSpaces: Int = 2,
+    /** A house or townhouse has one unless the record says it has no fireplace. */
+    val chimney: Boolean = kind == Kind.HOUSE || kind == Kind.TOWNHOUSE,
+    val pool: Boolean = false,
 ) {
-    HOUSE(25f, true),
-    TOWNHOUSE(38f, true),
-    APARTMENT(26f, false),
-    MOBILE(29f, false),
-    ;
+    enum class Kind { HOUSE, TOWNHOUSE, APARTMENT, MOBILE }
+
+    enum class Roof { GABLE, HIP, FLAT }
+
+    enum class Garage { NONE, ATTACHED, DETACHED, CARPORT }
+
+    /** The walls' height: the first house's 26 dp for one storey. */
+    val wallHeight: Float
+        get() {
+            val stories = stories ?: return 26f
+            return when {
+                stories >= 2.5 -> 52f
+                stories >= 2 -> 40f
+                stories > 1 -> 30f
+                else -> 26f
+            }
+        }
+
+    /** 16, 24 or 32 dp: a door per car. */
+    val garageWidth: Float
+        get() = 8f + 8f * garageSpaces
+
+    /** How far the home reaches left of its door, roof and garage included: the bins stand just past it. */
+    val leftReach: Float
+        get() =
+            if (kind != Kind.HOUSE) {
+                halfWidth
+            } else {
+                when (garage) {
+                    Garage.NONE -> width / 2 + 5
+                    Garage.ATTACHED -> width / 2 + garageWidth + 5
+                    Garage.DETACHED -> width / 2 + 5 + garageWidth + 5
+                    Garage.CARPORT -> width / 2 + 21
+                }
+            }
+
+    /** How far it reaches right of its door: the trees stand just past it. */
+    val rightReach: Float
+        get() = if (kind == Kind.HOUSE) width / 2 + 5 else halfWidth
+
+    /** Half the width a townhouse row, block or mobile home takes on the ground. */
+    private val halfWidth: Float
+        get() =
+            when (kind) {
+                Kind.HOUSE -> width / 2 + 5
+                Kind.TOWNHOUSE -> 38f
+                Kind.APARTMENT -> 26f
+                Kind.MOBILE -> 29f
+            }
+
+    /** The chimney's top left corner for a door at [origin]; smoke rises from just above its middle. */
+    fun chimneyTop(origin: Offset): Offset {
+        if (kind != Kind.HOUSE) return Offset(origin.x + 8, origin.y - 44)
+        val above =
+            when (roof) {
+                Roof.GABLE -> 18f
+                Roof.HIP -> 17f
+                Roof.FLAT -> 12f
+            }
+        return Offset(origin.x + width * 0.2f, origin.y - wallHeight - above)
+    }
 
     companion object {
-        /** From the home record's `home_type`; a house when it's unknown. */
-        fun of(homeType: String?): SkyHome =
-            when (homeType) {
-                "townhouse" -> TOWNHOUSE
-                "apartment", "condo", "studio", "multi_unit" -> APARTMENT
-                "mobile_home", "trailer", "rv" -> MOBILE
-                else -> HOUSE
+        /** The scene's first house. */
+        val HOUSE = SkyHome()
+
+        /**
+         * From the home record's `home_type` alone: the app's own types, or a county record's words
+         * ("CONDOMINIUM") from a server without the outline.
+         */
+        fun of(homeType: String?): SkyHome = SkyHome(kind = kindOf(homeType) ?: Kind.HOUSE)
+
+        /** From the Your Home section: its outline, or its `home_type` without one. */
+        fun of(
+            shape: PlaceHouseShape?,
+            homeType: String?,
+        ): SkyHome {
+            if (shape == null) return of(homeType)
+            val kind = kindOf(shape.kind) ?: kindOf(homeType) ?: Kind.HOUSE
+            val stories = shape.stories?.coerceIn(1.0, 3.0)
+            val footprint =
+                when (shape.footprint) {
+                    "small" -> 34f
+                    "large" -> 50f
+                    else -> 40f
+                }
+            return SkyHome(
+                kind = kind,
+                stories = stories,
+                // Two storeys stand a little wider, so they read as a house, not a tower.
+                width = footprint + if ((stories ?: 1.0) >= 2) 6f else 0f,
+                roof =
+                    when (shape.roof) {
+                        "hip" -> Roof.HIP
+                        "flat" -> Roof.FLAT
+                        else -> Roof.GABLE
+                    },
+                garage =
+                    when (shape.garage) {
+                        "attached" -> Garage.ATTACHED
+                        "detached" -> Garage.DETACHED
+                        "carport" -> Garage.CARPORT
+                        else -> Garage.NONE
+                    },
+                garageSpaces = (shape.garageSpaces ?: 2).coerceIn(1, 3),
+                chimney = (kind == Kind.HOUSE || kind == Kind.TOWNHOUSE) && shape.fireplace != false,
+                pool = kind == Kind.HOUSE && shape.pool == true,
+            )
+        }
+
+        /** The app's own home types, then a county record's words. */
+        private fun kindOf(value: String?): Kind? {
+            if (value.isNullOrEmpty()) return null
+            val words = value.uppercase()
+            val single = "SINGLE FAMILY" in words
+            return when {
+                value == "house" -> Kind.HOUSE
+                value == "townhouse" -> Kind.TOWNHOUSE
+                value in setOf("apartment", "condo", "studio", "multi_unit") -> Kind.APARTMENT
+                value in setOf("mobile", "mobile_home", "trailer", "rv") -> Kind.MOBILE
+                "MOBILE" in words || "MANUFACTURED" in words -> Kind.MOBILE
+                listOf("CONDO", "APARTMENT", "MULTI", "TRIPLEX", "QUADRUPLEX", "FOURPLEX").any { it in words } -> Kind.APARTMENT
+                !single && listOf("TOWNHOUSE", "ROWHOUSE", "DUPLEX").any { it in words } -> Kind.TOWNHOUSE
+                else -> null
             }
+        }
     }
 }
 
@@ -72,6 +197,9 @@ internal class HomeLight(
 
     val door: Color
         get() = if (lit) SkyPalette.windowGlow.copy(alpha = 0.55f) else scene.sky.bottom.mixed(SkyPalette.ink, 0.55f)
+
+    /** A garage door: the silhouette a shade toward the sky. */
+    fun garageDoor(house: Color): Color = house.mixed(scene.sky.bottom, 0.18f)
 }
 
 private fun DrawScope.porchGlow(
@@ -114,13 +242,14 @@ internal fun DrawScope.paintTownhouses(
     light: HomeLight,
     house: Color,
     origin: Offset,
+    chimney: Boolean = true,
 ) {
     val (x, y) = origin
     val side = house.mixed(SkyPalette.ink, 0.12f)
     townhouse(x - 26, 24f, y, side)
     townhouse(x + 26, 24f, y, side)
     townhouse(x, 28f, y, house)
-    drawRect(house, Offset(x + 8, y - 42), Size(5f, 12f))
+    if (chimney) drawRect(house, Offset(x + 8, y - 42), Size(5f, 12f))
     porchGlow(light, origin, 44f)
     drawRect(light.window(light.lit), Offset(x - 10, y - 18), Size(7f, 6f))
     drawRect(light.window(light.lit && !light.moment.lateNight), Offset(x + 3, y - 18), Size(7f, 6f))

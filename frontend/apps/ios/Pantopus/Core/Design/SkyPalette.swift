@@ -190,6 +190,8 @@ public enum SkyPalette {
     public static let treeAutumnDeep = SkyRGB(0xB8432A)
     public static let blossom = SkyRGB(0xF9A8D4)
     public static let pine = SkyRGB(0x2F6B3F)
+    /// A pool beside the house, blended into the silhouette.
+    public static let pool = SkyRGB(0x7DD3FC)
 
     /// Bins at the curb: garbage, recycling, yard waste.
     public static let binGarbage = SkyRGB(0x4B5563)

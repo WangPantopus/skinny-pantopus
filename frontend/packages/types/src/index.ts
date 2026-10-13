@@ -216,6 +216,8 @@ export type {
   PlacePollingPlace,
   PlaceCivicElectionData,
   PlaceYourHomeData,
+  PlaceHouseKind,
+  PlaceHouseShape,
   HomeSystemSource,
   HomeSystemStatus,
   PlaceHomeSystem,

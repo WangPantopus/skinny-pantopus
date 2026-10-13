@@ -9,7 +9,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotateRad
@@ -35,7 +34,7 @@ internal class TodaySkyGround(
     /** Bins at the curb, in order: "garbage", "recycling", "yard_waste". */
     private val bins: List<String> = emptyList(),
     private val season: SkySeason = SkySeason.SUMMER,
-    /** The home's kind and the far hill's lights. */
+    /** The home's kind and outline (`TodaySkyHomes.kt`, drawn in `TodaySkyHouse.kt`) and the far hill's lights. */
     details: SkyDetails = SkyDetails(),
 ) {
     private val night = moment.phase == SkyPalette.Phase.NIGHT
@@ -93,11 +92,12 @@ internal class TodaySkyGround(
             }
         drawPath(front, tones.frontHill)
         val house = Offset(w * 0.7f, y + 7)
-        when (home) {
-            SkyHome.HOUSE -> paintHouse(tones, house)
-            SkyHome.TOWNHOUSE -> paintTownhouses(HomeLight(scene, moment), tones.house, house)
-            SkyHome.APARTMENT -> paintApartment(HomeLight(scene, moment), tones.house, house)
-            SkyHome.MOBILE -> paintMobileHome(HomeLight(scene, moment), tones.house, house)
+        val light = HomeLight(scene, moment)
+        when (home.kind) {
+            SkyHome.Kind.HOUSE -> paintHouse(home, light, tones.house, weather == SkyPalette.Weather.SNOW, house)
+            SkyHome.Kind.TOWNHOUSE -> paintTownhouses(light, tones.house, house, home.chimney)
+            SkyHome.Kind.APARTMENT -> paintApartment(light, tones.house, house)
+            SkyHome.Kind.MOBILE -> paintMobileHome(light, tones.house, house)
         }
         if (bins.isNotEmpty()) paintBins(tones, house)
         if (cold && !still && home.chimney) paintSmoke(house)
@@ -109,7 +109,7 @@ internal class TodaySkyGround(
         tones: Tones,
         origin: Offset,
     ) {
-        val right = origin.x - home.halfWidth - 2
+        val right = origin.x - home.leftReach - 2
         // At the curb: a little in front of the house.
         val base = origin.y + 8
         if (moment.phase == SkyPalette.Phase.DUSK || night) {
@@ -138,60 +138,16 @@ internal class TodaySkyGround(
         }
     }
 
-    /** A 40 × 26 dp house with its door on the ground line at [origin]. */
-    private fun DrawScope.paintHouse(
-        tones: Tones,
-        origin: Offset,
-    ) {
-        val (x, y) = origin
-        // Filled one part at a time so overlapping parts never cancel out.
-        drawRect(tones.house, Offset(x - 20, y - 26), Size(40f, 26f))
-        drawRect(tones.house, Offset(x + 8, y - 44), Size(6f, 14f))
-        val roof =
-            Path().apply {
-                moveTo(x - 25, y - 25)
-                lineTo(x, y - 46)
-                lineTo(x + 25, y - 25)
-                close()
-            }
-        drawPath(roof, tones.house)
-        if (weather == SkyPalette.Weather.SNOW) {
-            val snow =
-                Path().apply {
-                    moveTo(x - 24, y - 26)
-                    lineTo(x, y - 45)
-                    lineTo(x + 24, y - 26)
-                }
-            drawPath(snow, SkyPalette.white, style = Stroke(width = 3f, cap = StrokeCap.Round, join = StrokeJoin.Round))
-        }
-        val lit = moment.phase == SkyPalette.Phase.DUSK || night
-        if (lit) {
-            drawRect(
-                brush =
-                    Brush.radialGradient(
-                        listOf(SkyPalette.windowGlow.copy(alpha = 0.28f), SkyPalette.windowGlow.copy(alpha = 0f)),
-                        center = Offset(x, y - 12),
-                        radius = 40f,
-                    ),
-                topLeft = Offset(x - 50, y - 60),
-                size = Size(100f, 70f),
-            )
-        }
-        val window = if (lit) SkyPalette.windowGlow else scene.sky.bottom.mixed(SkyPalette.white, 0.15f)
-        if (!(lit && moment.lateNight)) drawRect(window, Offset(x - 14, y - 18), Size(8f, 7f))
-        drawRect(window, Offset(x + 6, y - 18), Size(8f, 7f))
-        val door = if (lit) SkyPalette.windowGlow.copy(alpha = 0.55f) else scene.sky.bottom.mixed(SkyPalette.ink, 0.55f)
-        drawRect(door, Offset(x - 3, y - 11), Size(6f, 11f))
-    }
-
     /** Three puffs rising from the chimney on a loop: straight up when it's calm, bent over and kept low in a strong wind. */
     private fun DrawScope.paintSmoke(origin: Offset) {
         val drift = if (wind.calm) 0.0 else wind.toward * (2 + wind.mph * 0.8)
         val rise = 34 * (1 - 0.45 * wind.strength)
+        // From just above the middle of the chimney's top, wherever the roof puts it.
+        val chimney = home.chimneyTop(origin)
         repeat(3) { index ->
             val progress = (scene.time * 0.35 + index / 3.0) % 1.0
-            val x = origin.x + 11 + sin(progress * 5 + index) * 3 + progress * drift
-            val y = origin.y - 46 - progress * rise
+            val x = chimney.x + 3 + sin(progress * 5 + index) * 3 + progress * drift
+            val y = chimney.y - 2 - progress * rise
             drawCircle(
                 SkyPalette.smoke.copy(alpha = (0.35 * (1 - progress)).toFloat()),
                 (3 + progress * 6).toFloat(),
@@ -212,7 +168,7 @@ internal class TodaySkyGround(
         val lean = wind.lean(scene.time, still).toFloat()
         withTransform({
             // Beside the home, however wide it is.
-            translate(origin.x + 11 + home.halfWidth, origin.y + 2)
+            translate(origin.x + 11 + home.rightReach, origin.y + 2)
             rotateRad(lean, pivot = Offset.Zero)
         }) {
             drawRect(tones.house, Offset(-1.5f, -12f), Size(3f, 12f))
@@ -225,7 +181,7 @@ internal class TodaySkyGround(
             }
         }
         withTransform({
-            translate(origin.x + 35 + home.halfWidth, origin.y + 3)
+            translate(origin.x + 35 + home.rightReach, origin.y + 3)
             rotateRad(lean * 0.7f, pivot = Offset.Zero)
         }) {
             drawRect(tones.house, Offset(-1.5f, -7f), Size(3f, 8f))
@@ -311,6 +267,6 @@ internal class TodaySkyGround(
         ): Offset =
             // Horizon (34 above the bottom), down 7 to the house's ground line and 8 more to the curb,
             // then up 5 to the bins' middle.
-            Offset(width * 0.7f - home.halfWidth - 2 - (count * 9f - 2) / 2, height - 34 + 7 + 8 - 5)
+            Offset(width * 0.7f - home.leftReach - 2 - (count * 9f - 2) / 2, height - 34 + 7 + 8 - 5)
     }
 }

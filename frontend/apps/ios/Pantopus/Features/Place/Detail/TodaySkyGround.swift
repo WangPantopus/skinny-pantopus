@@ -21,7 +21,7 @@ struct TodaySkyGround {
     /// Bins at the curb, in order: "garbage", "recycling", "yard_waste".
     var bins: [String] = []
     var season: SkySeason = .summer
-    /// The resident's kind of home (`TodaySkyHomes.swift`).
+    /// The resident's home: its kind and outline (`TodaySkyHomes.swift`, drawn in `TodaySkyHouse.swift`).
     var home: SkyHome = .house
     /// Lights on the far hill after dusk, from the block's density bucket.
     var streetLights = 0
@@ -65,7 +65,7 @@ struct TodaySkyGround {
 
     /// Where the bins stand in a card of `size`, for the button over them.
     static func binsCenter(in size: CGSize, count: Int, home: SkyHome = .house) -> CGPoint {
-        let right = Double(size.width) * 0.7 - home.halfWidth - 2
+        let right = Double(size.width) * 0.7 - home.leftReach - 2
         // Horizon (34 above the bottom), down 7 to the house's ground line and 8 more to the curb,
         // then up 5 to the bins' middle.
         return CGPoint(x: right - (Double(count) * 9 - 2) / 2, y: Double(size.height) - 34 + 7 + 8 - 5)
@@ -75,7 +75,7 @@ struct TodaySkyGround {
     /// the porch after dark.
     private func paintBins(_ context: GraphicsContext, _ tones: Tones, at origin: CGPoint) {
         let lit = moment.phase == .dusk || night
-        let right = Double(origin.x) - home.halfWidth - 2
+        let right = Double(origin.x) - home.leftReach - 2
         let base = Double(origin.y) + 8
         if lit {
             let width = Double(bins.count) * 9 + 12
@@ -132,56 +132,17 @@ struct TodaySkyGround {
         context.fill(front, with: .color(tones.frontHill.color))
     }
 
-    /// A 40 × 26 point house with its door at `at` (the ground line).
-    func paintHouse(_ context: GraphicsContext, _ tones: Tones, at origin: CGPoint) {
-        let x = origin.x
-        let y = origin.y
-        // Filled one part at a time: overlapping subpaths in one path could
-        // cancel out under the non-zero rule and leave gaps.
-        var roof = Path()
-        roof.move(to: CGPoint(x: x - 25, y: y - 25))
-        roof.addLine(to: CGPoint(x: x, y: y - 46))
-        roof.addLine(to: CGPoint(x: x + 25, y: y - 25))
-        roof.closeSubpath()
-        let walls = Path(CGRect(x: x - 20, y: y - 26, width: 40, height: 26))
-        let chimney = Path(CGRect(x: x + 8, y: y - 44, width: 6, height: 14))
-        for part in [walls, chimney, roof] {
-            context.fill(part, with: .color(tones.house.color))
-        }
-        if weather == .snow {
-            var snow = Path()
-            snow.move(to: CGPoint(x: x - 24, y: y - 26))
-            snow.addLine(to: CGPoint(x: x, y: y - 45))
-            snow.addLine(to: CGPoint(x: x + 24, y: y - 26))
-            let style = StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round)
-            context.stroke(snow, with: .color(SkyPalette.white.color), style: style)
-        }
-        let lit = moment.phase == .dusk || night
-        if lit {
-            let halo = Gradient(colors: [SkyPalette.windowGlow.color(opacity: 0.28), SkyPalette.windowGlow.color(opacity: 0)])
-            context.fill(
-                Path(CGRect(x: x - 50, y: y - 60, width: 100, height: 70)),
-                with: .radialGradient(halo, center: CGPoint(x: x, y: y - 12), startRadius: 0, endRadius: 40)
-            )
-        }
-        let window = lit ? SkyPalette.windowGlow.color : scene.sky.bottom.mixed(with: SkyPalette.white, by: 0.15).color
-        if !(lit && moment.lateNight) {
-            context.fill(Path(CGRect(x: x - 14, y: y - 18, width: 8, height: 7)), with: .color(window))
-        }
-        context.fill(Path(CGRect(x: x + 6, y: y - 18, width: 8, height: 7)), with: .color(window))
-        let door = lit ? SkyPalette.windowGlow.color(opacity: 0.55) : scene.sky.bottom.mixed(with: SkyPalette.ink, by: 0.55).color
-        context.fill(Path(CGRect(x: x - 3, y: y - 11, width: 6, height: 11)), with: .color(door))
-    }
-
     /// Three puffs rising from the chimney on a loop: straight up when it's
     /// calm, bent over and kept low in a strong wind.
     private func paintSmoke(_ context: GraphicsContext, at origin: CGPoint) {
         let drift = wind.calm ? 0 : wind.toward * (2 + wind.mph * 0.8)
         let rise = 34 * (1 - 0.45 * wind.strength)
+        // From just above the middle of the chimney's top, wherever the roof puts it.
+        let chimney = home.chimneyTop(at: origin)
         for index in 0..<3 {
             let progress = (scene.time * 0.35 + Double(index) / 3).truncatingRemainder(dividingBy: 1)
-            let x = Double(origin.x) + 11 + sin(progress * 5 + Double(index)) * 3 + progress * drift
-            let y = Double(origin.y) - 46 - progress * rise
+            let x = Double(chimney.x) + 3 + sin(progress * 5 + Double(index)) * 3 + progress * drift
+            let y = Double(chimney.y) - 2 - progress * rise
             let puff = TodaySkyPainter.circle(x, y, 3 + progress * 6)
             context.fill(puff, with: .color(SkyPalette.smoke.color(opacity: 0.35 * (1 - progress))))
         }
@@ -194,7 +155,7 @@ struct TodaySkyGround {
         let lean = wind.lean(at: scene.time, still: still)
         var round = context
         // Beside the home, however wide it is.
-        round.translateBy(x: origin.x + 11 + home.halfWidth, y: origin.y + 2)
+        round.translateBy(x: origin.x + 11 + home.rightReach, y: origin.y + 2)
         round.rotate(by: .radians(lean))
         round.fill(Path(CGRect(x: -1.5, y: -12, width: 3, height: 12)), with: .color(tones.house.color))
         if season == .winter {
@@ -206,7 +167,7 @@ struct TodaySkyGround {
         }
 
         var pine = context
-        pine.translateBy(x: origin.x + 35 + home.halfWidth, y: origin.y + 3)
+        pine.translateBy(x: origin.x + 35 + home.rightReach, y: origin.y + 3)
         pine.rotate(by: .radians(lean * 0.7))
         var needles = Path()
         needles.move(to: CGPoint(x: -9, y: -6))

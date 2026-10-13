@@ -854,6 +854,28 @@ export interface BallotTeaser {
 // otherwise the section renders `unavailable` (area teaser at T0).
 // ════════════════════════════════════════════════════════════
 
+/** The kind of home the Today sky draws. */
+export type PlaceHouseKind = 'house' | 'townhouse' | 'apartment' | 'mobile';
+
+/**
+ * The home's outline for the Today sky: the county record (ATTOM) with the
+ * kind of home the household chose over it. A null field means the record
+ * doesn't say, and the apps draw their default for it.
+ */
+export interface PlaceHouseShape {
+  kind: PlaceHouseKind;
+  /** 1, 1.5, 2 or 3. */
+  stories: number | null;
+  /** Ground-floor area: under 1,000 sq ft, under 1,700, or more. */
+  footprint: 'small' | 'medium' | 'large' | null;
+  roof: 'gable' | 'hip' | 'flat' | null;
+  garage: 'attached' | 'detached' | 'carport' | 'none' | null;
+  /** 1–3 when there's a garage or carport. */
+  garage_spaces: number | null;
+  fireplace: boolean | null;
+  pool: boolean | null;
+}
+
 /** Your Home — property facts + value estimate + assessment (Band B). */
 export interface PlaceYourHomeData {
   year_built: number | null;
@@ -866,6 +888,8 @@ export interface PlaceYourHomeData {
   value_low: number | null;
   value_high: number | null;
   assessed_value: number | null;
+  /** The home's outline for the Today sky. Absent from older servers. */
+  house?: PlaceHouseShape | null;
 }
 
 // ════════════════════════════════════════════════════════════
