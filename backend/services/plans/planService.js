@@ -408,7 +408,9 @@ function myRequestView(plan, request, { waitlistPosition = null } = {}) {
     waitlist_position: waitlistPosition,
     decided_by: request.decided_by || null,
     decided_at: iso(request.decided_at),
-    created_at: iso(request.created_at),
+    // When they last asked (an ask after withdrawing, leaving or expiring counts; changing who's coming doesn't),
+    // the same time the host's RequestView shows.
+    created_at: iso(request.queued_at || request.created_at),
     asks_left: Math.max(0, rules.LIMITS.asksPerPlan - (request.ask_count || 1)),
     feedback: request.feedback || null,
   };
@@ -752,7 +754,12 @@ async function listMine(viewer) {
   const visible = [...all.values()].filter((plan) => isVisibleTo(plan, viewer) && plan.status !== 'cancelled');
   const ctx = await loadCardContext(visible, viewer);
 
-  const out = { hosting: [], going: [], asked: [], waitlisted: [], recent: [] };
+  const out = {
+    hosting: [], going: [], asked: [], waitlisted: [], recent: [],
+    // The viewer's own standing, so the apps can lead people without a verified address to "Verify your
+    // address" instead of a playdate they can't ask to join or host.
+    viewer: { verified_address: Boolean(viewer.verified), sees_playdates: Boolean(viewer.seesPlaydates) },
+  };
   for (const plan of visible.sort(soonestFirst)) {
     const ended = new Date(endsAt(plan)).getTime() <= Date.now() || plan.status === 'ended';
     const card = buildCard(plan, viewer, ctx);
