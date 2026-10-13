@@ -16,6 +16,8 @@ struct PlansMapView: View {
     @State private var viewModel: PlansMapViewModel
     @State private var camera: MapCameraPosition = .automatic
     @State private var dragOffset: CGFloat = 0
+    /// The area pill and chips' height, so the first look keeps pins out from under them.
+    @State private var chromeHeight: CGFloat = 0
     @State private var showsAreaPicker = false
     /// When a pin was last tapped: the same touch also reaches the map's own
     /// tap (which clears a selection) and must not undo the pin's.
@@ -43,6 +45,7 @@ struct PlansMapView: View {
                         viewModel: viewModel,
                         showsPlaydates: flags.playdates && viewModel.showsPlaydateFilter
                     ) { showsAreaPicker = true }
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { chromeHeight = $0 }
                         .transition(.opacity)
                 }
                 if showsHostButton {
@@ -57,6 +60,10 @@ struct PlansMapView: View {
             .ignoresSafeArea(edges: .bottom)
             .onChange(of: height + bottomInset, initial: true) { _, mapHeight in
                 if abs(viewModel.mapPoints - mapHeight) > 1 { viewModel.mapPoints = mapHeight }
+            }
+            .onChange(of: viewModel.fitRequest) { _, _ in
+                let mapSize = CGSize(width: geo.size.width, height: height + bottomInset)
+                fitPlans(mapSize: mapSize, sheetTop: mapSize.height - sheetHeight)
             }
         }
         .background(Theme.Color.appBg)
@@ -256,6 +263,22 @@ struct PlansMapView: View {
         ))
     }
 
+    /// F1's first look: you and the plans around you, in the open map between
+    /// the area pill and chips and the list (clear of the Host button too), so
+    /// no pin opens under them or off the edge.
+    private func fitPlans(mapSize: CGSize, sheetTop: CGFloat) {
+        guard let center = viewModel.center, viewModel.selectedId == nil else { return }
+        let plans = viewModel.pins.filter { viewModel.kindFilter == nil || $0.kind == viewModel.kindFilter }
+        guard !plans.isEmpty else { return }
+        let points = plans.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
+            + [CLLocationCoordinate2D(latitude: center.latitude, longitude: center.longitude)]
+        // A pin's head stands about 44 pt above its point and its tag hangs under it.
+        let top = chromeHeight + 48
+        let window = CGRect(x: 32, y: top, width: mapSize.width - 64, height: sheetTop - 80 - top)
+        guard let region = PlansCameraFit.region(showing: points, in: window, mapSize: mapSize) else { return }
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.35)) { camera = .region(region) }
+    }
+
     // MARK: - Sheet
 
     private func sheet(height: CGFloat, screenHeight: CGFloat, bottomInset: CGFloat) -> some View {
@@ -360,6 +383,38 @@ struct PlansHostStart: Hashable {
     var game: PlanGameOptionDTO?
     /// A5 "Host again": the earlier plan, a week later.
     var again: PlanDetailDTO?
+}
+
+/// The region that shows some points inside a window of the map (a rect in
+/// the map's own coordinates; the map frames a region in its whole size).
+/// One scale for both axes: at these sizes the map is conformal.
+enum PlansCameraFit {
+    /// At least about 2 miles across the window, so one plan next door isn't street level.
+    static let minimumMiles = 2.0
+
+    static func region(showing points: [CLLocationCoordinate2D], in window: CGRect, mapSize: CGSize) -> MKCoordinateRegion? {
+        guard window.width > 40, window.height > 40, mapSize.width > 0, mapSize.height > 0,
+              let south = points.map(\.latitude).min(), let north = points.map(\.latitude).max(),
+              let west = points.map(\.longitude).min(), let east = points.map(\.longitude).max()
+        else { return nil }
+        let middleLatitude = (south + north) / 2
+        let cosine = max(cos(middleLatitude * .pi / 180), 0.2)
+        // Degrees of longitude per point: whichever axis needs more.
+        let perPoint = max(
+            (east - west) / window.width,
+            (north - south) / cosine / window.height,
+            minimumMiles / (69 * cosine) / window.width
+        )
+        let latitudePerPoint = perPoint * cosine
+        // The window's middle shows the points' middle.
+        return MKCoordinateRegion(
+            center: CLLocationCoordinate2D(
+                latitude: middleLatitude + (window.midY - mapSize.height / 2) * latitudePerPoint,
+                longitude: (west + east) / 2 - (window.midX - mapSize.width / 2) * perPoint
+            ),
+            span: MKCoordinateSpan(latitudeDelta: latitudePerPoint * mapSize.height, longitudeDelta: perPoint * mapSize.width)
+        )
+    }
 }
 
 /// An area circle on the map.

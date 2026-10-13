@@ -286,7 +286,7 @@ data class StatusWaitingContent(
                         "You can keep using the rest of the app while we verify.",
                         "We'll notify you in-app AND by email when it resolves.",
                     ),
-                primaryCta = StatusCta(label = "Back to Hub", actionKey = "back_to_hub"),
+                primaryCta = StatusCta(label = "Done", actionKey = "back_to_hub"),
                 secondaryCta = StatusCta(label = "View claim", actionKey = "view_claim"),
             )
         }

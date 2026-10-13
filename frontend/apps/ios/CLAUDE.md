@@ -97,8 +97,9 @@ so the offline strip auto-appears.
 - To add a destination: extend the route enum, add a `case` in `destination(for:)`,
   and push from the appropriate callback. Keep the route enum case-free of
   closures — only `Hashable` payloads (ids, strings, small structs).
-- Hub → pillar dispatch is in `HubTabRoot.swift`'s `hub` block; jumpBackIn
-  string → route mapping lives in `route(forJumpBackIn:)`.
+- The Place tab's root (Your Place, the saved-address root, the first-run
+  screen or My homes) is chosen by `PlaceRootResolver` (`Features/Root/PlaceRoot.swift`)
+  and rendered by `placeRootContent` in `HubTabRoot.swift`.
 
 ## Parity
 

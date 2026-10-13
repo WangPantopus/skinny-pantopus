@@ -2,11 +2,11 @@
 //  PlaceSwitcherView.swift
 //  Pantopus
 //
-//  C2 — the multi-home switcher bottom sheet. Ported from
-//  `place-switcher.jsx`. Lists the resident's places (verified / claimed
-//  status), highlights the active one, and offers "Add a place". Fetches
-//  `/api/homes/my-homes`; the app's existing sheet chrome provides the
-//  grabber + scrim.
+//  C2 — "Your homes", the sheet behind the address on Your Place. Lists
+//  every Home the person can open (shared or their private setup), then
+//  entries still waiting on verification, with Add a home and Manage
+//  homes. Fetches `/api/homes/my-homes` through the screen store; the
+//  app's sheet chrome provides the scrim.
 //
 
 import SwiftUI
@@ -14,11 +14,14 @@ import SwiftUI
 // MARK: - Row model
 
 struct PlaceSwitcherRow: Identifiable, Hashable {
+    /// `home` opens Your Place for it; `pending` (a claim or residency
+    /// request still in review) opens My homes, where its status lives.
+    enum Kind: Hashable { case home, pending }
+
     let id: String
     let line1: String
-    let city: String
-    let isVerified: Bool
-    var initials: String
+    let subtitle: String
+    let kind: Kind
 }
 
 // MARK: - ViewModel
@@ -38,6 +41,7 @@ final class PlaceSwitcherViewModel {
     private let api: APIClient
     let onSelect: (String) -> Void
     let onAddPlace: () -> Void
+    let onManageHomes: () -> Void
     let onClose: () -> Void
 
     init(
@@ -45,48 +49,67 @@ final class PlaceSwitcherViewModel {
         api: APIClient = .shared,
         onSelect: @escaping (String) -> Void = { _ in },
         onAddPlace: @escaping () -> Void = {},
+        onManageHomes: @escaping () -> Void = {},
         onClose: @escaping () -> Void = {}
     ) {
         self.activeHomeId = activeHomeId
         self.api = api
         self.onSelect = onSelect
         self.onAddPlace = onAddPlace
+        self.onManageHomes = onManageHomes
         self.onClose = onClose
         // The shared home list shows at once when the store has it.
         if let copy = ScreenStore.store(for: api).peek(HomesEndpoints.myHomes(), as: MyHomesResponse.self) {
-            state = .loaded(copy.value.sharedHomes.map(Self.row(for:)))
+            state = .loaded(Self.rows(for: copy.value))
         }
     }
 
     func load() async {
         do {
             let response = try await HomesStoreReads.myHomes(store: ScreenStore.store(for: api)).value
-            state = .loaded(response.sharedHomes.map(Self.row(for:)))
+            state = .loaded(Self.rows(for: response))
         } catch let error as APIError {
-            state = .error(message: error.errorDescription ?? "Couldn't load your places.")
+            state = .error(message: error.errorDescription ?? "Couldn't load your homes.")
         } catch {
-            state = .error(message: "Couldn't load your places.")
+            state = .error(message: "Couldn't load your homes.")
         }
     }
 
-    private static func row(for home: MyHome) -> PlaceSwitcherRow {
-        let line1 = home.home.address ?? home.home.name ?? "A place"
-        let cityParts = [home.home.city, home.home.state].compactMap { $0 }.filter { !$0.isEmpty }
-        let verified = (home.verificationTier?.lowercased() == "verified")
-        return PlaceSwitcherRow(
-            id: home.id,
-            line1: line1,
-            city: cityParts.joined(separator: ", "),
-            isVerified: verified,
-            initials: Self.initials(line1)
-        )
+    /// Homes the person can open, by address, then the entries still waiting
+    /// on verification. A private setup is a Home too: it is listed.
+    static func rows(for response: MyHomesResponse) -> [PlaceSwitcherRow] {
+        let entries = response.homes.filter(\.hasValidListContext)
+        let openable = PlaceRootResolver.openableHomes(in: response)
+            .sorted { line1(for: $0).localizedStandardCompare(line1(for: $1)) == .orderedAscending }
+        let pending = entries.filter { $0.accessKind == "verification" }
+        return openable.map { row(for: $0, kind: .home) } + pending.map { row(for: $0, kind: .pending) }
     }
 
-    private static func initials(_ label: String) -> String {
-        let words = label.split { $0 == " " || $0 == "," }
-            .filter { $0.first?.isLetter ?? false }
-        let letters = words.prefix(2).compactMap(\.first).map(String.init)
-        return letters.isEmpty ? "PL" : letters.joined().uppercased()
+    private static func row(for home: MyHome, kind: PlaceSwitcherRow.Kind) -> PlaceSwitcherRow {
+        PlaceSwitcherRow(id: home.id, line1: line1(for: home), subtitle: subtitle(for: home), kind: kind)
+    }
+
+    private static func line1(for home: MyHome) -> String {
+        home.home.address?.nilIfEmpty ?? home.home.name?.nilIfEmpty ?? "Home"
+    }
+
+    /// "Camas, WA · Verified" / "· Claimed" / "· Private setup"; a request in
+    /// review says where it stands instead. Verified means verified ownership
+    /// or a verified household place, as My homes' chips say
+    /// (`verification_tier` is the evidence strength, never "verified").
+    static func subtitle(for home: MyHome) -> String {
+        if home.accessKind == "verification" {
+            return home.pendingClaimId != nil ? "Ownership in review" : "Verification in progress"
+        }
+        let status = if home.accessKind == "private_setup" {
+            "Private setup"
+        } else if home.ownershipStatus == "verified" || home.occupancy?.verificationStatus == "verified" {
+            "Verified"
+        } else {
+            "Claimed"
+        }
+        let city = [home.home.city, home.home.state].compactMap { $0?.nilIfEmpty }.joined(separator: ", ")
+        return city.isEmpty ? status : "\(city) · \(status)"
     }
 }
 
@@ -118,7 +141,7 @@ struct PlaceSwitcherSheet: View {
 
     private var header: some View {
         HStack {
-            Text("Switch place")
+            Text("Your homes")
                 .font(.system(size: 19, weight: .bold))
                 .kerning(-0.28)
                 .foregroundStyle(Theme.Color.appText)
@@ -154,7 +177,10 @@ struct PlaceSwitcherSheet: View {
                 VStack(spacing: 2) {
                     ForEach(rows) { row in
                         PlaceSwitcherRowView(row: row, isActive: row.id == viewModel.activeHomeId) {
-                            viewModel.onSelect(row.id)
+                            switch row.kind {
+                            case .home: viewModel.onSelect(row.id)
+                            case .pending: viewModel.onManageHomes()
+                            }
                         }
                     }
                     Rectangle()
@@ -163,6 +189,7 @@ struct PlaceSwitcherSheet: View {
                         .padding(.horizontal, 14)
                         .padding(.vertical, 8)
                     addPlaceRow
+                    manageHomesButton
                 }
                 .padding(.horizontal, 12)
                 .padding(.bottom, Spacing.s10)
@@ -182,7 +209,7 @@ struct PlaceSwitcherSheet: View {
                 }
                 .frame(width: 40, height: 40)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Add a place")
+                    Text("Add a home")
                         .font(.system(size: 15.5, weight: .semibold))
                         .kerning(-0.15)
                         .foregroundStyle(Theme.Color.primaryInk)
@@ -198,6 +225,19 @@ struct PlaceSwitcherSheet: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("place.switcher.add")
+    }
+
+    private var manageHomesButton: some View {
+        Button { viewModel.onManageHomes() } label: {
+            Text("Manage homes")
+                .font(.system(size: 14.5, weight: .semibold))
+                .foregroundStyle(Theme.Color.primaryInk)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.top, Spacing.s1)
+        .accessibilityIdentifier("place.switcher.manage")
     }
 }
 
@@ -215,7 +255,7 @@ struct PlaceSwitcherRowView: View {
                     RoundedRectangle(cornerRadius: 11, style: .continuous)
                         .fill(isActive ? Theme.Color.primary100 : Theme.Color.appSurfaceSunken)
                     Icon(
-                        .home,
+                        row.kind == .pending ? .clock : .home,
                         size: 21,
                         strokeWidth: 2,
                         color: isActive ? Theme.Color.primaryInk : Theme.Color.appTextSecondary
@@ -228,16 +268,18 @@ struct PlaceSwitcherRowView: View {
                         .kerning(-0.15)
                         .foregroundStyle(Theme.Color.appText)
                         .lineLimit(1)
-                    Text(isActive ? "Current place" : row.city)
-                        .font(.system(size: 13, weight: isActive ? .semibold : .medium))
-                        .foregroundStyle(isActive ? Theme.Color.primaryInkStrong : Theme.Color.appTextMuted)
+                    Text(row.subtitle)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Theme.Color.appTextMuted)
                         .lineLimit(1)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                PlaceChip(model: row.isVerified
-                    ? PlaceChipModel(tone: .success, text: "Verified", icon: .shieldCheck)
-                    : PlaceChipModel(tone: .warning, text: "Claimed", icon: .home))
-                PlaceChevron()
+                if isActive {
+                    Icon(.check, size: 18, strokeWidth: 2.5, color: Theme.Color.primaryInk)
+                        .accessibilityHidden(true)
+                } else {
+                    PlaceChevron()
+                }
             }
             .padding(.vertical, 13)
             .padding(.horizontal, 14)
@@ -251,6 +293,14 @@ struct PlaceSwitcherRowView: View {
             )
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(isActive ? .isSelected : [])
         .accessibilityIdentifier("place.switcher.row.\(row.id)")
+    }
+}
+
+private extension String {
+    var nilIfEmpty: String? {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 }

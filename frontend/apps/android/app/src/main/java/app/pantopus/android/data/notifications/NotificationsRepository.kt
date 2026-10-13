@@ -78,7 +78,7 @@ class NotificationsRepository
 
         /** An own edit to the notifications (read, all read, deleted): the lists and the bell read again. */
         private fun <T> NetworkResult<T>.notificationsChanged(): NetworkResult<T> =
-            also { if (it is NetworkResult.Success) store.markStale(StoreTopics.NOTIFICATIONS) }
+            also { if (it is NetworkResult.Success) store.markEdited(StoreTopics.NOTIFICATIONS) }
 
         suspend fun markRead(id: String): NetworkResult<NotificationActionEcho> = safeApiCall { api.markRead(id) }.notificationsChanged()
 

@@ -71,9 +71,18 @@ struct PlacePulseView: View {
     }
 
     private var subtitle: String {
-        // The pulse's greeting follows the server's clock, not the viewer's; greet by the device clock, as the Hub does.
-        if case .loaded = viewModel.state { return HubViewModel.greeting() }
+        // The pulse's greeting follows the server's clock, not the viewer's; greet by the device clock.
+        if case .loaded = viewModel.state { return Self.greeting() }
         return ""
+    }
+
+    static func greeting(at date: Date = Date()) -> String {
+        switch Calendar.current.component(.hour, from: date) {
+        case 5..<12: "Good morning"
+        case 12..<17: "Good afternoon"
+        case 17..<22: "Good evening"
+        default: "Hello"
+        }
     }
 
     @ViewBuilder

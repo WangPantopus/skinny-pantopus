@@ -99,7 +99,7 @@ class ApiServiceTest {
         runTest {
             server.enqueue(MockResponse().setResponseCode(503).setBody("{}"))
             val api = retrofit.create(HubApi::class.java)
-            val response = safeApiCall { api.overview() }
+            val response = safeApiCall { api.todayDetail() }
             val failure = response as NetworkResult.Failure
             val error = failure.error
             assertTrue(error is NetworkError.Server)

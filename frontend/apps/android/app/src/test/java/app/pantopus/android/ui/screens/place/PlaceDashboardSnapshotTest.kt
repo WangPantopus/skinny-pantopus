@@ -56,7 +56,7 @@ class PlaceDashboardSnapshotTest {
         PantopusTheme {
             PlaceDashboardContent(
                 intel = fixture(),
-                onOpenAvatar = {},
+                onOpenSwitcher = {},
                 onVerify = {},
                 onOpenDetail = {},
                 modifier = Modifier.fillMaxWidth().background(PantopusColors.appBg),
