@@ -795,6 +795,12 @@ async function draftPost({ text, surface, coarseLocation, userId }) {
 
 // ─── Pickup Days from a Flyer (for the pickup editor) ────────────────────────
 
+/** A note from the model for people to read: trimmed, without a stray closing bracket ("…in the photo.}"). */
+function noteText(note) {
+  const text = typeof note === 'string' ? note.trim() : '';
+  return (/[{[]/.test(text) ? text : text.replace(/[}\]\s]+$/, '')) || null;
+}
+
 /**
  * Read a household's pickup days from photos of their hauler's flyer, or from what they
  * wrote, for the pickup editor to fill in. Nothing is saved here: the person checks the
@@ -844,10 +850,11 @@ async function readPickupSchedule({ images = [], text, userId }) {
       return { error: 'DRAFT_INVALID', message: "Couldn't read a pickup schedule. Try again, or set your pickup days yourself.", fallback: true };
     }
     const fields = editorFields(reading);
+    const note = noteText(reading.note);
     if (!fields.garbage_weekday && !fields.recycling_frequency) {
-      return { error: 'NO_SCHEDULE', message: reading.note || "That doesn't look like a pickup schedule.", fallback: true };
+      return { error: 'NO_SCHEDULE', message: note || "That doesn't look like a pickup schedule.", fallback: true };
     }
-    return { schedule: fields, note: reading.note || null };
+    return { schedule: fields, note };
   } catch (err) {
     logger.error('readPickupSchedule error', { userId, error: err.message });
     await log({ status: err instanceof AIRefusalError ? 'refusal' : 'error', errorMessage: err.message });

@@ -42,6 +42,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.security.findFragmentActivity
+import app.pantopus.android.data.api.models.ai.AIPickupScheduleReadingDto
 import app.pantopus.android.data.api.models.place.PlaceAddressCalendarData
 import app.pantopus.android.data.api.models.place.SetPickupDayRequest
 import app.pantopus.android.ui.components.GhostButton
@@ -80,26 +81,25 @@ internal fun PickupScheduleEditor(
     // Keyed on the version too: a save with identical content still writes new rules (a new version), and the
     // editor must then send that version, or every retry would be refused while the fields stay the same.
     val openedVersion by rememberSaveable(data.pickupSchedule, data.pickupVersion) { mutableStateOf(data.pickupVersion) }
-    val dates =
-        remember(data.today, frequency) {
-            val today = runCatching { LocalDate.parse(data.today) }.getOrNull()
-            if (today == null) {
-                emptyList()
-            } else {
-                (0L until if (frequency == "weekly") WEEKLY_PICKUP_WINDOW_DAYS else BIWEEKLY_PICKUP_WINDOW_DAYS).map { offset ->
-                    val date = today.plusDays(offset)
-                    date.toString() to date.format(DateTimeFormatter.ofPattern("EEEE, MMM d"))
-                }
-            }
+    val dates = remember(data.today, frequency) { pickupDates(data.today, frequency) }
+    var readingFlyer by remember { mutableStateOf(false) }
+    val locked = busy || readingFlyer
+    if (actions.readsPickupFlyers) {
+        PickupFlyerControl(actions, enabled = !busy, onReadingChange = { readingFlyer = it }) { read ->
+            val filled = PickupChoice(weekday, frequency, nextDate).filledFrom(read, data.today)
+            weekday = filled.weekday
+            frequency = filled.frequency
+            nextDate = filled.nextDate
         }
+    }
     Text("Which day is garbage collected each week?", color = PantopusColors.appText, fontSize = 13.sp)
-    ScheduleChoice("Garbage collection", weekday, WEEKDAYS, busy) { weekday = it }
-    ScheduleChoice("Recycling", frequency, FREQUENCIES, busy) {
+    ScheduleChoice("Garbage collection", weekday, WEEKDAYS, locked) { weekday = it }
+    ScheduleChoice("Recycling", frequency, FREQUENCIES, locked) {
         frequency = it
         nextDate = ""
     }
     if (frequency != "not_set") {
-        ScheduleChoice("Next recycling pickup", nextDate, dates, busy) { nextDate = it }
+        ScheduleChoice("Next recycling pickup", nextDate, dates, locked) { nextDate = it }
     }
     Text(
         "Use your collection day, not the night you put bins out. Dates follow your home’s calendar. " +
@@ -108,7 +108,7 @@ internal fun PickupScheduleEditor(
         color = PantopusColors.appTextSecondary,
     )
     Button(
-        enabled = !busy && weekday.isNotEmpty() && (frequency == "not_set" || dates.any { it.first == nextDate }),
+        enabled = !locked && weekday.isNotEmpty() && (frequency == "not_set" || dates.any { it.first == nextDate }),
         onClick = {
             actions.setPickupDay(
                 SetPickupDayRequest(weekday, frequency, nextDate.takeIf { frequency != "not_set" }, expectedVersion = openedVersion),
@@ -117,8 +117,43 @@ internal fun PickupScheduleEditor(
         },
     ) { Text(if (busy) "Saving…" else "Save schedule") }
     if (data.pickupSchedule != null) {
-        TextButton(enabled = !busy, onClick = { actions.clearPickupDay(openedVersion) }) { Text("Clear household schedule") }
+        TextButton(enabled = !locked, onClick = { actions.clearPickupDay(openedVersion) }) { Text("Clear household schedule") }
     }
+}
+
+/** The dates the editor offers for the next recycling pickup: one cycle from the home's local today. */
+private fun pickupDates(
+    today: String,
+    frequency: String,
+): List<Pair<String, String>> {
+    val start = runCatching { LocalDate.parse(today) }.getOrNull() ?: return emptyList()
+    return (0L until if (frequency == "weekly") WEEKLY_PICKUP_WINDOW_DAYS else BIWEEKLY_PICKUP_WINDOW_DAYS).map { offset ->
+        val date = start.plusDays(offset)
+        date.toString() to date.format(DateTimeFormatter.ofPattern("EEEE, MMM d"))
+    }
+}
+
+/** The editor's three fields. */
+internal data class PickupChoice(
+    val weekday: String,
+    val frequency: String,
+    val nextDate: String,
+)
+
+/** Only what the flyer shows changes; a field it doesn't show keeps the editor's value. */
+internal fun PickupChoice.filledFrom(
+    read: AIPickupScheduleReadingDto,
+    today: String,
+): PickupChoice {
+    val day = read.garbageWeekday?.takeIf { code -> WEEKDAYS.any { it.first == code } } ?: weekday
+    val cycle = read.recyclingFrequency?.takeIf { code -> FREQUENCIES.any { it.first == code } }
+    val next =
+        when (cycle) {
+            null -> nextDate
+            "not_set" -> ""
+            else -> read.recyclingNextDate?.takeIf { date -> pickupDates(today, cycle).any { it.first == date } }.orEmpty()
+        }
+    return PickupChoice(day, cycle ?: frequency, next)
 }
 
 @Composable

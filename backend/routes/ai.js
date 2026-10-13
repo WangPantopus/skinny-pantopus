@@ -6,6 +6,7 @@
  *   POST /chat                   — Streaming chat agent (SSE)
  *   POST /draft/listing          — Single-turn listing draft
  *   POST /draft/post             — Single-turn post draft
+ *   POST /draft/pickup-schedule  — Pickup days from a flyer photo, for the Today editor
  *   POST /draft/mail-opening    — Mail opening line suggestion
  *   POST /summarize/mail         — Mail summarization
  *   GET  /place-brief            — Place brief with external data

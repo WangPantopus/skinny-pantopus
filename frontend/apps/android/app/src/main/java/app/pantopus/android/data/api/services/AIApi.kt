@@ -2,6 +2,8 @@ package app.pantopus.android.data.api.services
 
 import app.pantopus.android.data.api.models.ai.AIConversationsResponse
 import app.pantopus.android.data.api.models.ai.AIDraftListingVisionRequest
+import app.pantopus.android.data.api.models.ai.AIDraftPickupScheduleRequest
+import app.pantopus.android.data.api.models.ai.AIDraftPickupScheduleResponse
 import app.pantopus.android.data.api.models.ai.AIDraftPostRequest
 import app.pantopus.android.data.api.models.ai.AIListingVisionResponse
 import app.pantopus.android.data.api.models.ai.AIPostDraftResponse
@@ -68,4 +70,14 @@ interface AIApi {
     suspend fun draftPost(
         @Body body: AIDraftPostRequest,
     ): AIPostDraftResponse
+
+    /**
+     * The pickup days on a photo of a household's hauler's flyer, for the Today
+     * pickup editor to fill in. Nothing is saved: the editor's own Save writes
+     * the days. Route `backend/routes/ai.js:249`.
+     */
+    @POST("api/ai/draft/pickup-schedule")
+    suspend fun draftPickupSchedule(
+        @Body body: AIDraftPickupScheduleRequest,
+    ): AIDraftPickupScheduleResponse
 }
