@@ -10,6 +10,7 @@ import app.pantopus.android.data.api.models.hub.HubDiscoveryResponse
 import app.pantopus.android.data.api.models.hub.HubResponse
 import app.pantopus.android.data.api.models.hub.HubTodayResponse
 import app.pantopus.android.data.api.models.hub.NotificationPreferences
+import app.pantopus.android.data.api.models.location.SavedViewingArea
 import app.pantopus.android.data.api.models.location.ViewingLocationPayload
 import app.pantopus.android.data.api.models.neighborhood.NeighborhoodCells
 import app.pantopus.android.data.api.models.neighborhood.NeighborhoodMeter
@@ -136,6 +137,10 @@ object StoreKeys {
 
     /** The area the viewer chose in the Nearby context bar (`GET /api/location`; kind You: fresh 10 minutes). */
     val viewingLocation = StoreKey<ViewingLocationPayload>("api/location", kind = StoreKind.YOU, topics = setOf(StoreTopics.PROFILE_ME))
+
+    /** Client-only: the chosen area (or none) outlives the process, so saved Pulse and map pages open cold and offline. */
+    val viewingArea =
+        StoreKey<SavedViewingArea>("client/viewing-area", kind = StoreKind.YOU, type = SavedViewingArea::class.java)
 
     /** Post pins only; household pins must always pass their own current access check. */
     @Suppress("LongParameterList")
