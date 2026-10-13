@@ -136,6 +136,9 @@ enum PlanFormat {
     /// "Sunday 1:25 PM" for VoiceOver.
     static func spokenWhen(_ start: Date, now: Date = Date(), calendar: Calendar = .current) -> String {
         if calendar.isDate(start, inSameDayAs: now) { return "today \(time(start, calendar: calendar))" }
+        if let tomorrow = calendar.date(byAdding: .day, value: 1, to: now), calendar.isDate(start, inSameDayAs: tomorrow) {
+            return "tomorrow \(time(start, calendar: calendar))"
+        }
         return "\(weekday(start, calendar: calendar)) \(time(start, calendar: calendar))"
     }
 

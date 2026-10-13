@@ -25,7 +25,7 @@ struct PlanScreenSections: View {
                 case .browsing:
                     PlanBrowsingSection(card: card, onOpenHost: onOpenHost)
                 case .requested:
-                    PlanRequestedSection(card: card, sent: viewModel.sentRequest, myRequest: viewModel.plan?.myRequest)
+                    PlanRequestedSection(card: card, myRequest: viewModel.plan?.myRequest)
                 case .waitlisted:
                     PlanWaitlistSection(card: card)
                 case .going:
@@ -285,7 +285,6 @@ struct PlanNote: View {
 
 struct PlanRequestedSection: View {
     let card: PlanCardDTO
-    let sent: SentPlanRequest?
     let myRequest: PlanMyRequestDTO?
 
     var body: some View {
@@ -305,7 +304,7 @@ struct PlanRequestedSection: View {
                 .foregroundStyle(Theme.Color.appTextStrong)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        if let partySize = myRequest?.partySize ?? sent?.partySize {
+        if let partySize = myRequest?.partySize {
             PlanCardBox {
                 VStack(alignment: .leading, spacing: 6) {
                     Text.planOverline("Your request").padding(.bottom, 2)
@@ -316,12 +315,11 @@ struct PlanRequestedSection: View {
                     } else {
                         keyValue("Coming", partySize <= 1 ? "Just you" : "You + \(partySize - 1)")
                     }
-                    // The later of the server's time and this phone's own send (a re-ask
-                    // keeps the first ask's created_at), with the day when it isn't today.
-                    if let sentAt = [PlanTime.parse(myRequest?.createdAt), sent?.sentAt].compactMap(\.self).max() {
+                    // The last ask, with the day when it isn't today.
+                    if let sentAt = PlanTime.parse(myRequest?.createdAt) {
                         keyValue("Sent", PlanFormat.past(sentAt))
                     }
-                    if let note = myRequest?.note ?? sent?.note, !note.isEmpty {
+                    if let note = myRequest?.note, !note.isEmpty {
                         Text("\u{201C}\(note)\u{201D}")
                             .planFont(.small)
                             .italic()

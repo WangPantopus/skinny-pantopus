@@ -69,9 +69,6 @@ final class PlansMapViewModel {
     private(set) var selectedFailed = false
     /// The viewer's home, for "Use my home instead".
     private(set) var homeCenter: UserCoordinate?
-    /// The viewer has a verified home: playdates can show for them (the server
-    /// decides; this only keeps a "Playdate" filter from leading nowhere).
-    private(set) var hasVerifiedHome = false
     /// "Use my location" was refused or found no fix.
     private(set) var locationUnavailable = false
     var sheetStop: PlansSheetStop = .peek
@@ -110,7 +107,6 @@ final class PlansMapViewModel {
             return
         }
         homeCenter = await Self.homeCoordinate(store: store)
-        hasVerifiedHome = await Self.hasVerifiedHome(store: store)
         if location.canLocateWithoutAsking, let fix = await location.requestCurrent(timeoutSeconds: 4) {
             await use(fix, source: .gps)
         } else if prefersHome, let homeCenter {
@@ -355,15 +351,9 @@ final class PlansMapViewModel {
         "pantopus.plans.center.\(ScreenStore.accountKey)"
     }
 
-    private static func hasVerifiedHome(store: ScreenStore) async -> Bool {
-        guard let homes = try? await HomesStoreReads.myHomes(store: store).value.homes else { return false }
-        return homes.contains { $0.ownershipStatus == "verified" || $0.verificationTier == "strong" }
-    }
-
-    /// Show the "Playdate" filter: playdates on, and the viewer can see them
-    /// (a verified home, or the server already sent one).
+    /// Show the "Playdate" filter only to someone who can see playdates.
     var showsPlaydateFilter: Bool {
-        hasVerifiedHome || pins.contains { $0.kind == .playdate } || cards.contains { $0.kind == .playdate }
+        mine?.viewer?.seesPlaydates ?? false
     }
 
     private static func homeCoordinate(store: ScreenStore) async -> UserCoordinate? {

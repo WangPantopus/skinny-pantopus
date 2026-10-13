@@ -69,6 +69,8 @@ final class PlanComposerModel {
     private(set) var hostName = "You"
     /// A5 "Host again": the plan this one repeats.
     var hostedAgainFrom: String?
+    /// Playdates need a verified address; without one H1's playdate card leads there.
+    private(set) var verifiedAddress: Bool
     /// The title filled in from a game, cleared when the type changes.
     @ObservationIgnored private var autoTitle: String?
     /// A type was chosen (H1) or given: only then may a watch party pick the first game.
@@ -80,6 +82,7 @@ final class PlanComposerModel {
     init(start: PlansHostStart?, api: APIClient = .shared, location: any LocationProviding = DeviceLocationProvider.shared) {
         kind = start?.kind ?? .watchParty
         kindChosen = start != nil
+        verifiedAddress = PlansStoreReads.peekMine()?.viewer?.verifiedAddress ?? true
         game = start?.game
         self.api = api
         self.location = location
@@ -96,7 +99,14 @@ final class PlanComposerModel {
         }
         async let homeRead: Void = loadHome()
         async let gamesRead: Void = loadGames()
-        _ = await (homeRead, gamesRead)
+        async let standingRead: Void = loadStanding()
+        _ = await (homeRead, gamesRead, standingRead)
+    }
+
+    private func loadStanding() async {
+        if let viewer = try? await PlansStoreReads.mine().value.viewer {
+            verifiedAddress = viewer.verifiedAddress
+        }
     }
 
     private func loadHome() async {

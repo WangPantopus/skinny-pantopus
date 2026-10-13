@@ -48,8 +48,15 @@ struct PlanComposerRoot: View {
                         } else {
                             PlanTypePicker(
                                 showsPlaydates: flags.playdates,
+                                verifiedAddress: model.verifiedAddress,
                                 onClose: { onFinish(nil) },
                                 onPick: { kind in
+                                    // A playdate needs a verified address: go there, not to a refusal at the end.
+                                    if kind == .playdate, !model.verifiedAddress {
+                                        onFinish(nil)
+                                        PlanVerification.open()
+                                        return
+                                    }
                                     model.choose(kind)
                                     path.append(.details)
                                 }
@@ -83,6 +90,7 @@ struct PlanComposerRoot: View {
 
 struct PlanTypePicker: View {
     let showsPlaydates: Bool
+    var verifiedAddress = true
     let onClose: () -> Void
     let onPick: (PlanKind) -> Void
 
@@ -145,7 +153,9 @@ struct PlanTypePicker: View {
                 if kind == .playdate {
                     HStack(spacing: Spacing.s2) {
                         Icon(.shieldCheck, size: 14, color: Theme.Color.appTextSecondary)
-                        Text("Verified neighbors only").planFont(.footnote).foregroundStyle(Theme.Color.appTextSecondary)
+                        Text(verifiedAddress ? "Verified neighbors only" : "Verify your address to host")
+                            .planFont(.footnote)
+                            .foregroundStyle(Theme.Color.appTextSecondary)
                     }
                 }
                 Spacer(minLength: 0)

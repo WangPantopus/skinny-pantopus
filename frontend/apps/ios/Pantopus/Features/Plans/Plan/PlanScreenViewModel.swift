@@ -45,8 +45,6 @@ final class PlanScreenViewModel {
     let planId: String
     private(set) var phase: Phase = .loading
     private(set) var plan: PlanDetailDTO?
-    /// The viewer's own request, as sent here (J5 until the server returns it).
-    private(set) var sentRequest: SentPlanRequest?
     private(set) var isWorking = false
     /// A sentence for a failed action, shown under the footer.
     var actionError: String?
@@ -68,25 +66,21 @@ final class PlanScreenViewModel {
             plan = seeded
             phase = .loaded
         }
-        sentRequest = SentPlanRequest.load(planId: planId)
     }
 
     var card: PlanCardDTO? {
         plan?.card
     }
 
-    /// What the viewer sent, for "Change who's coming": the server's copy,
-    /// else what was sent from this phone.
+    /// What the viewer sent, for "Change who's coming".
     var askPrefill: PlanAskPrefill? {
-        if let mine = card?.myRequest {
-            return PlanAskPrefill(
-                partySize: mine.partySize ?? 1,
-                note: mine.note,
-                kidsCount: mine.kidsCount,
-                kidsAgeBands: mine.kidsAgeBands ?? []
-            )
-        }
-        return sentRequest.map { PlanAskPrefill(partySize: $0.partySize, note: $0.note, kidsCount: nil, kidsAgeBands: []) }
+        guard let mine = card?.myRequest else { return nil }
+        return PlanAskPrefill(
+            partySize: mine.partySize ?? 1,
+            note: mine.note,
+            kidsCount: mine.kidsCount,
+            kidsAgeBands: mine.kidsAgeBands ?? []
+        )
     }
 
     var mode: PlanScreenMode {
@@ -119,7 +113,6 @@ final class PlanScreenViewModel {
             }
             if case .notThisTime = mode { await loadOtherPlans() }
             if mode == .hosting { hostRequests = try? await PlansStoreReads.requests(planId: planId, store: store) }
-            if mode == .browsing || mode == .going || mode == .hosting { SentPlanRequest.clear(planId: planId) }
         } catch is CancellationError {
             return
         } catch let error as APIError {
@@ -173,8 +166,6 @@ final class PlanScreenViewModel {
             let reply: PlanAskResponse = try await api.request(PlansEndpoints.ask(planId: planId, body))
             let wasIn = mode == .going
             plan = reply.plan
-            sentRequest = SentPlanRequest(partySize: body.partySize, note: body.note, sentAt: Date())
-            sentRequest?.save(planId: planId)
             if reply.request.status == .accepted, !wasIn {
                 // A rule let them in at once: read the private half now (the reveal plays there).
                 await load()
@@ -186,7 +177,6 @@ final class PlanScreenViewModel {
     func withdraw() async -> Bool {
         await perform {
             _ = try await api.request(PlansEndpoints.withdraw(planId: planId), as: EmptyResponse.self)
-            SentPlanRequest.clear(planId: planId)
             await load()
         }
     }
@@ -288,37 +278,6 @@ struct PlanAskPrefill: Equatable {
     let note: String?
     let kidsCount: Int?
     let kidsAgeBands: [PlanKidsAgeBand]
-}
-
-/// What the viewer sent, kept on the phone only for their own J5 card
-/// (their party size and hello) until the server returns the request.
-struct SentPlanRequest: Codable, Equatable {
-    let partySize: Int
-    let note: String?
-    let sentAt: Date
-
-    @MainActor
-    func save(planId: String) {
-        if let data = try? JSONEncoder().encode(self) {
-            UserDefaults.standard.set(data, forKey: Self.key(planId))
-        }
-    }
-
-    @MainActor
-    static func load(planId: String) -> SentPlanRequest? {
-        guard let data = UserDefaults.standard.data(forKey: key(planId)) else { return nil }
-        return try? JSONDecoder().decode(SentPlanRequest.self, from: data)
-    }
-
-    @MainActor
-    static func clear(planId: String) {
-        UserDefaults.standard.removeObject(forKey: key(planId))
-    }
-
-    @MainActor
-    private static func key(_ planId: String) -> String {
-        "pantopus.plans.sent.\(ScreenStore.accountKey).\(planId.lowercased())"
-    }
 }
 
 /// Which plans already played their reveal for this account.
