@@ -244,6 +244,40 @@ data class ChatEstimate(
     val confidence: String,
 )
 
+/** A draft's text for the composer it opens: a post's body (with its type and headline), or a Support Train's story. */
+@Immutable
+data class ChatAIDraftPrefill(
+    val body: String,
+    /** The assistant's post type (`lost_found`, `event`, …), for posts. */
+    val postType: String? = null,
+    /** A post's headline, when the draft has one. */
+    val title: String? = null,
+)
+
+/**
+ * The household's pickup days as the assistant read them. Save writes them through
+ * `PUT /api/homes/:id/calendar/pickup-day`, as the Today editor does.
+ */
+@Immutable
+data class ChatAIPickupSchedule(
+    val homeId: String,
+    /** MO TU WE TH FR SA SU */
+    val garbageWeekday: String,
+    /** `not_set`, `weekly` or `biweekly`. */
+    val recyclingFrequency: String,
+    val recyclingNextDate: String? = null,
+    /** Null until the person taps Save. */
+    val save: ChatAIPickupSave? = null,
+)
+
+sealed interface ChatAIPickupSave {
+    data object Saving : ChatAIPickupSave
+
+    data object Saved : ChatAIPickupSave
+
+    data class Failed(val message: String) : ChatAIPickupSave
+}
+
 @Immutable
 data class ChatAIDraftCard(
     val id: String,
@@ -252,6 +286,10 @@ data class ChatAIDraftCard(
     val summary: String? = null,
     val priceLabel: String? = null,
     val valid: Boolean = true,
+    /** What "Use draft" carries into the composer. */
+    val prefill: ChatAIDraftPrefill? = null,
+    /** A pickup-days card's schedule and where its Save stands. */
+    val pickup: ChatAIPickupSchedule? = null,
 ) {
     /** Launch cut: a task (#4) or listing (#3) draft opens a composer hidden for the first launch. */
     val isLaunchAvailable: Boolean
@@ -394,6 +432,8 @@ sealed interface ChatBubbleBody {
         val text: String,
         val estimate: ChatEstimate?,
         val drafts: List<ChatAIDraftCard> = emptyList(),
+        /** What the assistant is doing while the reply is pending ("Drafting your post…"). */
+        val status: String? = null,
     ) : ChatBubbleBody
 }
 
@@ -456,6 +496,14 @@ sealed interface ChatTimelineRow {
      */
     data class TopicDivider(val id: String, val label: String) : ChatTimelineRow {
         override val rowId: String = "topic_$id"
+    }
+
+    /**
+     * A line the server writes into a room (`message_type: "system"`), shown centered and quiet: a plan's chat
+     * says "Alex is on the way" and "Sam let in Priya + 1" this way (Nearby Plans board A4).
+     */
+    data class SystemNote(val id: String, val text: String) : ChatTimelineRow {
+        override val rowId: String = "system_$id"
     }
 }
 

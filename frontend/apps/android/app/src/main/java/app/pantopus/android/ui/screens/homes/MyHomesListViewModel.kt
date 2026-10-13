@@ -261,6 +261,11 @@ class MyHomesListViewModel
             if (!visible) read(force = false)
         }
 
+        /** A change signal while visible bypasses the duplicate-entry guard and reads quietly. */
+        fun recheck() {
+            if (visible) read(force = false)
+        }
+
         /** Pull to refresh, Retry and after a delete: read now. */
         fun refresh() = read(force = true)
 
@@ -493,19 +498,6 @@ class MyHomesListViewModel
         private fun personalRequest(home: MyHome): PersonalHomeResidencyRequest? =
             if (pendingVerificationFor(home) == PendingVerification.Residency) requests.firstOrNull { it.homeId == home.id } else null
 
-        private fun homeRowTitle(
-            home: MyHome,
-            personal: PersonalHomeResidencyRequest?,
-        ): String {
-            val fallback =
-                if (pendingVerificationFor(home) == PendingVerification.Residency) {
-                    "Residency request · ${home.id.takeLast(REQUEST_REFERENCE_LENGTH)}"
-                } else {
-                    "Home"
-                }
-            return personal?.label ?: home.name?.takeIf(String::isNotBlank) ?: home.address?.takeIf(String::isNotBlank) ?: fallback
-        }
-
         private fun rowFor(
             home: MyHome,
             revision: Long,
@@ -608,6 +600,19 @@ class MyHomesListViewModel
                     }
             }
     }
+
+private fun homeRowTitle(
+    home: MyHome,
+    personal: PersonalHomeResidencyRequest?,
+): String {
+    val fallback =
+        if (pendingVerificationFor(home) == PendingVerification.Residency) {
+            "Residency request · ${home.id.takeLast(REQUEST_REFERENCE_LENGTH)}"
+        } else {
+            "Home"
+        }
+    return personal?.label ?: home.name?.takeIf(String::isNotBlank) ?: home.address?.takeIf(String::isNotBlank) ?: fallback
+}
 
 private fun unitLabel(home: MyHome): String? {
     if (home.accessKind == "verification") return null
