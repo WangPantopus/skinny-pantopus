@@ -385,4 +385,27 @@ public extension Theme.Color {
     /// Category: unboxing soft border — `#99f6e4` teal-200. Hairline border
     /// on chips and dashed tiles tinted with `categoryUnboxingBg`.
     static let categoryUnboxingBorder = SwiftUI.Color("Category/UnboxingBorder", bundle: Theme.bundle)
+
+    // MARK: - Nearby Plans
+
+    /// Plan kind: watch party (`cat-plan-watch`) — `#ea580c`, dark `#fb923c`.
+    /// The pin, the type swatch and the tile glyph (Plans board P1).
+    static let categoryPlanWatch = SwiftUI.Color("Category/PlanWatch", bundle: Theme.bundle)
+    /// Watch party tint — `#ffedd5`, dark `#3b2312`. Tiles and tags.
+    static let categoryPlanWatchTint = SwiftUI.Color("Category/PlanWatchTint", bundle: Theme.bundle)
+    /// Plan kind: playdate (`cat-plan-playdate`) — `#7c3aed`, dark `#a78bfa`.
+    static let categoryPlanPlaydate = SwiftUI.Color("Category/PlanPlaydate", bundle: Theme.bundle)
+    /// Playdate tint — `#ede9fe`, dark `#2a2148`.
+    static let categoryPlanPlaydateTint = SwiftUI.Color("Category/PlanPlaydateTint", bundle: Theme.bundle)
+    /// Plan kind: pickup game (`cat-plan-pickup`) — `#16a34a`, dark `#4ade80`.
+    static let categoryPlanPickup = SwiftUI.Color("Category/PlanPickup", bundle: Theme.bundle)
+    /// Pickup game tint — `#dcfce7`, dark `#13301f`.
+    static let categoryPlanPickupTint = SwiftUI.Color("Category/PlanPickupTint", bundle: Theme.bundle)
+    /// Plan kind: walk & coffee (`cat-plan-walk`) — `#a16207`, dark `#fbbf24`.
+    static let categoryPlanWalk = SwiftUI.Color("Category/PlanWalk", bundle: Theme.bundle)
+    /// Walk & coffee tint — `#fef3c7`, dark `#33290f`.
+    static let categoryPlanWalkTint = SwiftUI.Color("Category/PlanWalkTint", bundle: Theme.bundle)
+    /// The glyph on a plan pin or type swatch — white, dark `#0b1220`, so the
+    /// glyph keeps its contrast on the lighter dark-mode kind colors.
+    static let categoryPlanPinInk = SwiftUI.Color("Category/PlanPinInk", bundle: Theme.bundle)
 }

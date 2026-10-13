@@ -21,6 +21,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -74,11 +76,21 @@ class ScreenStore
         // runs under it, so a write queued before them can't put a copy back afterwards.
         private val diskLock = Any()
 
+        private val _changes = MutableStateFlow(0L)
+
+        /**
+         * Moves whenever a topic or a kind marks entries out of date (contract §8): screens on show read again, and a
+         * read answers the entries nobody marked without a request.
+         */
+        val changes: StateFlow<Long> = _changes.asStateFlow()
+
         private class Slot(
             val key: StoreKey<*>,
         ) {
             val state = MutableStateFlow(Stored<Any>())
             var etag: String? = null
+
+            @Volatile
             var stale = false
 
             /** Own edits (`put`, `remove`) and ended access: a read that started before one never overwrites it. */
@@ -116,6 +128,22 @@ class ScreenStore
             val edits: Long,
             val marks: Long,
         )
+
+        /** A mark whose saved-copy work is still queued: a load before it lands applies the mark itself. */
+        private class DiskMark(
+            val account: String,
+            val mark: SavedCopies.Mark,
+        ) {
+            fun covers(
+                key: StoreKey<*>,
+                copy: SavedCopies.Copy<*>,
+            ): Boolean =
+                copy.fetchedAt <= mark.upTo &&
+                    (copy.legacy || key.kind in mark.kinds || mark.topic?.let(key::matches) == true)
+        }
+
+        // Guarded by slots.
+        private val pendingDiskMarks = mutableListOf<DiskMark>()
 
         init {
             context.registerComponentCallbacks(
@@ -205,7 +233,28 @@ class ScreenStore
          * topic ending in `:*` (a list's "supporttrain:*") matches every topic with that prefix.
          */
         fun markStale(topic: String) {
-            synchronized(slots) { slots.values.forEach { if (it.key.matches(topic)) it.markStaleLocked() } }
+            synchronized(slots) {
+                slots.values.forEach { if (it.key.matches(topic)) it.markStaleLocked() }
+                queueDiskMarkLocked(SavedCopies.Mark(topic = topic))
+            }
+            _changes.update { it + 1 }
+        }
+
+        /** An own write without a full replacement: retire earlier reads and saved copies before revalidation. */
+        fun markEdited(topic: String) {
+            synchronized(slots) {
+                slots.values.filter { it.key.matches(topic) }.forEach { slot ->
+                    slot.edits++
+                    slot.markStaleLocked()
+                    slot.etag = null
+                    slot.inFlight?.cancel()
+                    slot.inFlight = null
+                    slot.state.value = slot.state.value.copy(refreshing = false)
+                    deleteSaved(slot.key.id)
+                }
+                queueDiskMarkLocked(SavedCopies.Mark(topic = topic, edited = true))
+            }
+            _changes.update { it + 1 }
         }
 
         /** Capture before an asynchronous save, so its reply cannot populate another account or a cleared cache. */
@@ -226,11 +275,41 @@ class ScreenStore
                 synchronized(slots) {
                     if (ticket.generation == generation && ticket.identity == identity() && ticket.edits == slot.edits) {
                         val markedMeanwhile = ticket.marks != slot.marks
-                        put(key, data)
-                        // Another device's change during this save still needs a read, just as during a GET.
-                        if (markedMeanwhile) slot.stale = true
+                        put(key, data, markedMeanwhile)
                     }
                 }
+            }
+        }
+
+        /** Capture before a direct sensitive read: its refusal cannot erase a newer account's safe summary. */
+        fun remover(key: StoreKey<*>): () -> Unit {
+            val account = accountId() ?: return {}
+            val (slot, ticket) =
+                synchronized(slots) {
+                    val slot = slotLocked(key, account)
+                    slot to Ticket(generation, identity(account), slot.edits, slot.marks)
+                }
+            return {
+                synchronized(slots) {
+                    if (ticket.generation == generation && ticket.identity == identity() && ticket.edits == slot.edits) {
+                        remove(key)
+                    }
+                }
+            }
+        }
+
+        /** A list item tapped now can seed a detail's first frame. It stays in the same bounded, wiped memory store. */
+        fun <T : Any> seed(
+            key: StoreKey<T>,
+            data: T,
+        ) {
+            val account = accountId() ?: return
+            synchronized(slots) {
+                val slot = slotLocked(key, account)
+                if (slot.state.value.data != null || slot.state.value.failure.refusesStoredCopy) return
+                // A seed is never fresh or saved. A read already in flight may still replace it with the complete reply.
+                slot.stale = true
+                slot.state.value = Stored(data)
             }
         }
 
@@ -241,13 +320,20 @@ class ScreenStore
         fun <T : Any> put(
             key: StoreKey<T>,
             data: T,
+        ) = put(key, data, markedWhileSaving = false)
+
+        private fun <T : Any> put(
+            key: StoreKey<T>,
+            data: T,
+            markedWhileSaving: Boolean,
         ) {
             val account = accountId() ?: return
             synchronized(slots) {
                 val slot = slotLocked(key, account)
                 slot.edits++
                 slot.etag = null
-                slot.stale = false
+                // Another device's change during a save still needs a read, including after eviction or relaunch.
+                slot.stale = markedWhileSaving
                 slot.state.value = Stored(data, fetchedAt = System.currentTimeMillis())
                 if (slot.persist || (key.kind.tier == StoreTier.EVERYDAY && key.savable)) {
                     slot.persist = true
@@ -258,7 +344,11 @@ class ScreenStore
 
         /** Marks every entry of [kinds] out of date, e.g. the household ones after a socket reconnect. */
         fun markStale(kinds: Set<StoreKind>) {
-            synchronized(slots) { slots.values.forEach { if (it.key.kind in kinds) it.markStaleLocked() } }
+            synchronized(slots) {
+                slots.values.forEach { if (it.key.kind in kinds) it.markStaleLocked() }
+                queueDiskMarkLocked(SavedCopies.Mark(kinds = kinds))
+            }
+            _changes.update { it + 1 }
         }
 
         /** Drops one entry, e.g. after the item was deleted. */
@@ -281,6 +371,7 @@ class ScreenStore
         fun wipe() {
             synchronized(slots) {
                 generation++
+                pendingDiskMarks.clear()
                 slots.values.forEach { slot ->
                     slot.retire()
                     slot.state.value = Stored()
@@ -319,6 +410,27 @@ class ScreenStore
             return slot
         }
 
+        /**
+         * Saved copies without a memory slot learn [mark] on the IO scope, never on the caller's thread (the main thread
+         * on resume, or a tap's own edit). Only copies fetched at or before the mark are touched.
+         */
+        private fun queueDiskMarkLocked(mark: SavedCopies.Mark) {
+            val account = accountId() ?: return
+            val pending = DiskMark(account, mark.copy(upTo = System.currentTimeMillis()))
+            pendingDiskMarks += pending
+            val gen = generation
+            scope.launch {
+                try {
+                    saved.invalidate(account, pending.mark) { work ->
+                        // One file at a time, so a delete on the main thread waits for one file at most.
+                        synchronized(diskLock) { if (gen == generation) work() }
+                    }
+                } finally {
+                    synchronized(slots) { pendingDiskMarks.remove(pending) }
+                }
+            }
+        }
+
         /** Remove the saved entry before returning, so an immediate relaunch cannot restore refused or edited data. */
         private fun deleteSaved(
             keyId: String,
@@ -340,9 +452,15 @@ class ScreenStore
                 deleteSaved(slot.key.id, account)
                 return
             }
-            slot.etag = copy.etag
-            slot.persist = true
-            slot.state.value = Stored(copy.data, fetchedAt = copy.fetchedAt)
+            val marks = pendingDiskMarks.filter { it.account == account && it.covers(slot.key, copy) }
+            val edited = marks.any { it.mark.edited }
+            // A queued own edit retires a current-format copy (its disk work is deleting the file): it is not shown.
+            if (!edited || copy.legacy) {
+                slot.etag = copy.etag.takeUnless { edited }
+                slot.stale = copy.stale || marks.isNotEmpty()
+                slot.persist = true
+                slot.state.value = Stored(copy.data, fetchedAt = copy.fetchedAt)
+            }
         }
 
         /** Writes a confirmed reply to the phone off the caller's thread, when the entry may be saved. */
@@ -360,7 +478,7 @@ class ScreenStore
                 deleteSaved(slot.key.id, account)
                 return
             }
-            val type = slot.key.type ?: return
+            if (slot.key.type == null) return
             val edits = slot.edits
             val gen = generation
             scope.launch {
@@ -368,7 +486,7 @@ class ScreenStore
                     // A wipe, a newer own edit, ended access or a reader that stopped vouching for the viewer since
                     // this reply was settled: it is not written.
                     if (gen == generation && edits == slot.edits && slot.persist) {
-                        saved.save(account, slot.key.id, type, data, fetchedAt, etag)
+                        saved.save(account, slot.key, data, fetchedAt, etag, slot.stale)
                     }
                 }
             }
@@ -438,6 +556,11 @@ class ScreenStore
                             }
                     }
                 if (BuildConfig.DEBUG) Timber.tag("ISStore").d("%s → %s", slot.key.id.replace(UUID, ":id"), slot.state.value.describe())
+                // The visible reader may have consumed a topic signal by joining this older flight. Release it
+                // before notifying again, so that reader rechecks the newer version instead of joining it twice.
+                // No signal without a newer mark: failed reads do not create a retry loop.
+                slot.inFlight = null
+                if (markedMeanwhile && !slot.state.value.failure.refusesStoredCopy) _changes.update { it + 1 }
             }
         }
 

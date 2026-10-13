@@ -35,6 +35,7 @@ import app.pantopus.android.core.perf.ReportContentShown
 import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.components.RefreshFailedLine
 import app.pantopus.android.ui.components.RefreshNotice
+import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.screens.hub.sections.HubActionStrip
 import app.pantopus.android.ui.screens.hub.sections.HubDiscoveryRail
 import app.pantopus.android.ui.screens.hub.sections.HubFirstRunHero
@@ -63,6 +64,7 @@ fun HubScreen(
     onIntent: (HubNavigationIntent) -> Unit = {},
     viewModel: HubViewModel = hiltViewModel(),
 ) {
+    RefreshOnStoreChange(viewModel::load)
     val state by viewModel.state.collectAsStateWithLifecycle()
     // Instant Screens: only a pull or Retry with the hub on screen shows the indicator; the hub never blanks for it.
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
