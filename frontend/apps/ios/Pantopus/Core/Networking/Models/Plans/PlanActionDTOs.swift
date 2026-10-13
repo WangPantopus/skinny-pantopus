@@ -409,14 +409,20 @@ public struct PlanPlaceOptionDTO: Decodable, Sendable, Hashable, Identifiable {
 /// `GET /api/plans/places/nearby` (and the geo search used by H6's box).
 public struct PlanPlacesResponse: Decodable, Sendable, Hashable {
     public let places: [PlanPlaceOptionDTO]
+    /// The area is asked for the first time and still loading (202): ask again in a few seconds.
+    public let loading: Bool
+    /// "© OpenStreetMap contributors": shown small under the list.
+    public let attribution: String?
 
     enum CodingKeys: String, CodingKey {
-        case places
+        case places, loading, attribution
     }
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         places = try container.decodeIfPresent(PlanLossyList<PlanPlaceOptionDTO>.self, forKey: .places)?.items ?? []
+        loading = try container.decodeIfPresent(Bool.self, forKey: .loading) ?? false
+        attribution = try container.decodeIfPresent(String.self, forKey: .attribution)
     }
 }
 
