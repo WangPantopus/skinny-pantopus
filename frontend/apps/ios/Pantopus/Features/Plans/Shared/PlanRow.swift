@@ -162,9 +162,11 @@ struct PlanRow: View {
                             .planFont(.footnote)
                             .foregroundStyle(Theme.Color.appTextSecondary)
                             .lineLimit(lines)
+                        // At the largest text sizes the status goes under the words, which keep the width.
+                        if typeSize.isAccessibilitySize { trailing.padding(.top, Spacing.s1) }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    trailing
+                    if !typeSize.isAccessibilitySize { trailing }
                 }
                 .padding(.vertical, 11)
             }
@@ -178,7 +180,7 @@ struct PlanRow: View {
 
     /// One line each (board P2); at the largest text sizes they wrap instead of cutting off.
     private var lines: Int {
-        typeSize.isAccessibilitySize ? 3 : 1
+        typeSize.isAccessibilitySize ? 4 : 1
     }
 
     @ViewBuilder private var trailing: some View {

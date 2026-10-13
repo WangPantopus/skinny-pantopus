@@ -67,6 +67,8 @@ final class PlansMapViewModel {
     private(set) var selectedId: String?
     private(set) var selectedCard: PlanCardDTO?
     private(set) var selectedFailed = false
+    /// The tapped pin's card, measured: its sheet takes this height, up to half (board F3).
+    var cardHeight: CGFloat = 0
     /// The viewer's home, for "Use my home instead".
     private(set) var homeCenter: UserCoordinate?
     /// "Use my location" was refused or found no fix.

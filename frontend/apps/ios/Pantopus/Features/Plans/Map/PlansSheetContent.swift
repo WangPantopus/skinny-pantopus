@@ -15,6 +15,8 @@ struct PlansSheetContent: View {
     let actions: PlansMapActions
     let onStop: (PlansSheetStop) -> Void
 
+    @Environment(\.dynamicTypeSize) private var typeSize
+
     var body: some View {
         Group {
             switch viewModel.phase {
@@ -62,8 +64,9 @@ struct PlansSheetContent: View {
                     seeAll(count: cards.count)
                 }
             }
-            // The two soonest near you (your own plans among them).
-            let first = Array(cards.prefix(2))
+            // The two soonest near you (your own plans among them); one at the
+            // largest text sizes, so the row has room for its words.
+            let first = Array(cards.prefix(typeSize.isAccessibilitySize ? 1 : 2))
             ForEach(Array(first.enumerated()), id: \.element.id) { index, card in
                 PlanRow(model: rowModel(card).withTrailing(.chevron), showsDivider: index > 0) {
                     actions.openPlan(card, card.id, .view)
@@ -76,6 +79,9 @@ struct PlansSheetContent: View {
                     .padding(.vertical, Spacing.s3)
             }
         }
+        // Whole lines even when the stop is too short for them (the largest
+        // text): the sheet cuts off the bottom instead of shrinking the words.
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private var peekTitleText: some View {
