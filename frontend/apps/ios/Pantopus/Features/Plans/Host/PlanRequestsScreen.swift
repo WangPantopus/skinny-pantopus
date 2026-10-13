@@ -189,7 +189,7 @@ struct PlanRequestsScreen: View {
     @ViewBuilder private var requestList: some View {
         if let pending = viewModel.requests?.pending {
             if pending.isEmpty {
-                Text("No requests waiting.")
+                Text("No requests right now. We'll tell you when someone asks.")
                     .planFont(.small)
                     .foregroundStyle(Theme.Color.appTextSecondary)
             }
@@ -296,11 +296,15 @@ struct PlanRequestCard: View {
             parts.append(distance.prefix(1).uppercased() + distance.dropFirst() + " away")
         }
         if request.user.hostedBefore { parts.append("you hosted them before") }
-        if let joined = request.user.plansJoined {
-            parts.append(joined == 0 ? "new to Pantopus" : "joined \(joined) plan\(joined == 1 ? "" : "s")")
+        if let joined = request.user.plansJoined, joined > 0 {
+            parts.append("joined \(joined) plan\(joined == 1 ? "" : "s")")
         }
         if let mutual = request.user.mutualConnections, mutual > 0 {
             parts.append("\(mutual) mutual connection\(mutual == 1 ? "" : "s")")
+        }
+        // Only when nothing else speaks for them (as on Android).
+        if (request.user.plansJoined ?? 0) == 0, (request.user.mutualConnections ?? 0) == 0, !request.user.hostedBefore {
+            parts.append("new to Pantopus")
         }
         return parts.joined(separator: " · ")
     }
