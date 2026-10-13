@@ -129,6 +129,22 @@ class ScreenStore
             val marks: Long,
         )
 
+        /** A mark whose saved-copy work is still queued: a load before it lands applies the mark itself. */
+        private class DiskMark(
+            val account: String,
+            val mark: SavedCopies.Mark,
+        ) {
+            fun covers(
+                key: StoreKey<*>,
+                copy: SavedCopies.Copy<*>,
+            ): Boolean =
+                copy.fetchedAt <= mark.upTo &&
+                    (copy.legacy || key.kind in mark.kinds || mark.topic?.let(key::matches) == true)
+        }
+
+        // Guarded by slots.
+        private val pendingDiskMarks = mutableListOf<DiskMark>()
+
         init {
             context.registerComponentCallbacks(
                 object : ComponentCallbacks2 {
@@ -219,7 +235,7 @@ class ScreenStore
         fun markStale(topic: String) {
             synchronized(slots) {
                 slots.values.forEach { if (it.key.matches(topic)) it.markStaleLocked() }
-                accountId()?.let { account -> synchronized(diskLock) { saved.invalidate(account, topic = topic) } }
+                queueDiskMarkLocked(SavedCopies.Mark(topic = topic))
             }
             _changes.update { it + 1 }
         }
@@ -236,7 +252,7 @@ class ScreenStore
                     slot.state.value = slot.state.value.copy(refreshing = false)
                     deleteSaved(slot.key.id)
                 }
-                accountId()?.let { account -> synchronized(diskLock) { saved.invalidate(account, topic = topic, edited = true) } }
+                queueDiskMarkLocked(SavedCopies.Mark(topic = topic, edited = true))
             }
             _changes.update { it + 1 }
         }
@@ -313,7 +329,7 @@ class ScreenStore
         fun markStale(kinds: Set<StoreKind>) {
             synchronized(slots) {
                 slots.values.forEach { if (it.key.kind in kinds) it.markStaleLocked() }
-                accountId()?.let { account -> synchronized(diskLock) { saved.invalidate(account, kinds = kinds) } }
+                queueDiskMarkLocked(SavedCopies.Mark(kinds = kinds))
             }
             _changes.update { it + 1 }
         }
@@ -338,6 +354,7 @@ class ScreenStore
         fun wipe() {
             synchronized(slots) {
                 generation++
+                pendingDiskMarks.clear()
                 slots.values.forEach { slot ->
                     slot.retire()
                     slot.state.value = Stored()
@@ -376,6 +393,27 @@ class ScreenStore
             return slot
         }
 
+        /**
+         * Saved copies without a memory slot learn [mark] on the IO scope, never on the caller's thread (the main thread
+         * on resume, or a tap's own edit). Only copies fetched at or before the mark are touched.
+         */
+        private fun queueDiskMarkLocked(mark: SavedCopies.Mark) {
+            val account = accountId() ?: return
+            val pending = DiskMark(account, mark.copy(upTo = System.currentTimeMillis()))
+            pendingDiskMarks += pending
+            val gen = generation
+            scope.launch {
+                try {
+                    saved.invalidate(account, pending.mark) { work ->
+                        // One file at a time, so a delete on the main thread waits for one file at most.
+                        synchronized(diskLock) { if (gen == generation) work() }
+                    }
+                } finally {
+                    synchronized(slots) { pendingDiskMarks.remove(pending) }
+                }
+            }
+        }
+
         /** Remove the saved entry before returning, so an immediate relaunch cannot restore refused or edited data. */
         private fun deleteSaved(
             keyId: String,
@@ -397,8 +435,12 @@ class ScreenStore
                 deleteSaved(slot.key.id, account)
                 return
             }
-            slot.etag = copy.etag
-            slot.stale = copy.stale
+            val marks = pendingDiskMarks.filter { it.account == account && it.covers(slot.key, copy) }
+            val edited = marks.any { it.mark.edited }
+            // A queued own edit retires a current-format copy; its disk work is deleting the file.
+            if (edited && !copy.legacy) return
+            slot.etag = copy.etag.takeUnless { edited }
+            slot.stale = copy.stale || marks.isNotEmpty()
             slot.persist = true
             slot.state.value = Stored(copy.data, fetchedAt = copy.fetchedAt)
         }
