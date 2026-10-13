@@ -245,6 +245,9 @@ async function sendHostSummaries() {
     const tz = plan.timezone || rules.DEFAULT_TIMEZONE;
     const local = rules.localParts(new Date(now), tz);
     if (rules.localParts(new Date(plan.post.event_date), tz).date !== local.date || local.hour < 8) continue;
+    // A plan posted after 8 AM on its day gets no summary: the host just made it.
+    const eightAm = rules.zonedInstant(local.year, local.month, local.day, 8, 0, tz);
+    if (new Date(plan.created_at).getTime() >= eightAm.getTime()) continue;
     const { data: claimed } = await supabaseAdmin.from('Plan')
       .update({ host_summary_sent_at: iso(now) }).eq('post_id', plan.post_id).is('host_summary_sent_at', null).select('post_id');
     if (!claimed || claimed.length === 0) continue;

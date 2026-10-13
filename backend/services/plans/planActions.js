@@ -449,6 +449,17 @@ async function editPlan(user, postId, patch, { io = null } = {}) {
   }
   if (patch.details !== undefined) planUpdate.details = normalizeDetails(plan.kind, patch.details);
 
+  // A plan moved to another time is reminded again (when its new reminder time is still
+  // ahead) and, moved to a later day, gets that day's morning summary.
+  const tz = planUpdate.timezone || plan.timezone || rules.DEFAULT_TIMEZONE;
+  let remindAgain = false;
+  if (timeMoved) {
+    remindAgain = rules.reminderAt(postUpdate.event_date, tz).getTime() > Date.now();
+    const newDay = rules.localParts(new Date(postUpdate.event_date), tz).date;
+    const oldDay = rules.localParts(new Date(plan.post.event_date), tz).date;
+    if (newDay !== oldDay && newDay > rules.localParts(new Date(), tz).date) planUpdate.host_summary_sent_at = null;
+  }
+
   const stamp = nowIso();
   if (Object.keys(postUpdate).length > 0) {
     const { error } = await supabaseAdmin.from('Post').update({ ...postUpdate, updated_at: stamp, is_edited: true, edited_at: stamp }).eq('id', postId);
@@ -465,7 +476,7 @@ async function editPlan(user, postId, patch, { io = null } = {}) {
     const accepted = requests.filter((r) => r.status === 'accepted');
     if (accepted.length > 0) {
       const { error } = await supabaseAdmin.from('PlanRequest')
-        .update({ reconfirm_requested_at: stamp, reconfirmed: null, updated_at: stamp })
+        .update({ reconfirm_requested_at: stamp, reconfirmed: null, updated_at: stamp, ...(remindAgain ? { reminded_at: null } : {}) })
         .eq('post_id', postId).eq('status', 'accepted');
       if (error) throw new Error(`Failed to ask "Still coming?": ${error.message}`);
       const hostFirst = firstOf((await userNames([viewer.id])).get(viewer.id));
@@ -662,13 +673,18 @@ async function askToJoin(user, postId, body, { io = null } = {}) {
   const viewer = await loadViewer(user, { gps: body.gps });
   const plan = await loadVisiblePlan(postId, viewer);
   if (String(plan.host_user_id) === viewer.id) fail(409, 'host', "You're hosting this plan.");
-  const ask = cleanAsk(plan, body);
   const ctx = await planService.loadCardContext([plan], viewer);
   const mine = ctx.myRequestByPlan.get(postId) || null;
+  const waiting = mine && (mine.status === 'pending' || mine.status === 'waitlisted');
+  // A second ask while waiting changes only what it sends; the rest stays as asked.
+  const keep = (key) => (body[key] !== undefined ? body[key] : mine[key]);
+  const ask = cleanAsk(plan, waiting
+    ? { party_size: keep('party_size'), note: keep('note'), kids_count: keep('kids_count'), kids_age_bands: keep('kids_age_bands'), stays_with_kids: keep('stays_with_kids') }
+    : body);
   const stamp = nowIso();
 
   // Already in line: a second ask changes who's coming and the hello. It doesn't use an ask.
-  if (mine && (mine.status === 'pending' || mine.status === 'waitlisted')) {
+  if (waiting) {
     const { error } = await supabaseAdmin.from('PlanRequest').update({ ...ask, updated_at: stamp }).eq('id', mine.id);
     if (error) throw new Error(`Failed to update your request: ${error.message}`);
     return { status: 200, body: await requestResult(postId, viewer, mine.id) };
