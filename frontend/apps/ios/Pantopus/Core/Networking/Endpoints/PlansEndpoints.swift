@@ -145,12 +145,11 @@ public enum PlansEndpoints {
 
     /// `GET /api/plans/places/nearby` — public places for H6, cached per
     /// area for 24 hours on the server. Route `backend/routes/plans.js`.
-    public static func nearbyPlaces(latitude: Double, longitude: Double) -> Endpoint {
-        Endpoint(
-            method: .get,
-            path: "\(base)/places/nearby",
-            query: ["latitude": String(latitude), "longitude": String(longitude)]
-        )
+    public static func nearbyPlaces(latitude: Double, longitude: Double, query text: String? = nil) -> Endpoint {
+        var query = ["latitude": String(latitude), "longitude": String(longitude)]
+        // `q` filters the same public places by name (never a street address).
+        if let text, !text.isEmpty { query["q"] = text }
+        return Endpoint(method: .get, path: "\(base)/places/nearby", query: query)
     }
 
     // MARK: - Hosting

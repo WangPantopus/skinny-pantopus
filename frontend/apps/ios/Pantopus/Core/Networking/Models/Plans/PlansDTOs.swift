@@ -428,9 +428,11 @@ public struct MyPlansResponse: Decodable, Sendable, Hashable {
     public let waitlisted: [PlanCardDTO]
     /// Ended in the last 2 days, hosted or in (A5).
     public let recent: [PlanCardDTO]
+    /// The viewer's own standing.
+    public let viewer: MyPlansViewer?
 
     enum CodingKeys: String, CodingKey {
-        case hosting, going, asked, waitlisted, recent
+        case hosting, going, asked, waitlisted, recent, viewer
     }
 
     public init(from decoder: any Decoder) throws {
@@ -440,6 +442,7 @@ public struct MyPlansResponse: Decodable, Sendable, Hashable {
         asked = try container.decodeIfPresent(PlanLossyList<PlanCardDTO>.self, forKey: .asked)?.items ?? []
         waitlisted = try container.decodeIfPresent(PlanLossyList<PlanCardDTO>.self, forKey: .waitlisted)?.items ?? []
         recent = try container.decodeIfPresent(PlanLossyList<PlanCardDTO>.self, forKey: .recent)?.items ?? []
+        viewer = try? container.decodeIfPresent(MyPlansViewer.self, forKey: .viewer)
     }
 
     public var isEmpty: Bool {
