@@ -874,7 +874,9 @@ private class RadonTodayState(
     suspend fun readReport(report: Uri) {
         choosingReport = false
         val reader = reportReader ?: return
-        if (sheet != "yes" || retained != null || busy || readingReport) return
+        // Only the yes sheet's own answer is filled, and one reading at a time.
+        if (sheet != "yes" || retained != null) return
+        if (busy || readingReport) return
         readingReport = true
         reportMessage = null
         try {
@@ -891,7 +893,7 @@ private class RadonTodayState(
             }
         } catch (cancelled: CancellationException) {
             throw cancelled
-        } catch (refused: Exception) {
+        } catch (refused: IllegalStateException) {
             Timber.w(refused, "radon report reading skipped: the card is no longer current")
         } finally {
             if (runCatching { requireCurrent() }.isSuccess) readingReport = false
