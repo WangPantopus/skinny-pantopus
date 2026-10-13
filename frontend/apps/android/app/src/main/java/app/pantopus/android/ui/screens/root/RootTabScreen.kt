@@ -2601,7 +2601,11 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     // stays reachable (back) and is the no-home fallback;
                     // parity with the iOS HubTabRoot auto-land.
                     val placeHostVm: HomeTabHostViewModel = hiltViewModel()
-                    app.pantopus.android.ui.components.RefreshOnStoreChange(placeHostVm::resolve)
+                    // A store change re-evaluates the landing, except under the address review: resolving there resets
+                    // its preview and save state, and after Save it would replace "Saved privately" with the Hub.
+                    app.pantopus.android.ui.components.RefreshOnStoreChange {
+                        if (placeHostVm.landing.value != HomeLanding.Review) placeHostVm.resolve()
+                    }
                     val placeLanding by placeHostVm.landing.collectAsStateWithLifecycle()
                     val verifyScope = rememberCoroutineScope()
                     var didLandPlace by rememberSaveable { mutableStateOf(false) }
