@@ -225,13 +225,25 @@ async function getCachedDiscovery({ lat, lng, userId, radius }) {
     return { sections, total_active: 0, free_count: 0, cached: true };
   }
 
-  // Cache miss — live query
-  const result = await discoverListings({ lat, lng, userId, radius: radiusMeters });
+  // Cache miss — live query. The cached sections are served to everyone near
+  // here, so build them as a signed-out viewer sees them (an owner or address
+  // grantee sees exact points) and personalize a copy as on a hit.
+  const result = await discoverListings({ lat, lng, userId: null, radius: radiusMeters });
 
   // Fire-and-forget: cache sections
   upsertSections(geohash, result.sections).catch((err) => {
     logger.warn('Background cache upsert failed', { geohash, error: err.message });
   });
+
+  if (userId) {
+    const sections = structuredClone(result.sections);
+    const [savedIds, filters] = await Promise.all([
+      getSavedListingIds(userId, collectListingIds(sections)),
+      getMuteAndBlockFilters(userId),
+    ]);
+    markSaved(sections, savedIds);
+    return { ...result, sections: applySectionFilters(sections, filters) };
+  }
 
   return result;
 }
