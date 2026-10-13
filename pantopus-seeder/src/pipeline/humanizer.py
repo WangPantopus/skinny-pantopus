@@ -436,6 +436,10 @@ def _call_api(client, messages: list[dict], system_prompt: str = "") -> tuple[st
         if response.stop_reason == "refusal":
             log.warning("Claude declined the request")
             return None, "api_error:refusal"
+        if response.stop_reason == "max_tokens":
+            # A post cut off mid-sentence can still pass the length checks; never publish one.
+            log.warning("Claude's reply hit max_tokens")
+            return None, "api_error:max_tokens"
         # A reply can open with a thinking block, so read the text blocks by type.
         text = "".join(block.text for block in response.content if block.type == "text").strip()
         if not text:
