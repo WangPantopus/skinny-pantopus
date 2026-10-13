@@ -55,6 +55,9 @@ struct PlansMapView: View {
                 sheet(height: sheetHeight, screenHeight: height, bottomInset: bottomInset)
             }
             .ignoresSafeArea(edges: .bottom)
+            .onChange(of: height + bottomInset, initial: true) { _, mapHeight in
+                if abs(viewModel.mapPoints - mapHeight) > 1 { viewModel.mapPoints = mapHeight }
+            }
         }
         .background(Theme.Color.appBg)
         .task { await viewModel.start() }

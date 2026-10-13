@@ -80,6 +80,8 @@ final class PlansMapViewModel {
     @ObservationIgnored private(set) var lastRegion: MKCoordinateRegion?
 
     private var span: Double = 0.06
+    /// The map's height on screen, so pins join clusters at the same distance on every phone.
+    var mapPoints = PlansClustering.mapPoints
     private var viewport: PlansViewport?
     private var pinsTask: Task<Void, Never>?
     private let api: APIClient
@@ -288,6 +290,7 @@ final class PlansMapViewModel {
         PlansClustering.markers(
             pins.filter { kindFilter == nil || $0.kind == kindFilter },
             span: span,
+            mapPoints: mapPoints,
             selectedId: selectedId
         )
     }
