@@ -49,6 +49,7 @@ import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
+import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -98,7 +99,12 @@ fun PlansTodayCards(
             )
         }
         ui.hostAgain.forEach { plan ->
-            HostAgainCard(plan, onNotNow = { viewModel.dismiss(plan) }, onHostAgain = { actions.onHostAgain(plan.kind, plan.id) })
+            HostAgainCard(
+                plan,
+                named = ui.hostAgain.size > 1,
+                onNotNow = { viewModel.dismiss(plan) },
+                onHostAgain = { actions.onHostAgain(plan.kind, plan.id) },
+            )
         }
     }
     ToastHost(controller = toast)
@@ -250,8 +256,7 @@ private fun HowWasItCard(
     onDone: () -> Unit,
 ) {
     val kind = plan.planKind ?: return
-    val zone = PlanFormat.zone(plan.timezone)
-    val day = PlanFormat.instant(plan.startsAt)?.atZone(zone)?.format(DateTimeFormatter.ofPattern("EEEE", Locale.US))
+    val day = recentDay(plan)
     Column(modifier = Modifier.fillMaxWidth().planCard().padding(Spacing.s4), verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s3)) {
             PlanKindLeading(kind)
@@ -294,18 +299,22 @@ private fun HowWasItCard(
 @Composable
 private fun HostAgainCard(
     plan: PlanDto,
+    named: Boolean,
     onNotNow: () -> Unit,
     onHostAgain: () -> Unit,
 ) {
     val kind = plan.planKind ?: return
-    val came = plan.spots - plan.spotsLeft
+    val came = plan.goingCount
+    // "came today", "came yesterday", "came last Sunday" (iOS words it the same way).
     val day =
-        PlanFormat.instant(
-            plan.startsAt,
-        )?.atZone(PlanFormat.zone(plan.timezone))?.format(DateTimeFormatter.ofPattern("EEEE", Locale.US))
+        when (val recent = recentDay(plan)) {
+            null -> ""
+            TODAY, YESTERDAY -> " $recent"
+            else -> " last $recent"
+        }
     val caption =
         listOfNotNull(
-            if (came > 0) "${if (came == 1) "1 person" else "$came people"} came${day?.let { " last $it" }.orEmpty()}." else null,
+            if (came > 0) "${if (came == 1) "1 person" else "$came people"} came$day." else null,
             "Same time next week?",
         ).joinToString(" ")
     Column(modifier = Modifier.fillMaxWidth().planCard().padding(Spacing.s4), verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
@@ -318,6 +327,14 @@ private fun HostAgainCard(
                     color = PantopusColors.appText,
                     modifier = Modifier.semantics { heading() },
                 )
+                // Two plans of the same kind: each card names its plan.
+                if (named) {
+                    Text(
+                        text = plan.title,
+                        style = PantopusTextStyle.small.copy(fontWeight = FontWeight.SemiBold),
+                        color = PantopusColors.appText,
+                    )
+                }
                 Text(text = caption, style = PantopusTextStyle.small, color = PantopusColors.appTextSecondary)
             }
         }
@@ -325,5 +342,20 @@ private fun HostAgainCard(
             PlanTonalButton(title = "Not now", onClick = onNotNow, height = 44.dp, modifier = Modifier.weight(1f))
             PrimaryButton(title = "Host again", onClick = onHostAgain, modifier = Modifier.weight(1f))
         }
+    }
+}
+
+private const val TODAY = "today"
+private const val YESTERDAY = "yesterday"
+
+/** When a recent plan was, in its own time zone: "today", "yesterday", or its weekday ("Sunday"). */
+private fun recentDay(plan: PlanDto): String? {
+    val zone = PlanFormat.zone(plan.timezone)
+    val day = PlanFormat.instant(plan.startsAt)?.atZone(zone)?.toLocalDate() ?: return null
+    val today = LocalDate.now(zone)
+    return when (day) {
+        today -> TODAY
+        today.minusDays(1) -> YESTERDAY
+        else -> day.format(DateTimeFormatter.ofPattern("EEEE", Locale.US))
     }
 }
