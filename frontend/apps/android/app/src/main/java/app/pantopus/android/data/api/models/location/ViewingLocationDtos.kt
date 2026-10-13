@@ -18,6 +18,15 @@ data class ViewingLocationPayload(
     val businessLocations: List<BusinessLocationDto> = emptyList(),
 )
 
+/**
+ * The only part of `GET /api/location` kept on the phone: the chosen area, or null when none is chosen. Homes,
+ * business locations and recent places stay in memory.
+ */
+@JsonClass(generateAdapter = true)
+data class SavedViewingArea(
+    val viewingLocation: ViewingLocationDto? = null,
+)
+
 /** The active viewing location (`backend/routes/location.js:49`). */
 @JsonClass(generateAdapter = true)
 data class ViewingLocationDto(

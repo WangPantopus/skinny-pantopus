@@ -2,7 +2,6 @@
 
 package app.pantopus.android.ui.screens.homes
 
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
@@ -27,6 +26,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.perf.ReportContentShown
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
+import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.screens.homes.members.HomeMemberRemovalDialog
 import app.pantopus.android.ui.screens.homes.members.HomeMemberRemovalTarget
 import app.pantopus.android.ui.screens.homes.members.SavedRemovalLink
@@ -69,6 +69,7 @@ fun MyHomesListScreen(
     onOpenWaitingRoom: ((String) -> Unit)? = null,
     viewModel: MyHomesListViewModel = hiltViewModel(),
 ) {
+    RefreshOnStoreChange(viewModel::recheck)
     val state by viewModel.state.collectAsStateWithLifecycle()
     ReportContentShown("my_homes", state.showsContent())
     val banner by viewModel.banner.collectAsStateWithLifecycle()
@@ -126,7 +127,7 @@ fun MyHomesListScreen(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize().testTag(MY_HOMES_LIST_TAG).semantics { testTagsAsResourceId = true }) {
+    HomeOfflineContent(modifier = Modifier.fillMaxSize().testTag(MY_HOMES_LIST_TAG).semantics { testTagsAsResourceId = true }) {
         ListOfRowsScreen(
             title = "My homes",
             customHeader = {

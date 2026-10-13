@@ -5,7 +5,6 @@ package app.pantopus.android.ui.screens.compose.gig
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import app.pantopus.android.data.ai.AiTranscriptionRepository
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
 import app.pantopus.android.data.api.models.geo.GeoResolveRequest
@@ -83,8 +82,6 @@ data class GigComposeUiState(
     val templates: List<GigComposeTemplate> = emptyList(),
     /** A12.8 — magic-post result driving the success step (undo + counts). */
     val postResult: GigComposePostResult? = null,
-    /** A12.8 — true while a voice note is being transcribed. */
-    val isTranscribing: Boolean = false,
     /** A12.8 — true right after a successful undo ("Task undone" toast). */
     val showUndoneToast: Boolean = false,
     /**
@@ -120,7 +117,6 @@ open class GigComposeViewModel
         private val savedStateHandle: SavedStateHandle,
         private val networkMonitor: NetworkMonitor,
         private val filesRepository: FilesRepository,
-        private val transcriptionRepository: AiTranscriptionRepository,
         private val draftQueue: GigDraftQueue,
         private val businessesRepository: BusinessesRepository,
         private val geoApi: GeoApi,
@@ -309,31 +305,6 @@ open class GigComposeViewModel
         /** A12.8 — a template chip seeds the describe text + parse. */
         fun applyTemplate(template: GigComposeTemplate) {
             setDescribeText(template.seedText)
-        }
-
-        /**
-         * A12.8 — transcribe a recorded voice note (m4a/AAC) via
-         * `POST /api/ai/transcribe` and append the text to the describe
-         * field. Failures are silent — the recording UI simply resets.
-         */
-        fun transcribeAudio(
-            filename: String,
-            mimeType: String,
-            bytes: ByteArray,
-        ) {
-            _state.update { it.copy(isTranscribing = true) }
-            viewModelScope.launch {
-                val result = transcriptionRepository.transcribe(filename, mimeType, bytes)
-                _state.update { it.copy(isTranscribing = false) }
-                if (result is NetworkResult.Success) {
-                    val transcript = result.data.text.trim()
-                    if (transcript.isNotEmpty()) {
-                        val current = _state.value.form.describeText
-                        val joined = if (current.isBlank()) transcript else "$current $transcript"
-                        setDescribeText(joined)
-                    }
-                }
-            }
         }
 
         /**

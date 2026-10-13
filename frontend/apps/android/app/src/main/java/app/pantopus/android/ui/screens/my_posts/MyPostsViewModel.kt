@@ -16,11 +16,14 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.feed.FeedCursor
 import app.pantopus.android.data.api.models.posts.MyPostDto
 import app.pantopus.android.data.api.models.posts.MyPostsResponse
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.posts.PostsRepository
 import app.pantopus.android.data.posts.PulsePostsRefreshNotifier
+import app.pantopus.android.data.store.StoreKind
+import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.screens.feed.pulse.PulseIntent
 import app.pantopus.android.ui.screens.shared.activity_filter_sheet.ActivityFilter
 import app.pantopus.android.ui.screens.shared.activity_filter_sheet.ActivitySortOrder
@@ -113,17 +116,20 @@ class MyPostsViewModel
         /** Set by [applyState] while the current view can't be shown from the rows loaded so far. */
         private var awaitingPages = false
 
+        /** Own deletes here: a tail recheck that started before one would bring its row back, so it is dropped. */
+        private var deletes = 0
+
+        /**
+         * A return or change while pages were loading (a post deleted or archived on its page): read again once they
+         * settle. A tail recheck that started before it is dropped, like one that started before an own delete.
+         */
+        private var readPending = false
+
         private var openPostHandler: (MyPostDto) -> Unit = {}
         private var composeHandler: () -> Unit = {}
         private var editPostHandler: (MyPostDto) -> Unit = {}
 
-        init {
-            viewModelScope.launch {
-                postsRefresh.ticks.collect {
-                    refresh()
-                }
-            }
-        }
+        val postChanges = postsRefresh.ticks
 
         private val _state = MutableStateFlow<ListOfRowsUiState>(ListOfRowsUiState.Loading)
         val state: StateFlow<ListOfRowsUiState> = _state.asStateFlow()
@@ -232,16 +238,22 @@ class MyPostsViewModel
             nowProvider = provider
         }
 
+        private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
+        val refreshNotice: StateFlow<RefreshNotice?> = _refreshNotice.asStateFlow()
+
         fun load() {
-            if (_state.value is ListOfRowsUiState.Loaded && loadedAtLeastOnce) return
-            reload()
+            if (loadingMore) {
+                readPending = true
+                return
+            }
+            reload(force = false)
         }
 
         fun refresh() {
             // Refresh requeries the wire (active posts only); wipe the local
             // archive overrides so the UI doesn't show stale optimistic state.
             localArchiveOverrides.clear()
-            reload()
+            reload(force = true)
         }
 
         fun selectTab(id: String) {
@@ -264,13 +276,16 @@ class MyPostsViewModel
                 val appended = fetchNextPage(generation) is NetworkResult.Success
                 if (generation != fetchGeneration) return@launch
                 loadingMore = false
+                runPendingRead()
                 // A filter applied while this page was in flight still needs the rest.
                 if (appended) pageThroughIfNeeded()
             }
         }
 
-        private fun reload() {
+        private fun reload(force: Boolean) {
             val generation = ++fetchGeneration
+            // This read starts after the change that queued one, so it covers it.
+            readPending = false
             // No paging off the old cursor while the list is being replaced.
             loadingMore = true
             val userId = currentUserId()
@@ -282,23 +297,41 @@ class MyPostsViewModel
                 applyState()
                 return
             }
-            if (!loadedAtLeastOnce) _state.value = ListOfRowsUiState.Loading
+            if (!loadedAtLeastOnce) {
+                postsRepo.userPostsCopy(userId, PAGE_SIZE, includeArchived = true).data?.let { copy ->
+                    posts = copy.posts
+                    nextPage = nextPageAfter(copy)
+                    loadedAtLeastOnce = true
+                    applyState()
+                }
+                if (!loadedAtLeastOnce) _state.value = ListOfRowsUiState.Loading
+            }
             // Keep the rows already paged in (bounded) rather than collapsing
             // the list to its first page on every refresh.
             val depth = posts.size.coerceIn(PAGE_SIZE, MAX_REFRESH_DEPTH)
             viewModelScope.launch {
-                val result = postsRepo.userPosts(userId, depth, includeArchived = true)
+                val result = postsRepo.userPosts(userId, depth, includeArchived = true, force = force)
+                val copy = postsRepo.userPostsCopy(userId, depth, includeArchived = true)
+                _refreshNotice.value = if (copy.showsRefreshFailure(StoreKind.POST)) RefreshNotice(copy.fetchedAt, ::refresh) else null
                 if (generation != fetchGeneration) return@launch
                 loadingMore = false
                 when (result) {
                     is NetworkResult.Success -> {
-                        posts = result.data.posts
-                        nextPage = nextPageAfter(result.data)
+                        val retained = replaceRefreshedHead(result.data)
                         loadedAtLeastOnce = true
                         applyState()
+                        if (retained > 0 && !readPending) recheckRetainedTail(result.data, retained, generation)
                     }
                     is NetworkResult.Failure -> {
-                        if (loadedAtLeastOnce) {
+                        if (result.error is NetworkError.Forbidden ||
+                            result.error == NetworkError.NotFound ||
+                            result.error == NetworkError.Unauthorized
+                        ) {
+                            posts = emptyList()
+                            nextPage = null
+                            loadedAtLeastOnce = false
+                            _state.value = ListOfRowsUiState.Error(result.error.displayMessage("Couldn't load the list."))
+                        } else if (loadedAtLeastOnce) {
                             // Keep the list; resume any paging this reload interrupted.
                             applyState()
                         } else {
@@ -306,6 +339,72 @@ class MyPostsViewModel
                         }
                     }
                 }
+                runPendingRead()
+            }
+        }
+
+        /**
+         * A bounded refresh replaces its covered range without dropping older pages the reader already opened. Returns how
+         * many older rows were kept; [recheckRetainedTail] reads them again.
+         */
+        private fun replaceRefreshedHead(response: MyPostsResponse): Int {
+            val boundary = response.posts.lastOrNull()
+            val time = boundary?.createdAt?.let(::parseInstant)
+            val older =
+                if (response.pagination?.hasMore == true && boundary != null && time != null) {
+                    posts.filter { row ->
+                        val created = parseInstant(row.createdAt)
+                        created != null && (created < time || (created == time && row.id < boundary.id))
+                    }
+                } else {
+                    emptyList()
+                }
+            posts = (response.posts + older).distinctBy { it.id }
+            if (older.isEmpty()) nextPage = nextPageAfter(response)
+            return older.size
+        }
+
+        /**
+         * The rows kept below a bounded refresh are read again page by page from the refreshed range, so a post deleted,
+         * archived or restored elsewhere since they loaded doesn't keep its old row. They stay on screen until the pages
+         * land; a failed page, or a delete here meanwhile, keeps them for the next refresh. A read queued meanwhile
+         * ([readPending]) reads them again instead.
+         */
+        private fun recheckRetainedTail(
+            head: MyPostsResponse,
+            retained: Int,
+            generation: Long,
+        ) {
+            val userId = currentUserId() ?: return
+            val start = nextPageAfter(head) ?: return
+            val deletesBefore = deletes
+            loadingMore = true
+            viewModelScope.launch {
+                val tail = mutableListOf<MyPostDto>()
+                var next: FeedCursor? = start
+                var complete = true
+                while (tail.size < retained) {
+                    val cursor = next ?: break
+                    when (val page = postsRepo.userPosts(userId, PAGE_SIZE, cursor.createdAt, cursor.id, includeArchived = true)) {
+                        is NetworkResult.Success -> {
+                            tail += page.data.posts
+                            next = nextPageAfter(page.data)
+                        }
+                        is NetworkResult.Failure -> {
+                            complete = false
+                            next = null
+                        }
+                    }
+                }
+                if (generation != fetchGeneration) return@launch
+                loadingMore = false
+                if (complete && deletesBefore == deletes && !readPending) {
+                    posts = (head.posts + tail).distinctBy { it.id }
+                    nextPage = next
+                    applyState()
+                }
+                runPendingRead()
+                pageThroughIfNeeded()
             }
         }
 
@@ -348,7 +447,13 @@ class MyPostsViewModel
                 if (failed != null && awaitingPages) {
                     _state.value = ListOfRowsUiState.Error(failed.error.displayMessage("Couldn't load the list."))
                 }
+                runPendingRead()
             }
+        }
+
+        /** The read [load] queued while pages were loading runs once none is. */
+        private fun runPendingRead() {
+            if (readPending && !loadingMore) reload(force = false)
         }
 
         private fun currentUserId(): String? = (authRepo.state.value as? AuthRepository.State.SignedIn)?.user?.id
@@ -513,6 +618,7 @@ class MyPostsViewModel
             val previousPosts = posts
             val previousOverrides = localArchiveOverrides.toMap()
             posts = posts.filterNot { it.id == target.postId }
+            deletes++
             localArchiveOverrides.remove(target.postId)
             applyState()
             viewModelScope.launch {

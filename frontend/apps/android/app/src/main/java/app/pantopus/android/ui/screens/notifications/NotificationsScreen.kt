@@ -16,6 +16,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.perf.ReportContentShown
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
+import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.components.ToastController
 import app.pantopus.android.ui.components.ToastHost
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsScreen
@@ -40,6 +41,8 @@ fun NotificationsScreen(
     onOpenGig: (String) -> Unit = {},
     viewModel: NotificationsViewModel = hiltViewModel(),
 ) {
+    RefreshOnStoreChange(viewModel::refreshIfNeeded)
+    val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
     val state by viewModel.state.collectAsStateWithLifecycle()
     val topBarAction by viewModel.topBarAction.collectAsStateWithLifecycle()
     val tabs by viewModel.tabs.collectAsStateWithLifecycle()
@@ -71,6 +74,7 @@ fun NotificationsScreen(
             state = state,
             onRefresh = { viewModel.refresh() },
             refreshing = refreshing,
+            refreshNotice = refreshNotice,
             onEndReached = { viewModel.loadMoreIfNeeded() },
             tabs = tabs,
             selectedTab = selectedTab,

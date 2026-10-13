@@ -16,9 +16,11 @@ import app.pantopus.android.data.api.models.chats.FindOrCreateTopicBody
 import app.pantopus.android.data.api.models.chats.SendChatMessageBody
 import app.pantopus.android.data.api.models.chats.resolvedText
 import app.pantopus.android.data.api.models.chats.resolvedType
+import app.pantopus.android.data.api.models.place.SetPickupDayRequest
 import app.pantopus.android.data.api.models.profile.UserReportRequest
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.api.net.readableForbiddenMessage
 import app.pantopus.android.data.api.services.GeoApi
 import app.pantopus.android.data.blocks.BlocksRepository
@@ -29,6 +31,7 @@ import app.pantopus.android.data.links.LinkPreview
 import app.pantopus.android.data.links.LinkPreviewRepository
 import app.pantopus.android.data.listings.ListingsRepository
 import app.pantopus.android.data.location.LocationProvider
+import app.pantopus.android.data.place.PlaceRepository
 import app.pantopus.android.data.profile.UserReportsRepository
 import app.pantopus.android.data.realtime.SocketManager
 import app.pantopus.android.data.upload.UploadFile
@@ -74,6 +77,7 @@ class ChatConversationViewModel
         private val linkPreviewRepo: LinkPreviewRepository,
         private val aiSession: AIConversationSession,
         private val activeChatThread: ActiveChatThread,
+        private val placeRepository: PlaceRepository,
     ) : ViewModel() {
         private val _state = MutableStateFlow<ChatConversationUiState>(ChatConversationUiState.Loading)
         val state: StateFlow<ChatConversationUiState> = _state.asStateFlow()
@@ -181,17 +185,22 @@ class ChatConversationViewModel
 
         // A15.3 capability chips for the AI welcome card (tap-to-send). Launch cut #4 (Open gigs):
         // the assistant doesn't price tasks, so "Price a task" gives way to the nearby question (as on web).
-        // Launch cut #10 (Mailbox): no mailbox to summarize.
+        // Launch cut #10 (Mailbox): no mailbox to summarize; a home question it answers from the calendar instead.
+        // The assistant can't look people up (it points to Search); it can start a Support Train.
         val aiPrompts: List<ChatPromptChip> =
-            listOfNotNull(
+            listOf(
                 if (LaunchFeatures.openGigs) {
                     ChatPromptChip("price", "Price a task", PantopusIcon.Hammer)
                 } else {
                     ChatPromptChip("nearby", "What's happening nearby?", PantopusIcon.MapPin)
                 },
                 ChatPromptChip("draft", "Draft a Pulse post", PantopusIcon.Pencil),
-                ChatPromptChip("mail", "Summarize mail", PantopusIcon.Mailbox).takeIf { LaunchFeatures.mailbox },
-                ChatPromptChip("neighbor", "Find a neighbor", PantopusIcon.Search),
+                if (LaunchFeatures.mailbox) {
+                    ChatPromptChip("mail", "Summarize mail", PantopusIcon.Mailbox)
+                } else {
+                    ChatPromptChip("pickup", "When's my pickup?", PantopusIcon.Calendar)
+                },
+                ChatPromptChip("support_train", "Start a Support Train", PantopusIcon.Utensils),
             )
 
         val emptyChips: List<ChatPromptChip> =
@@ -235,6 +244,10 @@ class ChatConversationViewModel
         // In-flight direct-room resolution, shared so concurrent sends make
         // a single `POST /api/chat/direct`.
         private var directRoomDeferred: Deferred<String?>? = null
+        private var historyGeneration = 0L
+        private var historyRefusal: String? = null
+        private var historyCopyContext: HistoryReadContext? = null
+        private var updateHistoryCopy: ((ChatMessagesResponse) -> Unit)? = null
 
         // Send inputs captured per optimistic row, keyed by its bare-UUID
         // `clientMessageId`. Survives refetches so retry resends the same
@@ -264,6 +277,9 @@ class ChatConversationViewModel
 
         private var aiConversationId: String? = null
         private val aiDraftsByMessageId = mutableMapOf<String, List<ChatAIDraftCard>>()
+
+        // What the assistant is doing while a tool runs ("Drafting your post…"), shown on the pending reply.
+        private var aiStatus: String? = null
         private var markReadJob: Job? = null
         private var connectionJob: Job? = null
         private var messageJob: Job? = null
@@ -284,6 +300,7 @@ class ChatConversationViewModel
         // 30s fallback refresh while the socket is down — started by the
         // connectionState collector, cancelled on connect / teardown.
         private var fallbackPollJob: Job? = null
+        private var catchUpJob: Job? = null
 
         // The attachment download in flight; a second tap waits for it.
         private var openAttachmentJob: Job? = null
@@ -342,6 +359,7 @@ class ChatConversationViewModel
                     publishViewedRooms()
                     subscribeToSockets()
                 }
+                fetch(initial = true, quiet = true)
                 return
             }
             // Seed AI continuity: a new VM instance for the AI thread keeps
@@ -362,15 +380,9 @@ class ChatConversationViewModel
         /**
          * Cross-relaunch AI continuity: `GET /api/ai/conversations` lists
          * conversation metadata newest-updated first — adopt the latest id
-         * so the next send appends to it instead of forking a new thread.
-         *
-         * TODO(ai-history): the backend persists no AI message bodies
-         * (`AIConversation` carries only metadata + the OpenAI
-         * `response_id`; there is no per-conversation messages endpoint —
-         * see `backend/routes/ai.js:358` + `agentService.js:1003`), so the
-         * visible transcript can't be restored yet. When a messages
-         * endpoint lands, seed [messages] here via [localMessage]
-         * (role → user/assistant rows) before the first send.
+         * so the next send appends to it instead of forking a new thread,
+         * and show its earlier turns so the assistant never refers to
+         * something the person can't see.
          */
         private fun restoreLatestAiConversation() {
             viewModelScope.launch {
@@ -382,6 +394,7 @@ class ChatConversationViewModel
                         if (aiConversationId == null) {
                             aiConversationId = latest.id
                             aiSession.conversationId = latest.id
+                            loadAiHistory(latest.id)
                         }
                     }
                     is NetworkResult.Failure ->
@@ -389,6 +402,107 @@ class ChatConversationViewModel
                 }
             }
         }
+
+        /**
+         * A pickup-days card's Save: the household's days through the pickup calendar
+         * route, exactly as the Today editor saves them. The card shows how it went.
+         */
+        fun savePickupSchedule(card: ChatAIDraftCard) {
+            val pickup = card.pickup ?: return
+            if (pickup.save == ChatAIPickupSave.Saving || pickup.save == ChatAIPickupSave.Saved) return
+            updatePickup(card.id) { it.copy(save = ChatAIPickupSave.Saving) }
+            viewModelScope.launch {
+                val request =
+                    SetPickupDayRequest(
+                        weekday = pickup.garbageWeekday,
+                        recyclingFrequency = pickup.recyclingFrequency,
+                        recyclingNextDate = pickup.recyclingNextDate.takeIf { pickup.recyclingFrequency != "not_set" },
+                    )
+                val save =
+                    when (val result = placeRepository.setPickupDay(pickup.homeId, request)) {
+                        is NetworkResult.Success -> ChatAIPickupSave.Saved
+                        is NetworkResult.Failure ->
+                            ChatAIPickupSave.Failed(result.error.displayMessage("Couldn't save your pickup days. Try again."))
+                    }
+                updatePickup(card.id) { it.copy(save = save) }
+            }
+        }
+
+        private fun updatePickup(
+            cardId: String,
+            change: (ChatAIPickupSchedule) -> ChatAIPickupSchedule,
+        ) {
+            val messageId = aiDraftsByMessageId.entries.firstOrNull { (_, cards) -> cards.any { it.id == cardId } }?.key ?: return
+            aiDraftsByMessageId[messageId] =
+                aiDraftsByMessageId[messageId].orEmpty().map { card ->
+                    if (card.id == cardId) card.copy(pickup = card.pickup?.let(change)) else card
+                }
+            rebuild()
+        }
+
+        /**
+         * Seed the thread with a restored conversation's turns
+         * (`GET /api/ai/conversations/:id/messages`). A draft and the note
+         * after it share one reply, as they did when it streamed. A server
+         * without the route leaves the thread empty, as before.
+         */
+        private suspend fun loadAiHistory(conversationId: String) {
+            if (messages.isNotEmpty()) return
+            val history =
+                when (val result = aiRepo.conversationMessages(conversationId)) {
+                    is NetworkResult.Success -> result.data
+                    is NetworkResult.Failure -> {
+                        Timber.w("AI conversation history unavailable: ${result.error.message}")
+                        return
+                    }
+                }
+            // A message sent (or "New chat") while this loaded wins.
+            if (messages.isNotEmpty() || aiConversationId != conversationId) return
+            val restored = mutableListOf<ChatMessageDto>()
+            val drafts = mutableMapOf<String, List<ChatAIDraftCard>>()
+            var openReplyId: String? = null
+            history.messages.forEachIndexed { index, item ->
+                val id = "ai_history_$index"
+                val draft = item.draft
+                val text = item.text.orEmpty()
+                when {
+                    item.role == "user" -> {
+                        openReplyId = null
+                        restored.add(localMessage(id = id, text = sentText(text, item.photos ?: 0), userId = currentUserId, type = "text"))
+                    }
+                    draft != null -> {
+                        val replyId = openReplyId ?: id
+                        if (openReplyId == null) restored.add(localMessage(id = replyId, text = "", userId = "ai", type = "ai_reply"))
+                        openReplyId = replyId
+                        aiRepo.draftCard(draft.type, draft.draft)?.let { drafts[replyId] = drafts[replyId].orEmpty() + it }
+                    }
+                    text.isNotEmpty() -> {
+                        val replyId = openReplyId
+                        val at = restored.indexOfFirst { it.id == replyId }
+                        if (replyId != null && at >= 0) {
+                            restored[at] = localMessage(id = replyId, text = text, userId = "ai", type = "ai_reply")
+                            openReplyId = null
+                        } else {
+                            restored.add(localMessage(id = id, text = text, userId = "ai", type = "ai_reply"))
+                        }
+                    }
+                }
+            }
+            messages.addAll(restored)
+            aiDraftsByMessageId.putAll(drafts)
+            rebuild()
+        }
+
+        /** A restored message of the person's: their words, or a line for the photos they sent alone. */
+        private fun sentText(
+            text: String,
+            photos: Int,
+        ): String =
+            when {
+                text.isNotEmpty() || photos == 0 -> text
+                photos == 1 -> "Sent a photo"
+                else -> "Sent $photos photos"
+            }
 
         /**
          * A15 `.ctx-strip` — resolve the pinned gig context for a gig room
@@ -426,8 +540,10 @@ class ChatConversationViewModel
          * flash, no lost scroll); only an error or an empty first load starts over.
          */
         fun refresh() {
+            // An access refusal tears listeners down. Retry must restore live updates as well as the first page.
+            if (connectionJob == null) subscribeToSockets()
             loadTopicsIfNeeded()
-            fetch(initial = true, quiet = _state.value is ChatConversationUiState.Loaded)
+            fetch(initial = true, quiet = _state.value is ChatConversationUiState.Loaded, force = true)
         }
 
         fun selectTopic(topicId: String?) {
@@ -1011,6 +1127,7 @@ class ChatConversationViewModel
             aiStreamJob = null
             job.cancel()
             _isAiStreaming.value = false
+            aiStatus = null
             val assistantId = streamingAssistantId
             streamingAssistantId = null
             if (assistantId != null) {
@@ -1031,6 +1148,7 @@ class ChatConversationViewModel
             aiStreamJob?.cancel()
             aiStreamJob = null
             _isAiStreaming.value = false
+            aiStatus = null
             streamingAssistantId = null
             aiConversationId = null
             aiSession.conversationId = null
@@ -1070,16 +1188,25 @@ class ChatConversationViewModel
                             aiSession.conversationId = event.id
                             aiSession.freshStartUserId = null
                         }
+                        is AIChatStreamEvent.Status -> {
+                            aiStatus = event.message
+                            rebuild()
+                        }
                         is AIChatStreamEvent.TextDelta -> {
+                            aiStatus = null
                             streamedText += event.delta
                             replaceLocalMessage(assistantId, streamedText, "ai_reply", "ai")
                         }
                         is AIChatStreamEvent.Draft -> {
+                            aiStatus = null
                             aiDraftsByMessageId[assistantId] = aiDraftsByMessageId[assistantId].orEmpty() + event.draft
                             rebuild()
                         }
-                        is AIChatStreamEvent.Error -> replaceLocalMessage(assistantId, event.message, "ai_reply", "ai")
-                        AIChatStreamEvent.Done -> Unit
+                        is AIChatStreamEvent.Error -> {
+                            aiStatus = null
+                            replaceLocalMessage(assistantId, event.message, "ai_reply", "ai")
+                        }
+                        AIChatStreamEvent.Done -> aiStatus = null
                     }
                 }
             }.onFailure { error ->
@@ -1088,6 +1215,7 @@ class ChatConversationViewModel
                 if (error is CancellationException) throw error
                 replaceLocalMessage(assistantId, "I lost the connection. Please try again.", "ai_reply", "ai")
             }
+            aiStatus = null
             streamingAssistantId = null
         }
 
@@ -1370,6 +1498,7 @@ class ChatConversationViewModel
             presenceOfflineJob?.cancel()
             reactionRefetchJob?.cancel()
             fallbackPollJob?.cancel()
+            catchUpJob?.cancel()
             typingUserJob?.cancel()
             typingStoppedJob?.cancel()
             typingClearJob?.cancel()
@@ -1384,6 +1513,7 @@ class ChatConversationViewModel
             presenceOfflineJob = null
             reactionRefetchJob = null
             fallbackPollJob = null
+            catchUpJob = null
             typingUserJob = null
             typingStoppedJob = null
             typingClearJob = null
@@ -1402,13 +1532,35 @@ class ChatConversationViewModel
          * replaces what it covers; older pages the reader loaded and rows newer than the page (a send that landed
          * meanwhile) stay. A failed quiet read keeps the thread as it is.
          */
+        private data class HistoryReadContext(
+            val generation: Long,
+            val mode: ChatThreadMode,
+            val user: String?,
+            val topicId: String?,
+        )
+
+        private fun historyContext() = HistoryReadContext(historyGeneration, mode, currentUserId, _selectedTopicId.value)
+
         private fun fetch(
             initial: Boolean,
             before: String? = null,
             quiet: Boolean = false,
+            force: Boolean = false,
         ) {
+            val context = historyContext()
+            if (initial || context != historyCopyContext) {
+                historyCopyContext = context
+                updateHistoryCopy =
+                    when (val target = context.mode) {
+                        is ChatThreadMode.Room -> repo.roomHistoryUpdater(target.id)
+                        is ChatThreadMode.Person -> repo.conversationHistoryUpdater(target.otherUserId, context.topicId)
+                        ChatThreadMode.Ai -> null
+                    }
+            }
+            val copied = initial && !quiet && showHistoryCopy()
+            val keepMessages = quiet || copied
             viewModelScope.launch {
-                if (initial && !quiet) {
+                if (initial && !keepMessages) {
                     _state.value = ChatConversationUiState.Loading
                     messages = mutableListOf()
                     // Pending / failed optimistic rows survive refetches —
@@ -1421,45 +1573,84 @@ class ChatConversationViewModel
                 }
                 if (mode is ChatThreadMode.Ai) {
                     // The assistant's transcript lives in this view model; a quiet read leaves it alone.
-                    if (!quiet) _state.value = ChatConversationUiState.Empty
+                    if (!keepMessages) _state.value = ChatConversationUiState.Empty
                     return@launch
                 }
-                val requestedTopicId = _selectedTopicId.value
                 val response =
-                    when (val target = mode) {
-                        is ChatThreadMode.Room -> repo.roomMessages(target.id, before)
-                        is ChatThreadMode.Person -> repo.conversationMessages(target.otherUserId, before, topicId = requestedTopicId)
+                    when (val target = context.mode) {
+                        is ChatThreadMode.Room -> repo.roomMessages(target.id, before, force = force)
+                        is ChatThreadMode.Person ->
+                            repo.conversationMessages(target.otherUserId, before, topicId = context.topicId, force = force)
                         ChatThreadMode.Ai -> return@launch
                     }
                 // The topic changed while this page was in flight (the opening topic
                 // resolves alongside the first fetch); the fetch for it owns the thread.
-                if (requestedTopicId != _selectedTopicId.value) return@launch
-                when (response) {
-                    is NetworkResult.Success -> {
-                        val keptOlder = placePage(response.data.messages, quiet)
-                        retireConfirmedSends(response.data.messages)
-                        updateActiveRooms(response.data)
-                        // Older pages kept under a quiet read keep their own cursor.
-                        if (!keptOlder) {
-                            hasMore = response.data.hasMore ?: false
-                            oldestCursor =
-                                response.data.nextCursor
-                                    ?: paginationCursor(messages.firstOrNull())
-                        }
-                        rebuild()
-                        joinActiveRoomsIfPossible()
-                        scheduleMarkRead()
-                        if (initial) prefetchDirectRoomIfNeeded()
+                if (context != historyContext()) return@launch
+                publishHistoryPage(response, keepMessages, initial)
+            }
+        }
+
+        private fun publishHistoryPage(
+            response: NetworkResult<ChatMessagesResponse>,
+            keepMessages: Boolean,
+            initial: Boolean,
+        ) {
+            when (response) {
+                is NetworkResult.Success -> {
+                    historyRefusal = null
+                    val keptOlder = placePage(response.data.messages, keepMessages)
+                    retireConfirmedSends(response.data.messages)
+                    updateActiveRooms(response.data)
+                    // Older pages kept under a quiet read keep their own cursor.
+                    if (!keptOlder) {
+                        hasMore = response.data.hasMore ?: false
+                        oldestCursor =
+                            response.data.nextCursor
+                                ?: paginationCursor(messages.firstOrNull())
                     }
-                    is NetworkResult.Failure -> {
-                        if (initial && !quiet) {
-                            _state.value = ChatConversationUiState.Error(response.error.message)
-                        } else {
-                            Timber.w("chat refresh or pagination failed: ${response.error.message}")
-                        }
+                    rebuild()
+                    joinActiveRoomsIfPossible()
+                    scheduleMarkRead()
+                    if (initial) prefetchDirectRoomIfNeeded()
+                }
+                is NetworkResult.Failure -> {
+                    if (historyAccessEnded(response.error)) {
+                        refuseHistory(response.error)
+                    } else if (initial && !keepMessages) {
+                        _state.value = ChatConversationUiState.Error(response.error.message)
+                    } else {
+                        Timber.w("chat refresh or pagination failed: ${response.error.message}")
                     }
                 }
             }
+        }
+
+        private fun refuseHistory(error: NetworkError) {
+            historyGeneration++
+            historyRefusal = error.message
+            messages.clear()
+            activeRoomIds = emptySet()
+            directRoomDeferred?.cancel()
+            directRoomDeferred = null
+            directRoomId = null
+            teardown()
+            _state.value = ChatConversationUiState.Error(error.message)
+        }
+
+        /** The newest hundred server messages, held only in the account-scoped memory store. */
+        private fun showHistoryCopy(): Boolean {
+            val copy =
+                when (val target = mode) {
+                    is ChatThreadMode.Room -> repo.roomMessagesCopy(target.id)
+                    is ChatThreadMode.Person -> repo.conversationMessagesCopy(target.otherUserId, _selectedTopicId.value)
+                    ChatThreadMode.Ai -> null
+                } ?: return false
+            messages = copy.messages.toMutableList()
+            hasMore = copy.hasMore ?: false
+            oldestCursor = copy.nextCursor ?: paginationCursor(messages.firstOrNull())
+            updateActiveRooms(copy)
+            rebuild()
+            return true
         }
 
         /** Puts a fetched [page] into [messages]; true when a quiet read kept older pages (they keep their cursor). */
@@ -1512,6 +1703,8 @@ class ChatConversationViewModel
             }
 
         private suspend fun resolveDirectRoom(otherUserId: String): String? {
+            val generation = historyGeneration
+            val userId = currentUserId
             val deferred =
                 directRoomDeferred ?: viewModelScope.async {
                     when (val result = repo.createDirectChat(otherUserId)) {
@@ -1524,6 +1717,7 @@ class ChatConversationViewModel
                     }
                 }.also { directRoomDeferred = it }
             val roomId = deferred.await()
+            if (generation != historyGeneration || userId != currentUserId || historyRefusal != null) return null
             if (directRoomDeferred === deferred) directRoomDeferred = null
             if (roomId != null && directRoomId == null) {
                 directRoomId = roomId
@@ -1634,8 +1828,11 @@ class ChatConversationViewModel
             if (connectionJob == null) {
                 connectionJob =
                     viewModelScope.launch {
+                        var connectedBefore = false
                         socket.connectionState.collect { state ->
                             if (state == SocketManager.ConnectionState.Connected) {
+                                if (connectedBefore) catchUpMessages()
+                                connectedBefore = true
                                 stopFallbackPolling()
                                 joinedRoomIds.clear()
                                 joinActiveRoomsIfPossible()
@@ -1788,6 +1985,43 @@ class ChatConversationViewModel
             _isCounterpartyTyping.value = false
         }
 
+        /** Reconnect fills the gap after the newest held message, without replacing the reading position. */
+        private fun catchUpMessages() {
+            val after = messages.maxByOrNull { it.createdAt }?.createdAt ?: return
+            if (catchUpJob?.isActive == true || mode is ChatThreadMode.Ai) return
+            val context = historyContext()
+            val target = context.mode
+            val topic = context.topicId
+            catchUpJob =
+                viewModelScope.launch {
+                    var before: String? = null
+                    do {
+                        val result =
+                            when (target) {
+                                is ChatThreadMode.Room -> repo.roomMessages(target.id, before = before, after = after)
+                                is ChatThreadMode.Person ->
+                                    repo.conversationMessages(target.otherUserId, before = before, after = after, topicId = topic)
+                                ChatThreadMode.Ai -> return@launch
+                            }
+                        if (context != historyContext()) return@launch
+                        when (result) {
+                            is NetworkResult.Success -> {
+                                mergeBackfill(result.data.messages)
+                                val cursor = result.data.nextCursor
+                                before = cursor.takeIf { result.data.hasMore == true && it != before && result.data.messages.isNotEmpty() }
+                            }
+                            is NetworkResult.Failure -> {
+                                if (historyAccessEnded(result.error)) refuseHistory(result.error)
+                                before = null
+                            }
+                        }
+                    } while (before != null)
+                }
+        }
+
+        private fun historyAccessEnded(error: NetworkError): Boolean =
+            error is NetworkError.Forbidden || error == NetworkError.NotFound || error == NetworkError.Unauthorized
+
         private fun joinActiveRoomsIfPossible() {
             if (socket.connectionState.value != SocketManager.ConnectionState.Connected) return
             val pending = activeRoomIds - joinedRoomIds
@@ -1795,7 +2029,7 @@ class ChatConversationViewModel
                 joinedRoomIds.add(roomId)
                 viewModelScope.launch {
                     val ack = socket.emitWithAck("room:join", JSONObject().put("roomId", roomId))
-                    if (ack?.optBoolean("success") != true) return@launch
+                    if (ack?.optBoolean("success") != true || roomId !in activeRoomIds) return@launch
                     val backfill = parseMessages(ack.optJSONArray("messages"))
                     if (backfill.isNotEmpty()) mergeBackfill(backfill)
                 }
@@ -1885,7 +2119,7 @@ class ChatConversationViewModel
             reactionRefetchJob =
                 viewModelScope.launch {
                     delay(REACTION_REFETCH_DEBOUNCE_MS)
-                    fetch(initial = true, quiet = true)
+                    fetch(initial = true, quiet = true, force = true)
                 }
         }
 
@@ -1923,7 +2157,7 @@ class ChatConversationViewModel
                 if (decoded != null) {
                     if (matchesTopicFilter(decoded)) insertIncoming(decoded) else rebuild()
                 } else {
-                    fetch(initial = true, quiet = true)
+                    fetch(initial = true, quiet = true, force = true)
                 }
                 return
             }
@@ -1937,7 +2171,7 @@ class ChatConversationViewModel
                 // so the incremental merge must too.
                 if (matchesTopicFilter(decoded)) insertIncoming(decoded)
             } else {
-                fetch(initial = true, quiet = true)
+                fetch(initial = true, quiet = true, force = true)
             }
         }
 
@@ -1982,7 +2216,7 @@ class ChatConversationViewModel
             if (decoded != null) {
                 applyUpdatedMessage(decoded)
             } else {
-                fetch(initial = true, quiet = true)
+                fetch(initial = true, quiet = true, force = true)
             }
         }
 
@@ -2053,6 +2287,20 @@ class ChatConversationViewModel
         // MARK: - Projection
 
         private fun rebuild() {
+            historyRefusal?.let {
+                _state.value = ChatConversationUiState.Error(it)
+                return
+            }
+            if (historyCopyContext == historyContext()) {
+                updateHistoryCopy?.invoke(
+                    ChatMessagesResponse(
+                        messages = messages.toList(),
+                        hasMore = hasMore,
+                        nextCursor = oldestCursor,
+                        roomIds = activeRoomIds.toList(),
+                    ),
+                )
+            }
             val combined = messages + pendingByClientId.values
             if (combined.isEmpty()) {
                 _state.value = ChatConversationUiState.Empty
@@ -2082,6 +2330,10 @@ class ChatConversationViewModel
                 }
                 if (message.resolvedType == "broadcast_reference") {
                     rows.add(ChatTimelineRow.BroadcastReference(broadcastReferenceOf(message)))
+                    return@forEachIndexed
+                }
+                if (message.resolvedType == "system") {
+                    rows.add(ChatTimelineRow.SystemNote(message.id, message.resolvedText))
                     return@forEachIndexed
                 }
                 val side = if (message.userId == currentUserId) ChatMessageSide.Outgoing else ChatMessageSide.Incoming
@@ -2199,6 +2451,7 @@ class ChatConversationViewModel
                         text = message.resolvedText,
                         estimate = null,
                         drafts = aiDraftsByMessageId[message.id].orEmpty(),
+                        status = aiStatus.takeIf { message.id == streamingAssistantId },
                     )
                 "text" -> {
                     val imageUrls =

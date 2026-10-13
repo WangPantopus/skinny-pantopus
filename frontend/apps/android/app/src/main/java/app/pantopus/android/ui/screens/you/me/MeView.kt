@@ -46,6 +46,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.identity.ProfileChanges
 import app.pantopus.android.data.api.models.users.InviteProgressDto
 import app.pantopus.android.data.api.models.users.MonthlyReceiptDto
+import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.screens.shared.identity.IdentityOption
 import app.pantopus.android.ui.screens.shared.identity.IdentitySwitcherPillRow
@@ -84,6 +85,7 @@ fun MeView(
     // A saved name or username (here or in Edit Profile) changes the header.
     val profileVersion by ProfileChanges.version.collectAsStateWithLifecycle()
     LaunchedEffect(profileVersion) { viewModel.load() }
+    RefreshOnStoreChange(viewModel::load)
 
     Box(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg).testTag("meScreen")) {
         when (val s = state) {

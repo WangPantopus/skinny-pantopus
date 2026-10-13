@@ -43,6 +43,7 @@ import app.pantopus.android.ui.components.GhostButton
 import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.components.RefreshFailedLine
 import app.pantopus.android.ui.components.RefreshNotice
+import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.components.StatusChip
 import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
 import app.pantopus.android.ui.screens.place.components.placeCard
@@ -50,6 +51,8 @@ import app.pantopus.android.ui.screens.place.detail.LocalPlaceDetailRetry
 import app.pantopus.android.ui.screens.place.detail.PlaceTodayDetailContent
 import app.pantopus.android.ui.screens.place.detail.TodayAlertsCheck
 import app.pantopus.android.ui.screens.place.detail.rememberMinuteClock
+import app.pantopus.android.ui.screens.plans.today.PlansTodayActions
+import app.pantopus.android.ui.screens.plans.today.PlansTodayCards
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -69,6 +72,7 @@ private const val PLACEHOLDER_ROWS = 3
 fun TodayTabScreen(
     onClaim: () -> Unit,
     onOpenPlace: ((homeId: String) -> Unit)? = null,
+    plans: PlansTodayActions? = null,
     viewModel: TodayTabViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -79,6 +83,7 @@ fun TodayTabScreen(
     val preferenceError by viewModel.preferenceError.collectAsStateWithLifecycle()
     // Coming back keeps what's on screen; the view model reads again only once it is out of date.
     HomeCopyLifecycle(viewModel::load, viewModel::suspendContent)
+    RefreshOnStoreChange(viewModel::load)
     // Pull to refresh, like iOS's Today tab (`.refreshable`): it always reads now, with the pull indicator
     // over the content instead of placeholders. The indicator shows only for a pull, not the first load.
     var pulled by remember { mutableStateOf(false) }
@@ -125,6 +130,8 @@ fun TodayTabScreen(
                         if (current.savedAnchorMatches) {
                             StatusChip("Saved place · Only you", modifier = Modifier.padding(bottom = 12.dp))
                         }
+                        // Nearby Plans (A1, A2, A5): today's plan and the day-after card, above the weather.
+                        plans?.let { PlansTodayCards(actions = it, modifier = Modifier.padding(bottom = 16.dp)) }
                         CompositionLocalProvider(LocalPlaceDetailRetry provides viewModel::refresh) {
                             PlaceTodayDetailContent(
                                 current.intelligence,

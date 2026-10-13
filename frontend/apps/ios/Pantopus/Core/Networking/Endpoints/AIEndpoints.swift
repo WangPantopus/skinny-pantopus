@@ -12,12 +12,18 @@ import Foundation
 /// Endpoints under `/api/ai/*` consumed by the Ask-Pantopus thread.
 public enum AIEndpoints {
     /// `GET /api/ai/conversations` — the caller's AI conversation list,
-    /// newest-updated first (server caps at 50). Summaries only — no
-    /// per-conversation messages endpoint exists (message history lives
-    /// in the provider's `previous_response_id` state, not our DB).
-    /// Route `backend/routes/ai.js:358`.
+    /// newest-updated first (server caps at 50). Summaries only; a
+    /// conversation's turns come from `conversationMessages(id:)`.
+    /// Route `backend/routes/ai.js:359`.
     public static func conversations() -> Endpoint {
         Endpoint(method: .get, path: "/api/ai/conversations")
+    }
+
+    /// `GET /api/ai/conversations/:id/messages` — one conversation's earlier
+    /// turns, so a restored thread shows what the assistant remembers.
+    /// Route `backend/routes/ai.js:365`.
+    public static func conversationMessages(id: String) -> Endpoint {
+        Endpoint(method: .get, path: "/api/ai/conversations/\(id)/messages")
     }
 
     /// `DELETE /api/ai/conversations/:id` — delete one AI conversation.

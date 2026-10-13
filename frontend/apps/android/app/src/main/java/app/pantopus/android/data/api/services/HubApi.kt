@@ -7,8 +7,10 @@ import app.pantopus.android.data.api.models.hub.HubTodayPayload
 import app.pantopus.android.data.api.models.hub.HubTodayResponse
 import app.pantopus.android.data.auth.AuthenticatedDispatchGuard
 import okhttp3.RequestBody
+import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.POST
 import retrofit2.http.Path
 import retrofit2.http.Query
@@ -27,9 +29,21 @@ interface HubApi {
     @GET("api/hub")
     suspend fun overview(): HubResponse
 
+    /** `GET /api/hub` through the screens' store (Instant Screens): sends the stored ETag, a 304 keeps the copy. */
+    @GET("api/hub")
+    suspend fun overviewConditional(
+        @Header("If-None-Match") etag: String?,
+    ): Response<HubResponse>
+
     /** `GET /api/hub/today` — route `backend/routes/hub.js:596`. */
     @GET("api/hub/today")
     suspend fun today(): HubTodayResponse
+
+    /** `GET /api/hub/today` through the screens' store. */
+    @GET("api/hub/today")
+    suspend fun todayConditional(
+        @Header("If-None-Match") etag: String?,
+    ): Response<HubTodayResponse>
 
     /**
      * `GET /api/hub/today` (typed) — route `backend/routes/hub.js:596`. Backs
@@ -71,4 +85,12 @@ interface HubApi {
         @Query("verified") verified: Boolean? = null,
         @Query("freeOrWanted") freeOrWanted: Boolean? = null,
     ): HubDiscoveryResponse
+
+    /** `GET /api/hub/discovery?filter=&limit=` (the Hub's rail) through the screens' store. */
+    @GET("api/hub/discovery")
+    suspend fun discoveryConditional(
+        @Query("filter") filter: String,
+        @Query("limit") limit: Int,
+        @Header("If-None-Match") etag: String?,
+    ): Response<HubDiscoveryResponse>
 }
