@@ -370,6 +370,8 @@ struct PlacePreviewContent: View {
 struct PlaceComingRegionBody: View {
     let message: String
     var signedInEntry = false
+    /// Replaces the primary button's title (the Place tab's first-run screen).
+    var primaryTitle: String?
     var onBrowse: () -> Void
     var onBack: () -> Void
 
@@ -406,7 +408,7 @@ struct PlaceComingRegionBody: View {
                     .multilineTextAlignment(.center)
                     .lineSpacing(2)
                     .foregroundStyle(Theme.Color.appTextSecondary)
-                PrimaryButton(title: signedInEntry ? "Back to saved places" : "Follow people & places") { onBrowse() }
+                PrimaryButton(title: primaryTitle ?? (signedInEntry ? "Back to saved places" : "Follow people & places")) { onBrowse() }
             }
             .padding(.horizontal, 28)
             Spacer(minLength: 0)

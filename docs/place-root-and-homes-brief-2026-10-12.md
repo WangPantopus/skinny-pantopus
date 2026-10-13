@@ -1,7 +1,7 @@
 # Place root, homes sheet and default home: build brief
 
 **Date:** October 12, 2026. **Checked against:** `master` at `2f553dd89` and PR #2189 at `07553bc1e` (branch `codex/remove-place-hub`). Anchors are symbols, not line numbers; if code moved, find the same symbol before changing anything.
-**Status:** written from the founder's review of PR #2189 on October 12. The founder approved the direction; nothing here is built. Where this brief and PR #2189 differ, this brief wins.
+**Status:** written from the founder's review of PR #2189 on October 12. The founder approved the direction. **Update, October 12 (late):** WP1, WP2 (without the default) and WP3 are built together in PR #2189 itself, with the changes in section 9; WP4 (default home) is still open. Where this brief and PR #2189 differ, section 9 wins.
 **Platforms:** iOS and Android. The backend and one additive migration are in WP4 only. No web interface work: the web keeps its Hub.
 
 ---
@@ -200,3 +200,25 @@ Each starts a session on one package. Replace nothing; the brief carries the det
 
 **WP4**
 > Read docs/place-root-and-homes-brief-2026-10-12.md (until it merges, run git fetch origin docs/place-root-and-homes-brief-2026-10-12 and read it from that branch). Build WP4 (default home): the migration, PUT /api/homes/default, is_default on my-homes, the resolver change, then the iOS and Android clients on top of WP2. Never create a UserNotificationPreferences row with briefings on. Do not touch hosted databases. Verify per section 6 WP4. Do not merge.
+
+## 9. What PR #2189 built (October 12, late)
+
+One PR instead of three: merging the My-homes root first would have made the first screen worse than master for every new person, so #2189 goes straight to the finished navigation.
+
+**Built as written:** Your Place is the Place tab root on iOS and Android, with no list under it (3.1, 3.2); the first-run screen is the launch screen in an embedded mode (1.1); pending-only accounts get My homes as the root (1.2); one add control on My homes (1.3); "Back to Place" returns to Your Place (1.4); Add Home ends on Your Place for the new Home (1.5); the address is the button to "Your homes", which lists private setups and pending entries and has Add a home and Manage homes (WP2 without default controls); choosing a home replaces the root, links to an openable home make it the root, a re-tap scrolls to the top (3.3, 3.4); the Hub and Recent activity code is deleted (3.6).
+
+**Changed from this brief, and why:**
+
+1. **Saved-address root (new state).** Most people finish sign-up with a privately saved address and no Home. Section 1.1 sent them back to the empty address field, so the app forgot the address they had just given it. They now see "Your Place" with their saved address, one next step ("Is this your home?" with **Set up this Home**, which opens Add Home with the address filled in, and **Look up a different address**), "Saved privately. Only you can see it.", and the public facts for that point from `GET /api/saved-places/:id/preview`. That endpoint already existed for the web; both apps now call it. Only saved places of type `home` or `searched` count: work and other spots aren't "your place".
+2. **Status chip instead of the initials avatar.** The avatar showed street initials ("NA") and "CLAIMED" for every Home that wasn't verified, including a private setup (tier T1), and it squeezed the address. The header is now "Your Place", a status chip (Verified, Claimed or Private setup; none for guests and service providers), then the bell and menu. The address button has its own row.
+3. **Verify prompts for a private setup.** The verify banner and the "Locked until you verify" group showed only for tier T3, so a new private setup had no next step at all. The server already sends `verify_available` for the setup stage (the web offers verify-by-mail there). Both apps now show them when the tier isn't T4 and verifying is available.
+4. **The sheet's Verified label.** The old switcher compared `verification_tier` with "verified", but that column holds evidence strength (weak, standard, strong, legal), so every home read "Claimed". The sheet uses verified ownership or a verified household place, as the web switcher does.
+5. **Hero text.** An alert's full bulletin (a screen long) filled the Today's Pulse card. Its headline and text now stop at three lines; a tap still opens the whole thing.
+6. **Copy.** Add Home's finish says "Open Your Place" when it goes there ("Open My Homes" otherwise); its "Back to Hub" is "Done"; the claim status screen's "Back to Hub" is "Done"; sign-out says "to use your account" instead of "to access your hub". "Back to Place" reads "Return to Your Place".
+
+7. **The first-run screen's region step.** For a non-US address, the button read "Back to saved places" and did nothing visible from the Place tab. It now says "Look up another address" and returns to the address field.
+
+**Platform notes.** On Android the arrival step (Save privately) draws over the root instead of being pushed. Back closes it and keeps the unfinished preview (it opens again on the next launch, as the step's "up to 24 hours" says). "Not now" still discards it. Android's Today pushes Add Home on its own stack, so finishing there also lands on Your Place. A link's "can open" check reads the kept list and then the server's on Android, and only the kept list when there is one on iOS.
+
+**Still open:** WP4 (default home). Until it lands, a choice in the sheet lasts for the session, a cold start uses the landing rule, and Today follows its own rule, so a multi-home person can see one home on Place and another on Today.
+

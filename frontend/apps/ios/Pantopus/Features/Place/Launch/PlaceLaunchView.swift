@@ -103,7 +103,13 @@ struct PlaceLaunchView: View {
                     retrying: viewModel.isLoadingPreview
                 )
             case let .region(message):
-                PlaceComingRegionBody(message: message, signedInEntry: signedInEntry, onBrowse: browseBeacons) {
+                // Embedded there is nothing to go back to: the button looks up another address.
+                PlaceComingRegionBody(
+                    message: message,
+                    signedInEntry: signedInEntry,
+                    primaryTitle: embedded == nil ? nil : "Look up another address",
+                    onBrowse: embedded == nil ? browseBeacons : viewModel.backToHero
+                ) {
                     viewModel.backToHero()
                 }
             }
