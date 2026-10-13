@@ -237,6 +237,8 @@ class ChatConversationViewModel
         private var directRoomDeferred: Deferred<String?>? = null
         private var historyGeneration = 0L
         private var historyRefusal: String? = null
+        private var historyCopyContext: HistoryReadContext? = null
+        private var updateHistoryCopy: ((ChatMessagesResponse) -> Unit)? = null
 
         // Send inputs captured per optimistic row, keyed by its bare-UUID
         // `clientMessageId`. Survives refetches so retry resends the same
@@ -430,6 +432,8 @@ class ChatConversationViewModel
          * flash, no lost scroll); only an error or an empty first load starts over.
          */
         fun refresh() {
+            // An access refusal tears listeners down. Retry must restore live updates as well as the first page.
+            if (connectionJob == null) subscribeToSockets()
             loadTopicsIfNeeded()
             fetch(initial = true, quiet = _state.value is ChatConversationUiState.Loaded, force = true)
         }
@@ -1424,6 +1428,15 @@ class ChatConversationViewModel
             force: Boolean = false,
         ) {
             val context = historyContext()
+            if (initial || context != historyCopyContext) {
+                historyCopyContext = context
+                updateHistoryCopy =
+                    when (val target = context.mode) {
+                        is ChatThreadMode.Room -> repo.roomHistoryUpdater(target.id)
+                        is ChatThreadMode.Person -> repo.conversationHistoryUpdater(target.otherUserId, context.topicId)
+                        ChatThreadMode.Ai -> null
+                    }
+            }
             val copied = initial && !quiet && showHistoryCopy()
             val keepMessages = quiet || copied
             viewModelScope.launch {
@@ -2157,6 +2170,16 @@ class ChatConversationViewModel
             historyRefusal?.let {
                 _state.value = ChatConversationUiState.Error(it)
                 return
+            }
+            if (historyCopyContext == historyContext()) {
+                updateHistoryCopy?.invoke(
+                    ChatMessagesResponse(
+                        messages = messages.toList(),
+                        hasMore = hasMore,
+                        nextCursor = oldestCursor,
+                        roomIds = activeRoomIds.toList(),
+                    ),
+                )
             }
             val combined = messages + pendingByClientId.values
             if (combined.isEmpty()) {

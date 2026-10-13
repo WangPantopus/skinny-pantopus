@@ -123,6 +123,8 @@ class ChatConversationViewModelTest {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         every { repo.roomMessagesCopy(any()) } returns null
         every { repo.conversationMessagesCopy(any(), any()) } returns null
+        every { repo.roomHistoryUpdater(any()) } returns {}
+        every { repo.conversationHistoryUpdater(any(), any()) } returns {}
         every { socket.connectionState } returns MutableStateFlow(SocketManager.ConnectionState.Disconnected)
         every { socket.eventsOf(any()) } returns emptyFlow()
         coEvery { socket.emitWithAck(any(), any(), any()) } returns null
