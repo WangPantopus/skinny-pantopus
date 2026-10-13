@@ -527,6 +527,9 @@ public enum ChatTimelineRow: Identifiable, Sendable, Hashable {
     case topicDivider(ChatTopicDivider)
     case broadcastReference(ChatBroadcastReference)
     case bubble(ChatBubbleContent)
+    /// A line the server writes into the room (`message_type: "system"`),
+    /// such as a plan's "Alex is on the way": centered, no sender.
+    case systemLine(ChatDayDivider)
 
     public var id: String {
         switch self {
@@ -534,6 +537,7 @@ public enum ChatTimelineRow: Identifiable, Sendable, Hashable {
         case let .topicDivider(divider): "topic_\(divider.id)"
         case let .broadcastReference(reference): "broadcast_\(reference.id)"
         case let .bubble(bubble): "bubble_\(bubble.id)"
+        case let .systemLine(line): "system_\(line.id)"
         }
     }
 }
