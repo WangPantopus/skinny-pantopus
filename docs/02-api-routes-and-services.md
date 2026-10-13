@@ -341,7 +341,7 @@ All routes mounted under `/api` prefix in `app.js`.
  |   +-- parcelShadowComparison.js
  |   +-- mailVendorService.js
  |
- +-- ai/                         OpenAI integration
+ +-- ai/                         Claude integration
  |   +-- agentService.js           Multi-turn chat, drafts, summarization
  |   +-- tools.js                  Function definitions for AI tool calling
  |   +-- schemas.js                Structured output schemas
@@ -513,7 +513,7 @@ Ranked feed returned to client
 |-----|-------------|------|---------|----------------|
 | **Supabase** | `@supabase/supabase-js` | Service role key | Default | Throws on error |
 | **Stripe** | `stripe` npm | Secret key | Default | Webhook idempotency |
-| **OpenAI** | `openai` npm | API key | 20-30s | Retry on 429, fallback |
+| **Anthropic (Claude)** | `@anthropic-ai/sdk` npm | API key | 20-30s | SDK retries 429/5xx twice, then fallback |
 | **Google Address** | `fetch` | API key in URL | 5s | Fallback to cache |
 | **Smarty** | `fetch` | auth-id + auth-token | 1.5s | Outage fallback |
 | **ATTOM** | `fetch` | API key header | 10s | Cache 30d TTL |
