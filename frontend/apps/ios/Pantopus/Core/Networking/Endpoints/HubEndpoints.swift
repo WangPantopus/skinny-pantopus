@@ -7,16 +7,6 @@ import Foundation
 
 /// Endpoint builders for `backend/routes/hub.js`.
 public enum HubEndpoints {
-    /// `GET /api/hub` — route `backend/routes/hub.js:24`. Server sends
-    /// `Cache-Control: no-store`, so we defensively disable client cache too.
-    public static func overview() -> Endpoint {
-        Endpoint(
-            method: .get,
-            path: "/api/hub",
-            cachePolicy: .reloadIgnoringLocalCacheData
-        )
-    }
-
     /// `GET /api/hub/today` — route `backend/routes/hub.js:596`.
     public static func today() -> Endpoint {
         Endpoint(method: .get, path: "/api/hub/today")

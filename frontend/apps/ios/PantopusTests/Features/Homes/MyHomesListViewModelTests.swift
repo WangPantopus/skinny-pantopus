@@ -112,8 +112,23 @@ final class MyHomesListViewModelTests: XCTestCase {
         }
     }
 
-    func testFabUsesHomeIdentityTintAndSecondaryCreate() {
-        let vm = MyHomesListViewModel()
+    func testFabUsesHomeIdentityTintAndSecondaryCreate() async {
+        // One add control: an empty list's own button adds a Home, so no FAB.
+        SequencedURLProtocol.sequence = [.status(200, body: "{\"homes\":[]}"), .status(200, body: "{\"requests\":[],\"next_cursor\":null}")]
+        let empty = MyHomesListViewModel(api: makeAPI(), identity: { "list-tests" }, onOpenHome: { _ in })
+        await empty.load()
+        XCTAssertNil(empty.fab)
+
+        SequencedURLProtocol.sequence = [
+            .status(200, body: """
+            {"homes":[{"id":"00000000-0000-4000-8000-000000000001","name":"Birch Lane","address":"412 Birch Ln",
+              "access_kind":"shared","has_home_access":true,"role_base":"owner","can_delete_home":true,
+              "occupancy":{"id":"o1","role":"owner","role_base":"owner","is_active":true,"verification_status":"verified"}}]}
+            """),
+            .status(200, body: "{\"requests\":[],\"next_cursor\":null}")
+        ]
+        let vm = MyHomesListViewModel(api: makeAPI(), identity: { "list-tests" }, onOpenHome: { _ in })
+        await vm.load()
         guard let fab = vm.fab else {
             XCTFail("Expected FAB")
             return

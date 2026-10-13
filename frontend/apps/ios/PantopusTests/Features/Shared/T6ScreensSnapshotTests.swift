@@ -55,10 +55,6 @@ final class T6ScreensSnapshotTests: XCTestCase {
 
     // MARK: - Refreshed Tier-1 surfaces (T6.2a / T6.2b / T6.3f)
 
-    func test_hub_ios_baseline_is_present() throws {
-        try assertBaseline("hub")
-    }
-
     func test_me_ios_baseline_is_present() throws {
         try assertBaseline("me")
     }

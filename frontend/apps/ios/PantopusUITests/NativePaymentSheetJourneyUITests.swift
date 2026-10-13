@@ -168,7 +168,7 @@ final class NativePaymentSheetJourneyUITests: XCTestCase {
 
     private func openPayments() {
         if element("payments.addMethodBtn").exists { return }
-        tap(element("place.menu").exists ? "place.menu" : "hubMenuButton")
+        tap("place.menu")
         tap("navDrawer.item.settings")
         tap("groupedListRow_paymentsPayouts")
         print("PAYMENT_IDENTITY_GATE")
@@ -178,7 +178,7 @@ final class NativePaymentSheetJourneyUITests: XCTestCase {
     private func restartAndOpenPayments() {
         app.terminate()
         app.launch()
-        XCTAssertTrue(element("hubMenuButton").waitForExistence(timeout: 20) || element("place.homeTools").exists)
+        XCTAssertTrue(element("place.menu").waitForExistence(timeout: 20) || element("place.homeTools").exists)
         openPayments()
     }
 
@@ -262,9 +262,9 @@ final class NativePaymentSheetJourneyUITests: XCTestCase {
     }
 
     private func signIn() {
-        if element("hubMenuButton").waitForExistence(timeout: 3) || element("place.homeTools").exists {
+        if element("place.menu").waitForExistence(timeout: 3) || element("place.homeTools").exists {
             dismissSignInPrompts()
-            tap(element("place.menu").exists ? "place.menu" : "hubMenuButton")
+            tap("place.menu")
             tap("navDrawer.item.settings")
             tapButton("Log out")
         }
@@ -274,7 +274,7 @@ final class NativePaymentSheetJourneyUITests: XCTestCase {
         enter(password, into: "loginPasswordField")
         tap("loginSubmitButton")
         dismissSignInPrompts()
-        XCTAssertTrue(element("tab.place").waitForExistence(timeout: 25) || element("hubMenuButton").exists)
+        XCTAssertTrue(element("tab.place").waitForExistence(timeout: 25) || element("place.menu").exists)
     }
 
     private func dismissSignInPrompts() {

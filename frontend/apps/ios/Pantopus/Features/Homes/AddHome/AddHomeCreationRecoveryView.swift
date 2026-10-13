@@ -92,7 +92,9 @@ struct AddHomeCreationRecoveryView: View {
                 return "Your residency request is recorded. Open My Homes to check its current status, "
                     + "household access and verification steps."
             }
-            return "Open My Homes to see your current setup and verification options. Saving a Home does not verify residency or ownership."
+            return viewModel.completionOpensYourPlace
+                ? "Open Your Place to see your Home and its verification options. Saving a Home does not verify residency or ownership."
+                : "Open My Homes to see your current setup and verification options. Saving a Home does not verify residency or ownership."
         case .cancelled:
             if viewModel.pendingCreation?.residencyHomeId != nil {
                 return "This request cannot submit a residency claim. Check the street, apartment and relationship before starting again."

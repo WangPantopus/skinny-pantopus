@@ -3,6 +3,7 @@
 package app.pantopus.android.data.saved_places
 
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
+import app.pantopus.android.data.api.models.place.PlacePreview
 import app.pantopus.android.data.api.models.saved_places.SavePlaceBody
 import app.pantopus.android.data.api.models.saved_places.SavedPlaceDeleteResponse
 import app.pantopus.android.data.api.models.saved_places.SavedPlaceResponse
@@ -54,6 +55,9 @@ class SavedPlacesRepository
 
         suspend fun today(id: String): NetworkResult<PlaceIntelligence> =
             todayStored(id).let { it.data?.let { data -> NetworkResult.Success(data) } ?: it.asResult() }
+
+        /** What's public about the saved point itself (the Place tab's saved-address root). */
+        suspend fun preview(id: String): NetworkResult<PlacePreview> = safeApiCall { api.preview(id) }
 
         suspend fun save(body: SavePlaceBody): NetworkResult<SavedPlaceResponse> = safeApiCall { api.save(body) }.changed()
 

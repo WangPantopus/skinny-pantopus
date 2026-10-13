@@ -99,11 +99,12 @@ final class RootTabUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["No conversations yet"].waitForExistence(timeout: 5))
     }
 
-    func testTapPlaceAvatarShowsProfile() throws {
+    func testPlaceMenuOpensProfile() throws {
         guard let app = launchSignedIn() else {
             throw XCTSkip("Signed-in launch env not honoured.")
         }
-        app.buttons["hubAvatarButton"].firstMatch.tap()
+        app.buttons["place.menu"].firstMatch.tap()
+        app.buttons["navDrawer.contextPill.profile"].firstMatch.tap()
         XCTAssertTrue(app.scrollViews["meScreen"].waitForExistence(timeout: 5))
     }
 }
