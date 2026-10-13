@@ -34,20 +34,24 @@ struct PlansCluster: Hashable, Identifiable {
 
 /// One thing on the map.
 enum PlansMarker: Hashable, Identifiable {
-    /// A pin; `fan` moves it sideways, in pin widths, when plans share one point.
-    case pin(PlanPinDTO, fan: Double)
+    case pin(PlanPinDTO)
+    /// Plans sharing one point, side by side with the point between them. One
+    /// marker, so each pin takes its own taps.
+    case fan([PlanPinDTO])
     case cluster(PlansCluster)
 
     var id: String {
         switch self {
-        case let .pin(pin, _): "pin.\(pin.id)"
+        case let .pin(pin): "pin.\(pin.id)"
+        case let .fan(pins): "fan.\(pins.first?.id ?? "")"
         case let .cluster(cluster): "cluster.\(cluster.id)"
         }
     }
 
     var coordinate: CLLocationCoordinate2D {
         switch self {
-        case let .pin(pin, _): CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude)
+        case let .pin(pin): CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude)
+        case let .fan(pins): CLLocationCoordinate2D(latitude: pins.first?.latitude ?? 0, longitude: pins.first?.longitude ?? 0)
         case let .cluster(cluster): CLLocationCoordinate2D(latitude: cluster.latitude, longitude: cluster.longitude)
         }
     }
@@ -85,8 +89,7 @@ enum PlansClustering {
             for key in points {
                 guard let group = byPoint[key] else { continue }
                 if group.count > 1, group.count <= fanLimit {
-                    let middle = Double(group.count - 1) / 2
-                    result += group.enumerated().map { PlansMarker.pin($1, fan: Double($0) - middle) }
+                    result.append(.fan(group))
                 } else {
                     loose += group
                 }
@@ -109,7 +112,7 @@ enum PlansClustering {
         }
         for group in groups {
             if group.count == 1, let pin = group.first {
-                result.append(.pin(pin, fan: 0))
+                result.append(.pin(pin))
             } else {
                 result.append(.cluster(cluster(group)))
             }
@@ -120,7 +123,8 @@ enum PlansClustering {
     /// Drawing order: pins, then clusters, then the selected pin.
     private static func layer(_ marker: PlansMarker, _ selectedId: String?) -> Int {
         switch marker {
-        case let .pin(pin, _): pin.id == selectedId ? 2 : 0
+        case let .pin(pin): pin.id == selectedId ? 2 : 0
+        case let .fan(pins): pins.contains { $0.id == selectedId } ? 2 : 0
         case .cluster: 1
         }
     }

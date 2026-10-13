@@ -86,18 +86,19 @@ struct PlansMapView: View {
             }
             ForEach(viewModel.markers) { marker in
                 switch marker {
-                case let .pin(pin, fan):
+                case let .pin(pin):
                     Annotation("", coordinate: marker.coordinate, anchor: .center) {
-                        Button { select(pin) } label: {
-                            PlanPinView(look: look(for: pin))
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(PlansPinSpeech.label(for: pin, card: card(for: pin.id), center: viewModel.center))
-                        .accessibilityHint("Opens the plan's card")
-                        .accessibilityIdentifier("planPin.\(pin.id)")
+                        pinButton(pin)
+                    }
+                    .annotationTitles(.hidden)
+                case let .fan(pins):
+                    Annotation("", coordinate: marker.coordinate, anchor: .center) {
                         // Plans sharing one point sit side by side, the point between them.
-                        .padding(.leading, max(fan, 0) * 2 * PlansClustering.fanStep)
-                        .padding(.trailing, max(-fan, 0) * 2 * PlansClustering.fanStep)
+                        HStack(spacing: PlansClustering.fanStep - PlanPinView.width) {
+                            ForEach(pins) { pin in
+                                pinButton(pin).zIndex(pin.id == viewModel.selectedId ? 1 : 0)
+                            }
+                        }
                     }
                     .annotationTitles(.hidden)
                 case let .cluster(cluster):
@@ -173,6 +174,16 @@ struct PlansMapView: View {
             isLive: pin.state == .live,
             badge: badge
         )
+    }
+
+    private func pinButton(_ pin: PlanPinDTO) -> some View {
+        Button { select(pin) } label: {
+            PlanPinView(look: look(for: pin))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(PlansPinSpeech.label(for: pin, card: card(for: pin.id), center: viewModel.center))
+        .accessibilityHint("Opens the plan's card")
+        .accessibilityIdentifier("planPin.\(pin.id)")
     }
 
     private func card(for id: String) -> PlanCardDTO? {

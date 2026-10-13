@@ -36,6 +36,9 @@ struct PlanPinLook: Equatable {
 
 /// The teardrop marker with its badge and tag.
 struct PlanPinView: View {
+    /// Wide enough for the tag under the head.
+    static let width: CGFloat = 96
+
     let look: PlanPinLook
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var haloGrows = false
@@ -78,7 +81,7 @@ struct PlanPinView: View {
             }
             Spacer(minLength: 0)
         }
-        .frame(width: max(96, size + 20), height: tipY * 2)
+        .frame(width: max(Self.width, size + 20), height: tipY * 2)
         .opacity(look.isDimmed ? 0.4 : 1)
         .animation(reduceMotion ? .easeInOut(duration: 0.15) : .easeOut(duration: 0.18), value: look)
     }
