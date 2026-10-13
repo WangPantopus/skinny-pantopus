@@ -100,6 +100,10 @@ class ScreenStore
             /** Topic marks: a reply to a read that started before one is kept but stays out of date. */
             var marks = 0L
 
+            /** Live memory updates must not hide an access refusal from a read already in flight. */
+            var memoryEdits = 0L
+            var refusals = 0L
+
             /** The entry may be written to the phone (its kind allows it, and the last reader said the viewer may). */
             @Volatile
             var persist = false
@@ -127,6 +131,7 @@ class ScreenStore
             val identity: String?,
             val edits: Long,
             val marks: Long,
+            val memoryEdits: Long = 0L,
         )
 
         /** A mark whose saved-copy work is still queued: a load before it lands applies the mark itself. */
@@ -212,7 +217,7 @@ class ScreenStore
                     val running = slot.inFlight?.takeIf { it.isActive }
                     if (running != null) return@synchronized slot to running
                     if (!force && !slot.stale && current.isFresh(key.kind)) return current.cast()
-                    val ticket = Ticket(generation, identity(account), slot.edits, slot.marks)
+                    val ticket = Ticket(generation, identity(account), slot.edits, slot.marks, slot.memoryEdits)
                     val etag = slot.etag.takeIf { current.data != null }
                     slot.state.value = current.copy(refreshing = true)
                     val job = scope.async { settle(slot, fetchSafely(fetch, etag), ticket) }
@@ -295,6 +300,36 @@ class ScreenStore
                         remove(key)
                     }
                 }
+            }
+        }
+
+        /**
+         * Keep a memory-only copy in step with confirmed live changes. Capture before reading or revalidating
+         * the screen context. This cannot recreate an evicted, cleared or refused copy, or follow a session switch.
+         * Unlike [writer], it leaves an in-flight access check running; a refusal still removes the entire copy.
+         */
+        fun <T : Any> memoryUpdater(key: StoreKey<T>): (T) -> Unit {
+            require(!key.savable)
+            val account = accountId() ?: return {}
+            return synchronized(slots) {
+                val slot = slotLocked(key, account)
+                val gen = generation
+                val session = identity(account)
+                val refusals = slot.refusals
+                val update: (T) -> Unit = { data ->
+                    synchronized(slots) live@{
+                        val active = gen == generation && session == identity() && slots["$account|${key.id}"] === slot
+                        if (!active || refusals != slot.refusals) return@live
+                        val current = slot.state.value
+                        if (current.data != null && current.data != data) {
+                            slot.memoryEdits++
+                            slot.etag = null
+                            slot.stale = true
+                            slot.state.value = current.copy(data = data)
+                        }
+                    }
+                }
+                update
             }
         }
 
@@ -528,19 +563,16 @@ class ScreenStore
                 }
                 // A topic marked the entry while the read was out: the reply is kept, and the next read asks again.
                 val markedMeanwhile = ticket.marks != slot.marks
+                val updatedMeanwhile = ticket.memoryEdits != slot.memoryEdits
                 val previous = slot.state.value
                 val now = System.currentTimeMillis()
                 slot.state.value =
                     when (result) {
                         is NetworkResult.Success ->
                             when (val reply = result.data) {
-                                is Conditional.Fresh -> {
-                                    slot.etag = reply.etag
-                                    slot.stale = markedMeanwhile
-                                    Stored(reply.data, fetchedAt = now).also { writeSaved(it.data, slot, now) }
-                                }
+                                is Conditional.Fresh -> settleFresh(slot, reply, ticket, now)
                                 Conditional.NotModified -> {
-                                    slot.stale = markedMeanwhile
+                                    slot.stale = markedMeanwhile || updatedMeanwhile
                                     previous.copy(fetchedAt = now, refreshing = false, failure = null).also {
                                         writeSaved(it.data, slot, now)
                                     }
@@ -554,6 +586,7 @@ class ScreenStore
                                 // the server's answer.
                                 slot.etag = null
                                 slot.edits++
+                                slot.refusals++
                                 deleteSaved(slot.key.id)
                                 Stored(failure = result.error)
                             } else {
@@ -566,6 +599,23 @@ class ScreenStore
                 // No signal without a newer mark: failed reads do not create a retry loop.
                 slot.inFlight = null
                 if (markedMeanwhile && !slot.state.value.failure.refusesStoredCopy) _changes.update { it + 1 }
+            }
+        }
+
+        private fun <T : Any> settleFresh(
+            slot: Slot,
+            reply: Conditional.Fresh<T>,
+            ticket: Ticket,
+            now: Long,
+        ): Stored<Any> {
+            val updatedMeanwhile = ticket.memoryEdits != slot.memoryEdits
+            slot.etag = reply.etag.takeUnless { updatedMeanwhile }
+            slot.stale = ticket.marks != slot.marks || updatedMeanwhile
+            // A successful older read cannot overwrite live changes that landed while it was in flight.
+            return if (updatedMeanwhile) {
+                slot.state.value.copy(refreshing = false, failure = null)
+            } else {
+                Stored(reply.data, fetchedAt = now).also { writeSaved(it.data, slot, now) }
             }
         }
 

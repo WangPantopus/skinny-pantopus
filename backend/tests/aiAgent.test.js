@@ -234,13 +234,12 @@ describe('AI Tool Definitions', () => {
 
   it('each tool has required structure', () => {
     for (const tool of toolDefinitions) {
-      expect(tool).toHaveProperty('type', 'function');
       expect(tool).toHaveProperty('name');
       expect(typeof tool.name).toBe('string');
       expect(tool).toHaveProperty('description');
       expect(typeof tool.description).toBe('string');
-      expect(tool).toHaveProperty('parameters');
-      expect(tool.parameters).toHaveProperty('type', 'object');
+      expect(tool).toHaveProperty('input_schema');
+      expect(tool.input_schema).toHaveProperty('type', 'object');
     }
   });
 

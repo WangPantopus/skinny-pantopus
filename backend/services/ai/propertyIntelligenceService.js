@@ -13,6 +13,7 @@
  */
 const supabaseAdmin = require('../../config/supabaseAdmin');
 const logger = require('../../utils/logger');
+const { houseFromAttomProperty } = require('../place/houseShape');
 
 const ATTOM_BASE = 'https://api.gateway.attomdata.com/propertyapi/v1.0.0';
 const ATTOM_RAW_CACHE_TABLE = 'AttomPropertyCache';
@@ -450,6 +451,8 @@ function buildProfileFromAttomResponses(home, { detailData, avmData, trendData }
     value_confidence: toNumberOrNull(avm.confidence),
     zip_median_value: assessment.assessed?.assdTtlValue || null,
     zip_median_sale_price_trend: zipMedianSalePriceTrend,
+    // The home's outline for the Today sky (services/place/houseShape.js).
+    house: detailData?.property?.[0] ? houseFromAttomProperty(detailData.property[0]) : null,
     cached_at: new Date().toISOString(),
     source: 'attom',
   };
@@ -475,6 +478,7 @@ function buildFallbackProfile(home) {
     value_confidence: null,
     zip_median_value: null,
     zip_median_sale_price_trend: null,
+    house: null,
     cached_at: new Date().toISOString(),
     source: 'fallback',
   };
@@ -725,11 +729,41 @@ async function getHomeAttomPropertyDetail(home) {
 // outage can't shadow real data for the full 30-day budget.
 const FALLBACK_TTL_DAYS = 1;
 
+/**
+ * Profiles cached before the house outline existed have no `house` key. Read
+ * it once from the stored ATTOM record (the raw cache, then the copy on the
+ * Home; never a live, billed call) and keep it on the cached row without
+ * touching its expiry.
+ */
+async function withHouseShape(homeId, profile) {
+  if (!profile || profile.house !== undefined || profile.source !== 'attom') return profile;
+  try {
+    const raw = await getCachedRawAttom(homeId, { allowExpired: true });
+    let detail = getRawPayloadResponse(raw?.rawPayload, 'property_detail');
+    if (!detail) {
+      const { data: home, error: homeError } = await supabaseAdmin
+        .from('Home').select('id, niche_data').eq('id', homeId).maybeSingle();
+      if (homeError) throw homeError;
+      detail = buildDetailResponseFromStoredPayload(getStoredAttomPropertyDetail(home));
+    }
+    const upgraded = { ...profile, house: detail?.property?.[0] ? houseFromAttomProperty(detail.property[0]) : null };
+    const { error } = await supabaseAdmin
+      .from('PropertyIntelligenceCache')
+      .update({ profile: upgraded })
+      .eq('home_id', homeId);
+    if (error) logger.warn('PropertyIntelligenceCache house write error', { homeId, error: error.message });
+    return upgraded;
+  } catch (err) {
+    logger.warn('PropertyIntelligence house shape read failed', { homeId, error: err.message });
+    return profile;
+  }
+}
+
 async function getProfile(homeId) {
   const cached = await getCachedProfile(homeId);
   if (cached) {
     logger.info('PropertyIntelligence cache hit', { homeId });
-    return { profile: cached.profile, source: 'cache' };
+    return { profile: await withHouseShape(homeId, cached.profile), source: 'cache' };
   }
 
   const { data: home, error: homeError } = await supabaseAdmin
@@ -752,7 +786,7 @@ async function getProfile(homeId) {
     const expired = await getCachedProfile(homeId, { allowExpired: true });
     if (expired && expired.source === 'attom' && expired.profile) {
       logger.info('PropertyIntelligence serving expired ATTOM cache (API unavailable)', { homeId });
-      return { profile: expired.profile, source: 'cache_stale' };
+      return { profile: await withHouseShape(homeId, expired.profile), source: 'cache_stale' };
     }
     if (!process.env.ATTOM_API_KEY) {
       logger.info('ATTOM_API_KEY not configured and no cached ATTOM payload, using fallback profile', { homeId });

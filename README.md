@@ -243,7 +243,7 @@ Native-project-specific commands (lint, format, release builds, store submission
 | **Web**     | Next.js 15, React 19, Tailwind CSS, TypeScript, TanStack Query, Socket.IO client, Stripe.js, Leaflet |
 | **iOS**     | Swift 5.10, SwiftUI, Observation, URLSession + async/await, Stripe iOS SDK, Socket.IO-Client-Swift, MapKit, KeychainAccess, swift-log |
 | **Android** | Kotlin 2.0, Jetpack Compose, Material 3, Hilt, Retrofit + OkHttp + Moshi, Kotlinx Coroutines/Flow, Navigation Compose, DataStore, Coil, Stripe Android SDK, Google Maps Compose, Socket.IO Java client |
-| **Backend** | Express 5, Node 18+, PostgreSQL (Supabase + PostGIS), Socket.IO, Supabase Auth, Stripe Connect, Twilio, OpenAI, Winston, Helmet |
+| **Backend** | Express 5, Node 18+, PostgreSQL (Supabase + PostGIS), Socket.IO, Supabase Auth, Stripe Connect, Twilio, Anthropic Claude, Winston, Helmet |
 | **Infra**   | Turborepo, pnpm workspaces, GitHub Actions, Docker (backend), Vercel (web), Fastlane (iOS), Play Publishing (Android), EC2 (backend hosting) |
 
 ---

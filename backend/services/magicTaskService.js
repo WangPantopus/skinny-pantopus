@@ -13,7 +13,8 @@
  *   medium (0.5–0.79) — show preview with highlighted "Confirm this" chip
  *   low    (< 0.5) — ask one clarifying question
  */
-const { getOpenAIClient } = require('../config/openai');
+const { getAnthropicClient, resolveModel, resolveEffort } = require('../config/anthropic');
+const { complete, isTimeoutError, parseJsonObject, todayLine } = require('./ai/llm');
 const { parseTaskText } = require('./taskParser');
 const logger = require('../utils/logger');
 
@@ -318,22 +319,23 @@ FINAL REMINDERS
 
 // ── LLM extraction ──────────────────────────────────────────────
 
-const AI_TIMEOUT_MS = Number(process.env.MAGIC_TASK_AI_TIMEOUT_MS) || 10_000; // 10s default
-const AI_MODEL = process.env.MAGIC_TASK_AI_MODEL || 'gpt-4o';
-const AI_TEMPERATURE = process.env.MAGIC_TASK_AI_TEMPERATURE != null
-  ? Number(process.env.MAGIC_TASK_AI_TEMPERATURE)
-  : 0.4;
-const AI_MAX_TOKENS = Number(process.env.MAGIC_TASK_AI_MAX_TOKENS) || 1500;
+// The reply is ~700 tokens of JSON, so allow more than the old 10s.
+const AI_TIMEOUT_MS = Number(process.env.MAGIC_TASK_AI_TIMEOUT_MS) || 15_000; // 15s default
+// A leftover MAGIC_TASK_AI_MODEL naming another provider's model is ignored.
+const AI_MODEL = resolveModel(process.env.MAGIC_TASK_AI_MODEL);
+const AI_EFFORT = resolveEffort(process.env.MAGIC_TASK_AI_EFFORT, 'low');
+// Covers the model's thinking as well as the JSON.
+const AI_MAX_TOKENS = Number(process.env.MAGIC_TASK_AI_MAX_TOKENS) || 4096;
 
 /**
- * Call OpenAI to extract structured task fields from user text.
+ * Call Claude to extract structured task fields from user text.
  * @param {string} userText — Raw user input
  * @param {object} deterministicFields — Fields already extracted by parser
  * @returns {Promise<object|null>} — Structured task draft or null on failure
  */
 async function llmExtract(userText, deterministicFields = {}, context = {}) {
-  const openai = getOpenAIClient();
-  if (!openai) return null;
+  const client = getAnthropicClient();
+  if (!client) return null;
 
   try {
     const contextHints = [];
@@ -350,33 +352,32 @@ async function llmExtract(userText, deterministicFields = {}, context = {}) {
       contextHints.push(`Deterministic parser found category="${deterministicFields.category}"`);
     }
 
-    const userMessage = contextHints.length > 0
+    // "Saturday morning" becomes a schedule only against today's date.
+    const userMessage = (contextHints.length > 0
       ? `User message: "${userText}"\n\nHints from deterministic parser:\n${contextHints.join('\n')}`
-      : `User message: "${userText}"`;
+      : `User message: "${userText}"`) + `\n\n${todayLine(context.timeZone)}`;
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
-
-    const completion = await openai.chat.completions.create({
+    // The task has too many optional fields for a response schema (the API caps
+    // optional parameters at 24), so the prompt asks for JSON and it is parsed
+    // here; validateAndDefault below does not trust any field.
+    const { text } = await complete({
+      client,
       model: AI_MODEL,
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: userMessage },
-      ],
-      response_format: { type: 'json_object' },
-      temperature: AI_TEMPERATURE,
-      max_tokens: AI_MAX_TOKENS,
-    }, { signal: controller.signal });
+      system: SYSTEM_PROMPT,
+      messages: [{ role: 'user', content: userMessage }],
+      effort: AI_EFFORT,
+      maxTokens: AI_MAX_TOKENS,
+      timeoutMs: AI_TIMEOUT_MS,
+    });
 
-    clearTimeout(timeout);
-
-    const content = completion.choices?.[0]?.message?.content;
-    if (!content) return null;
-
-    const parsed = JSON.parse(content);
+    const parsed = parseJsonObject(text);
+    if (!parsed) {
+      logger.warn('Magic Task AI reply was not JSON');
+      return null;
+    }
     return parsed;
   } catch (err) {
-    if (err.name === 'AbortError') {
+    if (isTimeoutError(err)) {
       logger.warn('Magic Task AI timed out', { timeout: AI_TIMEOUT_MS });
     } else {
       logger.error('Magic Task AI error', { error: err.message });
@@ -579,6 +580,7 @@ function computeOverallConfidence(fieldConfidence) {
  * @param {object} context — Optional context hints
  * @param {string} [context.homeId] — User's home ID (for location_mode=home)
  * @param {object} [context.location] — Pre-locked location { lat, lng }
+ * @param {string} [context.timeZone] — The person's time zone, for today's date (set by the route)
  * @param {string} [context.locationMode] — Pre-locked location mode
  * @returns {Promise<object>} — { draft, confidence, fieldConfidence, clarifyingQuestion, source }
  */

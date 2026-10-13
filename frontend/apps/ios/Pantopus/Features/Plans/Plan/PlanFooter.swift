@@ -84,7 +84,7 @@ struct PlanFooter: View {
                 Button { onAsk(false) } label: { PlanButtonLabel(title: "Join the waitlist", kind: .primary) }
                     .planButton(.primary)
                     .accessibilityIdentifier("planAsk")
-                caption("Full for now. If a spot opens, you'll hear right away.")
+                caption("Full for now. If a spot opens, we'll tell you right away.")
             } else {
                 Text(PlanCannotAskCopy.sentence(reason, card: card))
                     .planFont(.small)
@@ -114,7 +114,7 @@ struct PlanFooter: View {
     private func askCaption(_ card: PlanCardDTO) -> String? {
         // Board J2: a playdate says who approves each family.
         if card.kind == .playdate { return PlanCardLines.approval(card) }
-        if card.howPeopleGetIn == "automatic" { return "You'll be in right away" }
+        if card.howPeopleGetIn == "automatic" { return "You're in as soon as you ask, until the spots fill." }
         if let within = PlanCardLines.answersWithin(card.host) { return String(within.dropLast()) }
         return nil
     }
@@ -148,7 +148,7 @@ enum PlanCannotAskCopy {
         case .blocked:
             "You can't join this plan."
         case .tooManyRequests:
-            "You have 10 requests waiting. Withdraw one to ask here."
+            "You have 10 open requests. Withdraw one to ask here."
         case .ended:
             "Asking has closed for this plan."
         case .other:

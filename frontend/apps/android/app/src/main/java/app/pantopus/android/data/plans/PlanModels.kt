@@ -153,12 +153,14 @@ enum class KidsAgeBand(
     companion object {
         fun from(wire: String?): KidsAgeBand? = entries.firstOrNull { it.wire == wire }
 
-        /** "2–5" from a set of bands (the lowest age to the highest), "under 2" for that band alone. */
+        /** "ages 2–5" from a set of bands (the lowest age to the highest); "under 4" when they start under 2 (as iOS says it). */
         fun rangeLabel(wires: List<String>?): String? {
             val bands = wires.orEmpty().mapNotNull(::from)
             if (bands.isEmpty()) return null
-            if (bands.size == 1 && bands.first() == UNDER_2) return "under 2"
-            return "${bands.minOf { it.low }}–${bands.maxOf { it.high }}"
+            val low = bands.minOf { it.low }
+            val high = bands.maxOf { it.high }
+            // Non-breaking spaces: "ages 2–5" never splits across lines.
+            return if (low == 0) "under\u00A0${high + 1}" else "ages\u00A0$low–$high"
         }
     }
 }

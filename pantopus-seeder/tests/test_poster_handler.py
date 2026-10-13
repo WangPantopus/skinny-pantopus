@@ -36,7 +36,7 @@ def _mock_secrets():
     s = MagicMock()
     s.supabase_url = "https://test.supabase.co"
     s.supabase_service_role_key = "test-key"
-    s.openai_api_key = "sk-test"
+    s.anthropic_api_key = "sk-ant-test"
     s.curator_email = "curator@test.com"
     s.curator_password = "pass"
     s.pantopus_api_base_url = "https://api.pantopus.com"
@@ -554,7 +554,7 @@ class TestEndToEndFlow:
             patches["check_density"] as mock_density,
             patches["should_post"],
             patches["allowed_cats"],
-            patch("src.pipeline.humanizer.openai") as mock_openai,
+            patch("src.pipeline.humanizer.anthropic") as mock_anthropic,
             patches["auth_curator"] as mock_auth,
             patches["post_api"] as mock_post,
             patch(f"{_HANDLER}._select_items", return_value=[_make_queue_item()]),
@@ -565,16 +565,17 @@ class TestEndToEndFlow:
             mock_density.return_value = MagicMock(
                 stage="full", avg_daily_posts=0, active_posters=0
             )
-            client = mock_openai.OpenAI.return_value
-            client.chat.completions.create.return_value = MagicMock(
-                choices=[MagicMock(message=MagicMock(content=bad_text))]
+            client = mock_anthropic.Anthropic.return_value
+            client.messages.create.return_value = MagicMock(
+                content=[MagicMock(type="text", text=bad_text)],
+                stop_reason="end_turn",
             )
 
             result = handler({}, None)
 
             assert result["items_failed"] == 1
             assert result["items_posted"] == 0
-            assert client.chat.completions.create.call_count == 2
+            assert client.messages.create.call_count == 2
             mock_auth.assert_not_called()
             mock_post.assert_not_called()
             update_calls = sb.table.return_value.update.call_args_list

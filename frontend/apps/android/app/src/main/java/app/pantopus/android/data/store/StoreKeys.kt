@@ -1,6 +1,7 @@
 package app.pantopus.android.data.store
 
 import app.pantopus.android.data.api.models.businesses.MyBusinessesResponse
+import app.pantopus.android.data.api.models.chats.ChatMessagesResponse
 import app.pantopus.android.data.api.models.chats.UnifiedConversationsResponse
 import app.pantopus.android.data.api.models.connections.BlockedRelationshipsResponse
 import app.pantopus.android.data.api.models.connections.SentRequestsResponse
@@ -8,9 +9,6 @@ import app.pantopus.android.data.api.models.feed.FeedResponse
 import app.pantopus.android.data.api.models.homedashboard.HomeDashboardResponse
 import app.pantopus.android.data.api.models.homes.MyHomesResponse
 import app.pantopus.android.data.api.models.homes.showsCopyBeforeRecheck
-import app.pantopus.android.data.api.models.hub.HubDiscoveryResponse
-import app.pantopus.android.data.api.models.hub.HubResponse
-import app.pantopus.android.data.api.models.hub.HubTodayResponse
 import app.pantopus.android.data.api.models.hub.NotificationPreferences
 import app.pantopus.android.data.api.models.location.SavedViewingArea
 import app.pantopus.android.data.api.models.location.ViewingLocationPayload
@@ -44,8 +42,15 @@ object StoreTopics {
     /** The viewer's own profile and settings (a name, username or photo saved, here or on another device). */
     const val PROFILE_ME = "profile:me"
 
+    /**
+     * Client-only: the viewer's connection lists (accepted, requests in and out, blocked). The server sends no topic for
+     * them, so a connection request or acceptance arriving as an alert or a push marks them ([isConnectionNotice]).
+     */
+    const val CONNECTIONS = "connections"
+
     /** The viewer's conversation list: a chat created or left, a message sent or read. */
     const val CHATS = "chats"
+    const val CHAT_LIST = "chat-list"
 
     /** Client-only: the viewer posted, edited or deleted a post, so the feeds' first pages go out of date. */
     const val POSTS = "posts"
@@ -68,26 +73,26 @@ object StoreKeys {
         "api/relationships",
         mapOf("status" to status, "limit" to limit.toString(), "offset" to offset.toString()),
         kind = StoreKind.PEOPLE,
-        topics = setOf(StoreTopics.PROFILE_ME),
+        topics = setOf(StoreTopics.PROFILE_ME, StoreTopics.CONNECTIONS),
     )
 
     val pendingConnections =
         StoreKey<PendingRequestsResponse>(
             "api/relationships/requests/pending",
             kind = StoreKind.PEOPLE,
-            topics = setOf(StoreTopics.PROFILE_ME),
+            topics = setOf(StoreTopics.PROFILE_ME, StoreTopics.CONNECTIONS),
         )
     val sentConnections =
         StoreKey<SentRequestsResponse>(
             "api/relationships/requests/sent",
             kind = StoreKind.PEOPLE,
-            topics = setOf(StoreTopics.PROFILE_ME),
+            topics = setOf(StoreTopics.PROFILE_ME, StoreTopics.CONNECTIONS),
         )
     val blockedConnections =
         StoreKey<BlockedRelationshipsResponse>(
             "api/relationships/blocked",
             kind = StoreKind.PEOPLE,
-            topics = setOf(StoreTopics.PROFILE_ME),
+            topics = setOf(StoreTopics.PROFILE_ME, StoreTopics.CONNECTIONS),
         )
 
     /** Private bookmarks use the account-scoped phone copy so saved-place Today can open offline. */
@@ -267,6 +272,28 @@ object StoreKeys {
     fun post(postId: String) =
         StoreKey<PostDetailResponse>("api/posts/$postId", kind = StoreKind.POST, topics = setOf("post:$postId", StoreTopics.POSTS))
 
+    /** Message history is memory only: no Moshi type means these keys can never be saved. */
+    fun roomMessages(
+        roomId: String,
+        limit: Int,
+    ) = StoreKey<ChatMessagesResponse>(
+        "api/chat/rooms/$roomId/messages",
+        mapOf("limit" to limit.toString()),
+        kind = StoreKind.CONVERSATION,
+        topics = setOf("chat:$roomId", StoreTopics.CHATS),
+    )
+
+    fun conversationMessages(
+        otherId: String,
+        topicId: String?,
+        limit: Int,
+    ) = StoreKey<ChatMessagesResponse>(
+        "api/chat/conversations/$otherId/messages",
+        mapOf("limit" to limit.toString(), "topicId" to topicId),
+        kind = StoreKind.CONVERSATION,
+        topics = setOf("chat:*", StoreTopics.CHATS),
+    )
+
     /**
      * The Messages list (contract §4 "Messages list"): names, last-message previews and unread counts, fresh for 30
      * seconds, shared by the Messages tab and its badge. Message history never enters the store (founder decision 7).
@@ -276,7 +303,7 @@ object StoreKeys {
             "api/chat/unified-conversations",
             mapOf("limit" to "100"),
             kind = StoreKind.MESSAGES_LIST,
-            topics = setOf(StoreTopics.CHATS),
+            topics = setOf(StoreTopics.CHATS, StoreTopics.CHAT_LIST),
             type = UnifiedConversationsResponse::class.java,
         )
 
@@ -319,33 +346,6 @@ object StoreKeys {
             kind = StoreKind.NOTIFICATIONS,
             topics = setOf(StoreTopics.NOTIFICATIONS),
         )
-
-    /**
-     * The Hub (the Place tab without a home): its overview, kind Homes (fresh 2 minutes), in memory only: the reply
-     * carries bill status items and recent notifications, which are never saved on the phone. A name saved, a home, a
-     * notification, a chat or Today changing marks it.
-     */
-    val hubOverview =
-        StoreKey<HubResponse>(
-            "api/hub",
-            kind = StoreKind.HOMES,
-            topics = setOf(StoreTopics.HOMES, StoreTopics.NOTIFICATIONS, StoreTopics.CHATS, StoreTopics.TODAY, StoreTopics.PROFILE_ME),
-        )
-
-    /** The Hub's Today card (kind Today: fresh 10 minutes; a reply that says it failed keeps the last copy). */
-    val hubToday = StoreKey<HubTodayResponse>("api/hub/today", kind = StoreKind.TODAY, topics = setOf(StoreTopics.TODAY))
-
-    /** The Hub's Discover rail for one filter tab (kind Nearby: fresh 2 minutes). */
-    fun hubDiscovery(filter: String) =
-        StoreKey<HubDiscoveryResponse>(
-            "api/hub/discovery",
-            mapOf("filter" to filter, "limit" to HUB_DISCOVERY_LIMIT.toString()),
-            kind = StoreKind.NEARBY,
-            topics = setOf(StoreTopics.HOMES),
-        )
-
-    /** How many Discover cards the Hub asks for. */
-    const val HUB_DISCOVERY_LIMIT = 10
 
     /** The first page of one notifications list (a zone's context, all or unread); later pages are never stored. */
     fun notificationsFirstPage(

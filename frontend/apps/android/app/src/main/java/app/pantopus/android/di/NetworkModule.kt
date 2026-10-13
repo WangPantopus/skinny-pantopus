@@ -56,7 +56,6 @@ import app.pantopus.android.data.api.services.HomeTasksApi
 import app.pantopus.android.data.api.services.HomeVerificationApi
 import app.pantopus.android.data.api.services.HomesApi
 import app.pantopus.android.data.api.services.HubApi
-import app.pantopus.android.data.api.services.HubExtrasApi
 import app.pantopus.android.data.api.services.IdentityCenterApi
 import app.pantopus.android.data.api.services.ListingOffersApi
 import app.pantopus.android.data.api.services.ListingsMutationApi
@@ -361,9 +360,6 @@ object NetworkModule {
 
     @Provides @Singleton
     fun provideHubApi(retrofit: Retrofit): HubApi = retrofit.create(HubApi::class.java)
-
-    @Provides @Singleton
-    fun provideHubExtrasApi(retrofit: Retrofit): HubExtrasApi = retrofit.create(HubExtrasApi::class.java)
 
     @Provides @Singleton
     fun provideNotificationPreferencesApi(retrofit: Retrofit): NotificationPreferencesApi =

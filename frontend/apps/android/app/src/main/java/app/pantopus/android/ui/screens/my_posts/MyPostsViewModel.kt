@@ -119,6 +119,12 @@ class MyPostsViewModel
         /** Own deletes here: a tail recheck that started before one would bring its row back, so it is dropped. */
         private var deletes = 0
 
+        /**
+         * A return or change while pages were loading (a post deleted or archived on its page): read again once they
+         * settle. A tail recheck that started before it is dropped, like one that started before an own delete.
+         */
+        private var readPending = false
+
         private var openPostHandler: (MyPostDto) -> Unit = {}
         private var composeHandler: () -> Unit = {}
         private var editPostHandler: (MyPostDto) -> Unit = {}
@@ -236,7 +242,10 @@ class MyPostsViewModel
         val refreshNotice: StateFlow<RefreshNotice?> = _refreshNotice.asStateFlow()
 
         fun load() {
-            if (loadingMore) return
+            if (loadingMore) {
+                readPending = true
+                return
+            }
             reload(force = false)
         }
 
@@ -267,6 +276,7 @@ class MyPostsViewModel
                 val appended = fetchNextPage(generation) is NetworkResult.Success
                 if (generation != fetchGeneration) return@launch
                 loadingMore = false
+                runPendingRead()
                 // A filter applied while this page was in flight still needs the rest.
                 if (appended) pageThroughIfNeeded()
             }
@@ -274,6 +284,8 @@ class MyPostsViewModel
 
         private fun reload(force: Boolean) {
             val generation = ++fetchGeneration
+            // This read starts after the change that queued one, so it covers it.
+            readPending = false
             // No paging off the old cursor while the list is being replaced.
             loadingMore = true
             val userId = currentUserId()
@@ -308,7 +320,7 @@ class MyPostsViewModel
                         val retained = replaceRefreshedHead(result.data)
                         loadedAtLeastOnce = true
                         applyState()
-                        if (retained > 0) recheckRetainedTail(result.data, retained, generation)
+                        if (retained > 0 && !readPending) recheckRetainedTail(result.data, retained, generation)
                     }
                     is NetworkResult.Failure -> {
                         if (result.error is NetworkError.Forbidden ||
@@ -327,6 +339,7 @@ class MyPostsViewModel
                         }
                     }
                 }
+                runPendingRead()
             }
         }
 
@@ -354,7 +367,8 @@ class MyPostsViewModel
         /**
          * The rows kept below a bounded refresh are read again page by page from the refreshed range, so a post deleted,
          * archived or restored elsewhere since they loaded doesn't keep its old row. They stay on screen until the pages
-         * land; a failed page, or a delete here meanwhile, keeps them for the next refresh.
+         * land; a failed page, or a delete here meanwhile, keeps them for the next refresh. A read queued meanwhile
+         * ([readPending]) reads them again instead.
          */
         private fun recheckRetainedTail(
             head: MyPostsResponse,
@@ -384,11 +398,12 @@ class MyPostsViewModel
                 }
                 if (generation != fetchGeneration) return@launch
                 loadingMore = false
-                if (complete && deletesBefore == deletes) {
+                if (complete && deletesBefore == deletes && !readPending) {
                     posts = (head.posts + tail).distinctBy { it.id }
                     nextPage = next
                     applyState()
                 }
+                runPendingRead()
                 pageThroughIfNeeded()
             }
         }
@@ -432,7 +447,13 @@ class MyPostsViewModel
                 if (failed != null && awaitingPages) {
                     _state.value = ListOfRowsUiState.Error(failed.error.displayMessage("Couldn't load the list."))
                 }
+                runPendingRead()
             }
+        }
+
+        /** The read [load] queued while pages were loading runs once none is. */
+        private fun runPendingRead() {
+            if (readPending && !loadingMore) reload(force = false)
         }
 
         private fun currentUserId(): String? = (authRepo.state.value as? AuthRepository.State.SignedIn)?.user?.id
