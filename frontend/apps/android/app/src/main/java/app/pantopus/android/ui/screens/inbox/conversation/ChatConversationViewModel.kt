@@ -364,10 +364,10 @@ class ChatConversationViewModel
          * conversation metadata newest-updated first — adopt the latest id
          * so the next send appends to it instead of forking a new thread.
          *
-         * TODO(ai-history): the backend keeps each transcript server-side
-         * (`AIConversation.messages`) but the list returns metadata only and
-         * there is no per-conversation messages endpoint (see the
-         * conversations routes in `backend/routes/ai.js`), so the
+         * TODO(ai-history): the backend persists no AI message bodies
+         * (`AIConversation` carries only metadata + the OpenAI
+         * `response_id`; there is no per-conversation messages endpoint —
+         * see `backend/routes/ai.js:358` + `agentService.js:1003`), so the
          * visible transcript can't be restored yet. When a messages
          * endpoint lands, seed [messages] here via [localMessage]
          * (role → user/assistant rows) before the first send.
