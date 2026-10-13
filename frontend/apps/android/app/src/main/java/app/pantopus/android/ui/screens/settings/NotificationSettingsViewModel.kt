@@ -1,4 +1,4 @@
-@file:Suppress("PackageNaming")
+@file:Suppress("PackageNaming", "TooManyFunctions")
 
 package app.pantopus.android.ui.screens.settings
 
