@@ -26,6 +26,7 @@ struct PlanPinCard: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("planPinCard")
     }
 
@@ -52,7 +53,12 @@ struct PlanPinCard: View {
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .fixedSize(horizontal: false, vertical: true)
                 PlanHostRow(host: card.host, kind: card.kind)
-                PlanSpotsBlock(card: card, trailing: PlanCardLines.approval(card))
+                // Someone already in (or hosting) doesn't need to hear how to get in.
+                PlanSpotsBlock(
+                    card: card,
+                    trailing: card.viewer?.isIn == true || card.viewer?.isHost == true
+                        ? nil : PlanCardLines.approval(card)
+                )
                 buttons(card)
                     .padding(.top, 2)
             }
@@ -163,13 +169,19 @@ enum PlanCardLines {
         return parts.joined(separator: " · ")
     }
 
-    /// "Sam approves each person" or "Lets in anyone nearby automatically".
+    /// How people get in: "Sam approves each person", or the rule that lets
+    /// this viewer (or, for the host, anyone) in right away, in the words of
+    /// boards H4 and H5. Playdates: "Maya approves each family".
     static func approval(_ card: PlanCardDTO) -> String {
         let first = firstName(card.host.displayName)
-        if card.howPeopleGetIn == "automatic" {
-            return card.kind == .playdate ? "\(first) approves each family" : "You can get in right away"
+        if card.kind == .playdate { return "\(first) approves each family" }
+        let rule = card.viewer?.isHost == true ? card.autoRules?.first : card.viewer?.autoRule
+        switch rule {
+        case .anyoneNearby: return "Anyone nearby gets in right away"
+        case .verified: return "Verified neighbors get in right away"
+        case .hostedBefore: return "People \(first) has hosted get in right away"
+        case nil: return "\(first) approves each person"
         }
-        return card.kind == .playdate ? "\(first) approves each family" : "\(first) approves each person"
     }
 
     /// "Sam usually answers within an hour", when the server knows.

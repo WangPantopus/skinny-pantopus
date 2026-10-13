@@ -219,7 +219,8 @@ struct PlansListSheet: View {
         var order: [String] = []
         var grouped: [String: [PlanCardDTO]] = [:]
         for card in viewModel.visibleCards where !mine.contains(card.id) {
-            let title = card.state == .live ? "Today" : card.startsAtDate.map {
+            // A playdate's time is hidden until you're in; its day (`starts_on`) still heads it.
+            let title = card.state == .live ? "Today" : (card.startsAtDate ?? card.startsOnDate).map {
                 PlanFormat.dayHeading($0, calendar: PlanFormat.calendar(for: card.timezone))
             } ?? "This week"
             if grouped[title] == nil { order.append(title) }

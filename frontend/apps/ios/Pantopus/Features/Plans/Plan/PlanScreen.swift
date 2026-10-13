@@ -98,6 +98,7 @@ struct PlanScreen: View {
             PlanChatScreen(route: route)
         }
         .overlay(alignment: .bottom) { toastView }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("planScreen")
     }
 
@@ -138,7 +139,8 @@ struct PlanScreen: View {
                         isHosting: viewModel.mode == .hosting,
                         revealToken: viewModel.revealToken
                     )
-                    if viewModel.plan?.place == nil, viewModel.mode != .hosting {
+                    // J1/J2 promise the place; J5/J6 carry no chip (the boards).
+                    if viewModel.plan?.place == nil, viewModel.mode == .browsing {
                         PlanScopeChip(text: card.kind == .playdate
                             ? "Exact place and time shared when you're in"
                             : "Exact place shared when you're in")

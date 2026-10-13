@@ -25,6 +25,8 @@ struct PlanAskSheet: View {
     @State private var isSending = false
     @State private var failed: String?
     @FocusState private var noteFocused: Bool
+    /// The content's height, so the sheet opens just tall enough (J3, J4).
+    @State private var contentHeight: CGFloat = 0
 
     private static let noteLimit = 280
 
@@ -52,12 +54,16 @@ struct PlanAskSheet: View {
             .padding(.horizontal, Spacing.s4)
             .padding(.top, Spacing.s5)
             .padding(.bottom, Spacing.s6)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
         }
         .scrollDismissesKeyboard(.interactively)
-        .presentationDetents(card.kind == .playdate ? [.large] : [.medium, .large])
+        // Just tall enough for everything, Send request included; taller than
+        // the screen (large text) opens fully and scrolls.
+        .presentationDetents(contentHeight > 0 ? [.height(contentHeight), .large] : [.large])
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(26)
         .onAppear(perform: prefill)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("planAskSheet")
     }
 
@@ -95,7 +101,10 @@ struct PlanAskSheet: View {
         guard let start = card.startsAtDate else {
             return "\(short) · \(PlanFormat.dayPartPhrase(card.dayPart, day: card.startsOnDate, calendar: calendar))"
         }
-        let time = PlanFormat.pinTag(state: .upcoming, isFull: false, startsAt: start, dayPart: card.dayPart, calendar: calendar)
+        let time = PlanFormat.rowWhen(state: .upcoming, start: start, end: nil, calendar: calendar) ?? PlanFormat.time(
+            start,
+            calendar: calendar
+        )
         return "\(short) · \(time)"
     }
 

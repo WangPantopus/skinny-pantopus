@@ -78,12 +78,13 @@ struct PlanFooter: View {
             }
             .planButton(.primary)
             .accessibilityIdentifier("planAsk")
-            caption(askCaption(card))
+            if let text = askCaption(card) { caption(text) }
         } else if let reason = viewer?.cannotAskReason {
             if reason == .fullUseWaitlist {
                 Button { onAsk(false) } label: { PlanButtonLabel(title: "Join the waitlist", kind: .primary) }
                     .planButton(.primary)
                     .accessibilityIdentifier("planAsk")
+                caption("Full for now. If a spot opens, you'll hear right away.")
             } else {
                 Text(PlanCannotAskCopy.sentence(reason, card: card))
                     .planFont(.small)
@@ -107,11 +108,13 @@ struct PlanFooter: View {
             .fixedSize(horizontal: false, vertical: true)
     }
 
-    /// "Sam usually answers within an hour" when the server says; otherwise how people get in.
-    private func askCaption(_ card: PlanCardDTO) -> String {
+    /// "Sam usually answers within an hour" when the server says. Otherwise a
+    /// playdate says "Maya approves each family" (J2); other plans already say
+    /// how people get in above the footer.
+    private func askCaption(_ card: PlanCardDTO) -> String? {
         if card.howPeopleGetIn == "automatic", card.kind != .playdate { return "You'll be in right away" }
         if let within = PlanCardLines.answersWithin(card.host) { return String(within.dropLast()) }
-        return PlanCardLines.approval(card)
+        return card.kind == .playdate ? PlanCardLines.approval(card) : nil
     }
 
     /// "Starts in 7 hours. The waitlist closes 30 minutes before it ends."

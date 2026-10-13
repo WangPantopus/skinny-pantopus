@@ -74,6 +74,7 @@ struct PlanChatScreen: View {
                 closedNote: route.closedNote
             ) { dismiss() })
             .toolbar(.hidden, for: .navigationBar)
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("planChat")
     }
 }

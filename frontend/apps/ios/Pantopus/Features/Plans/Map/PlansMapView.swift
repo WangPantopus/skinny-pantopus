@@ -34,10 +34,14 @@ struct PlansMapView: View {
             let sheetHeight = max(140, height * viewModel.sheetStop.fraction - dragOffset) + bottomInset
             ZStack(alignment: .top) {
                 mapLayer
-                PlansMapTopBar(
-                    viewModel: viewModel,
-                    showsPlaydates: flags.playdates
-                ) { showsAreaPicker = true }
+                // The list pulled all the way up covers the map: its chrome steps aside (F2).
+                if viewModel.sheetStop != .full {
+                    PlansMapTopBar(
+                        viewModel: viewModel,
+                        showsPlaydates: flags.playdates
+                    ) { showsAreaPicker = true }
+                        .transition(.opacity)
+                }
                 if showsHostButton {
                     PlansHostButton { actions.host(nil) }
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
@@ -59,6 +63,7 @@ struct PlansMapView: View {
                 .presentationDetents([.medium, .large])
         }
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("plansMap")
     }
 
@@ -251,6 +256,7 @@ struct PlansMapView: View {
             // scrolls and only the handle moves the sheet.
             .gesture(sheetDrag(screenHeight: screenHeight), including: viewModel.sheetStop == .peek ? .all : .subviews)
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("plansSheet")
     }
 
