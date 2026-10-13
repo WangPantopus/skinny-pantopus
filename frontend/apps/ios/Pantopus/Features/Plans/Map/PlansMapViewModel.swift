@@ -35,39 +35,6 @@ enum PlansCenterSource: String {
     case gps, home
 }
 
-/// A group of pins too close to tell apart at this zoom.
-struct PlansCluster: Hashable, Identifiable {
-    let id: String
-    let latitude: Double
-    let longitude: Double
-    let count: Int
-    let kinds: [PlanKind]
-    let minLatitude: Double
-    let maxLatitude: Double
-    let minLongitude: Double
-    let maxLongitude: Double
-}
-
-/// One thing on the map.
-enum PlansMarker: Hashable, Identifiable {
-    case pin(PlanPinDTO)
-    case cluster(PlansCluster)
-
-    var id: String {
-        switch self {
-        case let .pin(pin): "pin.\(pin.id)"
-        case let .cluster(cluster): "cluster.\(cluster.id)"
-        }
-    }
-
-    var coordinate: CLLocationCoordinate2D {
-        switch self {
-        case let .pin(pin): CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude)
-        case let .cluster(cluster): CLLocationCoordinate2D(latitude: cluster.latitude, longitude: cluster.longitude)
-        }
-    }
-}
-
 @Observable
 @MainActor
 final class PlansMapViewModel {
@@ -314,25 +281,13 @@ final class PlansMapViewModel {
 
     // MARK: - What shows
 
-    /// Pins after the type filter, clustered at this zoom.
+    /// Pins after the type filter, clustered at this zoom (board P1).
     var markers: [PlansMarker] {
-        let visible = pins.filter { kindFilter == nil || $0.kind == kindFilter }
-        let cell = span / 7
-        var buckets: [String: [PlanPinDTO]] = [:]
-        var order: [String] = []
-        for pin in visible {
-            // The selected pin, and pins you host or are in, never hide in a cluster.
-            let key = pin.id == selectedId || pin.isHosting || pin.isIn
-                ? "solo.\(pin.id)"
-                : "\(Int(floor(pin.latitude / cell))):\(Int(floor(pin.longitude / cell)))"
-            if buckets[key] == nil { order.append(key) }
-            buckets[key, default: []].append(pin)
-        }
-        return order.compactMap { key in
-            guard let group = buckets[key] else { return nil }
-            if group.count == 1 || span < 0.004 { return group.first.map(PlansMarker.pin) }
-            return .cluster(Self.cluster(key, group))
-        }
+        PlansClustering.markers(
+            pins.filter { kindFilter == nil || $0.kind == kindFilter },
+            span: span,
+            selectedId: selectedId
+        )
     }
 
     /// The list after the type filter.
@@ -401,25 +356,5 @@ final class PlansMapViewModel {
         return homes.lazy.compactMap(\.location).first.map {
             UserCoordinate(latitude: $0.latitude, longitude: $0.longitude, accuracyMeters: 50)
         }
-    }
-
-    private static func cluster(_ key: String, _ group: [PlanPinDTO]) -> PlansCluster {
-        let lats = group.map(\.latitude)
-        let lons = group.map(\.longitude)
-        var kinds: [PlanKind] = []
-        for pin in group where !kinds.contains(pin.kind) {
-            kinds.append(pin.kind)
-        }
-        return PlansCluster(
-            id: key,
-            latitude: lats.reduce(0, +) / Double(lats.count),
-            longitude: lons.reduce(0, +) / Double(lons.count),
-            count: group.count,
-            kinds: kinds,
-            minLatitude: lats.min() ?? 0,
-            maxLatitude: lats.max() ?? 0,
-            minLongitude: lons.min() ?? 0,
-            maxLongitude: lons.max() ?? 0
-        )
     }
 }

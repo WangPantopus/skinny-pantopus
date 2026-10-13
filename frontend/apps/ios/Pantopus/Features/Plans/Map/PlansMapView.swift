@@ -77,7 +77,7 @@ struct PlansMapView: View {
             }
             ForEach(viewModel.markers) { marker in
                 switch marker {
-                case let .pin(pin):
+                case let .pin(pin, fan):
                     Annotation("", coordinate: marker.coordinate, anchor: .center) {
                         Button { select(pin) } label: {
                             PlanPinView(look: look(for: pin))
@@ -86,6 +86,9 @@ struct PlansMapView: View {
                         .accessibilityLabel(PlansPinSpeech.label(for: pin, card: card(for: pin.id), center: viewModel.center))
                         .accessibilityHint("Opens the plan's card")
                         .accessibilityIdentifier("planPin.\(pin.id)")
+                        // Plans sharing one point sit side by side, the point between them.
+                        .padding(.leading, max(fan, 0) * 2 * PlansClustering.fanStep)
+                        .padding(.trailing, max(-fan, 0) * 2 * PlansClustering.fanStep)
                     }
                     .annotationTitles(.hidden)
                 case let .cluster(cluster):
@@ -177,12 +180,16 @@ struct PlansMapView: View {
     }
 
     private func zoom(to cluster: PlansCluster) {
-        let latitudeDelta = max((cluster.maxLatitude - cluster.minLatitude) * 2.2, 0.004)
-        let longitudeDelta = max((cluster.maxLongitude - cluster.minLongitude) * 2.2, 0.004)
+        // More plans on one point than fit side by side: the list shows them.
+        if cluster.isOnePoint, cluster.count > PlansClustering.fanLimit {
+            setStop(.full)
+            return
+        }
+        let span = PlansClustering.span(toOpen: cluster)
         withAnimation(reduceMotion ? nil : .easeOut(duration: 0.35)) {
             camera = .region(MKCoordinateRegion(
                 center: CLLocationCoordinate2D(latitude: cluster.latitude, longitude: cluster.longitude),
-                span: MKCoordinateSpan(latitudeDelta: latitudeDelta, longitudeDelta: longitudeDelta)
+                span: MKCoordinateSpan(latitudeDelta: span, longitudeDelta: span)
             ))
         }
     }
