@@ -2,6 +2,7 @@ package app.pantopus.android.data.store
 
 import app.pantopus.android.data.api.models.businesses.MyBusinessesResponse
 import app.pantopus.android.data.api.models.chats.UnifiedConversationsResponse
+import app.pantopus.android.data.api.models.feed.FeedPreferencesResponse
 import app.pantopus.android.data.api.models.feed.FeedResponse
 import app.pantopus.android.data.api.models.homedashboard.HomeDashboardResponse
 import app.pantopus.android.data.api.models.homes.MyHomesResponse
@@ -182,6 +183,14 @@ object StoreKeys {
             kind = StoreKind.NEARBY,
             topics = setOf(StoreTopics.POSTS),
             type = FeedResponse::class.java,
+        )
+
+    val feedPreferences =
+        StoreKey<FeedPreferencesResponse>(
+            "api/posts/feed-preferences",
+            kind = StoreKind.YOU,
+            topics = setOf(StoreTopics.PROFILE_ME),
+            type = FeedPreferencesResponse::class.java,
         )
 
     /** One post and its comments (contract §4 "A post": fresh 1 minute, never saved on the phone). */
