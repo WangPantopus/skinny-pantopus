@@ -10,6 +10,7 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.hub.HubRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -34,6 +35,15 @@ class TodayDetailViewModel
         savedStateHandle: SavedStateHandle = SavedStateHandle(),
     ) : ViewModel() {
         private var fixture: TodayDetailContent? = null
+        private var readJob: Job? = null
+        private var readGeneration = 0
+
+        /** Briefing summaries and signals can contain private household details. */
+        fun suspendContent() {
+            readJob?.cancel()
+            readGeneration++
+            if (fixture == null) _state.value = TodayDetailUiState.Loading
+        }
 
         /** `DailyBriefingDelivery.id` carried by the push notification. */
         private val briefingDeliveryId: String? =
@@ -55,6 +65,8 @@ class TodayDetailViewModel
         val headerTitle: StateFlow<String> = _headerTitle.asStateFlow()
 
         fun load() {
+            readJob?.cancel()
+            val generation = ++readGeneration
             val seed = fixture
             if (seed != null) {
                 _state.value =
@@ -62,39 +74,43 @@ class TodayDetailViewModel
                 return
             }
             _state.value = TodayDetailUiState.Loading
-            viewModelScope.launch {
-                // Resolve the stored briefing first when the push carried one,
-                // so a briefing that outlives the live Today window still opens.
-                val briefing = fetchBriefing()
-                (briefing?.briefingKind ?: requestedKind)?.let { _headerTitle.value = titleForKind(it) }
-                when (val result = repository.todayDetail()) {
-                    is NetworkResult.Success -> {
-                        val payload = result.data
-                        val hasStoredSummary = !briefing?.summaryText.isNullOrEmpty()
-                        _state.value =
-                            if (!payload.isRenderable && !hasStoredSummary) {
-                                TodayDetailUiState.Error("Today's briefing isn't available right now.")
-                            } else {
-                                val content = TodayDetailMapper.fromPayload(payload, briefing)
-                                if (content.isAlert) {
-                                    TodayDetailUiState.Alert(content)
+            readJob =
+                viewModelScope.launch {
+                    // Resolve the stored briefing first when the push carried one,
+                    // so a briefing that outlives the live Today window still opens.
+                    val briefing = fetchBriefing()
+                    if (generation != readGeneration) return@launch
+                    (briefing?.briefingKind ?: requestedKind)?.let { _headerTitle.value = titleForKind(it) }
+                    val result = repository.todayDetail()
+                    if (generation != readGeneration) return@launch
+                    when (result) {
+                        is NetworkResult.Success -> {
+                            val payload = result.data
+                            val hasStoredSummary = !briefing?.summaryText.isNullOrEmpty()
+                            _state.value =
+                                if (!payload.isRenderable && !hasStoredSummary) {
+                                    TodayDetailUiState.Error("Today's briefing isn't available right now.")
                                 } else {
-                                    TodayDetailUiState.Populated(content)
+                                    val content = TodayDetailMapper.fromPayload(payload, briefing)
+                                    if (content.isAlert) {
+                                        TodayDetailUiState.Alert(content)
+                                    } else {
+                                        TodayDetailUiState.Populated(content)
+                                    }
                                 }
-                            }
-                    }
-                    is NetworkResult.Failure -> {
-                        // A stored briefing is enough to render on its own — RN
-                        // falls back the same way.
-                        _state.value =
-                            if (!briefing?.summaryText.isNullOrEmpty()) {
-                                TodayDetailUiState.Populated(TodayDetailMapper.fromPayload(null, briefing))
-                            } else {
-                                TodayDetailUiState.Error(result.error.displayMessage("Couldn't load Today."))
-                            }
+                        }
+                        is NetworkResult.Failure -> {
+                            // A stored briefing is enough to render on its own — RN
+                            // falls back the same way.
+                            _state.value =
+                                if (!briefing?.summaryText.isNullOrEmpty()) {
+                                    TodayDetailUiState.Populated(TodayDetailMapper.fromPayload(null, briefing))
+                                } else {
+                                    TodayDetailUiState.Error(result.error.displayMessage("Couldn't load Today."))
+                                }
+                        }
                     }
                 }
-            }
         }
 
         /**

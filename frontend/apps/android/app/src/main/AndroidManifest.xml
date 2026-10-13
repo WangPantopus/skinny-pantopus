@@ -113,6 +113,11 @@
             android:name=".push.ReminderActionReceiver"
             android:exported="false" />
 
+        <!-- Nearby Plans: the Accept / Decline / On my way / Still coming / Can't make it notification buttons. -->
+        <receiver
+            android:name=".push.PlanActionReceiver"
+            android:exported="false" />
+
         <!-- Google Maps API key -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"

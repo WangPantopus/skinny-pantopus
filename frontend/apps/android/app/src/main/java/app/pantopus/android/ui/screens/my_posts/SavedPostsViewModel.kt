@@ -64,6 +64,9 @@ class SavedPostsViewModel
         /** Bumped by every first-page load so a page that lands later can't append to its replacement. */
         private var generation = 0
         private val removing = mutableSetOf<String>()
+
+        /** Confirmed Removes here: a tail recheck that started before one would bring its row back, so it is dropped. */
+        private var removals = 0
         private var openPostHandler: (MyPostDto) -> Unit = {}
 
         fun bindCallbacks(onOpenPost: (MyPostDto) -> Unit) {
@@ -98,9 +101,10 @@ class SavedPostsViewModel
                 _refreshNotice.value = if (copy.showsRefreshFailure(StoreKind.POST)) RefreshNotice(copy.fetchedAt, ::refresh) else null
                 when (result) {
                     is NetworkResult.Success -> {
-                        replaceRefreshedHead(result.data)
+                        val retained = replaceRefreshedHead(result.data)
                         loadedOnce = true
                         applyState()
+                        if (retained > 0) recheckRetainedTail(result.data.posts, retained, gen)
                     }
                     is NetworkResult.Failure -> {
                         if (result.error is NetworkError.Forbidden ||
@@ -121,8 +125,11 @@ class SavedPostsViewModel
             }
         }
 
-        /** Keep later pages below the newest bookmark returned, then resume from the server's current save offset. */
-        private fun replaceRefreshedHead(response: SavedPostsResponse) {
+        /**
+         * Keep later pages below the newest bookmark returned, then resume from the server's current save offset. Returns
+         * how many older rows were kept; [recheckRetainedTail] reads them again.
+         */
+        private fun replaceRefreshedHead(response: SavedPostsResponse): Int {
             val boundary = response.posts.lastOrNull()?.savedAt?.let { MyPostsViewModel.parseInstant(it) }
             val refreshedIds = response.posts.mapTo(HashSet()) { it.id }
             val older =
@@ -135,8 +142,49 @@ class SavedPostsViewModel
                 }
             posts = (response.posts + older).distinctBy { it.id }
             // Offsets count raw saves, including posts hidden by the visibility check. A visible-row delta cannot
-            // adjust them safely; paging rechecks the retained tail and skips duplicates until it reaches new rows.
+            // adjust them safely; the recheck pages on from the server's offset after the refreshed range.
             nextOffset = nextOffsetAfter(response)
+            return older.size
+        }
+
+        /**
+         * The rows kept below a bounded refresh are read again from the server's offset after the refreshed range, so a
+         * bookmark removed elsewhere (the post's own menu, another device) doesn't keep its row. They stay on screen until
+         * the pages land; a failed page, or a Remove here meanwhile, keeps them for the next refresh.
+         */
+        private fun recheckRetainedTail(
+            head: List<MyPostDto>,
+            retained: Int,
+            gen: Int,
+        ) {
+            val start = nextOffset ?: return
+            val removalsBefore = removals
+            loadingMore = true
+            viewModelScope.launch {
+                val tail = mutableListOf<MyPostDto>()
+                var next: Int? = start
+                var complete = true
+                while (tail.size < retained) {
+                    val offset = next ?: break
+                    when (val page = postsRepo.savedPosts(limit = PAGE_SIZE, offset = offset)) {
+                        is NetworkResult.Success -> {
+                            tail += page.data.posts
+                            next = nextOffsetAfter(page.data)
+                        }
+                        is NetworkResult.Failure -> {
+                            complete = false
+                            next = null
+                        }
+                    }
+                }
+                if (gen != generation) return@launch
+                loadingMore = false
+                if (complete && removalsBefore == removals) {
+                    posts = (head + tail).distinctBy { it.id }
+                    nextOffset = next
+                }
+                applyState()
+            }
         }
 
         /** Footer reached: append the next page of saves. A failed page keeps the rows and offers Try again. */
@@ -174,6 +222,7 @@ class SavedPostsViewModel
                 removing.remove(postId)
                 when {
                     result is NetworkResult.Success && !result.data.saved -> {
+                        removals++
                         // A Pulse card still showing it saved would re-save it on its next tap: lists refetch.
                         postsRefresh.notifyPostsDidChange()
                         if (posts.any { it.id == postId }) {

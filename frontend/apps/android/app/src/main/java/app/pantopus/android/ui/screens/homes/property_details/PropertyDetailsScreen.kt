@@ -85,7 +85,7 @@ fun PropertyDetailsScreen(
     val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
 
-    HomeCopyLifecycle(viewModel::load, viewModel::suspendContent)
+    HomeCopyLifecycle(viewModel::load, viewModel::suspendContent, observeStoreChanges = true)
 
     HomeOfflineContent {
         PropertyDetailsScreenContent(

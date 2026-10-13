@@ -34,9 +34,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.R
 import app.pantopus.android.data.location.UserCoordinate
+import app.pantopus.android.ui.components.RefreshFailedLine
+import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.screens.explore.ExploreCluster
 import app.pantopus.android.ui.screens.explore.ExploreClusterDot
@@ -82,10 +85,15 @@ fun FeedMapSection(
     viewModel: FeedMapViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
     val region by viewModel.region.collectAsStateWithLifecycle()
     val viewportDirty by viewModel.viewportDirty.collectAsStateWithLifecycle()
 
-    LaunchedEffect(query) { viewModel.activate(query) }
+    LifecycleResumeEffect(query) {
+        viewModel.activate(query)
+        onPauseOrDispose { viewModel.suspendContent() }
+    }
+    RefreshOnStoreChange { viewModel.activate(query) }
 
     val cameraState =
         rememberCameraPositionState {
@@ -167,13 +175,14 @@ fun FeedMapSection(
                     .align(Alignment.BottomEnd)
                     .padding(end = 14.dp, bottom = 96.dp),
         )
-        Box(
+        Column(
             modifier =
                 Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .padding(horizontal = Spacing.s4, vertical = Spacing.s4),
         ) {
+            refreshNotice?.let { RefreshFailedLine(it) }
             when (val current = state) {
                 FeedMapUiState.Loading -> LoadingCard()
                 is FeedMapUiState.Error -> ErrorCard(current.message, viewModel::refresh)

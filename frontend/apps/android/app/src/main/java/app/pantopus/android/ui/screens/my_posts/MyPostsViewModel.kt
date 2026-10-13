@@ -116,6 +116,9 @@ class MyPostsViewModel
         /** Set by [applyState] while the current view can't be shown from the rows loaded so far. */
         private var awaitingPages = false
 
+        /** Own deletes here: a tail recheck that started before one would bring its row back, so it is dropped. */
+        private var deletes = 0
+
         private var openPostHandler: (MyPostDto) -> Unit = {}
         private var composeHandler: () -> Unit = {}
         private var editPostHandler: (MyPostDto) -> Unit = {}
@@ -302,9 +305,10 @@ class MyPostsViewModel
                 loadingMore = false
                 when (result) {
                     is NetworkResult.Success -> {
-                        replaceRefreshedHead(result.data)
+                        val retained = replaceRefreshedHead(result.data)
                         loadedAtLeastOnce = true
                         applyState()
+                        if (retained > 0) recheckRetainedTail(result.data, retained, generation)
                     }
                     is NetworkResult.Failure -> {
                         if (result.error is NetworkError.Forbidden ||
@@ -326,8 +330,11 @@ class MyPostsViewModel
             }
         }
 
-        /** A bounded refresh replaces its covered range without dropping older pages the reader already opened. */
-        private fun replaceRefreshedHead(response: MyPostsResponse) {
+        /**
+         * A bounded refresh replaces its covered range without dropping older pages the reader already opened. Returns how
+         * many older rows were kept; [recheckRetainedTail] reads them again.
+         */
+        private fun replaceRefreshedHead(response: MyPostsResponse): Int {
             val boundary = response.posts.lastOrNull()
             val time = boundary?.createdAt?.let(::parseInstant)
             val older =
@@ -341,6 +348,49 @@ class MyPostsViewModel
                 }
             posts = (response.posts + older).distinctBy { it.id }
             if (older.isEmpty()) nextPage = nextPageAfter(response)
+            return older.size
+        }
+
+        /**
+         * The rows kept below a bounded refresh are read again page by page from the refreshed range, so a post deleted,
+         * archived or restored elsewhere since they loaded doesn't keep its old row. They stay on screen until the pages
+         * land; a failed page, or a delete here meanwhile, keeps them for the next refresh.
+         */
+        private fun recheckRetainedTail(
+            head: MyPostsResponse,
+            retained: Int,
+            generation: Long,
+        ) {
+            val userId = currentUserId() ?: return
+            val start = nextPageAfter(head) ?: return
+            val deletesBefore = deletes
+            loadingMore = true
+            viewModelScope.launch {
+                val tail = mutableListOf<MyPostDto>()
+                var next: FeedCursor? = start
+                var complete = true
+                while (tail.size < retained) {
+                    val cursor = next ?: break
+                    when (val page = postsRepo.userPosts(userId, PAGE_SIZE, cursor.createdAt, cursor.id, includeArchived = true)) {
+                        is NetworkResult.Success -> {
+                            tail += page.data.posts
+                            next = nextPageAfter(page.data)
+                        }
+                        is NetworkResult.Failure -> {
+                            complete = false
+                            next = null
+                        }
+                    }
+                }
+                if (generation != fetchGeneration) return@launch
+                loadingMore = false
+                if (complete && deletesBefore == deletes) {
+                    posts = (head.posts + tail).distinctBy { it.id }
+                    nextPage = next
+                    applyState()
+                }
+                pageThroughIfNeeded()
+            }
         }
 
         /**
@@ -547,6 +597,7 @@ class MyPostsViewModel
             val previousPosts = posts
             val previousOverrides = localArchiveOverrides.toMap()
             posts = posts.filterNot { it.id == target.postId }
+            deletes++
             localArchiveOverrides.remove(target.postId)
             applyState()
             viewModelScope.launch {
