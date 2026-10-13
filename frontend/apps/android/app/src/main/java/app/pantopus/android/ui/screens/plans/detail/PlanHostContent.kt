@@ -253,7 +253,7 @@ private fun GuestRow(
     val title = if (person.partySize > 1) "$name + ${person.partySize - 1}" else name
     val kids =
         person.kidsCount?.let { count ->
-            listOfNotNull("$count ${if (count == 1) "kid" else "kids"}", KidsAgeBand.rangeLabel(person.kidsAgeBands)?.let { "ages $it" })
+            listOfNotNull("$count ${if (count == 1) "kid" else "kids"}", KidsAgeBand.rangeLabel(person.kidsAgeBands))
                 .joinToString(", ")
         }
     val subtitle =
