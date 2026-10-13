@@ -17,6 +17,7 @@ import app.pantopus.android.data.location.LocationProvider
 import app.pantopus.android.data.location.UserCoordinate
 import app.pantopus.android.data.location.ViewingLocationRepository
 import app.pantopus.android.data.postsmap.PostsMapRepository
+import app.pantopus.android.data.store.Stored
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -51,7 +52,7 @@ class ExploreMapViewModelTest {
         LaunchFeatures.overrideForTesting = null
     }
 
-    private fun makeVm(): ExploreMapViewModel = ExploreMapViewModel(mockk(), mockk(), mockk(), mockk(), mockk())
+    private fun makeVm(): ExploreMapViewModel = ExploreMapViewModel(mockk(), mockk(), mockk(), mockk(), mockk(), mockk())
 
     private fun loaded(vm: ExploreMapViewModel): ExploreMapUiState.Loaded = vm.state.value as ExploreMapUiState.Loaded
 
@@ -222,9 +223,13 @@ class ExploreMapViewModelTest {
                 postsMapRepo.markers(any(), any(), any(), any(), any(), any(), any(), any())
             } returns NetworkResult.Success(PostsMapResponse(markers = emptyList()))
 
+            every { postsMapRepo.postsCopy(any(), any(), any(), any(), any(), any()) } returns Stored()
+            coEvery { postsMapRepo.postsStored(any(), any(), any(), any(), any(), any(), any()) } returns
+                Stored(PostsMapResponse(markers = emptyList()), fetchedAt = System.currentTimeMillis())
+
             val viewingLocation: ViewingLocationRepository = mockk()
             coEvery { viewingLocation.current() } returns NetworkResult.Success(ViewingLocationPayload())
-            val vm = ExploreMapViewModel(gigsRepo, listingsRepo, postsMapRepo, location, viewingLocation)
+            val vm = ExploreMapViewModel(gigsRepo, listingsRepo, postsMapRepo, location, viewingLocation, mockk())
             vm.load()
 
             val loaded = vm.state.value as ExploreMapUiState.Loaded
