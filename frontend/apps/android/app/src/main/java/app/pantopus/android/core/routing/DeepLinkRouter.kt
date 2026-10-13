@@ -394,6 +394,17 @@ object DeepLinkRouter {
         signedInUserIdProvider = provider
     }
 
+    /** Nearby Plans' server flag for the signed-in person, bound once from `PlansFeature`. */
+    @Volatile
+    private var plansEnabledProvider: () -> Boolean = { false }
+
+    fun bindPlansEnabledProvider(provider: () -> Boolean) {
+        plansEnabledProvider = provider
+    }
+
+    /** True while Nearby Plans is on for the signed-in person. */
+    fun plansEnabled(): Boolean = plansEnabledProvider()
+
     fun handle(uri: Uri) {
         // Browser OAuth callbacks belong to the in-flight sign-in attempt:
         // `MainActivity.forwardDeepLink` hands them to `OAuthSessionStore`
@@ -539,7 +550,9 @@ object DeepLinkRouter {
                 key.startsWith("booking_") -> setOf(LaunchFeature.PUBLIC_SCHEDULING)
                 else -> LAUNCH_CUT_NOTIFICATION_TYPES[key].orEmpty()
             } + mailboxNotificationFeatures(key)
-        if (!typeFeatures.all(LaunchFeatures::isEnabled)) return false
+        // Nearby Plans' notifications show only while the `plans` flag is on for this person.
+        val plansOff = key.startsWith("plan_") && !plansEnabled()
+        if (plansOff || !typeFeatures.all(LaunchFeatures::isEnabled)) return false
         val path = notificationPath(type, link)?.takeIf { it.isNotBlank() } ?: return true
         val normalized = Paths.normalizeIncoming(path)
         return Paths.isOAuthCallback(normalized) || isLaunchAvailable(resolveString(normalized))
