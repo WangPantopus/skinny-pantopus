@@ -32,6 +32,8 @@ public struct NeighborhoodTabRoot: View {
     @State private var plans = PlansNavigator.shared
     @State private var plansPath: [PlansRoute] = []
     @State private var hostRequest: PlansHostRequest?
+    /// The plan just posted, opened once the composer has gone.
+    @State private var postedPlanId: String?
 
     public init() {}
 
@@ -64,10 +66,10 @@ public struct NeighborhoodTabRoot: View {
         .sheet(item: $presentedSurface) { surface in
             surfaceRoot(surface)
         }
-        .fullScreenCover(item: $hostRequest) { request in
+        .fullScreenCover(item: $hostRequest, onDismiss: openPostedPlan) { request in
             PlanComposerRoot(start: request.start) { posted in
+                postedPlanId = posted
                 hostRequest = nil
-                if let posted { plansPath = [.plan(id: posted, intent: .view)] }
             }
         }
         .onChange(of: plans.pending) { _, _ in consumePlansHandOff() }
@@ -100,6 +102,16 @@ public struct NeighborhoodTabRoot: View {
         }
     }
 
+    /// "See your plan" (H8): pushed after the composer is gone, since a screen
+    /// pushed under a full-screen cover never learns it came on screen.
+    private func openPostedPlan() {
+        if let id = postedPlanId {
+            postedPlanId = nil
+            plansPath = [.plan(id: id, intent: .view)]
+        }
+        consumePlansHandOff()
+    }
+
     /// What the Plans map can open.
     private var plansActions: PlansMapActions {
         PlansMapActions(
@@ -117,7 +129,8 @@ public struct NeighborhoodTabRoot: View {
     private func consumePlansHandOff() {
         guard rootTabs.selected == .nearby, plansFlags.plans else { return }
         presentedSurface = nil
-        if let route = plans.pending {
+        // Not under the composer: it waits until the composer is gone.
+        if let route = plans.pending, hostRequest == nil {
             plans.pending = nil
             plansPath = [route]
         }

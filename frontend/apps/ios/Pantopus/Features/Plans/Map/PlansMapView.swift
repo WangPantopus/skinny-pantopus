@@ -34,7 +34,7 @@ struct PlansMapView: View {
         GeometryReader { geo in
             let height = geo.size.height
             let bottomInset = geo.safeAreaInsets.bottom
-            let sheetHeight = max(140, height * viewModel.sheetStop.fraction - dragOffset) + bottomInset
+            let sheetHeight = max(140, height * viewModel.shownStop.fraction - dragOffset) + bottomInset
             ZStack(alignment: .top) {
                 mapLayer
                 // The list pulled all the way up covers the map: its chrome steps aside (F2).
@@ -219,13 +219,18 @@ struct PlansMapView: View {
         }
     }
 
-    /// About 15 miles across, so plans in the next town show.
+    /// F4 "Show": out far enough that the town with plans, `miles` away in a
+    /// direction we don't know, fits in the map above the list.
     private func widen() {
         guard let center = viewModel.center else { return }
+        let miles = Double(viewModel.nearestElsewhere?.miles ?? 8) + 1
+        let latitudeSpan = miles * 2 / 69 / 0.46
+        let longitudeSpan = miles * 2 / (69 * max(cos(center.latitude * .pi / 180), 0.2))
         withAnimation(reduceMotion ? nil : .easeOut(duration: 0.4)) {
             camera = .region(MKCoordinateRegion(
-                center: CLLocationCoordinate2D(latitude: center.latitude, longitude: center.longitude),
-                span: MKCoordinateSpan(latitudeDelta: 0.32, longitudeDelta: 0.32)
+                // You sit in the middle of the map above the sheet, not the screen's.
+                center: CLLocationCoordinate2D(latitude: center.latitude - latitudeSpan * 0.13, longitude: center.longitude),
+                span: MKCoordinateSpan(latitudeDelta: latitudeSpan, longitudeDelta: longitudeSpan)
             ))
         }
     }
@@ -274,7 +279,7 @@ struct PlansMapView: View {
             )
             // At its lowest stop the whole sheet drags; once open, its list
             // scrolls and only the handle moves the sheet.
-            .gesture(sheetDrag(screenHeight: screenHeight), including: viewModel.sheetStop == .peek ? .all : .subviews)
+            .gesture(sheetDrag(screenHeight: screenHeight), including: viewModel.shownStop == .peek ? .all : .subviews)
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("plansSheet")
@@ -286,7 +291,7 @@ struct PlansMapView: View {
                 dragOffset = value.translation.height
             }
             .onEnded { value in
-                let projected = screenHeight * viewModel.sheetStop.fraction - value.predictedEndTranslation.height
+                let projected = screenHeight * viewModel.shownStop.fraction - value.predictedEndTranslation.height
                 let fraction = projected / max(screenHeight, 1)
                 let target = PlansSheetStop.allCases.min { abs($0.fraction - fraction) < abs($1.fraction - fraction) } ?? .peek
                 withSheetAnimation {
@@ -305,7 +310,7 @@ struct PlansMapView: View {
     }
 
     private var stopName: String {
-        switch viewModel.sheetStop {
+        switch viewModel.shownStop {
         case .peek: "Collapsed"
         case .half: "Half open"
         case .full: "Open"

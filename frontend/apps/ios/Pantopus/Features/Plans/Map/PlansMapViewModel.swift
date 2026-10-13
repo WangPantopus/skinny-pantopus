@@ -300,6 +300,13 @@ final class PlansMapViewModel {
         listLoaded && cards.isEmpty && pins.isEmpty && (mine?.isEmpty ?? true)
     }
 
+    /// The stop the sheet shows: "Nothing planned yet" (F4) and "See plans near
+    /// you" (F5) hold a message and its buttons, so they never sit below half.
+    var shownStop: PlansSheetStop {
+        let isMessage = phase == .needsLocation || (phase == .ready && selectedId == nil && isEmpty)
+        return sheetStop == .peek && isMessage ? .half : sheetStop
+    }
+
     /// Your plans, hosting first.
     var yourPlans: [PlanCardDTO] {
         guard let mine else { return [] }

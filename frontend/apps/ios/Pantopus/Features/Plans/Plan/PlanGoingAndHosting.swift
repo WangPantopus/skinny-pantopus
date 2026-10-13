@@ -360,7 +360,7 @@ struct PlanHostingSection: View {
             .padding(.bottom, Spacing.s1)
             PlanSlotMeter(spots: card.spots, filled: filled).padding(.bottom, 6)
             if guests.isEmpty {
-                Text("Nobody yet. We'll tell you when someone asks.")
+                Text((card.requestsCount ?? 0) > 0 ? "Nobody's in yet." : "Nobody yet. We'll tell you when someone asks.")
                     .planFont(.small)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .padding(.vertical, Spacing.s2)

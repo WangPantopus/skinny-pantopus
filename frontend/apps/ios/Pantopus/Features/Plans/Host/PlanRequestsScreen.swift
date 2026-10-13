@@ -303,7 +303,7 @@ struct PlanRequestCard: View {
         return parts.joined(separator: " · ")
     }
 
-    /// "You + 1", "Just me"; for a playdate "2 kids · ages 2–5".
+    /// "Me + 1", "Just me" (the words the guest picked); for a playdate "2 kids · ages 2–5".
     private var party: String {
         if kind == .playdate {
             let kids = request.kidsCount ?? 1
