@@ -29,6 +29,7 @@ import app.pantopus.android.data.api.models.profile.PublicProfileDto
 import app.pantopus.android.data.api.models.relationships.PendingRequestsResponse
 import app.pantopus.android.data.api.models.relationships.RelationshipsListResponse
 import app.pantopus.android.data.api.models.saved_places.SavedPlacesListResponse
+import app.pantopus.android.data.api.models.settings.PrivacySettingsResponse
 import app.pantopus.android.data.api.models.support_trains.SupportTrainDetailDto
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsListResponse
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsNearbyResponse
@@ -89,6 +90,14 @@ object StoreKeys {
         StoreKey<BlockedRelationshipsResponse>(
             "api/relationships/blocked",
             kind = StoreKind.PEOPLE,
+            topics = setOf(StoreTopics.PROFILE_ME),
+        )
+
+    /** Search privacy preferences are copied in memory and removed after a PATCH. */
+    val privacySettings =
+        StoreKey<PrivacySettingsResponse>(
+            "api/privacy/settings",
+            kind = StoreKind.YOU,
             topics = setOf(StoreTopics.PROFILE_ME),
         )
 
