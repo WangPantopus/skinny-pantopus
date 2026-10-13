@@ -15,6 +15,9 @@ const { isVerifiedResident } = require('../../utils/homePermissions');
 const { isFreshGps } = require('./planRules');
 
 const VERIFIED_SELECT = 'home_id, verification_status, verification_source, verified_at, is_active';
+// A household member in a trusted state (the same states that may read the household's mail,
+// utils/homeMailAccess.js): never a pending claim, which anyone can file on any address.
+const TRUSTED_OCCUPANCY_STATUSES = ['verified', 'provisional', 'provisional_bootstrap'];
 
 /** Coordinates of a Home row: its geography point, or the map center the setup flow stored. */
 function homePoint(home) {
@@ -49,12 +52,12 @@ async function loadHomes(userId) {
   const [occupancies, owned] = await Promise.all([
     supabaseAdmin
       .from('HomeOccupancy')
-      .select(`${VERIFIED_SELECT}, home:home_id (id, address, city, state, zipcode, location, map_center_lat, map_center_lng)`)
+      .select(`${VERIFIED_SELECT}, home:home_id (id, address, address2, city, state, zipcode, location, map_center_lat, map_center_lng)`)
       .eq('user_id', userId)
       .eq('is_active', true),
     supabaseAdmin
       .from('Home')
-      .select('id, address, city, state, zipcode, location, map_center_lat, map_center_lng')
+      .select('id, address, address2, city, state, zipcode, location, map_center_lat, map_center_lng')
       .eq('owner_id', userId),
   ]);
   if (occupancies.error) throw new Error(`Failed to read homes: ${occupancies.error.message}`);
@@ -66,10 +69,11 @@ async function loadHomes(userId) {
     homes.set(String(row.home.id), {
       ...row.home,
       verified: isVerifiedResident({ occupancy: row }),
+      trusted: TRUSTED_OCCUPANCY_STATUSES.includes(row.verification_status),
     });
   }
   for (const home of owned.data || []) {
-    if (!homes.has(String(home.id))) homes.set(String(home.id), { ...home, verified: false });
+    if (!homes.has(String(home.id))) homes.set(String(home.id), { ...home, verified: false, trusted: false });
   }
   return [...homes.values()].map((home) => ({ ...home, point: homePoint(home) }));
 }
@@ -150,6 +154,7 @@ async function loadViewer(user, opts = {}) {
 }
 
 module.exports = {
+  TRUSTED_OCCUPANCY_STATUSES,
   loadViewer,
   verifiedUserIds,
   homePoint,
