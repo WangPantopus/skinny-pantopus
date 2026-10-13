@@ -645,7 +645,7 @@ private fun BackToHubRow(onClick: () -> Unit) {
                 color = PantopusColors.primary700,
             )
             Text(
-                text = "Return to your homes and places",
+                text = "Return to Your Place",
                 fontSize = 11.5.sp,
                 color = PantopusColors.appTextSecondary,
             )

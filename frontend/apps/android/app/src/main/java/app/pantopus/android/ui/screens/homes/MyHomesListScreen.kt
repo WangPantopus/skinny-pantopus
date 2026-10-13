@@ -37,6 +37,7 @@ import app.pantopus.android.ui.screens.shared.list_of_rows.FabAction
 import app.pantopus.android.ui.screens.shared.list_of_rows.FabTint
 import app.pantopus.android.ui.screens.shared.list_of_rows.FabVariant
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsScreen
+import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsUiState
 import app.pantopus.android.ui.screens.shared.list_of_rows.TopBarAction
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -121,7 +122,7 @@ fun MyHomesListScreen(
         }
     }
     LaunchedEffect(state) {
-        if (state !is app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsUiState.Loaded) deleteTarget = null
+        if (state !is ListOfRowsUiState.Loaded) deleteTarget = null
     }
 
     LaunchedEffect(pendingEvent) {
@@ -168,6 +169,7 @@ fun MyHomesListScreen(
                     }
                 }
             },
+            // One add control: with no rows, the empty state's button is the add action.
             fab =
                 FabAction(
                     icon = PantopusIcon.PlusCircle,
@@ -175,7 +177,7 @@ fun MyHomesListScreen(
                     variant = FabVariant.SecondaryCreate,
                     tint = FabTint.Home,
                     onClick = onAddHome,
-                ),
+                ).takeIf { (state as? ListOfRowsUiState.Loaded)?.sections?.any { it.rows.isNotEmpty() } == true },
             onBack = onBack,
             banner = banner,
             refreshing = refreshing,

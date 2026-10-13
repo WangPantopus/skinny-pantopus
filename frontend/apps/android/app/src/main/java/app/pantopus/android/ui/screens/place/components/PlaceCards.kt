@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.pantopus.android.data.api.models.place.PlaceDensityBucket
@@ -169,6 +170,9 @@ fun PlaceDensityCard(
 
 enum class PlaceHeroVariant { ALL_CLEAR, ALERT }
 
+/** The hero's headline and nudge stop at three lines each; tapping opens the whole Pulse. */
+private const val HERO_MAX_LINES = 3
+
 /**
  * The dashboard hero. All-clear (green) or alert (amber) framing, with
  * an inset, clearly-tappable secondary nudge.
@@ -233,6 +237,7 @@ fun PlaceHeroCard(
                     tint = if (isAlert) PantopusColors.warning else PantopusColors.home,
                 )
             }
+            // A full alert bulletin can be a screen long: three lines here, the whole of it in the Pulse.
             Text(
                 text = headline,
                 fontSize = 17.sp,
@@ -240,6 +245,8 @@ fun PlaceHeroCard(
                 lineHeight = 23.sp,
                 letterSpacing = (-0.2).sp,
                 color = PantopusColors.appText,
+                maxLines = HERO_MAX_LINES,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
         }
@@ -275,6 +282,8 @@ fun PlaceHeroCard(
                     fontSize = 13.5.sp,
                     lineHeight = 19.sp,
                     color = PantopusColors.appTextStrong,
+                    maxLines = HERO_MAX_LINES,
+                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
                 PantopusIconImage(

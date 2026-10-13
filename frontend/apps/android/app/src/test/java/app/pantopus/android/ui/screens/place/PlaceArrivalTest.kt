@@ -149,7 +149,8 @@ class PlaceArrivalTest {
                 )
             val vm = model()
             advanceUntilIdle()
-            assertEquals(HomeLanding.Review, vm.landing.value)
+            // The kept preview opens its save step over the Place tab's root.
+            assertTrue(vm.arrivalOpen.value)
             assertTrue(vm.arrival.value.previewError)
             coVerify(exactly = 0) { saves.save(any()) }
             coVerify(exactly = 0) { homes.create(any()) }
@@ -212,6 +213,7 @@ class PlaceArrivalTest {
             vm.finish()
             advanceUntilIdle()
             assertNull(PlacePendingStore.read())
+            assertFalse(vm.arrivalOpen.value)
             assertTrue(vm.landing.value is HomeLanding.Error)
             coVerify(exactly = 0) { saves.save(any()) }
             coVerify(exactly = 0) { homes.create(any()) }
