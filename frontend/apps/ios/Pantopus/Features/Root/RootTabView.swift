@@ -175,6 +175,10 @@ public struct RootTabView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }
+            // Plans change while the app is away (a yes, a moved time, a removal,
+            // a cancel) and their pushes don't reach the app in the background:
+            // coming back re-checks every Plans screen on view.
+            if plansFlags.plans { PlansStoreReads.changed() }
             Task { await plansFlags.refresh(account: signedInUserID) }
         }
         .onChange(of: chatBadgeStore.unreadMessages) { _, unread in

@@ -14,17 +14,22 @@ struct PlansDestination: View {
     let onHost: (PlansHostStart?) -> Void
 
     var body: some View {
-        switch route {
-        case let .plan(id, intent):
-            PlanScreen(planId: id, intent: intent, path: $path, onHost: onHost)
-        case let .requests(planId):
-            PlanRequestsScreen(planId: planId) { pop() }
-        case let .change(planId):
-            PlanChangeScreen(planId: planId) { pop() }
-        case let .profile(userId):
-            PublicProfileView(userId: userId) { pop() }
-                .toolbar(.hidden, for: .navigationBar)
+        Group {
+            switch route {
+            case let .plan(id, intent):
+                PlanScreen(planId: id, intent: intent, path: $path, onHost: onHost)
+            case let .requests(planId):
+                PlanRequestsScreen(planId: planId) { pop() }
+            case let .change(planId):
+                PlanChangeScreen(planId: planId) { pop() }
+            case let .profile(userId):
+                PublicProfileView(userId: userId) { pop() }
+                    .toolbar(.hidden, for: .navigationBar)
+            }
         }
+        // A link that replaces the screen on top (another plan) must start a
+        // fresh screen: the stack reuses its slot, and the old plan's state with it.
+        .id(route)
     }
 
     private func pop() {
