@@ -38,7 +38,7 @@ struct PlansMapView: View {
                 if viewModel.sheetStop != .full {
                     PlansMapTopBar(
                         viewModel: viewModel,
-                        showsPlaydates: flags.playdates
+                        showsPlaydates: flags.playdates && viewModel.showsPlaydateFilter
                     ) { showsAreaPicker = true }
                         .transition(.opacity)
                 }
