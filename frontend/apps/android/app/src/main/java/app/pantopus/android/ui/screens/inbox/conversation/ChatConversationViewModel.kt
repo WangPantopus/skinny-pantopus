@@ -2212,6 +2212,10 @@ class ChatConversationViewModel
                     rows.add(ChatTimelineRow.BroadcastReference(broadcastReferenceOf(message)))
                     return@forEachIndexed
                 }
+                if (message.resolvedType == "system") {
+                    rows.add(ChatTimelineRow.SystemNote(message.id, message.resolvedText))
+                    return@forEachIndexed
+                }
                 val side = if (message.userId == currentUserId) ChatMessageSide.Outgoing else ChatMessageSide.Incoming
                 val previousSameSide =
                     index > 0 &&

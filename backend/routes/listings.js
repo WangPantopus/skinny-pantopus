@@ -17,12 +17,21 @@ const { LISTING_LIST } = require('../utils/columns');
 const { applyLocationPrecision } = require('../utils/locationPrivacy');
 const { hydrateListingCreatorIdentities } = require('../utils/listingCreatorIdentity');
 const {
+  AREA_SEARCH_CANDIDATE_LIMIT,
   browseListings,
   discoverListings,
   searchListings,
   autocompleteListings,
+  findNearestListingPoint,
+  pickListingsWithinRadius,
+  showListingsInBounds,
 } = require('../services/marketplace/marketplaceService');
-const { applyLocationPrivacy, applyLocationPrivacyBatch } = require('../services/marketplace/locationPrivacy');
+const {
+  applyLocationPrivacy,
+  applyLocationPrivacyBatch,
+  widenBounds,
+  widenRadiusMeters,
+} = require('../services/marketplace/locationPrivacy');
 const { getReputation } = require('../services/marketplace/reputationService');
 const discoveryCacheService = require('../services/marketplace/discoveryCacheService');
 const {
@@ -337,7 +346,9 @@ function normalizeListing(row) {
     created_at: row.created_at,
     updated_at: row.updated_at,
     sold_at: row.sold_at,
-    distance_meters: row.distance_meters || null,
+    // An RPC's distance_meters is measured from the stored point; the radius
+    // routes set it from the shown point (showPickedListings).
+    distance_meters: null,
     creator,
     // Marketplace redesign fields
     layer: row.layer || 'goods',
@@ -386,28 +397,75 @@ function serializeListingMessageForViewer(message) {
 }
 
 /**
- * Enrich RPC results with latitude/longitude from the Listing table.
- * The find_listings_nearby RPC doesn't return lat/lng columns,
- * so we fetch them separately and merge.
+ * Enrich RPC results with latitude/longitude and the seller from the Listing
+ * table. The find_listings_nearby RPC doesn't return lat/lng columns and the
+ * in-bounds RPC doesn't return user_id (location privacy needs it to show
+ * sellers their own exact points), so we fetch them separately and merge.
  */
 async function enrichWithCoordinates(listings) {
   if (!listings || listings.length === 0) return listings;
   const ids = listings.map(l => l.id);
-  const { data: coords } = await supabaseAdmin
+  // Area searches read hundreds of candidates; keep each id filter short enough for a URL.
+  const chunks = [];
+  for (let i = 0; i < ids.length; i += 100) chunks.push(ids.slice(i, i + 100));
+  const results = await Promise.all(chunks.map(chunk => supabaseAdmin
     .from('Listing')
-    .select('id, latitude, longitude')
-    .in('id', ids);
-  if (!coords || coords.length === 0) return listings;
+    .select('id, user_id, latitude, longitude')
+    .in('id', chunk)));
+  const coords = results.flatMap(({ data }) => data || []);
+  if (coords.length === 0) return listings;
   const coordMap = {};
   coords.forEach(c => { coordMap[c.id] = c; });
   return listings.map(l => {
     const c = coordMap[l.id];
     if (c) {
+      l.user_id = c.user_id;
       l.latitude = c.latitude;
       l.longitude = c.longitude;
     }
     return l;
   });
+}
+
+/**
+ * Normalizes rows picked by pickListingsWithinRadius, applies location privacy
+ * and sets distance_meters from the point each viewer is shown.
+ */
+async function showPickedListings(picked, viewerUserId) {
+  const normalized = await normalizeListingsWithHydratedCreators(picked.map(({ row }) => row));
+  const shown = await applyLocationPrivacyBatch(normalized, viewerUserId);
+  return shown.map((listing, i) => ({ ...listing, distance_meters: picked[i].distanceMeters }));
+}
+
+/**
+ * The carousel's ranking (get_listing_carousel's): one listing per seller and
+ * three per category, newest first, then the top `limit` by score. The score's
+ * distance term is measured to the shown point, where the SQL function measures
+ * to the stored one.
+ */
+function rankCarousel(picked, radiusMeters, limit) {
+  const sellerRanks = new Map();
+  const categoryRanks = new Map();
+  const rankIn = (ranks, key) => { const rank = (ranks.get(key) || 0) + 1; ranks.set(key, rank); return rank; };
+  const now = Date.now();
+  return [...picked]
+    .sort((a, b) => String(b.row.created_at).localeCompare(String(a.row.created_at)))
+    .filter(({ row }) => {
+      const sellerRank = rankIn(sellerRanks, String(row.user_id));
+      const categoryRank = rankIn(categoryRanks, String(row.category));
+      return sellerRank <= 1 && categoryRank <= 3;
+    })
+    .map(({ row, distanceMeters }) => {
+      const ageSeconds = (now - new Date(row.created_at).getTime()) / 1000;
+      const score = 0.30 * (distanceMeters == null ? 0.5 : Math.max(1 - distanceMeters / radiusMeters, 0))
+        + 0.20 * (1 - Math.min(ageSeconds / 2592000, 1))
+        + 0.20 * (row.is_address_attached ? 1 : 0)
+        + 0.15 * (Number(row.quality_score) || 0) / 10
+        + 0.15 * 0.5;
+      return { row: { ...row, carousel_score: score }, distanceMeters };
+    })
+    .sort((a, b) => b.row.carousel_score - a.row.carousel_score)
+    .slice(0, limit);
 }
 
 function withTimeout(promise, ms, label) {
@@ -598,14 +656,16 @@ router.post('/', verifyToken, validate(createListingSchema), async (req, res) =>
     // Broadcast to all connected clients so browse pages can show "new listings" banner
     const io = req.app.get('io');
     if (io) {
+      // Every connected client gets this, so send the point a signed-out viewer is shown.
+      const shownToAll = applyLocationPrivacy(normalizeListing(listing), null);
       io.emit('listing:new', {
         id: listing.id,
         title: listing.title,
         category: listing.category,
         layer: listing.layer,
         listing_type: listing.listing_type,
-        latitude: listing.latitude,
-        longitude: listing.longitude,
+        latitude: shownToAll.latitude,
+        longitude: shownToAll.longitude,
         is_free: listing.is_free,
         is_wanted: listing.is_wanted,
         created_at: listing.created_at,
@@ -699,19 +759,11 @@ router.get('/browse', optionalAuth, async (req, res) => {
     let nearest_activity_center = null;
     const items = result?.listings || [];
     if (items.length === 0) {
-      const centerLat = (parseFloat(south) + parseFloat(north)) / 2;
-      const centerLon = (parseFloat(west) + parseFloat(east)) / 2;
-      const { data: nearestRows } = await supabaseAdmin.rpc('find_nearest_activity_center', {
-        p_center_lat: centerLat,
-        p_center_lon: centerLon,
-        p_content_type: 'listing',
+      nearest_activity_center = await findNearestListingPoint({
+        latitude: (parseFloat(south) + parseFloat(north)) / 2,
+        longitude: (parseFloat(west) + parseFloat(east)) / 2,
+        viewerUserId: userId,
       });
-      if (nearestRows && nearestRows.length > 0) {
-        nearest_activity_center = {
-          latitude: nearestRows[0].latitude,
-          longitude: nearestRows[0].longitude,
-        };
-      }
     }
 
     res.json({ ...result, nearest_activity_center });
@@ -817,20 +869,27 @@ router.get('/nearby', optionalAuth, async (req, res) => {
     }
 
     const radiusMeters = resolveListingQueryRadiusMeters({ radius, radiusMiles });
+    const centerLat = parseFloat(latitude);
+    const centerLng = parseFloat(longitude);
+    const pageLimit = parseInt(limit);
+    const pageOffset = parseInt(offset);
 
+    // The RPC filters, measures and sorts by stored points. Read every listing
+    // whose shown point could be in range, newest first for the distance sort,
+    // then filter, measure, sort and page by shown points.
     const { data: listings, error } = await supabaseAdmin.rpc('find_listings_nearby_v2', {
-      p_latitude: parseFloat(latitude),
-      p_longitude: parseFloat(longitude),
-      p_radius_meters: radiusMeters,
-      p_limit: parseInt(limit),
-      p_offset: parseInt(offset),
+      p_latitude: centerLat,
+      p_longitude: centerLng,
+      p_radius_meters: widenRadiusMeters(radiusMeters),
+      p_limit: AREA_SEARCH_CANDIDATE_LIMIT,
+      p_offset: 0,
       p_category: category || null,
       p_min_price: minPrice ? parseFloat(minPrice) : null,
       p_max_price: maxPrice ? parseFloat(maxPrice) : null,
       p_is_free: isFree === 'true' ? true : (isFree === 'false' ? false : null),
       p_condition: condition || null,
       p_search: search || null,
-      p_sort: sort,
+      p_sort: sort === 'distance' ? 'newest' : sort,
       // Marketplace redesign params
       p_layer: layer || null,
       p_listing_type: listingType || null,
@@ -848,14 +907,19 @@ router.get('/nearby', optionalAuth, async (req, res) => {
 
     // Apply location privacy with viewer context
     const viewerUserId = req.user?.id || null;
-    const normalized = await normalizeListingsWithHydratedCreators(enriched);
+    const picked = await pickListingsWithinRadius(enriched, viewerUserId, {
+      latitude: centerLat,
+      longitude: centerLng,
+      radiusMeters,
+      sortByDistance: sort === 'distance',
+    });
 
     res.json({
-      listings: await applyLocationPrivacyBatch(normalized, viewerUserId),
+      listings: await showPickedListings(picked.slice(pageOffset, pageOffset + pageLimit), viewerUserId),
       pagination: {
-        limit: parseInt(limit),
-        offset: parseInt(offset),
-        hasMore: listings && listings.length === parseInt(limit),
+        limit: pageLimit,
+        offset: pageOffset,
+        hasMore: picked.length > pageOffset + pageLimit,
       },
     });
   } catch (err) {
@@ -890,14 +954,18 @@ router.get('/in-bounds', optionalAuth, async (req, res) => {
       zoom_level: zoomLevel,
     });
 
+    // The RPC returns stored points. Read every listing whose shown point could
+    // be in the box, then keep and count those whose shown point is.
+    const bounds = { south: s, west: w, north: n, east: e };
+    const searchBounds = widenBounds(bounds);
     const { data: listings, error } = await supabaseAdmin.rpc('find_listings_in_bounds_v2', {
-      p_south: s,
-      p_west: w,
-      p_north: n,
-      p_east: e,
+      p_south: searchBounds.south,
+      p_west: searchBounds.west,
+      p_north: searchBounds.north,
+      p_east: searchBounds.east,
       p_layer: layer || null,
       p_category: category || null,
-      p_limit: parseInt(limit),
+      p_limit: AREA_SEARCH_CANDIDATE_LIMIT,
     });
 
     if (error) {
@@ -909,7 +977,11 @@ router.get('/in-bounds', optionalAuth, async (req, res) => {
       return res.status(500).json({ error: 'Failed to find listings in bounds' });
     }
 
-    const results = listings || [];
+    // Apply location privacy for map view with viewer context (enrichment adds
+    // the seller, so sellers see their own exact points)
+    const viewerUserId = req.user?.id || null;
+    const results = (await showListingsInBounds(await enrichWithCoordinates(listings || []), viewerUserId, bounds))
+      .slice(0, parseInt(limit) || 100);
     const elapsed = Number(process.hrtime.bigint() - startTime) / 1e6;
     logger.info('viewport_response', {
       endpoint: '/api/listings/in-bounds',
@@ -920,29 +992,17 @@ router.get('/in-bounds', optionalAuth, async (req, res) => {
       zoom_level: zoomLevel,
     });
 
-    // Apply location privacy for map view with viewer context
-    const viewerUserId = req.user?.id || null;
-    const privacyResults = await applyLocationPrivacyBatch(results, viewerUserId);
-
     // When viewport is empty, find the nearest activity center
     let nearest_activity_center = null;
     if (results.length === 0) {
-      const centerLat = (s + n) / 2;
-      const centerLon = (w + e) / 2;
-      const { data: nearestRows } = await supabaseAdmin.rpc('find_nearest_activity_center', {
-        p_center_lat: centerLat,
-        p_center_lon: centerLon,
-        p_content_type: 'listing',
+      nearest_activity_center = await findNearestListingPoint({
+        latitude: (s + n) / 2,
+        longitude: (w + e) / 2,
+        viewerUserId,
       });
-      if (nearestRows && nearestRows.length > 0) {
-        nearest_activity_center = {
-          latitude: nearestRows[0].latitude,
-          longitude: nearestRows[0].longitude,
-        };
-      }
     }
 
-    res.json({ listings: privacyResults, nearest_activity_center });
+    res.json({ listings: results, nearest_activity_center });
   } catch (err) {
     const elapsed = Number(process.hrtime.bigint() - startTime) / 1e6;
     logger.error('Listings in-bounds error', {
@@ -970,19 +1030,23 @@ router.get('/search', optionalAuth, async (req, res) => {
       return res.status(400).json({ error: 'Search query must be at least 2 characters' });
     }
 
-    // If location provided, use the RPC with search param
+    // If location provided, use the RPC with search param (read and decided on
+    // shown points, as in /nearby)
     if (latitude && longitude) {
       try {
+        const radiusMeters = resolveListingQueryRadiusMeters({ radius, radiusMiles });
+        const centerLat = parseFloat(latitude);
+        const centerLng = parseFloat(longitude);
         const { data: listings, error } = await withTimeout(
           supabaseAdmin.rpc('find_listings_nearby_v2', {
-            p_latitude: parseFloat(latitude),
-            p_longitude: parseFloat(longitude),
-            p_radius_meters: resolveListingQueryRadiusMeters({ radius, radiusMiles }),
-            p_limit: parseInt(limit),
-            p_offset: parseInt(offset),
+            p_latitude: centerLat,
+            p_longitude: centerLng,
+            p_radius_meters: widenRadiusMeters(radiusMeters),
+            p_limit: AREA_SEARCH_CANDIDATE_LIMIT,
+            p_offset: 0,
             p_category: category || null,
             p_search: q.trim(),
-            p_sort: sort,
+            p_sort: sort === 'distance' ? 'newest' : sort,
             p_layer: layer || null,
             p_listing_type: null,
             p_trust_only: trustOnly === 'true',
@@ -995,17 +1059,26 @@ router.get('/search', optionalAuth, async (req, res) => {
         if (!error) {
           // Enrich RPC results with lat/lng (RPC doesn't return these columns)
           const enriched = await enrichWithCoordinates(listings || []);
-          const normalized = await normalizeListingsWithHydratedCreators(enriched);
+          const viewerUserId = req.user?.id || null;
+          const picked = await pickListingsWithinRadius(enriched, viewerUserId, {
+            latitude: centerLat,
+            longitude: centerLng,
+            radiusMeters,
+            sortByDistance: sort === 'distance',
+          });
+          const pageOffset = parseInt(offset);
+          const pageLimit = parseInt(limit);
+          const page = await showPickedListings(picked.slice(pageOffset, pageOffset + pageLimit), viewerUserId);
           logger.info('marketplace.search', {
             query: q.trim(), category: category || null, source: 'rpc',
-            resultCount: normalized.length, latencyMs: Date.now() - start,
+            resultCount: page.length, latencyMs: Date.now() - start,
           });
           return res.json({
-            listings: await applyLocationPrivacyBatch(normalized, req.user?.id || null),
+            listings: page,
             pagination: {
-              limit: parseInt(limit),
-              offset: parseInt(offset),
-              hasMore: listings && listings.length === parseInt(limit),
+              limit: pageLimit,
+              offset: pageOffset,
+              hasMore: picked.length > pageOffset + pageLimit,
             },
           });
         }
@@ -1200,12 +1273,20 @@ router.get('/carousel', optionalAuth, async (req, res) => {
       return res.status(400).json({ error: 'latitude and longitude are required' });
     }
 
-    const { data, error } = await supabaseAdmin.rpc('get_listing_carousel', {
-      p_latitude: parseFloat(latitude),
-      p_longitude: parseFloat(longitude),
-      p_radius_meters: resolveListingRadiusMeters(radius),
+    // get_listing_carousel filters, ranks and picks one listing per seller by
+    // stored points. Read the nearby candidates instead and do that on shown
+    // points (rankCarousel).
+    const radiusMeters = resolveListingRadiusMeters(radius);
+    const centerLat = parseFloat(latitude);
+    const centerLng = parseFloat(longitude);
+    const { data, error } = await supabaseAdmin.rpc('find_listings_nearby_v2', {
+      p_latitude: centerLat,
+      p_longitude: centerLng,
+      p_radius_meters: widenRadiusMeters(radiusMeters),
+      p_limit: AREA_SEARCH_CANDIDATE_LIMIT,
+      p_offset: 0,
       p_layer: layer || null,
-      p_limit: 10,
+      p_sort: 'newest',
     });
 
     if (error) {
@@ -1213,9 +1294,15 @@ router.get('/carousel', optionalAuth, async (req, res) => {
       return res.status(500).json({ error: 'Failed to load carousel' });
     }
 
-    const enriched = await enrichWithCoordinates(data || []);
-    const normalized = await normalizeListingsWithHydratedCreators(enriched);
-    res.json({ listings: await applyLocationPrivacyBatch(normalized, req.user?.id || null) });
+    const viewerUserId = req.user?.id || null;
+    const located = (await enrichWithCoordinates(data || []))
+      .filter(l => l.latitude != null && l.longitude != null);
+    const picked = await pickListingsWithinRadius(located, viewerUserId, {
+      latitude: centerLat,
+      longitude: centerLng,
+      radiusMeters,
+    });
+    res.json({ listings: await showPickedListings(rankCarousel(picked, radiusMeters, 10), viewerUserId) });
   } catch (err) {
     logger.error('Carousel error', { error: err.message });
     res.status(500).json({ error: 'Failed to load carousel' });

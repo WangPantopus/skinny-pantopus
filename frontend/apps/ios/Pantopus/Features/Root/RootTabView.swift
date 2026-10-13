@@ -115,6 +115,9 @@ public struct RootTabView: View {
     @State private var profileInitialRoute: YouRoute?
     @State private var addHomeRequest: UUID?
     @Environment(AuthManager.self) private var auth
+    @Environment(\.scenePhase) private var scenePhase
+    /// Nearby Plans' two server flags, read at launch and on foreground.
+    @State private var plansFlags = PlansFlags.shared
     /// The You cover's model, kept across openings (Instant Screens): the
     /// cover shows its last content at once and refreshes it quietly once
     /// stale. Replaced for another account.
@@ -168,6 +171,15 @@ public struct RootTabView: View {
                 if youModelUserID != nil { youModel = MeViewModel() }
                 youModelUserID = signedInUserID
             }
+            await plansFlags.refresh(account: signedInUserID)
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            // Plans change while the app is away (a yes, a moved time, a removal,
+            // a cancel) and their pushes don't reach the app in the background:
+            // coming back re-checks every Plans screen on view.
+            if plansFlags.plans { PlansStoreReads.changed() }
+            Task { await plansFlags.refresh(account: signedInUserID) }
         }
         .onChange(of: chatBadgeStore.unreadMessages) { _, unread in
             model.messagesBadge = unread
@@ -306,9 +318,30 @@ public struct RootTabView: View {
         case .nearby:
             model.selected = .nearby
             _ = router.consume()
+        // Nearby Plans: the Nearby stack opens the plan, the requests or the
+        // composer. While the `plans` flag is off the link is dropped.
+        case let .plan(id):
+            openPlans(.plan(id: id, intent: .view))
+        case let .planRequests(id):
+            openPlans(.requests(planId: id))
+        case .planNew:
+            openPlans(nil)
         case .resetPassword, .verifyEmail, .unknown:
             _ = router.consume()
         }
+    }
+
+    /// Hands a Plans link to the Nearby stack (`route` nil: the composer).
+    private func openPlans(_ route: PlansRoute?) {
+        _ = router.consume()
+        plansFlags.prime(account: signedInUserID)
+        guard plansFlags.plans else { return }
+        if let route {
+            PlansNavigator.shared.pending = route
+        } else {
+            PlansNavigator.shared.pendingHost = PlansHostRequest(start: nil)
+        }
+        model.selected = .nearby
     }
 
     /// Links that leave the profile cover in place: the monthly receipt

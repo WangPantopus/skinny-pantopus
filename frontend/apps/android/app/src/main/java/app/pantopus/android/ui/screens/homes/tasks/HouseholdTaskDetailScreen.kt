@@ -38,6 +38,7 @@ import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.core.perf.ReportContentShown
 import app.pantopus.android.data.api.models.homes.HomeTaskDto
 import app.pantopus.android.ui.components.RefreshFailedLine
+import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.screens.homes.HomeOfflineContent
 import java.time.OffsetDateTime
 import java.time.ZoneId
@@ -56,6 +57,7 @@ fun HouseholdTaskDetailScreen(
     recurrenceViewModel: HomeTaskRecurrenceViewModel = hiltViewModel(),
     gigViewModel: HomeTaskGigViewModel = hiltViewModel(),
 ) {
+    RefreshOnStoreChange(viewModel::recheck)
     val state by viewModel.state.collectAsStateWithLifecycle()
     ReportContentShown("home_task", state.task != null)
     val mediaState by mediaViewModel.controller.state.collectAsStateWithLifecycle()
