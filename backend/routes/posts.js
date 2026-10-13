@@ -1996,21 +1996,21 @@ router.get('/map', verifyToken, async (req, res) => {
       }
     }
 
-    // When viewport is empty, find the nearest activity center
+    // When the viewport is empty, point to the nearest post this viewer's map would
+    // show, at the point it would show it (docs/location-privacy-matrix.md), never a
+    // stored point or a post they can't see.
     let nearest_activity_center = null;
-    if (results.length === 0) {
-      const centerLat = (s + n) / 2;
-      const centerLon = (w + e) / 2;
-      const { data: nearestRows } = await supabaseAdmin.rpc('find_nearest_activity_center', {
-        p_center_lat: centerLat,
-        p_center_lon: centerLon,
-        p_content_type: 'post',
-      });
-      if (nearestRows && nearestRows.length > 0) {
-        nearest_activity_center = {
-          latitude: nearestRows[0].latitude,
-          longitude: nearestRows[0].longitude,
-        };
+    if (results.length === 0 && enabledLayers.includes('posts')) {
+      try {
+        nearest_activity_center = await feedService.findNearestMapPost({
+          userId,
+          surface: surface || 'place',
+          postType: postType || null,
+          latitude: (s + n) / 2,
+          longitude: (w + e) / 2,
+        });
+      } catch (error) {
+        logger.warn('Nearest map post lookup failed', { error: error.message, userId });
       }
     }
 
