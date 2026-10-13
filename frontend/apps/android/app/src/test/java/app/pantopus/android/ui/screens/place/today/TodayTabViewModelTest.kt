@@ -5,7 +5,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModelStore
 import app.pantopus.android.core.security.AppLockManager
 import app.pantopus.android.data.api.models.homes.MyHomesResponse
-import app.pantopus.android.data.api.models.hub.HubTodayPayload
+import app.pantopus.android.data.api.models.hub.HubTodayResponse
 import app.pantopus.android.data.api.models.hub.NotificationPreferences
 import app.pantopus.android.data.api.models.hub.NotificationPreferencesDto
 import app.pantopus.android.data.api.models.hub.NotificationPreferencesPatch
@@ -64,11 +64,22 @@ class TodayTabViewModelTest {
         coEvery { homes.myHomesStored(any()) } returns Stored(MyHomesResponse(emptyList(), null), fetchedAt = System.currentTimeMillis())
         // No saved copy on the phone in these tests: Today waits for its read.
         every { homes.myHomesCopy() } returns null
-        coEvery { saved.list() } returns NetworkResult.Success(SavedPlacesListResponse(listOf(place)))
-        coEvery { saved.today(place.id) } returns NetworkResult.Success(mockk<PlaceIntelligence>())
-        coEvery { hub.todayDetail() } returns
-            NetworkResult.Success(HubTodayPayload(location = TodayLocationDto(source = "saved_place", latitude = 0.0, longitude = 0.0)))
-        coEvery { preferences.preferences() } answers { NetworkResult.Success(stored) }
+        coEvery { saved.listStored(any()) } returns Stored(SavedPlacesListResponse(listOf(place)), fetchedAt = System.currentTimeMillis())
+        every { saved.todayCopy(place.id) } returns Stored()
+        coEvery { saved.todayStored(place.id, any()) } returns
+            Stored(
+                mockk<PlaceIntelligence> { every { timeZone } returns "America/Los_Angeles" },
+                fetchedAt = System.currentTimeMillis(),
+            )
+        coEvery { hub.todayStored(any()) } returns
+            Stored(
+                HubTodayResponse(
+                    today = null,
+                    error = null,
+                    location = TodayLocationDto(source = "saved_place", latitude = 0.0, longitude = 0.0),
+                ),
+            )
+        coEvery { preferences.preferencesStored(any()) } answers { Stored(stored) }
     }
 
     @After fun teardown() {
