@@ -102,6 +102,18 @@ fun PlanRow(
     var crowded by remember(title, subtitle, end) { mutableStateOf(false) }
     val endBelow = (large && (end is PlanRowEnd.Status || end is PlanRowEnd.Note)) || (crowded && end is PlanRowEnd.Status)
     val onLayout: (TextLayoutResult) -> Unit = { if (!large && !crowded && it.hasVisualOverflow) crowded = true }
+    val titleLines =
+        when {
+            large -> 3
+            crowded -> 2
+            else -> 1
+        }
+    val subtitleLines =
+        when {
+            large -> 4
+            crowded -> 2
+            else -> 1
+        }
     Column(modifier = modifier.fillMaxWidth()) {
         if (!first) PlanDivider()
         Row(
@@ -130,7 +142,7 @@ fun PlanRow(
                     text = title,
                     style = PantopusTextStyle.body.copy(fontWeight = FontWeight.SemiBold, lineHeight = 21.sp),
                     color = PantopusColors.appText,
-                    maxLines = if (large) 3 else if (crowded) 2 else 1,
+                    maxLines = titleLines,
                     overflow = TextOverflow.Ellipsis,
                     onTextLayout = onLayout,
                 )
@@ -138,7 +150,7 @@ fun PlanRow(
                     text = subtitle,
                     style = PantopusTextStyle.small.copy(fontSize = 13.sp, lineHeight = 18.sp),
                     color = PantopusColors.appTextSecondary,
-                    maxLines = if (large) 4 else if (crowded) 2 else 1,
+                    maxLines = subtitleLines,
                     overflow = TextOverflow.Ellipsis,
                     onTextLayout = onLayout,
                 )
