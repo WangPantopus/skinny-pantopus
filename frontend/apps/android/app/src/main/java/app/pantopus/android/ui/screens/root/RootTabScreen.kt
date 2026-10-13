@@ -2131,6 +2131,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
     val chatBadgeViewModel: ChatBadgeViewModel = hiltViewModel()
     val currentHandle by sessionViewModel.currentHandle.collectAsStateWithLifecycle()
     val online by sessionViewModel.isOnline.collectAsStateWithLifecycle()
+    val plansMapFlags by hiltViewModel<PlansGateViewModel>().flags.collectAsStateWithLifecycle()
     val liveInboxBadgeCount by chatBadgeViewModel.unreadMessages.collectAsStateWithLifecycle()
     // §1C-b — context-aware navigation drawer, opened from the Hub menu button
     // (repurposed from "open Settings"; Settings now lives as a drawer row).
@@ -2620,7 +2621,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
     ) {
         Scaffold(
             topBar = {
-                if (!online && usesSavedPageOfflineStrip(backStackEntry?.destination?.route)) {
+                val route = backStackEntry?.destination?.route
+                // Nearby while `plans` is on is the Plans map, which floats its own strip over the map.
+                val plansMap = plansMapFlags.plans && route == PantopusRoute.Nearby.path
+                if (!online && usesSavedPageOfflineStrip(route) && !plansMap) {
                     OfflineBannerHost(isOffline = true, modifier = Modifier.statusBarsPadding()) { }
                 }
             },
