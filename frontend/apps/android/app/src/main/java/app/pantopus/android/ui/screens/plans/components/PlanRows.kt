@@ -100,20 +100,10 @@ fun PlanRow(
 ) {
     val large = LocalDensity.current.fontScale >= LARGE_TEXT_SCALE
     var crowded by remember(title, subtitle, end) { mutableStateOf(false) }
-    val endBelow = (large && (end is PlanRowEnd.Status || end is PlanRowEnd.Note)) || (crowded && end is PlanRowEnd.Status)
-    val onLayout: (TextLayoutResult) -> Unit = { if (!large && !crowded && it.hasVisualOverflow) crowded = true }
-    val titleLines =
-        when {
-            large -> 3
-            crowded -> 2
-            else -> 1
-        }
-    val subtitleLines =
-        when {
-            large -> 4
-            crowded -> 2
-            else -> 1
-        }
+    val endBelow = endGoesBelow(end, large, crowded)
+    val (titleLines, subtitleLines) = rowLines(large, crowded)
+    // A line cut off at one line each: the row lays out again as crowded (a no-op at large text).
+    val onLayout: (TextLayoutResult) -> Unit = { if (it.hasVisualOverflow) crowded = true }
     Column(modifier = modifier.fillMaxWidth()) {
         if (!first) PlanDivider()
         Row(
@@ -163,6 +153,24 @@ fun PlanRow(
         }
     }
 }
+
+/** A status or note goes under the words at large text; a status also when the words are crowded (as on iOS). */
+private fun endGoesBelow(
+    end: PlanRowEnd,
+    large: Boolean,
+    crowded: Boolean,
+): Boolean = (large && (end is PlanRowEnd.Status || end is PlanRowEnd.Note)) || (crowded && end is PlanRowEnd.Status)
+
+/** Lines for the title and the second line: one each (board P2), two when crowded, more at large text. */
+private fun rowLines(
+    large: Boolean,
+    crowded: Boolean,
+): Pair<Int, Int> =
+    when {
+        large -> 3 to 4
+        crowded -> 2 to 2
+        else -> 1 to 1
+    }
 
 @Composable
 private fun PlanRowEndSlot(end: PlanRowEnd) {
