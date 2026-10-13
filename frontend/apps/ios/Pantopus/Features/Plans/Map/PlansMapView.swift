@@ -61,6 +61,7 @@ struct PlansMapView: View {
         .sheet(isPresented: $showsAreaPicker) {
             PlansAreaPicker(viewModel: viewModel) { showsAreaPicker = false }
                 .presentationDetents([.medium, .large])
+                .presentationBackground(Theme.Color.appSurface)
         }
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .accessibilityElement(children: .contain)

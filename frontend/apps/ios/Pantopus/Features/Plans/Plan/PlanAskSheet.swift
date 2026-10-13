@@ -62,6 +62,8 @@ struct PlanAskSheet: View {
         .presentationDetents(contentHeight > 0 ? [.height(contentHeight), .large] : [.large])
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(26)
+        // Opaque, as the boards draw the modal: the plan behind must not show through.
+        .presentationBackground(Theme.Color.appSurface)
         .onAppear(perform: prefill)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("planAskSheet")

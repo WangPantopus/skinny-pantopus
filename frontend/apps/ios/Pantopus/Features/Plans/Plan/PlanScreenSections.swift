@@ -316,8 +316,10 @@ struct PlanRequestedSection: View {
                     } else {
                         keyValue("Coming", partySize <= 1 ? "Just you" : "You + \(partySize - 1)")
                     }
-                    if let sentAt = PlanTime.parse(myRequest?.createdAt) ?? sent?.sentAt {
-                        keyValue("Sent", PlanFormat.time(sentAt))
+                    // The later of the server's time and this phone's own send (a re-ask
+                    // keeps the first ask's created_at), with the day when it isn't today.
+                    if let sentAt = [PlanTime.parse(myRequest?.createdAt), sent?.sentAt].compactMap(\.self).max() {
+                        keyValue("Sent", PlanFormat.past(sentAt))
                     }
                     if let note = myRequest?.note ?? sent?.note, !note.isEmpty {
                         Text("\u{201C}\(note)\u{201D}")

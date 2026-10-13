@@ -112,9 +112,11 @@ struct PlanFooter: View {
     /// playdate says "Maya approves each family" (J2); other plans already say
     /// how people get in above the footer.
     private func askCaption(_ card: PlanCardDTO) -> String? {
-        if card.howPeopleGetIn == "automatic", card.kind != .playdate { return "You'll be in right away" }
+        // Board J2: a playdate says who approves each family.
+        if card.kind == .playdate { return PlanCardLines.approval(card) }
+        if card.howPeopleGetIn == "automatic" { return "You'll be in right away" }
         if let within = PlanCardLines.answersWithin(card.host) { return String(within.dropLast()) }
-        return card.kind == .playdate ? PlanCardLines.approval(card) : nil
+        return nil
     }
 
     /// "Starts in 7 hours. The waitlist closes 30 minutes before it ends."

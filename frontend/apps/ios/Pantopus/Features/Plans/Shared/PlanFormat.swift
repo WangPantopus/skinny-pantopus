@@ -124,6 +124,15 @@ enum PlanFormat {
         return "\(shortWeekday(start, calendar: calendar)) \(time(start, calendar: calendar))"
     }
 
+    /// When something happened: "9:42 AM" today, "Yesterday 8:11 PM", "Mon 8:11 PM".
+    static func past(_ date: Date, now: Date = Date(), calendar: Calendar = .current) -> String {
+        if calendar.isDate(date, inSameDayAs: now) { return time(date, calendar: calendar) }
+        if let yesterday = calendar.date(byAdding: .day, value: -1, to: now), calendar.isDate(date, inSameDayAs: yesterday) {
+            return "Yesterday \(time(date, calendar: calendar))"
+        }
+        return "\(shortWeekday(date, calendar: calendar)) \(time(date, calendar: calendar))"
+    }
+
     /// "Sunday 1:25 PM" for VoiceOver.
     static func spokenWhen(_ start: Date, now: Date = Date(), calendar: Calendar = .current) -> String {
         if calendar.isDate(start, inSameDayAs: now) { return "today \(time(start, calendar: calendar))" }

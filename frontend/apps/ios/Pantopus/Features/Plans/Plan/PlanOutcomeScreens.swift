@@ -232,6 +232,8 @@ struct PlanCancelSheet: View {
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(26)
+        // Opaque, as the boards draw the modal: the plan behind must not show through.
+        .presentationBackground(Theme.Color.appSurface)
         .accessibilityIdentifier("planCancelSheet")
     }
 
