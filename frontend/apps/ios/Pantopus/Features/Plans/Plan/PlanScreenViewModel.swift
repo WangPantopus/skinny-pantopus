@@ -145,7 +145,15 @@ final class PlanScreenViewModel {
     }
 
     private func loadOtherPlans() async {
-        guard let center = PlansStoreReads.lastCenter else { return }
+        // Opened from a link or a push, the map may not have set a center yet:
+        // the viewer's home, else a fix when location is already allowed.
+        var center = PlansStoreReads.lastCenter
+        if center == nil, let home = try? await HomesStoreReads.myHomes(store: store).value.homes.lazy.compactMap(\.location).first {
+            center = UserCoordinate(latitude: home.latitude, longitude: home.longitude, accuracyMeters: 50)
+        }
+        let location = DeviceLocationProvider.shared
+        if center == nil, location.canLocateWithoutAsking { center = await location.requestCurrent(timeoutSeconds: 4) }
+        guard let center else { return }
         if let snapshot = try? await PlansStoreReads.list(
             latitude: center.latitude,
             longitude: center.longitude,
