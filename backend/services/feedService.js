@@ -9,7 +9,11 @@
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 const { personaPostVisibleToViewer } = require('../utils/personaPostVisibility');
-const { applyLocationPrecision, leastPrecise } = require('../utils/locationPrivacy');
+const {
+  applyLocationPrecision,
+  leastPrecise,
+  DISPLAYED_POINT_MAX_SHIFT_DEGREES,
+} = require('../utils/locationPrivacy');
 const s3 = require('./s3Service');
 const {
   SAFE_CREATOR_SELECT,
@@ -1411,20 +1415,21 @@ async function getSportsFeed({
 // ---------------------------------------------------------------------------
 
 /**
- * Map-view feed query — posts within a bounding box.
- *
- * @param {Object} opts
- * @param {string} opts.userId
- * @param {string} [opts.surface]      – defaults to 'place'
- * @param {number} opts.south
- * @param {number} opts.west
- * @param {number} opts.north
- * @param {number} opts.east
- * @param {string} [opts.postType]
- * @param {number} [opts.limit]        – defaults to 50
- * @returns {Promise<object[]>}
+ * Where this viewer's map shows a post: its point after the location rule,
+ * worked out on a copy so the response privacy still runs once, in enrichment.
  */
-async function getMapFeed({
+function displayedPoint(post, viewerUserId) {
+  const shown = applyPostLocationPrivacy({ ...post }, viewerUserId);
+  return { latitude: shown.latitude, longitude: shown.longitude };
+}
+
+/**
+ * The posts this viewer may see on the map that are displayed inside the
+ * bounding box, newest first, each with its displayed point, not enriched.
+ *
+ * @returns {Promise<Array<{post: object, point: {latitude: number, longitude: number}}>>}
+ */
+async function loadMapPosts({
   userId,
   surface = 'place',
   south,
@@ -1452,14 +1457,19 @@ async function getMapFeed({
     return [];
   }
 
-  // 2. Build query with bounding box (fall back to latitude/longitude when effective_* is NULL)
+  // 2. Build query with bounding box (fall back to latitude/longitude when effective_* is NULL).
+  // Stored points are searched in the box widened by the most the location rule moves
+  // a point; step 6 keeps the posts displayed inside the box itself, so which posts
+  // come back follows the points the viewer sees, never the stored ones.
+  const shift = DISPLAYED_POINT_MAX_SHIFT_DEGREES;
+  const [qSouth, qWest, qNorth, qEast] = [south - shift, west - shift, north + shift, east + shift];
   let query = supabaseAdmin
     .from('Post')
     .select(FEED_POST_SELECT)
     .is('archived_at', null)
     .or(
-      `and(effective_latitude.gte.${south},effective_latitude.lte.${north},effective_longitude.gte.${west},effective_longitude.lte.${east}),` +
-      `and(effective_latitude.is.null,latitude.gte.${south},latitude.lte.${north},longitude.gte.${west},longitude.lte.${east})`
+      `and(effective_latitude.gte.${qSouth},effective_latitude.lte.${qNorth},effective_longitude.gte.${qWest},effective_longitude.lte.${qEast}),` +
+      `and(effective_latitude.is.null,latitude.gte.${qSouth},latitude.lte.${qNorth},longitude.gte.${qWest},longitude.lte.${qEast})`
     )
     .overlaps('distribution_targets', [distributionTarget])
     .order('created_at', { ascending: false })
@@ -1487,14 +1497,73 @@ async function getMapFeed({
     posts = posts.filter(p => !isPoliticsPost(p));
   }
 
-  // 6. Trim
-  posts = posts.slice(0, queryLimit);
+  // 6. Keep the posts displayed inside the box (a post without a displayed point has no pin)
+  const shown = posts
+    .map(post => ({ post, point: displayedPoint(post, userId) }))
+    .filter(({ point }) =>
+      point.latitude != null && point.longitude != null
+      && point.latitude >= south && point.latitude <= north
+      && point.longitude >= west && point.longitude <= east
+    );
 
-  // 7. Apply response privacy before the map route formats layer rows.
-  posts = applyPostLocationPrivacyBatch(posts, userId);
+  // 7. Trim
+  return shown.slice(0, queryLimit);
+}
 
-  // 8. Enrich
-  return enrichFeedPosts(posts, userId);
+/**
+ * Map-view feed query — posts displayed within a bounding box.
+ *
+ * @param {Object} opts
+ * @param {string} opts.userId
+ * @param {string} [opts.surface]      – defaults to 'place'
+ * @param {number} opts.south
+ * @param {number} opts.west
+ * @param {number} opts.north
+ * @param {number} opts.east
+ * @param {string} [opts.postType]
+ * @param {number} [opts.limit]        – defaults to 50
+ * @returns {Promise<object[]>}
+ */
+async function getMapFeed(opts) {
+  const shown = await loadMapPosts(opts);
+  // 8. Enrich; this applies the response privacy, which puts each pin at its displayed point
+  return enrichFeedPosts(shown.map(({ post }) => post), opts.userId);
+}
+
+// Half-sides, in degrees, of the widening boxes the empty-map hint searches:
+// about 11, 110 and 1,100 km north to south, then anywhere.
+const NEAREST_MAP_POST_HALF_SIDES = [0.1, 1, 10, 180];
+
+/**
+ * The empty-map hint: where this viewer's map shows the post nearest to a point,
+ * among the posts their map would show (same surface, post type and filters),
+ * measured to and returning the displayed point. null when none is near.
+ *
+ * @returns {Promise<{latitude: number, longitude: number}|null>}
+ */
+async function findNearestMapPost({ userId, surface = 'place', postType, latitude, longitude }) {
+  for (const half of NEAREST_MAP_POST_HALF_SIDES) {
+    const shown = await loadMapPosts({
+      userId,
+      surface,
+      postType,
+      south: Math.max(latitude - half, -90),
+      west: Math.max(longitude - half, -180),
+      north: Math.min(latitude + half, 90),
+      east: Math.min(longitude + half, 180),
+    });
+    let nearest = null;
+    let nearestMeters = Infinity;
+    for (const { point } of shown) {
+      const meters = haversineMeters(latitude, longitude, point.latitude, point.longitude);
+      if (meters < nearestMeters) {
+        nearest = point;
+        nearestMeters = meters;
+      }
+    }
+    if (nearest) return nearest;
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -1504,6 +1573,7 @@ async function getMapFeed({
 module.exports = {
   getListFeed,
   getMapFeed,
+  findNearestMapPost,
   getSportsFeed,
   getActiveSportsEvents,
   // Exported for use by posts.js during migration (these still exist in posts.js too)

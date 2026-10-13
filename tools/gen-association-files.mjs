@@ -64,7 +64,7 @@ const DEFAULT_AASA_PATHS = [
   '/post/*', '/posts/*', '/gig/*', '/gigs/*', '/listing/*', '/listings/*',
   '/marketplace/*', '/home', '/homes/*', '/user/*', '/users/*', '/business/*',
   '/businesses/*', '/b/*', '/u/*', '/mailbox/*', '/chat/*', '/messages/*',
-  '/conversation/*', '/support-trains/*', '/connections', '/notifications',
+  '/conversation/*', '/support-trains/*', '/plans/*', '/connections', '/notifications',
   '/wallet', '/invite/*', '/join/*', '/auth/*', '/verify-email',
   '/verify-email/*', '/reset-password', '/reset-password/*',
   '/settings/payments',

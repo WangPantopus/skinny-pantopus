@@ -15,6 +15,11 @@
 -keep class * extends com.squareup.moshi.JsonAdapter { *; }
 -keepclassmembers class * { @com.squareup.moshi.* <methods>; }
 -keepclassmembers class * { @com.squareup.moshi.* <fields>; }
+# Moshi's built-in enum adapter finds each constant with Class.getField(name), so enum
+# field names must survive R8. Enums marked @JsonClass(generateAdapter = false) are kept
+# above; keep every app enum's fields as well, so an unmarked enum in a Moshi model can't
+# crash a Release build (October 13: StoreKind in the saved-copy envelope crashed launch).
+-keepclassmembers enum app.pantopus.android.** { <fields>; }
 -dontwarn com.squareup.moshi.**
 
 # ─── Retrofit ──────────────────────────────────────────────────────
