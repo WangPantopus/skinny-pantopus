@@ -1,6 +1,7 @@
 package app.pantopus.android.data.store
 
 import app.pantopus.android.data.api.models.businesses.MyBusinessesResponse
+import app.pantopus.android.data.api.models.chats.ChatMessagesResponse
 import app.pantopus.android.data.api.models.chats.UnifiedConversationsResponse
 import app.pantopus.android.data.api.models.connections.BlockedRelationshipsResponse
 import app.pantopus.android.data.api.models.connections.SentRequestsResponse
@@ -46,6 +47,7 @@ object StoreTopics {
 
     /** The viewer's conversation list: a chat created or left, a message sent or read. */
     const val CHATS = "chats"
+    const val CHAT_LIST = "chat-list"
 
     /** Client-only: the viewer posted, edited or deleted a post, so the feeds' first pages go out of date. */
     const val POSTS = "posts"
@@ -267,6 +269,28 @@ object StoreKeys {
     fun post(postId: String) =
         StoreKey<PostDetailResponse>("api/posts/$postId", kind = StoreKind.POST, topics = setOf("post:$postId", StoreTopics.POSTS))
 
+    /** Message history is memory only: no Moshi type means these keys can never be saved. */
+    fun roomMessages(
+        roomId: String,
+        limit: Int,
+    ) = StoreKey<ChatMessagesResponse>(
+        "api/chat/rooms/$roomId/messages",
+        mapOf("limit" to limit.toString()),
+        kind = StoreKind.CONVERSATION,
+        topics = setOf("chat:$roomId", StoreTopics.CHATS),
+    )
+
+    fun conversationMessages(
+        otherId: String,
+        topicId: String?,
+        limit: Int,
+    ) = StoreKey<ChatMessagesResponse>(
+        "api/chat/conversations/$otherId/messages",
+        mapOf("limit" to limit.toString(), "topicId" to topicId),
+        kind = StoreKind.CONVERSATION,
+        topics = setOf("chat:*", StoreTopics.CHATS),
+    )
+
     /**
      * The Messages list (contract §4 "Messages list"): names, last-message previews and unread counts, fresh for 30
      * seconds, shared by the Messages tab and its badge. Message history never enters the store (founder decision 7).
@@ -276,7 +300,7 @@ object StoreKeys {
             "api/chat/unified-conversations",
             mapOf("limit" to "100"),
             kind = StoreKind.MESSAGES_LIST,
-            topics = setOf(StoreTopics.CHATS),
+            topics = setOf(StoreTopics.CHATS, StoreTopics.CHAT_LIST),
             type = UnifiedConversationsResponse::class.java,
         )
 
