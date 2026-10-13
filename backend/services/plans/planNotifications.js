@@ -220,7 +220,8 @@ async function notify({ userId, type, title, body, link, plan, metadata = {}, re
       userId,
       type,
       title,
-      body,
+      // A body can start with a time or a band ("today 5:30 PM · …", "about 1 mi · …"): capitalize it as a sentence.
+      body: capitalized(body),
       icon: ICON_BY_KIND[plan.kind] || '📅',
       link,
       metadata: fullMetadata,
