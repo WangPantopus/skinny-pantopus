@@ -120,35 +120,41 @@ data class SkyHome(
             if (shape == null) return of(homeType)
             val kind = kindOf(shape.kind) ?: kindOf(homeType) ?: Kind.HOUSE
             val stories = shape.stories?.coerceIn(1.0, 3.0)
-            val footprint =
-                when (shape.footprint) {
-                    "small" -> 34f
-                    "large" -> 50f
-                    else -> 40f
-                }
             return SkyHome(
                 kind = kind,
                 stories = stories,
                 // Two storeys stand a little wider, so they read as a house, not a tower.
-                width = footprint + if ((stories ?: 1.0) >= 2) 6f else 0f,
-                roof =
-                    when (shape.roof) {
-                        "hip" -> Roof.HIP
-                        "flat" -> Roof.FLAT
-                        else -> Roof.GABLE
-                    },
-                garage =
-                    when (shape.garage) {
-                        "attached" -> Garage.ATTACHED
-                        "detached" -> Garage.DETACHED
-                        "carport" -> Garage.CARPORT
-                        else -> Garage.NONE
-                    },
+                width = footprintWidth(shape.footprint) + if ((stories ?: 1.0) >= 2) 6f else 0f,
+                roof = roofOf(shape.roof),
+                garage = garageOf(shape.garage),
                 garageSpaces = (shape.garageSpaces ?: 2).coerceIn(1, 3),
                 chimney = (kind == Kind.HOUSE || kind == Kind.TOWNHOUSE) && shape.fireplace != false,
                 pool = kind == Kind.HOUSE && shape.pool == true,
             )
         }
+
+        /** The walls' width for the ground floor's size: 34, 40 or 50 dp. */
+        private fun footprintWidth(footprint: String?): Float =
+            when (footprint) {
+                "small" -> 34f
+                "large" -> 50f
+                else -> 40f
+            }
+
+        private fun roofOf(roof: String?): Roof =
+            when (roof) {
+                "hip" -> Roof.HIP
+                "flat" -> Roof.FLAT
+                else -> Roof.GABLE
+            }
+
+        private fun garageOf(garage: String?): Garage =
+            when (garage) {
+                "attached" -> Garage.ATTACHED
+                "detached" -> Garage.DETACHED
+                "carport" -> Garage.CARPORT
+                else -> Garage.NONE
+            }
 
         /** The app's own home types, then a county record's words. */
         private fun kindOf(value: String?): Kind? {

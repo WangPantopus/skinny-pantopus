@@ -102,7 +102,8 @@ private fun DrawScope.paintWindows(
         }
     }
     // A storey and a half: the attic window in the gable.
-    if (stories > 1 && stories < 2 && home.roof == SkyHome.Roof.GABLE && !late) {
+    val halfStorey = stories > 1 && stories < 2
+    if (halfStorey && home.roof == SkyHome.Roof.GABLE && !late) {
         drawRect(glass, Offset(x - 3, y - home.wallHeight - 10), Size(6f, 6f))
     }
 }
