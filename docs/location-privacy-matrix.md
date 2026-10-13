@@ -9,7 +9,7 @@ coordinates MUST pass through `applyLocationPrecision()` before serialization.**
 | Level              | Coordinate Treatment            | Address Text       | Map Pin         |
 |--------------------|---------------------------------|--------------------|-----------------|
 | `exact_place`      | Full lat/lng (6+ decimals)      | Full address       | Exact pin       |
-| `approx_area`      | Rounded to ~0.005 (~500m jitter)| City, State only   | Fuzzy circle    |
+| `approx_area`      | Grid cell + keyed ~500m offset (below) | City, State only | Fuzzy circle |
 | `neighborhood_only`| Rounded to ~0.01 (~1km)         | Neighborhood/City  | Area indicator  |
 | `none`             | `null` / omitted                | Omitted            | No pin          |
 
@@ -93,6 +93,11 @@ The feed service and post detail endpoint enforce a floor of `approx_area`
 via `leastPrecise()`. Posts always return `locationUnlocked: false` for
 non-authors.
 
+A post made with the composer's "current location" target stores the device's
+GPS fix, which differs by a few metres from post to post. Non-authors see the
+grid-cell point described under [Approximate-area points](#approximate-area-points),
+so every post from the same spot shows the same pin.
+
 ### Saved / Viewing Places
 
 These are per-user preferences stored locally or in `SavedPlace`.
@@ -115,9 +120,29 @@ leastPrecise(a, b)
 
 - If `isOwner === true` → return coordinates unchanged, `locationUnlocked: true`
 - If `precision === 'exact_place'` → return coordinates unchanged, `locationUnlocked: true`
-- If `precision === 'approx_area'` → jitter ±0.005 (~500m), strip address, `locationUnlocked: false`
+- If `precision === 'approx_area'` → grid-cell point (below), strip address, `locationUnlocked: false`
 - If `precision === 'neighborhood_only'` → round to 2 decimals (~1km), strip address, `locationUnlocked: false`
 - If `precision === 'none'` → null out lat/lng, strip address and location_name, `locationUnlocked: false`
+
+#### Approximate-area points
+
+`approx_area` never offsets the true point directly. It uses the fixed grid of
+0.005° cells (200 per degree; about 555 m north–south and 390 m east–west at
+45.6°N):
+
+1. Find the cell that holds the true point: `floor(lat × 200)`, `floor(lng × 200)`.
+2. Move the cell's center by up to ±0.005° on each axis. The offset is an HMAC
+   of the cell's indices keyed with `LOCATION_JITTER_SECRET` (falling back to
+   the service-role key), so it can't be recomputed without the secret.
+3. Round to 3 decimals.
+
+Every point in the same cell therefore gets the same displayed point, and it
+stays the same across reloads. Posting again from the same spot with a slightly
+different GPS fix shows the same pin and reveals no more than one post would;
+averaging many posts no longer narrows down where they were made. The displayed
+point is less than 0.008° from the true point on each axis. A place within a few
+metres of a cell edge can fall in either cell, so its posts may show two pins.
+Owners (`isOwner`) always keep their exact values.
 
 `backend/services/marketplace/locationPrivacy.js` exports:
 
@@ -237,6 +262,7 @@ See `backend/utils/verifiedCoordinateGuard.js`:
 - [x] Gig nearby/in-bounds/browse enforce location privacy
 - [x] Post detail enforces permanent blur for non-authors (`leastPrecise`)
 - [x] Feed service enforces permanent blur on every row
+- [x] `approx_area` points come from the fixed grid cell, so repeat posts from one spot show one pin
 - [x] Posts/map tasks+offers layers enforce per-gig privacy
 - [x] Listing detail enforces location_precision + grant-awareness + `locationUnlocked`
 - [x] Listing browse enforces location_precision
