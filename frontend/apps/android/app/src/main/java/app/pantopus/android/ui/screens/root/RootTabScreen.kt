@@ -344,6 +344,13 @@ import app.pantopus.android.ui.screens.place.verify.PLACE_VERIFY_HOME_ID_KEY
 import app.pantopus.android.ui.screens.place.verify.PLACE_VERIFY_METHOD_KEY
 import app.pantopus.android.ui.screens.place.verify.PlaceVerifyMethod
 import app.pantopus.android.ui.screens.place.verify.PlaceVerifyStatusScreen
+import app.pantopus.android.ui.screens.plans.PlansExternalRoutes
+import app.pantopus.android.ui.screens.plans.PlansGateViewModel
+import app.pantopus.android.ui.screens.plans.PlansRoutes
+import app.pantopus.android.ui.screens.plans.map.PlansMapActions
+import app.pantopus.android.ui.screens.plans.map.PlansMapScreen
+import app.pantopus.android.ui.screens.plans.plansRoutes
+import app.pantopus.android.ui.screens.plans.today.PlansTodayActions
 import app.pantopus.android.ui.screens.posts.PULSE_POST_DETAIL_ID_KEY
 import app.pantopus.android.ui.screens.posts.PulsePostDetailScreen
 import app.pantopus.android.ui.screens.profile.EditProfileScreen
@@ -2507,6 +2514,31 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 navController.navigate(ChildRoutes.CREATOR_AUDIENCE_MEMBERS)
                 DeepLinkRouter.consume()
             }
+            // Nearby Plans: while the `plans` flag is off a plan link opens today's Nearby screen instead.
+            is DeepLinkRouter.Destination.Plan -> {
+                if (DeepLinkRouter.plansEnabled()) {
+                    navController.navigate(PlansRoutes.plan(pending.id))
+                } else {
+                    navController.navigateToRootTab(PantopusRoute.Nearby)
+                }
+                DeepLinkRouter.consume()
+            }
+            is DeepLinkRouter.Destination.PlanRequests -> {
+                if (DeepLinkRouter.plansEnabled()) {
+                    navController.navigate(PlansRoutes.requests(pending.id))
+                } else {
+                    navController.navigateToRootTab(PantopusRoute.Nearby)
+                }
+                DeepLinkRouter.consume()
+            }
+            DeepLinkRouter.Destination.NewPlan -> {
+                if (DeepLinkRouter.plansEnabled()) {
+                    navController.navigate(PlansRoutes.host())
+                } else {
+                    navController.navigateToRootTab(PantopusRoute.Nearby)
+                }
+                DeepLinkRouter.consume()
+            }
             is DeepLinkRouter.Destination.ResetPassword,
             is DeepLinkRouter.Destination.VerifyEmail,
             is DeepLinkRouter.Destination.Unknown,
@@ -2769,18 +2801,75 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                     top.arguments?.getString(PLACE_DASHBOARD_HOME_ID_KEY) == homeId
                             if (!onDashboard) navController.navigate(ChildRoutes.placeDashboard(homeId))
                         },
+                        plans =
+                            PlansTodayActions(
+                                onOpenPlan = { id -> navController.navigate(PlansRoutes.plan(id)) },
+                                onOpenChat = { roomId, title, _ ->
+                                    navController.navigate(
+                                        ChildRoutes.chatConversationRoom(roomId, title, title.trim().take(1).uppercase(), verified = false),
+                                    )
+                                },
+                                onHostAgain = { kind, planId -> navController.navigate(PlansRoutes.host(kind = kind, again = planId)) },
+                            ),
                     )
                 }
                 composable(PantopusRoute.Nearby.path) {
-                    NearbyScreen(
-                        onClaim = { navController.navigate(ChildRoutes.ADD_HOME) },
-                        onOpenPulse = { navController.navigate(PantopusRoute.Pulse.path) },
-                        onOpenBeacons = { navController.navigate(ChildRoutes.BEACONS_FEED) },
-                        onOpenConnections = { navController.navigate(ChildRoutes.CONNECTIONS) },
-                        onOpenMarketplace = { navController.navigate(PantopusRoute.Marketplace.path) },
-                        onOpenTasks = { navController.navigate(PantopusRoute.Tasks.path) },
-                    )
+                    // Nearby Plans (decision D1): Nearby opens on the map while the `plans` flag is on, and is
+                    // today's screen while it is off.
+                    val plansGate: PlansGateViewModel = hiltViewModel()
+                    val plansFlags by plansGate.flags.collectAsStateWithLifecycle()
+                    if (plansFlags.plans) {
+                        PlansMapScreen(
+                            actions =
+                                PlansMapActions(
+                                    onOpenPlan = { id -> navController.navigate(PlansRoutes.plan(id)) },
+                                    onAsk = { id -> navController.navigate(PlansRoutes.plan(id, ask = true)) },
+                                    onHost = { kind, game -> navController.navigate(PlansRoutes.host(kind = kind?.wire, game = game?.id)) },
+                                    onOpenPulse = { navController.navigate(ChildRoutes.PULSE_FEED) },
+                                    onOpenConnections = { navController.navigate(ChildRoutes.CONNECTIONS) },
+                                    onInvite = { appContext.shareText(InviteLinks.INVITE_MESSAGE, "Invite to Pantopus") },
+                                ),
+                        )
+                    } else {
+                        NearbyScreen(
+                            onClaim = { navController.navigate(ChildRoutes.ADD_HOME) },
+                            onOpenPulse = { navController.navigate(PantopusRoute.Pulse.path) },
+                            onOpenBeacons = { navController.navigate(ChildRoutes.BEACONS_FEED) },
+                            onOpenConnections = { navController.navigate(ChildRoutes.CONNECTIONS) },
+                            onOpenMarketplace = { navController.navigate(PantopusRoute.Marketplace.path) },
+                            onOpenTasks = { navController.navigate(PantopusRoute.Tasks.path) },
+                        )
+                    }
                 }
+                plansRoutes(
+                    nav = navController,
+                    external =
+                        PlansExternalRoutes(
+                            openPulse = { navController.navigate(ChildRoutes.PULSE_FEED) },
+                            openConnections = { navController.navigate(ChildRoutes.CONNECTIONS) },
+                            openChat = { roomId, title, _ ->
+                                navController.navigate(
+                                    ChildRoutes.chatConversationRoom(
+                                        roomId = roomId,
+                                        displayName = title,
+                                        initials = title.trim().take(1).uppercase(),
+                                        verified = false,
+                                    ),
+                                )
+                            },
+                            openVerification = { target ->
+                                navController.navigate(
+                                    when (target) {
+                                        HubVerificationTarget.AddHome -> ChildRoutes.ADD_HOME
+                                        is HubVerificationTarget.WaitingRoom -> ChildRoutes.waitingRoom(target.homeId)
+                                        is HubVerificationTarget.Residency -> ChildRoutes.homeResidency(target.homeId)
+                                        is HubVerificationTarget.ClaimOwnership -> ChildRoutes.claimOwnership(target.homeId)
+                                    },
+                                )
+                            },
+                            openNearby = { navController.navigateToRootTab(PantopusRoute.Nearby) },
+                        ),
+                )
                 composable(PantopusRoute.Mail.path) {
                     // Mailbox is off for launch (contract §9): this tab is Messages, the conversation list itself.
                     if (!LaunchFeatures.mailbox) {
@@ -5039,6 +5128,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onOpenListing = { listingId -> navController.navigate(ChildRoutes.listingDetail(listingId)) },
                         arrivalRoomId = arrivalRoomId,
                         onOpenProfile = { userId -> navController.navigate(ChildRoutes.publicProfile(userId)) },
+                        onOpenPlan = { planId -> navController.navigate(PlansRoutes.plan(planId)) },
                     )
                 }
                 composable(ChildRoutes.CHAT_SEARCH) {

@@ -22,6 +22,7 @@ const chatRedactionJob = require('../jobs/chatRedactionJob');
 const trustAnomalyDetection = require('../jobs/trustAnomalyDetection');
 const computeAvgResponseTime = require('../jobs/computeAvgResponseTime');
 const autoArchivePosts = require('../jobs/autoArchivePosts');
+const { runPlansTick } = require('../jobs/planJobs');
 
 // ─── Internal auth middleware ───
 // Validates X-Internal-Key header against INTERNAL_API_KEY env var.
@@ -158,5 +159,7 @@ router.post('/jobs/chat-redaction', jobEndpoint('chatRedactionJob', chatRedactio
 router.post('/jobs/trust-anomaly-detection', jobEndpoint('trustAnomalyDetection', trustAnomalyDetection));
 router.post('/jobs/compute-avg-response-time', jobEndpoint('computeAvgResponseTime', computeAvgResponseTime));
 router.post('/jobs/auto-archive-posts', jobEndpoint('autoArchivePosts', autoArchivePosts));
+// Nearby Plans tick (it also runs every 5 minutes on the cron runner).
+router.post('/jobs/plans-tick', jobEndpoint('plansTick', runPlansTick, 240));
 
 module.exports = router;

@@ -40,19 +40,22 @@ class SavedPlacesStoreViewModel
         private val _toast = MutableStateFlow<SavedPlacesToast?>(null)
         val toast: StateFlow<SavedPlacesToast?> = _toast.asStateFlow()
 
-        private var loaded = false
+        private var loading = false
 
         fun loadIfNeeded() {
-            if (loaded) return
+            if (loading) return
+            loading = true
+            repository.listCopy()?.let { _saved.value = it.savedPlaces }
             viewModelScope.launch {
-                when (val result = repository.list()) {
-                    is NetworkResult.Success -> {
-                        _saved.value = result.data.savedPlaces
-                        loaded = true
-                    }
-                    is NetworkResult.Failure -> {
+                try {
+                    val stored = repository.listStored()
+                    stored.data?.let { _saved.value = it.savedPlaces }
+                    if (stored.data == null) {
+                        _saved.value = emptyList()
                         _toast.value = SavedPlacesToast("Couldn't load saved places.", isError = true)
                     }
+                } finally {
+                    loading = false
                 }
             }
         }
