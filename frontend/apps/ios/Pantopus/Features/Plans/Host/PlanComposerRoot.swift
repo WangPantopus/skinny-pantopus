@@ -117,6 +117,7 @@ struct PlanTypePicker: View {
             }
         }
         .background(Theme.Color.appBg)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("planTypePicker")
     }
 

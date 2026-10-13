@@ -45,6 +45,7 @@ struct PlanDetailsForm: View {
         .sheet(isPresented: $showsPlacePicker) {
             PlanPlacePicker(model: model) { showsPlacePicker = false }
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("planDetailsForm")
     }
 

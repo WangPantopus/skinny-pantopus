@@ -75,6 +75,7 @@ struct PlanPreviewScreen: View {
         }
         .background(Theme.Color.appBg)
         .task { await model.loadPreviewArea() }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("planPreview")
     }
 
@@ -174,6 +175,7 @@ struct PlanPostedScreen: View {
         }
         .sensoryFeedback(.success, trigger: landed)
         .onAppear(perform: drop)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("planPosted")
     }
 

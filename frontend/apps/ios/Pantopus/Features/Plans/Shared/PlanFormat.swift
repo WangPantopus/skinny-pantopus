@@ -143,6 +143,12 @@ enum PlanFormat {
         return "Starts \(weekday(start, calendar: calendar))"
     }
 
+    /// The day inside a sentence: "today", "tomorrow", "Saturday".
+    static func dayPhrase(_ date: Date, now: Date = Date(), calendar: Calendar = .current) -> String {
+        let heading = dayHeading(date, now: now, calendar: calendar)
+        return heading == "Today" || heading == "Tomorrow" ? heading.lowercased() : heading
+    }
+
     /// The day heading in the list: "Today", "Tomorrow", "Saturday".
     static func dayHeading(_ date: Date, now: Date = Date(), calendar: Calendar = .current) -> String {
         if calendar.isDate(date, inSameDayAs: now) { return "Today" }

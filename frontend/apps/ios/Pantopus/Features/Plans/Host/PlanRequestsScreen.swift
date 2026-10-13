@@ -143,12 +143,14 @@ struct PlanRequestsScreen: View {
         } message: { request in
             Text("Accepting \(PlanCardLines.firstName(request.user.displayName)) shares your address with them.")
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("planRequests")
     }
 
     private func summary(_ card: PlanCardDTO) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("\(card.details?.game.map { "\($0.label) game" } ?? card.title) · \(PlanScreenLines.when(card))")
+            // Board H10: "Seahawks game · Sun 1:25 PM".
+            Text("\(card.details?.game.map { "\($0.label) game" } ?? card.title) · \(PlanScreenLines.shortWhen(card))")
                 .planFont(.small)
                 .monospacedDigit()
                 .foregroundStyle(Theme.Color.appTextSecondary)
@@ -258,7 +260,8 @@ struct PlanRequestCard: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    StatusChip(party, variant: .neutral)
+                    // The word carries the state (board P2); VoiceOver hears just the word.
+                    StatusChip(party, variant: .neutral).accessibilityLabel(party)
                 }
                 .accessibilityElement(children: .combine)
                 if let note = request.note, !note.isEmpty {

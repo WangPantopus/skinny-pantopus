@@ -22,6 +22,8 @@ struct PlanPlacePicker: View {
     @State private var center: UserCoordinate?
     @State private var loading = true
     @State private var camera: MapCameraPosition = .automatic
+    /// "© OpenStreetMap contributors", from the places reply.
+    @State private var attribution: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -43,6 +45,11 @@ struct PlanPlacePicker: View {
                     searchField
                     if chosen != nil || center != nil { miniMap }
                     list
+                    if let attribution {
+                        Text("Places \(attribution)")
+                            .planFont(.caption)
+                            .foregroundStyle(Theme.Color.appTextMuted)
+                    }
                     Text("You can host within 3 miles of where you live or where you are now.")
                         .planFont(.caption)
                         .foregroundStyle(Theme.Color.appTextSecondary)
@@ -57,6 +64,7 @@ struct PlanPlacePicker: View {
         .background(Theme.Color.appBg)
         .task { await loadNearby() }
         .task(id: query) { await search() }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("planPlacePicker")
     }
 
@@ -98,7 +106,7 @@ struct PlanPlacePicker: View {
     }
 
     @ViewBuilder private var list: some View {
-        let shown = query.trimmingCharacters(in: .whitespaces).count >= 2 ? results : nearby
+        let shown = PlanPlaceFit.ordered(query.trimmingCharacters(in: .whitespaces).count >= 2 ? results : nearby, for: model.kind)
         VStack(alignment: .leading, spacing: 0) {
             Text.planOverline(query.count >= 2 ? "Results" : "Public places near you").padding(.bottom, 2)
             if loading, shown.isEmpty {
@@ -238,12 +246,22 @@ struct PlanPlacePicker: View {
                 longitudinalMeters: 1600
             ))
         }
-        if let reply = try? await ScreenStore.shared.load(
-            PlansEndpoints.nearbyPlaces(latitude: center.latitude, longitude: center.longitude),
-            as: PlanPlacesResponse.self,
-            kind: .publicPlace
-        ) {
+        // The first ask for an area can answer 202 "loading" while the server
+        // gathers its places: ask again a few times, 3 seconds apart.
+        for attempt in 0..<6 {
+            if attempt > 0 {
+                try? await Task.sleep(for: .seconds(3))
+                if Task.isCancelled { return }
+            }
+            guard let reply = try? await ScreenStore.shared.load(
+                PlansEndpoints.nearbyPlaces(latitude: center.latitude, longitude: center.longitude),
+                as: PlanPlacesResponse.self,
+                kind: .publicPlace,
+                force: attempt > 0
+            ) else { break }
             nearby = reply.value.places
+            attribution = reply.value.attribution ?? attribution
+            if !reply.value.loading { break }
         }
         loading = false
     }
@@ -255,11 +273,44 @@ struct PlanPlacePicker: View {
             return
         }
         try? await Task.sleep(for: .milliseconds(300))
-        guard !Task.isCancelled else { return }
+        guard !Task.isCancelled, let center = center ?? PlansStoreReads.lastCenter else { return }
+        // Public places only, by name: never a street address someone lives at.
         if let reply: PlanPlacesResponse = try? await APIClient.shared.request(
-            GeoEndpoints.searchPlaces(query: text, latitude: center?.latitude, longitude: center?.longitude)
+            PlansEndpoints.nearbyPlaces(latitude: center.latitude, longitude: center.longitude, query: text)
         ) {
             results = reply.places
+            attribution = reply.attribution ?? attribution
+        }
+    }
+}
+
+/// Which public places suit a plan: the kind's own places first (courts and
+/// parks for a pickup game, playgrounds for a playdate, trails for a walk,
+/// bars and restaurants for a watch party), nearest first within each, the
+/// rest after; never a bar for a playdate.
+enum PlanPlaceFit {
+    static func ordered(_ places: [PlanPlaceOptionDTO], for kind: PlanKind) -> [PlanPlaceOptionDTO] {
+        let preferred = preferredCategories(kind)
+        let allowed = places.filter { kind != .playdate || ($0.category ?? "").lowercased() != "bar" }
+        return allowed.enumerated()
+            .sorted { first, second in
+                let one = rank(first.element, preferred)
+                let two = rank(second.element, preferred)
+                return one == two ? first.offset < second.offset : one < two
+            }
+            .map(\.element)
+    }
+
+    private static func rank(_ place: PlanPlaceOptionDTO, _ preferred: [String]) -> Int {
+        preferred.firstIndex(of: (place.category ?? "").lowercased()) ?? preferred.count
+    }
+
+    private static func preferredCategories(_ kind: PlanKind) -> [String] {
+        switch kind {
+        case .watchParty: ["bar", "restaurant", "cafe", "community_center"]
+        case .playdate: ["playground", "park", "library", "community_center"]
+        case .pickupGame: ["court", "park", "playground", "community_center"]
+        case .walkCoffee: ["trail", "park", "cafe"]
         }
     }
 }

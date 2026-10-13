@@ -130,7 +130,8 @@ struct PlanRowModel: Identifiable, Equatable {
         } else if let start = card.startsAtDate {
             parts.append(PlanFormat.spokenWhen(start, now: now, calendar: calendar))
         } else {
-            parts.append(PlanFormat.dayPart(card.dayPart).lowercased())
+            // A playdate before you're in: "Saturday morning".
+            parts.append(PlanFormat.dayPartPhrase(card.dayPart, day: card.startsOnDate, now: now, calendar: calendar))
         }
         parts.append(card.area.label)
         if let distance = PlanFormat.spokenDistance(card.distanceBand) { parts.append(distance) }
@@ -184,7 +185,7 @@ struct PlanRow: View {
                 .foregroundStyle(Theme.Color.appTextMuted)
                 .lineLimit(1)
         case let .status(text, icon):
-            StatusChip(text, variant: .neutral, icon: icon)
+            StatusChip(text, variant: .neutral, icon: icon).accessibilityLabel(text)
         }
     }
 

@@ -178,6 +178,14 @@ enum PlanScreenLines {
         return PlanFormat.when(start: start, end: card.endsAtDate, long: true, calendar: calendar)
     }
 
+    /// "Sun 1:25 PM", "Tomorrow 6:00 PM", "Happening now · until 10:30"; a
+    /// playdate before you're in: "Saturday morning".
+    static func shortWhen(_ card: PlanCardDTO) -> String {
+        let calendar = PlanFormat.calendar(for: card.timezone)
+        return PlanFormat.rowWhen(state: card.state, start: card.startsAtDate, end: card.endsAtDate, calendar: calendar)
+            ?? PlanFormat.dayPartPhrase(card.dayPart, day: card.startsOnDate, calendar: calendar)
+    }
+
     /// "Near Prune Hill · about 1 mi · at Sam's place" / "· a public place".
     static func whereLine(_ card: PlanCardDTO) -> String {
         var parts = [card.area.label]

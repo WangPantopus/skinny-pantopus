@@ -56,6 +56,7 @@ struct PlanChangeScreen: View {
                 placeDraft = nil
             }
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("planChange")
     }
 
@@ -134,8 +135,10 @@ struct PlanChangeScreen: View {
         }
     }
 
-    private func goingCount(_: PlanCardDTO) -> Int {
-        (plan?.people ?? []).filter { !$0.isHost }.count
+    /// Everyone coming, parties counted in full ("Alex + 1" is two), as the board's "5 people are in".
+    private func goingCount(_ card: PlanCardDTO) -> Int {
+        let guests = (plan?.people ?? []).filter { !$0.isHost }
+        return guests.isEmpty ? card.goingCount : guests.reduce(0) { $0 + max($1.partySize, 1) }
     }
 
     /// Moving the start by more than 30 minutes, or the place, asks everyone who's in.
@@ -167,8 +170,7 @@ struct PlanChangeScreen: View {
                 Text("Pantopus · now").planFont(.footnote).foregroundStyle(Theme.Color.appTextSecondary)
                 Text("\(host) moved the \(card.kind.title.lowercased())").planFont(.smallStrong).foregroundStyle(Theme.Color.appText)
                 Text(
-                    "Now \(PlanFormat.dayHeading(start, calendar: calendar)) at "
-                        + "\(PlanFormat.time(start, calendar: calendar)). Still coming?"
+                    "Now \(PlanFormat.dayPhrase(start, calendar: calendar)) at \(PlanFormat.time(start, calendar: calendar)). Still coming?"
                 )
                 .planFont(.small)
                 .foregroundStyle(Theme.Color.appText)

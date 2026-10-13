@@ -256,7 +256,7 @@ struct PlanHostingSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            StatusChip("You're hosting", variant: .neutral, icon: .flag)
+            StatusChip("You're hosting", variant: .neutral, icon: .flag).accessibilityLabel("You're hosting")
             Text(card.title)
                 .planFont(.h2)
                 .foregroundStyle(Theme.Color.appText)
