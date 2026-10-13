@@ -4341,7 +4341,7 @@ private fun AiReplyBubble(
     ) {
         if (isThinking) {
             // A15.3 `.thinking` — streaming has produced no text yet.
-            AiThinkingRow()
+            AiThinkingRow(status = body.status)
         } else {
             AiTag()
             Text(text = body.text, fontSize = 13.5.sp, lineHeight = 18.sp, color = PantopusColors.appText)
@@ -4353,9 +4353,12 @@ private fun AiReplyBubble(
     }
 }
 
-/** Pulsing sparkles + muted "Thinking…" shown while the AI stream has no text yet. */
+/**
+ * Pulsing sparkles + muted "Thinking…" shown while the AI stream has no text yet, or what the
+ * assistant is doing ("Drafting your post…") once it says.
+ */
 @Composable
-private fun AiThinkingRow() {
+private fun AiThinkingRow(status: String? = null) {
     val transition = rememberInfiniteTransition(label = "aiThinking")
     val sparkAlpha by transition.animateFloat(
         initialValue = 0.45f,
@@ -4380,7 +4383,7 @@ private fun AiThinkingRow() {
             modifier = Modifier.alpha(sparkAlpha),
         )
         Text(
-            text = "Thinking…",
+            text = status ?: "Thinking…",
             fontSize = 12.5.sp,
             fontWeight = FontWeight.Medium,
             color = PantopusColors.appTextMuted,
@@ -4410,6 +4413,7 @@ private fun AiDraftCard(
             "gig" -> PantopusIcon.Hammer
             "listing" -> PantopusIcon.Tag
             "post" -> PantopusIcon.Pencil
+            "support_train" -> PantopusIcon.Utensils
             "mail_summary" -> PantopusIcon.Mailbox
             else -> PantopusIcon.Sparkles
         }
@@ -4418,6 +4422,7 @@ private fun AiDraftCard(
             "gig" -> "Task Draft"
             "listing" -> "Listing Draft"
             "post" -> "Post Draft"
+            "support_train" -> "Support Train"
             "mail_summary" -> "Mail Summary"
             else -> "Draft"
         }
@@ -4487,6 +4492,7 @@ private fun draftActionTitle(type: String): String =
         "gig" -> "Use in task composer"
         "listing" -> "Use in listing composer"
         "post" -> "Use in Pulse composer"
+        "support_train" -> "Set up the Support Train"
         else -> "Use draft"
     }
 

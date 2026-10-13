@@ -201,11 +201,17 @@ export interface NeighborhoodPulse {
 
 // ─── AI Chat ─────────────────────────────────────────────────
 
-export type AIDraftType = 'gig' | 'listing' | 'post' | 'mail_summary';
+export type AIDraftType = 'gig' | 'listing' | 'post' | 'mail_summary' | 'support_train';
+
+/** A Support Train the assistant has the story for; the start flow drafts the rest. */
+export interface SupportTrainChatDraft {
+  story: string;
+  support_modes_requested?: string[];
+}
 
 export interface AIChatDraft {
   type: AIDraftType;
-  draft: GigDraft | ListingDraft | PostDraft | MailSummary;
+  draft: GigDraft | ListingDraft | PostDraft | MailSummary | SupportTrainChatDraft;
   valid: boolean;
 }
 

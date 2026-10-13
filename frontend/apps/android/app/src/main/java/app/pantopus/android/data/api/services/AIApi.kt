@@ -1,5 +1,6 @@
 package app.pantopus.android.data.api.services
 
+import app.pantopus.android.data.api.models.ai.AIConversationMessagesResponse
 import app.pantopus.android.data.api.models.ai.AIConversationsResponse
 import app.pantopus.android.data.api.models.ai.AIDraftListingVisionRequest
 import app.pantopus.android.data.api.models.ai.AIDraftPostRequest
@@ -13,6 +14,7 @@ import retrofit2.http.GET
 import retrofit2.http.Multipart
 import retrofit2.http.POST
 import retrofit2.http.Part
+import retrofit2.http.Path
 import retrofit2.http.Query
 
 /**
@@ -27,6 +29,15 @@ interface AIApi {
      */
     @GET("api/ai/conversations")
     suspend fun conversations(): AIConversationsResponse
+
+    /**
+     * One conversation's earlier turns, for a restored thread.
+     * Route `backend/routes/ai.js:365`.
+     */
+    @GET("api/ai/conversations/{id}/messages")
+    suspend fun conversationMessages(
+        @Path("id") id: String,
+    ): AIConversationMessagesResponse
 
     /**
      * The Neighborhood Pulse for a home — the priority-ranked signal

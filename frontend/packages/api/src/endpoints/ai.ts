@@ -30,6 +30,8 @@ export function streamChat(
   data: AIChatRequest,
   handlers: {
     onConversation?: (data: { conversationId: string; isNew: boolean }) => void;
+    /** What the assistant is doing while a tool runs ("Drafting your post…"). */
+    onStatus?: (data: { tool: string; message: string }) => void;
     onTextDelta?: (delta: string) => void;
     onDraft?: (data: { type: string; draft: unknown; valid: boolean }) => void;
     onError?: (data: { error: string; message: string }) => void;
@@ -44,6 +46,9 @@ export function streamChat(
       switch (eventName) {
         case 'conversation':
           handlers.onConversation?.(parsed);
+          break;
+        case 'status':
+          handlers.onStatus?.(parsed);
           break;
         case 'text_delta':
           handlers.onTextDelta?.(parsed.delta);
@@ -127,6 +132,10 @@ export function streamChat(
 
     const decoder = new TextDecoder();
     let buffer = '';
+    // An event can straddle two network chunks (its blank line arriving in the
+    // next one), so its name and data outlive a single chunk.
+    let currentEvent = '';
+    let currentData = '';
 
     try {
       while (true) {
@@ -138,9 +147,6 @@ export function streamChat(
         // Parse SSE events from buffer
         const lines = buffer.split('\n');
         buffer = lines.pop() || ''; // Keep incomplete last line in buffer
-
-        let currentEvent = '';
-        let currentData = '';
 
         for (const line of lines) {
           if (line.startsWith('event: ')) {

@@ -1,12 +1,14 @@
 package app.pantopus.android.data.ai
 
 import app.pantopus.android.BuildConfig
+import app.pantopus.android.data.api.models.ai.AIConversationMessagesResponse
 import app.pantopus.android.data.api.models.ai.AIConversationsResponse
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.AIApi
 import app.pantopus.android.data.auth.TokenStorage
 import app.pantopus.android.ui.screens.inbox.conversation.ChatAIDraftCard
+import app.pantopus.android.ui.screens.inbox.conversation.ChatAIDraftPrefill
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -24,8 +26,14 @@ import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/** The hourly limit (backend/middleware/rateLimiter.js aiChatLimiter). */
+private const val HTTP_TOO_MANY_REQUESTS = 429
+
 sealed interface AIChatStreamEvent {
     data class Conversation(val id: String) : AIChatStreamEvent
+
+    /** What the assistant is doing while a tool runs ("Drafting your post…"). */
+    data class Status(val message: String) : AIChatStreamEvent
 
     data class TextDelta(val delta: String) : AIChatStreamEvent
 
@@ -62,6 +70,19 @@ class AIChatRepository
          */
         suspend fun conversations(): NetworkResult<AIConversationsResponse> = safeApiCall { api.conversations() }
 
+        /**
+         * One conversation's earlier turns, so a restored thread shows what
+         * the assistant remembers. Route `backend/routes/ai.js:365`.
+         */
+        suspend fun conversationMessages(id: String): NetworkResult<AIConversationMessagesResponse> =
+            safeApiCall { api.conversationMessages(id) }
+
+        /** A restored draft (`GET …/messages`) as the card a streamed one becomes. */
+        fun draftCard(
+            type: String,
+            fields: Map<String, Any?>,
+        ): ChatAIDraftCard? = parseDraft(JSONObject().put("type", type).put("valid", true).put("draft", JSONObject(fields)))
+
         fun streamChat(
             message: String,
             conversationId: String?,
@@ -95,7 +116,16 @@ class AIChatRepository
                 try {
                     call.execute().use { response ->
                         if (!response.isSuccessful) {
-                            emit(AIChatStreamEvent.Error("Failed to connect to AI."))
+                            // The hourly limit is not a connection problem.
+                            emit(
+                                AIChatStreamEvent.Error(
+                                    if (response.code == HTTP_TOO_MANY_REQUESTS) {
+                                        "You've reached this hour's limit for Pantopus AI. Please try again later."
+                                    } else {
+                                        "Failed to connect to AI."
+                                    },
+                                ),
+                            )
                             return@flow
                         }
                         val source = response.body?.source() ?: return@flow
@@ -130,6 +160,7 @@ class AIChatRepository
             val json = runCatching { JSONObject(data) }.getOrNull() ?: return null
             return when (eventName) {
                 "conversation" -> json.optString("conversationId").takeIf { it.isNotBlank() }?.let(AIChatStreamEvent::Conversation)
+                "status" -> json.optString("message").takeIf { it.isNotBlank() }?.let(AIChatStreamEvent::Status)
                 "text_delta" -> AIChatStreamEvent.TextDelta(json.optString("delta"))
                 "draft" -> parseDraft(json)?.let(AIChatStreamEvent::Draft)
                 "error" -> AIChatStreamEvent.Error(json.optString("message", json.optString("error", "AI error.")))
@@ -142,15 +173,32 @@ class AIChatRepository
             val type = json.optString("type", "draft")
             val valid = json.optBoolean("valid", true)
             val draft = json.optJSONObject("draft") ?: JSONObject()
+            val story = draft.optString("story").trim()
+            val content = draft.optString("content").trim()
             val title =
-                draft.optString("title").takeIf { it.isNotBlank() }
-                    ?: draft.optString("summary").takeIf { it.isNotBlank() }
-                    ?: draft.optString("content").takeIf { it.isNotBlank() }
-                    ?: "${type.replaceFirstChar { it.uppercase() }} draft"
+                if (type == "support_train") {
+                    "Support Train"
+                } else {
+                    draft.optString("title").takeIf { it.isNotBlank() }
+                        ?: draft.optString("summary").takeIf { it.isNotBlank() }
+                        ?: draft.optString("content").takeIf { it.isNotBlank() }
+                        ?: "${type.replaceFirstChar { it.uppercase() }} draft"
+                }
             val summary =
                 draft.optString("description").takeIf { it.isNotBlank() }
                     ?: draft.optString("content").takeIf { it.isNotBlank() }
                     ?: draft.optString("summary").takeIf { it.isNotBlank() }
+                    ?: story.takeIf { it.isNotBlank() }
+            // "Use draft" carries the text into the composer it opens.
+            val prefill =
+                when (type) {
+                    "post" ->
+                        content.takeIf { it.isNotBlank() }?.let { body ->
+                            ChatAIDraftPrefill(body, draft.optString("postType").takeIf { it.isNotBlank() })
+                        }
+                    "support_train" -> story.takeIf { it.isNotBlank() }?.let { ChatAIDraftPrefill(it) }
+                    else -> null
+                }
             val price =
                 when {
                     draft.has("price") -> "$${draft.opt("price")}"
@@ -164,6 +212,7 @@ class AIChatRepository
                 summary = summary,
                 priceLabel = price,
                 valid = valid,
+                prefill = prefill,
             )
         }
     }

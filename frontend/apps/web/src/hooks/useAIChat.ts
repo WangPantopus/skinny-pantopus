@@ -19,6 +19,8 @@ export function useAIChat() {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // What the assistant is doing while a tool runs ("Drafting your post…").
+  const [statusText, setStatusText] = useState<string | null>(null);
   const abortRef = useRef<{ abort: () => void } | null>(null);
   const streamTextRef = useRef('');
 
@@ -34,6 +36,7 @@ export function useAIChat() {
       }
 
       setError(null);
+      setStatusText(null);
       setIsStreaming(true);
       streamTextRef.current = '';
 
@@ -68,7 +71,12 @@ export function useAIChat() {
             setConversationId(data.conversationId);
           },
 
+          onStatus: (data) => {
+            setStatusText(data.message || null);
+          },
+
           onTextDelta: (delta) => {
+            setStatusText(null);
             streamTextRef.current += delta;
             const currentText = streamTextRef.current;
             setMessages((prev) =>
@@ -79,6 +87,7 @@ export function useAIChat() {
           },
 
           onDraft: (data) => {
+            setStatusText(null);
             const draft: AIChatDraft = {
               type: data.type as AIChatDraft['type'],
               draft: data.draft as AIChatDraft['draft'],
@@ -95,10 +104,12 @@ export function useAIChat() {
 
           onError: (data) => {
             setError(data.message || data.error);
+            setStatusText(null);
             setIsStreaming(false);
           },
 
           onDone: () => {
+            setStatusText(null);
             setIsStreaming(false);
             abortRef.current = null;
           },
@@ -121,6 +132,7 @@ export function useAIChat() {
     setMessages([]);
     setConversationId(null);
     setIsStreaming(false);
+    setStatusText(null);
     setError(null);
     streamTextRef.current = '';
   }, []);
@@ -150,12 +162,14 @@ export function useAIChat() {
       abortRef.current = null;
     }
     setIsStreaming(false);
+    setStatusText(null);
   }, []);
 
   return {
     messages,
     conversationId,
     isStreaming,
+    statusText,
     error,
     sendMessage,
     startNewConversation,

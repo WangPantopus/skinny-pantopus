@@ -181,17 +181,22 @@ class ChatConversationViewModel
 
         // A15.3 capability chips for the AI welcome card (tap-to-send). Launch cut #4 (Open gigs):
         // the assistant doesn't price tasks, so "Price a task" gives way to the nearby question (as on web).
-        // Launch cut #10 (Mailbox): no mailbox to summarize.
+        // Launch cut #10 (Mailbox): no mailbox to summarize; a home question it answers from the calendar instead.
+        // The assistant can't look people up (it points to Search); it can start a Support Train.
         val aiPrompts: List<ChatPromptChip> =
-            listOfNotNull(
+            listOf(
                 if (LaunchFeatures.openGigs) {
                     ChatPromptChip("price", "Price a task", PantopusIcon.Hammer)
                 } else {
                     ChatPromptChip("nearby", "What's happening nearby?", PantopusIcon.MapPin)
                 },
                 ChatPromptChip("draft", "Draft a Pulse post", PantopusIcon.Pencil),
-                ChatPromptChip("mail", "Summarize mail", PantopusIcon.Mailbox).takeIf { LaunchFeatures.mailbox },
-                ChatPromptChip("neighbor", "Find a neighbor", PantopusIcon.Search),
+                if (LaunchFeatures.mailbox) {
+                    ChatPromptChip("mail", "Summarize mail", PantopusIcon.Mailbox)
+                } else {
+                    ChatPromptChip("pickup", "When's my pickup?", PantopusIcon.Calendar)
+                },
+                ChatPromptChip("support_train", "Start a Support Train", PantopusIcon.Utensils),
             )
 
         val emptyChips: List<ChatPromptChip> =
@@ -264,6 +269,9 @@ class ChatConversationViewModel
 
         private var aiConversationId: String? = null
         private val aiDraftsByMessageId = mutableMapOf<String, List<ChatAIDraftCard>>()
+
+        // What the assistant is doing while a tool runs ("Drafting your post…"), shown on the pending reply.
+        private var aiStatus: String? = null
         private var markReadJob: Job? = null
         private var connectionJob: Job? = null
         private var messageJob: Job? = null
@@ -362,15 +370,9 @@ class ChatConversationViewModel
         /**
          * Cross-relaunch AI continuity: `GET /api/ai/conversations` lists
          * conversation metadata newest-updated first — adopt the latest id
-         * so the next send appends to it instead of forking a new thread.
-         *
-         * TODO(ai-history): the backend persists no AI message bodies
-         * (`AIConversation` carries only metadata + the OpenAI
-         * `response_id`; there is no per-conversation messages endpoint —
-         * see `backend/routes/ai.js:358` + `agentService.js:1003`), so the
-         * visible transcript can't be restored yet. When a messages
-         * endpoint lands, seed [messages] here via [localMessage]
-         * (role → user/assistant rows) before the first send.
+         * so the next send appends to it instead of forking a new thread,
+         * and show its earlier turns so the assistant never refers to
+         * something the person can't see.
          */
         private fun restoreLatestAiConversation() {
             viewModelScope.launch {
@@ -382,6 +384,7 @@ class ChatConversationViewModel
                         if (aiConversationId == null) {
                             aiConversationId = latest.id
                             aiSession.conversationId = latest.id
+                            loadAiHistory(latest.id)
                         }
                     }
                     is NetworkResult.Failure ->
@@ -389,6 +392,70 @@ class ChatConversationViewModel
                 }
             }
         }
+
+        /**
+         * Seed the thread with a restored conversation's turns
+         * (`GET /api/ai/conversations/:id/messages`). A draft and the note
+         * after it share one reply, as they did when it streamed. A server
+         * without the route leaves the thread empty, as before.
+         */
+        private suspend fun loadAiHistory(conversationId: String) {
+            if (messages.isNotEmpty()) return
+            val history =
+                when (val result = aiRepo.conversationMessages(conversationId)) {
+                    is NetworkResult.Success -> result.data
+                    is NetworkResult.Failure -> {
+                        Timber.w("AI conversation history unavailable: ${result.error.message}")
+                        return
+                    }
+                }
+            // A message sent (or "New chat") while this loaded wins.
+            if (messages.isNotEmpty() || aiConversationId != conversationId) return
+            val restored = mutableListOf<ChatMessageDto>()
+            val drafts = mutableMapOf<String, List<ChatAIDraftCard>>()
+            var openReplyId: String? = null
+            history.messages.forEachIndexed { index, item ->
+                val id = "ai_history_$index"
+                val draft = item.draft
+                val text = item.text.orEmpty()
+                when {
+                    item.role == "user" -> {
+                        openReplyId = null
+                        restored.add(localMessage(id = id, text = sentText(text, item.photos ?: 0), userId = currentUserId, type = "text"))
+                    }
+                    draft != null -> {
+                        val replyId = openReplyId ?: id
+                        if (openReplyId == null) restored.add(localMessage(id = replyId, text = "", userId = "ai", type = "ai_reply"))
+                        openReplyId = replyId
+                        aiRepo.draftCard(draft.type, draft.draft)?.let { drafts[replyId] = drafts[replyId].orEmpty() + it }
+                    }
+                    text.isNotEmpty() -> {
+                        val replyId = openReplyId
+                        val at = restored.indexOfFirst { it.id == replyId }
+                        if (replyId != null && at >= 0) {
+                            restored[at] = localMessage(id = replyId, text = text, userId = "ai", type = "ai_reply")
+                            openReplyId = null
+                        } else {
+                            restored.add(localMessage(id = id, text = text, userId = "ai", type = "ai_reply"))
+                        }
+                    }
+                }
+            }
+            messages.addAll(restored)
+            aiDraftsByMessageId.putAll(drafts)
+            rebuild()
+        }
+
+        /** A restored message of the person's: their words, or a line for the photos they sent alone. */
+        private fun sentText(
+            text: String,
+            photos: Int,
+        ): String =
+            when {
+                text.isNotEmpty() || photos == 0 -> text
+                photos == 1 -> "Sent a photo"
+                else -> "Sent $photos photos"
+            }
 
         /**
          * A15 `.ctx-strip` — resolve the pinned gig context for a gig room
@@ -1011,6 +1078,7 @@ class ChatConversationViewModel
             aiStreamJob = null
             job.cancel()
             _isAiStreaming.value = false
+            aiStatus = null
             val assistantId = streamingAssistantId
             streamingAssistantId = null
             if (assistantId != null) {
@@ -1031,6 +1099,7 @@ class ChatConversationViewModel
             aiStreamJob?.cancel()
             aiStreamJob = null
             _isAiStreaming.value = false
+            aiStatus = null
             streamingAssistantId = null
             aiConversationId = null
             aiSession.conversationId = null
@@ -1070,16 +1139,25 @@ class ChatConversationViewModel
                             aiSession.conversationId = event.id
                             aiSession.freshStartUserId = null
                         }
+                        is AIChatStreamEvent.Status -> {
+                            aiStatus = event.message
+                            rebuild()
+                        }
                         is AIChatStreamEvent.TextDelta -> {
+                            aiStatus = null
                             streamedText += event.delta
                             replaceLocalMessage(assistantId, streamedText, "ai_reply", "ai")
                         }
                         is AIChatStreamEvent.Draft -> {
+                            aiStatus = null
                             aiDraftsByMessageId[assistantId] = aiDraftsByMessageId[assistantId].orEmpty() + event.draft
                             rebuild()
                         }
-                        is AIChatStreamEvent.Error -> replaceLocalMessage(assistantId, event.message, "ai_reply", "ai")
-                        AIChatStreamEvent.Done -> Unit
+                        is AIChatStreamEvent.Error -> {
+                            aiStatus = null
+                            replaceLocalMessage(assistantId, event.message, "ai_reply", "ai")
+                        }
+                        AIChatStreamEvent.Done -> aiStatus = null
                     }
                 }
             }.onFailure { error ->
@@ -1088,6 +1166,7 @@ class ChatConversationViewModel
                 if (error is CancellationException) throw error
                 replaceLocalMessage(assistantId, "I lost the connection. Please try again.", "ai_reply", "ai")
             }
+            aiStatus = null
             streamingAssistantId = null
         }
 
@@ -2199,6 +2278,7 @@ class ChatConversationViewModel
                         text = message.resolvedText,
                         estimate = null,
                         drafts = aiDraftsByMessageId[message.id].orEmpty(),
+                        status = aiStatus.takeIf { message.id == streamingAssistantId },
                     )
                 "text" -> {
                     val imageUrls =

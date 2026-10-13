@@ -34,6 +34,30 @@ public struct AIConversationsResponse: Decodable, Sendable, Hashable {
     public let conversations: [AIConversationSummaryDTO]
 }
 
+/// `GET /api/ai/conversations/:id/messages` (`backend/routes/ai.js:365`) — a
+/// conversation as the thread shows it after a relaunch: the person's
+/// messages, the replies, and the drafts as cards.
+public struct AIConversationMessagesResponse: Decodable, Sendable, Hashable {
+    public let conversationId: String
+    public let title: String?
+    public let messages: [AIConversationMessageDTO]
+}
+
+public struct AIConversationMessageDTO: Decodable, Sendable, Hashable {
+    /// `user` or `assistant`.
+    public let role: String
+    public let text: String?
+    /// How many photos a person's message carried (they aren't kept).
+    public let photos: Int?
+    public let draft: AIConversationDraftDTO?
+}
+
+public struct AIConversationDraftDTO: Decodable, Sendable, Hashable {
+    /// `post`, `support_train`, `gig`, `listing`.
+    public let type: String
+    public let draft: [String: JSONValue]
+}
+
 /// Envelope from `POST /api/ai/transcribe` (`backend/routes/ai.js:387`)
 /// — Whisper transcription of a recorded describe-step voice note.
 public struct AITranscriptionResponse: Decodable, Sendable, Hashable {

@@ -269,6 +269,21 @@ public struct ChatAIDraftCard: Identifiable, Sendable, Hashable {
     public let summary: String?
     public let priceLabel: String?
     public let valid: Bool
+    /// What "Use draft" carries into the composer.
+    public var prefill: ChatAIDraftPrefill?
+}
+
+/// A draft's text for the composer it opens: a post's body (and its type),
+/// or a Support Train's story.
+public struct ChatAIDraftPrefill: Sendable, Hashable {
+    public let body: String
+    /// The assistant's post type (`lost_found`, `event`, …), for posts.
+    public let postType: String?
+
+    public init(body: String, postType: String? = nil) {
+        self.body = body
+        self.postType = postType
+    }
 }
 
 public struct ChatReplyPreview: Sendable, Hashable {

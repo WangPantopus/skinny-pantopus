@@ -18,6 +18,7 @@ import {
   Bell,
   FolderOpen,
   Share2,
+  UtensilsCrossed,
 } from 'lucide-react';
 import type {
   AIChatDraft,
@@ -25,6 +26,7 @@ import type {
   ListingDraft,
   PostDraft,
   MailSummary,
+  SupportTrainChatDraft,
 } from '@pantopus/types';
 import { launchFeatures } from '@/lib/featureFlags';
 
@@ -41,6 +43,8 @@ export function AIDraftCard({ draft }: AIDraftCardProps) {
       return launchFeatures.marketplace ? <ListingDraftCard draft={draft.draft as ListingDraft} /> : null;
     case 'post':
       return <PostDraftCard draft={draft.draft as PostDraft} />;
+    case 'support_train':
+      return <SupportTrainDraftCard draft={draft.draft as SupportTrainChatDraft} />;
     case 'mail_summary':
       return <MailSummaryCard summary={draft.draft as MailSummary} />;
     default:
@@ -247,6 +251,52 @@ function PostDraftCard({ draft }: { draft: PostDraft }) {
         >
           <ExternalLink className="w-3 h-3" />
           Create Post
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Support Train Card ──────────────────────────────────────
+
+/** The key the Support Train start page reads its story from (once). */
+export const AI_SUPPORT_TRAIN_STORY_KEY = 'ai_support_train_story';
+
+function SupportTrainDraftCard({ draft }: { draft: SupportTrainChatDraft }) {
+  const router = useRouter();
+  // The story goes by session storage, not the URL: it can name someone's health.
+  const handleUse = () => {
+    try {
+      sessionStorage.setItem(AI_SUPPORT_TRAIN_STORY_KEY, draft.story || '');
+    } catch {
+      // Storage blocked: the start page simply opens empty.
+    }
+    router.push('/app/support-trains/new');
+  };
+
+  return (
+    <div className="w-full rounded-xl border border-violet-200 bg-gradient-to-br from-violet-50/80 to-app-surface dark:from-violet-950/40 overflow-hidden">
+      <div className="flex items-center gap-2 px-3.5 py-2 bg-violet-100/50 border-b border-violet-100">
+        <UtensilsCrossed className="w-3.5 h-3.5 text-violet-600" />
+        <span className="text-xs font-semibold text-violet-700 uppercase tracking-wide">
+          Support Train
+        </span>
+        <Sparkles className="w-3 h-3 text-violet-400 ml-auto" />
+      </div>
+
+      <div className="px-3.5 py-3">
+        <p className="text-xs text-app-text-secondary leading-relaxed line-clamp-4">
+          {draft.story}
+        </p>
+      </div>
+
+      <div className="flex border-t border-violet-100">
+        <button
+          onClick={handleUse}
+          className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-violet-700 hover:bg-violet-50 transition-colors"
+        >
+          <ExternalLink className="w-3 h-3" />
+          Set up the Support Train
         </button>
       </div>
     </div>

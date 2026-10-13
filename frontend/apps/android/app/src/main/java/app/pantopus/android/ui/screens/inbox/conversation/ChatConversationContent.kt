@@ -244,6 +244,14 @@ data class ChatEstimate(
     val confidence: String,
 )
 
+/** A draft's text for the composer it opens: a post's body (and its type), or a Support Train's story. */
+@Immutable
+data class ChatAIDraftPrefill(
+    val body: String,
+    /** The assistant's post type (`lost_found`, `event`, …), for posts. */
+    val postType: String? = null,
+)
+
 @Immutable
 data class ChatAIDraftCard(
     val id: String,
@@ -252,6 +260,8 @@ data class ChatAIDraftCard(
     val summary: String? = null,
     val priceLabel: String? = null,
     val valid: Boolean = true,
+    /** What "Use draft" carries into the composer. */
+    val prefill: ChatAIDraftPrefill? = null,
 ) {
     /** Launch cut: a task (#4) or listing (#3) draft opens a composer hidden for the first launch. */
     val isLaunchAvailable: Boolean
@@ -394,6 +404,8 @@ sealed interface ChatBubbleBody {
         val text: String,
         val estimate: ChatEstimate?,
         val drafts: List<ChatAIDraftCard> = emptyList(),
+        /** What the assistant is doing while the reply is pending ("Drafting your post…"). */
+        val status: String? = null,
     ) : ChatBubbleBody
 }
 
