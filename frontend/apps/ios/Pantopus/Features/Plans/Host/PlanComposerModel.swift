@@ -359,7 +359,10 @@ final class PlanComposerModel {
             whereKind = .publicPlace
             startsNow = true
             start = nextHour
-            end = Date().addingTimeInterval(2 * 3600)
+            // About two hours from now, on a quarter hour ("Until 5:15 AM").
+            let quarter: TimeInterval = 15 * 60
+            end = Date(timeIntervalSinceReferenceDate: (Date().addingTimeInterval(2 * 3600).timeIntervalSinceReferenceDate / quarter)
+                .rounded(.up) * quarter)
         case .walkCoffee:
             spots = 6
             approval = .verifiedAuto

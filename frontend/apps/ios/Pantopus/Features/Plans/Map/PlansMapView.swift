@@ -223,7 +223,8 @@ struct PlansMapView: View {
     /// direction we don't know, fits in the map above the list.
     private func widen() {
         guard let center = viewModel.center else { return }
-        let miles = Double(viewModel.nearestElsewhere?.miles ?? 8) + 1
+        // A margin, so the town's pins sit inside the edge, not on it.
+        let miles = Double(viewModel.nearestElsewhere?.miles ?? 8) * 1.25 + 2
         let latitudeSpan = miles * 2 / 69 / 0.46
         let longitudeSpan = miles * 2 / (69 * max(cos(center.latitude * .pi / 180), 0.2))
         withAnimation(reduceMotion ? nil : .easeOut(duration: 0.4)) {
