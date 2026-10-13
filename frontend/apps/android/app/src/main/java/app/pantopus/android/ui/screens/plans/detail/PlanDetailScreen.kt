@@ -53,11 +53,11 @@ import kotlinx.coroutines.launch
 /** The report reasons a plan offers (the posts report queue's vocabulary). */
 private val reportReasons =
     listOf(
-        "safety" to "Safety concern",
-        "inappropriate" to "Inappropriate content",
+        "safety" to "Something unsafe",
+        "inappropriate" to "Inappropriate",
         "harassment" to "Harassment",
-        "spam" to "Spam",
-        "misinformation" to "Misleading",
+        "spam" to "Spam or a scam",
+        "misinformation" to "Not a real plan",
         "other" to "Something else",
     )
 
@@ -342,7 +342,7 @@ private fun LeaveDialog(
         title = { Text(title) },
         text = { Text(body) },
         confirmButton = { TextButton(onClick = onConfirm) { Text(action, color = PantopusColors.error) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Keep") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Not now") } },
     )
 }
 
@@ -384,7 +384,7 @@ private fun PlanGone(
                 color = PantopusColors.appText,
             )
             Text(
-                text = "It may have been cancelled, or it isn't open to you.",
+                text = "It may have ended, been cancelled, or be just for neighbors closer by.",
                 style = app.pantopus.android.ui.theme.PantopusTextStyle.body,
                 color = PantopusColors.appTextSecondary,
             )

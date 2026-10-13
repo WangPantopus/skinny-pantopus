@@ -55,10 +55,11 @@ final class NavigationSmokeTest: XCTestCase {
     }
 
     /// "You" is not a tab in the four-tab IA — it is a full-screen cover
-    /// opened from the Place tab's avatar button.
+    /// opened from the Place tab's menu.
     private func openYou(in app: XCUIApplication) {
         tabButton("place", in: app).tap()
-        app.buttons["hubAvatarButton"].firstMatch.tap()
+        app.buttons["place.menu"].firstMatch.tap()
+        app.buttons["navDrawer.contextPill.profile"].firstMatch.tap()
     }
 
     /// Chat lives in the Mail tab's Messages segment.
@@ -99,7 +100,9 @@ final class NavigationSmokeTest: XCTestCase {
             throw XCTSkip("Signed-in launch env not honoured.")
         }
         tabButton("place", in: app).tap()
-        assertReaches("hubScreen", in: app)
+        // Every Place root (Your Place, the saved address, first run, My homes
+        // for pending entries) carries the menu.
+        assertReaches("place.menu", in: app)
     }
 
     func testTab_todayLanding() throws {
@@ -134,7 +137,7 @@ final class NavigationSmokeTest: XCTestCase {
         assertReaches("chatList", in: app)
     }
 
-    func testYou_avatarOpensMeScreen() throws {
+    func testYou_menuOpensMeScreen() throws {
         guard let app = launchSignedIn() else {
             throw XCTSkip("Signed-in launch env not honoured.")
         }
@@ -142,28 +145,28 @@ final class NavigationSmokeTest: XCTestCase {
         assertReaches("meScreen", in: app)
     }
 
-    // MARK: - Hub top bar (HubRoute .notifications + menu → navigation drawer)
+    // MARK: - Place actions (notifications + menu → navigation drawer)
 
-    func testHub_bellTapPushesNotifications() throws {
+    func testPlace_bellTapPushesNotifications() throws {
         guard let app = launchSignedIn() else {
             throw XCTSkip("Signed-in launch env not honoured.")
         }
         tabButton("place", in: app).tap()
-        let bell = app.buttons["hubBellButton"].firstMatch
+        let bell = app.buttons["place.notifications"].firstMatch
         XCTAssertTrue(bell.waitForExistence(timeout: 3))
         bell.tap()
         assertReaches("notifications", in: app)
     }
 
-    func testHub_menuTapPushesSettings() throws {
+    func testPlace_menuTapPushesSettings() throws {
         guard let app = launchSignedIn() else {
             throw XCTSkip("Signed-in launch env not honoured.")
         }
         tabButton("place", in: app).tap()
-        let menu = app.buttons["hubMenuButton"].firstMatch
+        let menu = app.buttons["place.menu"].firstMatch
         XCTAssertTrue(menu.waitForExistence(timeout: 3))
         menu.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.5)).tap()
-        // The Hub menu now opens the context-aware navigation drawer; Settings
+        // The Place menu opens the context-aware navigation drawer; Settings
         // lives as a row near the bottom of its scroll view.
         let settingsRow = app.buttons["navDrawer.item.settings"].firstMatch
         XCTAssertTrue(settingsRow.waitForExistence(timeout: 5))
@@ -182,75 +185,6 @@ final class NavigationSmokeTest: XCTestCase {
         }
         settingsRow.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         assertReaches("settings", in: app, timeout: 8)
-    }
-
-    // MARK: - Hub pillars (HubRoute .mailboxRoot/.pulseFeed/.gigsFeed/.marketplace)
-
-    func testHub_pillarPulseTapPushesFeed() throws {
-        guard let app = launchSignedIn() else {
-            throw XCTSkip("Signed-in launch env not honoured.")
-        }
-        tabButton("place", in: app).tap()
-        let pulsePillar = app.buttons["hub.pillar.pulse"].firstMatch
-        guard pulsePillar.waitForExistence(timeout: 3) else {
-            throw XCTSkip("Pulse pillar not rendered in current Hub seed.")
-        }
-        pulsePillar.tap()
-        assertReaches("pulseFeed", in: app)
-    }
-
-    func testHub_pillarGigsTapPushesGigsFeed() throws {
-        guard let app = launchSignedIn() else {
-            throw XCTSkip("Signed-in launch env not honoured.")
-        }
-        tabButton("place", in: app).tap()
-        let gigsPillar = app.buttons["hub.pillar.gigs"].firstMatch
-        guard gigsPillar.waitForExistence(timeout: 3) else {
-            throw XCTSkip("Gigs pillar not rendered in current Hub seed.")
-        }
-        gigsPillar.tap()
-        assertReaches("gigsFeed", in: app)
-    }
-
-    func testHub_pillarMarketplaceTapPushesMarketplace() throws {
-        guard let app = launchSignedIn() else {
-            throw XCTSkip("Signed-in launch env not honoured.")
-        }
-        tabButton("place", in: app).tap()
-        let marketplacePillar = app.buttons["hub.pillar.marketplace"].firstMatch
-        guard marketplacePillar.waitForExistence(timeout: 3) else {
-            throw XCTSkip("Marketplace pillar not rendered in current Hub seed.")
-        }
-        marketplacePillar.tap()
-        assertReaches("marketplace", in: app)
-    }
-
-    func testHub_pillarMailTapPushesMailboxRoot() throws {
-        guard let app = launchSignedIn() else {
-            throw XCTSkip("Signed-in launch env not honoured.")
-        }
-        tabButton("place", in: app).tap()
-        let mailPillar = app.buttons["hub.pillar.mail"].firstMatch
-        guard mailPillar.waitForExistence(timeout: 3) else {
-            throw XCTSkip("Mail pillar not rendered in current Hub seed.")
-        }
-        mailPillar.tap()
-        assertReaches("mailboxRoot", in: app)
-    }
-
-    // MARK: - Hub Today card (HubRoute .todayDetail)
-
-    func testHub_todayCardTapPushesTodayDetail() throws {
-        guard let app = launchSignedIn() else {
-            throw XCTSkip("Signed-in launch env not honoured.")
-        }
-        tabButton("place", in: app).tap()
-        let today = app.buttons["hubTodayCard"].firstMatch
-        guard today.waitForExistence(timeout: 3) else {
-            throw XCTSkip("Today card not rendered in current Hub seed.")
-        }
-        today.tap()
-        assertReaches("todayDetail", in: app)
     }
 
     // MARK: - You action tiles (YouRoute .myPosts/.myBids/.myTasks/.offers/.myListings/.connections/.supportTrains)

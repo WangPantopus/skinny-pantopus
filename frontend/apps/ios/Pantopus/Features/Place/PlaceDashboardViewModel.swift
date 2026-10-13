@@ -46,8 +46,10 @@ final class PlaceDashboardViewModel {
     let onOpenPulse: () -> Void
     /// Switch the dashboard to another of the user's homes.
     let onSelectHome: (String) -> Void
-    /// Claim/verify another address (the switcher's "Add a place").
+    /// Claim/verify another address (the homes sheet's "Add a home").
     let onAddPlace: () -> Void
+    /// The full Home list (the homes sheet's "Manage homes" and pending rows).
+    let onManageHomes: () -> Void
     /// Begin verification with the chosen method + address (pushes B2).
     let onStartVerify: (PlaceVerifyMethod, String) -> Void
     /// W7 — compose a verified-neighbor heads-up (carries the address for
@@ -70,6 +72,7 @@ final class PlaceDashboardViewModel {
         onOpenPulse: @escaping () -> Void = {},
         onSelectHome: @escaping (String) -> Void = { _ in },
         onAddPlace: @escaping () -> Void = {},
+        onManageHomes: @escaping () -> Void = {},
         onStartVerify: @escaping (PlaceVerifyMethod, String) -> Void = { _, _ in },
         onComposeMessage: @escaping (String) -> Void = { _ in },
         onOpenInbox: @escaping () -> Void = {},
@@ -84,6 +87,7 @@ final class PlaceDashboardViewModel {
         self.onOpenPulse = onOpenPulse
         self.onSelectHome = onSelectHome
         self.onAddPlace = onAddPlace
+        self.onManageHomes = onManageHomes
         self.onStartVerify = onStartVerify
         self.onComposeMessage = onComposeMessage
         self.onOpenInbox = onOpenInbox

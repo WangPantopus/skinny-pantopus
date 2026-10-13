@@ -162,7 +162,11 @@ private fun RequestsHeader(
                 color = PantopusColors.appText,
                 modifier = Modifier.weight(1f),
             )
-            Text(text = "${plan.spotsLeft} left", style = PantopusTextStyle.small, color = PantopusColors.appTextSecondary)
+            Text(
+                text = if (plan.spotsLeft <= 0) "Full" else "${plan.spotsLeft} left",
+                style = PantopusTextStyle.small,
+                color = PantopusColors.appTextSecondary,
+            )
         }
         PlanSpotsMeter(spots = plan.spots, taken = taken)
     }
