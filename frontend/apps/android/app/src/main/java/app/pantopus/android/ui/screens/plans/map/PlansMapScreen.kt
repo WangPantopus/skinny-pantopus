@@ -538,6 +538,27 @@ private fun PlansMap(
 
 private const val START_ZOOM = 14f
 private const val FRAME_MS = 450
+private const val VIEWPORT_SETTLE_MS = 350L
+private const val SELECT_MS = 350
+private const val CLUSTER_MS = 400
+private const val ANIMATE_GRACE_MS = 400L
+private const val CAMERA_POLL_MS = 120L
+private const val SHEET_REST_MS = 150L
+private const val ZOOM_OUT_MS = 500
+private const val RECENTER_MS = 400
+
+/** Wider than this (about zoom 9 on a phone) the map doesn't ask for pins. */
+private const val MAX_FETCH_SPAN_DEGREES = 1.2
+private const val ELSEWHERE_DEFAULT_MILES = 8
+
+/** About how many miles from the center to the edge the map shows at [START_ZOOM] on a phone. */
+private const val START_RADIUS_MILES = 0.75
+private const val MIN_FETCH_ZOOM = 9f
+private const val FIVE_MILES_M = 8047.0
+private const val CLUSTER_PADDING_PX = 160
+
+/** Pins closer than this (about 100 m) count as one spot. */
+private const val SHARED_SPOT_DEGREES = 0.001
 
 /** Room around the framed plans: a pin's head stands above its point, its tag hangs under it. */
 private val PIN_ROOM = 56.dp
@@ -561,27 +582,6 @@ private fun framedBounds(
         .including(LatLng(center.latitude + MIN_HALF_SPAN_DEGREES, center.longitude))
         .including(LatLng(center.latitude - MIN_HALF_SPAN_DEGREES, center.longitude))
 }
-private const val VIEWPORT_SETTLE_MS = 350L
-private const val SELECT_MS = 350
-private const val CLUSTER_MS = 400
-private const val ANIMATE_GRACE_MS = 400L
-private const val CAMERA_POLL_MS = 120L
-private const val SHEET_REST_MS = 150L
-private const val ZOOM_OUT_MS = 500
-private const val RECENTER_MS = 400
-
-/** Wider than this (about zoom 9 on a phone) the map doesn't ask for pins. */
-private const val MAX_FETCH_SPAN_DEGREES = 1.2
-private const val ELSEWHERE_DEFAULT_MILES = 8
-
-/** About how many miles from the center to the edge the map shows at [START_ZOOM] on a phone. */
-private const val START_RADIUS_MILES = 0.75
-private const val MIN_FETCH_ZOOM = 9f
-private const val FIVE_MILES_M = 8047.0
-private const val CLUSTER_PADDING_PX = 160
-
-/** Pins closer than this (about 100 m) count as one spot. */
-private const val SHARED_SPOT_DEGREES = 0.001
 
 /** Pins as the map draws them, with TalkBack words that borrow the list's distance band when the pin has none. */
 private fun mapPins(state: PlansMapUiState): List<MapPin> {
