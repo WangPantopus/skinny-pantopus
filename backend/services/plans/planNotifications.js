@@ -5,8 +5,9 @@
  *
  * Every notice is an in-app Notification row right away. The push is sent by
  * this module, not by createNotification, so Plans can:
- *  - hold pushes during quiet hours (9 PM to 8 AM in the person's time zone),
- *    except within 2 hours of a plan the person is in;
+ *  - hold pushes during quiet hours (the person's own, from their notification
+ *    preferences, else 9 PM to 8 AM, in their time zone), except within 2 hours
+ *    of a plan the person is in;
  *  - bundle asks: the first ask on a plan pushes at once with Accept/Decline;
  *    more asks within 10 minutes become one push, without buttons;
  *  - attach the push categories and the ids their buttons need
@@ -21,8 +22,8 @@ const pushService = require('../pushService');
 const notificationService = require('../notificationService');
 const rules = require('./planRules');
 
-const QUIET_START_HOUR = 21;
-const QUIET_END_HOUR = 8;
+// Quiet hours for people who haven't set their own: 9 PM to 8 AM (minutes of the day).
+const DEFAULT_QUIET = { start: 21 * 60, end: 8 * 60 };
 const NEAR_PLAN_MS = 2 * 60 * 60 * 1000;
 const BUNDLE_WINDOW_MS = 10 * 60 * 1000;
 
@@ -117,37 +118,55 @@ function partyText(plan, request, first) {
 
 // ── Quiet hours ──────────────────────────────────────────────
 
-async function timezoneOf(userId, fallback) {
+function minutesOfDay(hhmm) {
+  const match = /^(\d{2}):(\d{2})/.exec(String(hhmm || ''));
+  if (!match) return null;
+  const minutes = Number(match[1]) * 60 + Number(match[2]);
+  return minutes < 24 * 60 ? minutes : null;
+}
+
+/**
+ * The person's quiet hours, in their time zone (else the plan's): their own
+ * quiet_hours_start_local / quiet_hours_end_local (the daily briefing's setting;
+ * the same start and end means none), else 9 PM to 8 AM.
+ * @returns {Promise<{ tz: string, start: number, end: number }>} minutes of the day
+ */
+async function quietHoursOf(userId, fallbackTz) {
+  const quiet = { tz: fallbackTz || rules.DEFAULT_TIMEZONE, ...DEFAULT_QUIET };
   try {
     const { data } = await supabaseAdmin
       .from('UserNotificationPreferences')
-      .select('daily_briefing_timezone')
+      .select('daily_briefing_timezone, quiet_hours_start_local, quiet_hours_end_local')
       .eq('user_id', userId)
       .maybeSingle();
+    const start = minutesOfDay(data?.quiet_hours_start_local);
+    const end = minutesOfDay(data?.quiet_hours_end_local);
+    if (start != null && end != null) Object.assign(quiet, { start, end });
     const tz = data?.daily_briefing_timezone;
     if (tz) {
       new Intl.DateTimeFormat('en-US', { timeZone: tz }).format(new Date());
-      return tz;
+      quiet.tz = tz;
     }
   } catch (_) {
-    // An unknown zone or a failed read falls back to the plan's zone.
+    // An unknown zone or a failed read keeps the plan's zone.
   }
-  return fallback || rules.DEFAULT_TIMEZONE;
+  return quiet;
 }
 
-function inQuietHours(tz, now = new Date()) {
-  const { hour } = rules.localParts(now, tz);
-  return hour >= QUIET_START_HOUR || hour < QUIET_END_HOUR;
+/** Inside the quiet hours at this moment? A window past midnight wraps; start = end means none. */
+function inQuietHours(quiet, now = new Date()) {
+  if (quiet.start === quiet.end) return false;
+  const { hour, minute } = rules.localParts(now, quiet.tz);
+  const m = hour * 60 + minute;
+  return quiet.start > quiet.end ? (m >= quiet.start || m < quiet.end) : (m >= quiet.start && m < quiet.end);
 }
 
-/** The next 8:00 AM in the zone, as an instant. */
-function nextQuietEnd(tz, now = new Date()) {
-  // Walk forward in 15-minute steps to the first moment past 8:00 local; at most a day.
-  const step = 15 * 60 * 1000;
+/** The first moment the quiet hours are over, as an instant (5-minute steps, at most a day). */
+function nextQuietEnd(quiet, now = new Date()) {
+  const step = 5 * 60 * 1000;
   let t = new Date(Math.ceil(now.getTime() / step) * step);
-  for (let i = 0; i < 4 * 26; i += 1) {
-    const { hour, minute } = rules.localParts(t, tz);
-    if (hour === QUIET_END_HOUR && minute < 15) return t;
+  for (let i = 0; i < 12 * 25; i += 1) {
+    if (!inQuietHours(quiet, t)) return t;
     t = new Date(t.getTime() + step);
   }
   return new Date(now.getTime() + 11 * 60 * 60 * 1000);
@@ -209,13 +228,13 @@ async function notify({ userId, type, title, body, link, plan, metadata = {}, re
     const row = rows && rows[0];
     if (!row) return null;
 
-    const tz = await timezoneOf(userId, plan.timezone);
+    const quiet = await quietHoursOf(userId, plan.timezone);
     const now = new Date();
     let deferUntil = holdUntil && holdUntil > now ? holdUntil : null;
     if (!(recipientIsIn && isNearPlan(plan, now.getTime()))) {
       const at = deferUntil || now;
-      if (inQuietHours(tz, at)) {
-        let until = nextQuietEnd(tz, at);
+      if (inQuietHours(quiet, at)) {
+        let until = nextQuietEnd(quiet, at);
         // For someone in the plan, quiet hours end 2 hours before it starts.
         const nearStart = new Date(new Date(plan.post?.event_date).getTime() - NEAR_PLAN_MS);
         if (recipientIsIn && nearStart > at && nearStart < until) until = nearStart;
@@ -410,7 +429,7 @@ module.exports = {
   inQuietHours,
   nextQuietEnd,
   isNearPlan,
-  timezoneOf,
+  quietHoursOf,
   sendPush,
   updateMetadata,
   notify,
