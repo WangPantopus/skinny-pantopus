@@ -89,6 +89,8 @@ class ScreenStore
         ) {
             val state = MutableStateFlow(Stored<Any>())
             var etag: String? = null
+
+            @Volatile
             var stale = false
 
             /** Own edits (`put`, `remove`) and ended access: a read that started before one never overwrites it. */
@@ -215,7 +217,10 @@ class ScreenStore
          * topic ending in `:*` (a list's "supporttrain:*") matches every topic with that prefix.
          */
         fun markStale(topic: String) {
-            synchronized(slots) { slots.values.forEach { if (it.key.matches(topic)) it.markStaleLocked() } }
+            synchronized(slots) {
+                slots.values.forEach { if (it.key.matches(topic)) it.markStaleLocked() }
+                accountId()?.let { account -> synchronized(diskLock) { saved.invalidate(account, topic = topic) } }
+            }
             _changes.update { it + 1 }
         }
 
@@ -231,6 +236,7 @@ class ScreenStore
                     slot.state.value = slot.state.value.copy(refreshing = false)
                     deleteSaved(slot.key.id)
                 }
+                accountId()?.let { account -> synchronized(diskLock) { saved.invalidate(account, topic = topic, edited = true) } }
             }
             _changes.update { it + 1 }
         }
@@ -253,9 +259,7 @@ class ScreenStore
                 synchronized(slots) {
                     if (ticket.generation == generation && ticket.identity == identity() && ticket.edits == slot.edits) {
                         val markedMeanwhile = ticket.marks != slot.marks
-                        put(key, data)
-                        // Another device's change during this save still needs a read, just as during a GET.
-                        if (markedMeanwhile) slot.stale = true
+                        put(key, data, markedMeanwhile)
                     }
                 }
             }
@@ -300,13 +304,20 @@ class ScreenStore
         fun <T : Any> put(
             key: StoreKey<T>,
             data: T,
+        ) = put(key, data, markedWhileSaving = false)
+
+        private fun <T : Any> put(
+            key: StoreKey<T>,
+            data: T,
+            markedWhileSaving: Boolean,
         ) {
             val account = accountId() ?: return
             synchronized(slots) {
                 val slot = slotLocked(key, account)
                 slot.edits++
                 slot.etag = null
-                slot.stale = false
+                // Another device's change during a save still needs a read, including after eviction or relaunch.
+                slot.stale = markedWhileSaving
                 slot.state.value = Stored(data, fetchedAt = System.currentTimeMillis())
                 if (slot.persist || (key.kind.tier == StoreTier.EVERYDAY && key.savable)) {
                     slot.persist = true
@@ -317,7 +328,10 @@ class ScreenStore
 
         /** Marks every entry of [kinds] out of date, e.g. the household ones after a socket reconnect. */
         fun markStale(kinds: Set<StoreKind>) {
-            synchronized(slots) { slots.values.forEach { if (it.key.kind in kinds) it.markStaleLocked() } }
+            synchronized(slots) {
+                slots.values.forEach { if (it.key.kind in kinds) it.markStaleLocked() }
+                accountId()?.let { account -> synchronized(diskLock) { saved.invalidate(account, kinds = kinds) } }
+            }
             _changes.update { it + 1 }
         }
 
@@ -401,6 +415,7 @@ class ScreenStore
                 return
             }
             slot.etag = copy.etag
+            slot.stale = copy.stale
             slot.persist = true
             slot.state.value = Stored(copy.data, fetchedAt = copy.fetchedAt)
         }
@@ -420,7 +435,7 @@ class ScreenStore
                 deleteSaved(slot.key.id, account)
                 return
             }
-            val type = slot.key.type ?: return
+            if (slot.key.type == null) return
             val edits = slot.edits
             val gen = generation
             scope.launch {
@@ -428,7 +443,7 @@ class ScreenStore
                     // A wipe, a newer own edit, ended access or a reader that stopped vouching for the viewer since
                     // this reply was settled: it is not written.
                     if (gen == generation && edits == slot.edits && slot.persist) {
-                        saved.save(account, slot.key.id, type, data, fetchedAt, etag)
+                        saved.save(account, slot.key, data, fetchedAt, etag, slot.stale)
                     }
                 }
             }
