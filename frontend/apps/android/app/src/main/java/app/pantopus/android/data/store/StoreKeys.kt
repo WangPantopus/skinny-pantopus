@@ -44,6 +44,12 @@ object StoreTopics {
     /** The viewer's own profile and settings (a name, username or photo saved, here or on another device). */
     const val PROFILE_ME = "profile:me"
 
+    /**
+     * Client-only: the viewer's connection lists (accepted, requests in and out, blocked). The server sends no topic for
+     * them, so a connection request or acceptance arriving as an alert or a push marks them ([isConnectionNotice]).
+     */
+    const val CONNECTIONS = "connections"
+
     /** The viewer's conversation list: a chat created or left, a message sent or read. */
     const val CHATS = "chats"
 
@@ -68,26 +74,26 @@ object StoreKeys {
         "api/relationships",
         mapOf("status" to status, "limit" to limit.toString(), "offset" to offset.toString()),
         kind = StoreKind.PEOPLE,
-        topics = setOf(StoreTopics.PROFILE_ME),
+        topics = setOf(StoreTopics.PROFILE_ME, StoreTopics.CONNECTIONS),
     )
 
     val pendingConnections =
         StoreKey<PendingRequestsResponse>(
             "api/relationships/requests/pending",
             kind = StoreKind.PEOPLE,
-            topics = setOf(StoreTopics.PROFILE_ME),
+            topics = setOf(StoreTopics.PROFILE_ME, StoreTopics.CONNECTIONS),
         )
     val sentConnections =
         StoreKey<SentRequestsResponse>(
             "api/relationships/requests/sent",
             kind = StoreKind.PEOPLE,
-            topics = setOf(StoreTopics.PROFILE_ME),
+            topics = setOf(StoreTopics.PROFILE_ME, StoreTopics.CONNECTIONS),
         )
     val blockedConnections =
         StoreKey<BlockedRelationshipsResponse>(
             "api/relationships/blocked",
             kind = StoreKind.PEOPLE,
-            topics = setOf(StoreTopics.PROFILE_ME),
+            topics = setOf(StoreTopics.PROFILE_ME, StoreTopics.CONNECTIONS),
         )
 
     /** Private bookmarks use the account-scoped phone copy so saved-place Today can open offline. */
