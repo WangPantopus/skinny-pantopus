@@ -20,10 +20,11 @@ const { encodeGeohash, decodeGeohashBbox } = require('../../utils/geohash');
 const placeSectionCache = require('../placeSectionCache');
 const rules = require('./planRules');
 
+// Each request carries a box around the host's neighborhood, so only servers
+// we'd be comfortable sending that to are listed here.
 const OVERPASS_URLS = [
   process.env.OVERPASS_API_URL,
   'https://overpass-api.de/api/interpreter',
-  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
 ].filter(Boolean);
 const FETCH_TIMEOUT_MS = 45000;
