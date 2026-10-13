@@ -73,9 +73,13 @@ function isImageError(err) {
   return /image|download the file/i.test(String(err.error?.error?.message || err.message || ''));
 }
 
-/** A system prompt as a cacheable block. */
-function systemBlocks(text, { cache = true } = {}) {
-  return [{ type: 'text', text, ...(cache ? { cache_control: { type: 'ephemeral' } } : {}) }];
+/**
+ * A system prompt as a cacheable block. `ttl: '1h'` keeps a prompt that every
+ * person shares (the chat's) cached through quiet stretches; the default is
+ * five minutes.
+ */
+function systemBlocks(text, { cache = true, ttl } = {}) {
+  return [{ type: 'text', text, ...(cache ? { cache_control: { type: 'ephemeral', ...(ttl ? { ttl } : {}) } } : {}) }];
 }
 
 // Models that take `role: "system"` messages inside `messages` (no beta needed);

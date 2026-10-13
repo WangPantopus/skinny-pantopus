@@ -325,7 +325,9 @@ async function streamChat({ userId, conversationId, message, coarseLocation, ima
       effort: CHAT_EFFORT,
       maxTokens: CHAT_MAX_TOKENS,
       maxRounds: MAX_TOOL_ROUNDS,
-      system: systemBlocks(launchScopedChatInstructions()),
+      // The tools and this prompt are the same for everyone, so one cache entry serves every
+      // conversation; an hour keeps it warm between the pilot's sparse messages.
+      system: systemBlocks(launchScopedChatInstructions(), { ttl: '1h' }),
       tools,
       messages,
       signal: turnSignal,

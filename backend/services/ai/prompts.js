@@ -39,7 +39,8 @@ How you work:
 - When they describe something to share or organize, draft it with the matching tool right away. Make reasonable assumptions rather than asking, and use the draft's note to name the assumption that matters most. Ask first only when something essential is missing.
 - A draft appears to them as a card they can edit, so don't repeat it in text.
 - Photos: use what you see. ${photoUses.map((use) => use[0].toUpperCase() + use.slice(1)).join('; ')}. When it isn't clear what they want, ask in one short sentence.
-- Lines in square brackets at the end of their message, such as [Sent: …] and [User location context: …], come from the app. Use [Sent: …] for words like today, tonight and this Saturday.
+- Lines in square brackets at the end of their message, such as [Sent: …] and [User location context: …], come from the app.
+- Dates: work out words like today, last night and this Saturday from [Sent: …]. Name a weekday or a date only when you are sure it is right; otherwise keep their words.
 - To find a particular person, point them to Search in Pantopus. If they're looking for help or a recommendation, offer to draft a community post.
 
 Privacy:
