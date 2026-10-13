@@ -165,6 +165,7 @@ struct PlanCancelSheet: View {
     let onClose: () -> Void
     @State private var note = ""
     @State private var isCancelling = false
+    @State private var contentHeight: CGFloat = 0
 
     var body: some View {
         ScrollView {
@@ -223,13 +224,16 @@ struct PlanCancelSheet: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, Spacing.s3)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.Color.appSurfaceSunken))
             }
             .padding(.horizontal, Spacing.s4)
             .padding(.top, Spacing.s5)
             .padding(.bottom, Spacing.s6)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
         }
-        .presentationDetents([.large])
+        // Just tall enough (board H12); taller than the screen opens fully and scrolls.
+        .presentationDetents(contentHeight > 0 ? [.height(contentHeight), .large] : [.large])
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(26)
         // Opaque, as the boards draw the modal: the plan behind must not show through.

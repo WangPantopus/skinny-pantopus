@@ -50,7 +50,7 @@ struct PlanComposerRoot: View {
                                 showsPlaydates: flags.playdates,
                                 onClose: { onFinish(nil) },
                                 onPick: { kind in
-                                    model.kind = kind
+                                    model.choose(kind)
                                     path.append(.details)
                                 }
                             )

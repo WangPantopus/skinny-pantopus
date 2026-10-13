@@ -69,12 +69,17 @@ final class PlanComposerModel {
     private(set) var hostName = "You"
     /// A5 "Host again": the plan this one repeats.
     var hostedAgainFrom: String?
+    /// The title filled in from a game, cleared when the type changes.
+    @ObservationIgnored private var autoTitle: String?
+    /// A type was chosen (H1) or given: only then may a watch party pick the first game.
+    @ObservationIgnored private var kindChosen: Bool
 
     private let api: APIClient
     private let location: any LocationProviding
 
     init(start: PlansHostStart?, api: APIClient = .shared, location: any LocationProviding = DeviceLocationProvider.shared) {
         kind = start?.kind ?? .watchParty
+        kindChosen = start != nil
         game = start?.game
         self.api = api
         self.location = location
@@ -112,7 +117,21 @@ final class PlanComposerModel {
         guard let reply = try? await ScreenStore.shared.load(PlansEndpoints.games(), as: PlanGamesResponse.self, kind: .publicPlace)
         else { return }
         games = reply.value.games
-        if kind == .watchParty, game == nil, title.isEmpty, let first = games.first { pick(first) }
+        if kindChosen, kind == .watchParty, game == nil, title.isEmpty, let first = games.first { pick(first) }
+    }
+
+    /// H1: the type the host picked. A watch party starts on the soonest game;
+    /// any other type drops a game and the title it filled in.
+    func choose(_ newKind: PlanKind) {
+        kind = newKind
+        kindChosen = true
+        if newKind == .watchParty {
+            if game == nil, title.isEmpty, let first = games.first { pick(first) }
+        } else {
+            game = nil
+            if let autoTitle, title == autoTitle { title = "" }
+            autoTitle = nil
+        }
     }
 
     // MARK: - Choices
@@ -122,6 +141,7 @@ final class PlanComposerModel {
         game = newGame
         guard let newGame else { return }
         title = "\(newGame.label) game"
+        autoTitle = title
         if let gameStart = newGame.startsAtDate, gameStart > Date() {
             start = gameStart
             end = newGame.endsAtDate ?? gameStart.addingTimeInterval(3 * 3600 + 20 * 60)

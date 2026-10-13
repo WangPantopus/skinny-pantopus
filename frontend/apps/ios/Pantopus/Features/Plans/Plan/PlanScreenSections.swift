@@ -434,7 +434,7 @@ struct PlanClosedSection: View {
     /// "Sam called it off: “Sorry, the courts are closed tonight.”"
     private var message: String? {
         guard card.state == .cancelled else { return nil }
-        let host = PlanCardLines.firstName(card.host.displayName)
+        let host = card.viewer?.isHost == true ? "You" : PlanCardLines.firstName(card.host.displayName)
         if let note = cancelNote?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty {
             return "\(host) called it off: \u{201C}\(note)\u{201D}"
         }
