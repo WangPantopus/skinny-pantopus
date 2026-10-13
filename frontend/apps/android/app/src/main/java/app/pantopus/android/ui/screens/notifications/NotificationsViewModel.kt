@@ -525,7 +525,11 @@ class NotificationsViewModel
 
         private fun finishReadAction() {
             // An access refusal owns the empty/error state; completing a write must not republish its old rows.
-            if (_state.value is ListOfRowsUiState.Loaded || _state.value is ListOfRowsUiState.Empty) applyState()
+            if (_state.value is ListOfRowsUiState.Loaded || _state.value is ListOfRowsUiState.Empty) {
+                applyState()
+            } else {
+                _topBarAction.value = makeTopBarAction(enabled = false)
+            }
             if (quietRefreshPending && pendingReads.isEmpty() && !markingAllRead) {
                 quietRefreshPending = false
                 refreshIfNeeded()
@@ -707,6 +711,7 @@ class NotificationsViewModel
                 hasMore = false
                 _unreadCount.value = 0
                 _state.value = ListOfRowsUiState.Error(refusal.error.displayMessage("Couldn't load the list."))
+                _topBarAction.value = makeTopBarAction(enabled = false)
                 return
             }
             val hadLaterPages = offsets.values.any { it > pageSize }
