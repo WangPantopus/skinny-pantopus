@@ -529,7 +529,7 @@ async function buildPlacePreview(place) {
   const foundingOpen = foundingSettled.status === 'fulfilled' ? Boolean(foundingSettled.value) : true;
 
   const sections = placePreviewService.assemblePreviewSections({ remote, flood, area, bucket, foundingOpen });
-  const aha = placePreviewService.pickAha(sections);
+  const aha = placePreviewService.pickAha(sections, { lat: place.lat, lng: place.lng });
 
   const floodSection = flood && flood.flood_zone
     ? {
