@@ -21,6 +21,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
@@ -145,7 +146,32 @@ fun PlanMiniMap(
     }
 }
 
+/**
+ * The host's preview of what neighbors see (board H7): the map around [center] with the plan's area, never a pin.
+ * Not interactive.
+ */
+@Composable
+fun PlanAreaPreviewMap(
+    center: LatLng,
+    kind: PlanKind,
+    modifier: Modifier = Modifier,
+) {
+    // Zoomed out a step from the plan page so the whole area fits the card's short map.
+    val zoom = if (kind == PlanKind.PLAYDATE) PREVIEW_ZOOM - 1f else PREVIEW_ZOOM
+    val camera = rememberCameraPositionState { position = CameraPosition.fromLatLngZoom(center, zoom) }
+    LaunchedEffect(center, zoom) { camera.position = CameraPosition.fromLatLngZoom(center, zoom) }
+    var ready by remember { mutableStateOf(false) }
+    Box(modifier = modifier.clipToBounds().clearAndSetSemantics {}) {
+        StaticMap(camera, onReady = { ready = true })
+        if (ready) {
+            val meters = if (kind == PlanKind.PLAYDATE) 1000.0 else 500.0
+            AreaAt(camera, center, (meters / metersPerDp(center.latitude, zoom)).toFloat(), kind, label = null, strength = 1f)
+        }
+    }
+}
+
 private const val ZOOM = 14.5f
+private const val PREVIEW_ZOOM = 13.5f
 private const val REVEAL_MS = 450
 private const val AREA_MS = 280f
 private const val PIN_START_MS = 200f
@@ -160,7 +186,10 @@ private fun lerp(
 /** 0 to 106% and back to 100%: a light spring, as a curve. */
 private fun growFromTip(t: Float): Float = if (t < 0.7f) t / 0.7f * 1.06f else 1.06f - (t - 0.7f) / 0.3f * 0.06f
 
-private fun metersPerDp(latitude: Double): Double = cos(latitude * PI / 180.0) * 40_075_016.686 / (256.0 * 2.0.pow(ZOOM.toDouble()))
+private fun metersPerDp(
+    latitude: Double,
+    zoom: Float = ZOOM,
+): Double = cos(latitude * PI / 180.0) * 40_075_016.686 / (256.0 * 2.0.pow(zoom.toDouble()))
 
 @OptIn(MapsComposeExperimentalApi::class)
 @Composable
