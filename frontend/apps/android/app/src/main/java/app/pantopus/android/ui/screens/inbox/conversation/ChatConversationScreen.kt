@@ -127,6 +127,9 @@ import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.screens.inbox.conversation.ai.AiCapabilityChip
 import app.pantopus.android.ui.screens.inbox.conversation.ai.AiEstimateCard
 import app.pantopus.android.ui.screens.inbox.conversation.ai.ChatAiAvatar
+import app.pantopus.android.ui.screens.plans.chat.PlanChatClosedBar
+import app.pantopus.android.ui.screens.plans.chat.PlanChatStrip
+import app.pantopus.android.ui.screens.plans.chat.rememberPlanChat
 import app.pantopus.android.ui.screens.shared.media.MediaViewerDialog
 import app.pantopus.android.ui.screens.shared.media.PostMediaItem
 import app.pantopus.android.ui.screens.shared.media.PostMediaKind
@@ -171,6 +174,7 @@ fun ChatConversationScreen(
     onOpenListing: (String) -> Unit = {},
     onContentLoaded: () -> Unit = {},
     onOpenProfile: (String) -> Unit = {},
+    onOpenPlan: (String) -> Unit = {},
     viewModel: ChatConversationViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -199,6 +203,8 @@ fun ChatConversationScreen(
     val openFile by viewModel.openFile.collectAsStateWithLifecycle()
     val linkPreviews by viewModel.linkPreviews.collectAsStateWithLifecycle()
     val isAiStreaming by viewModel.isAiStreaming.collectAsStateWithLifecycle()
+    // Nearby Plans (A4): a plan room shows its plan under the header and closes after the plan.
+    val planChat = rememberPlanChat((args.mode as? ChatThreadMode.Room)?.id)
     val gigContext by viewModel.gigContext.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -372,6 +378,7 @@ fun ChatConversationScreen(
             gigContext?.let { strip ->
                 GigContextStrip(strip = strip, onTap = { onOpenGig(strip.gigId) })
             }
+            PlanChatStrip(state = planChat, onOpenPlan = onOpenPlan)
             if (conversationMode == ChatConversationMode.CreatorThread) {
                 CreatorAudienceStrip(
                     context = resolvedCreatorContext,
@@ -486,7 +493,9 @@ fun ChatConversationScreen(
                     onUpgrade = { showFanUpgradePrompt = true },
                 )
             }
-            if (isSelectionMode) {
+            if (planChat.closed) {
+                PlanChatClosedBar()
+            } else if (isSelectionMode) {
                 SelectionDeleteBar(
                     enabled = selectedMessageIds.isNotEmpty(),
                     onDelete = { showBulkDeleteConfirm = true },
@@ -2626,6 +2635,7 @@ internal fun PopulatedFrame(
                 is ChatTimelineRow.DayDivider -> DayDividerRow(label = row.divider.label)
                 is ChatTimelineRow.TopicDivider -> TopicDividerRow(label = row.label)
                 is ChatTimelineRow.BroadcastReference -> BroadcastReferenceCard(reference = row.reference)
+                is ChatTimelineRow.SystemNote -> SystemNoteRow(text = row.text)
                 is ChatTimelineRow.Bubble ->
                     BubbleRow(
                         content = row.content,
@@ -2715,6 +2725,25 @@ private fun BroadcastReferenceCard(reference: ChatBroadcastReference) {
                 maxLines = 1,
             )
         }
+    }
+}
+
+/** A server line in the room (board A4 "sysmsg"): centered, small, on a sunken pill. */
+@Composable
+private fun SystemNoteRow(text: String) {
+    Box(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), contentAlignment = Alignment.Center) {
+        Text(
+            text = text,
+            fontSize = 12.sp,
+            lineHeight = 16.sp,
+            color = PantopusColors.appTextSecondary,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            modifier =
+                Modifier
+                    .clip(RoundedCornerShape(Radii.pill))
+                    .background(PantopusColors.appSurfaceSunken)
+                    .padding(horizontal = Spacing.s3, vertical = 5.dp),
+        )
     }
 }
 

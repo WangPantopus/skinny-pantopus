@@ -2207,6 +2207,10 @@ public final class ChatConversationViewModel {
                 rows.append(.broadcastReference(Self.broadcastReference(for: message)))
                 continue
             }
+            if message.messageType == "system" {
+                rows.append(.systemLine(ChatDayDivider(id: message.id, label: message.messageText ?? "")))
+                continue
+            }
             let side: ChatMessageSide = (message.userId == currentUserId) ? .outgoing : .incoming
             let previousSameSide =
                 index > 0 &&

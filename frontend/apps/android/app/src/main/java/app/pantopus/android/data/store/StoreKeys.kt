@@ -10,6 +10,7 @@ import app.pantopus.android.data.api.models.hub.HubDiscoveryResponse
 import app.pantopus.android.data.api.models.hub.HubResponse
 import app.pantopus.android.data.api.models.hub.HubTodayResponse
 import app.pantopus.android.data.api.models.hub.NotificationPreferences
+import app.pantopus.android.data.api.models.location.SavedViewingArea
 import app.pantopus.android.data.api.models.location.ViewingLocationPayload
 import app.pantopus.android.data.api.models.neighborhood.NeighborhoodCells
 import app.pantopus.android.data.api.models.neighborhood.NeighborhoodMeter
@@ -17,9 +18,13 @@ import app.pantopus.android.data.api.models.notifications.NotificationUnreadCoun
 import app.pantopus.android.data.api.models.notifications.NotificationsListResponse
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.place.PlaceSectionId
+import app.pantopus.android.data.api.models.posts.MyPostsResponse
 import app.pantopus.android.data.api.models.posts.PostDetailResponse
+import app.pantopus.android.data.api.models.posts.SavedPostsResponse
 import app.pantopus.android.data.api.models.postsmap.PostsMapResponse
+import app.pantopus.android.data.api.models.profile.PublicProfileDto
 import app.pantopus.android.data.api.models.saved_places.SavedPlacesListResponse
+import app.pantopus.android.data.api.models.support_trains.SupportTrainDetailDto
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsListResponse
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsNearbyResponse
 import app.pantopus.android.data.api.models.users.InviteCodeDto
@@ -118,6 +123,14 @@ object StoreKeys {
             topics = setOf("supporttrain:*"),
         )
 
+    /** Memory-only title and slots; the mixed detail reply's sensitive fields never enter this key. */
+    fun supportTrain(id: String) =
+        StoreKey<SupportTrainDetailDto>(
+            "api/activities/support-trains/$id",
+            kind = StoreKind.SUPPORT_TRAINS,
+            topics = setOf("supporttrain:$id"),
+        )
+
     /** Support Trains near [latitude], [longitude] (rounded with [roundCoordinate] before they get here). */
     fun nearbySupportTrains(
         latitude: Double,
@@ -136,6 +149,10 @@ object StoreKeys {
 
     /** The area the viewer chose in the Nearby context bar (`GET /api/location`; kind You: fresh 10 minutes). */
     val viewingLocation = StoreKey<ViewingLocationPayload>("api/location", kind = StoreKind.YOU, topics = setOf(StoreTopics.PROFILE_ME))
+
+    /** Client-only: the chosen area (or none) outlives the process, so saved Pulse and map pages open cold and offline. */
+    val viewingArea =
+        StoreKey<SavedViewingArea>("client/viewing-area", kind = StoreKind.YOU, type = SavedViewingArea::class.java)
 
     /** Post pins only; household pins must always pass their own current access check. */
     @Suppress("LongParameterList")
@@ -182,6 +199,34 @@ object StoreKeys {
             kind = StoreKind.NEARBY,
             topics = setOf(StoreTopics.POSTS),
             type = FeedResponse::class.java,
+        )
+
+    fun publicProfile(
+        identifier: String,
+        byUsername: Boolean = false,
+    ) = StoreKey<PublicProfileDto>(
+        "api/users/${if (byUsername) "username" else "id"}/$identifier",
+        kind = StoreKind.PEOPLE,
+        topics = setOf("profile:$identifier", StoreTopics.PROFILE_ME, StoreTopics.CHATS),
+    )
+
+    fun userPosts(
+        userId: String,
+        limit: Int,
+        includeArchived: Boolean,
+    ) = StoreKey<MyPostsResponse>(
+        "api/posts/user/$userId",
+        mapOf("limit" to limit.toString(), "include_archived" to includeArchived.takeIf { it }?.toString()),
+        kind = StoreKind.POST,
+        topics = setOf(StoreTopics.POSTS, "profile:$userId"),
+    )
+
+    fun savedPosts(limit: Int) =
+        StoreKey<SavedPostsResponse>(
+            "api/posts/saved",
+            mapOf("limit" to limit.toString()),
+            kind = StoreKind.POST,
+            topics = setOf(StoreTopics.POSTS, StoreTopics.PROFILE_ME),
         )
 
     /** One post and its comments (contract §4 "A post": fresh 1 minute, never saved on the phone). */

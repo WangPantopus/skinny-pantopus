@@ -37,6 +37,9 @@ const sharp = require('sharp');
 const { chosenUsernameOrNull } = require('../utils/personalUsername');
 const CHAT_DELETED_REDACT_DAYS = Math.max(parseInt(process.env.CHAT_DELETED_REDACT_DAYS || '180', 10) || 180, 1);
 const REDACTED_DELETED_MESSAGE = '[deleted message]';
+// Read marks update only rows with something unread (NULL counts too, so the unread trigger's `+ 1` works again).
+// A repeated read is then no write, and the database's change signal doesn't reach every member of the room.
+const HAS_UNREAD = 'unread_count.neq.0,unread_count.is.null';
 const LOCAL_PROFILE_IDENTITY_SELECT = [
   'id',
   'user_id',
@@ -983,6 +986,11 @@ router.get('/rooms/:roomId', verifyToken, async (req, res) => {
         room.participants = room.participants.filter((p) => !hiddenMembers.has(`${room.id}:${p.user_id}`));
       }
     }
+    // A plan's room names its plan, so the chat can show the plan strip and open it.
+    if (room.type === 'plan') {
+      const { data: plan } = await supabaseAdmin.from('Plan').select('post_id').eq('chat_room_id', roomId).maybeSingle();
+      room.plan_id = plan?.post_id || null;
+    }
     res.json({ room: serializeChatRoomForViewer(room) });
     
   } catch (err) {
@@ -1178,11 +1186,30 @@ router.post('/group', verifyToken, groupChatLimiter, validate(createGroupChatSch
  * PUT /api/chat/rooms/:roomId
  * Update room details (name, description)
  */
+/**
+ * A plan's chat (type 'plan') changes its members and its name only through the
+ * Plans endpoints (routes/plans.js), which keep it in step with who's in.
+ * Answers for the caller and returns true when the room is a plan's (or can't be read).
+ */
+async function refusePlanRoom(roomId, res) {
+  const { data: room, error } = await supabaseAdmin.from('ChatRoom').select('type').eq('id', roomId).maybeSingle();
+  if (error) {
+    res.status(503).json({ error: 'Chat is unavailable. Please try again.' });
+    return true;
+  }
+  if (room?.type === 'plan') {
+    res.status(403).json({ error: "A plan's chat changes only through the plan.", code: 'PLAN_ROOM' });
+    return true;
+  }
+  return false;
+}
+
 router.put('/rooms/:roomId', verifyToken, validate(updateRoomSchema), async (req, res) => {
   try {
     const { roomId } = req.params;
     const userId = req.user.id;
     const { roomName, roomDescription } = req.body;
+    if (await refusePlanRoom(roomId, res)) return;
     
     // Verify user is owner/admin
     const { data: participant } = await supabaseAdmin
@@ -1428,6 +1455,12 @@ router.post('/conversations/:otherUserId/read', verifyToken, async (req, res) =>
       readTargetUserId = asBusinessUserId;
     }
 
+    // Same rule as starting a chat: a "conversation with yourself" (or with the business you read for) would
+    // match every room the reader is in and mark them all read.
+    if (String(otherUserId) === String(readTargetUserId)) {
+      return res.status(400).json({ error: 'Cannot mark a conversation with yourself as read' });
+    }
+
     const { data: mineRows, error: mineErr } = await supabaseAdmin
       .from('ChatParticipant')
       .select('room_id')
@@ -1472,7 +1505,8 @@ router.post('/conversations/:otherUserId/read', verifyToken, async (req, res) =>
         last_read_at: stamp
       })
       .in('room_id', sharedRoomIds)
-      .in('user_id', usersToClear);
+      .in('user_id', usersToClear)
+      .or(HAS_UNREAD);
 
     if (updateErr) {
       logger.error('Error updating participants for conversation read', { requestId: req.requestId, userId, otherUserId, error: updateErr.message });
@@ -2224,7 +2258,7 @@ router.post('/rooms/:roomId/read', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    // Update participant's read state directly
+    // Update participant's read state directly; with nothing unread there is no row to change (count stays 0)
     const { data, error } = await supabaseAdmin
       .from('ChatParticipant')
       .update({
@@ -2233,6 +2267,7 @@ router.post('/rooms/:roomId/read', verifyToken, async (req, res) => {
       })
       .eq('room_id', roomIdStr)
       .eq('user_id', readTargetUserId)
+      .or(HAS_UNREAD)
       .select('unread_count')
       .maybeSingle();
     
@@ -2268,6 +2303,7 @@ router.post('/rooms/:roomId/participants', verifyToken, participantLimiter, asyn
     if (!newUserId) {
       return res.status(400).json({ error: 'userId required' });
     }
+    if (await refusePlanRoom(roomId, res)) return;
     
     // Verify user is owner/admin
     const { data: participant } = await supabaseAdmin
@@ -2344,6 +2380,7 @@ router.delete('/rooms/:roomId/participants/:participantUserId', verifyToken, par
   try {
     const { roomId, participantUserId } = req.params;
     const userId = req.user.id;
+    if (await refusePlanRoom(roomId, res)) return;
     
     // Check if removing self or if user is admin/owner
     const isSelf = userId === participantUserId;
@@ -2529,9 +2566,9 @@ router.get('/unified-conversations', verifyToken, async (req, res) => {
     const closedRoomIds = await closedGigRoomIds(joinedRooms.map((p) => p.room), userId);
     const roomList = joinedRooms.filter((p) => !closedRoomIds.has(String(p.room.id)));
 
-    // Separate group/home rooms (not mergeable) from direct/gig rooms (mergeable by person)
+    // Separate group/home/plan rooms (not mergeable) from direct/gig rooms (mergeable by person)
     const mergeableParticipants = roomList.filter(p => p.room.type === 'direct' || p.room.type === 'gig');
-    const groupHomeParticipants = roomList.filter(p => p.room.type === 'group' || p.room.type === 'home');
+    const groupHomeParticipants = roomList.filter(p => ['group', 'home', 'plan'].includes(p.room.type));
 
     // Step 2: For mergeable rooms, find other participants. The messages and topics of steps 4-5
     // don't depend on them, so they're fetched in the same round trip (previews for every listed
@@ -2628,6 +2665,14 @@ router.get('/unified-conversations', verifyToken, async (req, res) => {
       conversations.push(conv);
     }
 
+    // A plan's room names its plan (one read for all of them).
+    const planRoomIds = groupHomeParticipants.filter(p => p.room.type === 'plan').map(p => p.room_id);
+    const planByRoom = new Map();
+    if (planRoomIds.length > 0) {
+      const { data: plans } = await supabaseAdmin.from('Plan').select('post_id, chat_room_id').in('chat_room_id', planRoomIds);
+      for (const plan of plans || []) planByRoom.set(String(plan.chat_room_id), plan.post_id);
+    }
+
     // Step 5: Process group/home rooms using batch-fetched messages
     for (const p of groupHomeParticipants) {
       const roomId = p.room_id;
@@ -2651,6 +2696,7 @@ router.get('/unified-conversations', verifyToken, async (req, res) => {
         last_message_preview: lastMessagePreview,
         topics: [],
         _type: 'room',
+        ...(p.room.type === 'plan' ? { plan_id: planByRoom.get(String(roomId)) || null, is_active: p.room.is_active !== false } : {}),
       });
     }
 

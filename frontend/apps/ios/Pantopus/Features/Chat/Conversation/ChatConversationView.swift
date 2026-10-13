@@ -80,6 +80,8 @@ public struct ChatConversationView: View {
     @State private var hasLandedAtLatest = false
     @Environment(\.openURL) private var openURL
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// A Nearby Plan's chat (board A4): the plan above the messages.
+    @Environment(\.chatPlanContext) private var planContext
     /// Presentation mode — drives the AI chrome (avatar, welcome card,
     /// reply bubbles). Default `.dm`.
     private let mode: ChatConversationMode
@@ -141,6 +143,7 @@ public struct ChatConversationView: View {
                 ChatSelectionTopBar(count: selectedMessageIds.count, onCancel: exitSelection)
             }
             gigContextStrip
+            if let planContext { PlanChatStrip(context: planContext) }
             if mode == .creatorThread {
                 ChatCreatorAudienceStrip(
                     context: resolvedCreatorContext,
@@ -197,6 +200,8 @@ public struct ChatConversationView: View {
                 ChatSelectionDeleteBar(selectedCount: selectedMessageIds.count) {
                     bulkDeleteConfirmPresented = true
                 }
+            } else if let closed = planContext?.closedNote {
+                PlanChatClosedLine(text: closed)
             } else {
                 actionBanner
                 sendLimitBanner
@@ -1166,6 +1171,8 @@ extension ChatConversationView {
             ChatBroadcastReferenceCard(reference: reference)
         case let .bubble(bubble):
             bubbleRowView(bubble, rowWidth: rowWidth)
+        case let .systemLine(line):
+            ChatSystemLineRow(text: line.label)
         }
     }
 
@@ -1581,6 +1588,8 @@ private struct FanUpgradeBenefit: View {
 // MARK: - Header
 
 private struct ChatConversationHeader: View {
+    /// A Nearby Plan's chat counts "people" (board A4).
+    @Environment(\.chatPlanContext) private var planContext
     let mode: ChatConversationMode
     let counterparty: ChatCounterparty
     let creatorContext: ChatCreatorThreadContext
@@ -1801,7 +1810,7 @@ private struct ChatConversationHeader: View {
             let parts = [status, locality].compactMap { $0 }
             return parts.isEmpty ? nil : parts.joined(separator: " · ")
         case let .group(_, memberCount):
-            return memberCount.map { "\($0) members" }
+            return memberCount.map { planContext == nil ? "\($0) members" : "\($0) \($0 == 1 ? "person" : "people")" }
         case .ai:
             return "Replies in seconds · powered by Pantopus AI"
         }
@@ -2253,6 +2262,25 @@ private struct ChatDayDividerRow: View {
             Rectangle().fill(Theme.Color.appBorder).frame(height: 1)
         }
         .padding(.vertical, 6)
+    }
+}
+
+/// A server-written line (a plan's "Alex is on the way"): a small centered
+/// pill on the sunken surface, no sender (board A4).
+private struct ChatSystemLineRow: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 12))
+            .foregroundStyle(Theme.Color.appTextSecondary)
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, Spacing.s3)
+            .padding(.vertical, 5)
+            .background(Capsule().fill(Theme.Color.appSurfaceSunken))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, Spacing.s1)
+            .accessibilityIdentifier("chatSystemLine")
     }
 }
 

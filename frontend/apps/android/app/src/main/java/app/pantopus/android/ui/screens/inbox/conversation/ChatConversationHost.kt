@@ -47,6 +47,7 @@ fun ChatConversationHost(
     onOpenListing: (String) -> Unit = {},
     arrivalRoomId: String? = null,
     onOpenProfile: (String) -> Unit = {},
+    onOpenPlan: (String) -> Unit = {},
     authViewModel: ChatConversationHostViewModel = hiltViewModel(),
 ) {
     val state by authViewModel.authState.collectAsStateWithLifecycle()
@@ -76,5 +77,6 @@ fun ChatConversationHost(
         onOpenListing = onOpenListing,
         onContentLoaded = { arrival?.let(DeepLinkRouter::completeArrival) },
         onOpenProfile = onOpenProfile,
+        onOpenPlan = onOpenPlan,
     )
 }

@@ -86,6 +86,7 @@ import androidx.compose.material.icons.filled.EmergencyShare
 import androidx.compose.material.icons.filled.EnergySavingsLeaf
 import androidx.compose.material.icons.filled.Engineering
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.EscalatorWarning
 import androidx.compose.material.icons.filled.EventAvailable
 import androidx.compose.material.icons.filled.EventBusy
 import androidx.compose.material.icons.filled.EventNote
@@ -128,6 +129,7 @@ import androidx.compose.material.icons.filled.Laptop
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.LocalCafe
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.LocalFlorist
 import androidx.compose.material.icons.filled.LocalShipping
@@ -206,6 +208,7 @@ import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.Smartphone
 import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.SportsBaseball
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.Support
@@ -700,6 +703,13 @@ enum class PantopusIcon(
     // `git-merge` (branch merging into one); Material `MergeType` is the
     // closest available.
     GitMerge("git-merge"),
+
+    // Nearby Plans type glyphs (board P1): watch party is [Tv]; playdate is an adult and a child (Material
+    // `EscalatorWarning`, SF `figure.and.child.holdinghands`); pickup game is a ball (Material `SportsBaseball`,
+    // SF `tennisball`); walk & coffee is Lucide `coffee` (Material `LocalCafe`, SF `cup.and.saucer`).
+    AdultChild("adult-child"),
+    Ball("ball"),
+    Coffee("coffee"),
     ;
 
     companion object {
@@ -1133,6 +1143,9 @@ internal fun PantopusIcon.source(): IconSource =
         // G2 collective explainer: git-merge branch glyph. Material `MergeType`
         // (two paths merging) is the closest available vector.
         PantopusIcon.GitMerge -> IconSource.Material(Icons.Filled.MergeType)
+        PantopusIcon.AdultChild -> IconSource.Material(Icons.Filled.EscalatorWarning)
+        PantopusIcon.Ball -> IconSource.Material(Icons.Filled.SportsBaseball)
+        PantopusIcon.Coffee -> IconSource.Material(Icons.Filled.LocalCafe)
     }
 
 /**
