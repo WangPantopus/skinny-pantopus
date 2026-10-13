@@ -319,17 +319,17 @@ class EditProfileViewModel
         /** Idempotent — refuses to refetch when already loaded. */
         fun load() {
             if (_state.value is EditProfileUiState.Loaded) return
-            if (!isDirty) repo.ownProfileCopy()?.user?.let(::seedProfile)
+            repo.ownProfileCopy()?.user?.let(::seedProfile)
             if (_state.value !is EditProfileUiState.Loaded) _state.value = EditProfileUiState.Loading
             viewModelScope.launch {
                 when (val result = repo.ownProfile()) {
                     is NetworkResult.Success -> {
                         // A quiet refresh cannot replace fields the person has started editing.
                         if (!isDirty) seedProfile(result.data.user)
-                        _state.value = EditProfileUiState.Loaded
                     }
                     is NetworkResult.Failure -> {
-                        if (result.error.refusesStoredCopy || _state.value !is EditProfileUiState.Loaded) {
+                        if (result.error.refusesStoredCopy) clearRefusedProfile()
+                        if (_state.value !is EditProfileUiState.Loaded || result.error.refusesStoredCopy) {
                             _state.value =
                                 EditProfileUiState.Error(
                                     result.error.message.ifBlank { "Couldn't load profile." },
@@ -338,6 +338,19 @@ class EditProfileViewModel
                     }
                 }
             }
+        }
+
+        /** An access refusal retires the editor's seeded copy as well as the repository's copy. */
+        private fun clearRefusedProfile() {
+            _fields.value = EditProfileField.entries.associateWith { FormFieldState(id = it.key) }
+            _email.value = ""
+            _emailVerified.value = false
+            _avatarUrl.value = null
+            _avatarInitial.value = "?"
+            _skills.value = emptyList()
+            _savedSkills.value = emptyList()
+            _skillDraft.value = ""
+            usernameCheck.reset("", true)
         }
 
         private fun seedProfile(profile: UserProfile) {
