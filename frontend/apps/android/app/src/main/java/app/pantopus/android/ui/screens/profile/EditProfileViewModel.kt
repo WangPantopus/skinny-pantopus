@@ -14,6 +14,7 @@ import app.pantopus.android.data.api.models.ai.AIDraftPostRequest
 import app.pantopus.android.data.api.models.users.ProfileUpdateRequest
 import app.pantopus.android.data.api.models.users.UserProfile
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.network.NetworkMonitor
 import app.pantopus.android.data.profile.ProfileRepository
@@ -327,7 +328,8 @@ class EditProfileViewModel
                         if (!isDirty) seedProfile(result.data.user)
                     }
                     is NetworkResult.Failure -> {
-                        if (_state.value !is EditProfileUiState.Loaded) {
+                        if (result.error.refusesStoredCopy) clearRefusedProfile()
+                        if (_state.value !is EditProfileUiState.Loaded || result.error.refusesStoredCopy) {
                             _state.value =
                                 EditProfileUiState.Error(
                                     result.error.message.ifBlank { "Couldn't load profile." },
@@ -336,6 +338,19 @@ class EditProfileViewModel
                     }
                 }
             }
+        }
+
+        /** An access refusal retires the editor's seeded copy as well as the repository's copy. */
+        private fun clearRefusedProfile() {
+            _fields.value = EditProfileField.entries.associateWith { FormFieldState(id = it.key) }
+            _email.value = ""
+            _emailVerified.value = false
+            _avatarUrl.value = null
+            _avatarInitial.value = "?"
+            _skills.value = emptyList()
+            _savedSkills.value = emptyList()
+            _skillDraft.value = ""
+            usernameCheck.reset("", true)
         }
 
         private fun seedProfile(profile: UserProfile) {
