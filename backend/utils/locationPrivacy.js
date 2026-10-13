@@ -201,9 +201,19 @@ function leastPrecise(a, b) {
   return precisionRank(a) >= precisionRank(b) ? a : b;
 }
 
+/**
+ * The furthest, in degrees of latitude or longitude, that applyLocationPrecision
+ * moves a point: approx_area moves it less than 0.01° and neighborhood_only at
+ * most 0.005°. A query that must return everything displayed inside a box
+ * searches stored points in the box widened by this much, then keeps what is
+ * displayed inside the box itself.
+ */
+const DISPLAYED_POINT_MAX_SHIFT_DEGREES = 0.01;
+
 module.exports = {
   applyLocationPrecision,
   resolveGigPrecision,
   precisionRank,
   leastPrecise,
+  DISPLAYED_POINT_MAX_SHIFT_DEGREES,
 };
