@@ -873,30 +873,34 @@ private class RadonTodayState(
     /** Fills the yes sheet from a photo or PDF of the lab's report. Nothing is saved: the person checks it and taps Save. */
     suspend fun readReport(report: Uri) {
         choosingReport = false
-        val reader = reportReader ?: return
-        // Only the yes sheet's own answer is filled, and one reading at a time.
-        if (sheet != "yes" || retained != null) return
-        if (busy || readingReport) return
+        val reader = reportReader
+        if (reader == null || !readyForReport) return
         readingReport = true
         reportMessage = null
         try {
             requireCurrent()
-            val reading = reader(report) ?: return
+            val reading = reader(report)
             requireCurrent()
-            if (sheet != "yes") return
-            when (reading) {
-                is RadonReportReading.Read -> fill(reading)
-                is RadonReportReading.Failed -> {
-                    reportMessage = reading.message
-                    reportFailed = true
-                }
-            }
+            if (reading != null && sheet == "yes") show(reading)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (refused: IllegalStateException) {
             Timber.w(refused, "radon report reading skipped: the card is no longer current")
         } finally {
             if (runCatching { requireCurrent() }.isSuccess) readingReport = false
+        }
+    }
+
+    /** Only the yes sheet's own answer is filled, and one reading at a time. */
+    private val readyForReport get() = sheet == "yes" && retained == null && !busy && !readingReport
+
+    private fun show(reading: RadonReportReading) {
+        when (reading) {
+            is RadonReportReading.Read -> fill(reading)
+            is RadonReportReading.Failed -> {
+                reportMessage = reading.message
+                reportFailed = true
+            }
         }
     }
 
