@@ -1996,6 +1996,19 @@ router.get('/map', verifyToken, async (req, res) => {
       }
     }
 
+    // ── Plans layer (Nearby Plans) ──
+    // Only while the `plans` flag is on for this viewer; the area point for everyone,
+    // the exact place for the host and people who are in (services/plans/planMap.js).
+    if (enabledLayers.includes('plans')) {
+      try {
+        const { planPins } = require('../services/plans/planMap');
+        results.push(...await planPins(req.user, { south: s, west: w, north: n, east: e }, req.query));
+      } catch (error) {
+        logger.error('Error fetching map plans', { error: error.message, userId });
+        if (enabledLayers.filter(Boolean).every(layer => layer === 'plans')) throw error;
+      }
+    }
+
     // When the viewport is empty, point to the nearest post this viewer's map would
     // show, at the point it would show it (docs/location-privacy-matrix.md), never a
     // stored point or a post they can't see.
