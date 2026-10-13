@@ -35,6 +35,7 @@ import app.pantopus.android.data.store.ScreenStore
 import app.pantopus.android.data.store.StoreKeys
 import app.pantopus.android.data.store.StoreTopics
 import app.pantopus.android.data.store.Stored
+import app.pantopus.android.data.store.asResult
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -191,14 +192,39 @@ class PostsRepository
             cursorCreatedAt: String? = null,
             cursorId: String? = null,
             includeArchived: Boolean = false,
-        ): NetworkResult<MyPostsResponse> =
-            safeApiCall { api.userPosts(userId, limit, cursorCreatedAt, cursorId, includeArchived.takeIf { it }) }
+            force: Boolean = false,
+        ): NetworkResult<MyPostsResponse> {
+            if (cursorCreatedAt != null || cursorId != null) {
+                return safeApiCall { api.userPosts(userId, limit, cursorCreatedAt, cursorId, includeArchived.takeIf { it }) }
+            }
+            val stored =
+                store.read(StoreKeys.userPosts(userId, limit, includeArchived), force) { etag ->
+                    conditionalApiCall { api.userPostsConditional(userId, limit, includeArchived.takeIf { it }, etag) }
+                }
+            return stored.data?.let { NetworkResult.Success(it) } ?: stored.asResult()
+        }
+
+        fun userPostsCopy(
+            userId: String,
+            limit: Int,
+            includeArchived: Boolean,
+        ): Stored<MyPostsResponse> = store.peek(StoreKeys.userPosts(userId, limit, includeArchived))
 
         /** `GET /api/posts/saved` — My posts' Saved tab. */
         suspend fun savedPosts(
             limit: Int = 50,
             offset: Int = 0,
-        ): NetworkResult<SavedPostsResponse> = safeApiCall { api.savedPosts(limit, offset) }
+            force: Boolean = false,
+        ): NetworkResult<SavedPostsResponse> {
+            if (offset != 0) return safeApiCall { api.savedPosts(limit, offset) }
+            val stored =
+                store.read(StoreKeys.savedPosts(limit), force) { etag ->
+                    conditionalApiCall { api.savedPostsConditional(limit, etag) }
+                }
+            return stored.data?.let { NetworkResult.Success(it) } ?: stored.asResult()
+        }
+
+        fun savedPostsCopy(limit: Int): Stored<SavedPostsResponse> = store.peek(StoreKeys.savedPosts(limit))
 
         /** `DELETE /api/posts/:id`. */
         suspend fun deletePost(id: String): NetworkResult<Unit> = safeApiCall { api.deletePost(id) }.also(::markPostsChanged)
@@ -267,7 +293,7 @@ class PostsRepository
 
         /** An own post created, edited, deleted or archived: every feed's stored first page goes out of date. */
         private fun markPostsChanged(result: NetworkResult<*>) {
-            if (result is NetworkResult.Success) store.markStale(StoreTopics.POSTS)
+            if (result is NetworkResult.Success) store.markEdited(StoreTopics.POSTS)
         }
 
         /** An own action on a post (a like, a comment, a save, a repost): its stored copy goes out of date. */
@@ -275,7 +301,10 @@ class PostsRepository
             postId: String,
             result: NetworkResult<*>,
         ) {
-            if (result is NetworkResult.Success) store.markStale("post:$postId")
+            if (result is NetworkResult.Success) {
+                store.markEdited("post:$postId")
+                store.markEdited(StoreTopics.POSTS)
+            }
         }
     }
 
