@@ -115,6 +115,9 @@ public struct RootTabView: View {
     @State private var profileInitialRoute: YouRoute?
     @State private var addHomeRequest: UUID?
     @Environment(AuthManager.self) private var auth
+    @Environment(\.scenePhase) private var scenePhase
+    /// Nearby Plans' two server flags, read at launch and on foreground.
+    @State private var plansFlags = PlansFlags.shared
     /// The You cover's model, kept across openings (Instant Screens): the
     /// cover shows its last content at once and refreshes it quietly once
     /// stale. Replaced for another account.
@@ -168,6 +171,11 @@ public struct RootTabView: View {
                 if youModelUserID != nil { youModel = MeViewModel() }
                 youModelUserID = signedInUserID
             }
+            await plansFlags.refresh(account: signedInUserID)
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            Task { await plansFlags.refresh(account: signedInUserID) }
         }
         .onChange(of: chatBadgeStore.unreadMessages) { _, unread in
             model.messagesBadge = unread
