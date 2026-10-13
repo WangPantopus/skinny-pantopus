@@ -331,6 +331,9 @@ class IconTest {
             "calendar-off",
             // G2 collective setup explainer note (collective-frames.jsx EXPLAIN).
             "git-merge",
+            "adult-child",
+            "ball",
+            "coffee",
         )
 
     @Test

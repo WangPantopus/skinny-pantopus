@@ -275,8 +275,7 @@ export { searchProfiles } from './endpoints/identitySearch';
 export { getMagicDraft, getBasicDraft, magicPost, undoTask, getTemplateLibrary, getSavedTemplates, saveTemplate, deleteSavedTemplate, useTemplate, getMagicSettings, updateMagicSettings } from './endpoints/magicTask';
 
 // Convenience exports from AI Agent
-export { streamChat, draftListing, draftListingFromImages, draftPost, summarizeMail, getPlaceBrief, getConversations as getAIConversations, deleteConversation as deleteAIConversation, transcribeAudio } from './endpoints/ai';
-export type { TranscriptionResult } from './endpoints/ai';
+export { streamChat, draftListing, draftListingFromImages, draftPost, summarizeMail, getPlaceBrief, getConversations as getAIConversations, deleteConversation as deleteAIConversation } from './endpoints/ai';
 
 // Convenience exports from Mail Compose
 export { sendComposedMail, searchRecipients, getRecipientHomeContext, requestAISuggestion, uploadVoicePostscript, getEscrowedMailPublic, claimEscrowedMail, withdrawEscrowedMail } from './endpoints/mailCompose';

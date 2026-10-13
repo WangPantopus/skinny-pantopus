@@ -265,7 +265,7 @@ class TodayTabViewModel
                 homeId = null
                 _state.value = TodayTabUiState.Loading
             }
-            _refreshing.value = force && shown is TodayTabUiState.Loaded
+            _refreshing.value = true
             if (force) radonMemory.readAgain()
             loadJob =
                 viewModelScope.launch {
@@ -389,7 +389,11 @@ class TodayTabViewModel
             copy.data?.let {
                 _state.value =
                     TodayTabUiState.Loaded(
-                        it, savedPlace = place, fetchedAt = copy.fetchedAt, refreshFailed = copy.failure != null,
+                        it,
+                        savedPlace = place,
+                        savedAnchorMatches = shownAnchor(place),
+                        fetchedAt = copy.fetchedAt,
+                        refreshFailed = copy.failure != null,
                     )
             }
             val result = savedPlacesRepository.todayStored(place.id, force)
@@ -420,6 +424,7 @@ class TodayTabViewModel
                 TodayTabUiState.Loaded(
                     intelligence,
                     savedPlace = place,
+                    savedAnchorMatches = shownAnchor(place),
                     fetchedAt = copy.fetchedAt,
                     refreshFailed = copy.failure != null,
                 )
@@ -436,6 +441,10 @@ class TodayTabViewModel
                 _showMorningCard.value = preferences.dailyBriefingPromptedAt == null
             }
         }
+
+        /** A match already on screen for [place] keeps its chip and briefing card while the anchor is checked again. */
+        private fun shownAnchor(place: SavedPlaceDto): Boolean =
+            (_state.value as? TodayTabUiState.Loaded)?.takeIf { it.savedPlace?.id == place.id }?.savedAnchorMatches == true
 
         private suspend fun checkSavedAnchor(
             place: SavedPlaceDto,
