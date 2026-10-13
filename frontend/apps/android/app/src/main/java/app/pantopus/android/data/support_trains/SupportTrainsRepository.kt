@@ -22,6 +22,7 @@ import app.pantopus.android.data.api.models.support_trains.UpdateSupportTrainSlo
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.conditionalApiCall
 import app.pantopus.android.data.api.net.mapFresh
+import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.SupportTrainActionsApi
 import app.pantopus.android.data.api.services.SupportTrainsApi
@@ -186,7 +187,23 @@ class SupportTrainsRepository
          * Detail / A13.13 Manage). Route
          * `backend/routes/supportTrains.js:3444`.
          */
-        suspend fun detail(supportTrainId: String): NetworkResult<SupportTrainDetailDto> = safeApiCall { api.detail(supportTrainId) }
+        suspend fun detail(supportTrainId: String): NetworkResult<SupportTrainDetailDto> {
+            val key = StoreKeys.supportTrain(supportTrainId)
+            val remember = store.writer(key)
+            val forget = store.remover(key)
+            // This mixed response always checks access. Only the allowlisted title/slots survive the visit.
+            return safeApiCall { api.detail(supportTrainId) }.also { result ->
+                when (result) {
+                    is NetworkResult.Success -> remember(result.data.summaryCopy())
+                    is NetworkResult.Failure -> if (result.error.refusesStoredCopy) forget()
+                }
+            }
+        }
+
+        /** Safe train/slot summary only, in bounded account-scoped memory and never on disk. */
+        fun detailCopy(supportTrainId: String): Stored<SupportTrainDetailDto> = store.peek(StoreKeys.supportTrain(supportTrainId))
+
+        fun detailIsCurrent(supportTrainId: String): Boolean = store.isCurrent(StoreKeys.supportTrain(supportTrainId))
 
         /**
          * `POST /api/support-trains/:id/updates` — broadcast an update.

@@ -14,6 +14,7 @@ import app.pantopus.android.data.api.models.ai.AIDraftPostRequest
 import app.pantopus.android.data.api.models.users.ProfileUpdateRequest
 import app.pantopus.android.data.api.models.users.UserProfile
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.network.NetworkMonitor
 import app.pantopus.android.data.profile.ProfileRepository
@@ -318,27 +319,46 @@ class EditProfileViewModel
         /** Idempotent — refuses to refetch when already loaded. */
         fun load() {
             if (_state.value is EditProfileUiState.Loaded) return
-            _state.value = EditProfileUiState.Loading
+            repo.ownProfileCopy()?.user?.let(::seedProfile)
+            if (_state.value !is EditProfileUiState.Loaded) _state.value = EditProfileUiState.Loading
             viewModelScope.launch {
                 when (val result = repo.ownProfile()) {
                     is NetworkResult.Success -> {
-                        hydrate(result.data.user)
-                        // Seeded here rather than in `hydrate`: the PATCH
-                        // echo carries no `skills` key
-                        // (`backend/routes/users.js:2194`), so hydrating
-                        // skills there would blank the list after a save.
-                        _skills.value = result.data.user.skills.orEmpty()
-                        _savedSkills.value = _skills.value
-                        _state.value = EditProfileUiState.Loaded
+                        // A quiet refresh cannot replace fields the person has started editing.
+                        if (!isDirty) seedProfile(result.data.user)
                     }
                     is NetworkResult.Failure -> {
-                        _state.value =
-                            EditProfileUiState.Error(
-                                result.error.message.ifBlank { "Couldn't load profile." },
-                            )
+                        if (result.error.refusesStoredCopy) clearRefusedProfile()
+                        if (_state.value !is EditProfileUiState.Loaded || result.error.refusesStoredCopy) {
+                            _state.value =
+                                EditProfileUiState.Error(
+                                    result.error.message.ifBlank { "Couldn't load profile." },
+                                )
+                        }
                     }
                 }
             }
+        }
+
+        /** An access refusal retires the editor's seeded copy as well as the repository's copy. */
+        private fun clearRefusedProfile() {
+            _fields.value = EditProfileField.entries.associateWith { FormFieldState(id = it.key) }
+            _email.value = ""
+            _emailVerified.value = false
+            _avatarUrl.value = null
+            _avatarInitial.value = "?"
+            _skills.value = emptyList()
+            _savedSkills.value = emptyList()
+            _skillDraft.value = ""
+            usernameCheck.reset("", true)
+        }
+
+        private fun seedProfile(profile: UserProfile) {
+            hydrate(profile)
+            // Skills have their own PUT and are absent from the PATCH echo.
+            _skills.value = profile.skills.orEmpty()
+            _savedSkills.value = _skills.value
+            _state.value = EditProfileUiState.Loaded
         }
 
         fun refresh() = load()

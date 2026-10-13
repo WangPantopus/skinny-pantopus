@@ -28,6 +28,7 @@ jest.mock('../../services/notificationService', () => ({
 
 const express = require('express');
 const request = require('supertest');
+const { widenRadiusMeters } = require('../../services/marketplace/locationPrivacy');
 
 const LISTING_LOCAL = '11111111-1111-1111-8111-111111111111';
 const LISTING_REMOTE = '22222222-2222-1222-8222-222222222222';
@@ -129,7 +130,9 @@ describe('Listings Remote Regression', () => {
     // The local listing should also be present
     const local = res.body.listings.find(l => l.id === LISTING_LOCAL);
     expect(local).toBeDefined();
-    expect(local.distance_meters).toBe(500);
+    // Measured to the point the viewer is shown, not the RPC's stored-point distance
+    expect(local.distance_meters).toEqual(expect.any(Number));
+    expect(local.distance_meters).not.toBe(500);
 
     // Verify the RPC was called (not bypassed)
     expect(capturedParams).toBeTruthy();
@@ -158,7 +161,7 @@ describe('Listings Remote Regression', () => {
       .expect(200);
 
     expect(capturedParams).toBeTruthy();
-    expect(capturedParams.p_radius_meters).toBe(1609340);
+    expect(capturedParams.p_radius_meters).toBe(widenRadiusMeters(1609340));
   });
 
   it('keeps radius meters precedence over radiusMiles for nearby listing search', async () => {
@@ -183,7 +186,7 @@ describe('Listings Remote Regression', () => {
       .expect(200);
 
     expect(capturedParams).toBeTruthy();
-    expect(capturedParams.p_radius_meters).toBe(16000);
+    expect(capturedParams.p_radius_meters).toBe(widenRadiusMeters(16000));
   });
 
   it('honors radiusMiles for location-aware listing search', async () => {
@@ -208,6 +211,6 @@ describe('Listings Remote Regression', () => {
       .expect(200);
 
     expect(capturedParams).toBeTruthy();
-    expect(capturedParams.p_radius_meters).toBe(40234);
+    expect(capturedParams.p_radius_meters).toBe(widenRadiusMeters(40234));
   });
 });

@@ -30,7 +30,7 @@ fun HomeOwnershipSecurityScreen(
     val online by viewModel.isOnline.collectAsStateWithLifecycle()
     val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
-    HomeCopyLifecycle(viewModel::load, viewModel::suspendContent)
+    HomeCopyLifecycle(viewModel::load, viewModel::suspendContent, observeStoreChanges = true)
     OfflineBannerHost(isOffline = !online) {
         GroupedListScreen(
             title = viewModel.title,
