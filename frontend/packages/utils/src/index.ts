@@ -69,6 +69,20 @@ export function buildSupportTrainAppUrl(supportTrainId: string): string {
   return `pantopus:///support-trains/${encodeURIComponent(supportTrainId)}`;
 }
 
+// ─── Nearby Plans share links (mirror buildSupportTrain*) ────
+
+export function buildPlanPath(planId: string): string {
+  return `/plans/${encodeURIComponent(planId)}`;
+}
+
+export function buildPlanShareUrl(planId: string): string {
+  return `${APP_WEB_URL}${buildPlanPath(planId)}`;
+}
+
+export function buildPlanAppUrl(planId: string): string {
+  return `pantopus:///plans/${encodeURIComponent(planId)}`;
+}
+
 // ─── Calendarly booking links (mirror buildSupportTrain*) ────
 
 /** Public booking page path: /book/:slug (slug = booking PAGE slug). */

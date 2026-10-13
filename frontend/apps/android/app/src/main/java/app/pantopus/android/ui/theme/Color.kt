@@ -371,4 +371,50 @@ object PantopusColors {
      * viewer. Mirrored on iOS as `Theme.Color.liveBadge`.
      */
     val liveBadge = Color(0xFFFFD60A)
+
+    // Nearby Plans (board P1): one color per plan type for its pin, swatch and tile, with a soft tint for tiles
+    // and tags, in light and dark. Mirrored on iOS as `Theme.Color.catPlan*` and on the web as `--cat-plan-*`.
+
+    /** `cat-plan-watch` — `#EA580C` (orange-600); watch parties. */
+    val catPlanWatch = Color(0xFFEA580C)
+    val catPlanWatchTint = Color(0xFFFFEDD5)
+    val catPlanWatchDark = Color(0xFFFB923C)
+    val catPlanWatchTintDark = Color(0xFF3B2312)
+
+    /** `cat-plan-playdate` — `#7C3AED` (violet-600); playdates. */
+    val catPlanPlaydate = Color(0xFF7C3AED)
+    val catPlanPlaydateTint = Color(0xFFEDE9FE)
+    val catPlanPlaydateDark = Color(0xFFA78BFA)
+    val catPlanPlaydateTintDark = Color(0xFF2A2148)
+
+    /** `cat-plan-pickup` — `#16A34A` (green-600); pickup games. */
+    val catPlanPickup = Color(0xFF16A34A)
+    val catPlanPickupTint = Color(0xFFDCFCE7)
+    val catPlanPickupDark = Color(0xFF4ADE80)
+    val catPlanPickupTintDark = Color(0xFF13301F)
+
+    /** `cat-plan-walk` — `#A16207` (yellow-700); walks and coffee. */
+    val catPlanWalk = Color(0xFFA16207)
+    val catPlanWalkTint = Color(0xFFFEF3C7)
+    val catPlanWalkDark = Color(0xFFFBBF24)
+    val catPlanWalkTintDark = Color(0xFF33290F)
+
+    /** A plan pin's glyph on its colored head in dark mode — `#0B1220` (light mode uses white). */
+    val planPinInkDark = Color(0xFF0B1220)
+
+    /** The map's "you are here" dot — `#0A84FF` — and its 18% halo. */
+    val mapYou = Color(0xFF0A84FF)
+    val mapYouHalo = Color(0x2E0A84FF)
+
+    /** Glass over a map (the area pill, the type chips, round map buttons): white at 84%, dark `#1C222C` at 84%. */
+    val mapGlass = Color(0xD6FFFFFF)
+    val mapGlassDark = Color(0xD61C222C)
+
+    /** The stronger glass of a privacy chip over a map — `#FAFAFC` at 94% (dark `#242A34` at 95%). */
+    val mapGlassStrong = Color(0xF0FAFAFC)
+    val mapGlassStrongDark = Color(0xF2242A34)
+
+    /** The dimming behind a sheet over a map — `#111827` at 38% (dark: black at 56%). */
+    val sheetScrim = Color(0x61111827)
+    val sheetScrimDark = Color(0x8F000000)
 }

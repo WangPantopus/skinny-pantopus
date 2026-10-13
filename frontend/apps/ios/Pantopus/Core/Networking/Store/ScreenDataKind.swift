@@ -132,6 +132,10 @@ enum ScreenTopic {
     /// Client-only: lists of posts (the Pulse feed's first page, My posts,
     /// Saved). Marked by your own post changes here (`PulsePostsRefresh`).
     static let posts = "posts"
+    /// Client-only: Nearby Plans pins and lists (the map, the list under it,
+    /// Your plans, Today's plan cards). Marked by your own plan changes here:
+    /// hosting, asking, withdrawing, answering a request, cancelling.
+    static let plans = "plans"
 
     static func home(_ homeId: String) -> String {
         "home:\(homeId.lowercased())"
@@ -151,5 +155,10 @@ enum ScreenTopic {
 
     static func supportTrain(_ trainId: String) -> String {
         "supporttrain:\(trainId.lowercased())"
+    }
+
+    /// One plan (Nearby Plans): its card, requests and people.
+    static func plan(_ planId: String) -> String {
+        "plan:\(planId.lowercased())"
     }
 }

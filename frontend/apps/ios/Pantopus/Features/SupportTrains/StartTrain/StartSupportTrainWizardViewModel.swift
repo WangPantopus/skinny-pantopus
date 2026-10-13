@@ -66,15 +66,21 @@ public final class StartSupportTrainWizardViewModel: WizardModel {
     private var searchTask: Task<Void, Never>?
     private var isSubmittingFlag: Bool = false
 
+    /// - Parameter prefillReason: the story from a Pantopus AI Support Train card,
+    ///   which the organizer reviews in the reason step.
     init(
         api: APIClient = .shared,
         startDate: Date = Date(),
-        endDate: Date = Date().addingTimeInterval(60 * 60 * 24 * 6)
+        endDate: Date = Date().addingTimeInterval(60 * 60 * 24 * 6),
+        prefillReason: String? = nil
     ) {
         self.api = api
         let cal = Calendar.current
         self.startDate = cal.startOfDay(for: startDate)
         self.endDate = cal.startOfDay(for: endDate)
+        if let story = prefillReason?.trimmingCharacters(in: .whitespacesAndNewlines), !story.isEmpty {
+            reason = String(story.prefix(Self.reasonCharLimit))
+        }
     }
 
     // MARK: - Derived projections

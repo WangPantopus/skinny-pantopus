@@ -352,8 +352,6 @@ val GigComposeEngagementMode.tagSuffix: String
 internal fun MagicDescribeStep(
     state: GigComposeUiState,
     vm: GigComposeViewModel,
-    isRecording: Boolean = false,
-    onMicTap: () -> Unit = {},
     onImageTap: () -> Unit = {},
     onAttachTap: () -> Unit = {},
 ) {
@@ -367,9 +365,6 @@ internal fun MagicDescribeStep(
         detected = state.form.detectedArchetype,
         isParsed = state.form.detectedArchetype != null,
         isParsing = state.isParsingDraft,
-        isRecording = isRecording,
-        isTranscribing = state.isTranscribing,
-        onMicTap = onMicTap,
         onImageTap = onImageTap,
         onAttachTap = onAttachTap,
         onDismissKeyboard = focusManager::clearFocus,
@@ -535,9 +530,6 @@ private fun MagicDescribeCard(
     detected: GigComposeCategory?,
     isParsed: Boolean,
     isParsing: Boolean,
-    isRecording: Boolean,
-    isTranscribing: Boolean,
-    onMicTap: () -> Unit,
     onImageTap: () -> Unit,
     onAttachTap: () -> Unit,
     onDismissKeyboard: () -> Unit,
@@ -634,23 +626,12 @@ private fun MagicDescribeCard(
             },
         )
         HorizontalDivider(color = PantopusColors.appBorderSubtle)
-        // A12.8 — tool row: mic / image / paperclip + character counter.
+        // A12.8 — tool row: image / paperclip + character counter.
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s3, vertical = Spacing.s2),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
         ) {
-            if (isRecording) {
-                RecordingStopButton(onTap = onMicTap)
-            } else {
-                DescribeToolButton(
-                    icon = PantopusIcon.Mic,
-                    testTag = "gigCompose.describe.mic",
-                    label = if (isTranscribing) "Transcribing voice note" else "Record a voice note",
-                    tint = if (isTranscribing) PantopusColors.magic else PantopusColors.appTextSecondary,
-                    onTap = onMicTap,
-                )
-            }
             DescribeToolButton(
                 icon = PantopusIcon.Image,
                 testTag = "gigCompose.describe.image",
@@ -694,28 +675,6 @@ private fun DescribeToolButton(
         contentAlignment = Alignment.Center,
     ) {
         PantopusIconImage(icon = icon, contentDescription = null, size = 15.dp, tint = tint)
-    }
-}
-
-/** A12.8 — recording in progress: red dot + Stop, tap to finish. */
-@Composable
-private fun RecordingStopButton(onTap: () -> Unit) {
-    Row(
-        modifier =
-            Modifier
-                .heightIn(min = 32.dp)
-                .clip(RoundedCornerShape(Radii.sm))
-                .background(PantopusColors.errorBg)
-                .border(1.dp, PantopusColors.error, RoundedCornerShape(Radii.sm))
-                .clickable(role = Role.Button, onClick = onTap)
-                .padding(horizontal = Spacing.s2)
-                .testTag("gigCompose.describe.mic")
-                .semantics { contentDescription = "Stop recording" },
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
-    ) {
-        Box(modifier = Modifier.size(8.dp).clip(RoundedCornerShape(Radii.pill)).background(PantopusColors.error))
-        Text("Stop", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = PantopusColors.error)
     }
 }
 

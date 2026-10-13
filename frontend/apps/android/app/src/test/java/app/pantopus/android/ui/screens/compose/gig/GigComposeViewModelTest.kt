@@ -3,7 +3,6 @@
 package app.pantopus.android.ui.screens.compose.gig
 
 import androidx.lifecycle.SavedStateHandle
-import app.pantopus.android.data.ai.AiTranscriptionRepository
 import app.pantopus.android.data.api.models.businesses.BusinessMembership
 import app.pantopus.android.data.api.models.businesses.BusinessUserDto
 import app.pantopus.android.data.api.models.businesses.MyBusinessesResponse
@@ -78,7 +77,6 @@ class GigComposeViewModelTest {
 
     private val repo: GigsRepository = mockk(relaxed = true)
     private val filesRepo: FilesRepository = mockk(relaxed = true)
-    private val transcriptionRepo: AiTranscriptionRepository = mockk(relaxed = true)
     private val draftQueue = FakeGigDraftQueue()
     private val businessesRepo: BusinessesRepository = mockk(relaxed = true)
     private val geoApi: GeoApi = mockk(relaxed = true)
@@ -131,7 +129,6 @@ class GigComposeViewModelTest {
             savedStateHandle,
             networkMonitor,
             filesRepo,
-            transcriptionRepo,
             draftQueue,
             businessesRepo,
             geoApi,
@@ -190,7 +187,7 @@ class GigComposeViewModelTest {
                     "composeGig2.homeLongitude" to -122.6739,
                 ),
             )
-        return GigComposeViewModel(repo, handle, networkMonitor, filesRepo, transcriptionRepo, draftQueue, businessesRepo, geoApi, homesApi)
+        return GigComposeViewModel(repo, handle, networkMonitor, filesRepo, draftQueue, businessesRepo, geoApi, homesApi)
     }
 
     // MARK: - Initial chrome
@@ -710,7 +707,6 @@ class GigComposeViewModelTest {
                 handle,
                 networkMonitor,
                 filesRepo,
-                transcriptionRepo,
                 draftQueue,
                 businessesRepo,
                 geoApi,
@@ -740,7 +736,6 @@ class GigComposeViewModelTest {
                 handle,
                 networkMonitor,
                 filesRepo,
-                transcriptionRepo,
                 draftQueue,
                 businessesRepo,
                 geoApi,
@@ -1014,7 +1009,6 @@ class GigComposeViewModelTest {
                 handle,
                 networkMonitor,
                 filesRepo,
-                transcriptionRepo,
                 draftQueue,
                 businessesRepo,
                 geoApi,
