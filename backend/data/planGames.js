@@ -15,7 +15,10 @@
  *   Ducks          https://goducks.com/sports/football/schedule
  *                  (Oct 17 time: https://goducks.com/news/2026/10/11/football-oregon-vs-nebraska-set-for-8-pm-on-fox)
  *   Cougars        https://wsucougars.com/sports/football/schedule
- * Not listed for lack of a set time: Ducks at Illinois (Oct 24, TBD).
+ * The list covers games through Nov 10; check again before Oct 27 so the 14-day window
+ * stays full. Not listed for lack of a set time (TBD at the last check): Ducks at
+ * Illinois (Oct 24), Ducks vs Northwestern (Oct 31), Ducks at Ohio State (Nov 7),
+ * Huskies at Nebraska (Oct 31), Huskies vs Penn State (Nov 7).
  *
  * To add games: append rows with the official page as `source`, times in UTC.
  * GET /api/plans/games serves the ones that haven't ended and start within 14 days.
@@ -52,6 +55,32 @@ const GAMES = [
     starts_at: '2026-10-26T00:20:00Z', ends_at: '2026-10-26T03:35:00Z', source: 'https://www.seahawks.com/schedule/' },
   { id: 'blazers-2026-10-27-lal', team: 'trail_blazers', label: 'Blazers', opponent: 'Lakers', home: false,
     starts_at: '2026-10-28T03:00:00Z', ends_at: '2026-10-28T05:30:00Z', source: 'https://www.nba.com/blazers/schedule' },
+  { id: 'timbers-2026-10-28-stl', team: 'timbers', label: 'Timbers', opponent: 'St. Louis City SC', home: false,
+    starts_at: '2026-10-29T00:30:00Z', ends_at: '2026-10-29T02:30:00Z', source: 'https://www.timbers.com/schedule/' },
+  { id: 'blazers-2026-10-29-mem', team: 'trail_blazers', label: 'Blazers', opponent: 'Grizzlies', home: true,
+    starts_at: '2026-10-30T02:00:00Z', ends_at: '2026-10-30T04:30:00Z', source: 'https://www.nba.com/blazers/schedule' },
+  { id: 'blazers-2026-10-31-uta', team: 'trail_blazers', label: 'Blazers', opponent: 'Jazz', home: false,
+    starts_at: '2026-10-31T19:00:00Z', ends_at: '2026-10-31T21:30:00Z', source: 'https://www.nba.com/blazers/schedule' },
+  { id: 'cougars-2026-10-31-sdsu', team: 'cougars', label: 'Cougars', opponent: 'San Diego State', home: false,
+    starts_at: '2026-10-31T23:00:00Z', ends_at: '2026-11-01T02:30:00Z', source: 'https://wsucougars.com/sports/football/schedule' },
+  { id: 'timbers-2026-11-01-hou', team: 'timbers', label: 'Timbers', opponent: 'Houston Dynamo', home: true,
+    starts_at: '2026-11-02T02:45:00Z', ends_at: '2026-11-02T04:45:00Z', source: 'https://www.timbers.com/schedule/' },
+  { id: 'seahawks-2026-11-02-chi', team: 'seahawks', label: 'Seahawks', opponent: 'Bears', home: true,
+    starts_at: '2026-11-03T01:15:00Z', ends_at: '2026-11-03T04:30:00Z', source: 'https://www.seahawks.com/schedule/' },
+  { id: 'blazers-2026-11-02-den', team: 'trail_blazers', label: 'Blazers', opponent: 'Nuggets', home: false,
+    starts_at: '2026-11-03T02:00:00Z', ends_at: '2026-11-03T04:30:00Z', source: 'https://www.nba.com/blazers/schedule' },
+  { id: 'blazers-2026-11-04-phx', team: 'trail_blazers', label: 'Blazers', opponent: 'Suns', home: false,
+    starts_at: '2026-11-05T02:00:00Z', ends_at: '2026-11-05T04:30:00Z', source: 'https://www.nba.com/blazers/schedule' },
+  { id: 'blazers-2026-11-06-lal', team: 'trail_blazers', label: 'Blazers', opponent: 'Lakers', home: false,
+    starts_at: '2026-11-07T03:00:00Z', ends_at: '2026-11-07T05:30:00Z', source: 'https://www.nba.com/blazers/schedule' },
+  { id: 'timbers-2026-11-07-atx', team: 'timbers', label: 'Timbers', opponent: 'Austin FC', home: false,
+    starts_at: '2026-11-08T00:00:00Z', ends_at: '2026-11-08T02:00:00Z', source: 'https://www.timbers.com/schedule/' },
+  { id: 'blazers-2026-11-07-sas', team: 'trail_blazers', label: 'Blazers', opponent: 'Spurs', home: true,
+    starts_at: '2026-11-08T03:00:00Z', ends_at: '2026-11-08T05:30:00Z', source: 'https://www.nba.com/blazers/schedule' },
+  { id: 'seahawks-2026-11-08-ari', team: 'seahawks', label: 'Seahawks', opponent: 'Cardinals', home: true,
+    starts_at: '2026-11-08T21:25:00Z', ends_at: '2026-11-09T00:40:00Z', source: 'https://www.seahawks.com/schedule/' },
+  { id: 'blazers-2026-11-10-okc', team: 'trail_blazers', label: 'Blazers', opponent: 'Thunder', home: true,
+    starts_at: '2026-11-11T04:00:00Z', ends_at: '2026-11-11T06:30:00Z', source: 'https://www.nba.com/blazers/schedule' },
 ];
 
 module.exports = { CHECKED_AT, GAMES };
