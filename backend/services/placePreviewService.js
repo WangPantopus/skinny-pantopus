@@ -29,6 +29,7 @@
 
 const { serializePlaceSection } = require('../serializers/placeIntelligenceSerializer');
 const { encodeGeohash } = require('../utils/geohash');
+const { isInCascadiaRegion } = require('../utils/geo');
 const adapters = require('./placeSectionAdapters');
 const placeIntelligenceService = require('./placeIntelligenceService');
 
@@ -226,7 +227,8 @@ function toneFor(score) {
 
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
-// Each builder returns { score, grade, headline, detail, follow_up } or null.
+// Each builder takes the section's data and the previewed point ({ lat, lng },
+// or null) and returns { score, grade, headline, detail, follow_up } or null.
 // A follow_up names only what claiming really gives: the home's Place page, the morning briefing or
 // the alert push. Never a reminder or an alert that doesn't exist.
 const AHA_BUILDERS = {
@@ -287,10 +289,14 @@ const AHA_BUILDERS = {
         : 'Claim it to hear the morning that changes.',
     };
   },
-  seismic(d) {
+  seismic(d, point) {
     const sdc = String(d.design_category || '').toUpperCase();
     const score = { E: 85, D: 78, C: 45, B: 8, A: 6 }[sdc] ?? 20;
     const high = sdc === 'D' || sdc === 'E';
+    // D and E reach well past the Pacific Northwest (Southern California,
+    // Utah, Alaska, Memphis, Charleston), so only a point in the Cascadia
+    // region is told it is there. The retrofit advice holds everywhere.
+    const cascadia = Boolean(point) && isInCascadiaRegion(point.lat, point.lng);
     return {
       score,
       grade: sdc ? `Category ${sdc}` : null,
@@ -298,7 +304,7 @@ const AHA_BUILDERS = {
         ? `Earthquake design category ${sdc}: new homes here are built for high shaking`
         : sdc ? `Earthquake design category ${sdc} at this point` : 'Earthquake design demand for this point',
       detail: high
-        ? 'This is the Cascadia zone. Homes built before the modern code often are not bolted to their foundations; a retrofit is the usual fix.'
+        ? `${cascadia ? 'This is the Cascadia zone. ' : ''}Homes built before the modern code often are not bolted to their foundations; a retrofit is the usual fix.`
         : d.summary || '',
       follow_up: 'Claim it for the full risk picture.',
     };
@@ -443,7 +449,7 @@ function calmFacts(byId) {
 
 const AHA_FLOOR = 35;
 
-function pickAha(sections) {
+function pickAha(sections, point = null) {
   const byId = new Map();
   for (const env of sections || []) if (env && env.id) byId.set(env.id, env);
 
@@ -453,7 +459,7 @@ function pickAha(sections) {
     if (!data) continue;
     let built = null;
     try {
-      built = AHA_BUILDERS[id](data);
+      built = AHA_BUILDERS[id](data, point);
     } catch {
       built = null;
     }
