@@ -1244,7 +1244,8 @@ public struct HubTabRoot: View {
             return tab == .place
         case .feed, .post, .gig, .listing, .hubToday, .conversation,
              .invite, .joinInvite, .monthlyReceipt, .resetPassword, .verifyEmail, .unknown, .home,
-             .creatorInbox, .fanInbox, .creatorAudienceMembers, .nearby:
+             .creatorInbox, .fanInbox, .creatorAudienceMembers, .nearby,
+             .plan, .planRequests, .planNew:
             return false
         case .vacationHold, .mailDay, .stamps, .mailTask,
              .mailTranslation, .unboxing, .packageGig, .earn, .mailbox, .mailItem:

@@ -11,6 +11,8 @@
 //   wall / register / account rates   the ladder itself
 //   by route      the same ladder split by the `?r=` route stamped on
 //                 every beacon (EDDM cards, invite postcards) → CAC per route
+//   plans         Nearby Plans: hosted → viewed → asked → in → went well,
+//                 repeat hosts, auto-rule accepts, the same per plan kind
 //
 // Rates are per DISTINCT visitor (anon_id) when the beacons carried one,
 // so a visitor who reloads five times is one preview. Event totals are
@@ -31,6 +33,17 @@ const PILOT_EVENT_TYPES = ['session_open', 'reminder_sent', 'reminder_action', '
 const PILOT_DIMENSIONS = ['kind', 'action', 'decision', 'trigger'];
 const WEEK_MS = 7 * 86400000;
 const NO_ROUTE = '(direct)';
+// Nearby Plans as one ladder (the event → its step). `attended` is a guest
+// saying it went great or ok, the first time they answer.
+const PLAN_STEPS = Object.freeze({
+  plan_created: 'created',
+  plan_viewed: 'viewed',
+  plan_share_opened: 'share_opened',
+  plan_requested: 'requested',
+  plan_accepted: 'accepted',
+  plan_attended: 'attended',
+  plan_hosted_again: 'hosted_again',
+});
 
 function emptyLadder() {
   return {
@@ -109,9 +122,59 @@ function finish(ladder) {
   };
 }
 
+function emptyPlanSteps() {
+  return Object.fromEntries(Object.values(PLAN_STEPS).map((step) => [step, 0]));
+}
+
+function shortLabel(value) {
+  return typeof value === 'string' && value && value.length <= 40 ? value : '(none)';
+}
+
+/**
+ * Pure: the Plans block. Per step: events, distinct plans and distinct people
+ * (counted, never listed), the ladder's rates, how people got in, how it went,
+ * and the same steps per plan kind.
+ */
+function summarizePlans(rows) {
+  const events = emptyPlanSteps();
+  const plans = Object.fromEntries(Object.values(PLAN_STEPS).map((step) => [step, new Set()]));
+  const people = Object.fromEntries(Object.values(PLAN_STEPS).map((step) => [step, new Set()]));
+  const byKind = Object.create(null);
+  const acceptedBy = Object.create(null);
+  const howItWent = Object.create(null);
+  for (const row of rows || []) {
+    const step = PLAN_STEPS[row.event_type];
+    if (!step) continue;
+    const meta = row.meta && typeof row.meta === 'object' ? row.meta : {};
+    events[step] += 1;
+    if (typeof meta.plan_id === 'string' && meta.plan_id) plans[step].add(meta.plan_id);
+    if (row.user_id) people[step].add(String(row.user_id));
+    const kind = shortLabel(meta.kind);
+    if (!byKind[kind]) byKind[kind] = emptyPlanSteps();
+    byKind[kind][step] += 1;
+    if (step === 'accepted') bump(acceptedBy, meta.by === 'rule' ? 'rule' : 'host');
+    if (step === 'attended') bump(howItWent, shortLabel(meta.answer));
+  }
+  const sizes = (sets) => Object.fromEntries(Object.entries(sets).map(([step, set]) => [step, set.size]));
+  return {
+    events,
+    plans: sizes(plans),
+    people: sizes(people),
+    rates: {
+      asks_per_plan: rate(events.requested, events.created),
+      accept: rate(events.accepted, events.requested),
+      went_well: rate(events.attended, events.accepted),
+      hosted_again: rate(events.hosted_again, events.created),
+    },
+    accepted_by: acceptedBy,
+    how_it_went: howItWent,
+    by_kind: byKind,
+  };
+}
+
 /**
  * Pure: summarize a window of FunnelEvent rows.
- * @param {Array<{event_type:string, anon_id?:string|null, meta?:object}>} rows
+ * @param {Array<{event_type:string, anon_id?:string|null, user_id?:string|null, meta?:object}>} rows
  */
 function summarizeFunnel(rows) {
   const all = emptyLadder();
@@ -126,7 +189,13 @@ function summarizeFunnel(rows) {
   const byRoute = [...routes.entries()]
     .map(([route, ladder]) => ({ route, ...finish(ladder) }))
     .sort((a, b) => b.ladder.previews - a.ladder.previews);
-  return { ...finish(all), by_route: byRoute, rows: (rows || []).length, truncated: (rows || []).length >= MAX_ROWS };
+  return {
+    ...finish(all),
+    by_route: byRoute,
+    plans: summarizePlans(rows),
+    rows: (rows || []).length,
+    truncated: (rows || []).length >= MAX_ROWS,
+  };
 }
 
 // PostgREST pages every report read, including servers with smaller row caps.
@@ -301,7 +370,7 @@ async function loadFunnelSummary({ days = 30 } = {}) {
   const now = Date.now();
   const since = new Date(now - d * 86400000).toISOString();
   const [events, activation] = await Promise.all([
-    readPages(() => supabaseAdmin.from('FunnelEvent').select('event_type, anon_id, meta, created_at')
+    readPages(() => supabaseAdmin.from('FunnelEvent').select('event_type, anon_id, user_id, meta, created_at')
       .gte('created_at', since).lte('created_at', new Date(now).toISOString())
       .order('created_at', { ascending: false }).order('id')),
     loadActivation(since, now),

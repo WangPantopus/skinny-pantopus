@@ -276,6 +276,10 @@ data class ChatRoomDetailResponse(
 data class ChatRoomDetail(
     val type: String? = null,
     val participants: List<ChatRoomParticipant>? = null,
+    /** False once the room is read-only (a plan's chat after the plan, or a cancelled plan). */
+    @Json(name = "is_active") val isActive: Boolean? = null,
+    /** A `type: "plan"` room's plan (Nearby Plans). */
+    @Json(name = "plan_id") val planId: String? = null,
 )
 
 @JsonClass(generateAdapter = true)

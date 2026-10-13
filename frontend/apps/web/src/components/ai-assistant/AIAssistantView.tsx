@@ -23,6 +23,7 @@ export function AIAssistantView({ initialMessage, onBack }: AIAssistantViewProps
   const {
     messages,
     isStreaming,
+    statusText,
     error,
     sendMessage,
     startNewConversation,
@@ -94,7 +95,7 @@ export function AIAssistantView({ initialMessage, onBack }: AIAssistantViewProps
             </h2>
             <p className="text-xs text-app-text-muted">
               {/* Name only capabilities available under the launch flags. */}
-              {isStreaming ? 'Thinking…' : `Ask me to draft ${[launchFeatures.openGigs && 'gigs', launchFeatures.marketplace && 'listings', 'posts'].filter(Boolean).join(', ')}${launchFeatures.mailbox ? ' or summarize mail' : ''}`}
+              {isStreaming ? (statusText || 'Thinking…') : `Ask me to draft ${[launchFeatures.openGigs && 'gigs', launchFeatures.marketplace && 'listings', 'posts'].filter(Boolean).join(', ')}${launchFeatures.mailbox ? ' or summarize mail' : ''}`}
             </p>
           </div>
         </div>
@@ -141,7 +142,7 @@ export function AIAssistantView({ initialMessage, onBack }: AIAssistantViewProps
         )}
 
         {messages.map((msg) => (
-          <AIMessageBubble key={msg.id} message={msg} isStreaming={isStreaming && msg === messages[messages.length - 1] && msg.role === 'assistant'} />
+          <AIMessageBubble key={msg.id} message={msg} isStreaming={isStreaming && msg === messages[messages.length - 1] && msg.role === 'assistant'} statusText={statusText} />
         ))}
 
         {error && (
@@ -209,8 +210,9 @@ const QUICK_PROMPTS = [
   ...(launchFeatures.marketplace ? [{ label: '🏷️ Sell an item', text: 'I want to sell' }] : []),
   { label: '📢 Post to neighbors', text: 'I want to tell my neighbors about' },
   // The assistant summarizes a letter it is given (or one shared from Mail); it
-  // can't browse the inbox, so the prompt asks for the letter itself.
-  { label: '📬 Summarize a letter', text: 'Can you summarize this letter for me? Here it is: ' },
+  // can't browse the inbox, so the prompt asks for the letter itself. Launch cut #10.
+  ...(launchFeatures.mailbox ? [{ label: '📬 Summarize a letter', text: 'Can you summarize this letter for me? Here it is: ' }] : []),
+  { label: '🗑️ When\'s my pickup?', text: 'When is my next garbage pickup?' },
   { label: '🌤️ What\'s happening nearby?', text: 'What\'s happening near my home?' },
   ...(launchFeatures.openGigs ? [{ label: '🧹 Need cleaning help', text: 'I need someone to clean my house' }] : []),
 ];

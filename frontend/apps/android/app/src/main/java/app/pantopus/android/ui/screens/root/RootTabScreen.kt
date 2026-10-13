@@ -348,6 +348,13 @@ import app.pantopus.android.ui.screens.place.verify.PLACE_VERIFY_HOME_ID_KEY
 import app.pantopus.android.ui.screens.place.verify.PLACE_VERIFY_METHOD_KEY
 import app.pantopus.android.ui.screens.place.verify.PlaceVerifyMethod
 import app.pantopus.android.ui.screens.place.verify.PlaceVerifyStatusScreen
+import app.pantopus.android.ui.screens.plans.PlansExternalRoutes
+import app.pantopus.android.ui.screens.plans.PlansGateViewModel
+import app.pantopus.android.ui.screens.plans.PlansRoutes
+import app.pantopus.android.ui.screens.plans.map.PlansMapActions
+import app.pantopus.android.ui.screens.plans.map.PlansMapScreen
+import app.pantopus.android.ui.screens.plans.plansRoutes
+import app.pantopus.android.ui.screens.plans.today.PlansTodayActions
 import app.pantopus.android.ui.screens.posts.PULSE_POST_DETAIL_ID_KEY
 import app.pantopus.android.ui.screens.posts.PulsePostDetailScreen
 import app.pantopus.android.ui.screens.profile.EditProfileScreen
@@ -1179,6 +1186,10 @@ private object ChildRoutes {
      *  Trains FAB / empty-state CTA. */
     const val START_SUPPORT_TRAIN = "support-trains/start"
 
+    /** The story a Pantopus AI Support Train card opens the start flow with (optional). */
+    const val START_SUPPORT_TRAIN_STORY_KEY = "story"
+    const val START_SUPPORT_TRAIN_ROUTE = "$START_SUPPORT_TRAIN?$START_SUPPORT_TRAIN_STORY_KEY={$START_SUPPORT_TRAIN_STORY_KEY}"
+
     /** P4.6 — Support Trains search. Pushed from the Support Trains list
      *  top-bar search action; reuses the shared SearchListShell. */
     const val SUPPORT_TRAINS_SEARCH = "support-trains/search"
@@ -1409,8 +1420,12 @@ private object ChildRoutes {
 
     /** Optional Sports-lane starter prompt seeded into the draft body. */
     const val COMPOSE_BODY_KEY = "prefillBody"
+
+    /** Optional headline seeded into the draft (a Pantopus AI post draft's title). */
+    const val COMPOSE_TITLE_KEY = "prefillTitle"
     const val COMPOSE_POST =
-        "feed/compose?$COMPOSE_INTENT_KEY={$COMPOSE_INTENT_KEY}&$COMPOSE_BODY_KEY={$COMPOSE_BODY_KEY}"
+        "feed/compose?$COMPOSE_INTENT_KEY={$COMPOSE_INTENT_KEY}&$COMPOSE_BODY_KEY={$COMPOSE_BODY_KEY}" +
+            "&$COMPOSE_TITLE_KEY={$COMPOSE_TITLE_KEY}"
 
     /** P3.5 — Edit an existing Pulse post. Re-uses the compose flow. */
     const val EDIT_POST_POST_ID_KEY = "postId"
@@ -1489,12 +1504,24 @@ private object ChildRoutes {
         "_placeholder/generic?$PLACEHOLDER_LABEL_KEY=${java.net.URLEncoder.encode(label, "UTF-8").replace("+", "%20")}"
 
     /** Build the compose-post path with the pre-fill intent encoded. */
+    // `%20`, not URLEncoder's `+`: Navigation decodes the query value literally,
+    // so a prefilled "Lost cat" showed as "Lost+cat".
     fun composePost(
         intent: String,
         prefillBody: String = "",
+        prefillTitle: String = "",
     ): String =
-        "feed/compose?$COMPOSE_INTENT_KEY=${java.net.URLEncoder.encode(intent, "UTF-8")}" +
-            "&$COMPOSE_BODY_KEY=${java.net.URLEncoder.encode(prefillBody, "UTF-8")}"
+        "feed/compose?$COMPOSE_INTENT_KEY=${java.net.URLEncoder.encode(intent, "UTF-8").replace("+", "%20")}" +
+            "&$COMPOSE_BODY_KEY=${java.net.URLEncoder.encode(prefillBody, "UTF-8").replace("+", "%20")}" +
+            "&$COMPOSE_TITLE_KEY=${java.net.URLEncoder.encode(prefillTitle, "UTF-8").replace("+", "%20")}"
+
+    /** Build the start-a-Support-Train path with a story to start from. */
+    fun startSupportTrain(story: String): String =
+        if (story.isBlank()) {
+            START_SUPPORT_TRAIN
+        } else {
+            "$START_SUPPORT_TRAIN?$START_SUPPORT_TRAIN_STORY_KEY=${java.net.URLEncoder.encode(story, "UTF-8").replace("+", "%20")}"
+        }
 
     /** Build the edit-post path. The VM reads `postId` via SavedStateHandle. */
     fun editPost(postId: String): String = "feed/edit/${java.net.URLEncoder.encode(postId, "UTF-8")}"
@@ -2077,11 +2104,15 @@ private suspend fun NavHostController.openPlaceLink(
     section?.let { navigate(ChildRoutes.placeDetail(homeId, it)) }
 }
 
+// Posts and Support Trains carry their text, so the composer opens with the draft instead of empty.
 private fun routeForAIDraft(draft: ChatAIDraftCard): String =
     when (draft.type) {
         "gig" -> ChildRoutes.composeGig(GigsCategory.All.key)
         "listing" -> ChildRoutes.COMPOSE_LISTING
-        "post" -> ChildRoutes.composePost(PulseIntent.Ask.key)
+        "post" ->
+            draft.prefill?.let { ChildRoutes.composePost(PulseIntent.fromPostType(it.postType).key, it.body, it.title.orEmpty()) }
+                ?: ChildRoutes.composePost(PulseIntent.Ask.key)
+        "support_train" -> ChildRoutes.startSupportTrain(draft.prefill?.body.orEmpty())
         else -> ChildRoutes.composePost(PulseIntent.Ask.key)
     }
 
@@ -2529,6 +2560,31 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 navController.navigate(ChildRoutes.CREATOR_AUDIENCE_MEMBERS)
                 DeepLinkRouter.consume()
             }
+            // Nearby Plans: while the `plans` flag is off a plan link opens today's Nearby screen instead.
+            is DeepLinkRouter.Destination.Plan -> {
+                if (DeepLinkRouter.plansEnabled()) {
+                    navController.navigate(PlansRoutes.plan(pending.id))
+                } else {
+                    navController.navigateToRootTab(PantopusRoute.Nearby)
+                }
+                DeepLinkRouter.consume()
+            }
+            is DeepLinkRouter.Destination.PlanRequests -> {
+                if (DeepLinkRouter.plansEnabled()) {
+                    navController.navigate(PlansRoutes.requests(pending.id))
+                } else {
+                    navController.navigateToRootTab(PantopusRoute.Nearby)
+                }
+                DeepLinkRouter.consume()
+            }
+            DeepLinkRouter.Destination.NewPlan -> {
+                if (DeepLinkRouter.plansEnabled()) {
+                    navController.navigate(PlansRoutes.host())
+                } else {
+                    navController.navigateToRootTab(PantopusRoute.Nearby)
+                }
+                DeepLinkRouter.consume()
+            }
             is DeepLinkRouter.Destination.ResetPassword,
             is DeepLinkRouter.Destination.VerifyEmail,
             is DeepLinkRouter.Destination.Unknown,
@@ -2613,18 +2669,75 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             // The ballot card is on this home's Your Place: a link to it, as a push would open it.
                             placeLinkScope.launch { currentPlaceHost?.let { navController.openPlaceLink(it, homeId, null) } }
                         },
+                        plans =
+                            PlansTodayActions(
+                                onOpenPlan = { id -> navController.navigate(PlansRoutes.plan(id)) },
+                                onOpenChat = { roomId, title, _ ->
+                                    navController.navigate(
+                                        ChildRoutes.chatConversationRoom(roomId, title, title.trim().take(1).uppercase(), verified = false),
+                                    )
+                                },
+                                onHostAgain = { kind, planId -> navController.navigate(PlansRoutes.host(kind = kind, again = planId)) },
+                            ),
                     )
                 }
                 composable(PantopusRoute.Nearby.path) {
-                    NearbyScreen(
-                        onClaim = { navController.navigate(ChildRoutes.ADD_HOME) },
-                        onOpenPulse = { navController.navigate(PantopusRoute.Pulse.path) },
-                        onOpenBeacons = { navController.navigate(ChildRoutes.BEACONS_FEED) },
-                        onOpenConnections = { navController.navigate(ChildRoutes.CONNECTIONS) },
-                        onOpenMarketplace = { navController.navigate(PantopusRoute.Marketplace.path) },
-                        onOpenTasks = { navController.navigate(PantopusRoute.Tasks.path) },
-                    )
+                    // Nearby Plans (decision D1): Nearby opens on the map while the `plans` flag is on, and is
+                    // today's screen while it is off.
+                    val plansGate: PlansGateViewModel = hiltViewModel()
+                    val plansFlags by plansGate.flags.collectAsStateWithLifecycle()
+                    if (plansFlags.plans) {
+                        PlansMapScreen(
+                            actions =
+                                PlansMapActions(
+                                    onOpenPlan = { id -> navController.navigate(PlansRoutes.plan(id)) },
+                                    onAsk = { id -> navController.navigate(PlansRoutes.plan(id, ask = true)) },
+                                    onHost = { kind, game -> navController.navigate(PlansRoutes.host(kind = kind?.wire, game = game?.id)) },
+                                    onOpenPulse = { navController.navigate(ChildRoutes.PULSE_FEED) },
+                                    onOpenConnections = { navController.navigate(ChildRoutes.CONNECTIONS) },
+                                    onInvite = { appContext.shareText(InviteLinks.INVITE_MESSAGE, "Invite to Pantopus") },
+                                ),
+                        )
+                    } else {
+                        NearbyScreen(
+                            onClaim = { navController.navigate(ChildRoutes.ADD_HOME) },
+                            onOpenPulse = { navController.navigate(PantopusRoute.Pulse.path) },
+                            onOpenBeacons = { navController.navigate(ChildRoutes.BEACONS_FEED) },
+                            onOpenConnections = { navController.navigate(ChildRoutes.CONNECTIONS) },
+                            onOpenMarketplace = { navController.navigate(PantopusRoute.Marketplace.path) },
+                            onOpenTasks = { navController.navigate(PantopusRoute.Tasks.path) },
+                        )
+                    }
                 }
+                plansRoutes(
+                    nav = navController,
+                    external =
+                        PlansExternalRoutes(
+                            openPulse = { navController.navigate(ChildRoutes.PULSE_FEED) },
+                            openConnections = { navController.navigate(ChildRoutes.CONNECTIONS) },
+                            openChat = { roomId, title, _ ->
+                                navController.navigate(
+                                    ChildRoutes.chatConversationRoom(
+                                        roomId = roomId,
+                                        displayName = title,
+                                        initials = title.trim().take(1).uppercase(),
+                                        verified = false,
+                                    ),
+                                )
+                            },
+                            openVerification = { target ->
+                                navController.navigate(
+                                    when (target) {
+                                        HubVerificationTarget.AddHome -> ChildRoutes.ADD_HOME
+                                        is HubVerificationTarget.WaitingRoom -> ChildRoutes.waitingRoom(target.homeId)
+                                        is HubVerificationTarget.Residency -> ChildRoutes.homeResidency(target.homeId)
+                                        is HubVerificationTarget.ClaimOwnership -> ChildRoutes.claimOwnership(target.homeId)
+                                    },
+                                )
+                            },
+                            openNearby = { navController.navigateToRootTab(PantopusRoute.Nearby) },
+                        ),
+                )
                 composable(PantopusRoute.Mail.path) {
                     // Mailbox is off for launch (contract §9): this tab is Messages, the conversation list itself.
                     if (!LaunchFeatures.mailbox) {
@@ -4862,10 +4975,13 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onUseAIDraft = { draft ->
                             navController.navigate(routeForAIDraft(draft))
                         },
+                        // A saved pickup-days card opens Today, where the days now show.
+                        onOpenToday = { navController.navigateToRootTab(PantopusRoute.Today) },
                         onOpenGig = { gigId -> navController.navigate(ChildRoutes.gigDetail(gigId)) },
                         onOpenListing = { listingId -> navController.navigate(ChildRoutes.listingDetail(listingId)) },
                         arrivalRoomId = arrivalRoomId,
                         onOpenProfile = { userId -> navController.navigate(ChildRoutes.publicProfile(userId)) },
+                        onOpenPlan = { planId -> navController.navigate(PlansRoutes.plan(planId)) },
                     )
                 }
                 composable(ChildRoutes.CHAT_SEARCH) {
@@ -5230,6 +5346,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 defaultValue = PulseIntent.All.key
                             },
                             navArgument(ChildRoutes.COMPOSE_BODY_KEY) {
+                                type = NavType.StringType
+                                defaultValue = ""
+                            },
+                            navArgument(ChildRoutes.COMPOSE_TITLE_KEY) {
                                 type = NavType.StringType
                                 defaultValue = ""
                             },
@@ -5832,8 +5952,12 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onCancel = { navController.popBackStack() },
                     )
                 }
-                composable(ChildRoutes.START_SUPPORT_TRAIN) {
+                composable(
+                    route = ChildRoutes.START_SUPPORT_TRAIN_ROUTE,
+                    arguments = listOf(optionalStringNavArg(ChildRoutes.START_SUPPORT_TRAIN_STORY_KEY)),
+                ) { entry ->
                     StartSupportTrainWizardScreen(
+                        initialStory = entry.arguments?.getString(ChildRoutes.START_SUPPORT_TRAIN_STORY_KEY),
                         onDismiss = { navController.popBackStack() },
                         onOpenTrain = { trainId ->
                             // A10.9 (P3.1) — After publish we land on the

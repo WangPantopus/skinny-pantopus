@@ -6,9 +6,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.posts.MyPostDto
 import app.pantopus.android.data.api.models.posts.SavedPostsResponse
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.posts.PostsRepository
 import app.pantopus.android.data.posts.PulsePostsRefreshNotifier
+import app.pantopus.android.data.store.StoreKind
+import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.screens.feed.pulse.PulseIntent
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsUiState
 import app.pantopus.android.ui.screens.shared.list_of_rows.RowBodyEmphasis
@@ -48,48 +51,164 @@ class SavedPostsViewModel
         private val _toastMessage = MutableStateFlow<String?>(null)
         val toastMessage: StateFlow<String?> = _toastMessage.asStateFlow()
 
+        private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
+        val refreshNotice: StateFlow<RefreshNotice?> = _refreshNotice.asStateFlow()
+
         private var posts: List<MyPostDto> = emptyList()
+        private var loading = false
         private var nextOffset: Int? = null
         private var loadedOnce = false
         private var loadingMore = false
         private var loadMoreFailed = false
 
+        /** A return or mutation during a read must recheck once it settles; true preserves an explicit refresh. */
+        private var pendingRead: Boolean? = null
+
+        private val readingOrRemoving: Boolean
+            get() = loading || loadingMore || removing.isNotEmpty()
+
         /** Bumped by every first-page load so a page that lands later can't append to its replacement. */
         private var generation = 0
         private val removing = mutableSetOf<String>()
+
+        /** Confirmed Removes here: a tail recheck that started before one would bring its row back, so it is dropped. */
+        private var removals = 0
         private var openPostHandler: (MyPostDto) -> Unit = {}
 
         fun bindCallbacks(onOpenPost: (MyPostDto) -> Unit) {
             openPostHandler = onOpenPost
         }
 
-        /** Every visit to the tab re-reads it, so posts saved elsewhere since show up. */
-        fun load() {
+        /** A return uses the shared first-page copy while it is fresh. */
+        fun load() = read(force = false)
+
+        fun refresh() = read(force = true)
+
+        private fun read(force: Boolean) {
+            if (readingOrRemoving) {
+                pendingRead = force || pendingRead == true
+                return
+            }
+            loading = true
             val gen = ++generation
-            loadingMore = false
             loadMoreFailed = false
-            if (!loadedOnce) _state.value = ListOfRowsUiState.Loading
+            if (!loadedOnce) {
+                postsRepo.savedPostsCopy(PAGE_SIZE).data?.let { copy ->
+                    posts = copy.posts
+                    nextOffset = nextOffsetAfter(copy)
+                    loadedOnce = true
+                    applyState()
+                }
+                if (!loadedOnce) _state.value = ListOfRowsUiState.Loading
+            }
+            val depth = (nextOffset ?: posts.size).coerceIn(PAGE_SIZE, MAX_REFRESH_DEPTH)
             viewModelScope.launch {
-                val result = postsRepo.savedPosts(limit = PAGE_SIZE, offset = 0)
+                val result = postsRepo.savedPosts(limit = depth, force = force)
                 if (gen != generation) return@launch
+                loading = false
+                val copy = postsRepo.savedPostsCopy(depth)
+                _refreshNotice.value = if (copy.showsRefreshFailure(StoreKind.POST)) RefreshNotice(copy.fetchedAt, ::refresh) else null
                 when (result) {
                     is NetworkResult.Success -> {
-                        posts = result.data.posts
-                        nextOffset = nextOffsetAfter(result.data)
+                        val retained = replaceRefreshedHead(result.data)
                         loadedOnce = true
                         applyState()
+                        if (retained > 0) recheckRetainedTail(result.data.posts, retained, gen)
                     }
-                    is NetworkResult.Failure ->
-                        // A failed read is not an empty list: keep what's shown, or say so.
-                        if (loadedOnce) applyState() else _state.value = ListOfRowsUiState.Error(LOAD_FAILED)
+                    is NetworkResult.Failure -> {
+                        if (result.error is NetworkError.Forbidden ||
+                            result.error == NetworkError.NotFound ||
+                            result.error == NetworkError.Unauthorized
+                        ) {
+                            posts = emptyList()
+                            nextOffset = null
+                            loadedOnce = false
+                            _state.value = ListOfRowsUiState.Error(LOAD_FAILED)
+                        } else if (loadedOnce) {
+                            applyState()
+                        } else {
+                            _state.value = ListOfRowsUiState.Error(LOAD_FAILED)
+                        }
+                    }
                 }
+                readPending()
+            }
+        }
+
+        private fun readPending() {
+            val force = pendingRead ?: return
+            if (readingOrRemoving) return
+            pendingRead = null
+            read(force)
+        }
+
+        /**
+         * Keep later pages below the newest bookmark returned, then resume from the server's current save offset. Returns
+         * how many older rows were kept; [recheckRetainedTail] reads them again.
+         */
+        private fun replaceRefreshedHead(response: SavedPostsResponse): Int {
+            val boundary = response.posts.lastOrNull()?.savedAt?.let { MyPostsViewModel.parseInstant(it) }
+            val refreshedIds = response.posts.mapTo(HashSet()) { it.id }
+            val older =
+                if (response.pagination?.hasMore == true && boundary != null) {
+                    posts.filter { row ->
+                        row.id !in refreshedIds && MyPostsViewModel.parseInstant(row.savedAt)?.let { it <= boundary } == true
+                    }
+                } else {
+                    emptyList()
+                }
+            posts = (response.posts + older).distinctBy { it.id }
+            // Offsets count raw saves, including posts hidden by the visibility check. A visible-row delta cannot
+            // adjust them safely; the recheck pages on from the server's offset after the refreshed range.
+            nextOffset = nextOffsetAfter(response)
+            return older.size
+        }
+
+        /**
+         * The rows kept below a bounded refresh are read again from the server's offset after the refreshed range, so a
+         * bookmark removed elsewhere (the post's own menu, another device) doesn't keep its row. They stay on screen until
+         * the pages land; a failed page, or a Remove here meanwhile, keeps them for the next refresh.
+         */
+        private fun recheckRetainedTail(
+            head: List<MyPostDto>,
+            retained: Int,
+            gen: Int,
+        ) {
+            val start = nextOffset ?: return
+            val removalsBefore = removals
+            loadingMore = true
+            viewModelScope.launch {
+                val tail = mutableListOf<MyPostDto>()
+                var next: Int? = start
+                var complete = true
+                while (tail.size < retained) {
+                    val offset = next ?: break
+                    when (val page = postsRepo.savedPosts(limit = PAGE_SIZE, offset = offset)) {
+                        is NetworkResult.Success -> {
+                            tail += page.data.posts
+                            next = nextOffsetAfter(page.data)
+                        }
+                        is NetworkResult.Failure -> {
+                            complete = false
+                            next = null
+                        }
+                    }
+                }
+                if (gen != generation) return@launch
+                loadingMore = false
+                if (complete && removalsBefore == removals && pendingRead == null) {
+                    posts = (head + tail).distinctBy { it.id }
+                    nextOffset = next
+                }
+                applyState()
+                readPending()
             }
         }
 
         /** Footer reached: append the next page of saves. A failed page keeps the rows and offers Try again. */
         fun loadMoreIfNeeded() {
             val offset = nextOffset ?: return
-            if (loadingMore) return
+            if (loading || loadingMore) return
             val gen = generation
             loadingMore = true
             loadMoreFailed = false
@@ -97,15 +216,20 @@ class SavedPostsViewModel
                 val result = postsRepo.savedPosts(limit = PAGE_SIZE, offset = offset)
                 if (gen != generation) return@launch
                 loadingMore = false
+                var addedRows = false
                 when (result) {
                     is NetworkResult.Success -> {
                         val seen = posts.mapTo(HashSet()) { it.id }
-                        posts = posts + result.data.posts.filter { it.id !in seen }
+                        val fresh = result.data.posts.filter { it.id !in seen }
+                        addedRows = fresh.isNotEmpty()
+                        posts = posts + fresh
                         nextOffset = nextOffsetAfter(result.data)
                     }
                     is NetworkResult.Failure -> loadMoreFailed = true
                 }
                 applyState()
+                if (result is NetworkResult.Success && !addedRows && nextOffset != offset) loadMoreIfNeeded()
+                readPending()
             }
         }
 
@@ -117,6 +241,7 @@ class SavedPostsViewModel
                 removing.remove(postId)
                 when {
                     result is NetworkResult.Success && !result.data.saved -> {
+                        removals++
                         // A Pulse card still showing it saved would re-save it on its next tap: lists refetch.
                         postsRefresh.notifyPostsDidChange()
                         if (posts.any { it.id == postId }) {
@@ -130,6 +255,7 @@ class SavedPostsViewModel
                     result is NetworkResult.Success -> load()
                     else -> _toastMessage.value = "Couldn't remove it. Try again."
                 }
+                readPending()
             }
         }
 
@@ -204,6 +330,7 @@ class SavedPostsViewModel
         companion object {
             /** Saves per page of `GET /api/posts/saved`. */
             const val PAGE_SIZE = 50
+            const val MAX_REFRESH_DEPTH = 200
             const val LOAD_FAILED = "Couldn't load your saved posts."
             const val LOAD_MORE_FAILED = "Couldn't load more saved posts."
 
