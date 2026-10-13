@@ -18,6 +18,8 @@ const { recordFunnelEvent } = require('../services/funnelEvents');
 const { loadViewer } = require('../services/plans/planViewer');
 const planService = require('../services/plans/planService');
 const planActions = require('../services/plans/planActions');
+const planGames = require('../services/plans/planGames');
+const planPlaces = require('../services/plans/planPlaces');
 const { KINDS, WINDOWS } = require('../services/plans/planRules');
 
 const router = express.Router();
@@ -88,6 +90,30 @@ router.get('/mine', async (req, res) => {
     return res.json(await planService.listMine(viewer));
   } catch (err) {
     return serverError(res, err, 'mine', req);
+  }
+});
+
+// GET /api/plans/games: the next 14 days' games from the checked list (H2's game chips).
+router.get('/games', async (req, res) => {
+  try {
+    return res.json({ games: planGames.upcomingGames() });
+  } catch (err) {
+    return serverError(res, err, 'games', req);
+  }
+});
+
+// GET /api/plans/places/nearby?latitude&longitude[&q]: public places for H6, nearest first.
+router.get('/places/nearby', async (req, res) => {
+  try {
+    const point = pointFromQuery(req.query);
+    if (!point) return fail(res, 422, 'validation', 'A latitude and longitude are needed to find places nearby.');
+    const q = typeof req.query.q === 'string' ? req.query.q.slice(0, 60) : '';
+    const result = await planPlaces.placesNear({ ...point, q });
+    // 202 while an area seen for the first time is still loading: ask again in a few seconds.
+    return res.status(result.loading ? 202 : 200).json(result);
+  } catch (err) {
+    logger.warn('plans.places.unavailable', { error: err?.message });
+    return fail(res, 503, 'unavailable', "Places nearby aren't loading right now. Search, or try again in a minute.");
   }
 });
 
