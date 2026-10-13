@@ -269,7 +269,12 @@ struct PlanHostingSection: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         if card.state == .cancelled || card.state == .ended {
-            PlanClosedSection(card: card)
+            PlanClosedSection(
+                card: card,
+                cancelNote: viewModel.plan?.cancelNote,
+                showsTitle: false,
+                onOpenChat: viewModel.plan?.chatRoomId == nil ? nil : onOpenChat
+            )
         } else {
             requests
             going

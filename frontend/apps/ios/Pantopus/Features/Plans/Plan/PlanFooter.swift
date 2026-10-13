@@ -119,7 +119,7 @@ struct PlanFooter: View {
 
     /// "Starts in 7 hours. The waitlist closes 30 minutes before it ends."
     private func waitlistCaption(_ card: PlanCardDTO) -> String {
-        let starts = card.startsAtDate.map { PlanFormat.startsIn($0) + "." } ?? ""
+        let starts = card.state == .live ? "Happening now." : card.startsAtDate.map { PlanFormat.startsIn($0) + "." } ?? ""
         let closes = card.kind == .pickupGame || card.kind == .walkCoffee
             ? "The waitlist closes 30 minutes before it ends."
             : "The waitlist closes when it starts."

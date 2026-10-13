@@ -41,7 +41,11 @@ struct PlanScreenSections: View {
                         onConfirm: onConfirm
                     )
                 case .closed:
-                    PlanClosedSection(card: card)
+                    PlanClosedSection(
+                        card: card,
+                        cancelNote: viewModel.plan?.cancelNote,
+                        onOpenChat: viewModel.plan?.chatRoomId == nil ? nil : onOpenChat
+                    )
                 case .notThisTime:
                     EmptyView()
                 }
@@ -404,14 +408,34 @@ struct PlanWaitlistSection: View {
 
 struct PlanClosedSection: View {
     let card: PlanCardDTO
+    /// The host's note when they cancelled (H12).
+    var cancelNote: String?
+    var showsTitle = true
+    /// The plan's chat, read-only now, for people who were in.
+    var onOpenChat: (() -> Void)?
 
     var body: some View {
         PlanBanner(
             tone: .neutral,
             icon: card.state == .cancelled ? .calendarX : .checkCircle,
             title: card.state == .cancelled ? "This plan was cancelled" : "This plan has ended",
-            message: card.state == .cancelled ? "\(PlanCardLines.firstName(card.host.displayName)) called it off." : nil
+            message: message
         )
-        PlanTitleBlock(card: card)
+        if showsTitle { PlanTitleBlock(card: card) }
+        if let onOpenChat {
+            Button(action: onOpenChat) { PlanButtonLabel(title: "Read the group chat", icon: .messageCircle, kind: .secondary) }
+                .planButton(.secondary, size: .small)
+                .accessibilityIdentifier("planClosedChat")
+        }
+    }
+
+    /// "Sam called it off: “Sorry, the courts are closed tonight.”"
+    private var message: String? {
+        guard card.state == .cancelled else { return nil }
+        let host = PlanCardLines.firstName(card.host.displayName)
+        if let note = cancelNote?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty {
+            return "\(host) called it off: \u{201C}\(note)\u{201D}"
+        }
+        return "\(host) called it off."
     }
 }

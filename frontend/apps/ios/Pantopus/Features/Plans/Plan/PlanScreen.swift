@@ -135,7 +135,8 @@ struct PlanScreen: View {
                 ZStack(alignment: .bottomLeading) {
                     PlanHeaderMap(
                         card: card,
-                        place: viewModel.plan?.place,
+                        // A cancelled or ended plan shows its area again: no one should head there.
+                        place: viewModel.mode == .closed ? nil : viewModel.plan?.place,
                         isHosting: viewModel.mode == .hosting,
                         revealToken: viewModel.revealToken
                     )
