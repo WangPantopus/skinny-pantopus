@@ -149,6 +149,8 @@ All entity endpoints now include a `locationUnlocked` boolean:
 | `GET /api/posts/:id`                    | Post     | Fixed (permanent blur for non-authors) |
 | `GET /api/posts/map` (tasks layer)      | Post     | Fixed (`resolveGigPrecision` per gig) |
 | `GET /api/posts/map` (offers layer)     | Post     | Fixed (`resolveGigPrecision` per gig) |
+| `GET /api/posts/map` (posts layer)      | Post     | Fixed (displayed points only, see [Post Map Rules](#post-map-rules)) |
+| `GET /api/posts/map` (`nearest_activity_center`) | Post | Fixed (`findNearestMapPost`, see [Post Map Rules](#post-map-rules)) |
 | `GET /api/listings/:id`                 | Listing  | Fixed (grant-aware, `locationUnlocked`) |
 | `GET /api/listings` (browse)            | Listing  | Fixed |
 | `GET /api/listings/search` (RPC)        | Listing  | Fixed (viewer-aware) |
@@ -197,6 +199,28 @@ verified addresses must NEVER appear on public map surfaces:
 **Verification does NOT equal public visibility.** A verified home address
 confirms the user lives there; it does not make the location public.
 
+### Post Map Rules
+
+`GET /api/posts/map` works only with the points a viewer is shown, never with
+a post's stored point:
+
+- **Pins.** A post's pin is its displayed point for this viewer: the location
+  rule above, applied once (an author sees their own posts exactly). A post
+  with no displayed point (`none`) has no pin and isn't returned.
+- **Viewport.** A post is in a viewport only when its displayed point is. The
+  query searches stored points in the viewport widened by
+  `DISPLAYED_POINT_MAX_SHIFT_DEGREES` (0.01°, more than the rule ever moves a
+  point), then keeps the posts displayed inside the viewport itself.
+- **Empty-viewport hint (`nearest_activity_center`).** Sent only when the posts
+  layer was requested and came back empty. It is the displayed point of the
+  nearest post the viewer's map would show (same surface, post type, mute, hide,
+  block and politics filters), measured from the viewport center to displayed
+  points and searched within ±0.1°, ±1° and ±10°, then anywhere
+  (`feedService.findNearestMapPost`). Moving the map to it shows that post's pin.
+- `find_nearest_activity_center` has no post branch since
+  `20261013052405_nearest_activity_without_posts.sql`; it still serves gigs,
+  businesses and listings.
+
 ### Verified Coordinate Guard
 
 Rows with `geocode_mode: 'verified'` are protected from non-verified overwrites.
@@ -229,3 +253,4 @@ See `backend/utils/verifiedCoordinateGuard.js`:
 - [x] Gig bid acceptance posts address system message to chat
 - [x] Listing reveal-address posts system message to chat
 - [x] `ListingAddressGrant` table with RLS policies created
+- [x] Posts map pins, viewport and empty-viewport hint use displayed points only
