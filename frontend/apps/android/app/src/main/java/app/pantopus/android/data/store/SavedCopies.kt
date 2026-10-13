@@ -79,6 +79,16 @@ class SavedCopies
             val fetchedAt: Long,
             val etag: String?,
             val stale: Boolean,
+            /** Written before copies carried topics and kind: any mark applies to it. */
+            val legacy: Boolean = false,
+        )
+
+        /** One invalidation: a topic or kinds, own edit or not, for copies fetched at or before [upTo]. */
+        data class Mark(
+            val topic: String? = null,
+            val kinds: Set<StoreKind> = emptySet(),
+            val edited: Boolean = false,
+            val upTo: Long = Long.MAX_VALUE,
         )
 
         @JsonClass(generateAdapter = true)
@@ -126,7 +136,7 @@ class SavedCopies
                 } else {
                     // Least recently used goes first: reading counts as use.
                     file.setLastModified(now)
-                    Copy(data, envelope.fetchedAt, envelope.etag, envelope.stale)
+                    Copy(data, envelope.fetchedAt, envelope.etag, envelope.stale, envelope.legacy)
                 }
             } catch (
                 @Suppress("TooGenericExceptionCaught") error: Exception,
@@ -161,31 +171,33 @@ class SavedCopies
             }
         }
 
-        /** Invalidation also reaches entries whose memory slot has gone, and survives a process restart. */
+        /**
+         * Invalidation also reaches entries whose memory slot has gone, and survives a process restart. Runs off the
+         * caller's thread; [guard] wraps each file's work (the store's lock and wipe check), one file at a time.
+         */
         fun invalidate(
             account: String,
-            topic: String? = null,
-            kinds: Set<StoreKind> = emptySet(),
-            edited: Boolean = false,
+            mark: Mark,
+            guard: (() -> Unit) -> Unit = { it() },
         ) {
-            if (topic == null && kinds.isEmpty()) return
+            if (mark.topic == null && mark.kinds.isEmpty()) return
             val folder = file(account, "").parentFile ?: return
-            folder.listFiles()?.filter { it.extension == "json" }?.forEach { target ->
-                invalidateFile(target, topic, kinds, edited)
-            }
-            trim()
+            folder.listFiles()?.filter { it.extension == "json" }?.forEach { target -> guard { invalidateFile(target, mark) } }
+            guard { trim() }
         }
 
         private fun invalidateFile(
             target: File,
-            topic: String?,
-            kinds: Set<StoreKind>,
-            edited: Boolean,
+            mark: Mark,
         ) {
+            if (!target.isFile) return
+            val edited = mark.edited
             try {
                 target.bufferedReader().use { reader ->
                     val envelope = reader.readLine()?.let { envelopes.fromJson(it) } ?: return@use
-                    if (!envelope.legacy && !envelope.matches(topic, kinds)) return@use
+                    // A copy saved after the mark came from a later read and keeps its own state.
+                    if (envelope.fetchedAt > mark.upTo) return@use
+                    if (!envelope.legacy && !envelope.matches(mark.topic, mark.kinds)) return@use
                     if (edited && !envelope.legacy) {
                         target.delete()
                     } else if (!envelope.stale || (edited && envelope.etag != null)) {

@@ -21,12 +21,29 @@ const { resolveUsState } = require('../utils/usState');
 const featureFlagService = require('../services/featureFlagService');
 const ballotSummary = require('../services/ballot/summary');
 const ballotGovernments = require('../services/ballot/governments');
+const { publicPlan } = require('../services/plans/planPublic');
 
 // ============================================================
 // Public Preview Endpoints
 // No authentication required. Returns sanitized data only —
 // no user IDs, no exact addresses, no PII.
 // ============================================================
+
+// ── GET /api/public/plans/:id ───────────────────────────────
+// Nearby Plans share page (web /plans/:id). Area only: no host user id, no
+// point, no viewer; a playdate answers only its kind and city (planPublic.js).
+router.get('/plans/:id', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  try {
+    const plan = await publicPlan(req.params.id);
+    if (!plan) return res.status(404).json({ error: 'not_found', message: "This plan isn't available." });
+    recordFunnelEvent('plan_share_opened', { meta: { plan_id: req.params.id, kind: plan.kind } });
+    return res.json(plan);
+  } catch (err) {
+    console.error('[public/plans] failed:', err.message);
+    return res.status(500).json({ error: 'server_error', message: 'Something went wrong. Please try again.' });
+  }
+});
 
 // ── GET /api/public/gigs/:id ────────────────────────────────
 router.get('/gigs/:id', async (req, res) => {

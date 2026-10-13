@@ -91,6 +91,28 @@ function localParts(instant, timeZone = DEFAULT_TIMEZONE) {
   };
 }
 
+/** The instant of a local wall-clock time (y-m-d hh:mm) in a time zone. */
+function zonedInstant(year, month, day, hour, minute, timeZone = DEFAULT_TIMEZONE) {
+  const guess = Date.UTC(year, month - 1, day, hour, minute);
+  const offsetAt = (t) => {
+    const p = localParts(new Date(t), timeZone);
+    return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute) - Math.floor(t / 60000) * 60000;
+  };
+  let t = guess - offsetAt(guess);
+  const second = offsetAt(t);
+  if (guess - second !== t) t = guess - second;
+  return new Date(t);
+}
+
+/** When to remind people who are in: 2 hours before, or 7 PM the evening before a plan starting before 10 AM. */
+function reminderAt(startsAt, timeZone = DEFAULT_TIMEZONE) {
+  const start = new Date(startsAt);
+  const local = localParts(start, timeZone);
+  // Date.UTC rolls day 0 back to the last day of the previous month.
+  if (local.hour < 10) return zonedInstant(local.year, local.month, local.day - 1, 19, 0, timeZone);
+  return new Date(start.getTime() - 2 * 60 * 60 * 1000);
+}
+
 /** morning | afternoon | evening | night, from the local start hour. */
 function dayPart(startsAt, timeZone = DEFAULT_TIMEZONE) {
   const local = localParts(startsAt, timeZone);
@@ -165,6 +187,8 @@ module.exports = {
   distanceBandFromMeters,
   distanceMeters,
   localParts,
+  zonedInstant,
+  reminderAt,
   dayPart,
   planState,
   askingClosesAt,
