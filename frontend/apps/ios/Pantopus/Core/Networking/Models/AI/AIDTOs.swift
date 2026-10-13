@@ -58,18 +58,6 @@ public struct AIConversationDraftDTO: Decodable, Sendable, Hashable {
     public let draft: [String: JSONValue]
 }
 
-/// Envelope from `POST /api/ai/transcribe` (`backend/routes/ai.js:387`)
-/// — Whisper transcription of a recorded describe-step voice note.
-public struct AITranscriptionResponse: Decodable, Sendable, Hashable {
-    public let text: String
-    public let durationSeconds: Double?
-
-    private enum CodingKeys: String, CodingKey {
-        case text
-        case durationSeconds = "duration_seconds"
-    }
-}
-
 /// Body for `POST /api/ai/draft/listing-vision` (Snap & Sell). Images
 /// are base64 data URLs or hosted URLs; the route caps the array at 5
 /// (`backend/routes/ai.js:74`).

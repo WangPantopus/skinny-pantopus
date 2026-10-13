@@ -3,7 +3,7 @@
 // Chat agent, draft generation, mail summarization, place brief
 // ============================================================
 
-import apiClient, { get, post, del, getApiBaseUrl, fetchAuthHeaders, refreshAuthSession } from '../client';
+import { get, post, del, getApiBaseUrl, fetchAuthHeaders, refreshAuthSession } from '../client';
 import type {
   AIDraftGigRequest,
   AIDraftGigResponse,
@@ -259,42 +259,4 @@ export async function getConversations(): Promise<{ conversations: AIConversatio
  */
 export async function deleteConversation(id: string): Promise<{ message: string }> {
   return del<{ message: string }>(`/api/ai/conversations/${id}`);
-}
-
-// ─── Audio Transcription ─────────────────────────────────────
-
-export interface TranscriptionResult {
-  text: string;
-  duration_seconds: number | null;
-}
-
-/**
- * Transcribe an audio file via Whisper.
- * Accepts a file URI (React Native) or File object (web).
- */
-export async function transcribeAudio(
-  audio: string | File,
-  filename?: string,
-): Promise<TranscriptionResult> {
-  const formData = new FormData();
-
-  if (typeof audio === 'string') {
-    // React Native: audio is a file URI
-    formData.append('audio', {
-      uri: audio,
-      name: filename || 'recording.m4a',
-      type: 'audio/m4a',
-    } as any);
-  } else {
-    // Web: audio is a File object
-    formData.append('audio', audio);
-  }
-
-  const response = await apiClient.post<TranscriptionResult>(
-    '/api/ai/transcribe',
-    formData,
-    { headers: { 'Content-Type': 'multipart/form-data' } },
-  );
-
-  return response.data;
 }

@@ -6,14 +6,10 @@ import app.pantopus.android.data.api.models.ai.AIDraftListingVisionRequest
 import app.pantopus.android.data.api.models.ai.AIDraftPostRequest
 import app.pantopus.android.data.api.models.ai.AIListingVisionResponse
 import app.pantopus.android.data.api.models.ai.AIPostDraftResponse
-import app.pantopus.android.data.api.models.ai.TranscriptionResponse
 import app.pantopus.android.data.api.models.place.NeighborhoodPulse
-import okhttp3.MultipartBody
 import retrofit2.http.Body
 import retrofit2.http.GET
-import retrofit2.http.Multipart
 import retrofit2.http.POST
-import retrofit2.http.Part
 import retrofit2.http.Path
 import retrofit2.http.Query
 
@@ -49,16 +45,6 @@ interface AIApi {
     suspend fun pulse(
         @Query("homeId") homeId: String,
     ): NeighborhoodPulse
-
-    /**
-     * A12.8 — Whisper transcription of a recorded voice note (m4a/AAC,
-     * ≤25 MB, part name `audio`). Route `backend/routes/ai.js:387`.
-     */
-    @Multipart
-    @POST("api/ai/transcribe")
-    suspend fun transcribe(
-        @Part audio: MultipartBody.Part,
-    ): TranscriptionResponse
 
     /**
      * A12.9 Snap & Sell — draft listing fields from up to five base64

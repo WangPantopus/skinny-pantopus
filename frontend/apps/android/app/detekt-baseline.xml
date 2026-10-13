@@ -129,7 +129,6 @@
     <ID>MatchingDeclarationName:PackageEditorScreen.kt$PackageEditorTags</ID>
     <ID>MatchingDeclarationName:PackagesListScreen.kt$PackagesListTags</ID>
     <ID>MatchingDeclarationName:PlaceSectionCard.kt$PlaceSectionCardState</ID>
-    <ID>MatchingDeclarationName:TranscriptionDtos.kt$TranscriptionResponse</ID>
     <ID>MaxLineLength:A11yChecklist.kt$SchedulingA11yAudit$note = "Availability is conveyed only by an accent dot + weight; the cell has no contentDescription announcing ', available'/', today'."</ID>
     <ID>MaxLineLength:A11yChecklist.kt$SchedulingA11yAudit$note = "Picker is a labelled 'Time zone' control, but a host/viewer mismatch is not spoken; use SchedulingA11y.timezoneLabel(viewer, host)."</ID>
     <ID>MaxLineLength:A11yChecklist.kt$SchedulingA11yAudit$note = "The active code box uses a11yFocusRing; the input is one real labelled BasicTextField (TalkBack + autofill reach it)."</ID>
