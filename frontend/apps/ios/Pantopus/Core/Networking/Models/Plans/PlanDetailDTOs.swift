@@ -189,3 +189,18 @@ public struct PlanMyRequestDTO: Decodable, Sendable, Hashable {
         asksLeft = try container.decodeIfPresent(Int.self, forKey: .asksLeft)
     }
 }
+
+// MARK: - Your standing
+
+/// `/mine`'s `viewer`: whether playdates are open to this person.
+public struct MyPlansViewer: Decodable, Sendable, Hashable {
+    /// A verified resident (postcard, document, landlord or admin).
+    public let verifiedAddress: Bool
+    /// Verified, with `plans_playdates` on.
+    public let seesPlaydates: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case verifiedAddress = "verified_address"
+        case seesPlaydates = "sees_playdates"
+    }
+}
