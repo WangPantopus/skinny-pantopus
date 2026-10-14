@@ -63,7 +63,11 @@ Heads-up kinds a resident may create: `road_hazard`, `power_outage`, `weather_da
   "event": null,                  // { starts_at, ends_at, venue } for events
   "lost_found": null,             // { kind: "lost" | "found" }
   "offer": null,                  // { claim_mode, requests_open, gone } for offers
-  "viewer": { "is_author": false, "following": false, "can_mark_helpful": false },
+  "viewer": {
+    "is_author": false, "following": false, "can_mark_helpful": false,
+    "saved": false,               // the viewer saved it; POST /api/posts/:id/save toggles it, as on today's cards
+    "can_keep_open": false        // the asker's own open Ask, not yet kept open (2.12); false for everyone else
+  },
   "moderation": { "state": "live" }   // "held" / "removed" only ever reaches the author
 }
 ```
@@ -184,7 +188,7 @@ Private note to a home (signed): `POST /api/pulse/notes` `{ "toHomeId"? | "toPos
 
 The asker's two actions on an open Ask, offered by the day-6 reminder (`ask_still_open`, section 6) and on the Ask itself when `viewer.is_author`:
 
-- `POST /api/pulse/posts/:postId/keep-open`, no body → `{ "post_status": { "state": "open", "resolution": null, "ends_at": "<iso>" } }`. Moves the end 7 days past where it was, once per Ask (stored as `post_metadata.kept_open_at`); a second time answers `409 ALREADY_KEPT_OPEN`.
+- `POST /api/pulse/posts/:postId/keep-open`, no body → `{ "post_status": { "state": "open", "resolution": null, "ends_at": "<iso>" } }`. Moves the end 7 days past where it was, once per Ask (stored as `post_metadata.kept_open_at`); a second time answers `409 ALREADY_KEPT_OPEN`. On a `PulsePost`, `viewer.can_keep_open` is true exactly when this call would succeed, so clients offer "Keep open 7 more days" only then.
 - `POST /api/pulse/posts/:postId/close`, no body → `{ "post_status": { "state": "resolved", "resolution": "closed" | "closed_unanswered" } }`. `closed` when someone other than the asker replied, `closed_unanswered` when nobody did. The Ask leaves the views like any ended post; restoring it from My posts reopens it for another window (section 5).
 
 Both answer `404 POST_NOT_FOUND`, `403 NOT_POST_AUTHOR` (not the asker), `400 NOT_AN_ASK` (another type), and `409 ASK_ENDED` when the Ask is already answered, closed or past its end.
