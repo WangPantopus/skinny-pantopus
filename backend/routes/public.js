@@ -125,41 +125,6 @@ router.get('/listings/:id', async (req, res) => {
   }
 });
 
-// ── GET /api/public/posts/:id ───────────────────────────────
-router.get('/posts/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const { data: post, error } = await supabaseAdmin
-      .from('Post')
-      .select('id, title, content, post_type, city, state, visibility, allow_external_share, created_at')
-      .eq('id', id)
-      .single();
-
-    if (error || !post) {
-      return res.status(404).json({ error: 'Not found' });
-    }
-
-    // Only a post its author made public, with sharing left on. Neighborhood and city posts stay inside the app.
-    if (post.visibility !== 'public' || post.allow_external_share === false) {
-      return res.status(404).json({ error: 'Not found' });
-    }
-
-    res.json({
-      id: post.id,
-      title: post.title,
-      body: (post.content || '').slice(0, 200),
-      post_type: post.post_type,
-      city: post.city,
-      state: post.state,
-      created_at: post.created_at,
-    });
-  } catch (err) {
-    console.error('[public/posts] Error:', err.message);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
 // ============================================================
 // GET /api/public/place — anonymous T0 "Place" preview
 //

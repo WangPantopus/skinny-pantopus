@@ -929,6 +929,17 @@ private struct FeedPostActionSurfaces: ViewModifier {
             } message: {
                 Text("You won't see their posts in any feed. You can undo this from their profile.")
             }
+            .alert("Close this question?", isPresented: presentingCloseAsk) {
+                Button("Close", role: .destructive) {
+                    guard let id = viewModel.closingAskPostId else { return }
+                    viewModel.closingAskPostId = nil
+                    run { await viewModel.closeAsk(postId: id) }
+                }
+                .accessibilityIdentifier("pulseAskCloseConfirm")
+                Button("Cancel", role: .cancel) { viewModel.closingAskPostId = nil }
+            } message: {
+                Text("It leaves Pulse. You can restore it from My posts.")
+            }
             .sheet(item: $shareTarget) { target in
                 SystemShareSheet(items: [target.url])
                     .onDisappear {
@@ -1007,6 +1018,20 @@ private struct FeedPostActionSurfaces: ViewModifier {
                 }
                 .accessibilityIdentifier("pulseFeedOverflowMarkSolved")
             }
+            if actions.canKeepAskOpen {
+                Button("Keep open 7 more days") {
+                    dismissOverflow()
+                    run { await viewModel.keepAskOpen(postId: row.id) }
+                }
+                .accessibilityIdentifier("pulseAskKeepOpen")
+            }
+            if actions.canCloseAsk {
+                Button("Close") {
+                    viewModel.overflowPostId = nil
+                    viewModel.closingAskPostId = row.id
+                }
+                .accessibilityIdentifier("pulseAskClose")
+            }
             if actions.canReport {
                 Button("Report post", role: .destructive) {
                     viewModel.overflowPostId = nil
@@ -1068,6 +1093,13 @@ private struct FeedPostActionSurfaces: ViewModifier {
         Binding(
             get: { viewModel.mutingPostId != nil },
             set: { shown in if !shown { viewModel.mutingPostId = nil } }
+        )
+    }
+
+    private var presentingCloseAsk: Binding<Bool> {
+        Binding(
+            get: { viewModel.closingAskPostId != nil },
+            set: { shown in if !shown { viewModel.closingAskPostId = nil } }
         )
     }
 
