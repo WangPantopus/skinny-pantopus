@@ -55,20 +55,17 @@ import app.pantopus.android.ui.theme.Spacing
 /** The host's first name for sentences ("Sam approves each person"). */
 internal val PlanDto.hostFirst: String get() = PlanFormat.firstName(host?.displayName)
 
-/** "within an hour": how fast the host usually answers, or null with too little history. */
+/** "within an hour": how fast the host usually answers (iOS's table), or null with too little history. */
 internal fun answerTime(plan: PlanDto): String? {
     val minutes = plan.host?.typicalAnswerMinutes ?: return null
     return when {
-        minutes <= ANSWER_HOUR -> "within an hour"
-        minutes <= ANSWER_FEW_HOURS -> "within a few hours"
-        minutes <= ANSWER_DAY -> "within a day"
-        else -> null
+        minutes < 20 -> "within minutes"
+        minutes < 75 -> "within an hour"
+        minutes < 180 -> "within a few hours"
+        minutes < 24 * 60 -> "within a day"
+        else -> "in a day or two"
     }
 }
-
-private const val ANSWER_HOUR = 60
-private const val ANSWER_FEW_HOURS = 240
-private const val ANSWER_DAY = 1440
 
 /** "Near Prune Hill · under 1 mi · at Sam's place" (or "a public place"). */
 internal fun whereLine(plan: PlanDto): String {
@@ -118,10 +115,11 @@ internal fun detailsLine(plan: PlanDto): String? {
     return parts.takeIf { it.isNotEmpty() }?.joinToString(" · ")
 }
 
-/** "paddles", "balls" or "gear": what a pickup host brings extra (H4 "I have extra paddles"). */
+/** "paddles", "rackets", "balls" or "gear": what a pickup host brings extra (H4 "I have extra paddles"). */
 internal fun extraGearWord(sport: String?): String =
     when (sport) {
-        "pickleball", "tennis" -> "paddles"
+        "pickleball" -> "paddles"
+        "tennis" -> "rackets"
         "basketball", "soccer", "volleyball" -> "balls"
         else -> "gear"
     }
@@ -167,7 +165,7 @@ internal fun PlanSpots(
                 } else if (plan.planKind == PlanKind.PICKUP_GAME) {
                     "players"
                 } else {
-                    "spots"
+                    "people"
                 }
             PlanSpotsCaption(going = "Full", left = "${plan.spots} of ${plan.spots} $noun", note = note, noteMuted = true)
         } else {
@@ -187,7 +185,7 @@ internal fun ColumnScope.PlanBeforeInBody(plan: PlanDto) {
             PlanInfoLine(PantopusIcon.Calendar, PlanFormat.whenLine(plan, long = true))
             PlanInfoLine(PantopusIcon.MapPin, whereLine(plan))
             if (plan.isPlaydate) {
-                KidsAgeBand.rangeLabel(plan.details?.kidsAgeBands)?.let { PlanInfoLine(PantopusIcon.AdultChild, "Kids ages $it") }
+                KidsAgeBand.rangeLabel(plan.details?.kidsAgeBands)?.let { PlanInfoLine(PantopusIcon.AdultChild, "Kids $it") }
             }
         }
     }
@@ -225,7 +223,12 @@ internal fun askFooter(plan: PlanDto): AskFooter {
     return when {
         ended -> AskFooter("This plan has ended", enabled = false, caption = null, action = AskAction.None)
         viewer?.canAsk == true && (plan.isFull || viewer.cannotAskReason == PlanCannotAsk.FULL_USE_WAITLIST) ->
-            AskFooter("Join the waitlist", enabled = true, caption = "If a spot opens, we'll tell you right away.", action = AskAction.Ask)
+            AskFooter(
+                "Join the waitlist",
+                enabled = true,
+                caption = "Full for now. If a spot opens, we'll tell you right away.",
+                action = AskAction.Ask,
+            )
         viewer?.canAsk == true ->
             AskFooter(
                 "Ask to join",
@@ -252,16 +255,21 @@ internal fun askFooter(plan: PlanDto): AskFooter {
                     AskFooter(
                         "Share your location to join",
                         enabled = true,
-                        caption = "Hosts only see a distance like \"about 1 mi\".",
+                        caption = "Hosts only see a distance like “about 1 mi”.",
                         action = AskAction.Location,
                     )
                 PlanCannotAsk.TOO_FAR ->
-                    AskFooter("Too far to join", enabled = false, caption = "Plans take people within 5 miles.", action = AskAction.None)
+                    AskFooter(
+                        "Too far to join",
+                        enabled = false,
+                        caption = "This plan is for neighbors who live or are close by.",
+                        action = AskAction.None,
+                    )
                 PlanCannotAsk.FULL_USE_WAITLIST ->
                     AskFooter(
                         "Join the waitlist",
                         enabled = true,
-                        caption = "If a spot opens, we'll tell you right away.",
+                        caption = "Full for now. If a spot opens, we'll tell you right away.",
                         action = AskAction.Ask,
                     )
                 PlanCannotAsk.TOO_MANY_REQUESTS ->
@@ -314,7 +322,8 @@ private fun YourRequestCard(plan: PlanDto) {
         val coming =
             if (plan.isPlaydate) {
                 val kids = mine.kidsCount ?: 1
-                "You + $kids ${if (kids == 1) "kid" else "kids"}"
+                listOfNotNull("You + $kids ${if (kids == 1) "kid" else "kids"}", KidsAgeBand.rangeLabel(mine.kidsAgeBands))
+                    .joinToString(" · ")
             } else {
                 val size = mine.partySize ?: 1
                 if (size <= 1) "Just you" else "You + ${size - 1}"
@@ -458,7 +467,7 @@ internal fun PlaydateLocked(
                 color = PantopusColors.appText,
                 modifier = Modifier.semantics { heading() },
             )
-            Text(text = "A neighbor shared this with you.", style = PantopusTextStyle.small, color = PantopusColors.appTextSecondary)
+            Text(text = "Someone shared this with you.", style = PantopusTextStyle.small, color = PantopusColors.appTextSecondary)
         }
         Column(modifier = Modifier.fillMaxWidth().planCard().padding(Spacing.s4), verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
             PlanIconTile(PantopusIcon.Lock, PantopusColors.appSurfaceSunken, PantopusColors.appTextStrong, size = 48.dp, glyph = 22.dp)

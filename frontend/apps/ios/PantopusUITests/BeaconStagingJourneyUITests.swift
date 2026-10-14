@@ -51,7 +51,7 @@ final class BeaconStagingJourneyUITests: XCTestCase {
         XCTAssertTrue(inputs["BEACON_TEST_EMAIL"]?.hasPrefix("bp-ios-creator-") == true)
         app.launch()
         try signIn()
-        tap("hubMenuButton")
+        tap("place.menu")
         tap("navDrawer.item.my-beacon")
         XCTAssertTrue(element("beaconProfile").waitForExistence(timeout: 20))
         tap("beaconProfileComposeCTA")
@@ -85,7 +85,7 @@ final class BeaconStagingJourneyUITests: XCTestCase {
         // start before ending this fixture's session through normal settings.
         app.terminate()
         app.launch()
-        XCTAssertTrue(element("hubMenuButton").waitForExistence(timeout: 25))
+        XCTAssertTrue(element("place.menu").waitForExistence(timeout: 25))
         dismissSignInPrompts()
         signOut()
     }
@@ -102,13 +102,13 @@ final class BeaconStagingJourneyUITests: XCTestCase {
         // The private runner requires a full token lifetime to have elapsed.
         // Do not call signIn here: the existing Keychain session must recover.
         app.launch()
-        XCTAssertTrue(element("hubMenuButton").waitForExistence(timeout: 30))
+        XCTAssertTrue(element("place.menu").waitForExistence(timeout: 30))
         XCTAssertFalse(element("loginEmailField").exists)
         try openExactAudiencePost()
     }
 
     private func openExactAudiencePost() throws {
-        tap("hubBellButton")
+        tap("place.notifications")
         XCTAssertTrue(element("notifications").waitForExistence(timeout: 20))
         tapButton("Audience notifications")
         let body = try XCTUnwrap(inputs["BEACON_TEST_BODY"])
@@ -122,7 +122,7 @@ final class BeaconStagingJourneyUITests: XCTestCase {
     }
 
     private func signIn() throws {
-        if element("hubMenuButton").waitForExistence(timeout: 3) {
+        if element("place.menu").waitForExistence(timeout: 3) {
             // A failed prior UI assertion may leave a session in Keychain.
             // Use normal logout and login so the requested fixture account is
             // established without trusting a previous screen or session.
@@ -133,7 +133,7 @@ final class BeaconStagingJourneyUITests: XCTestCase {
         try enter(XCTUnwrap(inputs["BEACON_TEST_EMAIL"]), into: "loginEmailField")
         try enter(XCTUnwrap(inputs["BEACON_TEST_PASSWORD"]), into: "loginPasswordField")
         tap("loginSubmitButton")
-        XCTAssertTrue(element("hubMenuButton").waitForExistence(timeout: 25))
+        XCTAssertTrue(element("place.menu").waitForExistence(timeout: 25))
         dismissSignInPrompts()
     }
 
@@ -157,7 +157,7 @@ final class BeaconStagingJourneyUITests: XCTestCase {
     }
 
     private func signOut() {
-        tap("hubMenuButton")
+        tap("place.menu")
         tap("navDrawer.item.settings")
         tapButton("Log out")
         XCTAssertTrue(element("placeLaunchSignIn").waitForExistence(timeout: 20))

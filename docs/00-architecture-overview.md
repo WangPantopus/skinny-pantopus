@@ -82,7 +82,7 @@
 | **Triggers** | EventBridge | - | Cron schedules |
 | **Secrets** | AWS Secrets Manager | - | Credential storage |
 | **Metrics** | CloudWatch | - | Operational monitoring |
-| **AI** | OpenAI (gpt-4o-mini) | 1.0+ | Content humanization |
+| **AI** | Anthropic Claude (Sonnet 5.5) | 1.13+ | Content humanization |
 | **HTTP** | httpx | 0.27+ | Async HTTP client |
 | **RSS** | feedparser | 6.0+ | Feed parsing |
 | **Validation** | Pydantic | 2.0+ | Data models |
@@ -94,7 +94,7 @@
 | **Supabase** | PostgreSQL DB + Auth + RLS + Realtime | Backend (core) |
 | **Stripe** | Payments, Connect, Disputes | Backend (payments) |
 | **AWS S3 + CloudFront** | File storage + CDN | Backend (media) |
-| **OpenAI** | GPT-4o chat, drafts, vision, summarization | Backend (AI), Seeder (humanizer) |
+| **Anthropic Claude** | Sonnet 5.5 chat, drafts, vision, summarization | Backend (AI), Seeder (humanizer) |
 | **Twilio** | SMS / Phone verification | Backend (auth) |
 | **Mapbox** | Geocoding, maps, tiles | Backend (geo) |
 | **Google Address Validation** | Address normalization + geocoding | Backend (address pipeline) |
@@ -301,7 +301,7 @@
 | `GOOGLE_ADDRESS_VALIDATION_API_KEY` | Google |
 | `SMARTY_AUTH_ID` + `SMARTY_AUTH_TOKEN` | Smarty |
 | `LOB_API_KEY` + `LOB_WEBHOOK_SECRET` | Lob |
-| `OPENAI_API_KEY` | OpenAI |
+| `ANTHROPIC_API_KEY` | Anthropic |
 | `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` | AWS S3 |
 | `MAPBOX_ACCESS_TOKEN` | Mapbox |
 
@@ -350,7 +350,7 @@
  |           |                | Dedup + filter       | -- API ------>| USGS     |
  |           |                | Queue to DB          |              |           |
  +-----------+                +----------------------+              +-----------+
- | EventBrdg | -- invoke ---->| Poster Lambda        | -- AI ------->| OpenAI   |
+ | EventBrdg | -- invoke ---->| Poster Lambda        | -- AI ------->| Claude   |
  | (hourly)  |                | Select best item     |              |           |
  |           |                | Humanize via Claude  |              |           |
  |           |                | POST to API          | -- HTTP ----->| Backend  |

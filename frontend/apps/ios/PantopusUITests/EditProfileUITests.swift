@@ -24,7 +24,7 @@ final class EditProfileUITests: XCTestCase {
         app.launch()
         // Skip rather than fail when the build wasn't compiled with the
         // hooks (older artifacts). Mirrors the pattern in RootTabUITests.
-        guard app.staticTexts["Hub"].waitForExistence(timeout: 5) else {
+        guard app.buttons["place.menu"].firstMatch.waitForExistence(timeout: 5) else {
             app.terminateAfterSkippedLaunch()
             return nil
         }
@@ -32,7 +32,8 @@ final class EditProfileUITests: XCTestCase {
     }
 
     private func openEditProfile(in app: XCUIApplication) -> XCUIElement {
-        app.buttons["hubAvatarButton"].firstMatch.tap()
+        app.buttons["place.menu"].firstMatch.tap()
+        app.buttons["navDrawer.contextPill.profile"].firstMatch.tap()
         let editButton = app.buttons["youEditProfileButton"]
         XCTAssertTrue(editButton.waitForExistence(timeout: 3))
         editButton.tap()

@@ -12,35 +12,127 @@
 
 import SwiftUI
 
-/// The shape the scene draws for the resident's home.
-enum SkyHome: Equatable {
-    case house
-    case townhouse
-    case apartment
-    case mobile
+/// The resident's home as the scene draws it: its kind and, for a house, the
+/// outline the county record gives (`PlaceHouseShape`). What the record
+/// doesn't say keeps the scene's first house: one storey, 40 points wide,
+/// a gable roof and a chimney.
+struct SkyHome: Equatable {
+    enum Kind: Equatable {
+        case house
+        case townhouse
+        case apartment
+        case mobile
+    }
 
-    /// From the home record's `home_type`; a house when it's unknown.
-    init(_ homeType: String?) {
-        switch homeType {
-        case "townhouse": self = .townhouse
-        case "apartment", "condo", "studio", "multi_unit": self = .apartment
-        case "mobile_home", "trailer", "rv": self = .mobile
-        default: self = .house
+    enum Roof: Equatable {
+        case gable
+        case hip
+        case flat
+    }
+
+    enum Garage: Equatable {
+        case none
+        case attached
+        case detached
+        case carport
+    }
+
+    var kind = Kind.house
+    /// 1, 1.5, 2 or 3; nil draws the first house's one storey.
+    var stories: Double?
+    /// The walls' width, points.
+    var width = 40.0
+    var roof = Roof.gable
+    var garage = Garage.none
+    /// One door per car, 1 to 3.
+    var garageSpaces = 2
+    /// A house or townhouse has one unless the record says it has no fireplace.
+    var chimney = true
+    var pool = false
+
+    static let house = SkyHome()
+
+    /// From the home record's `home_type` alone: the app's own types, or a
+    /// county record's words ("CONDOMINIUM") from a server without the outline.
+    /// The outline itself is read in `SkyHome+Place.swift` (the app only; the
+    /// widget draws the first house).
+    init(_ homeType: String? = nil) {
+        kind = Self.kind(homeType) ?? .house
+        chimney = kind == .house || kind == .townhouse
+    }
+
+    /// The app's own home types, then a county record's words.
+    static func kind(_ value: String?) -> Kind? {
+        switch value {
+        case nil, "": return nil
+        case "house": return .house
+        case "townhouse": return .townhouse
+        case "apartment", "condo", "studio", "multi_unit": return .apartment
+        case "mobile", "mobile_home", "trailer", "rv": return .mobile
+        default: break
+        }
+        let words = (value ?? "").uppercased()
+        if words.contains("MOBILE") || words.contains("MANUFACTURED") { return .mobile }
+        if words.contains("CONDO") || words.contains("APARTMENT") || words.contains("MULTI") { return .apartment }
+        if words.contains("TRIPLEX") || words.contains("QUADRUPLEX") || words.contains("FOURPLEX") { return .apartment }
+        let single = words.contains("SINGLE FAMILY")
+        if !single, words.contains("TOWNHOUSE") || words.contains("ROWHOUSE") || words.contains("DUPLEX") { return .townhouse }
+        return nil
+    }
+
+    /// The walls' height: the first house's 26 points for one storey.
+    var wallHeight: Double {
+        guard let stories else { return 26 }
+        if stories >= 2.5 { return 52 }
+        if stories >= 2 { return 40 }
+        return stories > 1 ? 30 : 26
+    }
+
+    /// 16, 24 or 32 points: a door per car.
+    var garageWidth: Double {
+        Double(8 + 8 * garageSpaces)
+    }
+
+    /// How far the home reaches left of its door, roof included: the bins
+    /// stand just past it.
+    var leftReach: Double {
+        kind == .house ? width / 2 + 5 : halfWidth
+    }
+
+    /// How far it reaches right of its door, roof and garage included (the
+    /// garage stands right of the house, clear of the reading's chips): the
+    /// trees stand just past it.
+    var rightReach: Double {
+        guard kind == .house else { return halfWidth }
+        return switch garage {
+        case .none: width / 2 + 5
+        case .attached: width / 2 + garageWidth + 5
+        case .detached: width / 2 + 5 + garageWidth + 5
+        case .carport: width / 2 + 21
         }
     }
 
-    /// Half the width it takes on the ground, for the bins and the trees.
-    var halfWidth: Double {
-        switch self {
-        case .house: 25
+    /// Half the width a townhouse row, block or mobile home takes on the ground.
+    private var halfWidth: Double {
+        switch kind {
+        case .house: width / 2 + 5
         case .townhouse: 38
         case .apartment: 26
         case .mobile: 29
         }
     }
 
-    var chimney: Bool {
-        self == .house || self == .townhouse
+    /// The chimney's top left corner for a door at `origin`; smoke rises from
+    /// just above its middle.
+    func chimneyTop(at origin: CGPoint) -> CGPoint {
+        guard kind == .house else { return CGPoint(x: origin.x + 8, y: origin.y - 44) }
+        let top = Double(origin.y) - wallHeight
+        let above: Double = switch roof {
+        case .gable: 18
+        case .hip: 17
+        case .flat: 12
+        }
+        return CGPoint(x: Double(origin.x) + width * 0.2, y: top - above)
     }
 }
 
@@ -67,7 +159,7 @@ enum SkyStreet {
 extension TodaySkyGround {
     /// The resident's home with its door at `origin`.
     func paintHome(_ context: GraphicsContext, _ tones: Tones, at origin: CGPoint) {
-        switch home {
+        switch home.kind {
         case .house: paintHouse(context, tones, at: origin)
         case .townhouse: paintTownhouses(context, tones, at: origin)
         case .apartment: paintApartment(context, tones, at: origin)
@@ -102,7 +194,9 @@ extension TodaySkyGround {
         unit(context, center: x - 26, width: 24, ground: y, tone: side)
         unit(context, center: x + 26, width: 24, ground: y, tone: side)
         unit(context, center: x, width: 28, ground: y, tone: tones.house)
-        context.fill(Path(CGRect(x: x + 8, y: y - 42, width: 5, height: 12)), with: .color(tones.house.color))
+        if home.chimney {
+            context.fill(Path(CGRect(x: x + 8, y: y - 42, width: 5, height: 12)), with: .color(tones.house.color))
+        }
         porchGlow(context, at: origin, width: 44)
         context.fill(Path(CGRect(x: x - 10, y: y - 18, width: 7, height: 6)), with: .color(windowColor(lit: lit)))
         context.fill(Path(CGRect(x: x + 3, y: y - 18, width: 7, height: 6)), with: .color(windowColor(lit: lit && !moment.lateNight)))

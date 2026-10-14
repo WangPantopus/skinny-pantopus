@@ -32,7 +32,7 @@ The street is where people share a trash route, a storm drain and a view of each
 | --- | --- | --- |
 | Thumbtack | [Bundles same-day bookings within a ZIP code](https://patch.com/massachusetts/boston/how-boston-residents-can-save-35-percent-gutter-cleaning), such as $50 off gutter cleaning, and [acquired StreetFair in April 2026](https://grepbeat.com/2026/04/28/charlottes-streetfair-announces-acquisition-by-thumbtack/) | Don't compete on supply or discounts alone. Crews can come from anywhere, including Thumbtack |
 | [OneNeighbor](https://www.oneneighbor.com/faq) | Neighborhood group buying for lawn care and similar services; the price drops as more homes sign up; an HOA partner program | Group pricing is proven and taken. Our first version gives each home one confirmed price instead |
-| Nextdoor | A neighborhood feed with news and alerts | We build no feed. Plans, not posts |
+| Nextdoor | A neighborhood feed with news and alerts | We build no feed. Plans, not posts. *(Amended October 13, 2026: conversation is built separately as Pulse, a calm town space that ends, with no ranking, likes or scores. The street organizer itself still builds no feed. See `docs/product/pulse-build/`.)* |
 
 Our angle is to own the street as a lasting unit: its doors, its welcome, its calendar and its trusted people. We win on the quality of coordination and on what happens after the first job. The health test is a second street plan that isn't a Crew Day.
 
@@ -51,7 +51,7 @@ The goal is simple: living on a street with Pantopus is easier. Jobs get done pr
 
 **Non-goals**
 
-- A feed, a discussion board or crime reports.
+- A feed, a discussion board or crime reports. *(Amended October 13, 2026: public conversation is built as Pulse, a separate space with its own rules in `docs/product/pulse-build/`. The street organizer adds no feed of its own, and crime reports are never built anywhere.)*
 - Running crews ourselves.
 - Safety monitoring of people. That is Porchlight, a separate product.
 - Ads, or selling data.
@@ -449,11 +449,11 @@ Neighborhood apps become exhausting when joining one thing creates endless oblig
 ### Moderation
 
 - No feed, opinion posts, anonymous posts or crime reports.
-- Comments exist only inside a plan, among the people in it.
+- Comments exist only inside a plan, among the people in it. *(Amended October 13, 2026: Pulse conversations have public replies, each labeled with the writer's relationship to the place and moderated under Pulse's rules; a plan's own comments stay private to the plan.)*
 - A complaint about a specific home is never a plan.
 - Posting requires verified residency, with rate limits and blocking.
 - No direct messages outside a plan unless both people agree.
-- An AI tone check warns before sending ("This might read as harsh. Send anyway?"), but never blocks.
+- An AI tone check warns before sending ("This might read as harsh. Send anyway?"), but never blocks. *(Pulse's composer additionally stops a post that names a home or accuses a person, or shows a house number, plate or phone number, and offers a better route; tone itself still never blocks.)*
 - Reports go to a person at Pantopus. Residents never moderate each other.
 - Pantopus never poses as a neighbor. When no resident has started a plan, the organizer is clearly labeled "Pantopus."
 
@@ -466,7 +466,7 @@ Neighborhood apps become exhausting when joining one thing creates endless oblig
 
 ### What we never build
 
-- A feed, likes or public comments.
+- A feed, likes or public comments. *(Amended October 13, 2026: Pulse has public replies in a calm, time-ordered space that ends. Still never built: ranking by engagement, likes, or any public score.)*
 - Public scores for people or homes.
 - Crime or "suspicious person" reports.
 - Ads on the street.

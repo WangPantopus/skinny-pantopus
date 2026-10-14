@@ -4,9 +4,11 @@
  * These schemas enforce that AI responses conform to the shapes expected by
  * the existing Joi validation in gig / listing / post routes.  They are used
  * with:
- *   1.  OpenAI Responses API `text.format.type = 'json_schema'` for forced
- *       structured output.
- *   2.  Server-side validation before returning to the client.
+ *   1.  Claude structured outputs (`output_config.format`) after toClaudeSchema()
+ *       reduces them to the subset the API accepts.
+ *   2.  Server-side validation (Ajv, against the full schemas below, which keep
+ *       the length and range limits the API itself can't enforce) before
+ *       returning to the client.
  */
 const Ajv = require('ajv');
 const addFormats = require('ajv-formats');
@@ -231,8 +233,42 @@ const supportTrainDraftJsonSchema = {
   additionalProperties: false,
 };
 
-// ─── Strict variants for OpenAI Responses API ────────────────────────────
-// strict: true requires every property key in `required`.
+// ─── Strict variants for structured output ───────────────────────────────
+// Every property key is in `required` (optional fields are nullable), so the
+// model always states each one and the schema has no optional parameters,
+// which the API caps at 24 per request.
+
+// ─── Pickup Schedule Reading (a hauler's flyer, for the pickup editor) ─────
+
+const pickupScheduleJsonSchema = {
+  type: 'object',
+  properties: {
+    garbage_weekday:     { type: ['string', 'null'], enum: ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU', null] },
+    recycling_frequency: { type: ['string', 'null'], enum: ['weekly', 'biweekly', 'none', null] },
+    recycling_next_date: { type: ['string', 'null'], pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
+    note:                { type: ['string', 'null'], maxLength: 300 },
+  },
+  required: ['garbage_weekday', 'recycling_frequency', 'recycling_next_date', 'note'],
+  additionalProperties: false,
+};
+
+// ─── Radon Result Reading (a lab report, for the Today radon sheet) ──────────
+
+const radonResultJsonSchema = {
+  type: 'object',
+  properties: {
+    result_value:    { type: ['number', 'null'], minimum: 0 },
+    result_unit:     { type: ['string', 'null'], enum: ['pCi/L', 'Bq/m3', null] },
+    below_limit:     { type: 'boolean' },
+    test_start_date: { type: ['string', 'null'], pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
+    test_end_date:   { type: ['string', 'null'], pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
+    test_kind:       { type: ['string', 'null'], enum: ['short_term', 'long_term', null] },
+    lab:             { type: ['string', 'null'], maxLength: 120 },
+    note:            { type: ['string', 'null'], maxLength: 300 },
+  },
+  required: ['result_value', 'result_unit', 'below_limit', 'test_start_date', 'test_end_date', 'test_kind', 'lab', 'note'],
+  additionalProperties: false,
+};
 
 const gigDraftJsonSchemaStrict = {
   ...gigDraftJsonSchema,
@@ -264,6 +300,83 @@ const supportTrainDraftJsonSchemaStrict = {
   required: Object.keys(supportTrainDraftJsonSchema.properties),
 };
 
+const pickupScheduleJsonSchemaStrict = {
+  ...pickupScheduleJsonSchema,
+  required: Object.keys(pickupScheduleJsonSchema.properties),
+};
+
+const radonResultJsonSchemaStrict = {
+  ...radonResultJsonSchema,
+  required: Object.keys(radonResultJsonSchema.properties),
+};
+
+// ─── Claude structured-output schemas ──────────────────────────────────────
+// `output_config.format` takes a subset of JSON Schema: no numeric or
+// string-length limits, no array limit beyond minItems 0/1, and every object
+// closed with additionalProperties: false. A nullable field written as
+// `type: [X, 'null']` is sent as anyOf, the form the API documents. Limits the
+// API can't enforce move into the field's description so the model still sees
+// them; the Ajv validators below keep enforcing them on the reply.
+
+const UNSUPPORTED_KEYWORDS = [
+  'minLength', 'maxLength', 'pattern',
+  'minimum', 'maximum', 'exclusiveMinimum', 'exclusiveMaximum', 'multipleOf',
+  'maxItems', 'uniqueItems',
+];
+
+function toClaudeSchema(schema) {
+  const node = { ...schema };
+
+  const limits = [];
+  for (const keyword of UNSUPPORTED_KEYWORDS) {
+    if (node[keyword] !== undefined) {
+      limits.push(`${keyword}: ${JSON.stringify(node[keyword])}`);
+      delete node[keyword];
+    }
+  }
+  if (node.minItems !== undefined && node.minItems > 1) {
+    limits.push(`minItems: ${node.minItems}`);
+    delete node.minItems;
+  }
+  if (limits.length) {
+    node.description = [node.description, `{${limits.join(', ')}}`].filter(Boolean).join(' ');
+  }
+
+  if (node.properties) {
+    node.properties = Object.fromEntries(
+      Object.entries(node.properties).map(([key, value]) => [key, toClaudeSchema(value)]),
+    );
+    node.additionalProperties = false;
+  }
+  if (node.items) node.items = toClaudeSchema(node.items);
+  if (node.anyOf) node.anyOf = node.anyOf.map(toClaudeSchema);
+
+  if (Array.isArray(node.type)) {
+    const { description, type: types, ...rest } = node;
+    const branches = types.filter((t) => t !== 'null').map((t) => ({
+      type: t,
+      ...rest,
+      // null is its own branch, not a member of the typed branch's enum.
+      ...(Array.isArray(rest.enum) ? { enum: rest.enum.filter((value) => value !== null) } : {}),
+    }));
+    if (types.includes('null')) branches.push({ type: 'null' });
+    if (branches.length === 1) return description ? { ...branches[0], description } : branches[0];
+    return { ...(description ? { description } : {}), anyOf: branches };
+  }
+  return node;
+}
+
+const claudeSchemas = {
+  gigDraft: toClaudeSchema(gigDraftJsonSchemaStrict),
+  listingDraft: toClaudeSchema(listingDraftJsonSchemaStrict),
+  postDraft: toClaudeSchema(postDraftJsonSchemaStrict),
+  mailSummary: toClaudeSchema(mailSummaryJsonSchemaStrict),
+  placeBrief: toClaudeSchema(placeBriefJsonSchemaStrict),
+  supportTrainDraft: toClaudeSchema(supportTrainDraftJsonSchemaStrict),
+  pickupSchedule: toClaudeSchema(pickupScheduleJsonSchemaStrict),
+  radonResult: toClaudeSchema(radonResultJsonSchemaStrict),
+};
+
 // ─── Compile validators ────────────────────────────────────────────────────
 
 const validateGigDraft     = ajv.compile(gigDraftJsonSchema);
@@ -272,9 +385,15 @@ const validatePostDraft    = ajv.compile(postDraftJsonSchema);
 const validateMailSummary  = ajv.compile(mailSummaryJsonSchema);
 const validatePlaceBrief            = ajv.compile(placeBriefJsonSchema);
 const validateSupportTrainDraft    = ajv.compile(supportTrainDraftJsonSchema);
+const validatePickupSchedule       = ajv.compile(pickupScheduleJsonSchema);
+const validateRadonResult          = ajv.compile(radonResultJsonSchema);
 
 module.exports = {
-  // JSON Schemas (for OpenAI structured output)
+  // Schemas sent to Claude as `output_config.format.schema`
+  claudeSchemas,
+  toClaudeSchema,
+
+  // JSON Schemas (the full limits; the Strict variants list every property as required)
   gigDraftJsonSchema,
   gigDraftJsonSchemaStrict,
   listingDraftJsonSchema,
@@ -287,6 +406,10 @@ module.exports = {
   placeBriefJsonSchemaStrict,
   supportTrainDraftJsonSchema,
   supportTrainDraftJsonSchemaStrict,
+  pickupScheduleJsonSchema,
+  pickupScheduleJsonSchemaStrict,
+  radonResultJsonSchema,
+  radonResultJsonSchemaStrict,
 
   // Compiled validators (for server-side validation)
   validateGigDraft,
@@ -295,4 +418,6 @@ module.exports = {
   validateMailSummary,
   validatePlaceBrief,
   validateSupportTrainDraft,
+  validatePickupSchedule,
+  validateRadonResult,
 };

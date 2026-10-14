@@ -55,6 +55,14 @@ struct PlaceLaunchHost: View {
     }
 }
 
+/// The launch screen as the Place tab's first-run root: the tab's bell and
+/// menu replace the brand row and Sign in / Cancel.
+struct PlaceLaunchEmbedding {
+    var unreadCount: Int
+    var onOpenNotifications: () -> Void
+    var onOpenMenu: () -> Void
+}
+
 struct PlaceLaunchView: View {
     /// Present the existing sign-in screen.
     var onSignIn: () -> Void
@@ -64,6 +72,9 @@ struct PlaceLaunchView: View {
     /// previewed address for a private save instead of sign-in, and the
     /// leading action is Cancel. Mirrors Android's `onSavePreview`.
     var onSavePreview: (() -> Void)?
+    /// Set when this is the Place tab's root for someone with no Home and no
+    /// saved address (signed in, so `onSavePreview` is set too).
+    var embedded: PlaceLaunchEmbedding?
 
     @State private var viewModel = PlaceLaunchViewModel()
     @FocusState private var addressFocused: Bool
@@ -78,14 +89,27 @@ struct PlaceLaunchView: View {
                 PlacePreviewBody(
                     preview: preview,
                     signedInEntry: signedInEntry,
-                    onSignIn: { if signedInEntry || viewModel.prepareForAuth() { onSignIn() } },
+                    onSignIn: {
+                        // Embedded, Cancel returns to the address field (there is nothing under it).
+                        if embedded != nil {
+                            viewModel.backToHero()
+                        } else if signedInEntry || viewModel.prepareForAuth() {
+                            onSignIn()
+                        }
+                    },
                     onCreateAccount: continuePreview,
                     onBack: viewModel.backToHero,
                     onRetry: viewModel.retryPreview,
                     retrying: viewModel.isLoadingPreview
                 )
             case let .region(message):
-                PlaceComingRegionBody(message: message, signedInEntry: signedInEntry, onBrowse: browseBeacons) {
+                // Embedded there is nothing to go back to: the button looks up another address.
+                PlaceComingRegionBody(
+                    message: message,
+                    signedInEntry: signedInEntry,
+                    primaryTitle: embedded == nil ? nil : "Look up another address",
+                    onBrowse: embedded == nil ? browseBeacons : viewModel.backToHero
+                ) {
                     viewModel.backToHero()
                 }
             }
@@ -119,22 +143,38 @@ struct PlaceLaunchView: View {
     /// when the keyboard or a small screen makes it.
     private var hero: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 10) {
-                brandLockup
-                regionPill
-                Spacer()
-                Button(signedInEntry ? "Cancel" : "Sign in", action: onSignIn)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Theme.Color.primaryInk)
-                    .accessibilityIdentifier("placeLaunchSignIn")
+            if let embedded {
+                HStack(spacing: 0) {
+                    Spacer()
+                    PlaceBellButton(unreadCount: embedded.unreadCount, action: embedded.onOpenNotifications)
+                    Button(action: embedded.onOpenMenu) {
+                        Icon(.menu, size: 20, color: Theme.Color.appText)
+                            .frame(width: Spacing.s12, height: Spacing.s12)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Menu")
+                    .accessibilityIdentifier("place.menu")
+                }
+                .padding(.horizontal, Spacing.s3)
+            } else {
+                HStack(spacing: 10) {
+                    brandLockup
+                    regionPill
+                    Spacer()
+                    Button(signedInEntry ? "Cancel" : "Sign in", action: onSignIn)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Theme.Color.primaryInk)
+                        .accessibilityIdentifier("placeLaunchSignIn")
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, Spacing.s2)
             }
-            .padding(.horizontal, 20)
-            .padding(.top, Spacing.s2)
 
             ScrollView(showsIndicators: false) {
                 heroBody
                     .padding(.horizontal, 24)
-                    .padding(.top, Spacing.s8)
+                    .padding(.top, embedded == nil ? Spacing.s8 : Spacing.s4)
                     .padding(.bottom, Spacing.s6)
             }
             .scrollDismissesKeyboard(.interactively)

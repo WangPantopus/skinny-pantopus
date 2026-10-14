@@ -4,8 +4,7 @@
 //
 //  A10.6 — design-reference baseline tripwire for the reshaped Business
 //  Profile frames (populated / newly-claimed-closed / loading /
-//  not-found). Mirrors the pattern set by HubScreensSnapshotTests:
-//  asserts that the baseline PNG exists under
+//  not-found). Asserts that the baseline PNG exists under
 //  `PantopusTests/__Snapshots__/p1/business-profile-<state>-ios.png`
 //  and is a non-trivial PNG. The `BusinessProfileLoadedView` renders the
 //  two frames off `BusinessProfileSampleData`; the macOS snapshot job

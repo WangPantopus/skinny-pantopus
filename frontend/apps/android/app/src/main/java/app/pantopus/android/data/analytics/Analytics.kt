@@ -13,7 +13,16 @@ sealed class AnalyticsEvent(
 ) {
     open val properties: Map<String, String> get() = emptyMap()
 
-    data object ScreenHubViewed : AnalyticsEvent("screen.hub.viewed")
+    /**
+     * The Place tab's root shows. [root] is `home` (Your Place for a Home), `saved_place` (the address they saved),
+     * `first_run` (the address-first screen) or `homes` (My homes, while every entry waits on verification). Sent each
+     * time the root appears, as the Hub's `screen.hub.viewed` was.
+     */
+    data class ScreenPlaceViewed(
+        val root: String,
+    ) : AnalyticsEvent("screen.place.viewed") {
+        override val properties = mapOf("root" to root)
+    }
 
     data object ScreenMailboxRootViewed : AnalyticsEvent("screen.mailbox_root.viewed")
 
@@ -173,18 +182,6 @@ sealed class AnalyticsEvent(
             mapOf("step_number" to stepNumber.toString(), "step_name" to stepName)
     }
 
-    data class CtaHubActionStripTapped(
-        val label: String,
-    ) : AnalyticsEvent("cta.hub.action_strip_tapped") {
-        override val properties = mapOf("label" to label)
-    }
-
-    data class CtaHubPillarTapped(
-        val pillar: String,
-    ) : AnalyticsEvent("cta.hub.pillar_tapped") {
-        override val properties = mapOf("pillar" to pillar)
-    }
-
     data class FormEditProfileSubmit(
         val result: AnalyticsResult,
     ) : AnalyticsEvent("form.edit_profile.submit") {
@@ -282,7 +279,7 @@ enum class AnalyticsResult(
 
 /**
  * Analytics shim. Feature code calls
- * `Analytics.track(AnalyticsEvent.ScreenHubViewed)` and we fan the event
+ * `Analytics.track(AnalyticsEvent.ScreenMyHomesViewed)` and we fan the event
  * out to two sinks:
  *   1. [Observability] — mirrors the event into the Sentry breadcrumb
  *      stream so it shows up as context on the next crash / error.

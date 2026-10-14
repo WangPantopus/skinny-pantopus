@@ -2,14 +2,20 @@
  * Tiered property field suggestions for Add Home step 2:
  * 1) ATTOM (structured US assessor-style data)
  * 2) Heuristics from HomeAddress + Places classification
- * 3) Optional LLM (PROPERTY_SUGGESTIONS_LLM=1) — fills gaps only; never overrides ATTOM
+ * 3) Optional LLM (PROPERTY_SUGGESTIONS_LLM=1, Claude) — fills gaps only; never overrides ATTOM
  */
 
 const logger = require('../../utils/logger');
-const { getOpenAIClient } = require('../../config/openai');
+const { getAnthropicClient, resolveModel, resolveEffort, DRAFT_MODEL } = require('../../config/anthropic');
+const { complete, isTimeoutError, parseJsonObject } = require('./llm');
 const { fetchAttomPropertyDetailBundle } = require('./propertyIntelligenceService');
 
 const LLM_TIMEOUT_MS = 12000;
+// A leftover PROPERTY_SUGGESTIONS_LLM_MODEL naming another provider's model is ignored.
+const LLM_MODEL = resolveModel(process.env.PROPERTY_SUGGESTIONS_LLM_MODEL, DRAFT_MODEL);
+const LLM_EFFORT = resolveEffort(process.env.ANTHROPIC_DRAFT_EFFORT, 'low');
+// The reply is a few fields; max_tokens also covers the model's thinking.
+const LLM_MAX_TOKENS = 1024;
 
 const CANONICAL_HOME_TYPES = new Set([
   'house', 'apartment', 'condo', 'townhouse', 'studio', 'rv', 'mobile_home', 'trailer', 'multi_unit', 'other',
@@ -63,38 +69,31 @@ function isLlmEnabled() {
 }
 
 async function fetchLlmSuggestions(fullAddress, missingKeys) {
-  const openai = getOpenAIClient();
-  if (!openai || missingKeys.length === 0) return null;
+  const client = getAnthropicClient();
+  if (!client || missingKeys.length === 0) return null;
 
   const system = `You estimate basic US residential property attributes from a postal address only.
 Return a JSON object with these optional keys (omit unknowns): home_type (one of: house, apartment, condo, townhouse, studio, rv, mobile_home, trailer, multi_unit, other), bedrooms (integer), bathrooms (number), sq_ft (integer), lot_sq_ft (integer), year_built (integer), description_one_liner (short string).
-Never claim certainty — these are guesses. Use null for unknown values.`;
+Never claim certainty — these are guesses. Use null for unknown values.
+Reply with the JSON object only: no prose, no code fence.`;
 
   const user = `Address: ${fullAddress}\nOnly fill fields that are plausibly inferable from public knowledge of typical US housing stock at this location. Missing requested keys: ${missingKeys.join(', ')}`;
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), LLM_TIMEOUT_MS);
-
   try {
-    const completion = await openai.chat.completions.create({
-      model: process.env.PROPERTY_SUGGESTIONS_LLM_MODEL || 'gpt-4o-mini',
-      messages: [
-        { role: 'system', content: system },
-        { role: 'user', content: user },
-      ],
-      response_format: { type: 'json_object' },
-      temperature: 0.2,
-      max_tokens: 400,
-    }, { signal: controller.signal });
-
-    clearTimeout(timeout);
-    const content = completion.choices?.[0]?.message?.content;
-    if (!content) return null;
-    const parsed = JSON.parse(content);
+    const { text } = await complete({
+      client,
+      model: LLM_MODEL,
+      system,
+      messages: [{ role: 'user', content: user }],
+      effort: LLM_EFFORT,
+      maxTokens: LLM_MAX_TOKENS,
+      timeoutMs: LLM_TIMEOUT_MS,
+    });
+    const parsed = parseJsonObject(text);
+    if (!parsed) return null;
     return { ...parsed, source: 'llm' };
   } catch (err) {
-    clearTimeout(timeout);
-    if (err.name === 'AbortError') {
+    if (isTimeoutError(err)) {
       logger.warn('property suggestions LLM timeout');
     } else {
       logger.warn('property suggestions LLM error', { error: err.message });

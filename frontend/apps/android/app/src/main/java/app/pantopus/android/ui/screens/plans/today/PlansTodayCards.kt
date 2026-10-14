@@ -110,16 +110,14 @@ fun PlansTodayCards(
     ToastHost(controller = toast)
 }
 
-/** "Seahawks game at Sam's" (A1): the game or title, and where. */
+/**
+ * "Seahawks game at Sam's" (A1): the game or title, and the host's name for a plan at home. Never the venue:
+ * Today carries the area only (brief section 6), as on iOS.
+ */
 private fun todayTitle(plan: PlanDto): String {
     val short = plan.details?.game?.label?.let { "$it game" } ?: plan.title
-    val where =
-        if (plan.placeKind == "home") {
-            plan.host?.displayName?.let { "${PlanFormat.firstName(it)}'s" }
-        } else {
-            plan.place?.name
-        }
-    return if (where != null) "$short at $where" else short
+    val host = plan.host?.displayName?.takeIf { plan.placeKind == "home" }?.let { "${PlanFormat.firstName(it)}'s" }
+    return if (host != null) "$short at $host" else short
 }
 
 /** A1 and A2: a card whose border carries the type's color. */
@@ -280,7 +278,12 @@ private fun HowWasItCard(
         }
         if (answered != null) {
             Text(
-                text = "Thanks for telling us.",
+                text =
+                    if (answered == "not_right") {
+                        "Thanks for telling us. Someone from Pantopus will look at it."
+                    } else {
+                        "Thanks. Glad you went."
+                    },
                 style = PantopusTextStyle.body.copy(fontWeight = FontWeight.SemiBold),
                 color = PantopusColors.appText,
             )

@@ -393,7 +393,7 @@ public extension StatusWaitingContent {
                 "You can keep using the rest of the app while we verify.",
                 "We'll notify you in-app AND by email when it resolves."
             ],
-            primaryCta: StatusCTA(label: "Back to Hub", actionKey: "back_to_hub"),
+            primaryCta: StatusCTA(label: "Done", actionKey: "back_to_hub"),
             secondaryCta: StatusCTA(label: "View claim", actionKey: "view_claim")
         )
     }

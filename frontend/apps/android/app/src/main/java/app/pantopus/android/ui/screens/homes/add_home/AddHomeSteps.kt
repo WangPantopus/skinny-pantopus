@@ -251,8 +251,13 @@ sealed interface AddHomeOutboundEvent {
     /** Pop the wizard with no further navigation. */
     data object Dismiss : AddHomeOutboundEvent
 
-    /** Reload current list authority after acknowledging the saved command. */
-    data object OpenHomes : AddHomeOutboundEvent
+    /**
+     * Reload current list authority after acknowledging the saved command. [homeId] is the Home it created or asked
+     * to join (null when the confirmed outcome named none): the Place tab lands on it when it can open it.
+     */
+    data class OpenHomes(
+        val homeId: String?,
+    ) : AddHomeOutboundEvent
 
     /**
      * `check-address` matched an already-claimed home and the user

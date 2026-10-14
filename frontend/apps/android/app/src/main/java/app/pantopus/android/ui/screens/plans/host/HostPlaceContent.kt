@@ -84,7 +84,7 @@ internal fun PlacePickerStep(
         trailingClose = true,
         footer = {
             ui.error?.let { Text(text = it, style = PantopusTextStyle.small, color = PantopusColors.error) }
-            HostFooterButton(title = candidate?.let { "Use ${it.name}" } ?: "Pick a place", onClick = vm::usePlace)
+            HostFooterButton(title = candidate?.let { "Use ${it.name}" } ?: "Choose a place", onClick = vm::usePlace)
         },
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.s4)) {
@@ -116,7 +116,12 @@ internal fun PlacePickerStep(
                     ui.placesLoading && places.isEmpty() -> PlanRowsSkeleton(rows = 3)
                     places.isEmpty() ->
                         Text(
-                            text = if (query.isEmpty()) "No public places found nearby." else "No places match “$query”.",
+                            text =
+                                if (query.isEmpty()) {
+                                    "No public places found nearby. Search for one."
+                                } else {
+                                    "No places match “$query”."
+                                },
                             style = PantopusTextStyle.small,
                             color = PantopusColors.appTextSecondary,
                             modifier = Modifier.padding(vertical = Spacing.s3),
