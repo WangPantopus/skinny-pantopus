@@ -28,9 +28,9 @@ public struct ConnectionsView: View {
                 ),
                 titleVisibility: .visible,
                 presenting: viewModel.pendingRemoval
-            ) { _ in
+            ) { request in
                 Button("Remove", role: .destructive) {
-                    Task { @MainActor in await viewModel.confirmRemoval() }
+                    Task { @MainActor in await viewModel.confirmRemoval(request) }
                 }
                 .accessibilityIdentifier("connections.removeConfirm")
                 Button("Cancel", role: .cancel) { viewModel.cancelRemoval() }

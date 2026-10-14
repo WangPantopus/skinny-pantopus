@@ -7,9 +7,9 @@
 //    - tabs expose All / Neighbors / Pending counts
 //    - Neighbors filters out users without a city
 //    - search filters across name / username / city
-//    - accept optimistically removes pending and bumps All count;
-//      rolls back on failure
-//    - reject optimistically removes pending; rolls back on failure
+//    - accept removes pending and bumps All count once the server
+//      confirms; a refusal keeps both lists
+//    - reject removes pending once confirmed; a refusal keeps it
 //    - row mapping (avatar verified flag, message-CTA target,
 //      Pending vertical-action handlers)
 //
@@ -303,9 +303,9 @@ final class ConnectionsViewModelTests: XCTestCase {
         XCTAssertEqual(sections.first?.rows.first?.id, "req1")
     }
 
-    // MARK: - Accept (optimistic)
+    // MARK: - Accept (confirmed by the server)
 
-    func testAcceptOptimisticallyRemovesPendingAndBumpsAll() async {
+    func testAcceptConfirmedRemovesPendingAndBumpsAll() async {
         stubConnections(
             accepted: .status(200, body: Self.acceptedJSON),
             pending: .status(200, body: Self.pendingJSON),
@@ -322,7 +322,7 @@ final class ConnectionsViewModelTests: XCTestCase {
         XCTAssertEqual(vm.tabs[2].count, 0, "Pending should empty out after acceptance")
     }
 
-    func testAcceptRollsBackOnFailure() async {
+    func testAcceptFailureKeepsBothLists() async {
         stubConnections(
             accepted: .status(200, body: Self.acceptedJSON),
             pending: .status(200, body: Self.pendingJSON),
@@ -331,13 +331,13 @@ final class ConnectionsViewModelTests: XCTestCase {
         let vm = makeVM()
         await vm.load()
         await vm.accept(requestId: "req1")
-        XCTAssertEqual(vm.tabs[0].count, 2, "All count rolls back to original")
-        XCTAssertEqual(vm.tabs[2].count, 1, "Pending count rolls back")
+        XCTAssertEqual(vm.tabs[0].count, 2, "All count unchanged after a refusal")
+        XCTAssertEqual(vm.tabs[2].count, 1, "Pending keeps the request after a refusal")
     }
 
-    // MARK: - Reject (optimistic)
+    // MARK: - Reject (confirmed by the server)
 
-    func testRejectOptimisticallyRemovesPending() async {
+    func testRejectConfirmedRemovesPending() async {
         stubConnections(
             accepted: .status(200, body: Self.acceptedJSON),
             pending: .status(200, body: Self.pendingJSON),
@@ -352,7 +352,7 @@ final class ConnectionsViewModelTests: XCTestCase {
         XCTAssertEqual(vm.tabs[0].count, 2, "All count unchanged on reject")
     }
 
-    func testRejectRollsBackOnFailure() async {
+    func testRejectFailureKeepsPending() async {
         stubConnections(
             accepted: .status(200, body: Self.acceptedJSON),
             pending: .status(200, body: Self.pendingJSON),
@@ -361,7 +361,7 @@ final class ConnectionsViewModelTests: XCTestCase {
         let vm = makeVM()
         await vm.load()
         await vm.reject(requestId: "req1")
-        XCTAssertEqual(vm.tabs[2].count, 1, "Pending count rolls back")
+        XCTAssertEqual(vm.tabs[2].count, 1, "Pending keeps the request after a refusal")
     }
 
     // MARK: - Row mapping
