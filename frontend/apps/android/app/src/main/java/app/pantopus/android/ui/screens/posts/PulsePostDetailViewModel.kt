@@ -552,7 +552,7 @@ class PulsePostDetailViewModel
             val submittedRevision = composerRevision
             _isSendingComment.value = true
             viewModelScope.launch {
-                when (repo.createComment(postId, req)) {
+                when (val result = repo.createComment(postId, req)) {
                     is NetworkResult.Success -> {
                         pendingComment = null
                         if (submittedRevision == composerRevision) {
@@ -562,7 +562,7 @@ class PulsePostDetailViewModel
                         fetch(force = true)
                     }
                     is NetworkResult.Failure -> {
-                        _toastMessage.value = "Couldn't post your comment"
+                        _toastMessage.value = result.error.displayMessage("Couldn't post your comment. Try again.")
                     }
                 }
                 _isSendingComment.value = false
