@@ -130,11 +130,9 @@ private fun InBanner(
         progress.animateTo(1f, tween(150))
     }
     val mine = plan.myRequest
-    val subtitle =
-        when (mine?.decidedBy) {
-            "rule" -> "You got in right away"
-            else -> listOfNotNull("${plan.hostFirst} said yes", PlanFormat.ago(mine?.decidedAt)).joinToString(" · ")
-        }
+    // "Sam said yes · just now" (board J7), "· 12 min ago" later; a rule's yes gets its time too, as on iOS.
+    val said = if (mine?.decidedBy == "rule") "You got in right away" else "${plan.hostFirst} said yes"
+    val subtitle = listOfNotNull(said, PlanFormat.ago(mine?.decidedAt)).joinToString(" · ")
     PlanBanner(
         title = "You're in",
         subtitle = subtitle,

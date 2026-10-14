@@ -217,7 +217,7 @@ final class PlansMapViewModel {
             return
         } catch {
             // A list on screen stays; a first read that fails says so.
-            if !listLoaded { listError = "We couldn't load plans near you." }
+            if !listLoaded { listError = "Couldn't load plans near you." }
         }
     }
 

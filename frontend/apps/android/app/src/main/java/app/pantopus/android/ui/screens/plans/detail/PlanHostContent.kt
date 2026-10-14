@@ -93,14 +93,7 @@ internal fun ColumnScope.PlanHostBody(
             color = PantopusColors.appTextStrong,
         )
     }
-    if (plan.planState == PlanState.CANCELLED) {
-        PlanBanner(
-            title = "You cancelled this plan",
-            subtitle = "Everyone who was in or waiting was told. The pin is off the map.",
-            icon = PantopusIcon.XCircle,
-            tone = PlanBannerTone.Neutral,
-        )
-    }
+    if (closed) HostClosedBanner(plan)
     val pending = requests?.pending.orEmpty()
     val waiting = requests?.waitlisted.orEmpty()
     val count = maxOf(plan.requestsCount ?: 0, pending.size)
@@ -111,6 +104,10 @@ internal fun ColumnScope.PlanHostBody(
         WaitlistCard(waiting.mapNotNull { it.user?.displayName }, onOpenRequests)
     }
     GoingSection(plan, viewerId, busy, closed, asked = count > 0 || waiting.isNotEmpty(), onRemove = onRemove)
+    if (closed && plan.chatRoomId != null) {
+        // The chat stays to read once the plan is over (as on iOS).
+        GhostButton(title = "Read the group chat", onClick = onMessageGuests)
+    }
     if (!closed) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             if (plan.chatRoomId != null) {
@@ -125,6 +122,24 @@ internal fun ColumnScope.PlanHostBody(
     }
 }
 
+/** A cancelled plan says who was told and the host's note; an ended one says so (as on iOS). */
+@Composable
+private fun HostClosedBanner(plan: PlanDto) {
+    if (plan.planState == PlanState.CANCELLED) {
+        PlanBanner(
+            title = "You cancelled this plan",
+            subtitle = "Everyone who was in or waiting was told. The pin is off the map.",
+            icon = PantopusIcon.XCircle,
+            tone = PlanBannerTone.Neutral,
+        )
+        plan.cancelNote?.trim()?.takeIf(String::isNotEmpty)?.let { note ->
+            Text(text = "Your note: “$note”", style = PantopusTextStyle.small, color = PantopusColors.appTextSecondary)
+        }
+    } else {
+        PlanBanner(title = "This plan has ended", subtitle = null, icon = PantopusIcon.CheckCircle, tone = PlanBannerTone.Neutral)
+    }
+}
+
 @Composable
 private fun RequestsCard(
     count: Int,
@@ -133,7 +148,8 @@ private fun RequestsCard(
 ) {
     val who =
         when (names.size) {
-            0 -> "Tap to answer"
+            // The names aren't loaded yet (as on iOS).
+            0 -> if (count == 1) "Someone asked to join" else "$count people asked to join"
             1 -> "${names[0]} asked to join"
             2 -> "${names[0]} and ${names[1]} asked to join"
             else -> "${names[0]}, ${names[1]} and ${names.size - 2} more asked to join"
@@ -314,7 +330,7 @@ private fun GuestRow(
             text = {
                 Text(
                     if (atHome) {
-                        "They've already seen your address. They lose the plan, the note and the chat from now on."
+                        "${PlanFormat.firstName(name)} has already seen the address. They lose the plan, the note and the chat from now on."
                     } else {
                         "They lose the plan, the exact place, the note and the chat from now on."
                     },

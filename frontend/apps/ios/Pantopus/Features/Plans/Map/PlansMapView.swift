@@ -177,15 +177,17 @@ struct PlansMapView: View {
             nil
         }
         let calendar = PlanFormat.calendar(for: pin.timezone ?? card(for: pin.id)?.timezone)
+        let tag = PlanFormat.pinTag(
+            state: pin.state,
+            isFull: pin.isFull && !pin.isIn && !pin.isHosting,
+            startsAt: pin.startsAtDate,
+            dayPart: pin.dayPart,
+            calendar: calendar
+        )
         return PlanPinLook(
             kind: pin.kind,
-            tag: pin.isHosting && selected ? "Your plan" : PlanFormat.pinTag(
-                state: pin.state,
-                isFull: pin.isFull && !pin.isIn && !pin.isHosting,
-                startsAt: pin.startsAtDate,
-                dayPart: pin.dayPart,
-                calendar: calendar
-            ),
+            // "Your plan · Sun 1:25", as the posted pin reads (board H8) and Android's.
+            tag: pin.isHosting && selected ? "Your plan · \(tag)" : tag,
             isSelected: selected,
             isDimmed: viewModel.selectedId != nil && !selected,
             isFull: pin.isFull && !pin.isIn && !pin.isHosting,

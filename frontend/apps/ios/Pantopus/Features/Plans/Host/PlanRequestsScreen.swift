@@ -20,6 +20,8 @@ final class PlanRequestsViewModel {
     private(set) var loadFailed = false
     private(set) var working: Set<String> = []
     var error: String?
+    /// "Accepted. They're in." after an answer (as Android's toast).
+    var toast: String?
     private let api: APIClient
 
     init(planId: String, api: APIClient = .shared) {
@@ -41,18 +43,20 @@ final class PlanRequestsViewModel {
     }
 
     func accept(_ request: PlanRequestViewDTO, confirmedSharing: Bool) async {
-        await act(request.id) {
+        let accepted = await act(request.id) {
             _ = try await api.request(
                 PlansEndpoints.accept(planId: planId, requestId: request.id, confirmSharesAddress: isAtHome ? confirmedSharing : nil),
                 as: EmptyResponse.self
             )
         }
+        if accepted { toast = "Accepted. They're in." }
     }
 
     func decline(_ request: PlanRequestViewDTO) async {
-        await act(request.id) {
+        let declined = await act(request.id) {
             _ = try await api.request(PlansEndpoints.decline(planId: planId, requestId: request.id), as: EmptyResponse.self)
         }
+        if declined { toast = "Declined. They won't see who said no." }
     }
 
     /// "Let in people you've hosted".
@@ -66,7 +70,8 @@ final class PlanRequestsViewModel {
         }
     }
 
-    private func act(_ key: String, _ work: () async throws -> Void) async {
+    @discardableResult
+    private func act(_ key: String, _ work: () async throws -> Void) async -> Bool {
         working.insert(key)
         error = nil
         defer { working.remove(key) }
@@ -74,12 +79,17 @@ final class PlanRequestsViewModel {
             try await work()
             PlansStoreReads.changed(planId: planId)
             await load()
+            return true
         } catch {
+            // Android's words for the two answers the server can refuse.
             if case let APIError.clientError(status, body) = error, status == 409, PlanErrors.code(in: body) == "full" {
-                self.error = "Your plan is full. Add a spot, or wait for someone to leave."
+                self.error = "Their party doesn't fit the spots left. Make room first, or decline."
+            } else if case let APIError.clientError(_, body) = error, PlanErrors.code(in: body) == "not_waiting" {
+                self.error = "They're no longer waiting."
             } else {
                 self.error = PlanErrors.sentence(for: error)
             }
+            return false
         }
     }
 }
@@ -111,6 +121,8 @@ struct PlanRequestsScreen: View {
                                 + "Declining needs no reason, and they won't see who said no.",
                             icon: .home
                         )
+                    } else {
+                        PlanScopeLine(text: "Declining needs no reason, and they won't see who said no.")
                     }
                     waitlist
                 }
@@ -121,6 +133,16 @@ struct PlanRequestsScreen: View {
             .refreshable { await viewModel.load() }
         }
         .background(Theme.Color.appBg)
+        .overlay(alignment: .bottom) {
+            if let toast = viewModel.toast {
+                ToastView(message: ToastMessage(text: toast))
+                    .padding(.bottom, Spacing.s8)
+                    .task(id: toast) {
+                        try? await Task.sleep(for: .seconds(2.5))
+                        viewModel.toast = nil
+                    }
+            }
+        }
         .toolbar(.hidden, for: .navigationBar)
         .task {
             if let notice = PlansNavigator.shared.notice {

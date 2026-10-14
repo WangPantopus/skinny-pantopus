@@ -14,7 +14,8 @@ struct PlanAskSheet: View {
     let card: PlanCardDTO
     /// The request being changed (J5 "Change who's coming").
     let previous: PlanAskPrefill?
-    let onSend: (AskToJoinBody) async -> Bool
+    /// Sends the request: nil when it went through, else why not (the server's sentence, as on Android).
+    let onSend: (AskToJoinBody) async -> String?
 
     @Environment(\.dismiss) private var dismiss
     @State private var partySize = 1
@@ -253,9 +254,9 @@ struct PlanAskSheet: View {
         Task {
             isSending = true
             failed = nil
-            let sent = await onSend(body)
+            let failure = await onSend(body)
             isSending = false
-            if sent { dismiss() } else { failed = "We couldn't send that. Please try again." }
+            if let failure { failed = failure } else { dismiss() }
         }
     }
 }

@@ -5,6 +5,7 @@ package app.pantopus.android.ui.screens.plans.host
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -40,6 +41,7 @@ import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.PantopusTextStyle
+import app.pantopus.android.ui.theme.Spacing
 import java.util.Locale
 
 /** H2 to H5: the details for the chosen type. */
@@ -472,12 +474,24 @@ private fun HowPeopleGetIn(
                     vm.edit { it.copy(approveEach = true, autoRule = null) }
                 }
             }
-            PlanOptionRow {
-                PantopusCheckbox(
-                    isChecked = draft.hostedBefore,
-                    onCheckedChange = { on -> vm.edit { it.copy(hostedBefore = on) } },
-                    label = "Also let in people I've hosted",
-                )
+            // Not for a pickup game (board H4 has no such row); its second line as board H2 and iOS say it.
+            if (kind != PlanKind.PICKUP_GAME) {
+                PlanOptionRow {
+                    Column(modifier = Modifier.weight(1f)) {
+                        PantopusCheckbox(
+                            isChecked = draft.hostedBefore,
+                            onCheckedChange = { on -> vm.edit { it.copy(hostedBefore = on) } },
+                            label = "Also let in people I've hosted",
+                        )
+                        Text(
+                            text = "They get in right away, until the spots fill",
+                            style = PantopusTextStyle.small,
+                            color = PantopusColors.appTextSecondary,
+                            // Under the label, past the 22 dp box.
+                            modifier = Modifier.padding(start = 22.dp + Spacing.s2),
+                        )
+                    }
+                }
             }
         }
     }

@@ -227,7 +227,7 @@ struct PlansListSheet: View {
 
     private var windowName: String {
         switch viewModel.window {
-        case .now: "Now"
+        case .now: "Happening now"
         case .today: "Today"
         case .week: "This week"
         case .weekend: "This weekend"
