@@ -19,6 +19,11 @@ import Foundation
 /// Closed list of analytics events. Mirrors the P15 taxonomy 1:1; do
 /// not invent ad-hoc names — extend the enum instead.
 public enum AnalyticsEvent: Sendable, Equatable {
+    /// The Place tab's root shows. `root` is `home` (Your Place for a Home), `saved_place`
+    /// (the address they saved), `first_run` (the address-first screen) or `homes` (My homes,
+    /// while every entry waits on verification). Sent each time the root appears, as the
+    /// Hub's `screen.hub.viewed` was.
+    case screenPlaceViewed(root: String)
     case screenMailboxRootViewed
     case screenMyHomesViewed
     case screenHomeDashboardViewed
@@ -95,6 +100,7 @@ public enum AnalyticsEvent: Sendable, Equatable {
     /// owners depend on these strings.
     public var name: String {
         switch self {
+        case .screenPlaceViewed: "screen.place.viewed"
         case .screenMailboxRootViewed: "screen.mailbox_root.viewed"
         case .screenMyHomesViewed: "screen.my_homes.viewed"
         case .screenHomeDashboardViewed: "screen.home_dashboard.viewed"
@@ -153,6 +159,8 @@ public enum AnalyticsEvent: Sendable, Equatable {
     /// vendor schema doesn't need nested types.
     public var properties: [String: String] {
         switch self {
+        case let .screenPlaceViewed(root):
+            ["root": root]
         case let .screenMailboxItemDetailViewed(category, trustLevel):
             ["category": category, "trust_level": trustLevel]
         case let .screenAddHomeWizardStepViewed(stepNumber, stepName):
