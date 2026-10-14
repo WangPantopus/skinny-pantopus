@@ -128,6 +128,7 @@ const FEED_POST_SELECT = `
   purpose, utility_score, show_on_profile, profile_visibility_scope,
   is_visitor_post, state, solved_at, not_helpful_count,
   topic, sports_scope, post_metadata, origin,
+  expires_at, resolution, claim_mode,
   creator:user_id (${SAFE_CREATOR_SELECT}),
   business_author:business_author_id (${SAFE_CREATOR_SELECT}),
   home:home_id (id, address, city)
@@ -243,6 +244,11 @@ function normalizeFeedPostRow(row, likedPostIds = new Set(), savedPostIds = new 
     sports_scope: row.sports_scope || null,
     post_metadata: row.post_metadata || {},
     origin: row.origin || 'user',
+    // Lifecycle (contract §1): when the post ends, how it ended (null while open), and how an
+    // Offer is claimed (stored on every row; it means something only on an offer).
+    expires_at: row.expires_at || null,
+    resolution: row.resolution || null,
+    claim_mode: row.claim_mode || null,
     // P0.3: project the raw User row through the serializer wall so the
     // legacy `creator` slot never carries User.name / city / state to a
     // client even if a callsite skips attachIdentityAuthors.
