@@ -174,7 +174,12 @@ private fun WhereField(
                         color = PantopusColors.appTextSecondary,
                     )
                 }
-                PantopusIconImage(icon = PantopusIcon.ChevronRight, contentDescription = null, size = 16.dp, tint = PantopusColors.appTextMuted)
+                PantopusIconImage(
+                    icon = PantopusIcon.ChevronRight,
+                    contentDescription = null,
+                    size = 16.dp,
+                    tint = PantopusColors.appTextMuted,
+                )
             }
         }
     }
