@@ -192,13 +192,16 @@ class PulsePostDetailViewModel
             get() {
                 val post = (_state.value as? PulsePostDetailUiState.Loaded)?.content?.post ?: return false
                 if (!isOwner || post.postType != "ask_local" || post.resolution != null) return false
-                if (post.state == "solved" || post.state == "archived") return false
-                val end = post.expiresAt?.let { runCatching { Instant.parse(it) }.getOrNull() } ?: return true
-                return end.isAfter(Instant.now())
+                if (post.state != null && post.state != "open") return false
+                return PostStatus.askWindowIsOpen(post.createdAt, post.expiresAt)
             }
 
         /** "Keep open 7 more days": once per Ask (S7). */
-        val canKeepOpen: Boolean get() = isOwnOpenAsk && !keptOpen
+        val canKeepOpen: Boolean
+            get() {
+                val post = (_state.value as? PulsePostDetailUiState.Loaded)?.content?.post
+                return isOwnOpenAsk && !keptOpen && post?.lifecycleMetadata?.keptOpenAt.isNullOrBlank()
+            }
 
         /** "Close" (S7). */
         val canCloseAsk: Boolean get() = isOwnOpenAsk
