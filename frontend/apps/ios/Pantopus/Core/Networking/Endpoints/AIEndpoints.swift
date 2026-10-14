@@ -12,12 +12,18 @@ import Foundation
 /// Endpoints under `/api/ai/*` consumed by the Ask-Pantopus thread.
 public enum AIEndpoints {
     /// `GET /api/ai/conversations` — the caller's AI conversation list,
-    /// newest-updated first (server caps at 50). Summaries only — no
-    /// per-conversation messages endpoint exists (message history lives
-    /// in the provider's `previous_response_id` state, not our DB).
-    /// Route `backend/routes/ai.js:358`.
+    /// newest-updated first (server caps at 50). Summaries only; a
+    /// conversation's turns come from `conversationMessages(id:)`.
+    /// Route `backend/routes/ai.js:359`.
     public static func conversations() -> Endpoint {
         Endpoint(method: .get, path: "/api/ai/conversations")
+    }
+
+    /// `GET /api/ai/conversations/:id/messages` — one conversation's earlier
+    /// turns, so a restored thread shows what the assistant remembers.
+    /// Route `backend/routes/ai.js:365`.
+    public static func conversationMessages(id: String) -> Endpoint {
+        Endpoint(method: .get, path: "/api/ai/conversations/\(id)/messages")
     }
 
     /// `DELETE /api/ai/conversations/:id` — delete one AI conversation.
@@ -60,5 +66,14 @@ public enum AIEndpoints {
         // (`DRAFT_TIMEOUT_MS`, `backend/services/ai/agentService.js:30`),
         // which overruns the session's 20s inactivity default.
         Endpoint(method: .post, path: "/api/ai/draft/post", body: body, timeout: 35)
+    }
+
+    /// `POST /api/ai/draft/pickup-schedule` — the pickup days on a photo of
+    /// the household's hauler's flyer, for the Today pickup editor to fill
+    /// in. Nothing is saved: the editor's own Save writes the days.
+    /// Route `backend/routes/ai.js:249`.
+    public static func draftPickupSchedule(_ body: AIDraftPickupScheduleRequest) -> Endpoint {
+        // 45s like the listing vision read: the backend gives the model 30s.
+        Endpoint(method: .post, path: "/api/ai/draft/pickup-schedule", body: body, timeout: 45)
     }
 }

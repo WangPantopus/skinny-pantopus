@@ -127,6 +127,9 @@ import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.screens.inbox.conversation.ai.AiCapabilityChip
 import app.pantopus.android.ui.screens.inbox.conversation.ai.AiEstimateCard
 import app.pantopus.android.ui.screens.inbox.conversation.ai.ChatAiAvatar
+import app.pantopus.android.ui.screens.plans.chat.PlanChatClosedBar
+import app.pantopus.android.ui.screens.plans.chat.PlanChatStrip
+import app.pantopus.android.ui.screens.plans.chat.rememberPlanChat
 import app.pantopus.android.ui.screens.shared.media.MediaViewerDialog
 import app.pantopus.android.ui.screens.shared.media.PostMediaItem
 import app.pantopus.android.ui.screens.shared.media.PostMediaKind
@@ -166,10 +169,12 @@ fun ChatConversationScreen(
     chrome: ChatConversationChrome = ChatConversationChrome(),
     onBack: () -> Unit = {},
     onUseAIDraft: (ChatAIDraftCard) -> Unit = {},
+    onOpenToday: () -> Unit = {},
     onOpenGig: (String) -> Unit = {},
     onOpenListing: (String) -> Unit = {},
     onContentLoaded: () -> Unit = {},
     onOpenProfile: (String) -> Unit = {},
+    onOpenPlan: (String) -> Unit = {},
     viewModel: ChatConversationViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -198,6 +203,8 @@ fun ChatConversationScreen(
     val openFile by viewModel.openFile.collectAsStateWithLifecycle()
     val linkPreviews by viewModel.linkPreviews.collectAsStateWithLifecycle()
     val isAiStreaming by viewModel.isAiStreaming.collectAsStateWithLifecycle()
+    // Nearby Plans (A4): a plan room shows its plan under the header and closes after the plan.
+    val planChat = rememberPlanChat((args.mode as? ChatThreadMode.Room)?.id)
     val gigContext by viewModel.gigContext.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -371,6 +378,7 @@ fun ChatConversationScreen(
             gigContext?.let { strip ->
                 GigContextStrip(strip = strip, onTap = { onOpenGig(strip.gigId) })
             }
+            PlanChatStrip(state = planChat, onOpenPlan = onOpenPlan)
             if (conversationMode == ChatConversationMode.CreatorThread) {
                 CreatorAudienceStrip(
                     context = resolvedCreatorContext,
@@ -439,7 +447,14 @@ fun ChatConversationScreen(
                             },
                             selectedMessageIds = if (isSelectionMode) selectedMessageIds else emptySet(),
                             onBubbleTap = { if (isSelectionMode) viewModel.toggleSelection(it.id) },
-                            onUseAIDraft = onUseAIDraft,
+                            // A pickup-days card saves here; once saved it opens Today. Other drafts open composers.
+                            onUseAIDraft = { draft ->
+                                when {
+                                    draft.pickup == null -> onUseAIDraft(draft)
+                                    draft.pickup.save == ChatAIPickupSave.Saved -> onOpenToday()
+                                    else -> viewModel.savePickupSchedule(draft)
+                                }
+                            },
                             onOpenGig = onOpenGig,
                             onOpenListing = onOpenListing,
                             onOpenLocation = { lat, lng ->
@@ -478,7 +493,9 @@ fun ChatConversationScreen(
                     onUpgrade = { showFanUpgradePrompt = true },
                 )
             }
-            if (isSelectionMode) {
+            if (planChat.closed) {
+                PlanChatClosedBar()
+            } else if (isSelectionMode) {
                 SelectionDeleteBar(
                     enabled = selectedMessageIds.isNotEmpty(),
                     onDelete = { showBulkDeleteConfirm = true },
@@ -2524,6 +2541,9 @@ internal fun PopulatedFrame(
     onOpenAttachment: ((ChatBubbleBody.Attachment) -> Unit)? = null,
 ) {
     val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    var newMessageCount by rememberSaveable { mutableIntStateOf(0) }
+    var previousNewestId by rememberSaveable { mutableStateOf<String?>(null) }
     // Leading non-row items (pagination spacer + any pinned welcome card)
     // offset row indices inside the LazyColumn.
     val headerCount =
@@ -2531,10 +2551,13 @@ internal fun PopulatedFrame(
     // Set once the first non-empty projection has been positioned — gates
     // the load-older trigger so it can't fire while the list still sits at
     // the top pre-scroll.
-    var initialScrollDone by remember { mutableStateOf(false) }
-    LaunchedEffect(rows.size) {
+    var initialScrollDone by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(rows.size, rows.lastOrNull()?.rowId) {
         if (rows.isEmpty()) return@LaunchedEffect
         val lastIndex = headerCount + rows.lastIndex
+        val previousIndex = rows.indexOfLast { it.rowId == previousNewestId }
+        val appended = if (previousIndex >= 0) rows.drop(previousIndex + 1).count { it is ChatTimelineRow.Bubble } else 0
+        previousNewestId = rows.lastOrNull { it is ChatTimelineRow.Bubble }?.rowId
         if (!initialScrollDone) {
             // Open at the latest message. A Chat Search deep-link owns the
             // first scroll instead (the effect below lands on the match).
@@ -2549,7 +2572,15 @@ internal fun PopulatedFrame(
         val layoutInfo = listState.layoutInfo
         val lastVisible = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: return@LaunchedEffect
         if (lastVisible >= layoutInfo.totalItemsCount - 1 - NEAR_BOTTOM_ROW_SLACK) {
+            newMessageCount = 0
             listState.animateScrollToItem(lastIndex)
+        } else {
+            newMessageCount += appended
+        }
+    }
+    LaunchedEffect(listState) {
+        snapshotFlow { !listState.canScrollForward }.collect { atBottom ->
+            if (atBottom) newMessageCount = 0
         }
     }
     // The keyboard shortens the list from the bottom. A reader who was at the
@@ -2591,55 +2622,73 @@ internal fun PopulatedFrame(
             onScrollConsumed()
         }
     }
-    LazyColumn(
-        state = listState,
-        modifier = Modifier.fillMaxSize().testTag("chatConversationContent"),
-        contentPadding = PaddingValues(horizontal = Spacing.s3, vertical = Spacing.s3),
-    ) {
-        item(key = "chat_pagination_top_spacer") {
-            Spacer(modifier = Modifier.size(1.dp))
-        }
-        // A15.5's "Auto-welcome · free" card is omitted: no persona
-        // welcome-message exists on the wire, and the design's copy is
-        // fixture identity.
-        // A15.3: the `.ai-welcome` capability card doubles as the AI
-        // thread's pinned system message at the top of the timeline.
-        if (conversationMode == ChatConversationMode.AiAssistant && aiPrompts.isNotEmpty()) {
-            item(key = "ai_welcome_card") {
-                AiWelcomeCard(
-                    prompts = aiPrompts,
-                    onCapabilityTap = onCapabilityTap,
-                    modifier = Modifier.padding(bottom = Spacing.s3),
-                )
+    Box(modifier = Modifier.fillMaxSize()) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize().testTag("chatConversationContent"),
+            contentPadding = PaddingValues(horizontal = Spacing.s3, vertical = Spacing.s3),
+        ) {
+            item(key = "chat_pagination_top_spacer") {
+                Spacer(modifier = Modifier.size(1.dp))
+            }
+            // A15.5's "Auto-welcome · free" card is omitted: no persona
+            // welcome-message exists on the wire, and the design's copy is
+            // fixture identity.
+            // A15.3: the `.ai-welcome` capability card doubles as the AI
+            // thread's pinned system message at the top of the timeline.
+            if (conversationMode == ChatConversationMode.AiAssistant && aiPrompts.isNotEmpty()) {
+                item(key = "ai_welcome_card") {
+                    AiWelcomeCard(
+                        prompts = aiPrompts,
+                        onCapabilityTap = onCapabilityTap,
+                        modifier = Modifier.padding(bottom = Spacing.s3),
+                    )
+                }
+            }
+            items(items = rows, key = { it.rowId }) { row ->
+                when (row) {
+                    is ChatTimelineRow.DayDivider -> DayDividerRow(label = row.divider.label)
+                    is ChatTimelineRow.TopicDivider -> TopicDividerRow(label = row.label)
+                    is ChatTimelineRow.BroadcastReference -> BroadcastReferenceCard(reference = row.reference)
+                    is ChatTimelineRow.SystemNote -> SystemNoteRow(text = row.text)
+                    is ChatTimelineRow.Bubble ->
+                        BubbleRow(
+                            content = row.content,
+                            incomingInitials = incomingInitials,
+                            onLockedAction = onLockedAction,
+                            onLongPress = { onBubbleLongPress(row.content) },
+                            isSelected = selectedMessageIds.contains(row.content.id),
+                            onTap = { onBubbleTap(row.content) },
+                            onUseAIDraft = onUseAIDraft,
+                            onOpenGig = onOpenGig,
+                            onOpenListing = onOpenListing,
+                            onOpenLocation = onOpenLocation,
+                            onRetry = {
+                                if (row.content.id.startsWith("client_")) onRetry(row.content.id)
+                            },
+                            onReact = { reaction -> onReact(row.content.id, reaction) },
+                            linkPreviews = linkPreviews,
+                            onResolveLink = onResolveLink,
+                            onOpenUrl = onOpenUrl,
+                            onOpenPhotos = onOpenPhotos.takeIf { selectedMessageIds.isEmpty() },
+                            onOpenAttachment = onOpenAttachment.takeIf { selectedMessageIds.isEmpty() },
+                        )
+                }
             }
         }
-        items(items = rows, key = { it.rowId }) { row ->
-            when (row) {
-                is ChatTimelineRow.DayDivider -> DayDividerRow(label = row.divider.label)
-                is ChatTimelineRow.TopicDivider -> TopicDividerRow(label = row.label)
-                is ChatTimelineRow.BroadcastReference -> BroadcastReferenceCard(reference = row.reference)
-                is ChatTimelineRow.Bubble ->
-                    BubbleRow(
-                        content = row.content,
-                        incomingInitials = incomingInitials,
-                        onLockedAction = onLockedAction,
-                        onLongPress = { onBubbleLongPress(row.content) },
-                        isSelected = selectedMessageIds.contains(row.content.id),
-                        onTap = { onBubbleTap(row.content) },
-                        onUseAIDraft = onUseAIDraft,
-                        onOpenGig = onOpenGig,
-                        onOpenListing = onOpenListing,
-                        onOpenLocation = onOpenLocation,
-                        onRetry = {
-                            if (row.content.id.startsWith("client_")) onRetry(row.content.id)
-                        },
-                        onReact = { reaction -> onReact(row.content.id, reaction) },
-                        linkPreviews = linkPreviews,
-                        onResolveLink = onResolveLink,
-                        onOpenUrl = onOpenUrl,
-                        onOpenPhotos = onOpenPhotos.takeIf { selectedMessageIds.isEmpty() },
-                        onOpenAttachment = onOpenAttachment.takeIf { selectedMessageIds.isEmpty() },
-                    )
+        if (newMessageCount > 0) {
+            TextButton(
+                onClick = {
+                    newMessageCount = 0
+                    scope.launch { listState.animateScrollToItem((listState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0)) }
+                },
+                modifier =
+                    Modifier.align(Alignment.BottomCenter).padding(bottom = Spacing.s2)
+                        .clip(RoundedCornerShape(Radii.pill)).background(PantopusColors.appSurface)
+                        .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.pill))
+                        .testTag("chatNewMessages"),
+            ) {
+                Text(if (newMessageCount == 1) "1 new message ↓" else "$newMessageCount new messages ↓", color = PantopusColors.appText)
             }
         }
     }
@@ -2707,6 +2756,25 @@ private fun BroadcastReferenceCard(reference: ChatBroadcastReference) {
                 maxLines = 1,
             )
         }
+    }
+}
+
+/** A server line in the room (board A4 "sysmsg"): centered, small, on a sunken pill. */
+@Composable
+private fun SystemNoteRow(text: String) {
+    Box(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), contentAlignment = Alignment.Center) {
+        Text(
+            text = text,
+            fontSize = 12.sp,
+            lineHeight = 16.sp,
+            color = PantopusColors.appTextSecondary,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            modifier =
+                Modifier
+                    .clip(RoundedCornerShape(Radii.pill))
+                    .background(PantopusColors.appSurfaceSunken)
+                    .padding(horizontal = Spacing.s3, vertical = 5.dp),
+        )
     }
 }
 
@@ -4341,7 +4409,7 @@ private fun AiReplyBubble(
     ) {
         if (isThinking) {
             // A15.3 `.thinking` — streaming has produced no text yet.
-            AiThinkingRow()
+            AiThinkingRow(status = body.status)
         } else {
             AiTag()
             Text(text = body.text, fontSize = 13.5.sp, lineHeight = 18.sp, color = PantopusColors.appText)
@@ -4353,9 +4421,12 @@ private fun AiReplyBubble(
     }
 }
 
-/** Pulsing sparkles + muted "Thinking…" shown while the AI stream has no text yet. */
+/**
+ * Pulsing sparkles + muted "Thinking…" shown while the AI stream has no text yet, or what the
+ * assistant is doing ("Drafting your post…") once it says.
+ */
 @Composable
-private fun AiThinkingRow() {
+private fun AiThinkingRow(status: String? = null) {
     val transition = rememberInfiniteTransition(label = "aiThinking")
     val sparkAlpha by transition.animateFloat(
         initialValue = 0.45f,
@@ -4380,7 +4451,7 @@ private fun AiThinkingRow() {
             modifier = Modifier.alpha(sparkAlpha),
         )
         Text(
-            text = "Thinking…",
+            text = status ?: "Thinking…",
             fontSize = 12.5.sp,
             fontWeight = FontWeight.Medium,
             color = PantopusColors.appTextMuted,
@@ -4395,13 +4466,13 @@ private fun AiDraftCard(
 ) {
     val accent =
         when (draft.type) {
-            "listing" -> PantopusColors.success
+            "listing", "pickup_schedule" -> PantopusColors.success
             "mail_summary" -> PantopusColors.warning
             else -> PantopusColors.magic
         }
     val background =
         when (draft.type) {
-            "listing" -> PantopusColors.successBg
+            "listing", "pickup_schedule" -> PantopusColors.successBg
             "mail_summary" -> PantopusColors.warningBg
             else -> PantopusColors.magicBg
         }
@@ -4410,6 +4481,8 @@ private fun AiDraftCard(
             "gig" -> PantopusIcon.Hammer
             "listing" -> PantopusIcon.Tag
             "post" -> PantopusIcon.Pencil
+            "support_train" -> PantopusIcon.Utensils
+            "pickup_schedule" -> PantopusIcon.Calendar
             "mail_summary" -> PantopusIcon.Mailbox
             else -> PantopusIcon.Sparkles
         }
@@ -4418,6 +4491,8 @@ private fun AiDraftCard(
             "gig" -> "Task Draft"
             "listing" -> "Listing Draft"
             "post" -> "Post Draft"
+            "support_train" -> "Support Train"
+            "pickup_schedule" -> "Pickup days"
             "mail_summary" -> "Mail Summary"
             else -> "Draft"
         }
@@ -4457,9 +4532,12 @@ private fun AiDraftCard(
                 text = draft.summary,
                 fontSize = 11.5.sp,
                 color = PantopusColors.appTextSecondary,
-                maxLines = 3,
+                maxLines = if (draft.pickup != null) Int.MAX_VALUE else 3,
                 overflow = TextOverflow.Ellipsis,
             )
+        }
+        (draft.pickup?.save as? ChatAIPickupSave.Failed)?.let {
+            Text(text = it.message, fontSize = 11.5.sp, color = PantopusColors.error, modifier = Modifier.testTag("chatAIPickupError"))
         }
         draft.priceLabel?.let {
             Text(text = it, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = accent)
@@ -4471,22 +4549,30 @@ private fun AiDraftCard(
                 modifier =
                     Modifier
                         .heightIn(min = 34.dp)
-                        .clickable { onUse(draft) },
+                        .clickable(enabled = draft.pickup?.save != ChatAIPickupSave.Saving) { onUse(draft) },
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(5.dp),
             ) {
-                Text(text = draftActionTitle(draft.type), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = accent)
+                Text(text = draftActionTitle(draft), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = accent)
                 PantopusIconImage(icon = PantopusIcon.ArrowRight, contentDescription = null, size = 11.dp, tint = accent)
             }
         }
     }
 }
 
-private fun draftActionTitle(type: String): String =
-    when (type) {
+private fun draftActionTitle(draft: ChatAIDraftCard): String =
+    when (draft.type) {
         "gig" -> "Use in task composer"
         "listing" -> "Use in listing composer"
         "post" -> "Use in Pulse composer"
+        "support_train" -> "Set up the Support Train"
+        "pickup_schedule" ->
+            when (draft.pickup?.save) {
+                ChatAIPickupSave.Saving -> "Saving…"
+                ChatAIPickupSave.Saved -> "Saved. See them on Today"
+                is ChatAIPickupSave.Failed -> "Try again"
+                null -> "Save to my home"
+            }
         else -> "Use draft"
     }
 

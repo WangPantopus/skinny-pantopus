@@ -34,16 +34,28 @@ public struct AIConversationsResponse: Decodable, Sendable, Hashable {
     public let conversations: [AIConversationSummaryDTO]
 }
 
-/// Envelope from `POST /api/ai/transcribe` (`backend/routes/ai.js:387`)
-/// — Whisper transcription of a recorded describe-step voice note.
-public struct AITranscriptionResponse: Decodable, Sendable, Hashable {
-    public let text: String
-    public let durationSeconds: Double?
+/// `GET /api/ai/conversations/:id/messages` (`backend/routes/ai.js:365`) — a
+/// conversation as the thread shows it after a relaunch: the person's
+/// messages, the replies, and the drafts as cards.
+public struct AIConversationMessagesResponse: Decodable, Sendable, Hashable {
+    public let conversationId: String
+    public let title: String?
+    public let messages: [AIConversationMessageDTO]
+}
 
-    private enum CodingKeys: String, CodingKey {
-        case text
-        case durationSeconds = "duration_seconds"
-    }
+public struct AIConversationMessageDTO: Decodable, Sendable, Hashable {
+    /// `user` or `assistant`.
+    public let role: String
+    public let text: String?
+    /// How many photos a person's message carried (they aren't kept).
+    public let photos: Int?
+    public let draft: AIConversationDraftDTO?
+}
+
+public struct AIConversationDraftDTO: Decodable, Sendable, Hashable {
+    /// `post`, `support_train`, `gig`, `listing`.
+    public let type: String
+    public let draft: [String: JSONValue]
 }
 
 /// Body for `POST /api/ai/draft/listing-vision` (Snap & Sell). Images
@@ -134,4 +146,74 @@ public struct AIPostDraftDTO: Decodable, Sendable, Hashable {
 /// Envelope from `POST /api/ai/draft/post` (`backend/routes/ai.js:218`).
 public struct AIPostDraftResponse: Decodable, Sendable, Hashable {
     public let draft: AIPostDraftDTO
+}
+
+/// Body for `POST /api/ai/draft/pickup-schedule` (`backend/routes/ai.js:249`):
+/// photos of a hauler's flyer, as the person's own `/api/upload/ai-media`
+/// URLs (1–3), or what they wrote.
+public struct AIDraftPickupScheduleRequest: Encodable, Sendable {
+    public let images: [String]?
+    public let text: String?
+
+    public init(images: [String]? = nil, text: String? = nil) {
+        self.images = images
+        self.text = text
+    }
+}
+
+/// The pickup days read from a flyer, for the pickup editor to fill in. A nil
+/// field keeps the editor's own value; nothing is saved until the person taps
+/// the editor's Save.
+public struct AIDraftPickupScheduleResponse: Decodable, Sendable, Hashable {
+    public struct Schedule: Decodable, Sendable, Hashable {
+        /// `MO`…`SU`.
+        public let garbageWeekday: String?
+        /// `weekly`, `biweekly`, or `not_set` (the flyer says there is no recycling).
+        public let recyclingFrequency: String?
+        /// `YYYY-MM-DD`, already inside the window the save route accepts.
+        public let recyclingNextDate: String?
+        /// "Garbage every Tuesday. Recycling every other Tuesday, next on Tuesday, October 20."
+        public let summary: String?
+
+        private enum CodingKeys: String, CodingKey {
+            case summary
+            case garbageWeekday = "garbage_weekday"
+            case recyclingFrequency = "recycling_frequency"
+            case recyclingNextDate = "recycling_next_date"
+        }
+    }
+
+    public let schedule: Schedule
+    /// One sentence about what the flyer shows that the editor doesn't keep (yard waste, holidays).
+    public let note: String?
+}
+
+/// `POST /api/ai/draft/radon-result`: a radon test result read from a photo or
+/// PDF of the lab's report, for the Today radon sheet to fill in. The report
+/// isn't kept, and nothing is saved until the person taps the sheet's Save.
+public struct AIRadonReportResponse: Decodable, Sendable, Hashable {
+    public struct Result: Decodable, Sendable, Hashable {
+        /// The result in pCi/L (converted when the report gave Bq/m³).
+        public let valuePci: Double?
+        /// The report gave the result as below this limit ("<0.4").
+        public let belowLimit: Bool?
+        /// `YYYY-MM-DD`: the day the test ended.
+        public let testedOn: String?
+        /// `short_term`, `long_term`, or nil when the report doesn't say.
+        public let testKind: String?
+        /// "Short-term test, October 1 to October 3, 2026: 5.2 pCi/L. From …"
+        public let summary: String?
+
+        private enum CodingKeys: String, CodingKey {
+            case summary
+            case valuePci = "value_pci"
+            case belowLimit = "below_limit"
+            case testedOn = "tested_on"
+            case testKind = "test_kind"
+        }
+    }
+
+    public let result: Result
+    /// One sentence on how the report was read (which of several results, a missing date).
+    public let note: String?
 }

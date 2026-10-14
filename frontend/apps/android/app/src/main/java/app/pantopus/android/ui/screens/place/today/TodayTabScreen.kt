@@ -51,6 +51,8 @@ import app.pantopus.android.ui.screens.place.detail.LocalPlaceDetailRetry
 import app.pantopus.android.ui.screens.place.detail.PlaceTodayDetailContent
 import app.pantopus.android.ui.screens.place.detail.TodayAlertsCheck
 import app.pantopus.android.ui.screens.place.detail.rememberMinuteClock
+import app.pantopus.android.ui.screens.plans.today.PlansTodayActions
+import app.pantopus.android.ui.screens.plans.today.PlansTodayCards
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -70,6 +72,7 @@ private const val PLACEHOLDER_ROWS = 3
 fun TodayTabScreen(
     onClaim: () -> Unit,
     onOpenPlace: ((homeId: String) -> Unit)? = null,
+    plans: PlansTodayActions? = null,
     viewModel: TodayTabViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -127,6 +130,8 @@ fun TodayTabScreen(
                         if (current.savedAnchorMatches) {
                             StatusChip("Saved place · Only you", modifier = Modifier.padding(bottom = 12.dp))
                         }
+                        // Nearby Plans (A1, A2, A5): today's plan and the day-after card, above the weather.
+                        plans?.let { PlansTodayCards(actions = it, modifier = Modifier.padding(bottom = 16.dp)) }
                         CompositionLocalProvider(LocalPlaceDetailRetry provides viewModel::refresh) {
                             PlaceTodayDetailContent(
                                 current.intelligence,
@@ -135,7 +140,7 @@ fun TodayTabScreen(
                                 pilotEvents = viewModel.pilotEvents,
                                 radonContext = viewModel.radonContext,
                                 onOpenBallot = onOpenPlace?.let { open -> { viewModel.homeId?.let(open) } },
-                                alertsCheck = alertsCheck(age, refreshing),
+                                alertsCheck = alertsCheck(age, refreshing, current.refreshFailed),
                                 radonMemory = viewModel.radonMemory,
                             )
                         }
@@ -156,9 +161,10 @@ fun TodayTabScreen(
 private fun alertsCheck(
     ageMs: Long,
     refreshing: Boolean,
+    refreshFailed: Boolean,
 ): TodayAlertsCheck =
     when {
-        ageMs <= TODAY_ALERTS_MAX_SHOWN_AGE_MS -> TodayAlertsCheck.CURRENT
+        !refreshFailed && ageMs <= TODAY_ALERTS_MAX_SHOWN_AGE_MS -> TodayAlertsCheck.CURRENT
         refreshing -> TodayAlertsCheck.CHECKING
         else -> TodayAlertsCheck.UNAVAILABLE
     }

@@ -53,6 +53,7 @@ class EditProfileViewModelTest {
     @Before fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         every { networkMonitor.isOnline } returns isOnline
+        every { repo.ownProfileCopy() } returns null
         isOnline.value = true
     }
 

@@ -135,6 +135,9 @@ private fun creationExplanation(state: AddHomeUiState): String =
         state.creationStorageUnavailable -> "Recovery storage is unavailable. Retry recovery before making another Home request."
         state.creationOutcome?.state == "completed" && state.pendingCreation?.residencyHomeId != null ->
             "Your residency request is recorded. Open My Homes to check its current status, household access and verification steps."
+        state.creationOutcome?.state == "completed" && state.completionOpensYourPlace ->
+            "Open Your Place to see your Home and its verification options. " +
+                "Saving a Home does not verify residency or ownership."
         state.creationOutcome?.state == "completed" ->
             "Open My Homes to see your current setup and verification options. " +
                 "Saving a Home does not verify residency or ownership."

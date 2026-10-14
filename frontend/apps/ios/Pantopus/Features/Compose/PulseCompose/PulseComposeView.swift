@@ -39,6 +39,7 @@ public struct PulseComposeView: View {
         businessAuthorId: String? = nil,
         managesDismiss: Bool = true,
         taskShare: PulseTaskShare? = nil,
+        prefillTitle: String? = nil,
         prefillBody: String? = nil,
         onCancel: @escaping @MainActor () -> Void = {},
         onPosted: @escaping @MainActor (String?) -> Void = { _ in }
@@ -51,6 +52,7 @@ public struct PulseComposeView: View {
             postId: postId,
             businessAuthorId: businessAuthorId,
             taskShare: taskShare,
+            prefillTitle: prefillTitle,
             prefillBody: prefillBody
         ))
         self.managesDismiss = managesDismiss

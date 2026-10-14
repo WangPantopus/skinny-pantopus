@@ -639,13 +639,13 @@ private fun BackToHubRow(onClick: () -> Unit) {
         }
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "Back to Hub",
+                text = "Back to Place",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
                 color = PantopusColors.primary700,
             )
             Text(
-                text = "Return to your personal hub",
+                text = "Return to Your Place",
                 fontSize = 11.5.sp,
                 color = PantopusColors.appTextSecondary,
             )

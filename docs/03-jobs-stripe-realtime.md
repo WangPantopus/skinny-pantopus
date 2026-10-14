@@ -615,7 +615,7 @@ class AppError extends Error {
 | **Retry with backoff** | Payment capture (max 3 attempts, 15m interval) |
 | **Circuit breaker** | Address provider timeouts (1.5s, fallback to cache) |
 | **Rate limiting** | All API endpoints + Socket events |
-| **Graceful degradation** | AI features return null if OpenAI unavailable |
+| **Graceful degradation** | AI features return null if Claude is unavailable |
 | **Atomic operations** | Wallet transactions via PostgreSQL RPC |
 | **Recovery jobs** | processPendingTransfers recovers stranded states |
 | **Batch processing** | Score recomputation, redaction in batches of 100-200 |

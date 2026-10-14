@@ -19,7 +19,11 @@ import Foundation
 /// Closed list of analytics events. Mirrors the P15 taxonomy 1:1; do
 /// not invent ad-hoc names — extend the enum instead.
 public enum AnalyticsEvent: Sendable, Equatable {
-    case screenHubViewed
+    /// The Place tab's root shows. `root` is `home` (Your Place for a Home), `saved_place`
+    /// (the address they saved), `first_run` (the address-first screen) or `homes` (My homes,
+    /// while every entry waits on verification). Sent each time the root appears, as the
+    /// Hub's `screen.hub.viewed` was.
+    case screenPlaceViewed(root: String)
     case screenMailboxRootViewed
     case screenMyHomesViewed
     case screenHomeDashboardViewed
@@ -57,8 +61,6 @@ public enum AnalyticsEvent: Sendable, Equatable {
     case screenMyListingsViewed
     /// T6.3f / P14 — My businesses index (owner/staff roster).
     case screenMyBusinessesViewed
-    case ctaHubActionStripTapped(label: String)
-    case ctaHubPillarTapped(pillar: String)
     case ctaMailboxItemLogReceived
     case ctaAddHomeSubmit
     /// P2.3 — Snap & Sell wizard step view event.
@@ -98,7 +100,7 @@ public enum AnalyticsEvent: Sendable, Equatable {
     /// owners depend on these strings.
     public var name: String {
         switch self {
-        case .screenHubViewed: "screen.hub.viewed"
+        case .screenPlaceViewed: "screen.place.viewed"
         case .screenMailboxRootViewed: "screen.mailbox_root.viewed"
         case .screenMyHomesViewed: "screen.my_homes.viewed"
         case .screenHomeDashboardViewed: "screen.home_dashboard.viewed"
@@ -134,8 +136,6 @@ public enum AnalyticsEvent: Sendable, Equatable {
         case .screenPulseFeedViewed: "screen.pulse_feed.viewed"
         case .screenMyListingsViewed: "screen.my_listings.viewed"
         case .screenMyBusinessesViewed: "screen.my_businesses.viewed"
-        case .ctaHubActionStripTapped: "cta.hub.action_strip_tapped"
-        case .ctaHubPillarTapped: "cta.hub.pillar_tapped"
         case .ctaMailboxItemLogReceived: "cta.mailbox_item.log_received"
         case .ctaAddHomeSubmit: "cta.add_home.submit"
         case .screenListingComposeWizardStepViewed: "screen.listing_compose_wizard.step_viewed"
@@ -159,6 +159,8 @@ public enum AnalyticsEvent: Sendable, Equatable {
     /// vendor schema doesn't need nested types.
     public var properties: [String: String] {
         switch self {
+        case let .screenPlaceViewed(root):
+            ["root": root]
         case let .screenMailboxItemDetailViewed(category, trustLevel):
             ["category": category, "trust_level": trustLevel]
         case let .screenAddHomeWizardStepViewed(stepNumber, stepName):
@@ -181,10 +183,6 @@ public enum AnalyticsEvent: Sendable, Equatable {
             ["step_number": "\(stepNumber)", "step_name": stepName]
         case let .screenClaimOwnershipStepViewed(stepName):
             ["step_name": stepName]
-        case let .ctaHubActionStripTapped(label):
-            ["label": label]
-        case let .ctaHubPillarTapped(pillar):
-            ["pillar": pillar]
         case let .screenPulseFeedViewed(intent):
             ["intent": intent]
         case let .ctaClaimOwnershipSubmit(result):
@@ -211,8 +209,7 @@ public enum AnalyticsEvent: Sendable, Equatable {
             ["result": result.rawValue]
         case let .ctaPollVoteSubmit(result):
             ["result": result.rawValue]
-        case .screenHubViewed,
-             .screenMailboxRootViewed,
+        case .screenMailboxRootViewed,
              .screenMyHomesViewed,
              .screenHomeDashboardViewed,
              .screenMyClaimsViewed,
@@ -250,7 +247,7 @@ public enum AnalyticsResult: String, Sendable {
     case error
 }
 
-/// Analytics shim. Feature code calls `Analytics.track(.screenHubViewed)`
+/// Analytics shim. Feature code calls `Analytics.track(.screenMyHomesViewed)`
 /// and we fan the event out to Observability (Sentry breadcrumb) and the
 /// PostHog product-analytics vendor. In Debug builds the event also lands
 /// in the Xcode console for quick verification.

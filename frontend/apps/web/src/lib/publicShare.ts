@@ -109,6 +109,38 @@ export const fetchPublicBookingByToken = cache(
   }
 );
 
+/** A Nearby Plans share link: the plan's public card (area only), or `{ kind: 'playdate', city }`. */
+export type PublicPlan = {
+  id?: string;
+  kind: 'watch_party' | 'playdate' | 'pickup_game' | 'walk_coffee';
+  title?: string;
+  about?: string;
+  starts_at?: string | null;
+  ends_at?: string | null;
+  starts_on?: string | null;
+  day_part?: string | null;
+  timezone?: string;
+  area?: { label: string; city: string | null; precision: string };
+  place_kind?: 'public' | 'home';
+  host?: { display_name: string; avatar_url: string | null; verified_address: boolean; plans_hosted: number };
+  spots?: number;
+  going_count?: number;
+  spots_left?: number;
+  is_full?: boolean;
+  waitlist_count?: number;
+  details?: Record<string, unknown>;
+  state?: 'upcoming' | 'live' | 'ended' | 'cancelled';
+  city?: string | null;
+};
+
+export const fetchPublicPlan = cache(async (id: string): Promise<PublicFetchResult<PublicPlan>> => {
+  const result = await fetchPublicJson<PublicPlan>(
+    `/api/public/plans/${encodeURIComponent(id)}`,
+    { noStore: true },
+  );
+  return { data: result.data ?? null, status: result.status };
+});
+
 export const fetchPublicPoll = cache(async (id: string): Promise<PublicFetchResult<any>> => {
   const result = await fetchPublicJson<any>(`/api/public/poll/${encodeURIComponent(id)}`);
   return { data: result.data ?? null, status: result.status };

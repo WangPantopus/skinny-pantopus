@@ -15,6 +15,7 @@ import app.pantopus.android.data.store.ScreenStore
 import app.pantopus.android.data.store.StoreKey
 import app.pantopus.android.data.store.StoreKeys
 import app.pantopus.android.data.store.Stored
+import app.pantopus.android.ui.components.RefreshOnStoreChange
 import javax.inject.Inject
 
 /**
@@ -126,7 +127,10 @@ class HomeCopyGateFactory
 fun HomeCopyLifecycle(
     load: () -> Unit,
     pause: () -> Unit,
+    observeStoreChanges: Boolean = false,
 ) {
+    // Other consumers may install a targeted observer of their own.
+    if (observeStoreChanges) RefreshOnStoreChange(load)
     val owner = LocalLifecycleOwner.current
     val currentLoad by rememberUpdatedState(load)
     val currentPause by rememberUpdatedState(pause)

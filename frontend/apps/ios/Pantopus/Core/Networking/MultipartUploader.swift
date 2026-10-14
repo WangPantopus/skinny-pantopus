@@ -448,33 +448,6 @@ public final class MultipartUploader: @unchecked Sendable {
         }
     }
 
-    /// Transcribe a recorded audio note via `POST /api/ai/transcribe`
-    /// (multipart, field name `audio`, ≤25MB — Whisper's cap). Route
-    /// `backend/routes/ai.js:387`.
-    public func transcribeAudio(_ file: MultipartFile) async throws -> AITranscriptionResponse {
-        let boundary = "PantopusBoundary-\(UUID().uuidString)"
-        let url = environment.apiBaseURL.appendingPathComponent("/api/ai/transcribe")
-        let body = Self.buildBody(boundary: boundary, file: file)
-        let (data, http) = try await performUpload(to: url, boundary: boundary, body: body)
-        switch http.statusCode {
-        case 200..<300:
-            do {
-                return try JSONDecoder().decode(AITranscriptionResponse.self, from: data)
-            } catch {
-                logger.error("Transcription decode failed: \(error)")
-                throw APIError.decoding(underlying: error)
-            }
-        case 401:
-            throw APIError.unauthorized
-        case 413:
-            throw APIError.clientError(status: 413, message: "Audio file exceeds the 25MB limit.")
-        case 400..<500:
-            throw APIError.clientError(status: http.statusCode, message: String(data: data, encoding: .utf8))
-        default:
-            throw APIError.server(status: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
-        }
-    }
-
     /// Replace the signed-in user's avatar via
     /// `POST /api/upload/profile-picture` (`backend/routes/upload.js:236`).
     /// Single file, field name `file`; the server resizes to 800×800 webp,
@@ -657,6 +630,27 @@ public final class MultipartUploader: @unchecked Sendable {
         switch http.statusCode {
         case 200..<300:
             return try JSONDecoder().decode(AIMediaUploadResponse.self, from: data)
+        case 401:
+            throw APIError.unauthorized
+        case 400..<500:
+            throw APIError.clientError(status: http.statusCode, message: String(data: data, encoding: .utf8))
+        default:
+            throw APIError.server(status: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
+        }
+    }
+
+    /// Read a home's radon result from one photo or PDF of the lab's report
+    /// (`POST /api/ai/draft/radon-result`, field `file`; route
+    /// `backend/routes/ai.js:281`). The server reads the report in memory and
+    /// doesn't keep it; nothing is saved until the radon sheet's own Save.
+    public func readRadonReport(file: MultipartFile) async throws -> AIRadonReportResponse {
+        let boundary = "PantopusBoundary-\(UUID().uuidString)"
+        let url = environment.apiBaseURL.appendingPathComponent("/api/ai/draft/radon-result")
+        let body = Self.buildBody(boundary: boundary, file: file)
+        let (data, http) = try await performUpload(to: url, boundary: boundary, body: body)
+        switch http.statusCode {
+        case 200..<300:
+            return try JSONDecoder().decode(AIRadonReportResponse.self, from: data)
         case 401:
             throw APIError.unauthorized
         case 400..<500:

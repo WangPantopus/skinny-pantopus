@@ -159,10 +159,6 @@ const HOME_PLACE_TYPES = [
   'alert', 'deal', 'local_update', 'neighborhood_win', 'visitor_guide',
 ];
 
-const BUSINESS_PLACE_TYPES = [
-  'event', 'deal', 'local_update',
-];
-
 const POST_FORMATS = ['standard', 'quick_pulse', 'deep_dive', 'shout_out', 'show_and_tell'];
 
 const LOCATION_PRECISIONS = ['exact_place', 'approx_area', 'neighborhood_only', 'none'];
@@ -176,14 +172,14 @@ const SAFETY_ALERT_KINDS = [
   'theft', 'vandalism', 'suspicious', 'hazard', 'scam', 'other',
 ];
 
-// Map frontend alert kinds to valid DB enum values until migration 081 is applied
+// Posts from before migration 081 stored these composer kinds under older enum names. They can't
+// be created any more; an edit that sends one back compares it with the stored name. ('hazard' and
+// 'other' are stored as themselves: 'other' used to become 'public_safety', a notice kind.)
 const SAFETY_KIND_TO_DB = {
   theft: 'crime_incident',
   vandalism: 'crime_incident',
   suspicious: 'public_safety',
-  hazard: 'road_hazard',
   scam: 'crime_incident',
-  other: 'public_safety',
 };
 
 // `(?<!ok)http`: the Android app's client is OkHttp ("okhttp/4.x"), a person, not a bot.
@@ -192,6 +188,26 @@ const BOT_UA_PATTERN = /bot|crawl|spider|slurp|facebookexternal|whatsapp|telegra
 function toDbSafetyKind(kind) {
   return kind ? (SAFETY_KIND_TO_DB[kind] || kind) : null;
 }
+
+// Heads-up kinds anyone may create (docs/product/pulse-build/02-contract.md §1). Official and
+// curator accounts may also post the notice kinds, with a link to their source. Crime and
+// suspicion kinds can't be created by anyone; old posts of those kinds stay readable.
+const RESIDENT_ALERT_KINDS = ['road_hazard', 'power_outage', 'weather_damage', 'missing_pet', 'hazard', 'other'];
+const SOURCED_ALERT_KINDS = ['official_notice', 'public_safety', 'crime_incident'];
+const SOURCED_ALERT_ACCOUNT_TYPES = ['official', 'curator'];
+
+/** The sentence refusing a Heads-up of this kind from this account, or null when it may post it. */
+function alertKindRefusal(kind, accountType, sourceUrl) {
+  if (!kind || RESIDENT_ALERT_KINDS.includes(kind)) return null;
+  if (!SOURCED_ALERT_ACCOUNT_TYPES.includes(accountType) || !SOURCED_ALERT_KINDS.includes(kind)) {
+    return ['official_notice', 'public_safety'].includes(kind)
+      ? 'Only official accounts and Pantopus can post this kind of notice. Choose another kind of Heads-up.'
+      : "Heads-ups can't be about crime or suspicious people. In an emergency, call 911.";
+  }
+  return sourceUrl ? null : 'Add a link to the official source for this notice.';
+}
+
+const BUSINESS_CANNOT_POST_ERROR = "Businesses can't post to Pulse. Your business page and earlier posts are unchanged.";
 
 const POST_AS_TYPES = ['personal', 'business', 'home', 'persona'];
 const AUDIENCE_TYPES = ['connections', 'followers', 'network', 'nearby', 'saved_place', 'household', 'neighborhood', 'target_area', 'national', 'public'];
@@ -259,6 +275,8 @@ const createPostSchema = Joi.object({
   safetyBehaviorDescription: Joi.string().max(2000).optional(),
   // Frontend alias for safetyBehaviorDescription
   behaviorDescription: Joi.string().max(2000).optional(),
+  // The official source of an Official or curator notice; stored as post_metadata.source_url.
+  sourceUrl: Joi.string().uri({ scheme: ['https', 'http'] }).max(2048).optional(),
   // Deal fields
   dealExpiresAt: Joi.date().iso().optional(),
   dealBusinessName: Joi.string().max(255).optional(),
@@ -608,14 +626,11 @@ async function canViewPersonaPostAudience(post, viewerId) {
     && requiredRank <= 2;
 }
 
-async function hasExternalShare(postId) {
-  const { data: share } = await supabaseAdmin
-    .from('PostShare')
-    .select('id')
-    .eq('post_id', postId)
-    .eq('share_type', 'external')
-    .maybeSingle();
-  return !!share;
+// A link opens outside the app only for a post its author made public and left sharing on.
+// Nobody else's Share tap widens who can read a post.
+function isPubliclyShareable(post) {
+  const isPublic = post.visibility === 'public' || post.audience === 'public';
+  return isPublic && post.allow_external_share !== false;
 }
 
 const canViewPost = async (post, userId) => {
@@ -639,10 +654,8 @@ const canViewPost = async (post, userId) => {
   }
 
   if (!userId) {
-    // Direct-link views from outside the app should only work for posts that
-    // are already public, or that a user explicitly shared externally.
-    if (post.visibility === 'public' || post.audience === 'public') return true;
-    return hasExternalShare(post.id);
+    // Direct-link views from outside the app only work for posts that are already public.
+    return isPubliclyShareable(post);
   }
 
   const targets = Array.isArray(post.distribution_targets) ? post.distribution_targets : [];
@@ -733,6 +746,7 @@ const POST_VISIBILITY_SELECT = [
   'target_tier_rank',
   'visibility',
   'audience',
+  'allow_external_share',
   'origin',
   'latitude',
   'longitude',
@@ -983,7 +997,7 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
       distributionTargets, crossPostToConnections, gpsTimestamp, gpsLatitude, gpsLongitude,
       purpose, profileVisibilityScope, showOnProfile,
       geocodeProvider, geocodeAccuracy, geocodePlaceId,
-      topic, sportsScope, postMetadata,
+      topic, sportsScope, postMetadata, sourceUrl,
     } = req.body;
     // P2.4 / unified-IA §4.1 — defense-in-depth. Persona-context posts
     // must go through the audience-zone composer (P2.5) and the
@@ -1016,7 +1030,7 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
 	    let requestedAudience = audience || (postAs === 'persona' ? 'followers' : 'nearby');
 	    if (postAs === 'business' && (requestedAudience === 'followers' || visibility === 'followers')) {
 	      return res.status(400).json({
-	        error: 'Business posts can no longer target followers. Use Target Area or Public instead.',
+	        error: 'Business posts can no longer target followers. Use Public instead.',
 	        code: 'business_followers_audience_removed',
 	      });
 	    }
@@ -1057,6 +1071,15 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
     }
     if (hasCountryDistributionTarget && requestedAudience !== 'national') {
       return res.status(400).json({ error: 'Country-wide distribution requires national audience.' });
+    }
+    // Businesses reply; they don't post to the Place feed. Their other audiences are unchanged.
+    if (postAs === 'business'
+      && (LOCAL_AUDIENCES.includes(requestedAudience) || requestedDistributionTargets.includes('place'))) {
+      return res.status(403).json({ error: BUSINESS_CANNOT_POST_ERROR, code: 'BUSINESS_CANNOT_POST' });
+    }
+    const alertRefusal = alertKindRefusal(safetyAlertKind, req.user.accountType, sourceUrl);
+    if (alertRefusal) {
+      return res.status(400).json({ error: alertRefusal, code: 'ALERT_KIND_NOT_ALLOWED' });
     }
 
     let homeContext = null;
@@ -1113,20 +1136,6 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
 
       if (!hasEditorAccess) {
         return res.status(403).json({ error: 'You need at least editor role to post as this business' });
-      }
-      // v1.1: Business rate limiting — 1 per 24h to Place (tightened from 3)
-      if (['nearby', 'target_area'].includes(requestedAudience) ||
-          (distributionTargets && distributionTargets.includes('place'))) {
-        const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-        const { count } = await supabaseAdmin
-          .from('Post')
-          .select('id', { count: 'exact', head: true })
-          .eq('business_id', businessId)
-          .contains('distribution_targets', ['place'])
-          .gte('created_at', oneDayAgo);
-        if (count >= 1) {
-          return res.status(429).json({ error: 'Business posting limit reached (1 post per 24h to Place feed). Try again later.' });
-        }
       }
     }
 
@@ -1249,13 +1258,6 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
         return res.status(400).json({ error: 'Alerts must specify an alert type (e.g., road_hazard, power_outage).' });
       }
 
-      // Business Place type enforcement
-      if (postAs === 'business' && !BUSINESS_PLACE_TYPES.includes(postType)) {
-        return res.status(400).json({
-          error: `Businesses can only post Events, Deals, and Local Updates to the Place feed.`,
-        });
-      }
-
       // Home Place type enforcement
       if (postAs === 'home' && !HOME_PLACE_TYPES.includes(postType)) {
         return res.status(400).json({
@@ -1359,9 +1361,13 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
       // Sports topic lane (Phase 1)
       topic: topic || null,
       sports_scope: sportsScope || null,
-      post_metadata: postMetadata || {},
+      // A source link comes only from sourceUrl on an Official or curator notice (below).
+      post_metadata: Object.fromEntries(Object.entries(postMetadata || {}).filter(([key]) => key !== 'source_url')),
       origin,
     };
+    if (postType === 'alert' && sourceUrl && SOURCED_ALERT_ACCOUNT_TYPES.includes(req.user.accountType)) {
+      postData.post_metadata = { ...postData.post_metadata, source_url: sourceUrl };
+    }
 
     // v1.1: Compute distribution_targets from audience + cross-post toggles
     if (distributionTargets && distributionTargets.length > 0) {
@@ -1978,16 +1984,7 @@ router.get('/map', verifyToken, async (req, res) => {
         let homeCount = 0;
         for (const h of (homes || [])) {
           if (homeCount >= lim) break;
-          let lat = null, lon = null;
-          if (h.location) {
-            if (typeof h.location === 'object' && h.location.coordinates) {
-              lon = h.location.coordinates[0];
-              lat = h.location.coordinates[1];
-            } else if (typeof h.location === 'string') {
-              const m = h.location.match(/POINT\(([^ ]+) ([^ ]+)\)/);
-              if (m) { lon = parseFloat(m[1]); lat = parseFloat(m[2]); }
-            }
-          }
+          const { latitude: lat, longitude: lon } = resolveHomeCoordinates(h);
           if (lat != null && lon != null && lat >= s && lat <= n && lon >= w && lon <= e) {
             results.push({
               layer_type: 'home',
@@ -2005,21 +2002,34 @@ router.get('/map', verifyToken, async (req, res) => {
       }
     }
 
-    // When viewport is empty, find the nearest activity center
+    // ── Plans layer (Nearby Plans) ──
+    // Only while the `plans` flag is on for this viewer; the area point for everyone,
+    // the exact place for the host and people who are in (services/plans/planMap.js).
+    if (enabledLayers.includes('plans')) {
+      try {
+        const { planPins } = require('../services/plans/planMap');
+        results.push(...await planPins(req.user, { south: s, west: w, north: n, east: e }, req.query));
+      } catch (error) {
+        logger.error('Error fetching map plans', { error: error.message, userId });
+        if (enabledLayers.filter(Boolean).every(layer => layer === 'plans')) throw error;
+      }
+    }
+
+    // When the viewport is empty, point to the nearest post this viewer's map would
+    // show, at the point it would show it (docs/location-privacy-matrix.md), never a
+    // stored point or a post they can't see.
     let nearest_activity_center = null;
-    if (results.length === 0) {
-      const centerLat = (s + n) / 2;
-      const centerLon = (w + e) / 2;
-      const { data: nearestRows } = await supabaseAdmin.rpc('find_nearest_activity_center', {
-        p_center_lat: centerLat,
-        p_center_lon: centerLon,
-        p_content_type: 'post',
-      });
-      if (nearestRows && nearestRows.length > 0) {
-        nearest_activity_center = {
-          latitude: nearestRows[0].latitude,
-          longitude: nearestRows[0].longitude,
-        };
+    if (results.length === 0 && enabledLayers.includes('posts')) {
+      try {
+        nearest_activity_center = await feedService.findNearestMapPost({
+          userId,
+          surface: surface || 'place',
+          postType: postType || null,
+          latitude: (s + n) / 2,
+          longitude: (w + e) / 2,
+        });
+      } catch (error) {
+        logger.warn('Nearest map post lookup failed', { error: error.message, userId });
       }
     }
 
@@ -2661,12 +2671,20 @@ router.patch('/:id', verifyToken, validate(updatePostSchema), async (req, res) =
     const userId = req.user.id;
 
     const { data: existing } = await supabaseAdmin.from('Post')
-      .select('user_id, media_urls, media_thumbnails, media_live_urls').eq('id', id).single();
+      .select('user_id, media_urls, media_thumbnails, media_live_urls, safety_alert_kind, post_metadata')
+      .eq('id', id).single();
     if (!existing) return res.status(404).json({ error: 'Post not found' });
     if (existing.user_id !== userId) return res.status(403).json({ error: 'You can only edit your own posts' });
     if (req.user.accountType !== 'curator' && hasOutsideMedia(req.body, [normalizeMediaUrls(existing.media_urls),
       normalizeAlignedMediaUrls(existing.media_thumbnails), normalizeAlignedMediaUrls(existing.media_live_urls)])) {
       return res.status(400).json({ error: OUTSIDE_MEDIA_ERROR });
+    }
+    // A new Heads-up kind must be one this author may create. The edit forms send the posted
+    // kind back, sometimes under its stored name; an unchanged kind is always fine.
+    const kind = req.body.safetyAlertKind;
+    if (kind && ![kind, toDbSafetyKind(kind)].includes(existing.safety_alert_kind)) {
+      const refusal = alertKindRefusal(kind, req.user.accountType, existing.post_metadata?.source_url);
+      if (refusal) return res.status(400).json({ error: refusal, code: 'ALERT_KIND_NOT_ALLOWED' });
     }
 
     const fieldMap = {
@@ -3190,6 +3208,15 @@ router.post('/:id/share', verifyToken, validate(sharePostSchema), async (req, re
     const { shareType = 'external' } = req.body || {};
     const post = await requireVisiblePost({ postId, userId, res, select: POST_REFS_SELECT });
     if (!post) return;
+
+    // Only a public post has a link that works outside the app. Reposting stays open to anyone who can
+    // see the post, but an external share never lets everyone else read it.
+    if (shareType === 'external' && !isPubliclyShareable(post)) {
+      return res.status(403).json({
+        error: "This post isn't public, so it can't be shared outside Pantopus.",
+        code: 'SHARE_NOT_ALLOWED',
+      });
+    }
 
     if (shareType === 'repost' && typeof req.body.reposted === 'boolean') {
       // The repost state the client wants: a repeated request changes nothing and notifies no one.
@@ -3809,5 +3836,5 @@ router.post('/seeded/:factId/dismiss', verifyToken, async (req, res) => {
 });
 
 module.exports = router;
-// Business posts (businesses.js) derive purpose the same way.
-module.exports.derivePurposeFromPostType = derivePurposeFromPostType;
+// The business post route (businesses.js) gives the same answer.
+module.exports.BUSINESS_CANNOT_POST_ERROR = BUSINESS_CANNOT_POST_ERROR;

@@ -269,6 +269,45 @@ public struct ChatAIDraftCard: Identifiable, Sendable, Hashable {
     public let summary: String?
     public let priceLabel: String?
     public let valid: Bool
+    /// What "Use draft" carries into the composer.
+    public var prefill: ChatAIDraftPrefill?
+    /// A pickup-days card's schedule and where its Save stands.
+    public var pickup: ChatAIPickupSchedule?
+}
+
+/// The household's pickup days as the assistant read them. Save writes them
+/// through `PUT /api/homes/:id/calendar/pickup-day`, as the Today editor does.
+public struct ChatAIPickupSchedule: Sendable, Hashable {
+    public let homeId: String
+    /// MO TU WE TH FR SA SU
+    public let garbageWeekday: String
+    /// `not_set`, `weekly` or `biweekly`.
+    public let recyclingFrequency: String
+    public let recyclingNextDate: String?
+    /// Nil until the person taps Save.
+    public var save: ChatAIPickupSave?
+}
+
+public enum ChatAIPickupSave: Sendable, Hashable {
+    case saving
+    case saved
+    case failed(String)
+}
+
+/// A draft's text for the composer it opens: a post's body (with its type
+/// and headline), or a Support Train's story.
+public struct ChatAIDraftPrefill: Sendable, Hashable {
+    public let body: String
+    /// The assistant's post type (`lost_found`, `event`, …), for posts.
+    public let postType: String?
+    /// A post's headline, when the draft has one.
+    public let title: String?
+
+    public init(body: String, postType: String? = nil, title: String? = nil) {
+        self.body = body
+        self.postType = postType
+        self.title = title
+    }
 }
 
 public struct ChatReplyPreview: Sendable, Hashable {
@@ -527,6 +566,9 @@ public enum ChatTimelineRow: Identifiable, Sendable, Hashable {
     case topicDivider(ChatTopicDivider)
     case broadcastReference(ChatBroadcastReference)
     case bubble(ChatBubbleContent)
+    /// A line the server writes into the room (`message_type: "system"`),
+    /// such as a plan's "Alex is on the way": centered, no sender.
+    case systemLine(ChatDayDivider)
 
     public var id: String {
         switch self {
@@ -534,6 +576,7 @@ public enum ChatTimelineRow: Identifiable, Sendable, Hashable {
         case let .topicDivider(divider): "topic_\(divider.id)"
         case let .broadcastReference(reference): "broadcast_\(reference.id)"
         case let .bubble(bubble): "bubble_\(bubble.id)"
+        case let .systemLine(line): "system_\(line.id)"
         }
     }
 }

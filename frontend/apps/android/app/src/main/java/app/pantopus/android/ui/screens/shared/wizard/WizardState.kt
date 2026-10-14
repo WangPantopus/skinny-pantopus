@@ -25,7 +25,7 @@ sealed interface WizardProgressLabel {
 
 /**
  * Optional ghost CTA rendered alongside the primary in the sticky bottom
- * row. Used by the success step's "Back to Hub".
+ * row. Used by the success step's "Done".
  */
 data class WizardSecondaryCta(
     val label: String,

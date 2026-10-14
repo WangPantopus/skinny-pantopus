@@ -1719,12 +1719,12 @@ private fun ExploreEntity.pendingSavePlace(): PendingSavePlace =
         longitude = longitude,
         city = city,
         state = stateName,
-        geocodePlaceId = geocodePlaceId,
+        geocodePlaceId = geocodePlaceId ?: sourceId,
         sourceId = sourceId,
     )
 
 private fun List<SavedPlaceDto>.isSaved(entity: ExploreEntity): Boolean {
-    val target = savedPlaceMatchKey(entity.geocodePlaceId, entity.latitude, entity.longitude)
+    val target = savedPlaceMatchKey(entity.geocodePlaceId ?: entity.sourceId, entity.latitude, entity.longitude)
     return any { dto -> savedPlaceMatchKey(dto.geocodePlaceId, dto.latitude, dto.longitude) == target }
 }
 

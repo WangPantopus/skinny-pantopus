@@ -56,7 +56,6 @@ import app.pantopus.android.data.api.services.HomeTasksApi
 import app.pantopus.android.data.api.services.HomeVerificationApi
 import app.pantopus.android.data.api.services.HomesApi
 import app.pantopus.android.data.api.services.HubApi
-import app.pantopus.android.data.api.services.HubExtrasApi
 import app.pantopus.android.data.api.services.IdentityCenterApi
 import app.pantopus.android.data.api.services.ListingOffersApi
 import app.pantopus.android.data.api.services.ListingsMutationApi
@@ -86,6 +85,7 @@ import app.pantopus.android.data.api.services.PaymentsApi
 import app.pantopus.android.data.api.services.PersonaDmApi
 import app.pantopus.android.data.api.services.PersonaEditApi
 import app.pantopus.android.data.api.services.PlaceApi
+import app.pantopus.android.data.api.services.PlansApi
 import app.pantopus.android.data.api.services.PostPrecheckApi
 import app.pantopus.android.data.api.services.PostsApi
 import app.pantopus.android.data.api.services.PostsMapApi
@@ -360,9 +360,6 @@ object NetworkModule {
 
     @Provides @Singleton
     fun provideHubApi(retrofit: Retrofit): HubApi = retrofit.create(HubApi::class.java)
-
-    @Provides @Singleton
-    fun provideHubExtrasApi(retrofit: Retrofit): HubExtrasApi = retrofit.create(HubExtrasApi::class.java)
 
     @Provides @Singleton
     fun provideNotificationPreferencesApi(retrofit: Retrofit): NotificationPreferencesApi =
@@ -739,6 +736,11 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideSupportTrainActionsApi(retrofit: Retrofit): SupportTrainActionsApi = retrofit.create(SupportTrainActionsApi::class.java)
+
+    /** Nearby Plans: `/api/plans`, the Plans map layer and the two flags. */
+    @Provides
+    @Singleton
+    fun providePlansApi(retrofit: Retrofit): PlansApi = retrofit.create(PlansApi::class.java)
 
     /** S2 — universal search fan-out across the five search surfaces. */
     @Provides

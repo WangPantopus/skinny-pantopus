@@ -54,6 +54,7 @@ import app.pantopus.android.data.api.models.place.PlacePreviewPlaceRef
 import app.pantopus.android.data.api.models.place.PlacePreviewSectionStatus
 import app.pantopus.android.data.api.models.place.PlaceSectionEnvelope
 import app.pantopus.android.ui.components.PrimaryButton
+import app.pantopus.android.ui.screens.place.PlaceRootBar
 import app.pantopus.android.ui.screens.place.PlaceSectionView
 import app.pantopus.android.ui.screens.place.components.PlaceChip
 import app.pantopus.android.ui.screens.place.components.PlaceChipModel
@@ -77,11 +78,15 @@ fun PlaceLaunchScreen(
     onCreateAccount: () -> Unit,
     viewModel: PlaceLaunchViewModel = hiltViewModel(),
     onSavePreview: (() -> Unit)? = null,
+    embedded: PlaceLaunchEmbedding? = null,
 ) {
     val step by viewModel.step.collectAsStateWithLifecycle()
     val retrying by viewModel.loadingPreview.collectAsStateWithLifecycle()
     val browse = {
-        if (onSavePreview != null) {
+        if (embedded != null) {
+            // The tab's root has nothing under it: back to the address field.
+            viewModel.backToHero()
+        } else if (onSavePreview != null) {
             onSignIn()
         } else {
             PlacePendingStore.clear()
@@ -102,22 +107,43 @@ fun PlaceLaunchScreen(
 
     Box(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg)) {
         when (val current = step) {
-            LaunchStep.Hero -> Hero(viewModel, onSignIn, browse, signedInEntry = onSavePreview != null)
+            LaunchStep.Hero -> Hero(viewModel, onSignIn, browse, signedInEntry = onSavePreview != null, embedded = embedded)
             is LaunchStep.Preview ->
-                PreviewBody(
-                    current.preview,
-                    { if (onSavePreview != null || viewModel.prepareForAuth()) onSignIn() },
-                    continuePreview,
-                    onBack = viewModel::backToHero,
-                    onRetry = viewModel::retryPreview,
-                    retrying = retrying,
-                    signedInEntry = onSavePreview != null,
-                )
+                Box(modifier = Modifier.statusBarsPaddingIf(embedded == null)) {
+                    PreviewBody(
+                        current.preview,
+                        {
+                            // Embedded, Cancel returns to the address field (there is nothing under it).
+                            if (embedded != null) {
+                                viewModel.backToHero()
+                            } else if (onSavePreview != null || viewModel.prepareForAuth()) {
+                                onSignIn()
+                            }
+                        },
+                        continuePreview,
+                        onBack = viewModel::backToHero,
+                        onRetry = viewModel::retryPreview,
+                        retrying = retrying,
+                        signedInEntry = onSavePreview != null,
+                    )
+                }
             is LaunchStep.Region ->
-                RegionBody(current.message, browse, onBack = viewModel::backToHero, signedInEntry = onSavePreview != null)
+                Box(modifier = Modifier.statusBarsPaddingIf(embedded == null)) {
+                    // Embedded there is nothing to go back to: the button looks up another address.
+                    RegionBody(
+                        current.message,
+                        browse,
+                        onBack = viewModel::backToHero,
+                        signedInEntry = onSavePreview != null,
+                        primaryTitle = if (embedded != null) "Look up another address" else null,
+                    )
+                }
         }
     }
 }
+
+/** The signed-out screens pad the status bar themselves; embedded in the signed-in tabs, the tabs' Scaffold does it. */
+private fun Modifier.statusBarsPaddingIf(pad: Boolean): Modifier = if (pad) statusBarsPadding() else this
 
 @Composable
 @Suppress("LongMethod")
@@ -126,42 +152,50 @@ private fun Hero(
     onSignIn: () -> Unit,
     onCreateAccount: () -> Unit,
     signedInEntry: Boolean,
+    embedded: PlaceLaunchEmbedding?,
 ) {
     val query by viewModel.query.collectAsStateWithLifecycle()
     val suggestions by viewModel.suggestions.collectAsStateWithLifecycle()
     val loading by viewModel.loadingPreview.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
 
-    // Signed-out root: nothing above us pads the status bar, so do it here.
-    Column(modifier = Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 24.dp)) {
-        Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            PantopusLockup(size = 22.dp, variant = MarkVariant.Light)
-            // Demoted to the top bar so the address field is the first control.
-            // Takes the space up to "Sign in" and gives way at large text sizes, so "Sign in" stays on one line.
+    // Signed-out root: nothing above us pads the status bar, so do it here. Embedded, the tab's Scaffold does.
+    Column(modifier = Modifier.fillMaxSize().statusBarsPaddingIf(embedded == null)) {
+        if (embedded != null) {
+            PlaceRootBar(embedded.unreadCount, embedded.onOpenNotifications, embedded.onOpenMenu)
+        } else {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(start = 10.dp).weight(1f),
             ) {
-                Text("🇺🇸", fontSize = 11.sp)
+                PantopusLockup(size = 22.dp, variant = MarkVariant.Light)
+                // Demoted to the top bar so the address field is the first control.
+                // Takes the space up to "Sign in" and gives way at large text sizes, so "Sign in" stays on one line.
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(start = 10.dp).weight(1f),
+                ) {
+                    Text("🇺🇸", fontSize = 11.sp)
+                    Text(
+                        "United States",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = PantopusColors.appTextMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
                 Text(
-                    "United States",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = PantopusColors.appTextMuted,
+                    if (signedInEntry) "Cancel" else "Sign in",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = PantopusColors.primary600,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                    softWrap = false,
+                    modifier = Modifier.padding(start = 8.dp).clickable(onClick = onSignIn),
                 )
             }
-            Text(
-                if (signedInEntry) "Cancel" else "Sign in",
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = PantopusColors.primary600,
-                maxLines = 1,
-                softWrap = false,
-                modifier = Modifier.padding(start = 8.dp).clickable(onClick = onSignIn),
-            )
         }
 
         // One job: get a stranger from a postcard to type their address. The
@@ -169,7 +203,12 @@ private fun Hero(
         // the example card shows what comes back. Scrolls only when it must.
         Column(
             verticalArrangement = Arrangement.spacedBy(16.dp),
-            modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(top = 32.dp, bottom = 24.dp),
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 24.dp)
+                    .padding(top = if (embedded == null) 32.dp else Spacing.s2, bottom = 24.dp),
         ) {
             Text(
                 "Know what matters for your home, and stay on top of it.",
@@ -233,13 +272,16 @@ private fun Hero(
                     PrivacyProof()
                 }
                 ExampleCard(modifier = Modifier.padding(top = 8.dp))
-                Text(
-                    if (signedInEntry) "Back to saved places" else "Just here to follow someone or browse?",
-                    fontSize = 13.5.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = PantopusColors.appTextMuted,
-                    modifier = Modifier.fillMaxWidth().clickable(onClick = onCreateAccount),
-                )
+                // The tab's root has no saved places behind it to go back to (iOS shows no such link either).
+                if (embedded == null) {
+                    Text(
+                        if (signedInEntry) "Back to saved places" else "Just here to follow someone or browse?",
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = PantopusColors.appTextMuted,
+                        modifier = Modifier.fillMaxWidth().clickable(onClick = onCreateAccount),
+                    )
+                }
             }
         }
     }
@@ -401,7 +443,7 @@ private fun PreviewBody(
     retrying: Boolean,
     signedInEntry: Boolean,
 ) {
-    Box(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
+    Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.Top) {
                 Box(
@@ -462,45 +504,7 @@ private fun PreviewBody(
                         color = PantopusColors.appText,
                     )
                 }
-                // A real dollar band when one exists for this address,
-                // and nothing at all when it does not — the tiles carry
-                // the page as before. Never synthesized client-side.
-                // The aha card leads (Wedge v2 D1): the most surprising ready
-                // fact, in the server's words.
-                preview.aha?.takeIf { it.isRenderable }?.let { AhaCard(it, onCreateAccount) }
-                preview.moneyLead?.takeIf { it.isRenderable }?.let { MoneyLeadCard(it) }
-                // Every Band-A section through the dashboard's own cards;
-                // older backends send only `free` and keep the three tiles.
-                val sections = preview.sections.orEmpty()
-                if (sections.isNotEmpty()) PreviewSections(sections, onCreateAccount, onRetry, retrying)
-                preview.free?.takeIf { sections.isEmpty() }?.let { free ->
-                    PlaceGroupLabel(text = "Risk & readiness", modifier = Modifier.padding(top = 18.dp))
-                    PlaceSectionCard(
-                        title = "Flood",
-                        icon = PantopusIcon.Waves,
-                        state =
-                            if (free.flood.status == PlacePreviewSectionStatus.READY) {
-                                PlaceSectionCardState.LOADED
-                            } else {
-                                PlaceSectionCardState.UNAVAILABLE
-                            },
-                        value = free.flood.description ?: free.flood.zone?.let { "Zone $it" },
-                        chip = free.flood.zone?.let { PlaceChipModel(PlaceChipTone.SUCCESS, free.flood.description ?: "Flood zone") },
-                    )
-                    PlaceGroupLabel(text = "Your block", modifier = Modifier.padding(top = 18.dp))
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        PlaceDensityCard(bucket = free.density.bucket, label = free.density.label, ctaTitle = null, onTap = null)
-                        if (free.area.status == PlacePreviewSectionStatus.READY) {
-                            PlaceSectionCard(
-                                title = "Homes here",
-                                icon = PantopusIcon.Home,
-                                state = PlaceSectionCardState.LOADED,
-                                value = free.area.medianYearBuilt?.let { "Median built $it" } ?: free.area.note,
-                                caption = free.area.note,
-                            )
-                        }
-                    }
-                }
+                PlacePreviewFindings(preview, onFollowUp = onCreateAccount, onRetry = onRetry, retrying = retrying)
                 preview.locked?.takeIf { it.isNotEmpty() }?.let { locked ->
                     PlaceGroupLabel(text = "More with a free account", modifier = Modifier.padding(top = 18.dp))
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -691,8 +695,10 @@ private fun RegionBody(
     onBrowse: () -> Unit,
     onBack: () -> Unit,
     signedInEntry: Boolean,
+    // Replaces the primary button's title (the Place tab's first-run screen).
+    primaryTitle: String? = null,
 ) {
-    Column(modifier = Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 28.dp)) {
+    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 28.dp)) {
         Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
             Box(
                 modifier = Modifier.size(34.dp).clip(CircleShape).background(PantopusColors.appSurface).clickable(onClick = onBack),
@@ -734,7 +740,7 @@ private fun RegionBody(
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             )
             PrimaryButton(
-                title = if (signedInEntry) "Back to saved places" else "Follow people & places",
+                title = primaryTitle ?: if (signedInEntry) "Back to saved places" else "Follow people & places",
                 onClick = onBrowse,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -800,6 +806,62 @@ private fun AhaCard(
             ) {
                 Text(aha.followUp, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.primary600)
                 PantopusIconImage(PantopusIcon.ChevronRight, null, size = 14.dp, strokeWidth = 2.25f, tint = PantopusColors.primary600)
+            }
+        }
+    }
+}
+
+/**
+ * What's public about an address: the aha card, the money lead and the section groups. The launch preview shows it
+ * between its lead-in card and its locked group; the Place tab's saved-address root shows it under its next-step card.
+ * The aha follow-up and the sections' claim and verify buttons call [onFollowUp].
+ */
+@Composable
+internal fun PlacePreviewFindings(
+    preview: PlacePreview,
+    onFollowUp: () -> Unit,
+    onRetry: () -> Unit,
+    retrying: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier) {
+        // A real dollar band when one exists for this address,
+        // and nothing at all when it does not — the tiles carry
+        // the page as before. Never synthesized client-side.
+        // The aha card leads (Wedge v2 D1): the most surprising ready
+        // fact, in the server's words.
+        preview.aha?.takeIf { it.isRenderable }?.let { AhaCard(it, onFollowUp) }
+        preview.moneyLead?.takeIf { it.isRenderable }?.let { MoneyLeadCard(it) }
+        // Every Band-A section through the dashboard's own cards;
+        // older backends send only `free` and keep the three tiles.
+        val sections = preview.sections.orEmpty()
+        if (sections.isNotEmpty()) PreviewSections(sections, onFollowUp, onRetry, retrying)
+        preview.free?.takeIf { sections.isEmpty() }?.let { free ->
+            PlaceGroupLabel(text = "Risk & readiness", modifier = Modifier.padding(top = 18.dp))
+            PlaceSectionCard(
+                title = "Flood",
+                icon = PantopusIcon.Waves,
+                state =
+                    if (free.flood.status == PlacePreviewSectionStatus.READY) {
+                        PlaceSectionCardState.LOADED
+                    } else {
+                        PlaceSectionCardState.UNAVAILABLE
+                    },
+                value = free.flood.description ?: free.flood.zone?.let { "Zone $it" },
+                chip = free.flood.zone?.let { PlaceChipModel(PlaceChipTone.SUCCESS, free.flood.description ?: "Flood zone") },
+            )
+            PlaceGroupLabel(text = "Your block", modifier = Modifier.padding(top = 18.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                PlaceDensityCard(bucket = free.density.bucket, label = free.density.label, ctaTitle = null, onTap = null)
+                if (free.area.status == PlacePreviewSectionStatus.READY) {
+                    PlaceSectionCard(
+                        title = "Homes here",
+                        icon = PantopusIcon.Home,
+                        state = PlaceSectionCardState.LOADED,
+                        value = free.area.medianYearBuilt?.let { "Median built $it" } ?: free.area.note,
+                        caption = free.area.note,
+                    )
+                }
             }
         }
     }

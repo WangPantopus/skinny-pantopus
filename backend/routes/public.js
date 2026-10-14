@@ -21,12 +21,29 @@ const { resolveUsState } = require('../utils/usState');
 const featureFlagService = require('../services/featureFlagService');
 const ballotSummary = require('../services/ballot/summary');
 const ballotGovernments = require('../services/ballot/governments');
+const { publicPlan } = require('../services/plans/planPublic');
 
 // ============================================================
 // Public Preview Endpoints
 // No authentication required. Returns sanitized data only —
 // no user IDs, no exact addresses, no PII.
 // ============================================================
+
+// ── GET /api/public/plans/:id ───────────────────────────────
+// Nearby Plans share page (web /plans/:id). Area only: no host user id, no
+// point, no viewer; a playdate answers only its kind and city (planPublic.js).
+router.get('/plans/:id', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  try {
+    const plan = await publicPlan(req.params.id);
+    if (!plan) return res.status(404).json({ error: 'not_found', message: "This plan isn't available." });
+    recordFunnelEvent('plan_share_opened', { meta: { plan_id: req.params.id, kind: plan.kind } });
+    return res.json(plan);
+  } catch (err) {
+    console.error('[public/plans] failed:', err.message);
+    return res.status(500).json({ error: 'server_error', message: 'Something went wrong. Please try again.' });
+  }
+});
 
 // ── GET /api/public/gigs/:id ────────────────────────────────
 router.get('/gigs/:id', async (req, res) => {
@@ -115,7 +132,7 @@ router.get('/posts/:id', async (req, res) => {
 
     const { data: post, error } = await supabaseAdmin
       .from('Post')
-      .select('id, title, content, post_type, city, state, visibility, created_at')
+      .select('id, title, content, post_type, city, state, visibility, allow_external_share, created_at')
       .eq('id', id)
       .single();
 
@@ -123,9 +140,8 @@ router.get('/posts/:id', async (req, res) => {
       return res.status(404).json({ error: 'Not found' });
     }
 
-    // Only expose publicly visible posts
-    const publicVisibilities = ['public', 'neighborhood', 'city', 'global'];
-    if (!publicVisibilities.includes(post.visibility)) {
+    // Only a post its author made public, with sharing left on. Neighborhood and city posts stay inside the app.
+    if (post.visibility !== 'public' || post.allow_external_share === false) {
       return res.status(404).json({ error: 'Not found' });
     }
 
@@ -529,7 +545,7 @@ async function buildPlacePreview(place) {
   const foundingOpen = foundingSettled.status === 'fulfilled' ? Boolean(foundingSettled.value) : true;
 
   const sections = placePreviewService.assemblePreviewSections({ remote, flood, area, bucket, foundingOpen });
-  const aha = placePreviewService.pickAha(sections);
+  const aha = placePreviewService.pickAha(sections, { lat: place.lat, lng: place.lng });
 
   const floodSection = flood && flood.flood_zone
     ? {

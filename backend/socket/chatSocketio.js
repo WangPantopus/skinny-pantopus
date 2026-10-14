@@ -21,6 +21,17 @@ const { verifyAccessToken } = require('../services/accessTokenVerifier');
 // Store connected users: { userId: Set<socketId> }
 const connectedUsers = new Map();
 
+// A read mark changes only a row with something unread (NULL counts too), as in the REST read routes: a repeated
+// read is no write, so the database's change signal doesn't reach every member of the room.
+function markRoomRead(roomId, userId) {
+  return supabaseAdmin
+    .from('ChatParticipant')
+    .update({ unread_count: 0, last_read_at: new Date().toISOString() })
+    .eq('room_id', roomId)
+    .eq('user_id', userId)
+    .or('unread_count.neq.0,unread_count.is.null');
+}
+
 // The gig room also serves public task watchers. Tracking belongs only to the
 // current owner/worker and only while their authenticated socket is subscribed.
 async function emitPrivateGigUpdate(io, gig, event, payload) {
@@ -469,10 +480,7 @@ module.exports = (io) => {
         });
         
         // Mark messages as read
-        await supabaseAdmin.rpc('mark_messages_read', {
-          p_room_id: roomId,
-          p_user_id: userId
-        });
+        await markRoomRead(roomId, userId);
         
         // Notify room that user joined
         // Ids only: the first part of the person's email address is not for the other members to see.
@@ -559,14 +567,7 @@ module.exports = (io) => {
 
         // Room-level mark-as-read: zero unread count and update last_read_at.
         // Matches the REST endpoint POST /api/chat/rooms/:roomId/read.
-        const { error } = await supabaseAdmin
-          .from('ChatParticipant')
-          .update({
-            unread_count: 0,
-            last_read_at: new Date().toISOString()
-          })
-          .eq('room_id', roomId)
-          .eq('user_id', userId);
+        const { error } = await markRoomRead(roomId, userId);
 
         if (error) {
           logger.error('Mark read error', { sessionId, userId, roomId, error: error.message });

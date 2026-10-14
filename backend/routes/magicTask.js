@@ -24,6 +24,7 @@ const validate = require('../middleware/validate');
 const Joi = require('joi');
 const logger = require('../utils/logger');
 const { generateMagicDraft, generateBasicDraft, VALID_CATEGORIES, canonicalGigCategory } = require('../services/magicTaskService');
+const { userTimeZone } = require('../services/ai/chatContext');
 const { inferEngagementMode } = require('../services/offerScoringService');
 const {
   careDetailsSchema,
@@ -342,7 +343,7 @@ router.post('/magic-draft', verifyToken, validate(magicDraftSchema), async (req,
   logger.info('Magic draft requested', { userId, textLength: text.length });
 
   try {
-    const result = await generateMagicDraft(text, context || {});
+    const result = await generateMagicDraft(text, { ...(context || {}), timeZone: await userTimeZone(userId) });
 
     // If attachments were provided, mark them
     if (attachmentUrls && attachmentUrls.length > 0) {
