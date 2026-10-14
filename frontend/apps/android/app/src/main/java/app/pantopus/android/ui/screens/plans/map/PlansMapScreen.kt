@@ -285,14 +285,10 @@ private fun PlansSheetHost(
                     onDetails = { actions.onOpenPlan(selected.id) },
                     onContentHeight = { cardPx = it },
                     onPrimary = {
-                        val closed = selected.planState == PlanState.ENDED || selected.planState == PlanState.CANCELLED
-                        if (selected.standing == PlanViewerStanding.NONE && !closed) {
-                            actions.onAsk(selected.id)
-                        } else {
-                            actions.onOpenPlan(selected.id)
-                        }
+                        if (mainAction(selected)?.asks == true) actions.onAsk(selected.id) else actions.onOpenPlan(selected.id)
                     },
                 )
+            state.selectedId != null && state.selectedMissing -> PlanCardUnavailable(onClose = { viewModel.select(null) })
             state.selectedId != null -> PlanRowsSkeleton(rows = 2)
             state.isEmpty ->
                 PlansEmptyContent(

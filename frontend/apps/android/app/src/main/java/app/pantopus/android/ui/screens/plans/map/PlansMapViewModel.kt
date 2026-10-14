@@ -272,10 +272,12 @@ class PlansMapViewModel
                 when (val result = repository.plan(id)) {
                     is NetworkResult.Success ->
                         if (_state.value.selectedId == id) _state.update { it.copy(selected = result.data) }
+                    // With nothing on screen yet, any failure says "This plan isn't available" (as on iOS), never a
+                    // loading card that waits forever; a plan that's gone also refreshes the pins.
                     is NetworkResult.Failure ->
-                        if (_state.value.selectedId == id && result.error is NetworkError.NotFound) {
-                            _state.update { it.copy(selectedMissing = true) }
-                            repository.changed()
+                        if (_state.value.selectedId == id) {
+                            if (_state.value.selected == null) _state.update { it.copy(selectedMissing = true) }
+                            if (result.error is NetworkError.NotFound) repository.changed()
                         }
                 }
             }
