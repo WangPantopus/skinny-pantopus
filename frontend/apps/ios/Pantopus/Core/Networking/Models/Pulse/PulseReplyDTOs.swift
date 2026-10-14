@@ -22,7 +22,7 @@ public struct PulseReplyDTO: Decodable, Sendable, Hashable, Identifiable {
     public let helpful: Bool
     public let helpfulTo: String?
     public let canThank: Bool
-    public let thankedByViewer: Bool
+    public var thankedByViewer: Bool
     public let removed: Bool
     public let moderation: PulseModerationDTO?
 

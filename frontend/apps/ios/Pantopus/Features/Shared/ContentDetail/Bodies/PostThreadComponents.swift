@@ -17,6 +17,8 @@ struct CommentComposer: View {
     let isFocusedPresentation: Bool
     let isSending: Bool
     let onSend: @MainActor () -> Void
+    var focusRequest: Int = 0
+    @FocusState private var composerFocused: Bool
 
     var body: some View {
         HStack(spacing: Spacing.s2) {
@@ -27,13 +29,17 @@ struct CommentComposer: View {
                 ringProgress: 1,
                 size: 28
             )
-            TextField(placeholder, text: $text)
-                .font(.system(size: PantopusTextStyle.small.size))
+            TextField(placeholder, text: $text, axis: .vertical)
+                .pulseFont(.small)
+                .lineLimit(1...4)
+                .focused($composerFocused)
+                .onChange(of: focusRequest) { _, _ in composerFocused = true }
                 .foregroundStyle(Theme.Color.appText)
                 .submitLabel(.send)
                 .onSubmit { if canSend { onSend() } }
                 .padding(.horizontal, Spacing.s3)
-                .frame(height: 40)
+                .padding(.vertical, Spacing.s2)
+                .frame(minHeight: 44)
                 .background(Theme.Color.appSurface)
                 .overlay {
                     RoundedRectangle(cornerRadius: Radii.pill, style: .continuous)
@@ -63,14 +69,14 @@ struct CommentComposer: View {
                         )
                     }
                 }
-                .frame(width: 40, height: 40)
+                .frame(width: 44, height: 44)
                 .background(canSend || isFocusedPresentation ? Theme.Color.primarySolid : Theme.Color.appSurfaceSunken)
                 .clipShape(Circle())
             }
             .buttonStyle(.plain)
             .disabled(!canSend)
             .accessibilityIdentifier("pulsePostDetail-sendComment")
-            .accessibilityLabel("Send comment")
+            .accessibilityLabel("Send reply")
         }
     }
 

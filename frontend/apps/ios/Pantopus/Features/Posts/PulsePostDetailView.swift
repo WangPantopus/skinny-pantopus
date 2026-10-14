@@ -18,6 +18,10 @@ public struct PulsePostDetailView: View {
     @State private var showsReportDialog = false
     @State private var showsDeleteConfirm = false
     @State private var commentPendingDelete: String?
+    @State private var replyMenu: PulseReplyDTO?
+    @State private var replyPendingReport: PulseReplyDTO?
+    @State private var isVisible = false
+    @Environment(\.scenePhase) private var scenePhase
     private let onBack: @MainActor () -> Void
     private let onOpenProfile: @MainActor (String) -> Void
     private let onEdit: @MainActor (String) -> Void
@@ -64,8 +68,20 @@ public struct PulsePostDetailView: View {
         .accessibilityIdentifier("pulsePostDetail")
         .task { await viewModel.load() }
         .task { await viewModel.loadNearbyProviders() }
+        .onAppear { isVisible = true }
+        .onDisappear { isVisible = false }
+        .task(id: isVisible && scenePhase == .active) {
+            guard isVisible, scenePhase == .active else { return }
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(60)) } catch { return }
+                await viewModel.pollConversationReplies()
+            }
+        }
         .onChange(of: viewModel.state) { _, state in
-            if case .loaded = state { onContentLoaded() }
+            switch state {
+            case .loaded, .conversation: onContentLoaded()
+            default: break
+            }
         }
         .onChange(of: viewModel.didDeletePost) { _, deleted in
             if deleted { onBack() }
@@ -78,14 +94,22 @@ public struct PulsePostDetailView: View {
             Button(viewModel.isSaved ? "Remove bookmark" : "Save post") {
                 Task { await viewModel.toggleSave() }
             }
-            if !isRemovedByModerator {
+            if viewModel.conversation != nil {
+                if viewModel.canShareConversation {
+                    Button("Share post") { showsShareSheet = true }
+                }
+            } else if !isRemovedByModerator {
                 Button(viewModel.isReposted ? "Undo repost" : "Repost") {
                     Task { await viewModel.toggleRepost() }
                 }
             }
             if viewModel.isOwner {
                 Button("Edit post") {
-                    if case let .loaded(detail) = viewModel.state { onEdit(detail.post.id) }
+                    if case let .loaded(detail) = viewModel.state {
+                        onEdit(detail.post.id)
+                    } else if let detail = viewModel.conversation {
+                        onEdit(detail.post.id)
+                    }
                 }
                 if viewModel.canKeepAskOpen {
                     Button("Keep open 7 more days") {
@@ -100,6 +124,35 @@ public struct PulsePostDetailView: View {
                 Button("Delete post", role: .destructive) { showsDeleteConfirm = true }
             } else {
                 Button("Report post", role: .destructive) { showsReportDialog = true }
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+        .confirmationDialog(
+            "Reply options",
+            isPresented: Binding(get: { replyMenu != nil }, set: { if !$0 { replyMenu = nil } }),
+            titleVisibility: .hidden,
+            presenting: replyMenu
+        ) { reply in
+            if let id = reply.author?.id, id == viewModel.currentUserId {
+                Button("Delete reply", role: .destructive) { commentPendingDelete = reply.id }
+            } else {
+                Button("Report reply", role: .destructive) { replyPendingReport = reply }
+                if let id = reply.author?.id, !id.isEmpty {
+                    Button("Mute \(reply.author?.displayName ?? "this person")") {
+                        Task { await viewModel.muteConversationAuthor(id) }
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+        .confirmationDialog(
+            "Why are you reporting this reply?",
+            isPresented: Binding(get: { replyPendingReport != nil }, set: { if !$0 { replyPendingReport = nil } }),
+            titleVisibility: .visible,
+            presenting: replyPendingReport
+        ) { reply in
+            ForEach(Self.reportReasons, id: \.token) { reason in
+                Button(reason.label) { Task { await viewModel.reportConversationReply(reply, reason: reason.token) } }
             }
             Button("Cancel", role: .cancel) {}
         }
@@ -163,6 +216,13 @@ public struct PulsePostDetailView: View {
             LoadingLayout(onBack: onBack)
         case let .loaded(detail):
             loadedLayout(detail)
+        case let .conversation(detail):
+            PulseConversationDetailContent(
+                viewModel: viewModel,
+                content: detail,
+                onBack: onBack,
+                onOpenProfile: onOpenProfile
+            ) { replyMenu = $0 }
         case let .error(message, retryable):
             if retryable {
                 ErrorLayout(message: message, onBack: onBack) {
@@ -206,6 +266,7 @@ public struct PulsePostDetailView: View {
     /// A moderator removed the post: only its author still sees it, so
     /// nothing here offers to spread it.
     private var isRemovedByModerator: Bool {
+        if let detail = viewModel.conversation { return detail.post.moderation?.state == "removed" }
         if case let .loaded(detail) = viewModel.state { return detail.post.isRemovedByModerator }
         return false
     }
@@ -233,188 +294,6 @@ public struct PulsePostDetailView: View {
         ("safety", "Safety concern"),
         ("other", "Something else")
     ]
-}
-
-@MainActor
-public struct PulsePostDetailLoadedContent: View {
-    private let detail: PulsePostDetailContent
-    /// Opened from the feed's copy: the thread is still loading (or failed).
-    private let commentsState: CommentsLoadState
-    @Binding private var composerText: String
-    private let isSendingComment: Bool
-    private let replyingToName: String?
-    private let selectedReactionEmoji: String?
-    private let topBarAction: ContentDetailTopBarAction?
-    private let topBarSecondaryAction: ContentDetailTopBarAction?
-    /// Organically matched local businesses — empty hides the card.
-    private let nearbyProviders: [NearbyProviderRow]
-    private let onOpenBusiness: @MainActor (String) -> Void
-    private let onBack: @MainActor () -> Void
-    private let onOpenProfile: @MainActor (String) -> Void
-    private let onReactionTap: @MainActor (PostReactionKind) -> Void
-    private let onEmojiSelected: (@MainActor (String) -> Void)?
-    private let onSendTap: @MainActor () -> Void
-    private let onShowMoreReplies: @MainActor () -> Void
-    private let onCancelReply: (@MainActor () -> Void)?
-    private let onCommentReply: (@MainActor (PostCommentRow) -> Void)?
-    private let onCommentLike: (@MainActor (String) -> Void)?
-    private let onCommentDelete: (@MainActor (String) -> Void)?
-    private let onRefresh: (@Sendable () async -> Void)?
-
-    public init(
-        detail: PulsePostDetailContent,
-        commentsState: CommentsLoadState = .loaded,
-        composerText: Binding<String>,
-        isSendingComment: Bool,
-        replyingToName: String? = nil,
-        selectedReactionEmoji: String? = nil,
-        topBarAction: ContentDetailTopBarAction? = nil,
-        topBarSecondaryAction: ContentDetailTopBarAction? = nil,
-        nearbyProviders: [NearbyProviderRow] = [],
-        onOpenBusiness: @escaping @MainActor (String) -> Void = { _ in },
-        onBack: @escaping @MainActor () -> Void = {},
-        onOpenProfile: @escaping @MainActor (String) -> Void = { _ in },
-        onReactionTap: @escaping @MainActor (PostReactionKind) -> Void = { _ in },
-        onEmojiSelected: (@MainActor (String) -> Void)? = nil,
-        onSendTap: @escaping @MainActor () -> Void = {},
-        onShowMoreReplies: @escaping @MainActor () -> Void = {},
-        onCancelReply: (@MainActor () -> Void)? = nil,
-        onCommentReply: (@MainActor (PostCommentRow) -> Void)? = nil,
-        onCommentLike: (@MainActor (String) -> Void)? = nil,
-        onCommentDelete: (@MainActor (String) -> Void)? = nil,
-        onRefresh: (@Sendable () async -> Void)? = nil
-    ) {
-        self.detail = detail
-        self.commentsState = commentsState
-        _composerText = composerText
-        self.isSendingComment = isSendingComment
-        self.replyingToName = replyingToName
-        self.selectedReactionEmoji = selectedReactionEmoji
-        self.topBarAction = topBarAction
-        self.topBarSecondaryAction = topBarSecondaryAction
-        self.nearbyProviders = nearbyProviders
-        self.onOpenBusiness = onOpenBusiness
-        self.onBack = onBack
-        self.onOpenProfile = onOpenProfile
-        self.onReactionTap = onReactionTap
-        self.onEmojiSelected = onEmojiSelected
-        self.onSendTap = onSendTap
-        self.onShowMoreReplies = onShowMoreReplies
-        self.onCancelReply = onCancelReply
-        self.onCommentReply = onCommentReply
-        self.onCommentLike = onCommentLike
-        self.onCommentDelete = onCommentDelete
-        self.onRefresh = onRefresh
-    }
-
-    /// Opens the author's profile; nil (no tap) when the post came without its author's id.
-    private var authorProfileTap: (@MainActor () -> Void)? {
-        let userId = detail.post.userId
-        guard !userId.isEmpty else { return nil }
-        return { onOpenProfile(userId) }
-    }
-
-    public var body: some View {
-        ContentDetailShell(
-            title: "Post",
-            onBack: onBack,
-            topBarAction: topBarAction,
-            topBarSecondaryAction: topBarSecondaryAction,
-            onRefresh: onRefresh,
-            header: {
-                VStack(alignment: .leading, spacing: Spacing.s4) {
-                    if detail.post.isRemovedByModerator {
-                        RemovedPostNotice()
-                            .padding(.horizontal, Spacing.s4)
-                    }
-                    PostAuthorHeader(
-                        displayName: detail.authorDisplayName,
-                        avatarURL: detail.authorAvatarURL,
-                        isVerified: detail.authorVerified,
-                        identity: detail.authorIdentity,
-                        timeAndLocality: detail.timeAndLocality,
-                        intent: detail.intent,
-                        onAvatarTap: authorProfileTap
-                    )
-                    // How it ended, or when a Heads-up ends (Pulse S7).
-                    if let status = detail.status {
-                        PulsePostStatusPill(status: status, postId: detail.post.id)
-                            .padding(.horizontal, Spacing.s4)
-                    }
-                }
-            },
-            body: {
-                BodyReactionsBody(
-                    body: detail.post.content,
-                    media: detail.media,
-                    intent: detail.intent,
-                    reactions: detail.reactions,
-                    onReactionTap: onReactionTap,
-                    mediaLocationBadge: detail.post.locationName,
-                    detailLine: detail.post.lostFoundDetailLine,
-                    selectedReactionEmoji: selectedReactionEmoji,
-                    onEmojiSelected: onEmojiSelected,
-                    composerAvatarURL: nil,
-                    composerAvatarName: "You",
-                    composerText: $composerText,
-                    isSending: isSendingComment,
-                    onSendTap: onSendTap,
-                    comments: detail.comments,
-                    commentsState: commentsState,
-                    postedRecently: detail.postedWithinHour,
-                    hiddenReplyCount: detail.hiddenReplyCount,
-                    onShowMoreReplies: onShowMoreReplies,
-                    replyingToName: replyingToName,
-                    onCancelReply: onCancelReply,
-                    onCommentReply: detail.post.isRemovedByModerator ? nil : onCommentReply,
-                    onCommentLike: onCommentLike,
-                    onCommentDelete: onCommentDelete,
-                    belowReactions: nearbyProviders.isEmpty
-                        ? nil
-                        : AnyView(
-                            NearbyProvidersCard(
-                                rows: nearbyProviders,
-                                onOpenBusiness: onOpenBusiness
-                            )
-                        ),
-                    repliesClosedNote: detail.post.isRemovedByModerator ? "Replies are off for this post." : nil
-                ) { userId in
-                    onOpenProfile(userId)
-                }
-            },
-            cta: { InlineReplyCTA() }
-        )
-    }
-}
-
-/// Says why the author still sees a post that a moderator removed.
-private struct RemovedPostNotice: View {
-    var body: some View {
-        HStack(alignment: .top, spacing: Spacing.s2) {
-            Icon(.shieldAlert, size: 16, color: Theme.Color.warning)
-                .padding(.top, 1)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: Spacing.s1) {
-                Text("Removed by a moderator")
-                    .font(.system(size: 13.5, weight: .semibold))
-                    .foregroundStyle(Theme.Color.warning)
-                Text("Only you can see this post. Neighbors can't see it or reply.")
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(Theme.Color.appText)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding(Spacing.s3)
-        .background(Theme.Color.warningBg)
-        .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)
-                .stroke(Theme.Color.warningLight, lineWidth: 1)
-        )
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("pulsePostDetail-removedNotice")
-    }
 }
 
 private struct LoadingLayout: View {
