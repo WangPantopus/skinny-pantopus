@@ -234,7 +234,7 @@ Both answer `404 POST_NOT_FOUND`, `403 NOT_POST_AUTHOR` (not the asker), `400 NO
 
 ### 4.2 New tables awaiting founder approval
 
-**Nothing here merges until the founder ticks "New tables" in the README (hold point H3).** Server-only like the other private tables: RLS on, no client grants. Column lists are sketches for the owner to finalize in the migration PR.
+**Approved by the founder on October 14, 2026; "New tables" is ticked in the README (hold point H3).** The public Census boundary download is approved too. Server-only like the other private tables: RLS on, no client grants. Column lists are sketches for the owner to finalize in the migration PR.
 
 | # | Table | Owner | Purpose and key columns |
 |---|---|---|---|

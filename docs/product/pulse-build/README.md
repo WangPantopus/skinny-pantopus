@@ -18,7 +18,7 @@ These are authorization for the Pulse build only. They do not widen anything els
 - [x] **Adult-only posting, the labels and permissions table, and Visitors who may start Asks (one a day)** as in the design.
 - [x] **No unit tests, no coverage.** Quality comes from launching the real apps (web, iOS, Android) and doing every feature, flow, scenario and edge case end to end: [`05-scenarios.md`](05-scenarios.md).
 - [x] **Install the tools the build needs.** Done on this Mac; see "Tools" in [`04-verification.md`](04-verification.md).
-- [ ] **New tables.** The eleven tables in [`02-contract.md`](02-contract.md#42-new-tables-awaiting-founder-approval) need the founder's approval (`AGENTS.md`). **Nothing that creates a table merges until this box is ticked.** Work that needs no new table can start now.
+- [x] **New tables.** On October 14, 2026, the founder approved all eleven tables in [`02-contract.md`](02-contract.md#42-new-tables-awaiting-founder-approval) and the public Census boundary download for Camas, Washougal and Vancouver, replying to PB: "Approve all eleven tables and Census download". H3 is clear for those tables; migrations still require the normal review, CI and local verification. This does not authorize hosted database changes or deployment.
 - [ ] **Moderation cover.** Paid moderation for the first town is approved in principle (a part-time contractor beside the founder; the two-hour target only within stated hours; holds limited to call-outs and private information). The founder confirms real cover before the public-exposure PRs in R4 merge (hold point H2).
 
 ## Founder decisions, October 14, 2026
