@@ -231,6 +231,8 @@ All entity endpoints now include a `locationUnlocked` boolean:
 | `GET /api/gigs/in-bounds`              | Gig      | Fixed (privacy in enrichment) |
 | `feedService.normalizeFeedPostRow()`    | Post     | Fixed (permanent blur via `leastPrecise`) |
 | `GET /api/posts/:id`                    | Post     | Fixed (permanent blur for non-authors) |
+| `GET /api/posts/feed` (Nearby, saved place, Sports) | Post | Fixed (displayed points only, see [Post Feed Rules](#post-feed-rules)) |
+| `GET /api/posts/:id/matched-businesses` | Post     | Fixed (no stored-point distances or order for non-authors, see [Post Feed Rules](#post-feed-rules)) |
 | `GET /api/posts/map` (tasks layer)      | Post     | Fixed (`resolveGigPrecision` per gig) |
 | `GET /api/posts/map` (offers layer)     | Post     | Fixed (`resolveGigPrecision` per gig) |
 | `GET /api/posts/map` (posts layer)      | Post     | Fixed (displayed points only, see [Post Map Rules](#post-map-rules)) |
@@ -284,6 +286,25 @@ verified addresses must NEVER appear on public map surfaces:
 **Verification does NOT equal public visibility.** A verified home address
 confirms the user lives there; it does not make the location public.
 
+### Post Feed Rules
+
+`GET /api/posts/feed` (Nearby, the saved-place feed and the Sports lane) and
+the post page work the same way for anyone who isn't the post's author:
+
+- **Radius and `distance_meters`.** Both use the post's displayed point. A post
+  with no point of its own (placed by its home) uses its displayed effective
+  point. The query searches stored points in the radius's box widened by
+  `MAX_DISPLAY_OFFSET_DEGREES`, then keeps the posts displayed inside the
+  radius. The Sports lane's local box, Local radius and "nearby" ranking work
+  the same way.
+- **No displayed point.** A post with precision `none` shows no point, so it is
+  left out of a non-author's area results.
+- **Matched businesses.** The match job measures `distance_miles` from the
+  stored point and ranks partly by it. Non-authors get the snapshot without
+  distances and sorted by rating, and `matched_business_ids` in ID order.
+
+Authors keep exact values.
+
 ### Post Map Rules
 
 `GET /api/posts/map` works only with the points a viewer is shown, never with
@@ -294,7 +315,7 @@ a post's stored point:
   with no displayed point (`none`) has no pin and isn't returned.
 - **Viewport.** A post is in a viewport only when its displayed point is. The
   query searches stored points in the viewport widened by
-  `DISPLAYED_POINT_MAX_SHIFT_DEGREES` (0.01°, more than the rule ever moves a
+  `MAX_DISPLAY_OFFSET_DEGREES` (0.01°, more than the rule ever moves a
   point), then keeps the posts displayed inside the viewport itself.
 - **Empty-viewport hint (`nearest_activity_center`).** Sent only when the posts
   layer was requested and came back empty. It is the displayed point of the
@@ -324,6 +345,7 @@ See `backend/utils/verifiedCoordinateGuard.js`:
 - [x] Feed service enforces permanent blur on every row
 - [x] `approx_area` points come from the fixed grid cell, so repeat posts from one spot show one pin
 - [x] Posts/map tasks+offers layers enforce per-gig privacy
+- [x] Post feed and map filters, distances, the empty-map hint and matched-business distances and order never measure a non-author's stored point
 - [x] Listing detail enforces location_precision + grant-awareness + `locationUnlocked`
 - [x] Listing browse enforces location_precision
 - [x] Listing search/user/carousel pass viewer ID for privacy

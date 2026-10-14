@@ -309,6 +309,11 @@ export default function PostDetailPanel({
       onPostChange?.(post.id, { share_count: res.shareCount });
       showToast('Post link shared');
     } catch (err) {
+      // A post that isn't public is never counted as shared, but the link is already copied and opens for people who can see the post.
+      if ((err as { code?: string } | null)?.code === 'SHARE_NOT_ALLOWED') {
+        showToast('Post link shared. Only people who can see this post in Pantopus can open it.');
+        return;
+      }
       console.warn('Failed to share post', err);
       showToast('Failed to share post');
     }

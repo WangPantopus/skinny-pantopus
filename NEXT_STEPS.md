@@ -44,7 +44,7 @@ Sessions you start for one job (Instant Screens, Nearby Plans, single fixes) wor
 **Made by the founder on October 3.**
 
 - [x] New builds are mobile only: iOS and Android. Web waits. Backend, database and seeder changes the apps need are in scope and must not break the current web. **Exception, October 6 (founder): Ballot is built on the web as well; see the Ballot section.**
-- [x] F1 to F12 for the pilot: build F1, F4 and the rest of F9's truthfulness fixes; build small versions of F2, F3 and F5; ship F3b's server gate with F3; leave F7, F8, F10 and F12's appeal windows for later; drop F6 and F11; park the stylized home picture and the address QR inbox.
+- [x] F1 to F12 for the pilot: build F1, F4 and the rest of F9's truthfulness fixes; build small versions of F2, F3 and F5; ship F3b's server gate with F3; leave F7, F8, F10 and F12's appeal windows for later; drop F6 and F11; park the stylized home picture and the address QR inbox. (Changed October 14: the home picture is built, see above.)
 
 **Made on October 3 under the founder's standing instruction to go with the recommended option. Change any of them here.**
 
@@ -90,6 +90,10 @@ Sessions you start for one job (Instant Screens, Nearby Plans, single fixes) wor
 - [x] Labels and permissions, adult-only posting and Visitors who may start Asks (one a day) as in the design. Paid moderation is approved in principle; the founder confirms real cover before public web exposure.
 - [x] No unit tests or coverage for Pulse: every feature, flow and edge case is verified end to end by launching the web, iOS and Android apps ([scenarios](docs/product/pulse-build/05-scenarios.md)).
 - [ ] The eleven new tables in the [contract](docs/product/pulse-build/02-contract.md#42-new-tables-awaiting-founder-approval): awaiting the founder's approval.
+
+**Made by the founder on October 14.**
+
+- [x] The stylized home picture and the Place tab are no longer parked and are for everyone now: the Today sky draws the household's own house from its county record (PR 2202), and the Place tab is the person's place, with the legacy Hub removed (PR 2189). Both merged October 13.
 
 **Still open. The brief builds the default until you decide.**
 
@@ -234,7 +238,7 @@ A checked subitem means the named implementation or local check is complete; a p
   - [ ] Recheck Android once its last two Instant Screens fixes land (PRs 2178 and 2182); everything else from the October 13 list is merged and passed the recheck above.
   - [ ] Open with owners, no session running: on iOS and Android the Place pulse shows a weather alert's full text and fills the first screen during alerts (L1); on iOS, My Homes shows placeholders when it is reopened while offline (Home owner).
   - [ ] Complete Android map acceptance. Household pins now use the stored coordinates (PR 2180), and Android keeps only public map copies and rechecks Home access on each visit (PR 2181); both merged October 13. The local Maps SDK key is still empty, so tiles, pin selection and camera gestures stay unverified until you supply an approved SDK key.
-  - [ ] Retake store screenshots showing Messages; the October 7 approved set shows Mail. The five iPhone shots were retaken and you approved them on October 13 (PR 2230); Your Place now shows the Ballot card, which L4 retakes after the November 3 election. The Place root (PR 2189) then changed the Your Place header, so L4 retakes that iPhone shot for your approval. Still to take: the Android set, after PR 2178 fixes the first-week count, for your approval. Physical-iPhone airplane-mode launch remains a founder check.
+  - [ ] Retake store screenshots showing Messages; the October 7 approved set shows Mail. The five iPhone shots were retaken and you approved them on October 13 (PR 2230); Your Place now shows the Ballot card, which L4 retakes after the November 3 election. The Place root (PR 2189) then changed the Your Place header; L4 retook that iPhone shot and you approved it on October 14. Still to take: the Android set, after PR 2178 fixes the first-week count, for your approval. Physical-iPhone airplane-mode launch remains a founder check.
   - [x] October 6: every reachable web page on the production build opened as a homeowner, a new user and a non-member (198 pages; three old /app addresses crashed and are fixed in PR 1655); every route opened as an app link on Android and, signed out, on iOS with no crashes; signed-in Lighthouse: performance 72–77, accessibility 93–100.
   - [x] October 6 evening, web on that day's master: the 198 pages again with no crash; accessibility median 100 with fewer failing checks than the morning (the rest went to L3); every click target reachable with the keyboard once PR 1707 made the Place cards focusable.
   - [x] October 6, iOS signed in as a homeowner: VoiceOver names every control on the four tabs, dark mode reads correctly, the tabs fit an iPhone SE, and with the server unreachable each tab says so, offers a retry and recovers when it's back. Two Place-tab issues went to L1: its section rows aren't announced as buttons, and re-tapping the Place tab icon shows the older hub screen (switching tabs brings Your Place back since PR 1678). Both fixed (PRs 1696 and 1697) and rechecked on the October 7 iOS Release build.
@@ -302,7 +306,7 @@ Phases 0 and 1 of the [Street Organizer launch plan](docs/product/street-organiz
 ## 6. Dropped, parked or shelved
 
 - Dropped: F6 (just-moved ticks on the account and the voter step) and F11 (the keeper).
-- Parked: the stylized home picture; the address QR inbox; the Place tab rebuilt around a "place file" and "Your places"; the one-page notification settings redesign.
+- Parked: the address QR inbox; the one-page notification settings redesign. (The stylized home picture and the Place tab left this list on October 14; see section 0.)
 - Parked: a feed of permits, land-use cases, sales and assessment changes near an address. It needs the per-city adapters listed under Not now; it can return as the Street Organizer's civic facts and as Pulse content.
 - Shelved until October 6, then revived by the founder for the November 3 general election: the election feature (see the Ballot section). The 2027 local-election work it was shelved for stays parked ([build guide](docs/ballot-build-guide-2026-09-23.md), [review](docs/ballot-product-review-2026-09-23.md) and the design canvas kept).
 - Creator network and Places: ten conversations first (five hobbyist photographers or hikers, five creators), then decide in late November.
