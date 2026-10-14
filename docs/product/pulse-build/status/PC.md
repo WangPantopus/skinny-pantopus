@@ -191,6 +191,8 @@ unique (user_id, push_budget_date) where push_budget_date is not null
 
 ### 10. How I will verify (nothing real is sent)
 
+The standard is the founder's: no test code, every scenario run in the real surfaces. For S13 that is `05-scenarios.md` S13.1 and the cross-cutting checks A1, A3 to A5 and A7 to A12 and A14, run by hand against my own backend and database; A2, A6 and A13 where a surface exists (the unsubscribe page, the push's deep link once S3 lands). Each PR ends with `Scenarios run: …` and what could not be verified.
+
 - **Two accounts** with different times, time zones and channels, on my own `pc` stack. The job runs with a forced `now`, and a second run sends nothing.
 - **Time:** the due window and the 3-hour catch-up; the fall-back day (November 1, 2026) and the spring-forward day (March 14, 2027) send exactly once; a person with a missing or invalid time zone gets the Pacific default, as the briefing does.
 - **Quiet hours:** the push is held and released at the end; the email is not held; a digest time inside quiet hours.
@@ -208,7 +210,7 @@ unique (user_id, push_budget_date) where push_budget_date is not null
 | 1 | **There is no push payload log.** `push/dispatch.js` logs one debug line ("provider not configured") and never the payload. With no credentials a push returns `acceptedCount: 0`, which the briefing treats as a failure (503), so no push can reach `sent` locally. Ran on `pc`: `{"acceptedCount":0,"unresolvedCount":1}`. The "push payload logs" the kit relies on (my brief, `05-scenarios.md` A12) do not exist yet. | PB, PV |
 | 2 | **Expo push is on unless `PUSH_EXPO_ENABLED=false`**, and the runtime script's `.env` leaves it unset. A local account with an Expo-shaped token would make the backend call Expo's servers. I set it to false in my local env. | PV |
 | 3 | **Backend email cannot reach the local inbox.** With no SMTP the result is `EMAIL_UNAVAILABLE`; `EMAIL_DELIVERY_MODE=log` logs one line and delivers nowhere. The inbox (Mailpit) receives only Supabase Auth's mail and its SMTP port is not exposed to the host. | PV |
-| 4 | **Quiet hours: four copies, and the main push path checks none.** `createNotification` and `createBulkNotifications` push at once at any hour, and there is no daily cap anywhere. | PB |
+| 4 | **Quiet hours: four copies, and the main push path checks none.** `createNotification` and `createBulkNotifications` push at once at any hour, and the main push path has no per-person daily cap. | PB |
 | 5 | **Two existing pushes look like what the budget forbids:** `density_milestone` ("Neighborhood milestone reached", not launch-cut) and the monthly summary. | Founder (Needs 3) |
 | 6 | **The briefing scheduler reads every preference row with no range.** At the API's `max_rows` of 1,000 it stops silently. Not urgent at pilot size. | PB |
 | 7 | **The public post page** `frontend/apps/web/src/app/posts/[id]/page.tsx` reads the general post endpoint and shows `creator.name` first, then the location name and the creator's city and state. Every page outside `robots.ts`'s private list is crawlable in production. S15 reads PB's public endpoint only, shows first name and label, and moves `robots` to an allowlist. | PC at S15 |
