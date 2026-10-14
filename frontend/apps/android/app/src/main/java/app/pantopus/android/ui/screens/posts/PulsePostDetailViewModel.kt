@@ -12,14 +12,17 @@ import app.pantopus.android.data.api.models.posts.PostDetailDto
 import app.pantopus.android.data.api.models.posts.PostReactionKind
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.posts.MatchedBusinessesRepository
 import app.pantopus.android.data.posts.PostsRepository
 import app.pantopus.android.data.posts.PulsePostsRefreshNotifier
+import app.pantopus.android.data.pulse.PulseRepository
 import app.pantopus.android.data.store.StoreKind
 import app.pantopus.android.ui.components.IdentityPillar
 import app.pantopus.android.ui.components.RefreshNotice
+import app.pantopus.android.ui.screens.feed.pulse.PostStatus
 import app.pantopus.android.ui.screens.shared.content_detail.bodies.PostCommentRow
 import app.pantopus.android.ui.screens.shared.content_detail.bodies.PostReactionCounts
 import app.pantopus.android.ui.screens.shared.content_detail.headers.PostIntent
@@ -63,6 +66,8 @@ data class PulsePostDetailContent(
     val reactions: PostReactionCounts,
     val comments: List<PostCommentRow>,
     val hiddenReplyCount: Int,
+    /** How the post ended, or when a heads-up ends (S7): the pill under the author. */
+    val status: PostStatus? = null,
 )
 
 /** Observed UI state for the Pulse post detail screen. */
@@ -88,6 +93,8 @@ class PulsePostDetailViewModel
         private val postsRefresh: PulsePostsRefreshNotifier,
         private val matchedBusinessesRepo: MatchedBusinessesRepository,
         savedStateHandle: SavedStateHandle,
+        /** Pulse's own routes: the asker's keep-open and close (S7). */
+        private val pulseRepo: PulseRepository,
     ) : ViewModel() {
         private val postId: String =
             requireNotNull(savedStateHandle[PULSE_POST_DETAIL_ID_KEY]) {
@@ -176,6 +183,72 @@ class PulsePostDetailViewModel
 
         private val signedInUserId: String?
             get() = (authRepo.state.value as? AuthRepository.State.SignedIn)?.user?.id
+
+        private var keptOpen = false
+
+        /** The asker's own Ask that hasn't ended (S7): no resolution, not solved or archived, not past its end. */
+        private val isOwnOpenAsk: Boolean
+            get() {
+                val post = (_state.value as? PulsePostDetailUiState.Loaded)?.content?.post ?: return false
+                if (!isOwner || post.postType != "ask_local" || post.resolution != null) return false
+                if (post.state == "solved" || post.state == "archived") return false
+                val end = post.expiresAt?.let { runCatching { Instant.parse(it) }.getOrNull() } ?: return true
+                return end.isAfter(Instant.now())
+            }
+
+        /** "Keep open 7 more days": once per Ask (S7). */
+        val canKeepOpen: Boolean get() = isOwnOpenAsk && !keptOpen
+
+        /** "Close" (S7). */
+        val canCloseAsk: Boolean get() = isOwnOpenAsk
+
+        private val _confirmingClose = MutableStateFlow(false)
+
+        /** "Close this question?" is on screen. */
+        val confirmingClose: StateFlow<Boolean> = _confirmingClose.asStateFlow()
+
+        /** "Keep open 7 more days" (contract 2.12); a refusal shows the server's sentence. */
+        fun keepOpen() {
+            _showsOverflowMenu.value = false
+            viewModelScope.launch {
+                when (val result = pulseRepo.keepOpen(postId)) {
+                    is NetworkResult.Success -> {
+                        keptOpen = true
+                        _toastMessage.value = "Kept open for 7 more days."
+                        fetch(force = true)
+                    }
+                    is NetworkResult.Failure -> {
+                        if (PulseRepository.refusalCode(result.error) == PulseRepository.ALREADY_KEPT_OPEN) keptOpen = true
+                        _toastMessage.value = result.error.displayMessage("Couldn't keep it open. Try again.")
+                    }
+                }
+            }
+        }
+
+        fun beginCloseAsk() {
+            _showsOverflowMenu.value = false
+            _confirmingClose.value = true
+        }
+
+        fun cancelCloseAsk() {
+            _confirmingClose.value = false
+        }
+
+        /** The confirmed "Close" (contract 2.12): the Ask ends and leaves Pulse; My posts can restore it. */
+        fun closeAsk() {
+            _confirmingClose.value = false
+            viewModelScope.launch {
+                when (val result = pulseRepo.close(postId)) {
+                    is NetworkResult.Success -> {
+                        _toastMessage.value = "Question closed."
+                        postsRefresh.notifyPostsDidChange()
+                        fetch(force = true)
+                    }
+                    is NetworkResult.Failure ->
+                        _toastMessage.value = result.error.displayMessage("Couldn't close it. Try again.")
+                }
+            }
+        }
 
         /** The screen observes post changes only while it is visible. */
         val postChanges = postsRefresh.ticks
@@ -585,6 +658,14 @@ class PulsePostDetailViewModel
                     ),
                 comments = rows,
                 hiddenReplyCount = hidden,
+                status =
+                    PostStatus.of(
+                        postType = post.postType,
+                        state = post.state,
+                        resolution = post.resolution,
+                        expiresAt = post.expiresAt,
+                        goingCount = post.likeCount,
+                    ),
             )
         }
 

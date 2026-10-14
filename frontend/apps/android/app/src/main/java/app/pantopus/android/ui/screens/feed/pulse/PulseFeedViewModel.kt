@@ -27,6 +27,7 @@ import app.pantopus.android.data.location.LocationProvider
 import app.pantopus.android.data.location.ViewingLocationRepository
 import app.pantopus.android.data.posts.FeedQuery
 import app.pantopus.android.data.posts.PostsRepository
+import app.pantopus.android.data.pulse.PulseRepository
 import app.pantopus.android.data.posts.PulsePostsRefreshNotifier
 import app.pantopus.android.data.sports.SportsRepository
 import app.pantopus.android.data.store.StoreKeys
@@ -107,6 +108,8 @@ class PulseFeedViewModel
         private val moderation: FeedModerationStore,
         /** `GET /api/location` — the area chosen in the Nearby context bar. */
         private val viewingLocation: ViewingLocationRepository,
+        /** Pulse's own routes: the asker's keep-open and close (S7). */
+        private val pulseRepo: PulseRepository,
     ) : ViewModel() {
         private val _state = MutableStateFlow<PulseFeedUiState>(PulseFeedUiState.Loading)
         val state: StateFlow<PulseFeedUiState> = _state.asStateFlow()
@@ -246,6 +249,13 @@ class PulseFeedViewModel
         /** The post awaiting delete confirmation, if any. */
         private val _deletingPostId = MutableStateFlow<String?>(null)
         val deletingPostId: StateFlow<String?> = _deletingPostId.asStateFlow()
+
+        /** The Ask whose "Close" waits for its confirmation (S7). */
+        private val _closingAskId = MutableStateFlow<String?>(null)
+        val closingAskId: StateFlow<String?> = _closingAskId.asStateFlow()
+
+        /** Asks kept open here (or refused as already kept open): "Keep open 7 more days" no longer shows. */
+        private var keptOpenIds: Set<String> = emptySet()
 
         /** The post whose author is awaiting mute confirmation, if any. */
         private val _mutingPostId = MutableStateFlow<String?>(null)
@@ -509,6 +519,56 @@ class PulseFeedViewModel
 
         fun cancelDelete() {
             _deletingPostId.value = null
+        }
+
+        /**
+         * "Keep open 7 more days" on the asker's own open Ask (S7, contract 2.12): once per Ask. A refusal shows the
+         * server's sentence; "already kept open" also hides the entry.
+         */
+        fun keepOpen(postId: String) {
+            _overflowPostId.value = null
+            viewModelScope.launch {
+                when (val result = pulseRepo.keepOpen(postId)) {
+                    is NetworkResult.Success -> {
+                        keptOpenIds = keptOpenIds + postId
+                        _toastMessage.value = "Kept open for 7 more days."
+                        rebuildLoadedState()
+                    }
+                    is NetworkResult.Failure -> {
+                        if (PulseRepository.refusalCode(result.error) == PulseRepository.ALREADY_KEPT_OPEN) {
+                            keptOpenIds = keptOpenIds + postId
+                            rebuildLoadedState()
+                        }
+                        _toastMessage.value = result.error.displayMessage("Couldn't keep it open. Try again.")
+                    }
+                }
+            }
+        }
+
+        /** "Close" on the asker's own open Ask asks first (S7). */
+        fun beginCloseAsk(postId: String) {
+            _overflowPostId.value = null
+            _closingAskId.value = postId
+        }
+
+        fun cancelCloseAsk() {
+            _closingAskId.value = null
+        }
+
+        /** The confirmed "Close": the Ask ends (`closed` or `closed_unanswered`) and leaves the list (contract 2.12). */
+        fun closeAsk(postId: String) {
+            _closingAskId.value = null
+            viewModelScope.launch {
+                when (val result = pulseRepo.close(postId)) {
+                    is NetworkResult.Success -> {
+                        removedPostIds = removedPostIds + postId
+                        _toastMessage.value = "Question closed."
+                        rebuildLoadedState()
+                    }
+                    is NetworkResult.Failure ->
+                        _toastMessage.value = result.error.displayMessage("Couldn't close it. Try again.")
+                }
+            }
         }
 
         fun beginMuteAuthor(postId: String) {
@@ -1209,6 +1269,7 @@ class PulseFeedViewModel
             val likeCount = effectiveLikeCount(post)
             val isOwner = isOwner(post)
             val isSolved = effectiveIsSolved(post)
+            val openAsk = isOwner && isOpenAsk(post, isSolved)
             return PulsePostCardContent(
                 id = post.id,
                 likePending = post.id in liking,
@@ -1272,8 +1333,28 @@ class PulseFeedViewModel
                         postType = post.postType,
                         topicLabel = intent.cardChipLabel,
                         pulseTopic = PulseTopic.fromKey(post.topic),
+                        canKeepOpen = openAsk && post.id !in keptOpenIds,
+                        canCloseAsk = openAsk,
+                    ),
+                status =
+                    PostStatus.of(
+                        postType = post.postType,
+                        state = if (isSolved) "solved" else post.state,
+                        resolution = post.resolution,
+                        expiresAt = post.expiresAt,
+                        goingCount = likeCount,
                     ),
             )
+        }
+
+        /** An Ask that hasn't ended: no resolution, not solved or archived, and not past its end. */
+        private fun isOpenAsk(
+            post: FeedPost,
+            isSolved: Boolean,
+        ): Boolean {
+            if (post.postType != "ask_local" || isSolved || post.resolution != null || post.state == "archived") return false
+            val end = post.expiresAt?.let { runCatching { Instant.parse(it) }.getOrNull() } ?: return true
+            return end.isAfter(Instant.now())
         }
 
         private fun isOwner(post: FeedPost): Boolean {

@@ -154,6 +154,7 @@ fun FeedScreen(
     val overflowPostId by viewModel.overflowPostId.collectAsStateWithLifecycle()
     val reportingPostId by viewModel.reportingPostId.collectAsStateWithLifecycle()
     val deletingPostId by viewModel.deletingPostId.collectAsStateWithLifecycle()
+    val closingAskId by viewModel.closingAskId.collectAsStateWithLifecycle()
     val mutingPostId by viewModel.mutingPostId.collectAsStateWithLifecycle()
     val showsPreferences by viewModel.showsPreferences.collectAsStateWithLifecycle()
     val activeTopic by viewModel.activeTopic.collectAsStateWithLifecycle()
@@ -522,10 +523,31 @@ fun FeedScreen(
                     viewModel.dismissOverflow()
                     viewModel.markSolved(row.id)
                 },
+                onKeepOpen = { viewModel.keepOpen(row.id) },
+                onCloseAsk = { viewModel.beginCloseAsk(row.id) },
                 onReport = { viewModel.beginReport(row.id) },
                 onDelete = { viewModel.beginDelete(row.id) },
             )
         }
+    }
+
+    closingAskId?.let { id ->
+        AlertDialog(
+            onDismissRequest = { viewModel.cancelCloseAsk() },
+            title = { Text("Close this question?") },
+            text = { Text("It leaves Pulse. You can restore it from My posts.") },
+            confirmButton = {
+                TextButton(
+                    onClick = { viewModel.closeAsk(id) },
+                    modifier = Modifier.testTag("pulseAskCloseConfirm"),
+                ) {
+                    Text("Close", color = PantopusColors.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.cancelCloseAsk() }) { Text("Cancel") }
+            },
+        )
     }
 
     reportingPostId?.let { id ->
@@ -715,6 +737,8 @@ private fun PostOverflowSheet(
     onMuteTopic: () -> Unit,
     onMuteThisTopic: () -> Unit,
     onMarkSolved: () -> Unit,
+    onKeepOpen: () -> Unit,
+    onCloseAsk: () -> Unit,
     onReport: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -783,6 +807,12 @@ private fun PostOverflowSheet(
                     testTag = "pulseFeedOverflowMarkSolved",
                     onClick = onMarkSolved,
                 )
+            }
+            if (actions.canKeepOpen) {
+                OverflowAction(label = "Keep open 7 more days", testTag = "pulseAskKeepOpen", onClick = onKeepOpen)
+            }
+            if (actions.canCloseAsk) {
+                OverflowAction(label = "Close", testTag = "pulseAskClose", onClick = onCloseAsk)
             }
             if (actions.canReport) {
                 OverflowAction(

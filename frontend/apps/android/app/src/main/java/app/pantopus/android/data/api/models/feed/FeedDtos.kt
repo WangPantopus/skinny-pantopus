@@ -27,6 +27,15 @@ data class FeedPost(
     @Json(name = "userHasReposted") val userHasReposted: Boolean = false,
     /** Lifecycle state — `open` / `solved` (`backend/services/feedService.js:234`). */
     val state: String? = null,
+    /**
+     * How the post ended (S7): `answered`, `closed`, `closed_unanswered`, `claimed`, `expired`, `happened`, `reunited`;
+     * null while open. A value this build doesn't know shows no status.
+     */
+    val resolution: String? = null,
+    /** When the post ends (S7): a heads-up's named time, or its type's window. */
+    @Json(name = "expires_at") val expiresAt: String? = null,
+    /** Offers: `choose` or `first` (S7; meaningful only on an offer). */
+    @Json(name = "claim_mode") val claimMode: String? = null,
     /** Server-derived authorship: `user`, `curator` or `system`. */
     @Json(name = "origin") val origin: String? = null,
     /**

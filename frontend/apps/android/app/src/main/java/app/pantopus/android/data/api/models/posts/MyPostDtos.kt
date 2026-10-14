@@ -32,6 +32,12 @@ data class MyPostDto(
     val author: PostAuthorBriefDto? = null,
     /** Saved-list order is the bookmark time, which can differ from when the post was written. */
     val savedAt: String? = null,
+    /** Lifecycle state: `open`, `solved`, `archived`. */
+    val state: String? = null,
+    /** How the post ended (S7); null while open. */
+    val resolution: String? = null,
+    /** When the post ends (S7). */
+    @Json(name = "expires_at") val expiresAt: String? = null,
 )
 
 /** The author field a saved-post row shows (`author.displayName` on `GET /api/posts/saved`). */

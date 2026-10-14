@@ -24,6 +24,7 @@ import app.pantopus.android.data.posts.PostsRepository
 import app.pantopus.android.data.posts.PulsePostsRefreshNotifier
 import app.pantopus.android.data.store.StoreKind
 import app.pantopus.android.ui.components.RefreshNotice
+import app.pantopus.android.ui.screens.feed.pulse.PostStatus
 import app.pantopus.android.ui.screens.feed.pulse.PulseIntent
 import app.pantopus.android.ui.screens.shared.activity_filter_sheet.ActivityFilter
 import app.pantopus.android.ui.screens.shared.activity_filter_sheet.ActivitySortOrder
@@ -682,6 +683,7 @@ class MyPostsViewModel
                     )
                 }
             val headerChips = mutableListOf(intentChip(intent, projection.isArchived))
+            statusChipFor(dto)?.let(headerChips::add)
             if (projection.isArchived) headerChips.add(archivedChip())
 
             return RowModel(
@@ -752,6 +754,37 @@ class MyPostsViewModel
                             background = if (isArchived) PantopusColors.appSurfaceSunken else palette.background,
                             foreground = if (isArchived) PantopusColors.appTextSecondary else palette.foreground,
                         ),
+                )
+            }
+
+            /**
+             * How the post ended, or when a heads-up ends (S7), beside the type chip: "Answered" with the check,
+             * "Gone", "Reunited", "Happened · 3 went", "Ends Thu 4pm" with the clock; none for the rest.
+             */
+            fun statusChipFor(dto: MyPostDto): RowChip? {
+                val status =
+                    PostStatus.of(
+                        postType = dto.postType,
+                        state = dto.state,
+                        resolution = dto.resolution,
+                        expiresAt = dto.expiresAt,
+                        goingCount = dto.likeCount,
+                    ) ?: return null
+                val (foreground, background) =
+                    when (status.kind) {
+                        PostStatus.Kind.Answered -> PantopusColors.success to PantopusColors.successLight
+                        PostStatus.Kind.Ended -> PantopusColors.slate to PantopusColors.slateBg
+                        PostStatus.Kind.Ends -> PantopusColors.warning to PantopusColors.warningBg
+                    }
+                return RowChip(
+                    text = status.text,
+                    icon =
+                        when (status.kind) {
+                            PostStatus.Kind.Answered -> PantopusIcon.CheckCircle
+                            PostStatus.Kind.Ends -> PantopusIcon.Clock
+                            PostStatus.Kind.Ended -> null
+                        },
+                    tint = RowChip.Tint.Custom(background = background, foreground = foreground),
                 )
             }
 

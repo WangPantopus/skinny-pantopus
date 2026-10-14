@@ -310,7 +310,11 @@ class SavedPostsViewModel
                 onTap = { openPostHandler(dto) },
                 body = MyPostsViewModel.postBody(dto),
                 bodyEmphasis = RowBodyEmphasis.Primary,
-                headerChips = listOf(MyPostsViewModel.intentChip(intent, isArchived = false)),
+                headerChips =
+                    listOfNotNull(
+                        MyPostsViewModel.intentChip(intent, isArchived = false),
+                        MyPostsViewModel.statusChipFor(dto),
+                    ),
                 // Saved posts are other people's: the meta line names who wrote it.
                 timeMeta = listOfNotNull(author, time).joinToString(" · "),
                 engagement =

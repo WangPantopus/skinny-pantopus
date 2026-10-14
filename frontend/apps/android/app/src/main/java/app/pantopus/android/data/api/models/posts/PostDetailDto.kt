@@ -123,6 +123,12 @@ data class PostDetailDto(
     @Json(name = "deal_business_name") val dealBusinessName: String? = null,
     /** `moderation` when a moderator removed the post. Only its author can still open it then. */
     @Json(name = "archive_reason") val archiveReason: String? = null,
+    /** Lifecycle state: `open`, `solved`, `archived`. */
+    val state: String? = null,
+    /** How the post ended (S7); null while open. */
+    val resolution: String? = null,
+    /** When the post ends (S7). */
+    @Json(name = "expires_at") val expiresAt: String? = null,
 ) {
     /** A moderator removed the post: neighbors can't see it or reply. */
     val isRemovedByModerator: Boolean get() = archiveReason == "moderation"
