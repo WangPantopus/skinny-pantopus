@@ -3,10 +3,12 @@ import SwiftUI
 struct PulseFollowSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel: PulseFollowSettingsViewModel
+    let untilEndLabel: String
     let onChanged: () async -> Void
 
-    init(postId: String, canFollowUntilEnd: Bool, onChanged: @escaping () async -> Void) {
+    init(postId: String, canFollowUntilEnd: Bool, untilEndLabel: String, onChanged: @escaping () async -> Void) {
         _viewModel = State(initialValue: PulseFollowSettingsViewModel(postId: postId, canFollowUntilEnd: canFollowUntilEnd))
+        self.untilEndLabel = untilEndLabel
         self.onChanged = onChanged
     }
 
@@ -68,7 +70,7 @@ struct PulseFollowSettingsView: View {
             notificationToggle("Daily recap of new replies", value: "recap", follow: follow)
             notificationToggle("Notify me about each update", value: "each", follow: follow)
             Text("FOLLOW FOR HOW LONG?").pulseFont(.overline)
-            if viewModel.canFollowUntilEnd { duration("Until it ends", value: "on_resolve", follow: follow) }
+            if viewModel.canFollowUntilEnd { duration(untilEndLabel, value: "on_resolve", follow: follow) }
             duration("For a week", value: "week", follow: follow)
             duration("Keep following", value: "keep", follow: follow)
             Button("Stop following", role: .destructive) {

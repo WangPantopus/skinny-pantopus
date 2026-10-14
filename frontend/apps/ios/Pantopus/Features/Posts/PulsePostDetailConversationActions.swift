@@ -93,6 +93,11 @@ extension PulsePostDetailViewModel {
         return true
     }
 
+    var conversationFollowEndLabel: String {
+        guard let endsAt = PulsePageWords.parseDate(conversation?.post.status?.endsAt) else { return "Until it ends" }
+        return "Until it ends, \(PulsePostStatus.endsFormat(endsAt, timeZone: .current))"
+    }
+
     func sendConversationReply() async {
         let body = composerText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !body.isEmpty, conversation != nil, !isSendingComment, pendingConversationActions.isEmpty else { return }

@@ -160,7 +160,11 @@ public struct PulsePostDetailView: View {
                 PulseAudiencePickerView(viewModel: viewModel)
             }
             .sheet(isPresented: $showsFollowSettings) {
-                PulseFollowSettingsView(postId: viewModel.postId, canFollowUntilEnd: viewModel.canFollowConversationUntilEnd) {
+                PulseFollowSettingsView(
+                    postId: viewModel.postId,
+                    canFollowUntilEnd: viewModel.canFollowConversationUntilEnd,
+                    untilEndLabel: viewModel.conversationFollowEndLabel
+                ) {
                     await viewModel.refresh()
                 }
             }
@@ -205,11 +209,6 @@ public struct PulsePostDetailView: View {
         .onChange(of: viewModel.didDeletePost) { _, deleted in
             if deleted { onBack() }
         }
-    }
-
-    private var canPollReplies: Bool {
-        isVisible && scenePhase == .active && !showsFollowSettings && !showsReadScopeConfirm
-            && !showsOfferRequests && !showsShareSheet && privateMessage == nil
     }
 
     private var replyDialogs: some View {
@@ -323,6 +322,11 @@ public struct PulsePostDetailView: View {
 }
 
 extension PulsePostDetailView {
+    private var canPollReplies: Bool {
+        isVisible && scenePhase == .active && !showsFollowSettings && !showsReadScopeConfirm
+            && !showsOfferRequests && !showsShareSheet && privateMessage == nil
+    }
+
     private func requestShare() {
         Task {
             if await viewModel.authorizeShare(), isVisible, scenePhase == .active {
