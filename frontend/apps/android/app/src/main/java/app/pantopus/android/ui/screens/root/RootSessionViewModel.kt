@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.identity.MadeUpUsername
 import app.pantopus.android.data.auth.AuthRepository
+import app.pantopus.android.data.network.NetworkMonitor
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -20,7 +21,10 @@ class RootSessionViewModel
     @Inject
     constructor(
         authRepository: AuthRepository,
+        network: NetworkMonitor,
     ) : ViewModel() {
+        val isOnline: StateFlow<Boolean> = network.isOnline
+
         /** The drawer's "<name> · Your profile": the person's name, or a username they chose; never a made-up one. */
         val currentHandle: StateFlow<String> =
             authRepository.state
