@@ -2,9 +2,7 @@ package app.pantopus.android.data.api.services
 
 import app.pantopus.android.data.api.models.hub.BriefingDeliveryResponse
 import app.pantopus.android.data.api.models.hub.HubDiscoveryResponse
-import app.pantopus.android.data.api.models.hub.HubResponse
 import app.pantopus.android.data.api.models.hub.HubTodayPayload
-import app.pantopus.android.data.api.models.hub.HubTodayResponse
 import app.pantopus.android.data.auth.AuthenticatedDispatchGuard
 import okhttp3.RequestBody
 import retrofit2.http.Body
@@ -22,14 +20,6 @@ interface HubApi {
         @Body body: RequestBody,
         @Tag guard: AuthenticatedDispatchGuard? = null,
     )
-
-    /** `GET /api/hub` — route `backend/routes/hub.js:24`. */
-    @GET("api/hub")
-    suspend fun overview(): HubResponse
-
-    /** `GET /api/hub/today` — route `backend/routes/hub.js:596`. */
-    @GET("api/hub/today")
-    suspend fun today(): HubTodayResponse
 
     /**
      * `GET /api/hub/today` (typed) — route `backend/routes/hub.js:596`. Backs

@@ -60,7 +60,9 @@ function normaliseFeature(feature) {
     description: (p.description || '').slice(0, 500),
     instruction: (p.instruction || '').slice(0, 300),
     onset: p.onset || p.effective || '',
-    expires: p.expires || p.ends || '',
+    // When the hazard ends (shown as the alert's end time). NWS `expires` is only when this bulletin is
+    // replaced, often hours earlier: a frost advisory "until 8 AM" read "until 1 AM".
+    expires: p.ends || p.expires || '',
     areas: p.areaDesc ? p.areaDesc.split('; ') : [],
   };
 }

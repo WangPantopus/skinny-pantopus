@@ -164,6 +164,13 @@ struct PlaceTodayDetailContent: View {
         return vm.fallbackCalendar?.upcoming ?? []
     }
 
+    /// The household's home in the sky, drawn from its county record when the
+    /// Your Home section carries one.
+    private var skyHome: SkyHome {
+        let yourHome = vm.section(.yourHome, in: intel)?.yourHome
+        return SkyHome(shape: yourHome?.house, homeType: yourHome?.homeType)
+    }
+
     @ViewBuilder
     private func weatherAndGoodDay(proxy: ScrollViewProxy) -> some View {
         if let weather = vm.section(.weather, in: intel) {
@@ -186,7 +193,7 @@ struct PlaceTodayDetailContent: View {
                     sun: vm.section(.sunriseSunset, in: intel)?.sunriseSunset,
                     pickups: calendarEvents,
                     air: skyAir,
-                    home: SkyHome(vm.section(.yourHome, in: intel)?.yourHome?.homeType),
+                    home: skyHome,
                     streetLights: SkyStreet.lights(vm.section(.blockDensity, in: intel)?.blockDensity?.bucket.rawValue)
                 ) { withAnimation { proxy.scrollTo("todayAddressCalendar", anchor: .top) } }
                 PlaceSourceNote(name: weather.source ?? "Source unavailable", asOf: PlacePresentation.fmtTime(weather.asOf))

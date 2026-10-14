@@ -1,13 +1,16 @@
 package app.pantopus.android.data.api.services
 
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
+import app.pantopus.android.data.api.models.place.PlacePreview
 import app.pantopus.android.data.api.models.saved_places.SavePlaceBody
 import app.pantopus.android.data.api.models.saved_places.SavedPlaceDeleteResponse
 import app.pantopus.android.data.api.models.saved_places.SavedPlaceResponse
 import app.pantopus.android.data.api.models.saved_places.SavedPlacesListResponse
+import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.POST
 import retrofit2.http.Path
 
@@ -22,10 +25,30 @@ interface SavedPlacesApi {
     @GET("api/saved-places")
     suspend fun list(): SavedPlacesListResponse
 
+    @GET("api/saved-places")
+    suspend fun listConditional(
+        @Header("If-None-Match") etag: String?,
+    ): Response<SavedPlacesListResponse>
+
+    @GET("api/saved-places/{id}/today")
+    suspend fun todayConditional(
+        @Path("id") id: String,
+        @Header("If-None-Match") etag: String?,
+    ): Response<PlaceIntelligence>
+
     @GET("api/saved-places/{id}/today")
     suspend fun today(
         @Path("id") id: String,
     ): PlaceIntelligence
+
+    /**
+     * `GET /api/saved-places/:id/preview` — the public address preview for the saved point itself (not a lookup of
+     * its label), the same [PlacePreview] shape as `/api/public/place`. Route `backend/routes/savedPlaces.js:54`.
+     */
+    @GET("api/saved-places/{id}/preview")
+    suspend fun preview(
+        @Path("id") id: String,
+    ): PlacePreview
 
     /**
      * `POST /api/saved-places` — upsert a saved place on

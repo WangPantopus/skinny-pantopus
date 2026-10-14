@@ -2,7 +2,6 @@
 
 package app.pantopus.android.ui.screens.homes.tasks
 
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
@@ -20,6 +19,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.perf.ReportContentShown
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
+import app.pantopus.android.ui.components.RefreshOnStoreChange
+import app.pantopus.android.ui.screens.homes.HomeOfflineContent
 import app.pantopus.android.ui.screens.homes.showsContent
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsScreen
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsUiState
@@ -45,6 +46,7 @@ fun HouseholdTasksListScreen(
     onBack: (() -> Unit)? = null,
     viewModel: HouseholdTasksListViewModel = hiltViewModel(),
 ) {
+    RefreshOnStoreChange(viewModel::load)
     val state by viewModel.state.collectAsStateWithLifecycle()
     ReportContentShown("home_tasks", state.showsContent())
     val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
@@ -81,7 +83,7 @@ fun HouseholdTasksListScreen(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize().testTag("householdTasksList")) {
+    HomeOfflineContent(modifier = Modifier.fillMaxSize().testTag("householdTasksList")) {
         ListOfRowsScreen(
             title = "Tasks",
             state = state,

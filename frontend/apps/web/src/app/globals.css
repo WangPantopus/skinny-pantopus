@@ -335,6 +335,19 @@
   --color-identity-business-solid: #7C3AED;
   --color-identity-business-bg: #F3E8FF;
 
+  /* ── Nearby Plans kinds ──────────────────────────────────── */
+  /* The four plan kinds' map-pin accents (design board P1, the same values as
+     iOS Colors.swift and Android Color.kt): the kind colour, and its tint for
+     tags and tiles. Used by the plan share page (/plans/[id]). */
+  --color-cat-plan-watch: #EA580C;
+  --color-cat-plan-watch-tint: #FFEDD5;
+  --color-cat-plan-playdate: #7C3AED;
+  --color-cat-plan-playdate-tint: #EDE9FE;
+  --color-cat-plan-pickup: #16A34A;
+  --color-cat-plan-pickup-tint: #DCFCE7;
+  --color-cat-plan-walk: #A16207;
+  --color-cat-plan-walk-tint: #FEF3C7;
+
   /* ── Spacing (px) ────────────────────────────────────────── */
   --spacing-0: 0px;
   --spacing-1: 4px;
@@ -622,6 +635,15 @@
     --color-identity-personal: #38BDF8;
     --color-identity-home: #4ADE80;
     --color-identity-business: #A78BFA;
+    /* Nearby Plans kinds: lighter accents on deep tints (board P1, Dark). */
+    --color-cat-plan-watch: #FB923C;
+    --color-cat-plan-watch-tint: #3B2312;
+    --color-cat-plan-playdate: #A78BFA;
+    --color-cat-plan-playdate-tint: #2A2148;
+    --color-cat-plan-pickup: #4ADE80;
+    --color-cat-plan-pickup-tint: #13301F;
+    --color-cat-plan-walk: #FBBF24;
+    --color-cat-plan-walk-tint: #33290F;
     --app-surface: 15 23 42;
     --app-surface-raised: 30 41 59;
     /* A step below --app-surface (it was equal), so sunken fills such as

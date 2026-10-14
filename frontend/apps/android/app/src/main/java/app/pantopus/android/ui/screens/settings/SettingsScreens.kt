@@ -28,9 +28,11 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.security.findFragmentActivity
+import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.components.ToastController
 import app.pantopus.android.ui.components.ToastHost
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListBanner
@@ -51,11 +53,13 @@ fun SettingsIndexScreen(
     viewModel: SettingsIndexViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val footer by viewModel.footerCaption.collectAsStateWithLifecycle()
     val navigation by viewModel.navigation.collectAsStateWithLifecycle()
     var confirmSignOut by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { viewModel.load() }
+    RefreshOnStoreChange(viewModel::load)
     LaunchedEffect(navigation) {
         navigation?.let {
             viewModel.consumeNavigation()
@@ -66,13 +70,15 @@ fun SettingsIndexScreen(
     GroupedListScreen(
         title = viewModel.title,
         state = state,
+        refreshing = refreshing,
+        onRefresh = viewModel::refresh,
         footerCaption = footer,
         callbacks =
             GroupedListCallbacks(
                 onBack = onClose,
                 // Log out asks first, as the You screen does.
                 onTapRow = { rowId -> if (rowId == "signOut") confirmSignOut = true else viewModel.onRow(rowId) },
-                onRetry = viewModel::load,
+                onRetry = viewModel::refresh,
             ),
     )
 
@@ -81,7 +87,7 @@ fun SettingsIndexScreen(
             onDismissRequest = { confirmSignOut = false },
             title = { Text("Sign out of Pantopus?") },
             // Instant Screens contract §7: the sign-out confirmation says the phone's saved copy goes too.
-            text = { Text("You'll need to sign in again to access your hub. Signing out removes what Pantopus saved on this phone.") },
+            text = { Text("You'll need to sign in again to use your account. Signing out removes what Pantopus saved on this phone.") },
             modifier = Modifier.testTag("settingsSignOutDialog"),
             confirmButton = {
                 TextButton(onClick = {
@@ -110,6 +116,7 @@ fun NotificationSettingsScreen(
     viewModel: NotificationSettingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val footer by viewModel.footerCaption.collectAsStateWithLifecycle()
     val toast by viewModel.toast.collectAsStateWithLifecycle()
     val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
@@ -130,6 +137,7 @@ fun NotificationSettingsScreen(
     }
 
     LaunchedEffect(Unit) { viewModel.load() }
+    RefreshOnStoreChange(viewModel::load)
     LaunchedEffect(toast) {
         toast?.let {
             toastController.show(it)
@@ -141,6 +149,8 @@ fun NotificationSettingsScreen(
         GroupedListScreen(
             title = viewModel.title,
             state = state,
+            refreshing = refreshing,
+            onRefresh = viewModel::refresh,
             footerCaption = footer,
             refreshNotice = refreshNotice,
             // Parity with iOS `NotificationSettingsViewModel.banner`.
@@ -161,7 +171,7 @@ fun NotificationSettingsScreen(
                     onToggleRow = viewModel::onToggle,
                     onSelectRadio = viewModel::onSelectRadio,
                     onSelectChip = viewModel::onSelectChip,
-                    onRetry = viewModel::load,
+                    onRetry = viewModel::refresh,
                     onTapBanner = { context.openAppNotificationSettings() },
                 ),
         )
@@ -193,6 +203,8 @@ fun PrivacySettingsScreen(
     viewModel: PrivacySettingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
+    val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
     val banner by viewModel.banner.collectAsStateWithLifecycle()
     val toast by viewModel.toast.collectAsStateWithLifecycle()
     val deleteSheetVisible by viewModel.deleteSheetVisible.collectAsStateWithLifecycle()
@@ -204,7 +216,11 @@ fun PrivacySettingsScreen(
     val toastController = remember { ToastController() }
     val shownToast by toastController.current.collectAsStateWithLifecycle()
 
-    LaunchedEffect(Unit) { viewModel.load() }
+    LifecycleResumeEffect(Unit) {
+        viewModel.load()
+        onPauseOrDispose { }
+    }
+    RefreshOnStoreChange(viewModel::load)
     LaunchedEffect(toast) {
         toast?.let {
             toastController.show(it)
@@ -232,6 +248,9 @@ fun PrivacySettingsScreen(
         GroupedListScreen(
             title = viewModel.title,
             state = state,
+            refreshing = refreshing,
+            refreshNotice = refreshNotice,
+            onRefresh = viewModel::refresh,
             banner = banner,
             callbacks =
                 GroupedListCallbacks(
@@ -240,19 +259,13 @@ fun PrivacySettingsScreen(
                     onSelectRadio = viewModel::onRadio,
                     onTapRow = { rowId ->
                         when (rowId) {
-                            "appLockOpenSettings" -> {
-                                val intent =
-                                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                        data = Uri.fromParts("package", context.packageName, null)
-                                    }
-                                runCatching { context.startActivity(intent) }
-                            }
+                            "appLockOpenSettings" -> context.openAppDetailsSettings()
                             "downloadData" -> onOpenDataExport()
                             "whatWeCollect" -> onOpenPrivacyPolicy()
                             else -> viewModel.onTapRow(rowId)
                         }
                     },
-                    onRetry = viewModel::load,
+                    onRetry = viewModel::refresh,
                 ),
         )
         // Tag mirrors iOS `PrivacyView`'s `privacySettingsToast`
@@ -274,6 +287,14 @@ const val PRIVACY_SETTINGS_TOAST_TAG = "privacySettingsToast"
 
 private fun Context.notificationsAllowed(): Boolean =
     runCatching { NotificationManagerCompat.from(this).areNotificationsEnabled() }.getOrDefault(true)
+
+private fun Context.openAppDetailsSettings() {
+    val intent =
+        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+            data = Uri.fromParts("package", packageName, null)
+        }
+    runCatching { startActivity(intent) }
+}
 
 private fun Context.openAppNotificationSettings() {
     runCatching {

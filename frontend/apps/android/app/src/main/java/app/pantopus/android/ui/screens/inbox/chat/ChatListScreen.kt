@@ -42,6 +42,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.core.perf.ReportContentShown
+import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -70,6 +71,7 @@ fun ChatListScreen(
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) { viewModel.load() }
+    RefreshOnStoreChange(viewModel::load)
     DisposableEffect(Unit) {
         onDispose { viewModel.teardown() }
     }
@@ -91,7 +93,12 @@ fun ChatListScreen(
         )
         when (val s = state) {
             ChatListUiState.Loading -> LoadingFrame()
-            ChatListUiState.Empty -> EmptyFrame(onCompose = onCompose)
+            ChatListUiState.Empty ->
+                EmptyFrame(
+                    onCompose = onCompose,
+                    aiRow = viewModel.aiRow,
+                    onOpenAssistant = { onOpenConversation(viewModel.aiRow) },
+                )
             is ChatListUiState.Loaded ->
                 // Pull to re-read the list, as on iOS; it can go stale if the
                 // live connection drops.
@@ -318,13 +325,28 @@ private fun SkeletonRow() {
 }
 
 @Composable
-internal fun EmptyFrame(onCompose: () -> Unit) {
+internal fun EmptyFrame(
+    onCompose: () -> Unit,
+    aiRow: ConversationRowContent? = null,
+    onOpenAssistant: () -> Unit = {},
+) {
+    Column(modifier = Modifier.fillMaxSize().testTag("chatListEmpty")) {
+        // Pantopus AI stays reachable before the first conversation.
+        if (aiRow != null) ConversationRow(content = aiRow, onTap = onOpenAssistant)
+        EmptyMessage(onCompose = onCompose, modifier = Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun EmptyMessage(
+    onCompose: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Column(
         modifier =
-            Modifier
-                .fillMaxSize()
-                .padding(Spacing.s5)
-                .testTag("chatListEmpty"),
+            modifier
+                .fillMaxWidth()
+                .padding(Spacing.s5),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {

@@ -20,9 +20,13 @@ import app.pantopus.android.data.api.models.connections.SentRequestDto
 import app.pantopus.android.data.api.models.relationships.PendingRequestDto
 import app.pantopus.android.data.api.models.relationships.RelationshipDto
 import app.pantopus.android.data.api.models.relationships.RelationshipUserDto
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.connections.ConnectionsRepository
 import app.pantopus.android.data.relationships.RelationshipsRepository
+import app.pantopus.android.data.store.StoreKind
+import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.components.StatusChipVariant
 import app.pantopus.android.ui.screens.shared.list_of_rows.AvatarBackground
 import app.pantopus.android.ui.screens.shared.list_of_rows.AvatarBadgeSize
@@ -45,6 +49,7 @@ import app.pantopus.android.ui.screens.shared.list_of_rows.VerticalAction
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -143,8 +148,7 @@ enum class ConnectionAvatarTone {
 /**
  * Drives the T5.2.3 Connections center. Mirrors iOS
  * `ConnectionsViewModel` exactly — same tabs, same search, same row
- * mapping, same optimistic accept / reject pattern with rollback on
- * failure.
+ * mapping. Connection and access changes wait for the server to confirm.
  *
  * S5 (RN parity, `src/app/connections.tsx:16-21,70-82,126-148`) adds the
  * Sent + Blocked tabs and the per-row Remove (disconnect, confirmed) and
@@ -225,13 +229,25 @@ class ConnectionsViewModel
             }
 
         /** Initial load. Idempotent — re-running won't refetch when already loaded. */
-        fun load() {
-            if (loadedOnce) return
-            reload()
+        private var loading = false
+        private var readJob: Job? = null
+        private val actions = mutableMapOf<String, String>()
+        private val _actionError = MutableStateFlow<String?>(null)
+        val actionError: StateFlow<String?> = _actionError.asStateFlow()
+
+        fun dismissActionError() {
+            _actionError.value = null
         }
 
+        private val _refreshing = MutableStateFlow(false)
+        val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+        private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
+        val refreshNotice: StateFlow<RefreshNotice?> = _refreshNotice.asStateFlow()
+
+        fun load() = reload(force = false)
+
         /** Pull-to-refresh. */
-        fun refresh() = reload()
+        fun refresh() = reload(force = true)
 
         /** Tab switch — re-segment over the cached payload. */
         fun selectTab(id: String) {
@@ -248,56 +264,32 @@ class ConnectionsViewModel
             applyState()
         }
 
-        /**
-         * Accept a pending request. Optimistically removes the request and
-         * inserts a synthetic accepted row so the All / Neighbors counts
-         * bump immediately. Rolls back on failure.
-         */
+        /** Keep the request visible until the server confirms the connection. */
         fun accept(requestId: String) {
             val request = pending.firstOrNull { it.id == requestId } ?: return
             val user = request.requester ?: return
-            val previousPending = pending
-            val previousAccepted = accepted
-            pending = pending.filterNot { it.id == requestId }
-            val nowIso = isoString(Instant.now())
-            val synthetic =
-                RelationshipDto(
-                    id = requestId,
-                    status = "accepted",
-                    createdAt = request.createdAt,
-                    respondedAt = nowIso,
-                    acceptedAt = nowIso,
-                    blockedBy = null,
-                    direction = "received",
-                    otherUser = user,
-                )
-            accepted = listOf(synthetic) + accepted
-            applyState()
-            viewModelScope.launch {
-                when (repo.accept(requestId)) {
-                    is NetworkResult.Success -> Unit
-                    is NetworkResult.Failure -> {
-                        pending = previousPending
-                        accepted = previousAccepted
-                        applyState()
-                    }
-                }
+            performAction(requestId, "Accepting…", "Couldn't accept request.", { repo.accept(requestId) }) {
+                val nowIso = isoString(Instant.now())
+                pending = pending.filterNot { it.id == requestId }
+                accepted = listOf(
+                    RelationshipDto(
+                        id = requestId,
+                        status = "accepted",
+                        createdAt = request.createdAt,
+                        respondedAt = nowIso,
+                        acceptedAt = nowIso,
+                        direction = "received",
+                        otherUser = user,
+                    ),
+                ) + accepted.filterNot { it.id == requestId }
             }
         }
 
-        /** Decline / ignore a pending request. Optimistic; rolls back on failure. */
+        /** Keep the request available to retry if the server declines the change. */
         fun reject(requestId: String) {
-            val previousPending = pending
-            pending = pending.filterNot { it.id == requestId }
-            applyState()
-            viewModelScope.launch {
-                when (repo.reject(requestId)) {
-                    is NetworkResult.Success -> Unit
-                    is NetworkResult.Failure -> {
-                        pending = previousPending
-                        applyState()
-                    }
-                }
+            if (pending.none { it.id == requestId }) return
+            performAction(requestId, "Ignoring…", "Couldn't ignore request.", { repo.reject(requestId) }) {
+                pending = pending.filterNot { it.id == requestId }
             }
         }
 
@@ -309,6 +301,7 @@ class ConnectionsViewModel
          * Cancel / Remove alert (`src/app/connections.tsx:70-77`).
          */
         fun requestRemoval(relationshipId: String) {
+            if (relationshipId in actions) return
             val rel = accepted.firstOrNull { it.id == relationshipId } ?: return
             _pendingRemoval.value =
                 ConnectionRemovalRequest(
@@ -329,100 +322,162 @@ class ConnectionsViewModel
             disconnect(request.id)
         }
 
-        /**
-         * `DELETE /api/relationships/:id`. Optimistic — the row disappears
-         * immediately and is restored if the call fails.
-         */
+        /** Keep the connection visible until its removal is confirmed. */
         fun disconnect(relationshipId: String) {
-            val previous = accepted
-            accepted = accepted.filterNot { it.id == relationshipId }
-            applyState()
-            viewModelScope.launch {
-                when (connectionsRepo.disconnect(relationshipId)) {
-                    is NetworkResult.Success -> Unit
-                    is NetworkResult.Failure -> {
-                        accepted = previous
-                        applyState()
-                    }
-                }
+            if (accepted.none { it.id == relationshipId }) return
+            performAction(relationshipId, "Removing…", "Couldn't remove connection.", { connectionsRepo.disconnect(relationshipId) }) {
+                accepted = accepted.filterNot { it.id == relationshipId }
             }
         }
 
-        /**
-         * `POST /api/relationships/:id/unblock`. Optimistic — the row leaves
-         * the Blocked tab and is restored if the call fails. The backend
-         * deletes the row outright, so nothing moves into Connections.
-         */
+        /** An unblock changes access, so wait for confirmation before removing the row. */
         fun unblock(relationshipId: String) {
-            val previous = blocked
-            blocked = blocked.filterNot { it.id == relationshipId }
+            if (blocked.none { it.id == relationshipId }) return
+            performAction(relationshipId, "Unblocking…", "Couldn't unblock connection.", { connectionsRepo.unblock(relationshipId) }) {
+                blocked = blocked.filterNot { it.id == relationshipId }
+            }
+        }
+
+        private fun performAction(
+            id: String,
+            label: String,
+            failureMessage: String,
+            write: suspend () -> NetworkResult<*>,
+            confirmed: () -> Unit,
+        ) {
+            if (id in actions) return
+            readJob?.cancel()
+            loading = false
+            _refreshing.value = false
+            _actionError.value = null
+            actions[id] = label
             applyState()
             viewModelScope.launch {
-                when (connectionsRepo.unblock(relationshipId)) {
-                    is NetworkResult.Success -> Unit
-                    is NetworkResult.Failure -> {
-                        blocked = previous
-                        applyState()
+                try {
+                    when (val result = write()) {
+                        is NetworkResult.Success -> confirmed()
+                        is NetworkResult.Failure -> _actionError.value = result.error.displayMessage(failureMessage)
                     }
+                } finally {
+                    actions.remove(id)
+                    applyState()
                 }
             }
         }
 
-        private fun reload() {
-            _state.value = ListOfRowsUiState.Loading
-            viewModelScope.launch {
-                val acceptedDeferred = async { fetchAccepted() }
-                val pendingDeferred = async { fetchPending() }
-                val sentDeferred = async { fetchSent() }
-                val blockedDeferred = async { fetchBlocked() }
-                val acceptedOk = acceptedDeferred.await()
-                val pendingOk = pendingDeferred.await()
-                val sentOk = sentDeferred.await()
-                val blockedOk = blockedDeferred.await()
-                if (!acceptedOk && !pendingOk && !sentOk && !blockedOk) {
-                    _state.value =
-                        ListOfRowsUiState.Error("Couldn't load your connections. Try again.")
-                    return@launch
+        private fun pendingAction(id: String): RowTrailing.Status? = actions[id]?.let { RowTrailing.Status(it, StatusChipVariant.Warning) }
+
+        private fun reload(force: Boolean) {
+            if (loading || actions.isNotEmpty()) return
+            loading = true
+            _refreshing.value = force && loadedOnce
+            if (!loadedOnce) {
+                val acceptedCopy = repo.listCopy("accepted").data
+                val pendingCopy = repo.pendingCopy().data
+                val sentCopy = connectionsRepo.sentCopy().data
+                val blockedCopy = connectionsRepo.blockedCopy().data
+                if (acceptedCopy != null && pendingCopy != null && sentCopy != null && blockedCopy != null) {
+                    accepted = acceptedCopy.relationships
+                    pending = pendingCopy.requests
+                    sent = sentCopy.requests
+                    blocked = blockedCopy.blocked
+                    loadedOnce = true
+                    applyState()
                 }
-                loadedOnce = true
-                applyState()
+                if (!loadedOnce) _state.value = ListOfRowsUiState.Loading
             }
+            readJob =
+                viewModelScope.launch {
+                    val acceptedDeferred = async { fetchAccepted(force) }
+                    val pendingDeferred = async { fetchPending(force) }
+                    val sentDeferred = async { fetchSent(force) }
+                    val blockedDeferred = async { fetchBlocked(force) }
+                    val acceptedOk = acceptedDeferred.await()
+                    val pendingOk = pendingDeferred.await()
+                    val sentOk = sentDeferred.await()
+                    val blockedOk = blockedDeferred.await()
+                    loading = false
+                    _refreshing.value = false
+                    val staleFailure =
+                        listOf(repo.listCopy("accepted"), repo.pendingCopy(), connectionsRepo.sentCopy(), connectionsRepo.blockedCopy())
+                            .firstOrNull { it.showsRefreshFailure(StoreKind.PEOPLE) }
+                    _refreshNotice.value = staleFailure?.let { RefreshNotice(it.fetchedAt, ::refresh) }
+                    if (!loadedOnce && !acceptedOk && !pendingOk && !sentOk && !blockedOk) {
+                        _state.value =
+                            ListOfRowsUiState.Error("Couldn't load your connections. Try again.")
+                        return@launch
+                    }
+                    loadedOnce = true
+                    applyState()
+                }
         }
 
-        private suspend fun fetchSent(): Boolean =
-            when (val result = connectionsRepo.sentRequests()) {
+        private suspend fun fetchSent(force: Boolean): Boolean =
+            when (val result = connectionsRepo.sentRequests(force = force)) {
                 is NetworkResult.Success -> {
                     sent = result.data.requests
                     true
                 }
-                is NetworkResult.Failure -> false
+                is NetworkResult.Failure -> {
+                    if (result.error is NetworkError.Forbidden ||
+                        result.error == NetworkError.NotFound ||
+                        result.error == NetworkError.Unauthorized
+                    ) {
+                        sent = emptyList()
+                    }
+                    false
+                }
             }
 
-        private suspend fun fetchBlocked(): Boolean =
-            when (val result = connectionsRepo.blocked()) {
+        private suspend fun fetchBlocked(force: Boolean): Boolean =
+            when (val result = connectionsRepo.blocked(force = force)) {
                 is NetworkResult.Success -> {
                     blocked = result.data.blocked
                     true
                 }
-                is NetworkResult.Failure -> false
+                is NetworkResult.Failure -> {
+                    if (result.error is NetworkError.Forbidden ||
+                        result.error == NetworkError.NotFound ||
+                        result.error == NetworkError.Unauthorized
+                    ) {
+                        blocked = emptyList()
+                    }
+                    false
+                }
             }
 
-        private suspend fun fetchAccepted(): Boolean =
-            when (val result = repo.list(status = "accepted")) {
+        private suspend fun fetchAccepted(force: Boolean): Boolean =
+            when (val result = repo.list(status = "accepted", force = force)) {
                 is NetworkResult.Success -> {
                     accepted = result.data.relationships
                     true
                 }
-                is NetworkResult.Failure -> false
+                is NetworkResult.Failure -> {
+                    if (result.error is NetworkError.Forbidden ||
+                        result.error == NetworkError.NotFound ||
+                        result.error == NetworkError.Unauthorized
+                    ) {
+                        accepted = emptyList()
+                    }
+                    false
+                }
             }
 
-        private suspend fun fetchPending(): Boolean =
-            when (val result = repo.pendingRequests()) {
+        private suspend fun fetchPending(force: Boolean): Boolean =
+            when (val result = repo.pendingRequests(force = force)) {
                 is NetworkResult.Success -> {
                     pending = result.data.requests
                     true
                 }
-                is NetworkResult.Failure -> false
+                is NetworkResult.Failure -> {
+                    if (result.error is NetworkError.Forbidden ||
+                        result.error == NetworkError.NotFound ||
+                        result.error == NetworkError.Unauthorized
+                    ) {
+                        pending = emptyList()
+                    }
+                    false
+                }
             }
 
         private fun applyState() {
@@ -589,23 +644,27 @@ class ConnectionsViewModel
                         verified = false,
                     ),
                 trailing =
-                    RowTrailing.CircularAction(
+                    pendingAction(rel.id) ?: RowTrailing.CircularAction(
                         icon = PantopusIcon.MessageCircle,
                         accessibilityLabel = "Message $displayName",
                         background = PantopusColors.primary50,
                         foreground = PantopusColors.primary600,
                         onClick = { onMessage(target) },
                     ),
-                onTap = profileTap(user?.id),
+                onTap = { if (rel.id !in actions) profileTap(user?.id)() },
                 body = "Connected $timeFragment",
                 subtitleIcon = if (locality != null) PantopusIcon.MapPin else null,
                 bodyIcon = PantopusIcon.UserPlus,
                 destructiveAction =
-                    RowDestructiveAction(
-                        label = "Remove",
-                        testTag = "connections.row.${rel.id}.remove",
-                        onClick = { requestRemoval(rel.id) },
-                    ),
+                    if (rel.id in actions) {
+                        null
+                    } else {
+                        RowDestructiveAction(
+                            label = "Remove",
+                            testTag = "connections.row.${rel.id}.remove",
+                            onClick = { requestRemoval(rel.id) },
+                        )
+                    },
             )
         }
 
@@ -676,7 +735,7 @@ class ConnectionsViewModel
                         verified = false,
                     ),
                 trailing =
-                    RowTrailing.PillButton(
+                    pendingAction(rel.id) ?: RowTrailing.PillButton(
                         label = "Unblock",
                         tone = RowPillTone.Neutral,
                         onClick = { unblock(rel.id) },
@@ -712,7 +771,7 @@ class ConnectionsViewModel
                         verified = false,
                     ),
                 trailing =
-                    RowTrailing.VerticalActions(
+                    pendingAction(requestId) ?: RowTrailing.VerticalActions(
                         primary =
                             VerticalAction(
                                 label = "Accept",
@@ -726,7 +785,7 @@ class ConnectionsViewModel
                                 onClick = { reject(requestId) },
                             ),
                     ),
-                onTap = profileTap(user?.id),
+                onTap = { if (requestId !in actions) profileTap(user?.id)() },
                 body = "New request $timeFragment",
                 subtitleIcon = if (locality != null) PantopusIcon.MapPin else null,
                 bodyIcon = PantopusIcon.UserPlus,

@@ -21,8 +21,10 @@ final class MyHomesListViewModel: ListOfRowsDataSource {
         TopBarAction(icon: .search, accessibilityLabel: "Find or add a home", handler: onFindHome)
     }
 
+    /// One add control: with no Homes the empty state's button adds one.
     var fab: FABAction? {
-        FABAction(icon: .plusCircle, accessibilityLabel: "Add a home", variant: .secondaryCreate, tint: .home, handler: onAddHome)
+        guard case .loaded = state, !entries.isEmpty else { return nil }
+        return FABAction(icon: .plusCircle, accessibilityLabel: "Add a home", variant: .secondaryCreate, tint: .home, handler: onAddHome)
     }
 
     var banner: BannerConfig? {

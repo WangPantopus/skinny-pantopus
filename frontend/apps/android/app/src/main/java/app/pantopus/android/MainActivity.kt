@@ -23,6 +23,8 @@ import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.auth.OAuthSessionStore
 import app.pantopus.android.data.auth.TokenStorage
 import app.pantopus.android.data.chats.ActiveChatThread
+import app.pantopus.android.data.plans.PlansFeature
+import app.pantopus.android.data.store.StoreSync
 import app.pantopus.android.push.PushTokenSyncer
 import app.pantopus.android.push.ReminderActionReceiver
 import app.pantopus.android.ui.components.ToastController
@@ -65,6 +67,12 @@ class MainActivity : FragmentActivity() {
 
     @Inject lateinit var tokenStorage: TokenStorage
 
+    /** Instant Screens §8: the change signal and the catch-up marks for the screens' store. */
+    @Inject lateinit var storeSync: StoreSync
+
+    /** Nearby Plans' server flags: read at sign-in and on every foreground. */
+    @Inject lateinit var plansFeature: PlansFeature
+
     /**
      * App-wide [ToastController]. Survives configuration changes via the
      * Activity instance. Feature view-models can grab the same instance
@@ -96,6 +104,8 @@ class MainActivity : FragmentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         secureWindowController.bind(this)
+        storeSync.start()
+        plansFeature.start()
         observeAppLockPrivacyHold()
         lifecycleScope.launch {
             authRepository.state.collect { pilotEvents.authChanged() }
@@ -127,6 +137,8 @@ class MainActivity : FragmentActivity() {
         activeChatThread.isForeground = true
         pilotEvents.enterForeground()
         appLockManager.appDidBecomeActive()
+        storeSync.foregrounded()
+        plansFeature.foregrounded()
         launchPushTokenSync()
     }
 
@@ -137,7 +149,10 @@ class MainActivity : FragmentActivity() {
         // iOS sees no `.background` for those at all, so arming here would
         // lock the app in the user's hands on every rotation.
         appLockManager.appDidEnterBackground(isConfigurationChange = isChangingConfigurations)
-        if (!isChangingConfigurations) pilotEvents.enterBackground()
+        if (!isChangingConfigurations) {
+            pilotEvents.enterBackground()
+            storeSync.backgrounded()
+        }
         activeChatThread.isForeground = false
         super.onStop()
     }

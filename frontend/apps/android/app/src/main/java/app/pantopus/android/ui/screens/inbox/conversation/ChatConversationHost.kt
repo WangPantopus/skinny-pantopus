@@ -42,10 +42,12 @@ fun ChatConversationHost(
     initialTopic: ChatInitialTopic? = null,
     gigId: String? = null,
     onUseAIDraft: (ChatAIDraftCard) -> Unit = {},
+    onOpenToday: () -> Unit = {},
     onOpenGig: (String) -> Unit = {},
     onOpenListing: (String) -> Unit = {},
     arrivalRoomId: String? = null,
     onOpenProfile: (String) -> Unit = {},
+    onOpenPlan: (String) -> Unit = {},
     authViewModel: ChatConversationHostViewModel = hiltViewModel(),
 ) {
     val state by authViewModel.authState.collectAsStateWithLifecycle()
@@ -70,9 +72,11 @@ fun ChatConversationHost(
         chrome = chrome,
         onBack = onBack,
         onUseAIDraft = onUseAIDraft,
+        onOpenToday = onOpenToday,
         onOpenGig = onOpenGig,
         onOpenListing = onOpenListing,
         onContentLoaded = { arrival?.let(DeepLinkRouter::completeArrival) },
         onOpenProfile = onOpenProfile,
+        onOpenPlan = onOpenPlan,
     )
 }

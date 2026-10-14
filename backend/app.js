@@ -416,6 +416,7 @@ app.use('/api/scout', require('./routes/scout')); // Before-You-Sign Scout (T1, 
 app.use('/api/homes/:homeId/scheduling', require('./routes/scheduling')); // Calendarly home-scoped (before catch-all /:id)
 app.use('/api/homes', homeRoutes);
 app.use('/api/posts', postRoutes);
+app.use('/api/plans', require('./routes/plans'));  // Nearby Plans (404 while the `plans` flag is off)
 app.use('/api/sports', require('./routes/sports'));  // Sports topic lane (active events)
 app.use('/api/files', fileRoutes);
 app.use('/api/chat', chatRoutes);

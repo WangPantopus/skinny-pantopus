@@ -28,6 +28,12 @@ object ScreenTiming {
         Timber.tag(TAG).d("tap tab=%s", tab)
     }
 
+    fun navigationTapped(screen: String) {
+        if (!BuildConfig.DEBUG) return
+        tappedAt = SystemClock.uptimeMillis()
+        Timber.tag(TAG).d("tap screen=%s", screen)
+    }
+
     fun contentShown(screen: String) = log("content", screen)
 
     /** Content that was on screen gave way to a skeleton or an error (a blank the tab loop counts). */

@@ -236,8 +236,8 @@ extension HomeDashboardJourneyUITests {
         app.terminate()
         app.launch()
         try require(element("tab.place").waitForExistence(timeout: 30))
-        if !element("hubMenuButton").waitForExistence(timeout: 3) { try press(element("place.back")) }
-        try press(element("hubMenuButton"))
+        if !element("place.menu").waitForExistence(timeout: 3) { try press(element("place.back")) }
+        try press(element("place.menu"))
         try press(element("navDrawer.item.settings"))
         try press(app.buttons["Log out"].firstMatch)
         try require(element("placeLaunchSignIn").waitForExistence(timeout: 30))
@@ -274,8 +274,9 @@ extension HomeDashboardJourneyUITests {
             }
             try require(element("tab.place").waitForExistence(timeout: 30))
         }
-        if !element("hubAvatarButton").waitForExistence(timeout: 2) { try press(element("place.back")) }
-        try press(element("hubAvatarButton"))
+        if !element("place.menu").waitForExistence(timeout: 2) { try press(element("place.back")) }
+        try press(element("place.menu"))
+        try press(element("navDrawer.contextPill.profile"))
         try press(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "My homes")).firstMatch)
     }
 

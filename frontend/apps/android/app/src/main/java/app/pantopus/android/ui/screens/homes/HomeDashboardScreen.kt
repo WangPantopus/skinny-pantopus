@@ -49,6 +49,7 @@ import app.pantopus.android.core.perf.ReportContentShown
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.RefreshFailedLine
 import app.pantopus.android.ui.components.RefreshNotice
+import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.screens.compose.gig.GigChecklistLink
 import app.pantopus.android.ui.screens.gigs.GigsCategory
@@ -120,6 +121,7 @@ fun HomeDashboardScreen(
     onOpenOwnership: ((String) -> Unit)? = null,
     viewModel: HomeDashboardViewModel = hiltViewModel(),
 ) {
+    RefreshOnStoreChange(viewModel::recheck)
     val state by viewModel.state.collectAsStateWithLifecycle()
     ReportContentShown(
         "home_dashboard",
@@ -371,99 +373,101 @@ fun HomeDashboardScreen(
         )
     }
 
-    PullToRefreshBox(
-        isRefreshing = refreshing,
-        onRefresh = viewModel::refresh,
-        modifier = Modifier.fillMaxSize(),
-    ) {
-        when (val current = state) {
-            HomeDashboardUiState.Loading -> LoadingLayout(onBack = onBack)
-            is HomeDashboardUiState.Loaded ->
-                DashboardLayout(
-                    content = current.content,
-                    intelligence = intelligenceStack,
-                    refreshNotice = refreshNotice,
-                    brandNew = null,
-                    selectedTab = selectedTab,
-                    onSelectTab = ::openTab,
-                    onBack = onBack,
-                    onQuickAction = ::handleQuickAction,
-                    onFabAction = ::handleFab,
-                    onOpenPropertyDetails = {
-                        viewModel.currentHomeId()?.let { homeId ->
-                            onOpenPropertyDetails?.invoke(homeId) ?: openPlaceholder("property_details")
-                        }
-                    },
-                    onOpenSettings =
-                        onOpenSettings?.let { handler ->
-                            {
-                                viewModel.currentHomeId()?.let { homeId -> handler(homeId) }
+    HomeOfflineContent {
+        PullToRefreshBox(
+            isRefreshing = refreshing,
+            onRefresh = viewModel::refresh,
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            when (val current = state) {
+                HomeDashboardUiState.Loading -> LoadingLayout(onBack = onBack)
+                is HomeDashboardUiState.Loaded ->
+                    DashboardLayout(
+                        content = current.content,
+                        intelligence = intelligenceStack,
+                        refreshNotice = refreshNotice,
+                        brandNew = null,
+                        selectedTab = selectedTab,
+                        onSelectTab = ::openTab,
+                        onBack = onBack,
+                        onQuickAction = ::handleQuickAction,
+                        onFabAction = ::handleFab,
+                        onOpenPropertyDetails = {
+                            viewModel.currentHomeId()?.let { homeId ->
+                                onOpenPropertyDetails?.invoke(homeId) ?: openPlaceholder("property_details")
                             }
                         },
-                    onSecurityAction = ::handleSecurityAction,
-                    canPerform = viewModel::canPerform,
-                    can = viewModel::can,
-                )
-            is HomeDashboardUiState.Empty ->
-                DashboardLayout(
-                    content = current.brandNew.content,
-                    brandNew = current.brandNew,
-                    selectedTab = selectedTab,
-                    onSelectTab = ::openTab,
-                    onBack = onBack,
-                    onQuickAction = ::handleQuickAction,
-                    onFabAction = ::handleFab,
-                    onOpenPropertyDetails = {
-                        viewModel.currentHomeId()?.let { homeId ->
-                            onOpenPropertyDetails?.invoke(homeId) ?: openPlaceholder("property_details")
-                        }
-                    },
-                    onOpenSettings =
-                        onOpenSettings?.let { handler ->
-                            {
-                                viewModel.currentHomeId()?.let { homeId -> handler(homeId) }
+                        onOpenSettings =
+                            onOpenSettings?.let { handler ->
+                                {
+                                    viewModel.currentHomeId()?.let { homeId -> handler(homeId) }
+                                }
+                            },
+                        onSecurityAction = ::handleSecurityAction,
+                        canPerform = viewModel::canPerform,
+                        can = viewModel::can,
+                    )
+                is HomeDashboardUiState.Empty ->
+                    DashboardLayout(
+                        content = current.brandNew.content,
+                        brandNew = current.brandNew,
+                        selectedTab = selectedTab,
+                        onSelectTab = ::openTab,
+                        onBack = onBack,
+                        onQuickAction = ::handleQuickAction,
+                        onFabAction = ::handleFab,
+                        onOpenPropertyDetails = {
+                            viewModel.currentHomeId()?.let { homeId ->
+                                onOpenPropertyDetails?.invoke(homeId) ?: openPlaceholder("property_details")
                             }
                         },
-                    onSecurityAction = ::handleSecurityAction,
-                    canPerform = viewModel::canPerform,
-                    can = viewModel::can,
-                )
-            is HomeDashboardUiState.NeedsAttention ->
-                DashboardLayout(
-                    content = current.content,
-                    intelligence = intelligenceStack,
-                    refreshNotice = refreshNotice,
-                    brandNew = null,
-                    selectedTab = selectedTab,
-                    onSelectTab = ::openTab,
-                    onBack = onBack,
-                    onQuickAction = ::handleQuickAction,
-                    onFabAction = ::handleFab,
-                    onOpenPropertyDetails = {
-                        viewModel.currentHomeId()?.let { homeId ->
-                            onOpenPropertyDetails?.invoke(homeId) ?: openPlaceholder("property_details")
-                        }
-                    },
-                    onOpenSettings =
-                        onOpenSettings?.let { handler ->
-                            {
-                                viewModel.currentHomeId()?.let { homeId -> handler(homeId) }
+                        onOpenSettings =
+                            onOpenSettings?.let { handler ->
+                                {
+                                    viewModel.currentHomeId()?.let { homeId -> handler(homeId) }
+                                }
+                            },
+                        onSecurityAction = ::handleSecurityAction,
+                        canPerform = viewModel::canPerform,
+                        can = viewModel::can,
+                    )
+                is HomeDashboardUiState.NeedsAttention ->
+                    DashboardLayout(
+                        content = current.content,
+                        intelligence = intelligenceStack,
+                        refreshNotice = refreshNotice,
+                        brandNew = null,
+                        selectedTab = selectedTab,
+                        onSelectTab = ::openTab,
+                        onBack = onBack,
+                        onQuickAction = ::handleQuickAction,
+                        onFabAction = ::handleFab,
+                        onOpenPropertyDetails = {
+                            viewModel.currentHomeId()?.let { homeId ->
+                                onOpenPropertyDetails?.invoke(homeId) ?: openPlaceholder("property_details")
                             }
                         },
-                    onSecurityAction = ::handleSecurityAction,
-                    canPerform = viewModel::canPerform,
-                    can = viewModel::can,
-                )
-            is HomeDashboardUiState.Error ->
-                ErrorLayout(message = current.message, onBack = onBack, onRetry = viewModel::refresh)
-            is HomeDashboardUiState.Limited ->
-                LimitedLayout(
-                    state = current,
-                    onBack = onBack,
-                    onRetry = viewModel::refresh,
-                    onTasks = { viewModel.currentHomeId()?.let { onOpenTasks?.invoke(it) } },
-                    onOwnership = { viewModel.currentHomeId()?.let { onClaimOwnership?.invoke(it) } },
-                )
+                        onOpenSettings =
+                            onOpenSettings?.let { handler ->
+                                {
+                                    viewModel.currentHomeId()?.let { homeId -> handler(homeId) }
+                                }
+                            },
+                        onSecurityAction = ::handleSecurityAction,
+                        canPerform = viewModel::canPerform,
+                        can = viewModel::can,
+                    )
+                is HomeDashboardUiState.Error ->
+                    ErrorLayout(message = current.message, onBack = onBack, onRetry = viewModel::refresh)
+                is HomeDashboardUiState.Limited ->
+                    LimitedLayout(
+                        state = current,
+                        onBack = onBack,
+                        onRetry = viewModel::refresh,
+                        onTasks = { viewModel.currentHomeId()?.let { onOpenTasks?.invoke(it) } },
+                        onOwnership = { viewModel.currentHomeId()?.let { onClaimOwnership?.invoke(it) } },
+                    )
+            }
         }
     }
 }

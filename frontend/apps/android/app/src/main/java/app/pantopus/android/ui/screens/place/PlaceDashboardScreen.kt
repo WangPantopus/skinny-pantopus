@@ -16,12 +16,15 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -32,8 +35,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
@@ -52,16 +58,19 @@ import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.RefreshFailedLine
 import app.pantopus.android.ui.components.RefreshNotice
+import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.screens.ballot.BallotGovernmentsSheet
 import app.pantopus.android.ui.screens.ballot.BallotPlacement
 import app.pantopus.android.ui.screens.ballot.BallotSeasonBlock
 import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
 import app.pantopus.android.ui.screens.place.components.JustMovedCard
+import app.pantopus.android.ui.screens.place.components.PlaceChip
+import app.pantopus.android.ui.screens.place.components.PlaceChipModel
+import app.pantopus.android.ui.screens.place.components.PlaceChipTone
 import app.pantopus.android.ui.screens.place.components.PlaceGroupLabel
 import app.pantopus.android.ui.screens.place.components.PlaceHeroCard
 import app.pantopus.android.ui.screens.place.components.PlaceLockedCard
-import app.pantopus.android.ui.screens.place.components.PlaceVerifiedAvatar
 import app.pantopus.android.ui.screens.place.messaging.PlaceMessagesActionRow
 import app.pantopus.android.ui.screens.place.verify.PlaceVerifyMethod
 import app.pantopus.android.ui.screens.place.verify.PlaceVerifySheet
@@ -69,6 +78,7 @@ import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.Spacing
+import kotlinx.coroutines.flow.Flow
 
 const val PLACE_DASHBOARD_HOME_ID_KEY = "homeId"
 
@@ -100,6 +110,10 @@ fun PlaceDashboardScreen(
     onOpenMenu: () -> Unit = {},
     onOpenNotifications: () -> Unit = {},
     onPlaceUnavailable: (homeId: String) -> Unit = {},
+    /** The homes sheet's "Manage homes" and its entries still in review: My homes. */
+    onManageHomes: () -> Unit = {},
+    /** The Place tab tapped again while this dashboard is its root: back to the top. */
+    scrollToTop: Flow<Unit>? = null,
     viewModel: PlaceDashboardViewModel = hiltViewModel(key = "place-$homeId"),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -112,10 +126,13 @@ fun PlaceDashboardScreen(
         if ((state as? PlaceDashboardUiState.Error)?.unavailable == true) onPlaceUnavailable(homeId)
     }
     HomeCopyLifecycle({ viewModel.load(homeId) }, viewModel::suspendContent)
+    RefreshOnStoreChange { viewModel.load(homeId) }
 
     var showSwitcher by remember { mutableStateOf(false) }
     var showVerify by remember { mutableStateOf(false) }
     val verifyAddress = (state as? PlaceDashboardUiState.Loaded)?.intelligence?.place?.label.orEmpty()
+    val listState = rememberLazyListState()
+    LaunchedEffect(scrollToTop) { scrollToTop?.collect { listState.animateScrollToItem(0) } }
 
     // Pull to refresh, like iOS's `.refreshable`: it reads now with the indicator over the dashboard, which stays.
     var pulled by remember { mutableStateOf(false) }
@@ -128,13 +145,18 @@ fun PlaceDashboardScreen(
         },
         modifier = modifier.fillMaxSize().background(PantopusColors.appBg),
     ) {
+        // Before the dashboard loads there is nothing to go back to at the tab's root: the bell and menu stay reachable.
+        val headerActions: @Composable () -> Unit = { PlaceBellAndMenu(unreadCount, onOpenNotifications, onOpenMenu) }
         when (val current = state) {
-            PlaceDashboardUiState.Loading -> PlaceDashboardSkeleton()
+            PlaceDashboardUiState.Loading -> PlaceDashboardSkeleton(headerActions = headerActions)
             is PlaceDashboardUiState.Error ->
-                if (current.denied) {
-                    PlaceDeniedState()
-                } else {
-                    ErrorState(message = current.message, onRetry = viewModel::refresh)
+                Column(modifier = Modifier.fillMaxSize()) {
+                    PlaceRootBar(unreadCount, onOpenNotifications, onOpenMenu)
+                    if (current.denied) {
+                        PlaceDeniedState()
+                    } else {
+                        ErrorState(message = current.message, onRetry = viewModel::refresh)
+                    }
                 }
             is PlaceDashboardUiState.Loaded ->
                 PlaceDashboardContent(
@@ -150,7 +172,7 @@ fun PlaceDashboardScreen(
                     onOpenMenu = onOpenMenu,
                     onOpenNotifications = onOpenNotifications,
                     unreadCount = unreadCount,
-                    onOpenAvatar = { showSwitcher = true },
+                    onOpenSwitcher = { showSwitcher = true },
                     onVerify = { showVerify = true },
                     onOpenDetail = { group -> onOpenSection(homeId, group.slug) },
                     onOpenPulse = onOpenPulse,
@@ -158,6 +180,7 @@ fun PlaceDashboardScreen(
                     onOpenInbox = onOpenInbox,
                     onRetry = viewModel::refresh,
                     refreshNotice = refreshNotice,
+                    listState = listState,
                 )
         }
     }
@@ -186,16 +209,21 @@ fun PlaceDashboardScreen(
                 showSwitcher = false
                 onAddPlace()
             },
+            onManageHomes = {
+                showSwitcher = false
+                onManageHomes()
+            },
             onDismiss = { showSwitcher = false },
         )
     }
 }
 
+/** The loaded dashboard. [onOpenSwitcher] opens the homes sheet, from the address under "Your Place". */
 @Composable
 @Suppress("LongParameterList", "LongMethod")
 internal fun PlaceDashboardContent(
     intel: PlaceIntelligence,
-    onOpenAvatar: () -> Unit,
+    onOpenSwitcher: () -> Unit,
     onVerify: () -> Unit,
     onOpenDetail: (PlaceDetailGroup) -> Unit,
     modifier: Modifier = Modifier,
@@ -212,20 +240,22 @@ internal fun PlaceDashboardContent(
     homeId: String = "",
     onRetry: (() -> Unit)? = null,
     refreshNotice: RefreshNotice? = null,
+    listState: LazyListState = rememberLazyListState(),
 ) {
     val isVerified = intel.tier == PlaceTier.T4
-    // Guests and service providers aren't residents, so they get no verify prompts.
-    val isClaimed = intel.tier == PlaceTier.T3 && intel.verifyAvailable != false
+    // Verifying is the next step for a claimed resident and for a private setup (by mail). Guests and service
+    // providers can't verify, so they get no verify prompts; older servers don't say, and claimed decides.
+    val showsVerify = !isVerified && (intel.verifyAvailable ?: (intel.tier == PlaceTier.T3))
     val pulse = PlacePresentation.derivePulse(intel)
     val ballot = BallotPlacement.ballot(intel)
     var ballotGovernments by remember { mutableStateOf<BallotGovernments?>(null) }
 
-    LazyColumn(modifier = modifier.fillMaxSize()) {
+    LazyColumn(state = listState, modifier = modifier.fillMaxSize()) {
         item {
             PlaceDashboardHeader(
                 label = intel.place.label,
-                isVerified = isVerified,
-                onOpenAvatar = onOpenAvatar,
+                status = placeStatus(intel),
+                onOpenSwitcher = onOpenSwitcher,
                 onOpenMenu = onOpenMenu,
                 onOpenNotifications = onOpenNotifications,
                 unreadCount = unreadCount,
@@ -236,7 +266,7 @@ internal fun PlaceDashboardContent(
         if (refreshNotice != null) {
             item { RefreshFailedLine(refreshNotice, Modifier.padding(horizontal = 16.dp)) }
         }
-        if (isClaimed) {
+        if (showsVerify) {
             item {
                 PlaceVerifyBanner(
                     onTap = onVerify,
@@ -282,7 +312,7 @@ internal fun PlaceDashboardContent(
                 modifier =
                     Modifier
                         .padding(horizontal = 16.dp)
-                        .padding(top = if (isClaimed) 12.dp else 14.dp),
+                        .padding(top = if (showsVerify) 12.dp else 14.dp),
             )
         }
         item { Spacer(modifier = Modifier.height(20.dp)) }
@@ -331,7 +361,7 @@ internal fun PlaceDashboardContent(
                 modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp),
             )
         }
-        if (isClaimed) {
+        if (showsVerify) {
             item {
                 PlaceVerifyLockedGroup(
                     onVerify = onVerify,
@@ -476,27 +506,47 @@ private fun PlaceVerifyLockedGroup(
 
 // MARK: - Header
 
+/**
+ * Row one: "Your Place", where the person stands ([status]), then the bell and menu. Row two: the address. With
+ * [onOpenSwitcher] the address is the way to the person's homes (switch, add or manage them), with the whole width to
+ * itself so it truncates less; without it (a saved address) the address is a plain line.
+ */
 @Composable
 @Suppress("LongParameterList")
-private fun PlaceDashboardHeader(
+internal fun PlaceDashboardHeader(
     label: String,
-    isVerified: Boolean,
     onOpenMenu: () -> Unit,
-    onOpenAvatar: () -> Unit,
     onOpenNotifications: () -> Unit,
     unreadCount: Int,
     modifier: Modifier = Modifier,
+    status: PlaceChipModel? = null,
+    onOpenSwitcher: (() -> Unit)? = null,
 ) {
-    Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-            Text(
-                text = "Your Place",
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = (-0.56).sp,
-                lineHeight = 32.sp,
-                color = PantopusColors.appText,
-            )
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                modifier = Modifier.weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "Your Place",
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = (-0.56).sp,
+                    lineHeight = 32.sp,
+                    color = PantopusColors.appText,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false).semantics { heading() },
+                )
+                status?.let { Box(modifier = Modifier.testTag("place.status")) { PlaceChip(it) } }
+            }
+            PlaceBellAndMenu(unreadCount, onOpenNotifications, onOpenMenu)
+        }
+        if (onOpenSwitcher != null) {
+            PlaceAddressSwitcher(label = label, onClick = onOpenSwitcher)
+        } else {
             Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
                 PantopusIconImage(
                     icon = PantopusIcon.MapPin,
@@ -515,128 +565,131 @@ private fun PlaceDashboardHeader(
                 )
             }
         }
-        Box(
-            modifier = Modifier.clip(CircleShape).clickable(onClick = onOpenAvatar),
+    }
+}
+
+/** Where the person stands at this Home. Guests and service providers aren't residents: no status. */
+internal fun placeStatus(intel: PlaceIntelligence): PlaceChipModel? {
+    if (intel.viewer?.role == "nonresident") return null
+    return when (intel.tier) {
+        PlaceTier.T4 -> PlaceChipModel(PlaceChipTone.SUCCESS, "Verified", PantopusIcon.ShieldCheck)
+        PlaceTier.T3 -> PlaceChipModel(PlaceChipTone.WARNING, "Claimed", PantopusIcon.Home)
+        else -> PlaceChipModel(PlaceChipTone.NEUTRAL, "Private setup", PantopusIcon.Home)
+    }
+}
+
+private const val SWITCHER_HINT = "Switch home or add a home"
+
+/** The address as the way to the person's homes: a map pin, the address on one line and a chevron, in a pill. */
+@Composable
+private fun PlaceAddressSwitcher(
+    label: String,
+    onClick: () -> Unit,
+) {
+    val pill = RoundedCornerShape(percent = 50)
+    Row(
+        modifier =
+            Modifier
+                // Outside the semantics below, which replace everything inside them.
+                .testTag("place.addressSwitcher")
+                .minimumInteractiveComponentSize()
+                .clip(pill)
+                .background(PantopusColors.appSurfaceSunken)
+                .border(1.dp, PantopusColors.appBorder, pill)
+                .clickable(onClickLabel = SWITCHER_HINT, role = Role.Button, onClick = onClick)
+                // One element for TalkBack: the label names the homes and this address; the action label is the hint.
+                .clearAndSetSemantics { contentDescription = "Your homes, $label" }
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        PantopusIconImage(
+            icon = PantopusIcon.MapPin,
+            contentDescription = null,
+            size = 14.dp,
+            strokeWidth = 2f,
+            tint = PantopusColors.appTextSecondary,
+        )
+        Text(
+            text = label,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+            color = PantopusColors.appText,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
+        )
+        PantopusIconImage(
+            icon = PantopusIcon.ChevronDown,
+            contentDescription = null,
+            size = 14.dp,
+            strokeWidth = 2.25f,
+            tint = PantopusColors.appTextSecondary,
+        )
+    }
+}
+
+/** The bell (with the unread dot) and the menu, as every Place-tab root shows them. */
+@Composable
+internal fun PlaceBellAndMenu(
+    unreadCount: Int,
+    onOpenNotifications: () -> Unit,
+    onOpenMenu: () -> Unit,
+) {
+    Row {
+        IconButton(
+            onClick = onOpenNotifications,
+            modifier =
+                Modifier
+                    .size(Spacing.s12)
+                    .testTag("place.notifications")
+                    .semantics { if (unreadCount > 0) stateDescription = "$unreadCount unread" },
         ) {
-            // The monogram of the address's street words, as iOS draws it; the components' "RC" default is the
-            // design sample's and showed for every place.
-            if (isVerified) {
-                PlaceVerifiedAvatar(initials = placeMonogram(label), size = 40.dp)
-            } else {
-                PlaceClaimedAvatar(initials = placeMonogram(label), size = 40.dp)
-            }
-        }
-        // Bell + menu sit together, as on the Hub; the dot is the Hub bell's.
-        Row {
-            IconButton(
-                onClick = onOpenNotifications,
-                modifier =
-                    Modifier
-                        .size(Spacing.s12)
-                        .testTag("place.notifications")
-                        .semantics { if (unreadCount > 0) stateDescription = "$unreadCount unread" },
-            ) {
-                Box {
-                    PantopusIconImage(
-                        icon = PantopusIcon.Bell,
-                        contentDescription = "Notifications",
-                        size = Spacing.s5,
-                        tint = PantopusColors.appText,
-                    )
-                    if (unreadCount > 0) {
-                        Box(
-                            modifier =
-                                Modifier
-                                    .align(Alignment.TopEnd)
-                                    .offset(x = 2.dp, y = (-2).dp)
-                                    .size(8.dp)
-                                    .clip(CircleShape)
-                                    .background(PantopusColors.error)
-                                    .border(2.dp, PantopusColors.appSurface, CircleShape),
-                        )
-                    }
-                }
-            }
-            IconButton(onClick = onOpenMenu, modifier = Modifier.size(Spacing.s12).testTag("place.menu")) {
+            Box {
                 PantopusIconImage(
-                    icon = PantopusIcon.Menu,
-                    contentDescription = "Menu",
+                    icon = PantopusIcon.Bell,
+                    contentDescription = "Notifications",
                     size = Spacing.s5,
                     tint = PantopusColors.appText,
                 )
+                if (unreadCount > 0) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .align(Alignment.TopEnd)
+                                .offset(x = 2.dp, y = (-2).dp)
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(PantopusColors.error)
+                                .border(2.dp, PantopusColors.appSurface, CircleShape),
+                    )
+                }
             }
+        }
+        IconButton(onClick = onOpenMenu, modifier = Modifier.size(Spacing.s12).testTag("place.menu")) {
+            PantopusIconImage(
+                icon = PantopusIcon.Menu,
+                contentDescription = "Menu",
+                size = Spacing.s5,
+                tint = PantopusColors.appText,
+            )
         }
     }
 }
 
-/** A two-letter monogram from the address's street words; parity twin of iOS `PlaceDashboardView.initials(_:)`. */
-internal fun placeMonogram(label: String): String {
-    val letters =
-        label
-            .split(' ', ',')
-            .filter { it.firstOrNull()?.isLetter() == true }
-            .take(2)
-            .map { it.first().uppercaseChar() }
-    return if (letters.isEmpty()) "PL" else letters.joinToString("")
-}
-
-// MARK: - Claimed avatar
-
+/** A top bar with only the bell and menu, at the header's place, for a Place-tab root with no header of its own. */
 @Composable
-fun PlaceClaimedAvatar(
-    initials: String = "RC",
-    size: Dp = 40.dp,
+internal fun PlaceRootBar(
+    unreadCount: Int,
+    onOpenNotifications: () -> Unit,
+    onOpenMenu: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Box(modifier = Modifier.size(size)) {
-            Box(
-                modifier =
-                    Modifier
-                        .size(size)
-                        .clip(CircleShape)
-                        .background(Brush.linearGradient(listOf(PantopusColors.slate, PantopusColors.appTextSecondary))),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = initials,
-                    fontSize = (size.value * 0.34f).sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.2.sp,
-                    color = PantopusColors.appSurface,
-                )
-            }
-            Box(
-                modifier =
-                    Modifier
-                        .size(size * 0.42f)
-                        .align(Alignment.BottomEnd)
-                        .clip(CircleShape)
-                        .background(PantopusColors.warning)
-                        .border(2.dp, PantopusColors.appSurface, CircleShape),
-                contentAlignment = Alignment.Center,
-            ) {
-                PantopusIconImage(
-                    icon = PantopusIcon.Home,
-                    contentDescription = null,
-                    size = size * 0.22f,
-                    strokeWidth = 2.75f,
-                    tint = PantopusColors.appSurface,
-                )
-            }
-        }
-        Text(
-            text = "CLAIMED",
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 0.4.sp,
-            color = PantopusColors.warning,
-            modifier =
-                Modifier
-                    .clip(RoundedCornerShape(999.dp))
-                    .background(PantopusColors.warningBg)
-                    .border(1.dp, PantopusColors.warningLight, RoundedCornerShape(999.dp))
-                    .padding(horizontal = 7.dp, vertical = 2.dp),
-        )
+    Row(
+        modifier = modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.End,
+    ) {
+        PlaceBellAndMenu(unreadCount, onOpenNotifications, onOpenMenu)
     }
 }
 
@@ -714,7 +767,7 @@ fun PlaceVerifyBanner(
 // MARK: - Skeleton
 
 @Composable
-private fun FullWidthShimmer(
+internal fun FullWidthShimmer(
     height: Dp,
     cornerRadius: Dp = 16.dp,
 ) {
@@ -723,15 +776,19 @@ private fun FullWidthShimmer(
     }
 }
 
+/** The dashboard's loading geometry; [headerActions] (the bell and menu) sit where the loaded header puts them. */
 @Composable
-private fun PlaceDashboardSkeleton() {
+internal fun PlaceDashboardSkeleton(headerActions: (@Composable () -> Unit)? = null) {
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-        Column(
-            modifier = Modifier.padding(horizontal = 2.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Shimmer(width = 150.dp, height = 26.dp)
-            Shimmer(width = 190.dp, height = 14.dp)
+        Row(verticalAlignment = Alignment.Top) {
+            Column(
+                modifier = Modifier.weight(1f).padding(horizontal = 2.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Shimmer(width = 150.dp, height = 26.dp)
+                Shimmer(width = 190.dp, height = 14.dp)
+            }
+            headerActions?.let { actions -> Box(modifier = Modifier.padding(top = 8.dp, end = 2.dp)) { actions() } }
         }
         Spacer(modifier = Modifier.height(8.dp))
         FullWidthShimmer(height = 132.dp)

@@ -1216,7 +1216,7 @@ private fun TodayWeatherSection(
                 intel.section(PlaceSectionId.SUNRISE_SUNSET)?.sunriseSunset,
                 pickups,
                 air,
-                home = SkyHome.of(intel.section(PlaceSectionId.YOUR_HOME)?.yourHome?.homeType),
+                home = intel.section(PlaceSectionId.YOUR_HOME)?.yourHome.let { SkyHome.of(it?.house, it?.homeType) },
                 streetLights = SkyStreet.lights(intel.section(PlaceSectionId.BLOCK_DENSITY)?.blockDensity?.bucket?.name?.lowercase()),
                 onBins = onBins,
             )

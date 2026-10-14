@@ -13,11 +13,16 @@ import app.pantopus.android.data.account.AccountRepository
 import app.pantopus.android.data.api.models.settings.PrivacySettingsUpdate
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.displayMessage
+import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.auth.SessionEndReason
 import app.pantopus.android.data.privacy.PrivacyRepository
 import app.pantopus.android.data.profile.ProfileRepository
+import app.pantopus.android.data.storage.StorageUsage
+import app.pantopus.android.data.store.StoreKind
 import app.pantopus.android.data.support_trains.SupportTrainsRepository
+import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.components.ToastKind
 import app.pantopus.android.ui.components.ToastMessage
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListBanner
@@ -57,6 +62,9 @@ enum class SettingsRoute {
      * Settings index when `auth.state.value.user.isAdmin == true`.
      */
     ReviewClaims,
+
+    /** This phone → Storage & data (Instant Screens contract §7). */
+    StorageData,
 }
 
 // MARK: - Index
@@ -68,11 +76,15 @@ class SettingsIndexViewModel
         private val auth: AuthRepository,
         private val privacy: PrivacyRepository,
         private val profile: ProfileRepository,
+        private val storage: StorageUsage,
     ) : ViewModel() {
         val title: String = "Settings"
 
         private val _state = MutableStateFlow<GroupedListUiState>(GroupedListUiState.Loading)
         val state: StateFlow<GroupedListUiState> = _state.asStateFlow()
+        private val _refreshing = MutableStateFlow(false)
+        val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+        private var reading = false
 
         private val _footerCaption = MutableStateFlow<String?>(null)
         val footerCaption: StateFlow<String?> = _footerCaption.asStateFlow()
@@ -100,12 +112,22 @@ class SettingsIndexViewModel
         private var stripeConnected: Boolean? = null
         private var isAdmin: Boolean = false
 
+        /** What Pantopus keeps on this phone (Storage & data); null until measured. */
+        private var storageBytes: Long? = null
+
         /**
          * Entry and every Back from a sub-screen (Instant Screens): the index stays on screen, and a first entry shows
          * the stored profile at once. The block count is read again quietly (an unblock shows on return); the
          * profile only once the store says it is out of date.
          */
-        fun load() {
+        fun load() = read(force = false)
+
+        fun refresh() = read(force = true)
+
+        private fun read(force: Boolean) {
+            if (reading) return
+            reading = true
+            _refreshing.value = force && _state.value is GroupedListUiState.Loaded
             val state = auth.state.value
             if (state is AuthRepository.State.SignedIn) {
                 // The session `UserDto` carries no verification flag, so the
@@ -115,24 +137,34 @@ class SettingsIndexViewModel
             }
             val shown = _state.value is GroupedListUiState.Loaded
             if (!shown) showStoredProfile()
+            // Measured on every entry and return: Clear cache, or browsing, changes it.
             viewModelScope.launch {
-                when (val blocks = privacy.blocks()) {
-                    is NetworkResult.Success -> blockCount = blocks.data.blocks.size
-                    else -> Unit
+                storageBytes = storage.measure().total
+                if (_state.value is GroupedListUiState.Loaded) rebuild()
+            }
+            viewModelScope.launch {
+                try {
+                    when (val blocks = privacy.blocks()) {
+                        is NetworkResult.Success -> blockCount = blocks.data.blocks.size
+                        else -> Unit
+                    }
+                    // Real verification state — `GET /api/users/profile` →
+                    // `user.verified` (`backend/routes/users.js:1962`). Same
+                    // field the Verification Center sub-screen reports; a failed
+                    // first read stays `null` (unknown), a failed re-read keeps it.
+                    val user = profile.ownProfileStored(force).data?.user
+                    if (user != null) {
+                        verified = user.verified
+                        profileVisibility = user.profileVisibility
+                    } else if (!shown) {
+                        verified = null
+                        profileVisibility = null
+                    }
+                    rebuild()
+                } finally {
+                    reading = false
+                    _refreshing.value = false
                 }
-                // Real verification state — `GET /api/users/profile` →
-                // `user.verified` (`backend/routes/users.js:1962`). Same
-                // field the Verification Center sub-screen reports; a failed
-                // first read stays `null` (unknown), a failed re-read keeps it.
-                val user = profile.ownProfileStored().data?.user
-                if (user != null) {
-                    verified = user.verified
-                    profileVisibility = user.profileVisibility
-                } else if (!shown) {
-                    verified = null
-                    profileVisibility = null
-                }
-                rebuild()
             }
         }
 
@@ -167,6 +199,7 @@ class SettingsIndexViewModel
                 "legal" -> _navigation.value = SettingsRoute.Legal
                 "about" -> _navigation.value = SettingsRoute.About
                 "reviewClaims" -> _navigation.value = SettingsRoute.ReviewClaims
+                "storageData" -> _navigation.value = SettingsRoute.StorageData
                 "signOut" -> {
                     viewModelScope.launch {
                         auth.signOut()
@@ -263,6 +296,7 @@ class SettingsIndexViewModel
                                 ),
                         ),
                     )
+                    add(thisPhoneGroup())
                     add(
                         GroupedListGroup(
                             id = "payments",
@@ -327,6 +361,21 @@ class SettingsIndexViewModel
                     )
                 }
             _state.value = GroupedListUiState.Loaded(groups = groups)
+        }
+
+        /** Storage & data (Instant Screens contract §7), after Notifications; the size on the row once measured. */
+        private fun thisPhoneGroup(): GroupedListGroup {
+            val size: RowControl =
+                storageBytes?.let { RowControl.ChipStatus(StorageUsage.format(it), RowControl.ChipTone.Neutral, includesChevron = true) }
+                    ?: RowControl.Chevron
+            return GroupedListGroup(
+                id = "thisPhone",
+                overline = "This phone",
+                rows =
+                    listOf(
+                        GroupedListRow(id = "storageData", label = "Storage & data", subtext = "Photos and saved pages", control = size),
+                    ),
+            )
         }
 
         companion object {
@@ -429,25 +478,53 @@ class PrivacySettingsViewModel
         private val _accountDeleted = MutableStateFlow(false)
         val accountDeleted: StateFlow<Boolean> = _accountDeleted.asStateFlow()
 
-        fun load() {
+        private var searchPrivacyLoading = false
+        private val _refreshing = MutableStateFlow(false)
+        val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+        private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
+        val refreshNotice: StateFlow<RefreshNotice?> = _refreshNotice.asStateFlow()
+
+        fun load() = readPrivacy(force = false)
+
+        fun refresh() = readPrivacy(force = true)
+
+        private fun readPrivacy(force: Boolean) {
+            if (searchPrivacyLoading || searchPrivacySaving) return
+            searchPrivacyLoading = true
+            _refreshing.value = force && _state.value is GroupedListUiState.Loaded
             configureAppLockForSignedInUser()
             appLock.refreshCapability()
-            viewModelScope.launch {
-                fetchSearchPrivacy()
+            privacy.settingsCopy()?.let { copy ->
+                searchVisibility = copy.settings.searchVisibility ?: "everyone"
+                findableByName = copy.settings.findableByName ?: false
+                searchPrivacyLoadFailed = false
                 rebuild()
             }
-        }
-
-        /** `GET /api/privacy/settings` — `backend/routes/privacy.js:50`. A
-         *  failure never blanks the screen. */
-        private suspend fun fetchSearchPrivacy() {
-            when (val result = privacy.settings()) {
-                is NetworkResult.Success -> {
-                    searchVisibility = result.data.settings.searchVisibility ?: "everyone"
-                    findableByName = result.data.settings.findableByName ?: false
-                    searchPrivacyLoadFailed = false
+            viewModelScope.launch {
+                try {
+                    val result = privacy.settings(force)
+                    val copy = privacy.settingsSnapshot()
+                    _refreshNotice.value = RefreshNotice(copy.fetchedAt, ::refresh).takeIf { copy.showsRefreshFailure(StoreKind.YOU) }
+                    when (result) {
+                        is NetworkResult.Success ->
+                            if (!searchPrivacySaving) {
+                                searchVisibility = result.data.settings.searchVisibility ?: "everyone"
+                                findableByName = result.data.settings.findableByName ?: false
+                                searchPrivacyLoadFailed = false
+                            }
+                        is NetworkResult.Failure -> {
+                            searchPrivacyLoadFailed = true
+                            if (result.error.refusesStoredCopy) {
+                                _state.value = GroupedListUiState.Error(result.error.displayMessage("Search privacy is unavailable."))
+                                return@launch
+                            }
+                        }
+                    }
+                    rebuild()
+                } finally {
+                    searchPrivacyLoading = false
+                    _refreshing.value = false
                 }
-                is NetworkResult.Failure -> searchPrivacyLoadFailed = true
             }
         }
 
@@ -512,7 +589,7 @@ class PrivacySettingsViewModel
                 _deleteSheetVisible.value = true
                 loadOrganizedLiveTrainCount()
             }
-            if (rowId == ROW_SEARCH_PRIVACY_RETRY) load()
+            if (rowId == ROW_SEARCH_PRIVACY_RETRY) refresh()
         }
 
         fun consumeToast() {
@@ -760,7 +837,7 @@ class PrivacySettingsViewModel
          * (`settings/privacy.tsx:20-33`, `:476-556`) word for word.
          */
         private fun searchPrivacyGroup(): GroupedListGroup {
-            // The card has no pull-to-refresh; after a failed load this row is the way back.
+            // Keep an explicit recovery action alongside pull-to-refresh after a failed first read.
             val retry =
                 GroupedListRow(
                     id = ROW_SEARCH_PRIVACY_RETRY,
