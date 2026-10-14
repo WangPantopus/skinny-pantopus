@@ -6,11 +6,14 @@ Owner: the PB session. Keep this file current in your own PRs (or a small docs P
 
 - **S1 rule cleanups** (server half): [PR 2259](https://github.com/WangPantopus/skinny-pantopus/pull/2259), merged, verified on web, iOS and Android. Heads-ups about crime and suspicion (`theft`, `vandalism`, `suspicious`, `scam`, `crime_incident`) are refused at creation with `400 ALERT_KIND_NOT_ALLOWED`; `official_notice` and `public_safety` only from Official or curator accounts, each with `sourceUrl` (stored as `post_metadata.source_url`); an edit can't switch a post to a refused kind; businesses can't post to the Place feed (`403 BUSINESS_CANNOT_POST`, also from `POST /api/businesses/:id/posts`). Old posts of those kinds stay readable and editable. The seeder now sends each alert's source. Contract §1, §2.5 and §8 updated.
 - **S4 topics** (server half): [PR 2264](https://github.com/WangPantopus/skinny-pantopus/pull/2264), merged, verified on web, iOS and Android: the twelve topics in `Post_topic_check`, `?topic=` on the legacy Place feed, topic mutes with `areaId` (listed in `GET /api/posts/mute` as `topic_mutes`, undone by area), `PostMute.area_id`. Contract §2.9 and §4.1 updated.
+- **One read check (S5, part 1):** [PR 2268](https://github.com/WangPantopus/skinny-pantopus/pull/2268), merged, verified on web, iOS and Android. `canReadPost` (the post page's rule) lives in `backend/services/pulse/readAccess.js` with `readablePosts` and `POST_READ_SELECT`; other people's profile post lists and the business Mentions list use it (both showed posts their readers couldn't open). Local-profile activity follows in [PR 2270](https://github.com/WangPantopus/skinny-pantopus/pull/2270).
+- **Adult attestation (S5.6, server):** [PR 2269](https://github.com/WangPantopus/skinny-pantopus/pull/2269): `POST /api/pulse/adult-attestation`, `User.adult_attested_at`, `403 AGE_NOT_ELIGIBLE` for an under-18 date of birth. New `backend/routes/pulse.js`, mounted at `/api/pulse`.
 
 ## Next
 
-- **One read check on every path** (S5, no table needed): `canReadPost` now lives in `backend/services/pulse/readAccess.js` (this PR), and the profile post list and the business Mentions list use it. The other paths that check access their own way get their own small privacy PRs, one at a time.
-- Then `labelFor` (built on `isVerifiedResident` in `utils/homePermissions.js`, which Plans already uses), `canReadPost`'s area scopes, and the `PulseArea` migration with the three town boundaries, ready for the table approval.
+- **S7 lifecycle** (no table; H1 is cleared now that PI's and PA's S2 are on `master`): `expires_at`, `resolution`, `claim_mode`, the `share` and `offer` types, `PostCategoryTTL` rows, auto-archive by type, the day-6 `ask_still_open` reminder.
+- The remaining read paths that check access their own way, one small privacy PR each.
+- Then, once the founder approves the tables and the boundary download: `labelFor` (built on `isVerifiedResident` in `utils/homePermissions.js`, which Plans already uses), `canReadPost`'s area scopes, and the `PulseArea` migration with the three town boundaries, ready for the table approval.
 
 ## Requests (to other streams)
 
