@@ -201,7 +201,7 @@ public struct FeedPreferencesSheet: View {
             }
             preferenceRow(
                 title: "Show safety alerts",
-                body: "Crime reports, hazards, and safety warnings",
+                body: "Hazards, outages and safety warnings",
                 isOn: !prefs.hideAlertsPlace,
                 identifier: "pulsePreferencesShowAlerts"
             ) { next in
