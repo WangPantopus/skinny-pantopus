@@ -12,7 +12,21 @@ Owner: the PA session. Keep this file current in your own PRs (or a small docs P
 - **Restore after background process death:** [PR 2296](https://github.com/WangPantopus/skinny-pantopus/pull/2296), merged October 14. `MainActivity` no longer replays the original launch link when restoring the person's later screen. The prior session checked link-start, a link arriving during restore, and configuration changes.
 - **S4 topics:** [PR 2300](https://github.com/WangPantopus/skinny-pantopus/pull/2300), merged October 14 at `9bcbe0c89`. All required CI passed, including Android lint/test/assemble and instrumented tests; the PR records the two-account local checks and R8 Release check. Topic chips, empty-topic text, card topics, topic mutes and preferences undo are on `master`.
 
-## Resumed — October 14, 2026
+## Current handoff — October 14, 2026
+
+The founder requested another handoff during the resumed run. No additional slice was finished or merged. The five existing PRs remain drafts. The PA runtime, fresh fixtures, managed auxiliary checkout and current build are retained for continuation; no cleanup was requested this time. Full current-head local checks, native verification and R8 remain merge gates. See the private continuation for the build PID/log and exact runtime state.
+
+| Work | What is built in the draft | What remains |
+|---|---|---|
+| S7 [2302](https://github.com/WangPantopus/skinny-pantopus/pull/2302) | Lifecycle pills/menus, Keep open/Close, reminders; new manual-archive guards and restored-Ask reconciliation (`c77d19ef7`) | Finish current full build, fresh two-account native scenarios, R8 install/check, exact-head green CI |
+| Sharing [2316](https://github.com/WangPantopus/skinny-pantopus/pull/2316) | Permission-aware menus, server authorization before chooser; unknown moderation now denied (`ac8d6a7f2`) | Full checks; restricted/disabled/stale/offline/repeat-tap/two-account and R8 verification |
+| Radius/comments [2318](https://github.com/WangPantopus/skinny-pantopus/pull/2318) | 100-mile display cap and safe refusal copy; unchanged this run | Integrate final S7; old-radius/offline-cache/comment retry device checks and R8; retarget after S7 merge |
+| S5/S6 [2303](https://github.com/WangPantopus/skinny-pantopus/pull/2303) | Grouped page, area/views/topics/menus; successive earlier pages now accumulate and the moved end gates seen (`a0d1fc8cd`) | Compile/full checks, 100+ equal-time rows, real paging/seen checks, dark/a11y/offline/R8; PB feed/distance H4 |
+| Draft foundation [2315](https://github.com/WangPantopus/skinny-pantopus/pull/2315) | Encrypted account/origin drafts and photos; extracted picker callback and explicitly typed JSON keys (`7378540e9`) | Full checks and all persistence/account/photo/failure/retry/deletion device cases; full S8 and S20 are not built |
+
+Full S8/S9 and the remaining Android work through S24 are still unfinished. Continue with published contracts, existing components and backend hold points. S25 remains reserved. The entries below distinguish fresh evidence from the prior cleanup session's historical evidence.
+
+### Resumed work and evidence
 
 - Resumed in the primary PA checkout on `claude/pulse-pa-s7-status`; fetched origin and merged master `b4234543c` into S7 (`b583dc54f`). The unrelated `.claude/launch.json` modification is preserved unchanged.
 - All five PA PRs remain drafts. S7's old pushed head has green CI; the new local repairs still need current-head checks. No draft is verified complete or ready to merge.
@@ -22,7 +36,8 @@ Owner: the PA session. Keep this file current in your own PRs (or a small docs P
 - S7 review repairs: non-open Heads-ups no longer show a future ending time; detail reads the existing `archived_at` so manually archived Asks offer no Keep open/Close actions, and archived list rows do not advertise a future ending. Fresh synthetic manual-archive fixtures are ready for the native pass.
 - Closing an Ask now uses a separate local marker from deleted/hidden posts. A fresh later feed page can clear that marker when My posts restores the Ask; an older in-flight read cannot bring it back. Native close/restore verification remains pending.
 - Fresh web check: Alice's post and Bob's reply survive reload; Bob sees both without Alice's edit/delete controls. The web still uses `Solved` for an answered Ask and a generic Post for a claimed Offer. This is compatibility evidence, not complete web lifecycle copy.
-- Prepared local follow-ups while S7 builds, without another Gradle run: sharing rejects unknown moderation values and fixes its two overlong lines (`ac8d6a7f2`); S6 appends/deduplicates older batches, keeps loaded rows during failures/actions, carries the original snapshot and observes the moved end before acknowledging (`a0d1fc8cd`); draft persistence extracts its photo-picker callback to address CI's complexity finding (`e16c0900c`). These commits are not pushed or verified yet. S7 remains first for app verification and merge.
+- Prepared follow-ups while S7 builds, without another Gradle run: sharing rejects unknown moderation values and fixes its two overlong lines (`ac8d6a7f2`); S6 appends/deduplicates older batches, keeps loaded rows during failures/actions, carries the original snapshot and observes the moved end before acknowledging (`a0d1fc8cd`); draft persistence extracts its photo-picker callback (`e16c0900c`) and explicitly types JSON keys (`7378540e9`). The old draft instrumented job failed compilation before starting its emulator; this was not a device failure. These repairs remain unverified. S7 remains first for app verification and merge.
+- TalkBack speech-display preflight now works on the retained emulator; TalkBack is off before sign-in. This is tool setup, not an S7 accessibility pass. The fresh Android app has not yet been installed.
 - H4 audit: snapshot contract #2310 is on master; distance #2311, real feed #2312 and the S9/S10 chain #2313/#2317/#2319–#2322 are open. S8 also still requires PS's composer checks. S25 remains reserved.
 
 ## Historical cleanup handoff — October 14, 2026
