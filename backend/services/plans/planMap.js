@@ -58,7 +58,7 @@ async function planPins(user, box, query = {}) {
   const pad = 0.02;
   const rows = await planService.queryOpenPlansInBox({
     south: box.south - pad, north: box.north + pad, west: box.west - pad, east: box.east + pad,
-  }, { kinds });
+  }, { kinds, scopeAccess: viewer.scopeAccess });
   const candidates = rows
     .filter((plan) => planService.isVisibleTo(plan, viewer))
     .filter((plan) => planService.windowMatches(plan, window));

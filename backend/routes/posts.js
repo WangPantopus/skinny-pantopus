@@ -214,7 +214,7 @@ const { PULSE_TOPICS, PULSE_TOPIC_NAMES, isPulseTopic } = require('../services/p
 const pulseLifecycle = require('../services/pulse/lifecycle');
 // The one read check every path uses (this file keeps calling it canViewPost).
 const {
-  canReadPost: canViewPost, readablePosts, isPubliclyShareable, POST_READ_SELECT, canReadReply, onlyShownReplies,
+  canReadPost: canViewPost, readablePosts, postScopeAccess, isPubliclyShareable, POST_READ_SELECT, canReadReply, onlyShownReplies,
 } = require('../services/pulse/readAccess');
 
 const TOPIC_VALUES = PULSE_TOPICS;
@@ -1893,15 +1893,15 @@ router.get('/saved', verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const { limit = 50, offset = 0 } = req.query;
-
-    const { data: saves, error } = await supabaseAdmin
+    const scopeAccess = await postScopeAccess(userId);
+    const { data: saves, error } = await scopeAccess.query(supabaseAdmin
       .from('PostSave')
       .select(`
         id, created_at,
-        post:post_id (
+        post:post_id!inner (
           *, creator:user_id (${SAFE_CREATOR_SELECT}), home:home_id (id, address, city)
         )
-      `)
+      `), 'post')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .range(parseInt(offset), parseInt(offset) + parseInt(limit) - 1);
@@ -2020,10 +2020,10 @@ router.get('/feed/home', verifyToken, async (req, res) => {
     }
 
     const audienceFilter = subTab === 'neighborhood' ? 'neighborhood' : 'household';
-
-    let query = supabaseAdmin
+    const scopeAccess = await postScopeAccess(userId);
+    let query = scopeAccess.query(supabaseAdmin
       .from('Post')
-      .select(FEED_POST_SELECT)
+      .select(FEED_POST_SELECT))
       .eq('home_id', homeId)
       .eq('audience', audienceFilter)
       .is('archived_at', null)
@@ -2450,6 +2450,9 @@ router.post('/mute/topic', verifyToken, async (req, res) => {
     feedService.invalidateFilterCache(userId);
     res.json({ message: `Muted ${postType}${surface ? ` on ${surface}` : ''}` });
   } catch (err) {
+    if (err.code === '23503' && err.message?.includes('PostMute_area_id_fkey')) {
+      return res.status(400).json({ error: 'That area could not be found.' });
+    }
     logger.error('Topic mute error', { error: err.message, userId: req.user.id });
     res.status(500).json({ error: 'Failed to mute topic' });
   }
@@ -3447,6 +3450,8 @@ router.get('/user/:userId', verifyToken, async (req, res) => {
       .order('created_at', { ascending: false })
       .order('id', { ascending: false })
       .limit(parsedLimit);
+
+    query = (await postScopeAccess(requestingUserId)).query(query);
 
     // Archived posts are left out of every list except the owner's own My posts,
     // which asks for them to fill its Archived tab (and to restore them).

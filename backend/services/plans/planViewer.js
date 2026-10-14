@@ -13,6 +13,7 @@ const { isFeatureEnabled } = require('../featureFlagService');
 const { getMuteAndHideFilters } = require('../feedService');
 const { isVerifiedResident } = require('../../utils/homePermissions');
 const { isFreshGps } = require('./planRules');
+const { postScopeAccess } = require('../pulse/readAccess');
 
 const VERIFIED_SELECT = 'home_id, verification_status, verification_source, verified_at, is_active';
 // A household member in a trusted state (the same states that may read the household's mail,
@@ -109,11 +110,12 @@ function parseGps(raw) {
  */
 async function loadViewer(user, opts = {}) {
   const userId = String(user.id);
-  const [playdatesFlag, filters, homes, savedPlaces] = await Promise.all([
+  const [playdatesFlag, filters, homes, savedPlaces, scopeAccess] = await Promise.all([
     isFeatureEnabled('plans_playdates', user),
     getMuteAndHideFilters(userId),
     loadHomes(userId),
     loadSavedPlaces(userId),
+    postScopeAccess(userId),
   ]);
   const gps = parseGps(opts.gps);
   const verified = homes.some((home) => home.verified);
@@ -144,6 +146,7 @@ async function loadViewer(user, opts = {}) {
   return {
     id: userId,
     role: user.role || null,
+    scopeAccess,
     verified,
     // Playdates exist for a viewer only with the flag on and a verified address.
     seesPlaydates: Boolean(playdatesFlag) && verified,

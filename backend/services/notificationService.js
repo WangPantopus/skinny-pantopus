@@ -12,6 +12,7 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 const badgeService = require('./badgeService');
 const pushService = require('./pushService');
+const { readableNotifications } = require('./pulse/notificationAccess');
 const { isLaunchNotificationHidden } = require('../utils/featureFlags');
 const {
   CONTEXTS: NOTIFICATION_CONTEXT_LIST,
@@ -374,6 +375,10 @@ async function createNotification({ userId, type, title, body, icon, link, metad
       return null;
     }
 
+    // Stored references remain subject to current access on every inbox read.
+    // A quote the recipient cannot read must not leave through a live channel.
+    if (!(await readableNotifications([data])).length) return null;
+
     // Push updated badge counts to the user in real-time
     badgeService.emitBadgeUpdate(userId);
 
@@ -389,8 +394,9 @@ async function createNotification({ userId, type, title, body, icon, link, metad
     // 1. User has global push enabled (MailPreferences.push_notifications)
     // 2. User hasn't disabled this specific notification type (UserNotificationPreferences)
     Promise.all([isPushEnabled(userId), isTypeEnabled(userId, type)])
-      .then(([pushEnabled, typeEnabled]) => {
+      .then(async ([pushEnabled, typeEnabled]) => {
         if (!pushEnabled || !typeEnabled) return;
+        if (!(await readableNotifications([data])).length) return;
         emitDesktopAlert(data);
         return pushService.sendToUser(userId, {
           title,
@@ -451,13 +457,15 @@ async function createBulkNotifications(notifications, { sendPush = true } = {}) 
       return [];
     }
 
+    const readable = await readableNotifications(data || []);
+
     // Push updated badge counts to all affected users
-    const uniqueUserIds = [...new Set(rows.map((n) => n.user_id))];
+    const uniqueUserIds = [...new Set(readable.map((n) => n.user_id))];
     badgeService.emitBadgeUpdateToMany(uniqueUserIds);
 
     // Push each notification to its recipient if they're connected
-    if (_io && _connectedUsers && data) {
-      for (const notif of data) {
+    if (_io && _connectedUsers) {
+      for (const notif of readable) {
         const socketIds = getUserSocketIds(notif.user_id);
         for (const socketId of socketIds) {
           _io.to(socketId).emit('notification:new', notif);
@@ -466,11 +474,12 @@ async function createBulkNotifications(notifications, { sendPush = true } = {}) 
     }
 
     // Send push notifications to all affected users' devices (respecting preferences)
-    if (sendPush && data && data.length > 0) {
-      for (const notif of data) {
+    if (sendPush && readable.length > 0) {
+      for (const notif of readable) {
         Promise.all([isPushEnabled(notif.user_id), isTypeEnabled(notif.user_id, notif.type)])
-          .then(([pushEnabled, typeEnabled]) => {
+          .then(async ([pushEnabled, typeEnabled]) => {
             if (!pushEnabled || !typeEnabled) return;
+            if (!(await readableNotifications([notif])).length) return;
             emitDesktopAlert(notif);
             return pushService.sendToUser(notif.user_id, {
               title: notif.title,
@@ -484,7 +493,7 @@ async function createBulkNotifications(notifications, { sendPush = true } = {}) 
       }
     }
 
-    return data || [];
+    return readable;
   } catch (err) {
     logger.error('Bulk notification error', { error: err.message });
     return [];
