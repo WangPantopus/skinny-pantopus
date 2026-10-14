@@ -229,7 +229,7 @@ Both answer `404 POST_NOT_FOUND`, `403 NOT_POST_AUTHOR` (not the asker), `400 NO
 | `PostComment` | `helpful_at timestamptz`, `helpful_by uuid`, `moderation_state text not null default 'live'`, `moderation_rule text`. Account deletion must leave a "Reply removed" row instead of cascading (change `user_id` to nullable with `ON DELETE SET NULL`, and soft-delete the text). `moderation_state` (check `live`/`held`/`removed`) and `moderation_rule` are in `20261014091000_pulse_comment_moderation_state.sql` (S11, PB's half, part 2) |
 | `PostMute` | `area_id uuid null` (the `topic` entity type already exists); its unique index includes `area_id`. Added with `Post_topic_check`'s widening in `20261014031000_pulse_topics.sql` (S4); the foreign key to `PulseArea` comes with that table |
 | `User` | `adult_attested_at timestamptz`; `account_type` check widened with `official` |
-| `UserFeedPreference` | `pulse_seen_nearby_at timestamptz`, `pulse_seen_following_at timestamptz` |
+| `UserFeedPreference` | `pulse_nearby_seen_at timestamptz`, `pulse_following_seen_at timestamptz` (server-only storage finalized before S6; clients use `/feed/seen`, never these columns) |
 | `UserNotificationPreferences` | `digest_enabled boolean`, `digest_time_local time`, `digest_channel text`, `weekly_street_digest_enabled boolean` (PC), `nudge_helper boolean default true` |
 | `Plan` | `source_post_id uuid null` (R3); S21: `series_id uuid`, `recurrence jsonb`, `co_host_ids uuid[]`, `paused_at timestamptz` |
 | `Post` (later slices) | S23: `merged_into_post_id uuid null`; S24: pinned sources live in `post_metadata.pins` (no column) |
