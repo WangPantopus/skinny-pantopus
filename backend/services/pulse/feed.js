@@ -8,6 +8,7 @@ const { displayedPoint } = require('./distanceText');
 const { postCards } = require('./cards');
 const seen = require('./seen');
 const cursor = require('./feedCursor');
+const follows = require('./follows');
 const { DAY_MS } = require('./lifecycle');
 
 const SELECT = `${legacy.FEED_POST_SELECT}, allow_external_share, moderation_state, radius_miles, pulse_post_town_id`;
@@ -32,7 +33,8 @@ async function contextFor(userId, areaId) {
   const available = homes.areas.filter(item => (item.kind === 'town' && (item.id === defaults.town?.id
     || homes.verifiedAreaIds.has(item.id))) || (['street', 'neighborhood'].includes(item.kind) && homes.verifiedAreaIds.has(item.id)));
   if (area && !available.some(item => item.id === area.id)) available.push(area);
-  return { userId, homes, filters, area, available, defaults, scope: await postScopeAccess(userId, homes) };
+  return { userId, homes, filters, area, available, defaults, scope: await postScopeAccess(userId, homes),
+    follows: await follows.activeRows(userId) };
 }
 
 /** Read database chunks, then apply existing hide/mute/politics and legacy reader
@@ -40,7 +42,7 @@ async function contextFor(userId, areaId) {
  * predicate. Never mistake an entirely filtered chunk for the end of the feed.
  */
 async function scan(context, { view, topic, lower, before, readAt, take = Infinity, countOnly = false }) {
-  if (!context.area || view === 'following') return countOnly ? 0 : []; // S10 supplies the explicit follow graph.
+  if (!context.area || (view === 'following' && !context.follows.length)) return countOnly ? 0 : [];
   const found = [];
   let count = 0;
   let position = before;
@@ -66,6 +68,7 @@ async function scan(context, { view, topic, lower, before, readAt, take = Infini
       p_area_id: context.area.id, p_points: points,
     }))).map(row => row.id) : []);
     eligible = eligible.filter(post => post.area_id || legacyIds.has(post.id));
+    if (view === 'following') eligible = eligible.filter(post => follows.matches(context.follows, post, context.area.id));
     const permissions = await Promise.all(eligible.map(post => canReadPost(post, context.userId, context.scope)));
     const readable = eligible.filter((_, i) => permissions[i]);
     if (countOnly) count += readable.length;
@@ -139,4 +142,4 @@ async function newCount(userId, { view, topic, areaId, after }) {
   return { count: await scan(context, { view, topic, lower: after, readAt, countOnly: true }) };
 }
 
-module.exports = { page, newCount };
+module.exports = { page, newCount, contextFor };

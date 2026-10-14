@@ -10,6 +10,7 @@ const feedSeen = require('../services/pulse/seen');
 const feedCursor = require('../services/pulse/feedCursor');
 const conversation = require('../services/pulse/conversation');
 const replyActions = require('../services/pulse/replyActions');
+const follows = require('../services/pulse/follows');
 const { isPulseTopic } = require('../services/pulse/topics');
 const {
   DAY_MS, askIdsWithReplies, windowDays, endsAt,
@@ -92,6 +93,37 @@ router.post('/posts/:postId/replies/:replyId/helpful', verifyToken, async (req, 
 router.post('/posts/:postId/replies/:replyId/thanks', verifyToken, async (req, res) => {
   try {
     res.json(await replyActions.act(req.params.postId, req.params.replyId, req.user.id, 'thanks'));
+  } catch (error) { feedError(res, error); }
+});
+
+router.get('/follows', verifyToken, async (req, res) => {
+  try {
+    res.set('Cache-Control', 'private, no-store');
+    res.json(await follows.list(req.user.id));
+  } catch (error) { feedError(res, error); }
+});
+
+router.put('/follows', verifyToken, async (req, res) => {
+  try { res.json(await follows.put(req.user.id, req.body)); }
+  catch (error) { feedError(res, error); }
+});
+
+router.delete('/follows', verifyToken, async (req, res) => {
+  try { res.json(await follows.remove(req.user.id, req.query)); }
+  catch (error) { feedError(res, error); }
+});
+
+router.get('/preferences/summary', verifyToken, async (req, res) => {
+  try {
+    res.set('Cache-Control', 'private, no-store');
+    res.json(await follows.summary(req.user.id));
+  } catch (error) { feedError(res, error); }
+});
+
+router.get('/posts/:postId/why', verifyToken, async (req, res) => {
+  try {
+    res.set('Cache-Control', 'private, no-store');
+    res.json(await follows.why(req.user.id, req.params.postId, feedOptions(req.query)));
   } catch (error) { feedError(res, error); }
 });
 

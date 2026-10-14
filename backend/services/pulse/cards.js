@@ -6,6 +6,7 @@ const { labelFor, homeAreaContext } = require('./areas');
 const { distanceFormatter } = require('./distanceText');
 const { onlyShownReplies, isPubliclyShareable } = require('./readAccess');
 const { DAY_MS, endsAt } = require('./lifecycle');
+const follows = require('./follows');
 
 const TYPES = new Set(['ask_local', 'share', 'offer', 'alert', 'event', 'lost_found']);
 const ACTIONS = { ask_local: ['answer', 'Answer'], share: ['reply', 'Reply'], offer: ['claim', 'Ask for it'],
@@ -34,11 +35,12 @@ async function replyCounts(posts, viewerId, blockedIds) {
  */
 async function postCards(rows, { viewerId, homes, areas, fallbackArea, blockedIds, publicResponse = false }) {
   if (!rows.length) return [];
-  const [enriched, counts, distance, ttlResult] = await Promise.all([
+  const [enriched, counts, distance, ttlResult, followed] = await Promise.all([
     feed.enrichFeedPosts(rows.map(row => feed.normalizeFeedPostRow(row)), viewerId),
     replyCounts(rows, viewerId, blockedIds),
     distanceFormatter(viewerId, { homes, publicResponse }),
     db.from('PostCategoryTTL').select('post_type, ttl_days'),
+    viewerId ? follows.activeRows(viewerId) : [],
   ]);
   if (ttlResult.error) throw ttlResult.error;
   const days = new Map((ttlResult.data || []).map(row => [row.post_type, row.ttl_days]));
@@ -85,7 +87,8 @@ async function postCards(rows, { viewerId, homes, areas, fallbackArea, blockedId
         venue: raw.event_venue || null } : null,
       lost_found: type === 'lost_found' ? { kind: raw.lost_found_type || 'lost' } : null,
       offer: type === 'offer' ? { claim_mode: raw.claim_mode || 'choose', requests_open: open, gone: raw.resolution === 'claimed' } : null,
-      viewer: { is_author: own, following: false, can_mark_helpful: own && type === 'ask_local',
+      viewer: { is_author: own, following: followed.some(row => row.target_type === 'post' && row.target_id === raw.id
+          && (!row.ends_on_resolve || follows.open(raw))), can_mark_helpful: own && type === 'ask_local',
         saved: !!post.userHasSaved, can_share: isPubliclyShareable(raw) && raw.moderation_state === 'live',
         can_keep_open: own && type === 'ask_local' && open && askEnd > readAt && !raw.post_metadata?.kept_open_at },
       moderation: { state: raw.moderation_state || 'live' },
