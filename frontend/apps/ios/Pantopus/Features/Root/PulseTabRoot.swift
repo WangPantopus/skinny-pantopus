@@ -58,7 +58,7 @@ public struct PulseTabRoot: View {
                 },
                 topMenu: topMenu,
                 topCard: quietCard,
-                onRefresh: { [neighborhood] in await neighborhood.refresh() }
+                onRefresh: refreshQuietCard
             )
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: PulseRoute.self) { route in
@@ -108,6 +108,11 @@ public struct PulseTabRoot: View {
     /// The neighborhood meter or "Set up a home", above the Nearby posts.
     private var quietCard: AnyView {
         AnyView(PulseQuietCard(viewModel: neighborhood, onSetUpHome: onAddHome))
+    }
+
+    /// A pull to refresh re-reads the quiet card's meter beside the feed.
+    private func refreshQuietCard() async {
+        await neighborhood.refresh()
     }
 
     private var navigationPathBinding: Binding<NavigationPath> {
