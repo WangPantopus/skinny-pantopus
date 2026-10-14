@@ -88,11 +88,11 @@ async function getGlobalPins() {
     return _globalPinsCache.data;
   }
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await excludeEndedPosts(supabaseAdmin
     .from('Post')
     .select(FEED_POST_SELECT)
     .eq('is_global_pin', true)
-    .is('archived_at', null)
+    .is('archived_at', null))
     .order('created_at', { ascending: false })
     .limit(10);
 
@@ -632,6 +632,16 @@ function isPoliticsPost(post) {
 }
 
 // ---------------------------------------------------------------------------
+// Ended posts
+// ---------------------------------------------------------------------------
+
+// A post whose own end time has passed leaves the views at once, before the archive job
+// ends it (contract §5, S7: a Heads-up ends at the time it names).
+function excludeEndedPosts(query) {
+  return query.or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`);
+}
+
+// ---------------------------------------------------------------------------
 // Cursor pagination helpers
 // ---------------------------------------------------------------------------
 
@@ -931,10 +941,10 @@ async function getListFeed({
 
   for (let round = 0; round < MAX_ROUNDS && accumulated.length < parsedLimit && !dbExhausted; round++) {
     // 5. Build base query
-    let query = supabaseAdmin
+    let query = excludeEndedPosts(supabaseAdmin
       .from('Post')
       .select(FEED_POST_SELECT)
-      .is('archived_at', null)
+      .is('archived_at', null))
       .order('is_pinned', { ascending: false })
       .order('created_at', { ascending: false })
       .order('id', { ascending: false })
@@ -1196,10 +1206,10 @@ async function fetchSportsCandidates({
     let exhausted = false;
 
     while (!exhausted && rows.length < maxRowsPerSide) {
-      let query = supabaseAdmin
+      let query = excludeEndedPosts(supabaseAdmin
         .from('Post')
         .select(FEED_POST_SELECT)
-        .is('archived_at', null)
+        .is('archived_at', null))
         .eq('topic', 'sports')
         .gte('created_at', cutoffIso)
         .order('created_at', { ascending: false })
@@ -1478,10 +1488,10 @@ async function loadMapPosts({
   // come back follows the points the viewer sees, never the stored ones.
   const shift = DISPLAYED_POINT_MAX_SHIFT_DEGREES;
   const [qSouth, qWest, qNorth, qEast] = [south - shift, west - shift, north + shift, east + shift];
-  let query = supabaseAdmin
+  let query = excludeEndedPosts(supabaseAdmin
     .from('Post')
     .select(FEED_POST_SELECT)
-    .is('archived_at', null)
+    .is('archived_at', null))
     .or(
       `and(effective_latitude.gte.${qSouth},effective_latitude.lte.${qNorth},effective_longitude.gte.${qWest},effective_longitude.lte.${qEast}),` +
       `and(effective_latitude.is.null,latitude.gte.${qSouth},latitude.lte.${qNorth},longitude.gte.${qWest},longitude.lte.${qEast})`
