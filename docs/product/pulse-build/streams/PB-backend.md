@@ -54,6 +54,8 @@ Do them in this order; each is its own small PR set. "Done when" is what the own
 
 ## Verification you own
 
+Run the scenarios in [`05-scenarios.md`](../05-scenarios.md) for every slice you ship (S1, S4–S10, S12, S14 and the server halves of the rest) **through the apps**: the **web** app for the existing feed and post page (after every backend PR they must render every new type, label, status and field without errors), and the iOS or Android app for the new endpoints (run it yourself or ask PI or PA). No unit tests.
+
 The two-account privacy matrix on every audience PR; the aged-fixture run for every lifecycle rule; legacy-endpoint checks after every wall change; the web still loads its feed and post pages (`GET /api/posts/feed`, `/app/feed`).
 
 ## Needs from others

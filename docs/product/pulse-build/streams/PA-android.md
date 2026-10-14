@@ -47,6 +47,8 @@ Known facts: text scales (sp) and was checked at 2×; **Release builds are R8-sh
 
 ## Verification you own
 
+Run every scenario for your slices in [`05-scenarios.md`](../05-scenarios.md) on your emulator (section A on every screen, section B for the slice), then look at the same server-created content on **web** (your stream has a web dev server). PV runs the cross-client round trips (section C). No unit tests, no instrumented-test code, no coverage work.
+
 On your own emulator (`pulse-pa`, console port 5574), against your own backend: each slice's screens with two accounts; relaunch and process-death persistence; 2× font; dark mode; TalkBack; five tabs on a small screen; every route you touched; and **one Release build** (R8) of the merged state before you call a slice done. `./gradlew ktlintCheck detekt :app:lintDebug test` (+ `paparazziVerify`) before pushing.
 
 ## First three days

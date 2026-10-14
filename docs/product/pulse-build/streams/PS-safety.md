@@ -38,7 +38,13 @@ You build what keeps Pulse calm: the composer checks that catch call-outs and pr
 - **Founder-only:** moderator hiring, hours, the NCMEC or any law-enforcement setup, the Anthropic key, any real send.
 - **Hold point H2:** the public-exposure PRs (PC's S15) wait for your S11 baseline.
 
+## Web guard (S2, small web fixes only)
+
+No stream owns the existing web Pulse feed (`frontend/apps/web/src/components/feed/*`, `/app/feed`, `/app/feed/post/[id]`), and it must keep working while the backend adds types (`share`, `offer`), labels, statuses and fields. You own the small fixes: make the web feed and post page render unknown and new values without errors (scenario S2.2) before PB lets people create the new types. Anything bigger goes to the founder.
+
 ## Verification you own
+
+Run the scenarios in [`05-scenarios.md`](../05-scenarios.md) for S8 (checks), S9 (slowed exchanges), S11 and S12 (drafting) through the apps and the web console. No unit tests.
 
 With your own runtime and accounts: a call-out draft is blocked with the three options on both apps and via the API (`422`); fine drafts pass; the ladder end to end with an author, a reporter and a moderator (held → approved; removed → appeal → reversed); the author sees notices; a held item never reaches anyone but the author and staff on **any** read path (run the privacy matrix rows with PB); the console works at phone and desktop widths; the existing report flow still works.
 

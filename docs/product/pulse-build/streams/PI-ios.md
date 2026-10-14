@@ -49,6 +49,8 @@ Known facts that change how you work: iOS type styles are **fixed sizes** (the a
 
 ## Verification you own
 
+Run every scenario for your slices in [`05-scenarios.md`](../05-scenarios.md) on your simulator (section A on every screen, section B for the slice), then look at the same server-created content on **web** (your stream has a web dev server). PV runs the cross-client round trips (section C). No unit tests, no UI-test code, no coverage work.
+
 On your own simulator (`Pulse-PI`), against your own backend: each slice's screens with two accounts; relaunch persistence; large text; dark mode; VoiceOver labels via the accessibility inspector; the five-tab bar on a small phone; every push and link route you touched. `swiftlint lint --strict`, `swiftformat --lint .`, the two `verify-*.sh` guards and `make test` before pushing.
 
 ## First three days

@@ -88,6 +88,7 @@ Sessions you start for one job (Instant Screens, Nearby Plans, single fixes) wor
 - [x] Five tabs: Place · Today · Pulse · Plans · Messages. The Plans tab shows only while `plans` is on. Nearby is no longer a tab; its Pulse, Connections and neighborhood meter move into the Pulse tab, and the Plans map moves to the Plans tab. This replaces the September 16 and October 12 four-tab lines for this build.
 - [x] Share posts are allowed (a place attached, at most 2 a week); crime, suspicious, theft, vandalism and scam alert kinds can no longer be created; businesses reply and never post; the PR 625 review's recommendations are the defaults; the Share leak is fixed in [PR 2252](https://github.com/WangPantopus/skinny-pantopus/pull/2252).
 - [x] Labels and permissions, adult-only posting and Visitors who may start Asks (one a day) as in the design. Paid moderation is approved in principle; the founder confirms real cover before public web exposure.
+- [x] No unit tests or coverage for Pulse: every feature, flow and edge case is verified end to end by launching the web, iOS and Android apps ([scenarios](docs/product/pulse-build/05-scenarios.md)).
 - [ ] The eleven new tables in the [contract](docs/product/pulse-build/02-contract.md#42-new-tables-awaiting-founder-approval): awaiting the founder's approval.
 
 **Still open. The brief builds the default until you decide.**

@@ -35,6 +35,8 @@ You build how Pulse reaches people outside the app: the daily digest, the noise 
 
 ## Verification you own
 
+Run the scenarios in [`05-scenarios.md`](../05-scenarios.md) for S13, S15 and S18 (digest, public web, text and email) through the local mail inbox and a signed-out browser. No unit tests.
+
 Local: two accounts with different preferences get the right digest at the right local time (advance the clock by running the job with a forced "now"); nothing duplicates (run twice); quiet hours hold; a signed-out browser sees only public posts, with no street or distance, and a removed-from-web post 404s; the sitemap lists only public posts; the web app's existing pages still load.
 
 ## First three days

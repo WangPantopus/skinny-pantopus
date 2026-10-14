@@ -11,7 +11,9 @@
 #   B+8 edge inspector (off) · B+9 pooler · B+100 backend (PORT) · B+101 web dev server
 #
 # The stack applies every migration under this checkout's supabase/migrations (symlinked, so your
-# branch's migrations are what runs). Only the services the backend needs are started. `--env` writes a
+# branch's migrations are what runs). Only the services the backend needs are started (about 450 MB
+# idle; Supabase Realtime is off because nothing in this repo uses it: the apps' realtime is the
+# backend's own Socket.IO). `--env` writes a
 # backend .env (gitignored) pointing at this stack, with background jobs off and Stripe not required.
 set -euo pipefail
 
@@ -32,7 +34,7 @@ esac
 
 root="$(git rev-parse --show-toplevel)"
 rt="${PULSE_RUNTIME_ROOT:-$HOME/.config/pantopus}/pulse-$stream-runtime"
-excluded="studio,imgproxy,edge-runtime,vector,logflare,postgres-meta,supavisor"
+excluded="studio,imgproxy,edge-runtime,vector,logflare,postgres-meta,supavisor,realtime"
 
 shadow=$base; api=$((base + 1)); db=$((base + 2)); studio=$((base + 3)); inbox=$((base + 4))
 analytics=$((base + 7)); inspector=$((base + 8)); pooler=$((base + 9))

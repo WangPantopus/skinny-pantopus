@@ -25,7 +25,7 @@ scripts/pulse/stream-runtime.sh status <stream>
 scripts/pulse/stream-runtime.sh stop <stream>
 ```
 
-It starts only the services the backend needs (Postgres 17 with every migration in **your** checkout, Auth, REST, Storage, Realtime and a mail inbox) under its own project name `pantopus-pulse-<stream>` and ports, so it cannot touch another session's database. It takes about a minute. `--env` writes a gitignored `backend/.env` for it (background jobs off, no Stripe key needed).
+It starts only the services the backend needs (Postgres 17 with every migration in **your** checkout, Auth, REST, Storage and a mail inbox; Supabase's Realtime service is off because nothing in this repo uses it, and the apps' realtime is the backend's own Socket.IO) under its own project name `pantopus-pulse-<stream>` and ports, so it cannot touch another session's database. It takes under a minute and about 450 MB of memory idle. `--env` writes a gitignored `backend/.env` for it (background jobs off, no Stripe key needed).
 
 | Stream | Supabase API | Postgres | Mail inbox | **Backend** | **Web** |
 |---|---|---|---|---|---|
@@ -46,6 +46,10 @@ cd frontend/apps/web && NEXT_PUBLIC_API_URL=http://127.0.0.1:<backend> NEXT_PUBL
 ```
 
 Run long servers in the background, check `/health`, and stop them when you are done. **Re-restart the backend after you merge `master`** so you are running the latest routes. If you use the browser preview tool, add a local launch entry to `.claude/launch.json` and **never commit that file's changes**. Email (sign-up, codes) lands in the stream's mail inbox at `http://127.0.0.1:<mail inbox>`.
+
+### Why every stream has its own database (and what is shared)
+
+Do **not** point two streams at one database. Each branch carries its own unmerged migrations, so a shared schema would be a mix of everyone's unfinished work and would break whoever runs different code; the migration history would conflict the moment two branches apply different files; one stream's `db reset`, aged-fixture job run or cleanup would wipe or archive another's data; and the privacy matrix, the "You're caught up" checks and the moderation queue all need a clean, known set of rows that other streams' test posts would pollute. The cost of not sharing is small: **a stream is about 450 MB idle, six are about 2.7 GB**, against Docker Desktop's 7.7 GB memory limit (other sessions' older stacks hold about 1.6 GB of it; the founder can raise the limit in Docker Desktop, Settings, Resources). Nothing writable is shared. To test another stream's unmerged work, merge its branch into a throwaway local branch and run it in **your** stack; PV's stack runs `master` as the integration check.
 
 ## Accounts and fixtures
 
@@ -93,11 +97,15 @@ The emulator reaches your Mac as `10.0.2.2`. Screenshots and accessibility reads
 
 ## What "verified" means here
 
-- You used the **real app** on the platform your change touches, signed in as a real local account, against **your** backend and database. A second account sees the other side (the neighbor, the outsider, the asker). The state **survives relaunch or reload**.
+**The founder's standard: no unit tests, no coverage; every feature, function and flow works with all scenarios and edge cases, end to end, in the apps launched on web, iOS and Android.** [`05-scenarios.md`](05-scenarios.md) is the catalogue; your PR says which scenarios you ran.
+
+- You used the **real app** (web, iOS, Android: every client that has the surface), signed in as a real local account, against **your** backend and database. A second account sees the other side (the neighbor, the outsider, the asker). The state **survives relaunch or reload**. You tried the edge cases: offline, double-tap, odd and old data, every label, every limit.
 - For anything about audience: run the **two-account privacy matrix** below for the paths you touched, including the old endpoints.
 - A PR body says what you did and what you did not. Not verified usually means: hosted services, physical phones, live providers (Stripe, Lob, Anthropic, push delivery), real inboxes, store builds.
 
-### Two-account privacy matrix (PV owns the runner; PB runs it on every audience PR)
+### Two-account privacy matrix (PV owns the helper script; PB runs it on every audience PR)
+
+The matrix is a **checklist you walk**, in the real apps wherever a path has a screen, with `scripts/pulse/privacy-matrix.cjs` as a helper that replays the API-level rows against a local stack. The script is a verification tool, not a test suite: it is not in CI, has no coverage target, and never replaces launching the apps.
 
 Actors: **author** (verified resident of the town), **neighbor** (verified resident, same town), **new-here** (postcard pending), **nearby** (verified in a neighboring town), **visitor** (signed in, no home), **outsider** (signed out). Posts: public town post; `verified_town` post; `verified_area` post (when an area is open); held post; removed post; a post with `allow_external_share = false`; an older post with no `read_scope`.
 
