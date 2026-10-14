@@ -167,7 +167,8 @@ Private note to a home (signed): `POST /api/pulse/notes` `{ "toHomeId"? | "toPos
 - `GET|PUT /api/pulse/preferences` → `{ "digest": { "enabled", "time_local", "timezone", "channel": "email"|"push"|"both" }, "weekly_street_digest": false, "quiet_hours": { "start_local", "end_local" } (existing fields), "nudge_helper": true }`.
 - `GET /api/pulse/preferences/summary` → every follow, mute and alert with an `undo` descriptor, for the preferences page.
 - `GET /api/pulse/posts/:id/why` → `{ "reasons": [{ "kind": "area" | "topic" | "follow" | "time", "text": "You're viewing Camas, all topics, newest first." }] }`. Only the reader's own choices.
-- Mutes: `POST /api/posts/mute/topic` accepts `{ "topic", "areaId" }` (the legacy `{ "postType" }` still works); `GET /api/posts/mute` also lists topic mutes; `DELETE /api/posts/mute` undoes them. User mutes as today.
+- Mutes (in force since S4): `POST /api/posts/mute/topic` accepts `{ "topic", "areaId"? }` → `{ "message", "mute": { "topic", "area_id" } }`; without `areaId` the topic is muted everywhere; an unknown topic or a malformed `areaId` is a 400; muting twice keeps one mute. The legacy `{ "postType", "surface"? }` still works. `GET /api/posts/mute` → `{ "muted": [ …people and businesses, unchanged ], "topic_mutes": [{ "topic", "area_id", "muted_at" }] }`. `DELETE /api/posts/mute` `{ "entityType": "topic", "entityId": "<topic>", "areaId"? }` (body or query string) removes that one mute (without `areaId`, the everywhere mute). A topic muted in an area hides that topic's posts in the area and posts that have no area (every post until `Post.area_id` arrives with S5). User mutes as today.
+- Topic filter (in force since S4): `GET /api/posts/feed?surface=place&topic=<topic>` returns only that topic's posts, for any of the 12; `sports` keeps its Sports lane.
 
 ### 2.10 Areas and eligibility
 
@@ -195,7 +196,7 @@ Private note to a home (signed): `POST /api/pulse/notes` `{ "toHomeId"? | "toPos
 |---|---|
 | `Post` | `read_scope text` (check: `public`, `verified_town`, `verified_area`), `area_id uuid` (FK `PulseArea`, after approval), `expires_at timestamptz`, `resolution text` (check, section 1), `claim_mode text default 'choose'`, `moderation_state text not null default 'live'`, `moderation_rule text`, `moderation_note text`, `moderated_at timestamptz`, `search_tsv tsvector` generated + GIN (R3). Widen `Post_post_type_check` with `share`, `offer`; widen `Post_topic_check` to the 12 topics (plus legacy `sports`); keep `state` in sync (`open` → `solved` when `answered`, `archived` otherwise) so older clients still read it |
 | `PostComment` | `helpful_at timestamptz`, `helpful_by uuid`, `moderation_state text not null default 'live'`, `moderation_rule text`. Account deletion must leave a "Reply removed" row instead of cascading (change `user_id` to nullable with `ON DELETE SET NULL`, and soft-delete the text) |
-| `PostMute` | `area_id uuid null` (the `topic` entity type already exists) |
+| `PostMute` | `area_id uuid null` (the `topic` entity type already exists); its unique index includes `area_id`. Added with `Post_topic_check`'s widening in `20261014031000_pulse_topics.sql` (S4); the foreign key to `PulseArea` comes with that table |
 | `User` | `adult_attested_at timestamptz`; `account_type` check widened with `official` |
 | `UserFeedPreference` | `pulse_seen_nearby_at timestamptz`, `pulse_seen_following_at timestamptz` |
 | `UserNotificationPreferences` | `digest_enabled boolean`, `digest_time_local time`, `digest_channel text`, `weekly_street_digest_enabled boolean` (PC), `nudge_helper boolean default true` |
