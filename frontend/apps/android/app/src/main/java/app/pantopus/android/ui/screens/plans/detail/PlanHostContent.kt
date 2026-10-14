@@ -256,15 +256,19 @@ private fun GuestRow(
             listOfNotNull("$count ${if (count == 1) "kid" else "kids"}", KidsAgeBand.rangeLabel(person.kidsAgeBands))
                 .joinToString(", ")
         }
+    // Board H9, as on iOS: "Verified · about 1 mi · you hosted Alex before", "About 1 mi · new to Pantopus".
     val subtitle =
         listOfNotNull(
-            if (person.reconfirmNeeded == true) "hasn't confirmed the change" else null,
-            if (person.verifiedAddress) "verified" else null,
+            if (person.onMyWay) "On the way" else null,
+            if (person.verifiedAddress) "Verified" else null,
             PlanFormat.distance(person.distanceBand),
             kids,
-            if (person.hostedBefore == true) "you hosted ${PlanFormat.firstName(name)} before" else null,
-            if (person.newToPantopus == true) "new to Pantopus" else null,
-            if (person.onMyWay) "on the way" else null,
+            when {
+                person.hostedBefore == true -> "you hosted ${PlanFormat.firstName(name)} before"
+                person.newToPantopus == true -> "new to Pantopus"
+                else -> null
+            },
+            if (person.reconfirmNeeded == true) "asked “Still coming?”" else null,
         ).joinToString(" · ").replaceFirstChar { it.titlecase() }.ifBlank { "Going" }
     Column(modifier = Modifier.fillMaxWidth()) {
         if (!first) PlanDivider()
