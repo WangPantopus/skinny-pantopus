@@ -447,7 +447,9 @@ enum PlansPinSpeech {
         } else if let start = pin.startsAtDate {
             parts.append(PlanFormat.spokenWhen(start, calendar: PlanFormat.calendar(for: pin.timezone ?? card?.timezone)))
         } else {
-            parts.append(PlanFormat.dayPart(pin.dayPart).lowercased())
+            // A playdate whose time is hidden: "Saturday morning", as its card says it (as on Android).
+            let calendar = PlanFormat.calendar(for: pin.timezone ?? card?.timezone)
+            parts.append(PlanFormat.dayPartPhrase(pin.dayPart, day: pin.startsOnDate, calendar: calendar))
         }
         let band = pin.distanceBand ?? card?.distanceBand ?? center.map {
             PlanFormat.band(meters: CLLocation(latitude: $0.latitude, longitude: $0.longitude)

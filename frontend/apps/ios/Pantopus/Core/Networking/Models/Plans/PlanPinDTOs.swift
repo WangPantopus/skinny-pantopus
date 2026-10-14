@@ -18,6 +18,8 @@ public struct PlanPinDTO: Decodable, Sendable, Hashable, Identifiable {
     public let longitude: Double
     public let precision: String?
     public let startsAt: String?
+    /// The plan's local day ("2026-10-17"), also while a playdate's time is hidden.
+    public let startsOn: String?
     public let dayPart: PlanDayPart
     public let title: String
     public let goingCount: Int
@@ -35,6 +37,7 @@ public struct PlanPinDTO: Decodable, Sendable, Hashable, Identifiable {
         case id, kind, latitude, longitude, precision, title, state
         case layerType = "layer_type"
         case startsAt = "starts_at"
+        case startsOn = "starts_on"
         case dayPart = "day_part"
         case goingCount = "going_count"
         case spotsLeft = "spots_left"
@@ -59,6 +62,7 @@ public struct PlanPinDTO: Decodable, Sendable, Hashable, Identifiable {
         longitude = try container.decode(Double.self, forKey: .longitude)
         precision = try container.decodeIfPresent(String.self, forKey: .precision)
         startsAt = try container.decodeIfPresent(String.self, forKey: .startsAt)
+        startsOn = try container.decodeIfPresent(String.self, forKey: .startsOn)
         dayPart = try container.decodeIfPresent(PlanDayPart.self, forKey: .dayPart) ?? .afternoon
         title = try container.decodeIfPresent(String.self, forKey: .title) ?? ""
         goingCount = try container.decodeIfPresent(Int.self, forKey: .goingCount) ?? 0
@@ -75,6 +79,16 @@ public struct PlanPinDTO: Decodable, Sendable, Hashable, Identifiable {
 
     public var startsAtDate: Date? {
         PlanTime.parse(startsAt)
+    }
+
+    /// The plan's local day, at noon, for "Saturday morning" while the time is hidden (as the card's).
+    public var startsOnDate: Date? {
+        guard let startsOn else { return startsAtDate }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = timezone.flatMap(TimeZone.init(identifier:)) ?? .current
+        formatter.dateFormat = "yyyy-MM-dd HH:mm"
+        return formatter.date(from: "\(startsOn) 12:00")
     }
 
     public var isHosting: Bool {
