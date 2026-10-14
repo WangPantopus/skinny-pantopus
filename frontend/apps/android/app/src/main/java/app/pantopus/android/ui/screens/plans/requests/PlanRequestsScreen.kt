@@ -21,6 +21,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -40,6 +46,7 @@ import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.components.ToastController
 import app.pantopus.android.ui.components.ToastHost
 import app.pantopus.android.ui.screens.plans.components.PlanAvatar
+import app.pantopus.android.ui.screens.plans.components.PlanOverline
 import app.pantopus.android.ui.screens.plans.components.PlanScopeLine
 import app.pantopus.android.ui.screens.plans.components.PlanSpotsMeter
 import app.pantopus.android.ui.screens.plans.components.PlanStatusChip
@@ -109,16 +116,21 @@ fun PlanRequestsScreen(
             } else {
                 PlanScopeLine("Declining needs no reason, and they won't see who said no.")
             }
-            Text(
-                text =
-                    if (ui.waitlisted.isEmpty()) {
-                        "Waitlist: nobody yet"
-                    } else {
-                        "Waitlist: " + ui.waitlisted.joinToString(", ") { it.user?.displayName ?: "Neighbor" }
-                    },
-                style = PantopusTextStyle.caption,
-                color = PantopusColors.appTextSecondary,
-            )
+            if (ui.waitlisted.isEmpty()) {
+                Text(text = "Waitlist: nobody yet", style = PantopusTextStyle.caption, color = PantopusColors.appTextSecondary)
+            } else {
+                // The waitlist as cards, as on iOS: the host can let someone in (or say no) from here too.
+                PlanOverline("Waitlist")
+                ui.waitlisted.forEach { request ->
+                    RequestCard(
+                        request = request,
+                        playdate = plan?.isPlaydate == true,
+                        working = request.id in ui.working,
+                        onAccept = { viewModel.accept(request) },
+                        onDecline = { viewModel.decline(request) },
+                    )
+                }
+            }
         }
         ToastHost(controller = toast, modifier = Modifier.align(Alignment.TopCenter))
     }
@@ -146,12 +158,8 @@ private fun RequestsHeader(
     val taken = plan.spots - plan.spotsLeft
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(
-            text =
-                listOfNotNull(
-                    plan.title,
-                    // "Sun 1:25 PM" (board H10), or "Today 5:30 PM".
-                    PlanFormat.instant(plan.startsAt)?.let { PlanFormat.shortWhen(it, PlanFormat.zone(plan.timezone)) },
-                ).joinToString(" · "),
+            // Board H10: "Seahawks game · Sun 1:25 PM" (or "Today 5:30 PM").
+            text = listOfNotNull(PlanFormat.shortTitle(plan), PlanFormat.rowWhen(plan)).joinToString(" · "),
             style = PantopusTextStyle.small,
             color = PantopusColors.appTextSecondary,
         )
@@ -229,11 +237,43 @@ private fun RequestCard(
         request.note?.takeIf(String::isNotBlank)?.let {
             Text(text = "“$it”", style = PantopusTextStyle.body.copy(fontStyle = FontStyle.Italic), color = PantopusColors.appText)
         }
+        // TalkBack hears whom each button answers ("Accept Priya"), as VoiceOver does on iOS.
+        val first = user?.displayName?.takeIf { it.isNotBlank() }?.let(PlanFormat::firstName) ?: "Neighbor"
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            GhostButton(title = "Decline", onClick = onDecline, modifier = Modifier.weight(1f), isEnabled = !working)
-            PrimaryButton(title = "Accept", onClick = onAccept, modifier = Modifier.weight(1f), isLoading = working)
+            SpokenAs("Decline $first", enabled = !working, action = onDecline, modifier = Modifier.weight(1f)) {
+                GhostButton(title = "Decline", onClick = onDecline, isEnabled = !working)
+            }
+            SpokenAs("Accept $first", enabled = !working, action = onAccept, modifier = Modifier.weight(1f)) {
+                PrimaryButton(title = "Accept", onClick = onAccept, isLoading = working)
+            }
         }
     }
+}
+
+/** A button read out with its own words ("Accept Priya") while it shows a shorter title ("Accept"). */
+@Composable
+private fun SpokenAs(
+    label: String,
+    enabled: Boolean,
+    action: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    Box(
+        modifier =
+            modifier.clearAndSetSemantics {
+                contentDescription = label
+                role = Role.Button
+                if (enabled) {
+                    onClick(label = label) {
+                        action()
+                        true
+                    }
+                } else {
+                    disabled()
+                }
+            },
+    ) { content() }
 }
 
 /** "About 1 mi away · joined 2 plans · 1 mutual connection" (or "new to Pantopus"). */
