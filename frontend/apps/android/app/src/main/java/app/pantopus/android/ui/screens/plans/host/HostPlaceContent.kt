@@ -329,6 +329,23 @@ internal fun HostPreviewStep(
                         )
                     }
                 }
+                // A playdate's exact time is its own row, as on iOS (neighbors see only the part of the day).
+                if (kind == PlanKind.PLAYDATE) {
+                    PlanOptionRow {
+                        PantopusIconImage(
+                            icon = PantopusIcon.Clock,
+                            contentDescription = null,
+                            size = 18.dp,
+                            tint = PantopusColors.appTextSecondary,
+                        )
+                        Text(
+                            text = "The exact time",
+                            style = PantopusTextStyle.small,
+                            color = PantopusColors.appText,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
                 PlanOptionRow {
                     PantopusIconImage(
                         icon = PantopusIcon.Users,
@@ -337,12 +354,7 @@ internal fun HostPreviewStep(
                         tint = PantopusColors.appTextSecondary,
                     )
                     Text(
-                        text =
-                            if (kind == PlanKind.PLAYDATE) {
-                                "The exact time, who's going, and the group chat"
-                            } else {
-                                "Who's going, and the group chat"
-                            },
+                        text = "Who's going, and the group chat",
                         style = PantopusTextStyle.small,
                         color = PantopusColors.appText,
                         modifier = Modifier.weight(1f),

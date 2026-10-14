@@ -121,10 +121,17 @@ object PlanFormat {
         plan: PlanDto,
         now: Instant = Instant.now(),
     ): String {
-        val zone = zone(plan.timezone)
-        val start = instant(plan.startsAt)?.atZone(zone) ?: return hiddenWhen(plan)
+        val start = instant(plan.startsAt)?.atZone(zone(plan.timezone)) ?: return hiddenWhen(plan)
+        return dayAt(start, now)
+    }
+
+    /** "Sunday at 2:00 PM", "today at 2:41 AM", "Sunday, Oct 25 at 1:25 PM" a week or more out. */
+    fun dayAt(
+        start: ZonedDateTime,
+        now: Instant = Instant.now(),
+    ): String {
         val day =
-            when (ChronoUnit.DAYS.between(now.atZone(zone).toLocalDate(), start.toLocalDate())) {
+            when (ChronoUnit.DAYS.between(now.atZone(start.zone).toLocalDate(), start.toLocalDate())) {
                 0L -> "today"
                 1L -> "tomorrow"
                 in 2..ONE_WEEK_DAYS -> start.format(dayLong)
@@ -132,6 +139,33 @@ object PlanFormat {
             }
         return "$day at ${start.format(clock)}"
     }
+
+    /**
+     * A row's "when" (board P2, as on iOS): "Happening now · until 10:30", "Today 5:30 PM", "Tomorrow 9:00 AM",
+     * "Sun 1:25 PM" this week, "Sun, Oct 25 1:25 PM" a week or more out; null while a playdate's time is hidden.
+     */
+    fun rowWhen(
+        plan: PlanDto,
+        now: Instant = Instant.now(),
+    ): String? {
+        val zone = zone(plan.timezone)
+        if (plan.planState == PlanState.LIVE) return happeningNow(instant(plan.endsAt)?.atZone(zone))
+        val start = instant(plan.startsAt)?.atZone(zone) ?: return null
+        val days = ChronoUnit.DAYS.between(now.atZone(zone).toLocalDate(), start.toLocalDate())
+        return when {
+            days == 0L -> "Today ${start.format(clock)}"
+            days == 1L -> "Tomorrow ${start.format(clock)}"
+            days <= ONE_WEEK_DAYS -> "${start.format(dayShort)} ${start.format(clock)}"
+            else -> "${start.format(dateShort)} ${start.format(clock)}"
+        }
+    }
+
+    /** "Happening now · until 10:30" (F3, J1 to J7, H9 and the rows, as on iOS and the boards). */
+    fun happeningNow(end: ZonedDateTime?): String =
+        listOfNotNull("Happening now", end?.let { "until ${it.format(clockShort)}" }).joinToString(" · ")
+
+    /** "Seahawks game" for a game's watch party (boards J3, H10, A4), else the plan's title. */
+    fun shortTitle(plan: PlanDto): String = plan.details?.game?.label?.let { "$it game" } ?: plan.title
 
     /** "1:25–4:45 PM", or "11:30 AM–1:00 PM" across noon. */
     fun timeRange(
@@ -148,17 +182,21 @@ object PlanFormat {
     }
 
     /**
-     * "Sun, Oct 18 · 1:25–4:45 PM" ([long] = false) or "Sunday, Oct 18 · 1:25–4:45 PM"; for a playdate whose time
-     * is still hidden, "Saturday morning" (or just "Morning" without a date).
+     * "Sun, Oct 18 · 1:25–4:45 PM" ([long] = false) or "Sunday, Oct 18 · 1:25–4:45 PM"; "Today · 5:30–7:30 PM" and
+     * "Tomorrow · …" when they apply (board J6); "Happening now · until 10:30" while it's on; for a playdate whose
+     * time is still hidden, "Saturday morning" (or just "Morning" without a date).
      */
     fun whenLine(
         plan: PlanDto,
         long: Boolean = false,
+        now: Instant = Instant.now(),
     ): String {
         val zone = zone(plan.timezone)
-        val start = instant(plan.startsAt)?.atZone(zone) ?: return hiddenWhen(plan)
         val end = instant(plan.endsAt)?.atZone(zone)
-        return "${start.format(if (long) dateLong else dateShort)} · ${timeRange(start, end)}"
+        if (plan.planState == PlanState.LIVE) return happeningNow(end)
+        val start = instant(plan.startsAt)?.atZone(zone) ?: return hiddenWhen(plan)
+        val day = relativeDay(start.toLocalDate(), now.atZone(zone).toLocalDate()) ?: start.format(if (long) dateLong else dateShort)
+        return "$day · ${timeRange(start, end)}"
     }
 
     /** A playdate before you're in: "Saturday morning" when the server sends the local date, else "Morning". */
@@ -189,30 +227,11 @@ object PlanFormat {
     ): String {
         val zone = zone(plan.timezone)
         val start = instant(plan.startsAt)?.atZone(zone)
-        val end = instant(plan.endsAt)?.atZone(zone)
         val today = now.atZone(zone).toLocalDate()
         val distance = distance(plan.distanceBand)
         val area = plan.area?.label?.removePrefix("Near ")
         val parts = mutableListOf<String>()
-        val whenText =
-            when {
-                plan.planState == PlanState.LIVE ->
-                    listOfNotNull(
-                        "Happening now",
-                        end?.let { "until ${it.format(clockShort)}" },
-                    ).joinToString(" · ")
-                start == null -> hiddenWhen(plan)
-                else -> {
-                    val relative = relativeDay(start.toLocalDate(), today)
-                    when {
-                        relative == "Today" -> "Today ${start.format(clock)}"
-                        relative == "Tomorrow" -> "Tomorrow ${start.format(clock)}"
-                        ChronoUnit.DAYS.between(today, start.toLocalDate()) <= ONE_WEEK_DAYS ->
-                            "${start.format(dayShort)} ${start.format(clock)}"
-                        else -> "${start.format(dateShort)} ${start.format(clock)}"
-                    }
-                }
-            }
+        val whenText = rowWhen(plan, now) ?: hiddenWhen(plan)
         when (plan.standing) {
             PlanViewerStanding.HOSTING -> {
                 parts += "You're hosting"
@@ -224,7 +243,8 @@ object PlanFormat {
                     area?.let { parts += it }
                     KidsAgeBand.rangeLabel(plan.details?.kidsAgeBands)?.let { parts += it }
                 } else {
-                    if (start != null && relativeDay(start.toLocalDate(), today) == null && plan.planState != PlanState.LIVE) {
+                    // A later day names the area too ("Sun 1:25 PM · Downtown · about 2 mi"), as on iOS.
+                    if (start != null && start.toLocalDate() != today && plan.planState != PlanState.LIVE) {
                         area?.let { parts += it }
                     }
                     distance?.let { parts += it }
@@ -299,18 +319,26 @@ object PlanFormat {
         return parts.joinToString(", ")
     }
 
-    /** "Starts in 7 hours" / "Starts in 25 minutes" / "Started". */
+    /**
+     * "Starts in 25 minutes", "Starts in 7 hours", "Starts tomorrow", "Starts Saturday", "Starts Sunday, Oct 25" a
+     * week or more out; "Happening now" once it's on (as on iOS).
+     */
     fun startsIn(
         plan: PlanDto,
         now: Instant = Instant.now(),
     ): String? {
-        val start = instant(plan.startsAt) ?: return null
-        val minutes = Duration.between(now, start).toMinutes()
+        if (plan.planState == PlanState.LIVE) return "Happening now"
+        val zone = zone(plan.timezone)
+        val start = instant(plan.startsAt)?.atZone(zone) ?: return null
+        val minutes = Duration.between(now, start.toInstant()).toMinutes()
+        val days = ChronoUnit.DAYS.between(now.atZone(zone).toLocalDate(), start.toLocalDate())
         return when {
             minutes <= 0 -> null
             minutes < 60 -> "Starts in $minutes minute${if (minutes == 1L) "" else "s"}"
             minutes < 60 * 24 -> (minutes / 60).let { "Starts in $it hour${if (it == 1L) "" else "s"}" }
-            else -> (minutes / (60 * 24)).let { "Starts in $it day${if (it == 1L) "" else "s"}" }
+            days == 1L -> "Starts tomorrow"
+            days <= ONE_WEEK_DAYS -> "Starts ${start.format(dayLong)}"
+            else -> "Starts ${start.format(dateLong)}"
         }
     }
 
@@ -329,16 +357,17 @@ object PlanFormat {
         }
     }
 
-    /** "9:42 AM" today, "Mon 9:42 AM" earlier this week, else "Oct 12". */
+    /** "9:42 AM" today, "Yesterday 8:11 PM", "Mon 9:42 AM" earlier this week, else "Oct 12" (J5 "Sent", as on iOS). */
     fun sentAt(
         raw: String?,
         zone: ZoneId = ZoneId.systemDefault(),
     ): String? {
         val at = instant(raw)?.atZone(zone) ?: return null
-        val today = LocalDate.now(zone)
+        val days = ChronoUnit.DAYS.between(at.toLocalDate(), LocalDate.now(zone))
         return when {
-            at.toLocalDate() == today -> at.format(clock)
-            ChronoUnit.DAYS.between(at.toLocalDate(), today) < ONE_WEEK_DAYS -> "${at.format(dayShort)} ${at.format(clock)}"
+            days <= 0L -> at.format(clock)
+            days == 1L -> "Yesterday ${at.format(clock)}"
+            days < ONE_WEEK_DAYS -> "${at.format(dayShort)} ${at.format(clock)}"
             else -> at.format(DateTimeFormatter.ofPattern("MMM d", locale))
         }
     }

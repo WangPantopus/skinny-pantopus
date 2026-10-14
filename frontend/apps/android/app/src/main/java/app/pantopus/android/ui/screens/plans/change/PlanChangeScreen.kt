@@ -129,8 +129,6 @@ private fun NotificationPreview(ui: PlanChangeUi) {
     val host = PlanFormat.firstName(plan.host?.displayName)
     val noun = plan.planKind?.noun ?: "plan"
     val start = ui.start ?: return
-    val day = start.format(DateTimeFormatter.ofPattern("EEEE", Locale.US))
-    val time = start.format(DateTimeFormatter.ofPattern("h:mm a", Locale.US))
     PlanField(label = "What they'll get") {
         Column(
             modifier =
@@ -156,7 +154,11 @@ private fun NotificationPreview(ui: PlanChangeUi) {
                 style = PantopusTextStyle.body.copy(fontWeight = FontWeight.SemiBold),
                 color = PantopusColors.appText,
             )
-            Text(text = "Now $day at $time. Still coming?", style = PantopusTextStyle.body, color = PantopusColors.appText)
+            Text(
+                text = "Now ${PlanFormat.dayAt(start.atZone(PlanFormat.zone(plan.timezone)))}. Still coming?",
+                style = PantopusTextStyle.body,
+                color = PantopusColors.appText,
+            )
         }
         Column(
             modifier =

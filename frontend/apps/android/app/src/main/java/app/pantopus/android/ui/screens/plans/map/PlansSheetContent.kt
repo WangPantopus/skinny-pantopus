@@ -81,6 +81,7 @@ import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 import java.util.Locale
 
 /** h4 on the boards: 17/22 semibold. */
@@ -206,7 +207,7 @@ internal fun ColumnScope.PlansPeekContent(
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 if (all.isEmpty()) {
                     Text(
-                        text = "Nothing within 5 miles ${state.window.label.lowercase()}. Plans farther away show on the map.",
+                        text = "Nothing within 5 miles ${state.window.phrase}. Plans farther away show on the map.",
                         style = PantopusTextStyle.small,
                         color = PantopusColors.appTextSecondary,
                         modifier = Modifier.padding(vertical = Spacing.s3),
@@ -326,6 +327,10 @@ private fun MoreNearbyRow(
         onClick = onClick,
     )
 }
+
+/** The window inside a sentence: "right now", "today", "this week", "this weekend" (as on iOS). */
+private val PlanWindow.phrase: String
+    get() = if (this == PlanWindow.NOW) "right now" else label.lowercase()
 
 /** Plans grouped by day: "Today", "Tomorrow", then the weekday ("Saturday"), soonest first. */
 internal fun daySections(plans: List<PlanDto>): List<Pair<String, List<PlanDto>>> {
@@ -500,6 +505,9 @@ internal fun primaryLabel(plan: PlanDto): String =
             }
     }
 
+/** What "Invite a neighbor" shares (board F4, the same words as iOS). */
+const val PLANS_INVITE_MESSAGE = "I'm on Pantopus to make small plans with neighbors. Join me. https://pantopus.com/start"
+
 /** Nothing planned this week (board F4): a game to host if there is one, the other types, and an invite. */
 @Composable
 internal fun PlansEmptyContent(
@@ -520,10 +528,12 @@ internal fun PlansEmptyContent(
                 color = PantopusColors.appTextSecondary,
             )
         }
-        state.games.firstOrNull()?.let { game -> GameSuggestion(game) { onHost(PlanKind.WATCH_PARTY, game) } }
-        val others = if (state.games.isEmpty()) state.kinds else state.kinds.filter { it != PlanKind.WATCH_PARTY }
+        // The next game as a watch-party nudge; without one, the plain invitation (as on iOS).
+        val game = state.games.firstOrNull()
+        GameSuggestion(game) { onHost(PlanKind.WATCH_PARTY, game) }
+        val others = state.kinds.filter { it != PlanKind.WATCH_PARTY }
         Text(
-            text = if (state.games.isEmpty()) "Start something" else "Or start something else",
+            text = "Or start something else",
             style = PantopusTextStyle.small,
             color = PantopusColors.appTextSecondary,
             modifier = Modifier.padding(top = 2.dp),
@@ -574,17 +584,12 @@ internal fun PlansEmptyContent(
 
 @Composable
 private fun GameSuggestion(
-    game: PlanGameDto,
+    game: PlanGameDto?,
     onClick: () -> Unit,
 ) {
     val colors = PlanKind.WATCH_PARTY.colors
-    val start = PlanFormat.instant(game.startsAt)?.atZone(java.time.ZoneId.systemDefault())
-    val whenText =
-        start?.let {
-            "${it.format(DateTimeFormatter.ofPattern("EEEE", Locale.US))} at ${it.format(DateTimeFormatter.ofPattern("h:mm", Locale.US))}"
-        }
     // The label ("Seahawks"), never `team`, which is the list's internal id ("seahawks").
-    val title = listOfNotNull(game.label, whenText?.let { "play $it" }).joinToString(" ")
+    val title = game?.let(::gameLine) ?: "Watch a game together"
     Row(
         modifier =
             Modifier
@@ -604,6 +609,18 @@ private fun GameSuggestion(
         }
         PantopusIconImage(icon = PantopusIcon.ChevronRight, contentDescription = null, size = 16.dp, tint = PantopusColors.appTextMuted)
     }
+}
+
+/** "Seahawks play Sunday at 1:25", "Seahawks play today at 7:15" (board F4, as on iOS). */
+internal fun gameLine(game: PlanGameDto): String {
+    val start = PlanFormat.instant(game.startsAt)?.atZone(java.time.ZoneId.systemDefault()) ?: return "${game.label} play soon"
+    val day =
+        when (ChronoUnit.DAYS.between(LocalDate.now(start.zone), start.toLocalDate())) {
+            0L -> "today"
+            1L -> "tomorrow"
+            else -> start.format(DateTimeFormatter.ofPattern("EEEE", Locale.US))
+        }
+    return "${game.label} play $day at ${start.format(DateTimeFormatter.ofPattern("h:mm", Locale.US))}"
 }
 
 /** No location yet (board F5). */

@@ -89,7 +89,9 @@ internal fun PlanAskSheet(
                     modifier = Modifier.semantics { heading() },
                 )
                 Text(
-                    text = listOf(shortTitle(plan), shortWhen(plan)).filter(String::isNotBlank).joinToString(" · "),
+                    text = listOf(PlanFormat.shortTitle(plan), PlanFormat.rowWhen(plan) ?: PlanFormat.hiddenWhen(plan))
+                        .filter(String::isNotBlank)
+                        .joinToString(" · "),
                     style = PantopusTextStyle.small,
                     color = PantopusColors.appTextSecondary,
                 )
@@ -122,14 +124,6 @@ internal fun PlanAskSheet(
             )
         }
     }
-}
-
-private fun shortTitle(plan: PlanDto): String = plan.details?.game?.label?.let { "$it game" } ?: plan.title
-
-private fun shortWhen(plan: PlanDto): String {
-    val zone = PlanFormat.zone(plan.timezone)
-    val start = PlanFormat.instant(plan.startsAt)?.atZone(zone) ?: return PlanFormat.hiddenWhen(plan)
-    return start.format(java.time.format.DateTimeFormatter.ofPattern("EEE h:mm a", java.util.Locale.US))
 }
 
 @Composable

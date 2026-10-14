@@ -169,7 +169,7 @@ private fun HostNote(
     }
 }
 
-/** "Sam (host), you + 1, Alex, Jordan and 2 more", with their initials. */
+/** "Sam (host), you + 1, Alex + 1, Jordan and 2 more", with their initials: parties and up to 4 names, as on iOS. */
 @Composable
 private fun PeopleLine(
     plan: PlanDto,
@@ -177,20 +177,28 @@ private fun PeopleLine(
 ) {
     val people = plan.people.orEmpty()
     if (people.isEmpty()) return
-    val host = people.firstOrNull { it.isHost }
-    val others = people.filter { !it.isHost && it.userId != viewerId }
     val myParty = plan.myRequest?.partySize ?: 1
-    val names = mutableListOf<String>()
-    host?.displayName?.let { names += "${PlanFormat.firstName(it)} (host)" }
-    names += if (plan.isPlaydate || myParty <= 1) "you" else "you + ${myParty - 1}"
-    val shown = others.take(2)
-    shown.forEach { names += PlanFormat.firstName(it.displayName) }
-    val rest = others.size - shown.size
+    val you = if (plan.isPlaydate || myParty <= 1) "you" else "you + ${myParty - 1}"
+    val names =
+        people
+            .map { person ->
+                val first = PlanFormat.firstName(person.displayName)
+                when {
+                    viewerId != null && person.userId == viewerId -> you
+                    person.isHost -> "$first (host)"
+                    person.partySize > 1 -> "$first + ${person.partySize - 1}"
+                    else -> first
+                }
+            }.toMutableList()
+    // The server lists everyone in; if this phone's account isn't among them yet, "you" still goes after the host.
+    if (you !in names) names.add(if (people.firstOrNull()?.isHost == true) 1 else 0, you)
+    val shown = names.take(4)
+    val rest = names.size - shown.size
     val line =
         when {
-            rest > 0 -> names.joinToString(", ") + " and $rest more"
-            names.size > 1 -> names.dropLast(1).joinToString(", ") + " and " + names.last()
-            else -> names.joinToString()
+            rest > 0 -> shown.joinToString(", ") + " and $rest more"
+            shown.size > 1 -> shown.dropLast(1).joinToString(", ") + " and " + shown.last()
+            else -> shown.joinToString()
         }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s3)) {
         PlanAvatarStack(names = people.take(4).map { it.displayName to it.userId })
