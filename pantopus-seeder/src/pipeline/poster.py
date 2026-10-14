@@ -62,6 +62,7 @@ def post_to_pantopus(
     topic: str | None = None,
     sports_scope: str | None = None,
     post_metadata: dict | None = None,
+    source_url: str | None = None,
 ) -> tuple[str | None, str | None]:
     """POST content to the Pantopus API as the curator.
 
@@ -76,6 +77,9 @@ def post_to_pantopus(
         Optional sports-topic metadata (Phase 1). `topic='sports'` flips the
         post into the Sports lane; `post_metadata` may include event_key,
         team_tag, league, is_game_thread, is_watch_prompt, fresh_until.
+    source_url:
+        The item's source. Sent with alerts: the API refuses a curator's
+        public-safety notice without a link to its source.
     """
     post_type = CATEGORY_TO_POST_TYPE.get(category, "local_update")
     purpose = CATEGORY_TO_PURPOSE.get(category, "local_update")
@@ -113,6 +117,8 @@ def post_to_pantopus(
             "earthquake": "public_safety",
         }
         body["safetyAlertKind"] = alert_kind_map.get(category, "public_safety")
+        if source_url:
+            body["sourceUrl"] = source_url
 
     if media_urls:
         body["mediaUrls"] = media_urls

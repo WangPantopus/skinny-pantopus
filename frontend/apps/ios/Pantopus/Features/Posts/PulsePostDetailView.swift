@@ -288,6 +288,13 @@ public struct PulsePostDetailLoadedContent: View {
         self.onRefresh = onRefresh
     }
 
+    /// Opens the author's profile; nil (no tap) when the post came without its author's id.
+    private var authorProfileTap: (@MainActor () -> Void)? {
+        let userId = detail.post.userId
+        guard !userId.isEmpty else { return nil }
+        return { onOpenProfile(userId) }
+    }
+
     public var body: some View {
         ContentDetailShell(
             title: "Post",
@@ -307,8 +314,9 @@ public struct PulsePostDetailLoadedContent: View {
                         isVerified: detail.authorVerified,
                         identity: detail.authorIdentity,
                         timeAndLocality: detail.timeAndLocality,
-                        intent: detail.intent
-                    ) { onOpenProfile(detail.post.userId) }
+                        intent: detail.intent,
+                        onAvatarTap: authorProfileTap
+                    )
                 }
             },
             body: {

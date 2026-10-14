@@ -16,9 +16,10 @@ public struct FeedAuthorCredentialDTO: Decodable, Sendable, Hashable {
     public let status: String?
 }
 
-/// Author / business-author projection on a post. Accepts both the legacy
-/// `{ username, name, first_name }` shape and the P0.4 identity projection
-/// `{ handle, displayName, avatarUrl }` returned by `attachIdentityAuthors`.
+/// Author / business-author projection on a post. Accepts the legacy
+/// `{ username, name, first_name }` shape, the P0.4 identity projection
+/// `{ handle, displayName, avatarUrl }` returned by `attachIdentityAuthors`,
+/// and the Pulse author `{ display_name, avatar_url }` (contract 2.1).
 public struct PostCreatorDTO: Decodable, Sendable, Hashable, Identifiable {
     public let id: String
     public let username: String?
@@ -35,10 +36,12 @@ public struct PostCreatorDTO: Decodable, Sendable, Hashable, Identifiable {
     private enum CodingKeys: String, CodingKey {
         case id, username, name, handle
         case displayName, credential
+        case displayNameSnake = "display_name"
         case firstName = "first_name"
         case lastName = "last_name"
         case profilePictureURL = "profile_picture_url"
         case avatarUrl
+        case avatarURLSnake = "avatar_url"
         case city, state
         case accountType = "account_type"
     }
@@ -67,24 +70,27 @@ public struct PostCreatorDTO: Decodable, Sendable, Hashable, Identifiable {
         credential = nil
     }
 
+    /// Tolerant (Pulse S2): a field that is missing, null or of another shape
+    /// reads as absent rather than failing the post or reply it belongs to.
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        let rawId = try c.decodeIfPresent(String.self, forKey: .id)
-        let usernameValue = try c.decodeIfPresent(String.self, forKey: .username)
-        let handleValue = try c.decodeIfPresent(String.self, forKey: .handle)
+        let rawId = c.lenient(String.self, forKey: .id)
+        let usernameValue = c.lenient(String.self, forKey: .username)
+        let handleValue = c.lenient(String.self, forKey: .handle)
         id = rawId ?? usernameValue ?? handleValue ?? "pantopus"
         username = usernameValue ?? handleValue
-        wireDisplayName = try c.decodeIfPresent(String.self, forKey: .displayName)
-        credential = try c.decodeIfPresent(FeedAuthorCredentialDTO.self, forKey: .credential)
-        name = try c.decodeIfPresent(String.self, forKey: .name)
-        firstName = try c.decodeIfPresent(String.self, forKey: .firstName)
-        lastName = try c.decodeIfPresent(String.self, forKey: .lastName)
-        profilePictureURL =
-            try c.decodeIfPresent(String.self, forKey: .profilePictureURL)
-                ?? c.decodeIfPresent(String.self, forKey: .avatarUrl)
-        city = try c.decodeIfPresent(String.self, forKey: .city)
-        state = try c.decodeIfPresent(String.self, forKey: .state)
-        accountType = try c.decodeIfPresent(String.self, forKey: .accountType)
+        wireDisplayName = c.lenient(String.self, forKey: .displayName)
+            ?? c.lenient(String.self, forKey: .displayNameSnake)
+        credential = c.lenient(FeedAuthorCredentialDTO.self, forKey: .credential)
+        name = c.lenient(String.self, forKey: .name)
+        firstName = c.lenient(String.self, forKey: .firstName)
+        lastName = c.lenient(String.self, forKey: .lastName)
+        profilePictureURL = c.lenient(String.self, forKey: .profilePictureURL)
+            ?? c.lenient(String.self, forKey: .avatarUrl)
+            ?? c.lenient(String.self, forKey: .avatarURLSnake)
+        city = c.lenient(String.self, forKey: .city)
+        state = c.lenient(String.self, forKey: .state)
+        accountType = c.lenient(String.self, forKey: .accountType)
     }
 
     /// Best-effort display name across the various populated fields.
@@ -137,10 +143,12 @@ public struct CommentAttachmentDTO: Decodable, Sendable, Hashable, Identifiable 
 public struct PostCommentDTO: Decodable, Sendable, Hashable, Identifiable {
     public let id: String
     public let postId: String
-    public let userId: String
+    /// Nil for a reply whose author deleted their account ("Reply removed", contract 2.2).
+    public let userId: String?
     public let parentCommentId: String?
     public let comment: String
     public let createdAt: String
+    /// Deleted, or removed (`removed`, contract 2.2): this screen shows neither.
     public let isDeleted: Bool
     public let userHasLiked: Bool?
     public let likeCount: Int?
@@ -155,10 +163,29 @@ public struct PostCommentDTO: Decodable, Sendable, Hashable, Identifiable {
         case comment
         case createdAt = "created_at"
         case isDeleted = "is_deleted"
+        case removed
         case userHasLiked
         case likeCount = "like_count"
         case author
         case attachments
+    }
+
+    /// Tolerant (Pulse S2): only `id` is required; a field that is missing,
+    /// null or of another shape reads as absent, and an unreadable
+    /// attachment is left out.
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        postId = c.lenient(String.self, forKey: .postId) ?? ""
+        userId = c.lenient(String.self, forKey: .userId)
+        parentCommentId = c.lenient(String.self, forKey: .parentCommentId)
+        comment = c.lenient(String.self, forKey: .comment) ?? ""
+        createdAt = c.lenient(String.self, forKey: .createdAt) ?? ""
+        isDeleted = c.lenient(Bool.self, forKey: .isDeleted) == true || c.lenient(Bool.self, forKey: .removed) == true
+        userHasLiked = c.lenient(Bool.self, forKey: .userHasLiked)
+        likeCount = c.lenient(Int.self, forKey: .likeCount)
+        author = c.lenient(PostCreatorDTO.self, forKey: .author)
+        attachments = c.lenient(LossyList<CommentAttachmentDTO>.self, forKey: .attachments)?.items
     }
 }
 
@@ -255,41 +282,46 @@ public struct PostDetailDTO: Decodable, Sendable, Hashable, Identifiable {
         case archiveReason = "archive_reason"
     }
 
+    /// Tolerant (Pulse S2): only `id` and `created_at` are required; any
+    /// other field that is missing, null or of another shape reads as
+    /// absent, and a reply this build can't read is left out.
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(String.self, forKey: .id)
-        userId = try c.decode(String.self, forKey: .userId)
-        title = try c.decodeIfPresent(String.self, forKey: .title)
-        content = try c.decodeIfPresent(String.self, forKey: .content) ?? ""
-        postType = try c.decodeIfPresent(String.self, forKey: .postType)
-        postFormat = try c.decodeIfPresent(String.self, forKey: .postFormat)
-        purpose = try c.decodeIfPresent(String.self, forKey: .purpose)
-        mediaURLs = try (c.decodeIfPresent([String].self, forKey: .mediaURLs)) ?? []
-        mediaTypes = try c.decodeIfPresent([String].self, forKey: .mediaTypes)
-        mediaThumbnails = try (c.decodeIfPresent([String].self, forKey: .mediaThumbnails)) ?? []
-        mediaLiveURLs = try (c.decodeIfPresent([String].self, forKey: .mediaLiveURLs)) ?? []
+        // Empty when the post comes without its author's id: nothing is owned or opened by it.
+        userId = c.lenient(String.self, forKey: .userId) ?? ""
+        title = c.lenient(String.self, forKey: .title)
+        content = c.lenient(String.self, forKey: .content) ?? ""
+        postType = c.lenient(String.self, forKey: .postType)
+        postFormat = c.lenient(String.self, forKey: .postFormat)
+        purpose = c.lenient(String.self, forKey: .purpose)
+        // The four media lists are read side by side, so one is kept whole or not at all.
+        mediaURLs = c.lenient([String].self, forKey: .mediaURLs) ?? []
+        mediaTypes = c.lenient([String].self, forKey: .mediaTypes)
+        mediaThumbnails = c.lenient([String].self, forKey: .mediaThumbnails) ?? []
+        mediaLiveURLs = c.lenient([String].self, forKey: .mediaLiveURLs) ?? []
         createdAt = try c.decode(String.self, forKey: .createdAt)
-        updatedAt = try c.decodeIfPresent(String.self, forKey: .updatedAt)
-        isEdited = try c.decodeIfPresent(Bool.self, forKey: .isEdited)
-        likeCount = try c.decodeIfPresent(Int.self, forKey: .likeCount) ?? 0
-        commentCount = try c.decodeIfPresent(Int.self, forKey: .commentCount) ?? 0
-        shareCount = try c.decodeIfPresent(Int.self, forKey: .shareCount)
-        viewCount = try c.decodeIfPresent(Int.self, forKey: .viewCount)
-        creator = try c.decodeIfPresent(PostCreatorDTO.self, forKey: .creator)
-        home = try c.decodeIfPresent(PostHomeRefDTO.self, forKey: .home)
-        userHasLiked = try c.decodeIfPresent(Bool.self, forKey: .userHasLiked) ?? false
-        userHasSaved = try c.decodeIfPresent(Bool.self, forKey: .userHasSaved) ?? false
-        userHasReposted = try c.decodeIfPresent(Bool.self, forKey: .userHasReposted) ?? false
-        comments = try (c.decodeIfPresent([PostCommentDTO].self, forKey: .comments)) ?? []
-        visibility = try c.decodeIfPresent(String.self, forKey: .visibility)
-        eventDate = try c.decodeIfPresent(String.self, forKey: .eventDate)
-        eventVenue = try c.decodeIfPresent(String.self, forKey: .eventVenue)
-        lostFoundType = try c.decodeIfPresent(String.self, forKey: .lostFoundType)
-        lostFoundContactPref = try c.decodeIfPresent(String.self, forKey: .lostFoundContactPref)
-        serviceCategory = try c.decodeIfPresent(String.self, forKey: .serviceCategory)
-        dealBusinessName = try c.decodeIfPresent(String.self, forKey: .dealBusinessName)
-        locationName = try c.decodeIfPresent(String.self, forKey: .locationName)
-        archiveReason = try c.decodeIfPresent(String.self, forKey: .archiveReason)
+        updatedAt = c.lenient(String.self, forKey: .updatedAt)
+        isEdited = c.lenient(Bool.self, forKey: .isEdited)
+        likeCount = c.lenient(Int.self, forKey: .likeCount) ?? 0
+        commentCount = c.lenient(Int.self, forKey: .commentCount) ?? 0
+        shareCount = c.lenient(Int.self, forKey: .shareCount)
+        viewCount = c.lenient(Int.self, forKey: .viewCount)
+        creator = c.lenient(PostCreatorDTO.self, forKey: .creator)
+        home = c.lenient(PostHomeRefDTO.self, forKey: .home)
+        userHasLiked = c.lenient(Bool.self, forKey: .userHasLiked) ?? false
+        userHasSaved = c.lenient(Bool.self, forKey: .userHasSaved) ?? false
+        userHasReposted = c.lenient(Bool.self, forKey: .userHasReposted) ?? false
+        comments = c.lossyList(PostCommentDTO.self, forKey: .comments)
+        visibility = c.lenient(String.self, forKey: .visibility)
+        eventDate = c.lenient(String.self, forKey: .eventDate)
+        eventVenue = c.lenient(String.self, forKey: .eventVenue)
+        lostFoundType = c.lenient(String.self, forKey: .lostFoundType)
+        lostFoundContactPref = c.lenient(String.self, forKey: .lostFoundContactPref)
+        serviceCategory = c.lenient(String.self, forKey: .serviceCategory)
+        dealBusinessName = c.lenient(String.self, forKey: .dealBusinessName)
+        locationName = c.lenient(String.self, forKey: .locationName)
+        archiveReason = c.lenient(String.self, forKey: .archiveReason)
     }
 }
 

@@ -76,34 +76,37 @@ public struct FeedPostDTO: Decodable, Sendable, Hashable, Identifiable {
         case creator
     }
 
+    /// Tolerant (Pulse S2): only `id` and `created_at` are required; any
+    /// other field that is missing, null or of another shape reads as absent.
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(String.self, forKey: .id)
-        userId = try c.decodeIfPresent(String.self, forKey: .userId)
-        title = try c.decodeIfPresent(String.self, forKey: .title)
-        content = try c.decodeIfPresent(String.self, forKey: .content) ?? ""
-        postType = try c.decodeIfPresent(String.self, forKey: .postType)
+        userId = c.lenient(String.self, forKey: .userId)
+        title = c.lenient(String.self, forKey: .title)
+        content = c.lenient(String.self, forKey: .content) ?? ""
+        postType = c.lenient(String.self, forKey: .postType)
         createdAt = try c.decode(String.self, forKey: .createdAt)
-        likeCount = try c.decodeIfPresent(Int.self, forKey: .likeCount) ?? 0
-        commentCount = try c.decodeIfPresent(Int.self, forKey: .commentCount) ?? 0
-        shareCount = try c.decodeIfPresent(Int.self, forKey: .shareCount) ?? 0
-        userHasLiked = try c.decodeIfPresent(Bool.self, forKey: .userHasLiked) ?? false
-        userHasSaved = try c.decodeIfPresent(Bool.self, forKey: .userHasSaved) ?? false
-        userHasReposted = try c.decodeIfPresent(Bool.self, forKey: .userHasReposted) ?? false
-        state = try c.decodeIfPresent(String.self, forKey: .state)
-        origin = try c.decodeIfPresent(String.self, forKey: .origin)
-        isSeeded = try c.decodeIfPresent(Bool.self, forKey: .isSeeded) ?? false
-        isVisitorPost = try c.decodeIfPresent(Bool.self, forKey: .isVisitorPost) ?? false
-        businessAuthorId = try c.decodeIfPresent(String.self, forKey: .businessAuthorId)
-        locationName = try c.decodeIfPresent(String.self, forKey: .locationName)
-        eventDate = try c.decodeIfPresent(String.self, forKey: .eventDate)
-        eventVenue = try c.decodeIfPresent(String.self, forKey: .eventVenue)
-        lostFoundType = try c.decodeIfPresent(String.self, forKey: .lostFoundType)
-        mediaURLs = try c.decodeIfPresent([String].self, forKey: .mediaURLs) ?? []
-        mediaThumbnails = try c.decodeIfPresent([String].self, forKey: .mediaThumbnails) ?? []
-        mediaTypes = try c.decodeIfPresent([String].self, forKey: .mediaTypes) ?? []
-        mediaLiveURLs = try c.decodeIfPresent([String].self, forKey: .mediaLiveURLs) ?? []
-        creator = try c.decodeIfPresent(PostCreatorDTO.self, forKey: .creator)
+        likeCount = c.lenient(Int.self, forKey: .likeCount) ?? 0
+        commentCount = c.lenient(Int.self, forKey: .commentCount) ?? 0
+        shareCount = c.lenient(Int.self, forKey: .shareCount) ?? 0
+        userHasLiked = c.lenient(Bool.self, forKey: .userHasLiked) ?? false
+        userHasSaved = c.lenient(Bool.self, forKey: .userHasSaved) ?? false
+        userHasReposted = c.lenient(Bool.self, forKey: .userHasReposted) ?? false
+        state = c.lenient(String.self, forKey: .state)
+        origin = c.lenient(String.self, forKey: .origin)
+        isSeeded = c.lenient(Bool.self, forKey: .isSeeded) ?? false
+        isVisitorPost = c.lenient(Bool.self, forKey: .isVisitorPost) ?? false
+        businessAuthorId = c.lenient(String.self, forKey: .businessAuthorId)
+        locationName = c.lenient(String.self, forKey: .locationName)
+        eventDate = c.lenient(String.self, forKey: .eventDate)
+        eventVenue = c.lenient(String.self, forKey: .eventVenue)
+        lostFoundType = c.lenient(String.self, forKey: .lostFoundType)
+        // The four media lists are read side by side, so one is kept whole or not at all.
+        mediaURLs = c.lenient([String].self, forKey: .mediaURLs) ?? []
+        mediaThumbnails = c.lenient([String].self, forKey: .mediaThumbnails) ?? []
+        mediaTypes = c.lenient([String].self, forKey: .mediaTypes) ?? []
+        mediaLiveURLs = c.lenient([String].self, forKey: .mediaLiveURLs) ?? []
+        creator = c.lenient(PostCreatorDTO.self, forKey: .creator)
     }
 }
 
@@ -151,6 +154,19 @@ public struct FeedResponse: Decodable, Sendable, Hashable {
     public var requiresViewingLocation: Bool?
     /// Place feed only: no area was given, so the server looked around the person's own place.
     public var fallbackArea: FeedFallbackArea?
+
+    private enum CodingKeys: String, CodingKey {
+        case posts, pagination, requiresViewingLocation, fallbackArea
+    }
+
+    /// A row this build can't read is left out; the rest of the feed shows (Pulse S2).
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        posts = c.lossyList(FeedPostDTO.self, forKey: .posts)
+        pagination = c.lenient(FeedPagination.self, forKey: .pagination)
+        requiresViewingLocation = c.lenient(Bool.self, forKey: .requiresViewingLocation)
+        fallbackArea = c.lenient(FeedFallbackArea.self, forKey: .fallbackArea)
+    }
 }
 
 /// Where the place feed looked when no area was given, such as "Near Camas, WA".

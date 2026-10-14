@@ -111,7 +111,7 @@ public struct PlanDetailDTO: Decodable, Sendable, Hashable, Identifiable {
         card = try PlanCardDTO(from: decoder)
         let container = try decoder.container(keyedBy: CodingKeys.self)
         place = try? container.decodeIfPresent(PlanPlaceDTO.self, forKey: .place)
-        people = (try? container.decodeIfPresent(PlanLossyList<PlanPersonDTO>.self, forKey: .people))?.items
+        people = (try? container.decodeIfPresent(LossyList<PlanPersonDTO>.self, forKey: .people))?.items
         chatRoomId = try container.decodeIfPresent(String.self, forKey: .chatRoomId)
         chatOpen = try container.decodeIfPresent(Bool.self, forKey: .chatOpen)
         cancelNote = try container.decodeIfPresent(String.self, forKey: .cancelNote)
