@@ -320,7 +320,7 @@ fun FeedScreen(
                 }
             } else {
                 FeedChipRow(
-                    chips = PulseIntent.entries.map { FeedChipItem(id = it.key, label = it.label) },
+                    chips = PulseIntent.filterEntries.map { FeedChipItem(id = it.key, label = it.label) },
                     activeId = activeIntent.key,
                     onSelect = { id -> viewModel.selectIntent(PulseIntent.fromKey(id)) },
                     skeleton = state is PulseFeedUiState.Loading,
@@ -433,7 +433,7 @@ fun FeedScreen(
                 title = { Text("Filter by intent") },
                 text = {
                     Column {
-                        PulseIntent.entries.forEach { intent ->
+                        PulseIntent.filterEntries.forEach { intent ->
                             TextButton(
                                 onClick = {
                                     showsIntentPicker = false

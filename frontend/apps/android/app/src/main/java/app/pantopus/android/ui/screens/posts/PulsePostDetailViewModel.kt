@@ -185,6 +185,7 @@ class PulsePostDetailViewModel
             get() = (authRepo.state.value as? AuthRepository.State.SignedIn)?.user?.id
 
         private var keptOpen = false
+        private var endingAsk = false
 
         /** The asker's own Ask that hasn't ended (S7): no resolution, not solved or archived, not past its end. */
         private val isOwnOpenAsk: Boolean
@@ -209,18 +210,25 @@ class PulsePostDetailViewModel
 
         /** "Keep open 7 more days" (contract 2.12); a refusal shows the server's sentence. */
         fun keepOpen() {
+            if (endingAsk) return
+            endingAsk = true
             _showsOverflowMenu.value = false
             viewModelScope.launch {
-                when (val result = pulseRepo.keepOpen(postId)) {
-                    is NetworkResult.Success -> {
-                        keptOpen = true
-                        _toastMessage.value = "Kept open for 7 more days."
-                        fetch(force = true)
+                try {
+                    when (val result = pulseRepo.keepOpen(postId)) {
+                        is NetworkResult.Success -> {
+                            keptOpen = true
+                            _toastMessage.value = "Kept open for 7 more days."
+                            fetch(force = true)
+                        }
+                        is NetworkResult.Failure -> {
+                            if (PulseRepository.refusalCode(result.error) == PulseRepository.ALREADY_KEPT_OPEN) keptOpen = true
+                            _toastMessage.value = result.error.displayMessage("Couldn't keep it open. Try again.")
+                            fetch(force = true)
+                        }
                     }
-                    is NetworkResult.Failure -> {
-                        if (PulseRepository.refusalCode(result.error) == PulseRepository.ALREADY_KEPT_OPEN) keptOpen = true
-                        _toastMessage.value = result.error.displayMessage("Couldn't keep it open. Try again.")
-                    }
+                } finally {
+                    endingAsk = false
                 }
             }
         }
@@ -236,16 +244,24 @@ class PulsePostDetailViewModel
 
         /** The confirmed "Close" (contract 2.12): the Ask ends and leaves Pulse; My posts can restore it. */
         fun closeAsk() {
+            if (endingAsk) return
+            endingAsk = true
             _confirmingClose.value = false
             viewModelScope.launch {
-                when (val result = pulseRepo.close(postId)) {
-                    is NetworkResult.Success -> {
-                        _toastMessage.value = "Question closed."
-                        postsRefresh.notifyPostsDidChange()
-                        fetch(force = true)
+                try {
+                    when (val result = pulseRepo.close(postId)) {
+                        is NetworkResult.Success -> {
+                            _toastMessage.value = "Question closed."
+                            postsRefresh.notifyPostsDidChange()
+                            fetch(force = true)
+                        }
+                        is NetworkResult.Failure -> {
+                            _toastMessage.value = result.error.displayMessage("Couldn't close it. Try again.")
+                            fetch(force = true)
+                        }
                     }
-                    is NetworkResult.Failure ->
-                        _toastMessage.value = result.error.displayMessage("Couldn't close it. Try again.")
+                } finally {
+                    endingAsk = false
                 }
             }
         }

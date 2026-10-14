@@ -256,6 +256,7 @@ class PulseFeedViewModel
 
         /** Asks kept open here (or refused as already kept open): "Keep open 7 more days" no longer shows. */
         private var keptOpenIds: Set<String> = emptySet()
+        private val endingAskIds = mutableSetOf<String>()
 
         /** The post whose author is awaiting mute confirmation, if any. */
         private val _mutingPostId = MutableStateFlow<String?>(null)
@@ -526,21 +527,28 @@ class PulseFeedViewModel
          * server's sentence; "already kept open" also hides the entry.
          */
         fun keepOpen(postId: String) {
+            if (!endingAskIds.add(postId)) return
             _overflowPostId.value = null
             viewModelScope.launch {
-                when (val result = pulseRepo.keepOpen(postId)) {
-                    is NetworkResult.Success -> {
-                        keptOpenIds = keptOpenIds + postId
-                        _toastMessage.value = "Kept open for 7 more days."
-                        rebuildLoadedState()
-                    }
-                    is NetworkResult.Failure -> {
-                        if (PulseRepository.refusalCode(result.error) == PulseRepository.ALREADY_KEPT_OPEN) {
+                try {
+                    when (val result = pulseRepo.keepOpen(postId)) {
+                        is NetworkResult.Success -> {
                             keptOpenIds = keptOpenIds + postId
+                            _toastMessage.value = "Kept open for 7 more days."
                             rebuildLoadedState()
                         }
-                        _toastMessage.value = result.error.displayMessage("Couldn't keep it open. Try again.")
+                        is NetworkResult.Failure -> {
+                            if (PulseRepository.refusalCode(result.error) == PulseRepository.ALREADY_KEPT_OPEN) {
+                                keptOpenIds = keptOpenIds + postId
+                                rebuildLoadedState()
+                            }
+                            _toastMessage.value = result.error.displayMessage("Couldn't keep it open. Try again.")
+                            refresh()
+                        }
                     }
+                } finally {
+                    endingAskIds.remove(postId)
+                    rebuildLoadedState()
                 }
             }
         }
@@ -557,16 +565,24 @@ class PulseFeedViewModel
 
         /** The confirmed "Close": the Ask ends (`closed` or `closed_unanswered`) and leaves the list (contract 2.12). */
         fun closeAsk(postId: String) {
+            if (!endingAskIds.add(postId)) return
             _closingAskId.value = null
             viewModelScope.launch {
-                when (val result = pulseRepo.close(postId)) {
-                    is NetworkResult.Success -> {
-                        removedPostIds = removedPostIds + postId
-                        _toastMessage.value = "Question closed."
-                        rebuildLoadedState()
+                try {
+                    when (val result = pulseRepo.close(postId)) {
+                        is NetworkResult.Success -> {
+                            removedPostIds = removedPostIds + postId
+                            _toastMessage.value = "Question closed."
+                            rebuildLoadedState()
+                        }
+                        is NetworkResult.Failure -> {
+                            _toastMessage.value = result.error.displayMessage("Couldn't close it. Try again.")
+                            refresh()
+                        }
                     }
-                    is NetworkResult.Failure ->
-                        _toastMessage.value = result.error.displayMessage("Couldn't close it. Try again.")
+                } finally {
+                    endingAskIds.remove(postId)
+                    rebuildLoadedState()
                 }
             }
         }

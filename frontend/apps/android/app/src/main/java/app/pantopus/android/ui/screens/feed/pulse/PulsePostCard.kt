@@ -98,7 +98,7 @@ data class PulsePostActions(
     val canMuteTopic: Boolean get() = !isSeeded && !postType.isNullOrEmpty()
 
     /** "Mute this topic": only on a post tagged with one of the 12 Pulse topics. */
-    val canMuteThisTopic: Boolean get() = !isSeeded && pulseTopic != null
+    val canMuteThisTopic: Boolean get() = !isOwner && !isSeeded && pulseTopic != null
 }
 
 /** VM-prepared content for a single Pulse card. */
@@ -637,7 +637,7 @@ private val attendeeTints =
 
 private fun PulseIntent.tintColors(): Pair<Color, Color> =
     when (this) {
-        PulseIntent.All -> PantopusColors.appTextSecondary to PantopusColors.appSurfaceSunken
+        PulseIntent.All, PulseIntent.Generic -> PantopusColors.appTextSecondary to PantopusColors.appSurfaceSunken
         PulseIntent.Ask -> PantopusColors.warmAmber to PantopusColors.warmAmberBg
         PulseIntent.Recommend -> PantopusColors.success to PantopusColors.successLight
         PulseIntent.Event -> PantopusColors.magic to PantopusColors.magicBg

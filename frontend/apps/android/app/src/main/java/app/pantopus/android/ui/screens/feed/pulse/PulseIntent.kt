@@ -6,10 +6,9 @@ import androidx.compose.runtime.Immutable
 import app.pantopus.android.ui.theme.PantopusIcon
 
 /**
- * Ten-way classification for Pulse posts. Drives the chip-row filter,
+ * Classification for Pulse posts, including a read-only generic fallback. Drives the chip-row filter,
  * the per-card colored chip, the reaction-verb set, and the compose
- * FAB's pre-fill. `All` is a chip-row-only sentinel; real posts always
- * resolve to one of the other nine.
+ * FAB's pre-fill. `All` is a chip-row-only sentinel; `Generic` renders types this client cannot classify.
  *
  * The chip set mirrors RN's `PLACE_POST_TYPES`
  * (`src/constants/feed.ts:18-28`) 1:1 — `Alert` / `Deal` /
@@ -22,6 +21,7 @@ enum class PulseIntent(
     val cardChipLabel: String,
 ) {
     All(key = "all", label = "All", cardChipLabel = ""),
+    Generic(key = "generic", label = "Post", cardChipLabel = "Post"),
     Ask(key = "ask", label = "Ask", cardChipLabel = "Ask"),
     Recommend(key = "recommend", label = "Recommend", cardChipLabel = "Rec"),
     Event(key = "event", label = "Event", cardChipLabel = "Event"),
@@ -37,7 +37,7 @@ enum class PulseIntent(
     val postType: String?
         get() =
             when (this) {
-                All -> null
+                All, Generic -> null
                 Ask -> "ask_local"
                 Recommend -> "recommendation"
                 Event -> "event"
@@ -53,7 +53,7 @@ enum class PulseIntent(
     val icon: PantopusIcon
         get() =
             when (this) {
-                All -> PantopusIcon.Info
+                All, Generic -> PantopusIcon.Info
                 Ask -> PantopusIcon.HelpCircle
                 Recommend -> PantopusIcon.ThumbsUp
                 Event -> PantopusIcon.Calendar
@@ -69,12 +69,14 @@ enum class PulseIntent(
     fun chipLabelFor(lostFoundType: String?): String = if (this == Lost && lostFoundType == "found") "Found" else cardChipLabel
 
     companion object {
+        /** The generic fallback is readable, never a filter or compose choice. */
+        val filterEntries: List<PulseIntent> = entries.filter { it != Generic }
+
         fun fromKey(key: String): PulseIntent = entries.firstOrNull { it.key == key } ?: All
 
         /**
          * Resolve a backend `post_type` to a UI intent. Unknown values
-         * fall through to `Announce` (most generic) so the card still
-         * renders a meaningful indicator.
+         * fall through to `Generic` so the card reads "Post" without inventing its type.
          */
         fun fromPostType(postType: String?): PulseIntent =
             when (postType ?: "") {
@@ -87,7 +89,7 @@ enum class PulseIntent(
                 "neighborhood_win" -> NeighborhoodWin
                 "visitor_guide" -> VisitorGuide
                 "local_update", "announcement", "heads_up" -> Announce
-                else -> Announce
+                else -> Generic
             }
     }
 }
@@ -154,6 +156,8 @@ fun PulseIntent.reactionTemplate(
                 PulseReaction(PulseReaction.Kind.Helpful, PantopusIcon.Lightbulb, "helpful", helpfulCount, true),
                 PulseReaction(PulseReaction.Kind.Shared, PantopusIcon.Share, "shared", secondaryCount, false),
             )
+        PulseIntent.Generic ->
+            listOf(PulseReaction(PulseReaction.Kind.Helpful, PantopusIcon.ThumbsUp, "", helpfulCount, true))
         PulseIntent.Announce, PulseIntent.Alert, PulseIntent.All ->
             // A03: announce cards lead with the "seen" eye verb.
             listOf(

@@ -803,6 +803,7 @@ class MyPostsViewModel
             fun intentFilterId(intent: PulseIntent): String =
                 when (intent) {
                     PulseIntent.All -> "all"
+                    PulseIntent.Generic -> "generic"
                     PulseIntent.Ask -> "ask"
                     PulseIntent.Recommend -> "recommend"
                     PulseIntent.Event -> "event"
@@ -818,6 +819,7 @@ class MyPostsViewModel
             fun intentLabel(intent: PulseIntent): String =
                 when (intent) {
                     PulseIntent.All -> "All"
+                    PulseIntent.Generic -> "Post"
                     PulseIntent.Ask -> "Ask"
                     PulseIntent.Recommend -> "Recommend"
                     PulseIntent.Event -> "Event"
@@ -836,7 +838,7 @@ class MyPostsViewModel
 
             private fun paletteFor(intent: PulseIntent): IntentPalette =
                 when (intent) {
-                    PulseIntent.All ->
+                    PulseIntent.All, PulseIntent.Generic ->
                         IntentPalette(
                             foreground = PantopusColors.appTextSecondary,
                             background = PantopusColors.appSurfaceSunken,
@@ -939,6 +941,7 @@ class MyPostsViewModel
                     PulseIntent.NeighborhoodWin,
                     PulseIntent.VisitorGuide,
                     PulseIntent.All,
+                    PulseIntent.Generic,
                     ->
                         listOf(replies, likes)
                 }
