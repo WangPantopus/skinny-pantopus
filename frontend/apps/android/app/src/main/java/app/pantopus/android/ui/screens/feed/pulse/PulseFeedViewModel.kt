@@ -803,6 +803,7 @@ class PulseFeedViewModel
         fun muteAuthor(postId: String) {
             _mutingPostId.value = null
             val post = loadedPosts.firstOrNull { it.id == postId } ?: return
+            if (isOwner(post) || post.isSeeded) return
             val businessId = post.businessAuthorId
             val entityType = if (businessId != null) FeedMuteEntityType.Business else FeedMuteEntityType.User
             val entityId = businessId ?: post.userId ?: return
@@ -829,6 +830,7 @@ class PulseFeedViewModel
          */
         fun muteTopic(postId: String) {
             val post = loadedPosts.firstOrNull { it.id == postId } ?: return
+            if (isOwner(post) || post.isSeeded) return
             val postType = post.postType?.takeIf { it.isNotEmpty() } ?: return
             val label = PulseIntent.fromPostType(postType).cardChipLabel
             mutedPostTypes = mutedPostTypes + postType
@@ -853,6 +855,7 @@ class PulseFeedViewModel
          */
         fun muteThisTopic(postId: String) {
             val post = loadedPosts.firstOrNull { it.id == postId } ?: return
+            if (isOwner(post) || post.isSeeded) return
             val topic = PulseTopic.fromKey(post.topic) ?: return
             mutedTopicKeys = mutedTopicKeys + topic.key
             if (_activeTopic.value == topic) selectTopic(null) else rebuildLoadedState()

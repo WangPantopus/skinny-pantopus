@@ -94,8 +94,8 @@ data class PulsePostActions(
     val canMuteAuthor: Boolean
         get() = !isOwner && !isSeeded && muteEntityType != null && !muteEntityId.isNullOrEmpty()
 
-    /** Topic mute needs a concrete post type. */
-    val canMuteTopic: Boolean get() = !isSeeded && !postType.isNullOrEmpty()
+    /** Type mute needs another person's post with a concrete post type. */
+    val canMuteTopic: Boolean get() = !isOwner && !isSeeded && !postType.isNullOrEmpty()
 
     /** "Mute this topic": only on a post tagged with one of the 12 Pulse topics. */
     val canMuteThisTopic: Boolean get() = !isOwner && !isSeeded && pulseTopic != null
