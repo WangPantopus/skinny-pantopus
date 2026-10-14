@@ -233,8 +233,6 @@ All entity endpoints now include a `locationUnlocked` boolean:
 | `GET /api/posts/:id`                    | Post     | Fixed (permanent blur for non-authors) |
 | `GET /api/posts/feed` (Nearby, saved place, Sports) | Post | Fixed (displayed points only, see [Post Feed Rules](#post-feed-rules)) |
 | `GET /api/posts/:id/matched-businesses` | Post     | Fixed (no stored-point distances or order for non-authors, see [Post Feed Rules](#post-feed-rules)) |
-| `GET /api/posts/map` (tasks layer)      | Post     | Fixed (`resolveGigPrecision` per gig) |
-| `GET /api/posts/map` (offers layer)     | Post     | Fixed (`resolveGigPrecision` per gig) |
 | `GET /api/posts/map` (posts layer)      | Post     | Fixed (displayed points only, see [Post Map Rules](#post-map-rules)) |
 | `GET /api/posts/map` (`nearest_activity_center`) | Post | Fixed (`findNearestMapPost`, see [Post Map Rules](#post-map-rules)) |
 | `GET /api/listings/:id`                 | Listing  | Fixed (grant-aware, `locationUnlocked`) |
@@ -366,7 +364,6 @@ See `backend/utils/verifiedCoordinateGuard.js`:
 - [x] Post detail enforces permanent blur for non-authors (`leastPrecise`)
 - [x] Feed service enforces permanent blur on every row
 - [x] `approx_area` points come from the fixed grid cell, so repeat posts from one spot show one pin
-- [x] Posts/map tasks+offers layers enforce per-gig privacy
 - [x] Post feed and map filters, distances, the empty-map hint and matched-business distances and order never measure a non-author's stored point
 - [x] Post feed, Sports and map queries read whole neighborhood cells and never another person's `none` post, so the rows they read say nothing finer than a cell
 - [x] Listing detail enforces location_precision + grant-awareness + `locationUnlocked`
