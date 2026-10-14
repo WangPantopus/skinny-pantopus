@@ -19,6 +19,8 @@ public enum PostIntent: String, Sendable, CaseIterable, Identifiable {
     case event
     case share
     case alert
+    /// A post whose type this build doesn't know (Pulse S2): a plain "Post" chip.
+    case generic
 
     public var id: String {
         rawValue
@@ -33,6 +35,7 @@ public enum PostIntent: String, Sendable, CaseIterable, Identifiable {
         case .event: "Event"
         case .share: "Share"
         case .alert: "Alert"
+        case .generic: "Post"
         }
     }
 
@@ -45,6 +48,7 @@ public enum PostIntent: String, Sendable, CaseIterable, Identifiable {
         case .event: .personal
         case .share: .home
         case .alert: .warning
+        case .generic: .neutral
         }
     }
 
@@ -57,16 +61,19 @@ public enum PostIntent: String, Sendable, CaseIterable, Identifiable {
         case .event: .calendar
         case .share: .messageCircle
         case .alert: .alertCircle
+        case .generic: .messageSquare
         }
     }
 
     /// Convert a backend `Post.post_type` / `Post.purpose` token into the
     /// nearest UI intent. `post_type` is the canonical column and wins;
     /// `purpose` is a backend-derived rollup (e.g. lost_found posts get
-    /// `purpose: "ask"`) so it's only a fallback. Returns `.share` for
-    /// unknown / generic values.
+    /// `purpose: "ask"`) so it's only a fallback. Returns `.share` for the
+    /// older general types, and `.generic` for a type this build doesn't
+    /// know (one added later), so it never wears another type's label.
     public static func from(purpose: String?, postType: String?) -> PostIntent {
         if let mapped = map(postType) { return mapped }
+        if !PulseIntent.knows(postType: postType) { return .generic }
         return map(purpose) ?? .share
     }
 
@@ -130,7 +137,7 @@ public struct PostAuthorHeader: View {
             Spacer()
             StatusChip(intent.label.uppercased(), variant: intent.chipVariant, icon: intent.icon)
                 // "Share post" would read like the top bar's Share button.
-                .accessibilityLabel("Post type: \(intent.label)")
+                .accessibilityLabel(intent == .generic ? intent.label : "Post type: \(intent.label)")
         }
         .padding(.horizontal, Spacing.s4)
         .accessibilityElement(children: .contain)

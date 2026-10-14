@@ -307,7 +307,7 @@ async function getMuteAndHideFilters(userId) {
     { data: personaBlocks, error: personaBlocksError },
     { data: feedPrefs, error: feedPrefsError },
   ] = await Promise.all([
-    supabaseAdmin.from('PostMute').select('muted_entity_id, muted_entity_type, surface').eq('user_id', userId),
+    supabaseAdmin.from('PostMute').select('muted_entity_id, muted_entity_type, surface, area_id').eq('user_id', userId),
     supabaseAdmin.from('PostHide').select('post_id').eq('user_id', userId),
     supabaseAdmin.from('Relationship')
       .select('requester_id, addressee_id')
@@ -337,12 +337,16 @@ async function getMuteAndHideFilters(userId) {
     }
   }
 
-  // Build surface-scoped topic mute sets
+  // Build surface-scoped topic mute sets, and the areas each Pulse topic is muted in
   const topicMutes = (mutes || []).filter(m => m.muted_entity_type === 'topic');
-  const globalMutedTopics = new Set(topicMutes.filter(m => !m.surface).map(m => m.muted_entity_id));
+  const globalMutedTopics = new Set(topicMutes.filter(m => !m.surface && !m.area_id).map(m => m.muted_entity_id));
   const mutedTopicsBySurface = new Map();
+  const mutedTopicAreas = new Map();
   for (const m of topicMutes) {
-    if (m.surface) {
+    if (m.area_id) {
+      if (!mutedTopicAreas.has(m.muted_entity_id)) mutedTopicAreas.set(m.muted_entity_id, new Set());
+      mutedTopicAreas.get(m.muted_entity_id).add(m.area_id);
+    } else if (m.surface) {
       if (!mutedTopicsBySurface.has(m.surface)) mutedTopicsBySurface.set(m.surface, new Set());
       mutedTopicsBySurface.get(m.surface).add(m.muted_entity_id);
     }
@@ -357,6 +361,7 @@ async function getMuteAndHideFilters(userId) {
     blockedPersonaIds: new Set((personaBlocks || []).map(block => block.persona_id).filter(Boolean)),
     globalMutedTopics,
     mutedTopicsBySurface,
+    mutedTopicAreas,
     feedPreferences: feedPrefs || {
       hide_deals_place: false, hide_alerts_place: false,
       show_politics_connections: false, show_politics_place: false,
@@ -408,6 +413,9 @@ function applyMuteHideFilters(posts, filters, surface, viewerUserId = null) {
           if (surfaceTopics.has(p.post_type)) return false;
         }
       }
+      // A topic muted in one area hides its posts there, and posts that aren't in any area.
+      const mutedAreas = p.topic ? filters.mutedTopicAreas?.get(p.topic) : null;
+      if (mutedAreas && (p.area_id == null || mutedAreas.has(p.area_id))) return false;
       // Place-specific preference hiding — only apply on the Place surface
       if (isPlace && filters.feedPreferences?.hide_deals_place && dealTypes.includes(p.post_type)) return false;
       if (isPlace && filters.feedPreferences?.hide_alerts_place && alertTypes.includes(p.post_type)) return false;
@@ -950,8 +958,9 @@ async function getListFeed({
       );
     }
 
-    // 6. postType filter
+    // 6. postType and topic filters (topic=sports is its own lane, above)
     if (postType) query = query.eq('post_type', postType);
+    if (topic) query = query.eq('topic', topic);
 
     // 7. tags filter
     if (tags?.length) query = query.overlaps('tags', tags);
