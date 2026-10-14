@@ -533,7 +533,18 @@ public final class PulsePostDetailViewModel {
             PulsePostsRefresh.notifyPostsDidChange()
         } catch {
             logger.warning("Comment send failed: \(error)")
-            toastMessage = "Couldn't post your comment"
+            // A refusal says why in the server's words (contract §0); the draft stays.
+            toastMessage = Self.refusal(in: error) ?? "Couldn't post your comment"
+        }
+    }
+
+    /// The server's sentence for a refused request (403 or another 4xx);
+    /// nil for a failure that isn't a refusal (offline, 5xx).
+    private static func refusal(in error: any Error) -> String? {
+        switch error as? APIError {
+        case let .forbidden(message): message
+        case let .clientError(_, message): APIError.friendlyClientMessage(message)
+        default: nil
         }
     }
 

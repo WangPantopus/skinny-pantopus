@@ -67,7 +67,7 @@ struct PlanScreen: View {
         .sheet(isPresented: $showsAsk) {
             if let card = viewModel.card {
                 PlanAskSheet(card: card, previous: askIsChange ? viewModel.askPrefill : nil) { body in
-                    await viewModel.ask(body)
+                    await viewModel.ask(body) ? nil : viewModel.actionError ?? "We couldn't send that. Please try again."
                 }
             }
         }
@@ -81,6 +81,8 @@ struct PlanScreen: View {
                 }
             }
             Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Pantopus reviews every report. The host isn't told who reported.")
         }
         .alert(
             confirmation?.title ?? "",
@@ -98,6 +100,11 @@ struct PlanScreen: View {
             PlanChatScreen(route: route)
         }
         .overlay(alignment: .bottom) { toastView }
+        .onChange(of: viewModel.notice) { _, notice in
+            guard let notice else { return }
+            toast = notice
+            viewModel.notice = nil
+        }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("planScreen")
     }
@@ -189,7 +196,8 @@ struct PlanScreen: View {
             PlanGlassButton(icon: .chevronLeft, label: "Back", action: close)
                 .accessibilityIdentifier("planBack")
             Spacer()
-            if let url = card.shareUrl.flatMap(URL.init(string:)) {
+            // Nothing to share once it's cancelled or over (as on Android).
+            if card.state != .cancelled, card.state != .ended, let url = card.shareUrl.flatMap(URL.init(string:)) {
                 ShareLink(item: url, message: Text(card.title)) {
                     PlanGlassIcon(icon: .share)
                 }
@@ -267,7 +275,13 @@ struct PlanScreen: View {
             title: "This plan isn't available",
             message: "It may have ended, been cancelled, or be just for neighbors closer by.",
             onBack: close
-        )
+        ) {
+            // A way on, as on Android (J8's "See all plans" goes back the same way).
+            Button("See other plans", action: close)
+                .planButton(.secondary, size: .small)
+                .frame(maxWidth: 220)
+                .accessibilityIdentifier("planSeeOtherPlans")
+        }
     }
 
     private func errorState(_ message: String) -> some View {

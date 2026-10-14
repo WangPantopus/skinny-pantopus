@@ -69,6 +69,8 @@ struct PlanFooter: View {
         }
     }
 
+    /// One primary action, as on Android: ask (or join the waitlist), verify,
+    /// share a location, or the reason someone can't, greyed out.
     @ViewBuilder
     private func browsing(_ card: PlanCardDTO) -> some View {
         let viewer = card.viewer
@@ -78,24 +80,33 @@ struct PlanFooter: View {
             }
             .planButton(.primary)
             .accessibilityIdentifier("planAsk")
-            if let text = askCaption(card) { caption(text) }
+            if let text = card.isFull ? PlanCannotAskCopy.waitlist : askCaption(card) { caption(text) }
         } else if let reason = viewer?.cannotAskReason {
-            if reason == .fullUseWaitlist {
+            switch reason {
+            case .fullUseWaitlist:
                 Button { onAsk(false) } label: { PlanButtonLabel(title: "Join the waitlist", kind: .primary) }
                     .planButton(.primary)
                     .accessibilityIdentifier("planAsk")
-                caption("Full for now. If a spot opens, we'll tell you right away.")
-            } else {
-                Text(PlanCannotAskCopy.sentence(reason, card: card))
-                    .planFont(.small)
-                    .foregroundStyle(Theme.Color.appTextSecondary)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("planCannotAsk")
-                if reason == .needsVerifiedAddress {
-                    Button("Verify your address") { PlanVerification.open() }
-                        .planButton(.secondary, size: .small)
+                caption(PlanCannotAskCopy.waitlist)
+            case .needsVerifiedAddress:
+                Button("Verify your address to join") { PlanVerification.open() }
+                    .planButton(.primary)
+                    .accessibilityIdentifier("planVerify")
+                caption("This plan is for verified neighbors.")
+            case .needsLocation:
+                Button { Task { await viewModel.shareLocation() } } label: {
+                    PlanButtonLabel(title: "Share your location to join", kind: .primary, isLoading: viewModel.isWorking)
                 }
+                .planButton(.primary)
+                .disabled(viewModel.isWorking)
+                .accessibilityIdentifier("planShareLocation")
+                caption("Hosts only see a distance like \u{201C}about 1 mi\u{201D}.")
+            default:
+                Button(PlanCannotAskCopy.title(reason)) {}
+                    .planButton(.primary)
+                    .disabled(true)
+                    .accessibilityIdentifier("planCannotAsk")
+                if let text = PlanCannotAskCopy.caption(reason) { caption(text) }
             }
         }
     }
@@ -129,30 +140,29 @@ struct PlanFooter: View {
     }
 }
 
-/// Why someone can't ask, in a sentence.
+/// The J1 footer's words when someone can't ask (as on Android).
 enum PlanCannotAskCopy {
-    static func sentence(_ reason: PlanCannotAskReason, card: PlanCardDTO) -> String {
+    /// Under "Join the waitlist".
+    static let waitlist = "Full for now. If a spot opens, we'll tell you right away."
+
+    /// The greyed-out button.
+    static func title(_ reason: PlanCannotAskReason) -> String {
         switch reason {
-        case .needsVerifiedAddress:
-            card.kind == .playdate
-                ? "Playdates are for verified neighbors. Verify your address to ask."
-                : "\(PlanCardLines.firstName(card.host.displayName)) asks for a verified address. Verify yours to ask."
-        case .tooFar:
-            "This plan is for neighbors who live or are close by."
-        case .needsLocation:
-            "Turn on location, or add your home, to ask to join."
-        case .fullUseWaitlist:
-            "This plan is full."
-        case .declined, .removed:
-            "This one didn't work out."
-        case .blocked:
-            "You can't join this plan."
-        case .tooManyRequests:
-            "You have 10 open requests. Withdraw one to ask here."
-        case .ended:
-            "Asking has closed for this plan."
-        case .other:
-            "You can't ask to join this plan right now."
+        case .tooFar: "Too far to join"
+        case .ended: "Asking has closed"
+        default: "Ask to join"
+        }
+    }
+
+    /// Why, under the greyed-out button.
+    static func caption(_ reason: PlanCannotAskReason) -> String? {
+        switch reason {
+        case .tooFar: "This plan is for neighbors who live or are close by."
+        case .tooManyRequests: "You have 10 open requests. Withdraw one to ask here."
+        case .declined, .removed: "This one didn't work out."
+        case .blocked: "You can't join this plan."
+        case .other: "You can't ask to join this plan right now."
+        case .needsVerifiedAddress, .needsLocation, .fullUseWaitlist, .ended: nil
         }
     }
 }
@@ -202,7 +212,7 @@ enum PlanConfirmation: Identifiable, Equatable {
         case let .removeGuest(name, _, atHome):
             atHome
                 ? "\(PlanCardLines.firstName(name)) has already seen the address. They lose the plan, the note and the chat from now on."
-                : "They lose the plan, the note and the chat from now on."
+                : "They lose the plan, the exact place, the note and the chat from now on."
         }
     }
 
@@ -228,9 +238,9 @@ enum PlanConfirmation: Identifiable, Equatable {
         case let .notComing(host):
             await viewModel.stillComing(false) ? "We told \(PlanCardLines.firstName(host))" : nil
         case .blockHost:
-            await viewModel.blockHost() ? "Blocked" : nil
+            await viewModel.blockHost() ? "Blocked. You won't see each other's plans." : nil
         case let .removeGuest(_, requestId, _):
-            await viewModel.remove(requestId: requestId) ? "Removed from your plan" : nil
+            await viewModel.remove(requestId: requestId) ? "Removed. They no longer see the plan." : nil
         }
     }
 }

@@ -62,6 +62,8 @@ sealed interface PulseFeedUiState {
         val content: FeedEmptyContent,
         /** No area was searched: the call to action opens the area switcher instead of the composer. */
         val needsArea: Boolean = false,
+        /** A topic with nothing in it: the call to action shows all topics again (Pulse build S4). */
+        val clearsTopic: Boolean = false,
     ) : PulseFeedUiState
 
     data class Loaded(
@@ -313,6 +315,12 @@ class PulseFeedViewModel
          * a surface, so a topic muted on Nearby is not muted on Beacons.
          */
         private var mutedPostTypes: Set<String> = emptySet()
+
+        /**
+         * Pulse topics muted from a card here, hidden at once; the server leaves them out of every later read. A topic
+         * unmuted from the preferences sheet leaves this set ([topicUnmuted]).
+         */
+        private var mutedTopicKeys: Set<String> = emptySet()
 
         /** Signed-in user id — gates delete / mark-solved / report per RN. */
         private val viewerId: String?
@@ -763,6 +771,34 @@ class PulseFeedViewModel
         }
 
         /**
+         * "Mute this topic" (Pulse build S4): `POST /api/posts/mute/topic` `{ topic }` mutes it everywhere until areas
+         * arrive with S5. The topic's posts leave the list at once (and the chip, if it was the chosen one), and the
+         * server leaves them out of every later read.
+         */
+        fun muteThisTopic(postId: String) {
+            val post = loadedPosts.firstOrNull { it.id == postId } ?: return
+            val topic = PulseTopic.fromKey(post.topic) ?: return
+            mutedTopicKeys = mutedTopicKeys + topic.key
+            if (_activeTopic.value == topic) selectTopic(null) else rebuildLoadedState()
+            viewModelScope.launch {
+                when (feedActions.mutePulseTopic(topic.key)) {
+                    is NetworkResult.Success -> _toastMessage.value = "${topic.label} muted."
+                    is NetworkResult.Failure -> {
+                        mutedTopicKeys = mutedTopicKeys - topic.key
+                        _toastMessage.value = "Couldn't mute ${topic.label}."
+                        rebuildLoadedState()
+                    }
+                }
+            }
+        }
+
+        /** The preferences sheet unmuted [topicKey]: show its posts again and read the page. */
+        fun topicUnmuted(topicKey: String) {
+            mutedTopicKeys = mutedTopicKeys - topicKey
+            refresh()
+        }
+
+        /**
          * `POST /api/posts/:id/report` — one of the `reportPostSchema`
          * reasons (`backend/routes/posts.js:3168`).
          */
@@ -861,17 +897,15 @@ class PulseFeedViewModel
                         userId = post.userId,
                         businessAuthorId = post.businessAuthorId,
                     ) &&
-                    (post.postType == null || post.postType !in mutedPostTypes)
+                    (post.postType == null || post.postType !in mutedPostTypes) &&
+                    (post.topic == null || post.topic !in mutedTopicKeys)
             }
 
         private fun rebuildLoadedState() {
             val visible = visiblePosts()
             if (visible.isEmpty()) {
                 if (loadedPosts.isEmpty()) return
-                _state.value =
-                    PulseFeedUiState.Empty(
-                        content = _surface.value.emptyContent(scopeLabel = scopeLabel),
-                    )
+                _state.value = topicEmptyState() ?: PulseFeedUiState.Empty(content = _surface.value.emptyContent(scopeLabel = scopeLabel))
                 return
             }
             val query = _searchText.value.trim().lowercase()
@@ -1070,10 +1104,19 @@ class PulseFeedViewModel
          */
         private fun emptyState(noAreaSearched: Boolean): PulseFeedUiState.Empty {
             if (!noAreaSearched) {
-                return PulseFeedUiState.Empty(content = _surface.value.emptyContent(scopeLabel = scopeLabel))
+                return topicEmptyState() ?: PulseFeedUiState.Empty(content = _surface.value.emptyContent(scopeLabel = scopeLabel))
             }
             _radiusSuggestion.value = null
             return PulseFeedUiState.Empty(content = FeedSurface.noAreaContent(), needsArea = true)
+        }
+
+        /**
+         * A chosen topic with nothing in it says so and offers all topics again (S4.4). Sports keeps its own empty
+         * state with the starter prompts.
+         */
+        private fun topicEmptyState(): PulseFeedUiState.Empty? {
+            val topic = _activeTopic.value?.takeIf { _surface.value == FeedSurface.Pulse && it != PulseTopic.Sports } ?: return null
+            return PulseFeedUiState.Empty(content = FeedSurface.topicEmptyContent(topic, scopeLabel), clearsTopic = true)
         }
 
         /**
@@ -1228,6 +1271,7 @@ class PulseFeedViewModel
                         muteEntityName = authorName,
                         postType = post.postType,
                         topicLabel = intent.cardChipLabel,
+                        pulseTopic = PulseTopic.fromKey(post.topic),
                     ),
             )
         }
@@ -1242,6 +1286,8 @@ class PulseFeedViewModel
                 relativeTimestamp(post.createdAt),
                 // Ahead of the place so a long place name never truncates it; web draws the badge beside the time.
                 "Visitor".takeIf { post.isVisitorPost },
+                // The topic too, before the place, as on iOS ("2h · Gardening · Camas").
+                PulseTopic.fromKey(post.topic)?.label,
                 post.locationName?.takeIf { it.isNotEmpty() },
             ).joinToString(" · ")
 

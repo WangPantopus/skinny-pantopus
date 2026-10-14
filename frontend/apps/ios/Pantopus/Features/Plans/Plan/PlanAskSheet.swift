@@ -14,7 +14,8 @@ struct PlanAskSheet: View {
     let card: PlanCardDTO
     /// The request being changed (J5 "Change who's coming").
     let previous: PlanAskPrefill?
-    let onSend: (AskToJoinBody) async -> Bool
+    /// Sends the request: nil when it went through, else why not (the server's sentence, as on Android).
+    let onSend: (AskToJoinBody) async -> String?
 
     @Environment(\.dismiss) private var dismiss
     @State private var partySize = 1
@@ -103,10 +104,12 @@ struct PlanAskSheet: View {
         guard let start = card.startsAtDate else {
             return "\(short) · \(PlanFormat.dayPartPhrase(card.dayPart, day: card.startsOnDate, calendar: calendar))"
         }
-        let time = PlanFormat.rowWhen(state: .upcoming, start: start, end: nil, calendar: calendar) ?? PlanFormat.time(
-            start,
+        let time = PlanFormat.rowWhen(
+            state: card.state == .live ? .live : .upcoming,
+            start: start,
+            end: card.endsAtDate,
             calendar: calendar
-        )
+        ) ?? PlanFormat.time(start, calendar: calendar)
         return "\(short) · \(time)"
     }
 
@@ -141,7 +144,7 @@ struct PlanAskSheet: View {
                     Text("With you, the whole time").planFont(.small).foregroundStyle(Theme.Color.appTextSecondary)
                 }
                 Spacer()
-                PlanStepper(value: $kidsCount, range: 1...6, label: "Kids coming")
+                PlanStepper(value: $kidsCount, range: 1...8, label: "Kids coming")
             }
             VStack(alignment: .leading, spacing: Spacing.s2) {
                 Text.planOverline("Their ages")
@@ -253,9 +256,9 @@ struct PlanAskSheet: View {
         Task {
             isSending = true
             failed = nil
-            let sent = await onSend(body)
+            let failure = await onSend(body)
             isSending = false
-            if sent { dismiss() } else { failed = "We couldn't send that. Please try again." }
+            if let failure { failed = failure } else { dismiss() }
         }
     }
 }

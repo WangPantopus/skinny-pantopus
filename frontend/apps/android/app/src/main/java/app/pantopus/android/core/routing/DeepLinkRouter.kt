@@ -377,6 +377,9 @@ object DeepLinkRouter {
         /** Nearby Plans: `/plans/new` opens the host flow (H1). */
         data object NewPlan : Destination
 
+        /** `/plans` opens the Plans tab (Pulse build S3). Behind the `plans` flag. */
+        data object PlansTab : Destination
+
         data class Unknown(val uri: String) : Destination
     }
 
@@ -413,7 +416,8 @@ object DeepLinkRouter {
 
     /** True when [destination] is a Plans page. Those open only while the `plans` flag is on. */
     fun isPlansDestination(destination: Destination): Boolean =
-        destination is Destination.Plan || destination is Destination.PlanRequests || destination == Destination.NewPlan
+        destination is Destination.Plan || destination is Destination.PlanRequests || destination == Destination.NewPlan ||
+            destination == Destination.PlansTab
 
     /** True while Nearby Plans is on for the signed-in person. */
     fun plansEnabled(): Boolean = plansEnabledProvider()
@@ -733,7 +737,8 @@ object DeepLinkRouter {
         val idQuery = Paths.queryParam(queryPart, "id")
 
         return when (segments.first()) {
-            "feed" -> {
+            // `/app/pulse` is the Pulse tab, as `/app/feed` is.
+            "feed", "pulse" -> {
                 val post = Paths.queryParam(queryPart, "post")
                 when {
                     !post.isNullOrBlank() -> Destination.Post(post)
@@ -894,6 +899,8 @@ object DeepLinkRouter {
                 val id = segments.getOrNull(1)
                 val trailing = segments.getOrNull(2)
                 when {
+                    // Bare `/plans`: the Plans tab.
+                    segments.size == 1 -> Destination.PlansTab
                     id == "new" && segments.size == 2 -> Destination.NewPlan
                     id.isNullOrBlank() -> Destination.Unknown(raw)
                     segments.size == 2 -> Destination.Plan(id)

@@ -117,7 +117,8 @@ fun PlansTodayCards(
 private fun todayTitle(plan: PlanDto): String {
     val short = plan.details?.game?.label?.let { "$it game" } ?: plan.title
     val host = plan.host?.displayName?.takeIf { plan.placeKind == "home" }?.let { "${PlanFormat.firstName(it)}'s" }
-    return if (host != null) "$short at $host" else short
+    // "Movie night at Morgan's" already says whose place it is (as on iOS).
+    return if (host != null && !short.contains(host, ignoreCase = true)) "$short at $host" else short
 }
 
 /** A1 and A2: a card whose border carries the type's color. */

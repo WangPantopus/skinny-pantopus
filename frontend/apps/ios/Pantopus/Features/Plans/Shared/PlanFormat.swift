@@ -143,6 +143,23 @@ enum PlanFormat {
         }
     }
 
+    /// The host's own distance to a public place: "0.4 mi", or "here" next
+    /// door (as on Android).
+    static func placeDistance(_ meters: Double) -> String {
+        let miles = meters / 1609.34
+        return miles < 0.03 ? "here" : String(format: "%.1f mi", max(miles, 0.1))
+    }
+
+    /// "just now", "12 min ago", "3 hours ago", else as [past] ("Mon 9:42 AM"): when
+    /// someone answered (J7), as on Android.
+    static func ago(_ date: Date, now: Date = Date(), calendar: Calendar = .current) -> String {
+        let minutes = Int(now.timeIntervalSince(date) / 60)
+        if minutes < 2 { return "just now" }
+        if minutes < 60 { return "\(minutes) min ago" }
+        if minutes < 12 * 60 { return "\(minutes / 60) hour\(minutes / 60 == 1 ? "" : "s") ago" }
+        return past(date, now: now, calendar: calendar)
+    }
+
     /// "Sunday 1:25 PM" for VoiceOver ("today 5:30 PM", "Thursday, Oct 22 5:15 PM" a week or more out).
     static func spokenWhen(_ start: Date, now: Date = Date(), calendar: Calendar = .current) -> String {
         "\(dayPhrase(start, now: now, calendar: calendar)) \(time(start, calendar: calendar))"

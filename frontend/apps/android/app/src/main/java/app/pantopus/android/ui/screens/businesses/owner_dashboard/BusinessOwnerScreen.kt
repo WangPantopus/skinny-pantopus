@@ -35,7 +35,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -70,7 +69,6 @@ import app.pantopus.android.ui.screens.businesses.catalog.BusinessCatalogScreen
 import app.pantopus.android.ui.screens.businesses.inbox.BusinessInboxScreen
 import app.pantopus.android.ui.screens.businesses.owner_dashboard.components.FoundingOfferBanner
 import app.pantopus.android.ui.screens.businesses.owner_dashboard.components.InsightTiles
-import app.pantopus.android.ui.screens.businesses.owner_dashboard.components.OwnerComposeFab
 import app.pantopus.android.ui.screens.businesses.owner_dashboard.components.OwnerHeaderBanner
 import app.pantopus.android.ui.screens.businesses.owner_dashboard.components.OwnerLiveBar
 import app.pantopus.android.ui.screens.businesses.owner_dashboard.components.OwnerNavRow
@@ -78,7 +76,6 @@ import app.pantopus.android.ui.screens.businesses.owner_dashboard.components.Own
 import app.pantopus.android.ui.screens.businesses.owner_dashboard.components.PreviewBar
 import app.pantopus.android.ui.screens.businesses.owner_dashboard.components.ProfileStrengthCard
 import app.pantopus.android.ui.screens.businesses.owner_dashboard.components.ReviewReplyComposer
-import app.pantopus.android.ui.screens.compose.pulse.PulseComposeScreen
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailTopBar
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -125,9 +122,6 @@ fun BusinessOwnerScreen(
     val toast by viewModel.toast.collectAsStateWithLifecycle()
     var mode by remember { mutableStateOf(OwnerViewMode.Owner) }
 
-    /** C2 — bumped per composer open so each post starts from a blank draft. */
-    var composeSession by remember { mutableIntStateOf(0) }
-
     LaunchedEffect(Unit) { viewModel.load() }
 
     Box(
@@ -173,10 +167,6 @@ fun BusinessOwnerScreen(
                                 onPreview = { mode = OwnerViewMode.Preview },
                                 onManageCatalog = { mode = OwnerViewMode.Catalog },
                                 onOpenInbox = { mode = OwnerViewMode.Inbox },
-                                onComposePost = {
-                                    composeSession += 1
-                                    mode = OwnerViewMode.Compose
-                                },
                                 onSubmitReply = { id, text -> viewModel.submitReply(id, text) },
                                 onClaimFounding = viewModel::claimFoundingOffer,
                                 onDismissFounding = viewModel::dismissFoundingBanner,
@@ -198,20 +188,6 @@ fun BusinessOwnerScreen(
                                 onBack = { mode = OwnerViewMode.Owner },
                                 onOpenRoom = onOpenChatRoom,
                                 onOpenPost = onOpenPost,
-                            )
-                        OwnerViewMode.Compose ->
-                            // C2 — reuse the shared Pulse composer, pointed at
-                            // `POST /api/businesses/:businessId/posts`.
-                            PulseComposeScreen(
-                                onBack = { mode = OwnerViewMode.Owner },
-                                // A fresh key per open so the composer starts
-                                // blank instead of reusing the last draft.
-                                viewModel = hiltViewModel(key = "businessPost-$composeSession"),
-                                onPosted = {
-                                    mode = OwnerViewMode.Owner
-                                    viewModel.refresh()
-                                },
-                                businessAuthorId = current.content.businessId,
                             )
                     }
                 }
@@ -261,9 +237,6 @@ enum class OwnerViewMode {
     /** C2 — the catalog manager (services / products CRUD + reorder). */
     Catalog,
 
-    /** C2 — "Post as this business" (role-gated). */
-    Compose,
-
     /** The business-side inbox — rooms addressed to the business identity
      *  plus neighborhood posts matched to it. */
     Inbox,
@@ -291,8 +264,6 @@ internal fun OwnerEditFrame(
     onManageCatalog: () -> Unit = {},
     /** Opens the business inbox frame (Messages + Mentions). */
     onOpenInbox: () -> Unit = {},
-    /** C2 — opens the "Post as this business" composer. */
-    onComposePost: () -> Unit = {},
     /** Founding-business offer banner actions. */
     onClaimFounding: () -> Unit = {},
     onDismissFounding: () -> Unit = {},
@@ -339,18 +310,6 @@ internal fun OwnerEditFrame(
                     )
                 }
             }
-        }
-        // C2 — "Post as this business". RN floats the same FAB above its
-        // dock, gated on `access.role_base`.
-        if (content.canPostAsBusiness) {
-            OwnerComposeFab(
-                onClick = onComposePost,
-                modifier =
-                    Modifier
-                        .align(Alignment.BottomEnd)
-                        .navigationBarsPadding()
-                        .padding(end = Spacing.s4, bottom = 88.dp),
-            )
         }
         OwnerDock(
             onPreview = onPreview,

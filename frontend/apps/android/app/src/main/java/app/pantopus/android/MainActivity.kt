@@ -112,8 +112,11 @@ class MainActivity : FragmentActivity() {
         }
         // A recreated Activity retains its navigation/ViewModel state. Replaying the
         // launch link would replace that screen and discard its in-progress input.
-        // Fresh processes still route the launch intent; onNewIntent handles new links.
-        if (lastNonConfigurationInstance == null) forwardDeepLink(intent)
+        // That holds after a configuration change and after the process was stopped in
+        // the background too (saved state comes back, with the link that started the
+        // Activity, which was routed then). A first launch still routes it; a link that
+        // arrives while the Activity is restored comes through onNewIntent.
+        if (savedInstanceState == null) forwardDeepLink(intent)
         setContent {
             PantopusTheme {
                 Box(modifier = Modifier.fillMaxSize()) {

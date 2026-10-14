@@ -44,6 +44,9 @@ public struct PlanPersonDTO: Codable, Sendable, Hashable, Identifiable {
     public let newToPantopus: Bool
     /// Host only: asked "Still coming?" and hasn't answered.
     public let reconfirmNeeded: Bool
+    /// Host only, playdates: how many kids come and their age bands (never names).
+    public let kidsCount: Int?
+    public let kidsAgeBands: [PlanKidsAgeBand]?
 
     public var id: String {
         userId
@@ -63,6 +66,8 @@ public struct PlanPersonDTO: Codable, Sendable, Hashable, Identifiable {
         case plansJoined = "plans_joined"
         case newToPantopus = "new_to_pantopus"
         case reconfirmNeeded = "reconfirm_needed"
+        case kidsCount = "kids_count"
+        case kidsAgeBands = "kids_age_bands"
     }
 
     public init(from decoder: any Decoder) throws {
@@ -80,6 +85,8 @@ public struct PlanPersonDTO: Codable, Sendable, Hashable, Identifiable {
         plansJoined = try container.decodeIfPresent(Int.self, forKey: .plansJoined)
         newToPantopus = try container.decodeIfPresent(Bool.self, forKey: .newToPantopus) ?? false
         reconfirmNeeded = try container.decodeIfPresent(Bool.self, forKey: .reconfirmNeeded) ?? false
+        kidsCount = try container.decodeIfPresent(Int.self, forKey: .kidsCount)
+        kidsAgeBands = try? container.decodeIfPresent([PlanKidsAgeBand].self, forKey: .kidsAgeBands)
     }
 }
 

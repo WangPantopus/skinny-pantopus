@@ -89,11 +89,11 @@ async function getGlobalPins() {
     return _globalPinsCache.data;
   }
 
-  // Rows as stored, with the two columns the read check needs beyond the feed's own; each
+  // Rows as stored, with the columns the read check needs beyond the feed's own; each
   // viewer's feed checks them (getListFeed step 12).
-  const { data, error } = await excludeEndedPosts(supabaseAdmin
+  const { data, error } = await onlyShownPosts(supabaseAdmin
     .from('Post')
-    .select(`${FEED_POST_SELECT}, allow_external_share, radius_miles`)
+    .select(`${FEED_POST_SELECT}, allow_external_share, radius_miles, moderation_state`)
     .eq('is_global_pin', true)
     .is('archived_at', null))
     .order('created_at', { ascending: false })
@@ -676,13 +676,17 @@ function isPoliticsPost(post) {
 }
 
 // ---------------------------------------------------------------------------
-// Ended posts
+// What the views show
 // ---------------------------------------------------------------------------
 
-// A post whose own end time has passed leaves the views at once, before the archive job
-// ends it (contract §5, S7: a Heads-up ends at the time it names).
-function excludeEndedPosts(query) {
-  return query.or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`);
+// The feeds, the map and the pins show live posts that haven't ended (contract §5). A post whose
+// own end time has passed leaves them at once, before the archive job ends it (S7: a Heads-up ends
+// at the time it names). A post held for review or removed by moderation (S11) leaves them too;
+// its author still reads it on its page and in their own list (canReadPost).
+function onlyShownPosts(query) {
+  return query
+    .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
+    .eq('moderation_state', 'live');
 }
 
 // ---------------------------------------------------------------------------
@@ -835,6 +839,31 @@ function boundingBoxFromCenter(lat, lng, radiusMeters) {
   };
 }
 
+// Place reads (the list feed, the Sports lane and the map) reach at most this far from their
+// point: 100 miles, the apps' default radius. A wider radius, such as the apps' 1,000-mile and
+// Global choices, reads this far, so no single request reads a whole region.
+const MAX_PLACE_RADIUS_METERS = 160934;
+
+// The radius a Place read uses: the one asked for, up to the cap. A zero, negative or
+// non-numeric radius reads the cap, which is also the routes' default.
+function placeRadiusMeters(radiusMeters) {
+  const meters = Number(radiusMeters);
+  return Number.isFinite(meters) && meters > 0
+    ? Math.min(meters, MAX_PLACE_RADIUS_METERS)
+    : MAX_PLACE_RADIUS_METERS;
+}
+
+// The part of a map box a Place read uses: at most the cap from the box's center each way.
+function capPlaceBox({ south, west, north, east }) {
+  const cap = boundingBoxFromCenter((south + north) / 2, (west + east) / 2, MAX_PLACE_RADIUS_METERS);
+  return {
+    south: Math.max(south, cap.south),
+    west: Math.max(west, cap.west),
+    north: Math.min(north, cap.north),
+    east: Math.min(east, cap.east),
+  };
+}
+
 // The box a query reads so it finds every post whose displayed point can be inside `box`.
 function widenForDisplayedPoints(box) {
   return {
@@ -885,7 +914,7 @@ function politicsPrefKey(surface) {
  * @param {string} opts.surface        – 'place' | 'connections' | 'personas'
  * @param {number} [opts.latitude]
  * @param {number} [opts.longitude]
- * @param {number} [opts.radiusMeters] – defaults to 16 000 m
+ * @param {number} [opts.radiusMeters] – defaults to 16 000 m, at most MAX_PLACE_RADIUS_METERS
  * @param {string} [opts.postType]
  * @param {string} [opts.cursorCreatedAt]
  * @param {string} [opts.cursorId]
@@ -913,6 +942,7 @@ async function getListFeed({
   if (!FEED_SURFACES.includes(surface)) {
     throw new Error(`Invalid feed surface: ${surface}`);
   }
+  radiusMeters = placeRadiusMeters(radiusMeters);
 
   // Sports topic lane: Place + topic=sports is a fundamentally different
   // query (union of local geo + national country:US) with a stable merged
@@ -1002,7 +1032,7 @@ async function getListFeed({
 
   for (let round = 0; round < MAX_ROUNDS && accumulated.length < parsedLimit && !dbExhausted; round++) {
     // 5. Build base query
-    let query = excludeEndedPosts(supabaseAdmin
+    let query = onlyShownPosts(supabaseAdmin
       .from('Post')
       .select(FEED_POST_SELECT)
       .is('archived_at', null))
@@ -1270,7 +1300,7 @@ async function fetchSportsCandidates({
     let exhausted = false;
 
     while (!exhausted && rows.length < maxRowsPerSide) {
-      let query = excludeEndedPosts(supabaseAdmin
+      let query = onlyShownPosts(supabaseAdmin
         .from('Post')
         .select(FEED_POST_SELECT)
         .is('archived_at', null))
@@ -1540,7 +1570,7 @@ async function loadMapPosts({
   // come back follows the points the viewer sees, never the stored ones.
   const box = { south, west, north, east };
   const queryBox = widenForDisplayedPoints(box);
-  let query = excludeEndedPosts(supabaseAdmin
+  let query = onlyShownPosts(supabaseAdmin
     .from('Post')
     .select(FEED_POST_SELECT)
     .is('archived_at', null))
@@ -1598,7 +1628,10 @@ async function loadMapPosts({
  * @returns {Promise<object[]>}
  */
 async function getMapFeed(opts) {
-  const shown = await loadMapPosts(opts);
+  // A Place map reads at most the cap around the box's center. (The empty-map hint below searches
+  // wider, but it returns one displayed point, never a post.)
+  const box = opts.surface === 'connections' ? {} : capPlaceBox(opts);
+  const shown = await loadMapPosts({ ...opts, ...box });
   // 8. Enrich; this applies the response privacy, which puts each pin at its displayed point
   return enrichFeedPosts(shown.map(({ post }) => post), opts.userId);
 }

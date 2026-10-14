@@ -58,6 +58,15 @@ class PlansFeature
         /** The current answer for the signed-in person (off while signed out). */
         val flags: StateFlow<PlansFlags> = _flags.asStateFlow()
 
+        private val _settled = MutableStateFlow(false)
+
+        /**
+         * True once [flags] holds the signed-in person's answer (the one kept from last time, then the re-check);
+         * false while signed out and in the moment after sign-in or a relaunch before it is read. The tab bar waits
+         * for it before moving anyone off the Plans tab.
+         */
+        val settled: StateFlow<Boolean> = _settled.asStateFlow()
+
         /** True when Plans is on for the signed-in person right now. */
         val isOn: Boolean get() = _flags.value.plans
 
@@ -82,8 +91,10 @@ class PlansFeature
                     if (id == null) {
                         reading?.cancel()
                         _flags.value = PlansFlags()
+                        _settled.value = false
                     } else {
                         _flags.value = remembered(id)
+                        _settled.value = true
                         refresh()
                     }
                 }

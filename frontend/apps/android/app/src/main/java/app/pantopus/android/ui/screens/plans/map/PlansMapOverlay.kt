@@ -255,7 +255,7 @@ private fun ClusterItem(
                 .alpha(if (dimmed) DIMMED_ALPHA else 1f)
                 .clickable(role = Role.Button, onClick = onTap)
                 .clearAndSetSemantics {
-                    contentDescription = "${pins.size} plans here"
+                    contentDescription = clusterSpoken(pins)
                     role = Role.Button
                     onClick(label = "Zoom in") {
                         onTap()
@@ -263,6 +263,18 @@ private fun ClusterItem(
                     }
                 },
     )
+}
+
+/** "3 plans here, one you're in" (as on iOS): a cluster names the plan you host, are in or asked to join. */
+internal fun clusterSpoken(pins: List<MapPin>): String {
+    val yours =
+        when {
+            pins.any { it.badge == PlanPinBadge.Hosting } -> "one you're hosting"
+            pins.any { it.badge == PlanPinBadge.In } -> "one you're in"
+            pins.any { it.badge == PlanPinBadge.Waiting } -> "one you asked to join"
+            else -> null
+        }
+    return listOfNotNull("${pins.size} plans here", yours).joinToString(", ")
 }
 
 private const val DROP_DP = 16f

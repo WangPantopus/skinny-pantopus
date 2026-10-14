@@ -46,7 +46,7 @@ class NavigationSmokeTest {
         }
 
         composeRule.onNodeWithTag("smoke.root/home").assertIsDisplayed()
-        for (tab in listOf("today", "nearby", "mail", "home")) {
+        for (tab in listOf("today", "pulse", "plans", "mail", "home")) {
             composeRule.onNodeWithTag("tab.$tab").assertIsDisplayed().performClick()
             composeRule.onNodeWithTag("smoke.root/$tab").assertIsDisplayed()
         }
@@ -83,7 +83,7 @@ class NavigationSmokeTest {
                 "tab.${route.path.substringAfterLast('/')}"
             }
         // Place keeps its legacy home path for deep-link compatibility.
-        check(expectedTags == listOf("tab.home", "tab.today", "tab.nearby", "tab.mail")) {
+        check(expectedTags == listOf("tab.home", "tab.today", "tab.pulse", "tab.plans", "tab.mail")) {
             "PantopusRoute.entries derived testTags drifted: $expectedTags"
         }
     }
