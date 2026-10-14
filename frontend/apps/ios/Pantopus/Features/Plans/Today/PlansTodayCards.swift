@@ -122,7 +122,7 @@ struct PlansTodayCards: View {
                 ForEach(model.recent) { card in
                     PlanAfterCard(card: card, model: model) { again in
                         PlansNavigator.shared.pendingHost = PlansHostRequest(start: PlansHostStart(kind: card.kind, again: again))
-                        rootTabs.selected = .nearby
+                        rootTabs.selected = .plans
                     }
                 }
                 if let error = model.error, !(model.hosting.isEmpty && model.going.isEmpty && model.recent.isEmpty) {
@@ -252,6 +252,6 @@ struct PlansTodayCards: View {
     private func open(_ card: PlanCardDTO, intent: PlanOpenIntent) {
         PlansStoreReads.seed(card)
         PlansNavigator.shared.pending = .plan(id: card.id, intent: intent)
-        rootTabs.selected = .nearby
+        rootTabs.selected = .plans
     }
 }

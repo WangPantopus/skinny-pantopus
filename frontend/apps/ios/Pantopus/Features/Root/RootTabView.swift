@@ -2,14 +2,16 @@
 //  RootTabView.swift
 //  Pantopus
 //
-//  The 4-tab bottom bar — Place · Today · Nearby · Messages — that sits
-//  above every signed-in screen (wedge Phase 1.5 IA: every tab alive at
-//  zero density). Place is selected at launch. Today is the daily briefing;
-//  Nearby is the density-gated door (Pulse / Tasks / Marketplace present
-//  as sheets from it). The fourth tab is Messages, with the unread badge,
-//  while Mailbox is off for launch (`LaunchFeatures.mailbox`, founder
-//  decision 2026-10-09). With Mailbox on it reads Mail and hosts the
-//  mailbox and the Messages inbox as two segments.
+//  The bottom bar — Place · Today · Pulse · Plans · Messages — that sits
+//  above every signed-in screen (Pulse S3, founder decision 2026-10-13: the
+//  Nearby tab is gone; its Pulse, Connections and neighborhood meter live in
+//  the Pulse tab). Place is selected at launch. Today is the daily briefing.
+//  Plans shows only while the `plans` switch is on, so the bar has four
+//  tabs or five and follows the switch while the app runs. The last tab is
+//  Messages, with the unread badge, while Mailbox is off for launch
+//  (`LaunchFeatures.mailbox`, founder decision 2026-10-09). With Mailbox on
+//  it reads Mail and hosts the mailbox and the Messages inbox as two
+//  segments; its id stays `mail` either way.
 //
 
 // swiftlint:disable file_length
@@ -20,15 +22,16 @@ import SwiftUI
 /// A tab in the primary bottom bar. Encoded as an enum so call sites never
 /// reach for stringly-typed paths.
 public enum RootTab: Hashable, CaseIterable {
-    case place, today, nearby, mail
+    case place, today, pulse, plans, mail
 
-    /// Human-readable label rendered under each tab icon. The fourth tab is
+    /// Human-readable label rendered under each tab icon. The last tab is
     /// "Messages" while Mailbox is off for launch; its id stays `mail`.
     public var label: String {
         switch self {
         case .place: "Place"
         case .today: "Today"
-        case .nearby: "Nearby"
+        case .pulse: "Pulse"
+        case .plans: "Plans"
         case .mail: LaunchFeatures.mailbox ? "Mail" : "Messages"
         }
     }
@@ -38,7 +41,8 @@ public enum RootTab: Hashable, CaseIterable {
         switch self {
         case .place: "place"
         case .today: "today"
-        case .nearby: "nearby"
+        case .pulse: "pulse"
+        case .plans: "plans"
         case .mail: "mail"
         }
     }
@@ -48,7 +52,8 @@ public enum RootTab: Hashable, CaseIterable {
         switch self {
         case .place: .home
         case .today: .sun
-        case .nearby: .compass
+        case .pulse: .activity
+        case .plans: .calendar
         case .mail: LaunchFeatures.mailbox ? .mail : .messageCircle
         }
     }
@@ -136,16 +141,21 @@ public struct RootTabView: View {
             .tabItem { tabLabel(.place) }
             .tag(RootTab.place)
 
-            TodayTabRoot {
-                model.selected = .place
-                addHomeRequest = UUID()
-            }
-            .tabItem { tabLabel(.today) }
-            .tag(RootTab.today)
+            TodayTabRoot(onAddHome: startAddingHome)
+                .tabItem { tabLabel(.today) }
+                .tag(RootTab.today)
 
-            NeighborhoodTabRoot()
-                .tabItem { tabLabel(.nearby) }
-                .tag(RootTab.nearby)
+            PulseTabRoot(onAddHome: startAddingHome)
+                .tabItem { tabLabel(.pulse) }
+                .tag(RootTab.pulse)
+
+            // Only while the `plans` switch is on (`onChange` below moves a
+            // reader off it when the switch turns off).
+            if plansFlags.plans {
+                PlansTabRoot()
+                    .tabItem { tabLabel(.plans) }
+                    .tag(RootTab.plans)
+            }
 
             MailTabRoot(
                 onOpenProfile: { showProfile = true },
@@ -180,6 +190,10 @@ public struct RootTabView: View {
             // coming back re-checks every Plans screen on view.
             if plansFlags.plans { PlansStoreReads.changed() }
             Task { await plansFlags.refresh(account: signedInUserID) }
+        }
+        .onChange(of: plansFlags.plans) { _, isOn in
+            // The Plans tab goes with the switch; a reader on it lands on Pulse.
+            if !isOn, model.selected == .plans { model.selected = .pulse }
         }
         .onChange(of: chatBadgeStore.unreadMessages) { _, unread in
             model.messagesBadge = unread
@@ -248,23 +262,23 @@ public struct RootTabView: View {
         case let .joinInvite(code):
             pendingInviteToken = InviteSheetToken(token: code)
             _ = router.consume()
-        // Pulse / Tasks / Marketplace present as sheets from the
-        // Neighborhood door; the door mounts the surface's tab root,
-        // which consumes the pending destination as before.
-        case .feed, .post:
-            model.selected = .nearby
-            NeighborhoodDoorStore.shared.pendingSurface = .pulse
+        // The Pulse tab consumes feed, post and Pulse links itself (back to
+        // its root, or the post pushed on it). Tasks and Marketplace present
+        // as sheets from the Pulse tab, whose surface root consumes the
+        // pending destination as before.
+        case .feed, .post, .pulse:
+            model.selected = .pulse
         case .gig:
             if LaunchFeatures.openGigs {
-                model.selected = .nearby
+                model.selected = .pulse
                 NeighborhoodDoorStore.shared.pendingSurface = .tasks
             } else {
-                // Launch cut #4 (Open gigs): no Tasks door, so the task's
+                // Launch cut #4 (Open gigs): no Tasks surface, so the task's
                 // detail opens in the Place stack (`HubTabRoot`).
                 model.selected = .place
             }
         case .listing:
-            model.selected = .nearby
+            model.selected = .pulse
             NeighborhoodDoorStore.shared.pendingSurface = .marketplace
         // Mailbox-cluster destinations resolve in the Mail tab's stack
         // (a mailbox-rooted HubTabRoot sharing the same destinations). While
@@ -315,11 +329,10 @@ public struct RootTabView: View {
         case .home:
             model.selected = .place
             _ = router.consume()
-        case .nearby:
-            model.selected = .nearby
-            _ = router.consume()
-        // Nearby Plans: the Nearby stack opens the plan, the requests or the
-        // composer. While the `plans` flag is off the link is dropped.
+        // The Plans tab: a plan, the requests or the composer open on its
+        // stack. While the `plans` switch is off the link is dropped.
+        case .plans:
+            openPlansTab()
         case let .plan(id):
             openPlans(.plan(id: id, intent: .view))
         case let .planRequests(id):
@@ -331,7 +344,7 @@ public struct RootTabView: View {
         }
     }
 
-    /// Hands a Plans link to the Nearby stack (`route` nil: the composer).
+    /// Hands a Plans link to the Plans tab's stack (`route` nil: the composer).
     private func openPlans(_ route: PlansRoute?) {
         _ = router.consume()
         plansFlags.prime(account: signedInUserID)
@@ -341,7 +354,21 @@ public struct RootTabView: View {
         } else {
             PlansNavigator.shared.pendingHost = PlansHostRequest(start: nil)
         }
-        model.selected = .nearby
+        model.selected = .plans
+    }
+
+    /// `/plans`: the Plans tab itself, while the switch is on.
+    private func openPlansTab() {
+        _ = router.consume()
+        plansFlags.prime(account: signedInUserID)
+        guard plansFlags.plans else { return }
+        model.selected = .plans
+    }
+
+    /// "Set up a home" from Today or Pulse: the Place tab starts adding one.
+    private func startAddingHome() {
+        model.selected = .place
+        addHomeRequest = UUID()
     }
 
     /// Links that leave the profile cover in place: the monthly receipt
