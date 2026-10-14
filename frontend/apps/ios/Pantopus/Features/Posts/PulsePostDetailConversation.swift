@@ -105,6 +105,11 @@ extension PulsePostDetailViewModel {
             }
             // Existing removed rows replace their old text immediately.
             state = .conversation(content)
+            if !response.replies.isEmpty {
+                // Re-entry must not restore a fresher-looking, older copy
+                // after a reply was edited or removed during polling.
+                store.markStale(topics: [ScreenTopic.post(postId)])
+            }
         } catch {
             guard generation == conversationGeneration, !Task.isCancelled else { return }
             _ = clearRefusedConversation(error)

@@ -253,6 +253,9 @@ public final class PulsePostDetailViewModel {
 
     /// "Keep open 7 more days": the Ask stays up 7 more days, once.
     public func keepAskOpen() async {
+        let isConversation = conversation != nil
+        if isConversation, !beginConversationAction("keepOpen") { return }
+        defer { if isConversation { finishConversationAction("keepOpen") } }
         do {
             _ = try await client.request(PulseEndpoints.keepAskOpen(postId: postId), as: PulseAskActionResponse.self)
             showToast("Kept open for 7 more days.", kind: .success)
@@ -261,12 +264,19 @@ public final class PulsePostDetailViewModel {
             showToast((error as? APIError)?.errorDescription ?? "Couldn't keep it open.")
         }
         // The post's end and its keep-open mark come back with it (and a refusal's reason).
-        await refresh()
+        if isConversation {
+            await refreshConversationAfterMutation()
+        } else {
+            await refresh()
+        }
     }
 
     /// "Close", after "Close this question?": the Ask ends and leaves Pulse;
     /// the asker still sees it here and can restore it from My posts.
     public func closeAsk() async {
+        let isConversation = conversation != nil
+        if isConversation, !beginConversationAction("close") { return }
+        defer { if isConversation { finishConversationAction("close") } }
         do {
             _ = try await client.request(PulseEndpoints.closeAsk(postId: postId), as: PulseAskActionResponse.self)
             showToast("Question closed.", kind: .success)
@@ -274,7 +284,11 @@ public final class PulsePostDetailViewModel {
         } catch {
             showToast((error as? APIError)?.errorDescription ?? "Couldn't close it.")
         }
-        await refresh()
+        if isConversation {
+            await refreshConversationAfterMutation()
+        } else {
+            await refresh()
+        }
     }
 
     func showToast(_ text: String, kind: ToastKind = .error) {
