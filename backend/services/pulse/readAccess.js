@@ -96,13 +96,21 @@ function isPubliclyShareable(post) {
   return isPublic && post.allow_external_share !== false;
 }
 
+// Shared by post reads and Plans, whose private venue/guest rules are additional to this wall.
+// Callers must select user_id, archive_reason and moderation_state; staff comes from the server.
+function canReadPostModeration(post, userId, staff = false) {
+  if (userId && post.user_id === userId) return true;
+  if (post.archive_reason === 'moderation' || post.moderation_state === 'removed') return false;
+  if (post.moderation_state === 'held') return staff;
+  return true;
+}
+
 /** Whether `userId` (null: signed out) may read `post`, a row with at least POST_READ_SELECT. */
 async function canReadPost(post, userId) {
   if (post.user_id === userId) return true;
-  // Removed by moderation: only its author still sees it.
-  if (post.archive_reason === 'moderation' || post.moderation_state === 'removed') return false;
-  // Held for review: its author and staff.
-  if (post.moderation_state === 'held') return isStaff(userId);
+  if (!canReadPostModeration(post, userId, post.moderation_state === 'held' && await isStaff(userId))) return false;
+  // A held post that passed the shared check belongs to staff's review view.
+  if (post.moderation_state === 'held') return true;
   // Profile blocks (UserBlock) hide posts in both directions, like messaging.
   if (userId && post.user_id && await blockService.isBlocked(post.user_id, userId)) return false;
   if (post.identity_context_type === 'persona'
@@ -220,5 +228,5 @@ function onlyShownReplies(query, userId) {
 }
 
 module.exports = {
-  canReadPost, readablePosts, isPubliclyShareable, POST_READ_SELECT, canReadReply, onlyShownReplies,
+  canReadPost, canReadPostModeration, readablePosts, isPubliclyShareable, POST_READ_SELECT, canReadReply, onlyShownReplies,
 };

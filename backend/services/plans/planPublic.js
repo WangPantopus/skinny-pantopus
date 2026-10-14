@@ -13,6 +13,7 @@
 
 const { isFeatureEnabled } = require('../featureFlagService');
 const planService = require('./planService');
+const { canReadPostModeration } = require('../pulse/readAccess');
 
 const NOBODY = '00000000-0000-0000-0000-000000000000';
 
@@ -37,7 +38,7 @@ function anonymousViewer() {
 async function publicPlan(postId) {
   if (!planService.isUuid(postId)) return null;
   const plan = await planService.loadPlanRow(postId);
-  if (!plan || !plan.post || plan.post.archive_reason === 'moderation') return null;
+  if (!plan || !plan.post || !canReadPostModeration(plan.post, null)) return null;
   if (!(await isFeatureEnabled('plans', plan.host_user_id))) return null;
   if (plan.kind === 'playdate') {
     if (!(await isFeatureEnabled('plans_playdates', plan.host_user_id))) return null;
