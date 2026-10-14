@@ -1,5 +1,6 @@
 package app.pantopus.android.ui.screens.place.detail
 
+import android.net.Uri
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -61,6 +62,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.data.ai.RadonReportReading
 import app.pantopus.android.data.analytics.PilotEvents
 import app.pantopus.android.data.api.models.homes.CreateHomeTaskRequest
 import app.pantopus.android.data.api.models.homes.HomeTaskDto
@@ -93,6 +95,8 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import java.math.BigDecimal
+import java.math.RoundingMode
 import java.net.HttpURLConnection.HTTP_FORBIDDEN
 import java.time.Instant
 import java.time.LocalDate
@@ -115,6 +119,11 @@ private const val GOOD_DAY_TILE_WIDTH = 128f
 private const val RADON_MORNING_HOUR = 9
 private const val RADON_REMINDER_DAYS = 14L
 private const val RADON_DISMISS_DAYS = 30L
+
+/** The EPA's action level for radon, and the level from which it suggests considering a fix. */
+private const val RADON_ACTION_LEVEL_PCI = 4.0
+private const val RADON_CONSIDER_LEVEL_PCI = 2.0
+private const val RADON_ACTION_LEVEL_URL = "https://www.epa.gov/radon/what-epas-action-level-radon-and-what-does-it-mean"
 
 /**
  * What the radon and first-use cards last knew, per home, for one screen's lifetime: a card built again (coming back
@@ -631,6 +640,26 @@ internal object RadonToday {
         val result = (task.details?.get("result_pci") as? Number)?.toDouble()?.takeIf { it.isFinite() && it >= 0 }
         return if (prefix == "Radon tested" && result != null) "$text · $result pCi/L" else text
     }
+
+    /** What the result field shows for a read value: 5.2, 4.05, 0.4 (at most two decimals, with a "."). */
+    fun plain(value: Double): String = BigDecimal.valueOf(value).setScale(2, RoundingMode.HALF_UP).stripTrailingZeros().toPlainString()
+
+    /**
+     * A result against the EPA's action level of 4.0 pCi/L, in the EPA's own terms: what it recommends at each
+     * level, and nothing about health. Mirrors iOS `RadonToday.explanation`.
+     */
+    fun explanation(
+        pci: Double,
+        testKind: String? = null,
+    ): String =
+        when {
+            pci >= RADON_ACTION_LEVEL_PCI ->
+                "That's at or above the EPA's action level of 4.0 pCi/L. The EPA recommends fixing a home at this level." +
+                    if (testKind == "long_term") "" else " After a short-term test, it recommends testing again to confirm first."
+            pci >= RADON_CONSIDER_LEVEL_PCI ->
+                "That's below the EPA's action level of 4.0 pCi/L. The EPA suggests considering a fix between 2 and 4 pCi/L."
+            else -> "That's below the EPA's action level of 4.0 pCi/L."
+        }
 }
 
 private class RadonTodayState(
@@ -642,6 +671,7 @@ private class RadonTodayState(
     private val preferences: DataStore<Preferences>,
     val hasRadon: Boolean,
     private val memory: RadonTodayMemory?,
+    private val reportReader: (suspend (Uri) -> RadonReportReading?)?,
 ) {
     val lifetime = CoroutineScope(parent.coroutineContext + Job(parent.coroutineContext[Job]))
     private var active = true
@@ -664,6 +694,16 @@ private class RadonTodayState(
     var hasDate by mutableStateOf(false)
     var result by mutableStateOf("")
     var retained by mutableStateOf<CreateHomeTaskRequest?>(null)
+
+    /** "Read a lab report" in the yes sheet: the reading, what it found, and the test kind it saw. */
+    val readsReports get() = reportReader != null
+    var readingReport by mutableStateOf(false)
+    var reportMessage by mutableStateOf<String?>(null)
+    var reportFailed by mutableStateOf(false)
+    var reportTestKind by mutableStateOf<String?>(null)
+
+    /** The person is in the camera or a picker opened from the sheet: pausing for it doesn't end the sheet. */
+    var choosingReport = false
 
     /** The viewer can't read the household's tasks (e.g. a guest): the card isn't theirs to answer. */
     var noTaskAccess by mutableStateOf(false)
@@ -763,6 +803,10 @@ private class RadonTodayState(
                 ?: if (kind == "yes") LocalDate.now() else LocalDate.now().plusDays(RADON_REMINDER_DAYS)
             hasDate = retained?.details?.get("tested_on") != null
             result = retained?.details?.get("result_pci")?.toString().orEmpty()
+            readingReport = false
+            reportMessage = null
+            reportFailed = false
+            reportTestKind = null
             error = null
             sheet = retained?.let { if (it.status == "done") "yes" else "no" } ?: kind
         } catch (cancelled: CancellationException) {
@@ -826,6 +870,53 @@ private class RadonTodayState(
         }
     }
 
+    /** Fills the yes sheet from a photo or PDF of the lab's report. Nothing is saved: the person checks it and taps Save. */
+    suspend fun readReport(report: Uri) {
+        choosingReport = false
+        val reader = reportReader
+        if (reader == null || !readyForReport) return
+        readingReport = true
+        reportMessage = null
+        try {
+            requireCurrent()
+            val reading = reader(report)
+            requireCurrent()
+            if (reading != null && sheet == "yes") show(reading)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (refused: IllegalStateException) {
+            Timber.w(refused, "radon report reading skipped: the card is no longer current")
+        } finally {
+            if (runCatching { requireCurrent() }.isSuccess) readingReport = false
+        }
+    }
+
+    /** Only the yes sheet's own answer is filled, and one reading at a time. */
+    private val readyForReport get() = sheet == "yes" && retained == null && !busy && !readingReport
+
+    private fun show(reading: RadonReportReading) {
+        when (reading) {
+            is RadonReportReading.Read -> fill(reading)
+            is RadonReportReading.Failed -> {
+                reportMessage = reading.message
+                reportFailed = true
+            }
+        }
+    }
+
+    /** Only what the report shows changes: the result, and the test date when it has one. */
+    private fun fill(reading: RadonReportReading.Read) {
+        val read = reading.result
+        read.valuePci?.takeIf { it.isFinite() && it >= 0 }?.let { result = RadonToday.plain(it) }
+        read.testedOn?.let { runCatching { LocalDate.parse(it) }.getOrNull() }?.let {
+            hasDate = true
+            selectedDate = it
+        }
+        reportTestKind = read.testKind
+        reportMessage = listOfNotNull(read.summary, reading.note, "Check the result and date, then tap Save.").joinToString(" ")
+        reportFailed = false
+    }
+
     suspend fun hideFirstUse() =
         whileCurrent {
             preferences.edit { it[booleanPreferencesKey("firstUse.dismissed.$homeId")] = true }
@@ -884,16 +975,19 @@ private fun rememberHomeTodayState(
 ): RadonTodayState? {
     val homeId = actions?.calendarHomeId ?: return null
     val hasRadon = intel.section(PlaceSectionId.LEAD_RADON)?.leadRadon?.radonZone in 1..3
+    val reportReader: (suspend (Uri) -> RadonReportReading?)? = actions?.takeIf { it.readsRadonReports }?.let { it::readRadonReport }
     val context = LocalContext.current
     val parent = rememberCoroutineScope()
     var epoch by remember(homeId) { mutableStateOf(0) }
     var paused by remember(homeId) { mutableStateOf(false) }
     val state =
         remember(homeId, intel, epoch) {
-            RadonTodayState(homeId, factory, parent, contextGuard, events, context.homeTodayPreferences, hasRadon, memory)
+            RadonTodayState(homeId, factory, parent, contextGuard, events, context.homeTodayPreferences, hasRadon, memory, reportReader)
         }
     DisposableEffect(state) { onDispose { state.close() } }
     LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) {
+        // Choosing a lab report hands over to the camera or a system picker and comes back: the sheet stays.
+        if (state.choosingReport) return@LifecycleEventEffect
         paused = true
         state.close()
     }
@@ -1006,22 +1100,7 @@ private fun RadonTaskSheet(state: RadonTodayState) {
             )
             if (state.retained != null) Text("An earlier task request is saved. Save retries that exact request.")
             if (tested) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Test date (optional)", modifier = Modifier.weight(1f))
-                    Switch(
-                        checked = state.hasDate,
-                        onCheckedChange = { state.hasDate = it },
-                        enabled = !state.busy && state.retained == null,
-                    )
-                }
-                if (state.hasDate) RadonDateField(state, pastAllowed = true)
-                OutlinedTextField(
-                    value = state.result,
-                    onValueChange = { state.result = it },
-                    label = { Text("Result (pCi/L)") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    enabled = !state.busy && state.retained == null,
-                )
+                RadonTestedFields(state, value)
             } else {
                 RadonDateField(state, pastAllowed = false)
             }
@@ -1029,11 +1108,60 @@ private fun RadonTaskSheet(state: RadonTodayState) {
             GhostButton(
                 if (tested) "Save" else "Add reminder",
                 isLoading = state.busy,
-                isEnabled = !state.busy && (state.retained != null || valid),
+                isEnabled = !state.busy && !state.readingReport && (state.retained != null || valid),
                 onClick = { state.lifetime.launch { state.save() } },
             )
             GhostButton("Close", isEnabled = !state.busy, onClick = { state.sheet = null })
         }
+    }
+}
+
+/** The yes sheet's fields: a lab report to read, the test date and the result, explained against the EPA's action level. */
+@Composable
+private fun RadonTestedFields(
+    state: RadonTodayState,
+    value: Double?,
+) {
+    val links = LocalUriHandler.current
+    // A reading in progress fills these fields; nothing is typed over it meanwhile.
+    val editable = !state.busy && !state.readingReport && state.retained == null
+    if (state.readsReports) {
+        RadonReportControl(
+            reading = state.readingReport,
+            message = state.reportMessage,
+            failed = state.reportFailed,
+            enabled = editable,
+            onLeave = { state.choosingReport = true },
+            onCancel = { state.choosingReport = false },
+        ) { report, afterwards ->
+            state.lifetime.launch { state.readReport(report) }.invokeOnCompletion { afterwards() }
+        }
+    }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("Test date (optional)", modifier = Modifier.weight(1f))
+        Switch(checked = state.hasDate, onCheckedChange = { state.hasDate = it }, enabled = editable)
+    }
+    if (state.hasDate) RadonDateField(state, pastAllowed = true)
+    OutlinedTextField(
+        value = state.result,
+        onValueChange = { state.result = it },
+        label = { Text("Result (pCi/L)") },
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+        enabled = editable,
+    )
+    value?.takeIf { it.isFinite() && it >= 0 }?.let { pci ->
+        Text(
+            RadonToday.explanation(pci, state.reportTestKind),
+            fontSize = 13.sp,
+            color = PantopusColors.appTextSecondary,
+            modifier = Modifier.testTag("radonSheetExplanation"),
+        )
+        Text(
+            "What the EPA's action level means",
+            fontSize = 12.sp,
+            color = PantopusColors.primary600,
+            modifier = Modifier.clickable { links.openUri(RADON_ACTION_LEVEL_URL) },
+        )
     }
 }
 
@@ -1045,7 +1173,7 @@ private fun RadonDateField(
     val context = LocalContext.current
     GhostButton(
         "Date: ${state.selectedDate.format(DateTimeFormatter.ofPattern("MMM d"))}",
-        isEnabled = !state.busy && state.retained == null,
+        isEnabled = !state.busy && !state.readingReport && state.retained == null,
         onClick = {
             val date = state.selectedDate
             android.app.DatePickerDialog(

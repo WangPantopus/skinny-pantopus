@@ -17,7 +17,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -29,12 +28,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import app.pantopus.android.data.api.models.place.PlaceFloodNfipData
 import app.pantopus.android.data.api.models.place.PlaceHeatColdData
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.place.PlaceSectionEnvelope
 import app.pantopus.android.data.api.models.place.PlaceSectionId
 import app.pantopus.android.data.api.models.place.PlaceTier
+import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.screens.place.PlacePresentation
 import app.pantopus.android.ui.screens.place.components.PlaceChip
 import app.pantopus.android.ui.screens.place.components.PlaceDensityCard
@@ -97,7 +98,11 @@ fun PlaceRiskDetailContent(
 
     PlaceDetailSectionLabel("Fridge card")
     if (intel.tier == PlaceTier.T4) {
-        LaunchedEffect(Unit) { viewModel.loadFridgeCards() }
+        LifecycleResumeEffect(Unit) {
+            viewModel.loadFridgeCards()
+            onPauseOrDispose { }
+        }
+        RefreshOnStoreChange(viewModel::loadFridgeCards)
         PlaceFridgeCardSection(viewModel)
     } else {
         PlaceLockedCard(

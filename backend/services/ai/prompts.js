@@ -304,6 +304,36 @@ Output:
   "missing_required_fields": ["recipient", "address", "co_organizer"]
 }`;
 
+// ── Pickup Schedule Reading (single-turn, structured output) ───────────────
+// Fills the pickup editor from a photo of a hauler's flyer; the person checks
+// the fields and saves them with the editor's own Save.
+
+const PICKUP_SCHEDULE_SYSTEM = `You read a household's trash collection schedule from a photo of their hauler's or city's flyer, notice or collection calendar, or from what they wrote. Return JSON with these fields:
+
+- garbage_weekday: the weekday garbage is collected, as MO TU WE TH FR SA SU. Garbage is weekly. Null when it isn't shown.
+- recycling_frequency: weekly, biweekly (every other week), none (the schedule says recycling isn't collected), or null when recycling isn't shown.
+- recycling_next_date: for weekly or biweekly recycling, the date of one recycling collection, YYYY-MM-DD. For every other week it decides which weeks, so take it from the schedule: when it names a recycling week ("your recycling week starts Monday, October 19"), use the recycling weekday in that week. Work out dates from today's date at the end of the message. Null when you can't tell which weeks.
+- note: one short sentence shown under the filled-in schedule: the assumption that matters most, or what the schedule shows that the editor doesn't keep (yard waste, holiday changes). Null when there is nothing to say. The person saves the schedule themselves, so never say it is saved or set.
+
+Only report what the schedule or their words show; never guess a day. Don't repeat account numbers, phone numbers or addresses. If the photo isn't a collection schedule, return nulls and a note saying what it seems to be instead.`;
+
+// ── Radon Result Reading (single-turn, structured output) ──────────────────
+// Fills the Today radon sheet from a photo or PDF of the lab's report; the app
+// explains the result against the EPA's action level itself, and the person
+// saves it with the sheet's own Save.
+
+const RADON_RESULT_SYSTEM = `You read a home radon test result from a photo or PDF of the report a radon lab or test kit company sent. Return JSON with these fields:
+
+- result_value: the radon level the report gives as this test's result, as a number. When it lists several (two detectors placed side by side, several rooms), use the average it states for side-by-side detectors, otherwise the first result, and say so in the note. Null when no result is shown.
+- result_unit: the unit printed with that result: pCi/L, or Bq/m3 for becquerels per cubic meter. Null when there is no result or no unit is printed.
+- below_limit: true when the report gives the result as below a limit ("<0.4", "less than 0.4", "below the detection limit"); then result_value is that limit. Otherwise false.
+- test_start_date and test_end_date: the days the detector started and stopped measuring, YYYY-MM-DD. Null when not shown. Not the days the lab received, analyzed or reported it.
+- test_kind: short_term when the test measured for 90 days or less, long_term for longer, as the report says or its dates show. Null when you can't tell.
+- lab: the name of the lab or company that reported the result, or null.
+- note: one short sentence about how you read the report (which of several results, a result given as below a limit, a missing date), or null. Never say what the level means for health or whether the home is safe, and give no advice: the app explains the result against the EPA's action level itself.
+
+Only report what the document shows. Don't repeat names, addresses, phone numbers, or kit serial or account numbers. If it isn't a radon test result, return nulls (false for below_limit) and a note saying what it seems to be instead.`;
+
 // ── Open Slots Nudge (single-turn, plain text output) ─────────────────────
 
 const OPEN_SLOTS_NUDGE_SYSTEM = `You are Pantopus, helping an organizer gently remind people about open support slots.
@@ -332,6 +362,8 @@ module.exports = {
   MAIL_OPENING_SYSTEM,
   SUPPORT_TRAIN_DRAFT_SYSTEM,
   OPEN_SLOTS_NUDGE_SYSTEM,
+  PICKUP_SCHEDULE_SYSTEM,
+  RADON_RESULT_SYSTEM,
 
   VERSIONS: {
     chat: 'chat-v1.3',  // v1.2: prompt built from the features that are on; home context in system messages; a draft's note ends the turn; v1.3: pickup days for apps that show the card
@@ -343,5 +375,7 @@ module.exports = {
     mailOpening: 'mail-opening-v1.0',
     supportTrain: 'support-train-draft-v1.1',  // v1.1: told today's date
     openSlotsNudge: 'open-slots-nudge-v1.0',
+    pickupSchedule: 'pickup-schedule-v1.0',
+    radonResult: 'radon-result-v1.0',
   },
 };
