@@ -263,21 +263,29 @@ object PlanFormat {
     }
 
     /** A playdate before you're in: "Saturday morning" when the server sends the local date, else "Morning". */
-    fun hiddenWhen(plan: PlanDto): String {
-        val part = plan.dayPart?.lowercase(locale)
-        val date = plan.localDate
-        if (date != null && part != null) {
-            val today = LocalDate.now(zone(plan.timezone))
-            val relative =
-                when (ChronoUnit.DAYS.between(today, date)) {
-                    0L -> if (part == "night") "Tonight" else "This $part"
-                    1L -> "Tomorrow $part"
-                    else -> "${date.format(dayLong)} $part"
-                }
-            return relative
+    fun hiddenWhen(plan: PlanDto): String = dayPartOnDay(plan.dayPart, plan.localDate, plan.timezone) ?: "Time shared when you're in"
+
+    /** "Saturday morning", "Tomorrow morning", "Tonight"; just "Morning" without a day; null without a part of the day. */
+    fun dayPartOnDay(
+        wire: String?,
+        day: LocalDate?,
+        timezone: String?,
+    ): String? {
+        val part = wire?.lowercase(locale) ?: return null
+        day ?: return dayPart(wire)
+        return when (ChronoUnit.DAYS.between(LocalDate.now(zone(timezone)), day)) {
+            0L -> if (part == "night") "Tonight" else "This $part"
+            1L -> "Tomorrow $part"
+            else -> "${day.format(dayLong)} $part"
         }
-        return dayPart(plan.dayPart) ?: "Time shared when you're in"
     }
+
+    /** The same from a pin's or card's `starts_on` ("2026-10-17"). */
+    fun dayPartOnDay(
+        wire: String?,
+        startsOn: String?,
+        timezone: String?,
+    ): String? = dayPartOnDay(wire, startsOn?.let { runCatching { LocalDate.parse(it) }.getOrNull() }, timezone)
 
     /**
      * The second line of a plan row (board P2, F2): "Happening now · until 10:30 · 1.2 mi",
@@ -367,7 +375,8 @@ object PlanFormat {
                         ?: at.format(if (ChronoUnit.DAYS.between(today, at.toLocalDate()) <= ONE_WEEK_DAYS) dayLong else dateLong)
                 parts += "$day ${at.format(clock)}"
             }
-            else -> dayPart(pin.dayPart)?.let { parts += it }
+            // A playdate whose time is hidden: "Saturday morning", as its card says it (the pin carries the day).
+            else -> dayPartOnDay(pin.dayPart, pin.startsOn, pin.timezone)?.let { parts += it }
         }
         distanceSpoken(distanceBand ?: pin.distanceBand)?.let { parts += it }
         parts +=

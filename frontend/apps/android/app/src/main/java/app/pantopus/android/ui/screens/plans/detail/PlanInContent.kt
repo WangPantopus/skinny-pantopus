@@ -108,6 +108,7 @@ internal fun ColumnScope.PlanInBody(
             icon = PantopusIcon.Calendar,
             onClick = { context.addToCalendar(plan) },
             modifier = Modifier.weight(1f),
+            spoken = "Add to calendar",
         )
         if (plan.chatRoomId != null) {
             PlanStackButton(title = "Group chat", icon = PantopusIcon.MessageCircle, onClick = onOpenChat, modifier = Modifier.weight(1f))
