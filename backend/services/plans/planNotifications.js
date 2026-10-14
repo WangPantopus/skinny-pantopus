@@ -279,9 +279,10 @@ async function requestReceived({ plan, request, requesterUser, hostFirst, reques
     link: `/plans/${plan.post_id}/requests`,
     plan,
     recipientIsIn: true,
+    // requester_name (a first name, as in the title) lets a failed Accept/Decline button say whom it was for.
     metadata: head
-      ? { request_id: request.id, bundled: true, bundle_head_id: head.id }
-      : { request_id: request.id },
+      ? { request_id: request.id, requester_name: requesterFirst, bundled: true, bundle_head_id: head.id }
+      : { request_id: request.id, requester_name: requesterFirst },
     holdUntil: head ? new Date(new Date(head.created_at).getTime() + BUNDLE_WINDOW_MS) : null,
   });
 }

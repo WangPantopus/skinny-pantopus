@@ -71,7 +71,8 @@ final class PlanComposerModel {
     var hostedAgainFrom: String?
     /// Playdates need a verified address; without one H1's playdate card leads there.
     private(set) var verifiedAddress: Bool
-    /// The title filled in from a game, cleared when the type changes.
+    /// The title the app filled in (a game's, or the type's starting title),
+    /// cleared when the type changes; a title the host typed stays.
     @ObservationIgnored private var autoTitle: String?
     /// A type was chosen (H1) or given: only then may a watch party pick the first game.
     @ObservationIgnored private var kindChosen: Bool
@@ -87,6 +88,7 @@ final class PlanComposerModel {
         self.api = api
         self.location = location
         applyDefaults()
+        startTitle()
         if let game = start?.game { pick(game) }
         if let again = start?.again { repeatPlan(again) }
     }
@@ -136,12 +138,35 @@ final class PlanComposerModel {
         kind = newKind
         kindChosen = true
         if newKind == .watchParty {
-            if game == nil, title.isEmpty, let first = games.first { pick(first) }
+            guard game == nil else { return }
+            dropAutoTitle()
+            if title.isEmpty, let first = games.first { pick(first) }
         } else {
             game = nil
-            if let autoTitle, title == autoTitle { title = "" }
-            autoTitle = nil
+            dropAutoTitle()
+            startTitle()
         }
+    }
+
+    /// Drops a title the app filled in; one the host typed stays.
+    private func dropAutoTitle() {
+        if let autoTitle, title == autoTitle { title = "" }
+        autoTitle = nil
+    }
+
+    /// The boards' starting titles, as on Android: "Playground morning" (H3),
+    /// "Coffee walk" (H5). A watch party starts from its game; a pickup game
+    /// has no title field.
+    private func startTitle() {
+        guard title.isEmpty else { return }
+        let starting: String? = switch kind {
+        case .playdate: "Playground morning"
+        case .walkCoffee: "Coffee walk"
+        case .watchParty, .pickupGame: nil
+        }
+        guard let starting else { return }
+        title = starting
+        autoTitle = starting
     }
 
     // MARK: - Choices
@@ -150,8 +175,11 @@ final class PlanComposerModel {
     func pick(_ newGame: PlanGameOptionDTO?) {
         game = newGame
         guard let newGame else { return }
-        title = "\(newGame.label) game"
-        autoTitle = title
+        // Board H2: "Seahawks game on the big screen"; a title the host typed stays (as on Android).
+        if title.isEmpty || title == autoTitle {
+            title = "\(newGame.label) game on the big screen"
+            autoTitle = title
+        }
         if let gameStart = newGame.startsAtDate, gameStart > Date() {
             start = gameStart
             end = newGame.endsAtDate ?? gameStart.addingTimeInterval(3 * 3600 + 20 * 60)

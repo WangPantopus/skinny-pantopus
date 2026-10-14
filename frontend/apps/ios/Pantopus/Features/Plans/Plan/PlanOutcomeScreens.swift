@@ -67,12 +67,11 @@ struct PlanNotThisTimeScreen: View {
         .accessibilityIdentifier("planNotThisTime")
     }
 
-    /// "Sunday, Oct 18 · 1:25 PM · Sam R."
+    /// "Sunday, Oct 18 · 1:25 PM · Sam R." (board J8; "Today · 1:25 PM" when it applies, as on Android).
     private var subline: String {
         let calendar = PlanFormat.calendar(for: card.timezone)
-        let when = card.startsAtDate.map {
-            "\(PlanFormat.dayHeading($0, calendar: calendar)) · \(PlanFormat.time($0, calendar: calendar))"
-        } ?? PlanFormat.dayPartPhrase(card.dayPart, day: card.startsOnDate, calendar: calendar)
+        let when = card.startsAtDate.map { PlanFormat.when(start: $0, end: nil, long: true, calendar: calendar) }
+            ?? PlanFormat.dayPartPhrase(card.dayPart, day: card.startsOnDate, calendar: calendar)
         return "\(when) · \(card.host.displayName)"
     }
 

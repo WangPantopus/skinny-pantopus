@@ -199,6 +199,17 @@ object PlanFormat {
         return "$day · ${timeRange(start, end)}"
     }
 
+    /** "Sunday, Oct 18 · 1:25 PM", "Today · 1:25 PM" (board J8); a hidden playdate time: "Saturday morning". */
+    fun dayAndTime(
+        plan: PlanDto,
+        now: Instant = Instant.now(),
+    ): String {
+        val zone = zone(plan.timezone)
+        val start = instant(plan.startsAt)?.atZone(zone) ?: return hiddenWhen(plan)
+        val day = relativeDay(start.toLocalDate(), now.atZone(zone).toLocalDate()) ?: start.format(dateLong)
+        return "$day · ${start.format(clock)}"
+    }
+
     /** A playdate before you're in: "Saturday morning" when the server sends the local date, else "Morning". */
     fun hiddenWhen(plan: PlanDto): String {
         val part = plan.dayPart?.lowercase(locale)
