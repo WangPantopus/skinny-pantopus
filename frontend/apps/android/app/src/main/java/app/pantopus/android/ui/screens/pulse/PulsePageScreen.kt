@@ -28,8 +28,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -38,7 +36,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -89,8 +86,7 @@ import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 /**
@@ -119,6 +115,7 @@ fun PulsePageScreen(
     val earlier by viewModel.earlier.collectAsStateWithLifecycle()
     val toast by viewModel.toast.collectAsStateWithLifecycle()
     var showsPreferences by rememberSaveable { mutableStateOf(false) }
+    var showsAreas by rememberSaveable { mutableStateOf(false) }
     ReportContentShown("pulse", state is PulsePageUiState.Loaded)
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -157,6 +154,7 @@ fun PulsePageScreen(
                         refreshNotice,
                         FeedTopMenu(onOpenConnections, onOpenBeacons),
                         { showsPreferences = true },
+                        { showsAreas = true },
                         viewModel,
                     )
                 },
@@ -182,6 +180,16 @@ fun PulsePageScreen(
         )
     }
     PulsePageMenus(viewModel)
+    if (showsAreas) {
+        PulseAreaPickerSheet(
+            selectedId = query.areaId,
+            onSelect = { areaId ->
+                showsAreas = false
+                viewModel.selectArea(areaId)
+            },
+            onDismiss = { showsAreas = false },
+        )
+    }
     if (showsPreferences) {
         FeedPreferencesSheet(
             onClose = { showsPreferences = false },
@@ -198,9 +206,10 @@ private fun PulsePageHeader(
     refreshNotice: RefreshNotice?,
     menu: FeedTopMenu,
     onPreferences: () -> Unit,
+    onAreas: () -> Unit,
     viewModel: PulsePageViewModel,
 ) {
-    PulseHeader(content?.areaName, content?.areaChoices.orEmpty(), menu, onPreferences, viewModel::selectArea)
+    PulseHeader(content?.areaName, menu, onPreferences, onAreas)
     PulseViews(selected = query.view, onSelect = viewModel::selectView)
     PulseTopicChips(selected = query.topic, onSelect = viewModel::selectTopic)
     refreshNotice?.let { RefreshFailedLine(it, modifier = Modifier.padding(horizontal = Spacing.s4, vertical = Spacing.s1)) }
@@ -253,17 +262,20 @@ private fun PulsePageMenus(viewModel: PulsePageViewModel) {
             onDismiss = viewModel::dismissMenu,
             onToggleSave = { viewModel.toggleSave(card) },
             onToggleRepost = null,
-            onShare = if (card.canShare) {
-                {
-                viewModel.dismissMenu()
-                val share =
-                    Intent(Intent.ACTION_SEND).apply {
-                        type = "text/plain"
-                        putExtra(Intent.EXTRA_TEXT, "https://www.pantopus.com/posts/${card.id}")
+            onShare =
+                if (card.canShare) {
+                    {
+                        viewModel.dismissMenu()
+                        val share =
+                            Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_TEXT, "https://www.pantopus.com/posts/${card.id}")
+                            }
+                        context.startActivity(Intent.createChooser(share, "Share post"))
                     }
-                context.startActivity(Intent.createChooser(share, "Share post"))
-                }
-            } else null,
+                } else {
+                    null
+                },
             onHide = { viewModel.hide(card) },
             onNotHelpful = {},
             onMuteAuthor = { viewModel.confirmMenu(PulsePageMenuAction.MuteAuthor) },
@@ -378,10 +390,17 @@ private fun PulsePageEffects(
     }
     // The end card on screen means the page was read to its end: tell the server, once per read.
     LaunchedEffect(query) { listState.scrollToItem(0) }
-    LaunchedEffect(content?.readAt, query, newCount) {
+    LaunchedEffect(content?.readAt, query, newCount, lifecycle) {
         if (content != null) {
-            snapshotFlow { listState.layoutInfo.visibleItemsInfo.any { it.key == END_KEY } }.filter { it }.first()
-            viewModel.endShown()
+            lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                snapshotFlow { listState.layoutInfo.visibleItemsInfo.any { it.key == END_KEY } }.collectLatest { visible ->
+                    // Retry a failed acknowledgement only while this page's end remains visible.
+                    while (visible) {
+                        viewModel.endShown()
+                        delay(NEW_POLL_MS)
+                    }
+                }
+            }
         }
     }
 }
@@ -420,10 +439,9 @@ private data class PulsePageCallbacks(
 @Composable
 private fun PulseHeader(
     areaName: String?,
-    areas: List<PulseAreaChoice>,
     menu: FeedTopMenu,
     onPreferences: () -> Unit,
-    onPickArea: (String?) -> Unit,
+    onAreas: () -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s4, vertical = Spacing.s2),
@@ -442,7 +460,7 @@ private fun PulseHeader(
                 color = PantopusColors.appText,
                 modifier = Modifier.semantics { heading() },
             )
-            areaName?.let { name -> PulseAreaPill(name = name, choices = areas, onPick = onPickArea) }
+            PulseAreaPill(name = areaName ?: "Choose an area", onClick = onAreas)
         }
         PulseMoreMenu(menu = menu, onPreferences = onPreferences)
     }
@@ -457,11 +475,8 @@ data class PulseAreaChoice(
 @Composable
 private fun PulseAreaPill(
     name: String,
-    choices: List<PulseAreaChoice>,
-    onPick: (String?) -> Unit,
+    onClick: () -> Unit,
 ) {
-    var open by remember { mutableStateOf(false) }
-    val more = choices.size > 1
     Box {
         Row(
             modifier =
@@ -469,34 +484,21 @@ private fun PulseAreaPill(
                     .heightIn(min = 36.dp)
                     .clip(RoundedCornerShape(Radii.pill))
                     .border(1.dp, PantopusColors.appBorderStrong, RoundedCornerShape(Radii.pill))
-                    .then(if (more) Modifier.clickable { open = true } else Modifier)
+                    .clickable(role = Role.Button, onClick = onClick)
                     .padding(horizontal = Spacing.s3)
-                    .semantics { contentDescription = if (more) "Area: $name. Change area" else "Area: $name" }
+                    .semantics { contentDescription = "Area: $name. Change area" }
                     .testTag("pulseAreaPill"),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
         ) {
             PantopusIconImage(icon = PantopusIcon.MapPin, contentDescription = null, size = 16.dp, tint = PantopusColors.primary600)
             Text(text = name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
-            if (more) {
-                PantopusIconImage(
-                    icon = PantopusIcon.ChevronDown,
-                    contentDescription = null,
-                    size = 14.dp,
-                    tint = PantopusColors.appTextSecondary,
-                )
-            }
-        }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            choices.forEach { choice ->
-                DropdownMenuItem(
-                    text = { Text(choice.name) },
-                    onClick = {
-                        open = false
-                        onPick(choice.id)
-                    },
-                )
-            }
+            PantopusIconImage(
+                icon = PantopusIcon.ChevronDown,
+                contentDescription = null,
+                size = 14.dp,
+                tint = PantopusColors.appTextSecondary,
+            )
         }
     }
 }

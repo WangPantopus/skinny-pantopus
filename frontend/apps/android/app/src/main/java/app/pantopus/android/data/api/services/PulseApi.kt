@@ -1,7 +1,9 @@
 package app.pantopus.android.data.api.services
 
 import app.pantopus.android.data.api.models.pulse.PulseAckResponse
+import app.pantopus.android.data.api.models.pulse.PulseAreaSearchResponse
 import app.pantopus.android.data.api.models.pulse.PulseFeedResponse
+import app.pantopus.android.data.api.models.pulse.PulseMyAreasResponse
 import app.pantopus.android.data.api.models.pulse.PulseNewCountResponse
 import app.pantopus.android.data.api.models.pulse.PulsePostStatusResponse
 import app.pantopus.android.data.api.models.pulse.PulseSeenRequest
@@ -16,6 +18,16 @@ import retrofit2.http.Query
 /** The Pulse page's routes (`/api/pulse/…`, contract section 2; PB's `backend/routes/pulse.js`). */
 @Suppress("LongParameterList")
 interface PulseApi {
+    /** Open areas derived from the primary home (`backend/routes/pulse.js`, contract 2.2). */
+    @GET("api/pulse/areas/mine")
+    suspend fun myAreas(): PulseMyAreasResponse
+
+    /** Open towns matching a literal name substring (`backend/routes/pulse.js`, contract 2.2). */
+    @GET("api/pulse/areas/search")
+    suspend fun searchAreas(
+        @Query("q") query: String,
+    ): PulseAreaSearchResponse
+
     /**
      * `GET /api/pulse/feed` (contract 2.3): the groups of the viewer's page, or with [earlierBefore] the next older
      * items in one "EARLIER" group. [view] is `nearby` or `following`; [areaId] defaults to the viewer's town.

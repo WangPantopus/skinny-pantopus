@@ -1,8 +1,10 @@
 package app.pantopus.android.data.pulse
 
 import app.pantopus.android.data.api.models.pulse.PulseAckResponse
+import app.pantopus.android.data.api.models.pulse.PulseAreaSearchResponse
 import app.pantopus.android.data.api.models.pulse.PulseFeedCopy
 import app.pantopus.android.data.api.models.pulse.PulseFeedResponse
+import app.pantopus.android.data.api.models.pulse.PulseMyAreasResponse
 import app.pantopus.android.data.api.models.pulse.PulseNewCountResponse
 import app.pantopus.android.data.api.models.pulse.PulsePostStatusResponse
 import app.pantopus.android.data.api.models.pulse.PulseSeenRequest
@@ -43,6 +45,12 @@ class PulseRepository
         private val api: PulseApi,
         private val store: ScreenStore,
     ) {
+        /** The server alone decides which home areas are open to this viewer. */
+        suspend fun myAreas(): NetworkResult<PulseMyAreasResponse> = safeApiCall { api.myAreas() }
+
+        /** Town browsing never changes the primary home or claims residence. */
+        suspend fun searchAreas(query: String): NetworkResult<PulseAreaSearchResponse> = safeApiCall { api.searchAreas(query) }
+
         /** The first page of [query] through the store; [force] reads now (pull to refresh, "↑ N new conversations"). */
         suspend fun feedStored(
             query: PulseFeedQuery,

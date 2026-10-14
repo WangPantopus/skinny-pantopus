@@ -1,5 +1,6 @@
 package app.pantopus.android.ui.screens.pulse
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.pulse.PulseFeedCopy
@@ -50,6 +51,8 @@ sealed interface PulseEarlierState {
  * "↑ N new conversations" pill and "Show earlier" are the only ways items arrive.
  */
 @HiltViewModel
+// Named menu actions share the page's pending-write guards and overlays, including earlier rows.
+@Suppress("TooManyFunctions")
 class PulsePageViewModel
     @Inject
     constructor(
@@ -57,11 +60,19 @@ class PulsePageViewModel
         private val posts: PostsRepository,
         private val feedActions: FeedActionsRepository,
         private val moderation: FeedModerationStore,
+        private val savedState: SavedStateHandle,
     ) : ViewModel() {
         private val _state = MutableStateFlow<PulsePageUiState>(PulsePageUiState.Loading)
         val state: StateFlow<PulsePageUiState> = _state.asStateFlow()
 
-        private val _query = MutableStateFlow(PulseFeedQuery())
+        private val _query =
+            MutableStateFlow(
+                PulseFeedQuery(
+                    view = savedState.get<String>(VIEW_KEY)?.takeIf { it == PulseFeedQuery.VIEW_FOLLOWING } ?: PulseFeedQuery.VIEW_NEARBY,
+                    topic = savedState[TOPIC_KEY],
+                    areaId = savedState[AREA_KEY],
+                ),
+            )
         val query: StateFlow<PulseFeedQuery> = _query.asStateFlow()
 
         private val _refreshing = MutableStateFlow(false)
@@ -144,6 +155,9 @@ class PulsePageViewModel
             markingSeen?.cancel()
             _menu.value = null
             _query.value = next
+            savedState[VIEW_KEY] = next.view
+            savedState[TOPIC_KEY] = next.topic
+            savedState[AREA_KEY] = next.areaId
             _newCount.value = 0
             _earlier.value = PulseEarlierState.Idle
             seenFor = null
@@ -348,6 +362,7 @@ class PulsePageViewModel
             val author = actions.muteEntityId
             val entity = actions.muteEntityType
             if (author != null && entity != null && moderation.isMuted(entity, author)) return false
+            if (actions.isOwner) return true
             val topic = actions.pulseTopic?.key ?: return true
             return (topic to card.areaId) !in mutedTopics && (topic to null) !in mutedTopics
         }
@@ -501,5 +516,8 @@ class PulsePageViewModel
 
         private companion object {
             const val ERROR_FALLBACK = "We couldn't load Pulse."
+            const val VIEW_KEY = "pulse.view"
+            const val TOPIC_KEY = "pulse.topic"
+            const val AREA_KEY = "pulse.area"
         }
     }

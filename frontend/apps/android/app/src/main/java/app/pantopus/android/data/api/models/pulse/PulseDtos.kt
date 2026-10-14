@@ -35,6 +35,22 @@ data class PulseAreaDto(
     val kind: String? = null,
     val name: String? = null,
     val state: String? = null,
+    val title: String? = null,
+)
+
+/** Open areas of the primary home (`GET /api/pulse/areas/mine`, contract 2.2). */
+@JsonClass(generateAdapter = true)
+data class PulseMyAreasResponse(
+    val town: PulseAreaDto? = null,
+    val neighborhood: PulseAreaDto? = null,
+    val street: PulseAreaDto? = null,
+    @Json(name = "home_verified") val homeVerified: Boolean? = null,
+)
+
+/** Open towns only; no location or home details (`GET /api/pulse/areas/search`, contract 2.2). */
+@JsonClass(generateAdapter = true)
+data class PulseAreaSearchResponse(
+    val areas: List<PulseAreaDto>? = null,
 )
 
 @JsonClass(generateAdapter = true)

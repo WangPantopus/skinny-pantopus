@@ -286,7 +286,7 @@ internal fun PulseFeedResponse.toPage(
         groups.orEmpty().mapIndexedNotNull { index, group ->
             val cards =
                 group.items.filter { it.id.isNotBlank() && it.moderation?.state !in listOf("held", "removed") && seenIds.add(it.id) }
-                    .map { post -> post.toCard(now, zone).let { it.copy(areaId = group.areaId ?: it.areaId) } }
+                    .map { post -> post.toCard(now, zone).copy(areaId = group.areaId) }
             if (cards.isEmpty()) null else PulseGroupUi(key = "${group.key.orEmpty()}:$index", title = group.title.orEmpty(), cards = cards)
         }
     val homeTown = areasAvailable.orEmpty().firstOrNull { it.kind == "town" }?.id

@@ -543,9 +543,6 @@ object NetworkModule {
     fun providePostsApi(retrofit: Retrofit): PostsApi = retrofit.create(PostsApi::class.java)
 
     @Provides @Singleton
-    fun providePulseApi(retrofit: Retrofit): PulseApi = retrofit.create(PulseApi::class.java)
-
-    @Provides @Singleton
     fun providePostPrecheckApi(retrofit: Retrofit): PostPrecheckApi = retrofit.create(PostPrecheckApi::class.java)
 
     @Provides @Singleton
@@ -769,7 +766,7 @@ object NetworkModule {
     @Singleton
     fun providePlansApi(retrofit: Retrofit): PlansApi = retrofit.create(PlansApi::class.java)
 
-    /** Pulse's own routes (`/api/pulse/…`): the asker's keep-open and close (S7). */
+    /** Pulse's page, areas and lifecycle routes (`/api/pulse/…`). */
     @Provides
     @Singleton
     fun providePulseApi(retrofit: Retrofit): PulseApi = retrofit.create(PulseApi::class.java)
