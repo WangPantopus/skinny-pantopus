@@ -91,7 +91,7 @@ class PulseComposeDraftStore
             val json = JSONObject(raw)
             check(json.getInt("version") == VERSION) { "This saved draft needs a newer app." }
             val values = json.getJSONObject("values")
-            val fields = values.keys().asSequence().associateWith { values.getString(it) }
+            val fields = values.keys().asSequence().map { it as String }.associateWith { values.getString(it) }
             val photos = json.getJSONArray("photos")
             check(photos.length() <= MAX_PHOTOS) { "The saved photos couldn't be read. Try again." }
             val restored =
