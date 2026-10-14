@@ -119,6 +119,7 @@ import app.pantopus.android.ui.screens.explore.ExploreKind
 import app.pantopus.android.ui.screens.explore.ExploreMapFocus
 import app.pantopus.android.ui.screens.explore.ExploreMapScreen
 import app.pantopus.android.ui.screens.feed.FeedScreen
+import app.pantopus.android.ui.screens.feed.FeedTopMenu
 import app.pantopus.android.ui.screens.feed.beacons.BeaconsFeedScreen
 import app.pantopus.android.ui.screens.feed.pulse.PulseIntent
 import app.pantopus.android.ui.screens.following.FollowingScreen
@@ -316,7 +317,8 @@ import app.pantopus.android.ui.screens.membership.MembershipDetailScreen
 import app.pantopus.android.ui.screens.my_bids.MyBidsScreen
 import app.pantopus.android.ui.screens.my_posts.MyPostsScreen
 import app.pantopus.android.ui.screens.my_tasks.MyTasksScreen
-import app.pantopus.android.ui.screens.nearby.NearbyScreen
+import app.pantopus.android.ui.screens.nearby.NearbyViewModel
+import app.pantopus.android.ui.screens.nearby.pulseQuietStateCard
 import app.pantopus.android.ui.screens.notifications.NotificationsScreen
 import app.pantopus.android.ui.screens.offers.OffersScreen
 import app.pantopus.android.ui.screens.persona_dm.FanInboxScreen
@@ -2196,6 +2198,18 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 rootsOnStack = PantopusRoute.all.filter { navController.isOnBackStack(it.path) },
             )
         }
+    // Plans is a tab only while its switch is on, and the bar follows the switch while the app runs.
+    val plansGate: PlansGateViewModel = hiltViewModel()
+    val plansFlags by plansGate.flags.collectAsStateWithLifecycle()
+    val plansSettled by plansGate.settled.collectAsStateWithLifecycle()
+    val barTabs = remember(plansFlags.plans) { PantopusRoute.barTabs(plansFlags.plans) }
+    // Standing on Plans when the switch turns off lands on Pulse. It waits for the person's answer, so a relaunch
+    // that restores the Plans tab isn't moved off it by the moment before the answer is read.
+    LaunchedEffect(plansFlags.plans, plansSettled, currentRoute) {
+        if (plansSettled && !plansFlags.plans && currentRoute == PantopusRoute.Plans) {
+            navController.navigateToRootTab(PantopusRoute.Pulse)
+        }
+    }
     val resolvedInboxBadgeCount = maxOf(inboxBadgeCount, liveInboxBadgeCount)
     val badges: Map<PantopusRoute, Int> =
         if (resolvedInboxBadgeCount > 0) mapOf(PantopusRoute.Mail to resolvedInboxBadgeCount) else emptyMap()
@@ -2245,8 +2259,13 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 navController.navigateToRootTab(PantopusRoute.Place)
                 DeepLinkRouter.consume()
             }
+            // Nearby is no longer a tab: its links, pushes and saved state open Pulse (Pulse build S3).
             DeepLinkRouter.Destination.Nearby -> {
-                navController.navigateToRootTab(PantopusRoute.Nearby)
+                navController.navigateToRootTab(PantopusRoute.Pulse)
+                DeepLinkRouter.consume()
+            }
+            DeepLinkRouter.Destination.PlansTab -> {
+                navController.navigateToRootTab(if (DeepLinkRouter.plansEnabled()) PantopusRoute.Plans else PantopusRoute.Pulse)
                 DeepLinkRouter.consume()
             }
             is DeepLinkRouter.Destination.Connections -> {
@@ -2579,28 +2598,32 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 navController.navigate(ChildRoutes.CREATOR_AUDIENCE_MEMBERS)
                 DeepLinkRouter.consume()
             }
-            // Nearby Plans: while the `plans` flag is off a plan link opens today's Nearby screen instead.
+            // Plans: a plan link opens the Plans tab with the plan on top, so Back lands on Plans; while the `plans`
+            // flag is off it opens Pulse instead.
             is DeepLinkRouter.Destination.Plan -> {
                 if (DeepLinkRouter.plansEnabled()) {
+                    navController.navigateToRootTab(PantopusRoute.Plans)
                     navController.navigate(PlansRoutes.plan(pending.id))
                 } else {
-                    navController.navigateToRootTab(PantopusRoute.Nearby)
+                    navController.navigateToRootTab(PantopusRoute.Pulse)
                 }
                 DeepLinkRouter.consume()
             }
             is DeepLinkRouter.Destination.PlanRequests -> {
                 if (DeepLinkRouter.plansEnabled()) {
+                    navController.navigateToRootTab(PantopusRoute.Plans)
                     navController.navigate(PlansRoutes.requests(pending.id))
                 } else {
-                    navController.navigateToRootTab(PantopusRoute.Nearby)
+                    navController.navigateToRootTab(PantopusRoute.Pulse)
                 }
                 DeepLinkRouter.consume()
             }
             DeepLinkRouter.Destination.NewPlan -> {
                 if (DeepLinkRouter.plansEnabled()) {
+                    navController.navigateToRootTab(PantopusRoute.Plans)
                     navController.navigate(PlansRoutes.host())
                 } else {
-                    navController.navigateToRootTab(PantopusRoute.Nearby)
+                    navController.navigateToRootTab(PantopusRoute.Pulse)
                 }
                 DeepLinkRouter.consume()
             }
@@ -2658,6 +2681,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 PantopusBottomBar(
                     selected = currentRoute,
                     badges = badges,
+                    tabs = barTabs,
                     onSelect = { target ->
                         ScreenTiming.tabTapped(target.path.substringAfterLast('/'))
                         if (target == currentRoute) {
@@ -2688,7 +2712,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onOpenMenu = { navDrawerScope.launch { navDrawerState.open() } },
                     )
                 }
-                // ── Wedge v2 D2: Place · Today · Nearby · Mail ──────────
+                // ── Pulse build S3: Place · Today · Pulse · Plans · Mail ──────────
                 composable(PantopusRoute.Today.path) {
                     TodayTabScreen(
                         onClaim = { navController.navigate(ChildRoutes.ADD_HOME) },
@@ -2708,11 +2732,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             ),
                     )
                 }
-                composable(PantopusRoute.Nearby.path) {
-                    // Nearby Plans (decision D1): Nearby opens on the map while the `plans` flag is on, and is
-                    // today's screen while it is off.
-                    val plansGate: PlansGateViewModel = hiltViewModel()
-                    val plansFlags by plansGate.flags.collectAsStateWithLifecycle()
+                composable(PantopusRoute.Plans.path) {
+                    // Plans (the map and list of what's on) is a tab only while the `plans` flag is on. With it off there
+                    // is nothing to show here: the switch watch above moves a person standing here to Pulse.
                     if (plansFlags.plans) {
                         PlansMapScreen(
                             actions =
@@ -2720,27 +2742,22 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                     onOpenPlan = { id -> navController.navigate(PlansRoutes.plan(id)) },
                                     onAsk = { id -> navController.navigate(PlansRoutes.plan(id, ask = true)) },
                                     onHost = { kind, game -> navController.navigate(PlansRoutes.host(kind = kind?.wire, game = game?.id)) },
-                                    onOpenPulse = { navController.navigate(ChildRoutes.PULSE_FEED) },
+                                    onOpenPulse = { navController.navigateToRootTab(PantopusRoute.Pulse) },
                                     onOpenConnections = { navController.navigate(ChildRoutes.CONNECTIONS) },
                                     onInvite = { appContext.shareText(PLANS_INVITE_MESSAGE, "Invite a neighbor") },
                                 ),
                         )
-                    } else {
-                        NearbyScreen(
-                            onClaim = { navController.navigate(ChildRoutes.ADD_HOME) },
-                            onOpenPulse = { navController.navigate(PantopusRoute.Pulse.path) },
-                            onOpenBeacons = { navController.navigate(ChildRoutes.BEACONS_FEED) },
-                            onOpenConnections = { navController.navigate(ChildRoutes.CONNECTIONS) },
-                            onOpenMarketplace = { navController.navigate(PantopusRoute.Marketplace.path) },
-                            onOpenTasks = { navController.navigate(PantopusRoute.Tasks.path) },
-                        )
                     }
+                }
+                // Nearby is no longer a tab; its old route (saved state, a stale entry) opens Pulse.
+                composable(PantopusRoute.Nearby.path) {
+                    LaunchedEffect(Unit) { navController.navigateToRootTab(PantopusRoute.Pulse) }
                 }
                 plansRoutes(
                     nav = navController,
                     external =
                         PlansExternalRoutes(
-                            openPulse = { navController.navigate(ChildRoutes.PULSE_FEED) },
+                            openPulse = { navController.navigateToRootTab(PantopusRoute.Pulse) },
                             openConnections = { navController.navigate(ChildRoutes.CONNECTIONS) },
                             openChat = { roomId, title, _ ->
                                 navController.navigate(
@@ -2762,7 +2779,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                     },
                                 )
                             },
-                            openNearby = { navController.navigateToRootTab(PantopusRoute.Nearby) },
+                            openNearby = { navController.navigateToRootTab(PantopusRoute.Plans) },
                         ),
                 )
                 composable(PantopusRoute.Mail.path) {
@@ -2796,6 +2813,14 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     )
                 }
                 composable(PantopusRoute.Pulse.path) {
+                    // Nearby's other content lives here now: the neighborhood meter or "Set up a home" as one
+                    // quiet-state card, and Connections (Beacons too, while that launch cut is off) in the top menu.
+                    val quietMeter: NearbyViewModel = hiltViewModel()
+                    val quietStateCard =
+                        pulseQuietStateCard(
+                            onClaim = { navController.navigate(ChildRoutes.ADD_HOME) },
+                            viewModel = quietMeter,
+                        )
                     FeedScreen(
                         onOpenPost = { postId -> navController.navigate(ChildRoutes.pulsePost(postId)) },
                         onCompose = { intent -> navController.navigate(ChildRoutes.composePost(intent.key)) },
@@ -2804,6 +2829,14 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 ChildRoutes.composePost(PulseIntent.Ask.key, starter.placeholder),
                             )
                         },
+                        topMenu =
+                            FeedTopMenu(
+                                onOpenConnections = { navController.navigate(ChildRoutes.CONNECTIONS) },
+                                // Launch cut #1 (Beacon): no Beacons entry for the first launch.
+                                onOpenBeacons = { navController.navigate(ChildRoutes.BEACONS_FEED) }.takeIf { LaunchFeatures.beacon },
+                            ),
+                        quietStateCard = quietStateCard,
+                        onRefreshQuietStateCard = quietMeter::refresh,
                     )
                 }
                 composable(PantopusRoute.Tasks.path) {
