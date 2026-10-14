@@ -82,7 +82,7 @@ struct PulseConversationDetailContent: View {
                 identity: .personal,
                 timeAndLocality: card.meta,
                 intent: .from(purpose: nil, postType: content.post.type),
-                onAvatarTap: card.authorId.map { id in { onOpenProfile(id) } },
+                onAvatarTap: authorProfileTap,
                 pulseCard: card
             )
             VStack(alignment: .leading, spacing: Spacing.s3) {
@@ -117,6 +117,11 @@ struct PulseConversationDetailContent: View {
                 thumbnailURL: item.thumbnailUrl.flatMap(URL.init(string:))
             )
         }
+    }
+
+    private var authorProfileTap: (@MainActor () -> Void)? {
+        guard let id = card.authorId, !id.isEmpty else { return nil }
+        return { onOpenProfile(id) }
     }
 
     @ViewBuilder private var primaryAction: some View {

@@ -66,6 +66,7 @@ struct PulseConversationRepliesView: View {
             isIndented: indented,
             isOwn: currentUserId != nil && reply.author?.id == currentUserId,
             canMarkHelpful: content.post.type == "ask_local" && content.post.viewer?.canMarkHelpful == true,
+            canReply: content.post.moderation?.state == nil || content.post.moderation?.state == "live",
             isPending: pendingReplies.contains(reply.id),
             onOpenProfile: onOpenProfile,
             onReply: { onReply(reply) },

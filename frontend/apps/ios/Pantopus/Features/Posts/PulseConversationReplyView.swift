@@ -14,6 +14,7 @@ struct PulseConversationReplyView: View {
     let isIndented: Bool
     let isOwn: Bool
     let canMarkHelpful: Bool
+    let canReply: Bool
     let isPending: Bool
     let onOpenProfile: (String) -> Void
     let onReply: () -> Void
@@ -86,6 +87,7 @@ struct PulseConversationReplyView: View {
                 if let id = reply.author?.id, !id.isEmpty {
                     Button(authorName) { onOpenProfile(id) }
                         .pulseFont(.button)
+                        .frame(minHeight: 44)
                         .buttonStyle(.plain)
                         .foregroundStyle(Theme.Color.appText)
                         .accessibilityLabel("Open \(authorName)'s profile")
@@ -114,6 +116,7 @@ struct PulseConversationReplyView: View {
         PlanFlowLayout(spacing: Spacing.s3) {
             Button("Reply", action: onReply)
                 .frame(minHeight: 44)
+                .disabled(!canReply)
                 .accessibilityLabel("Reply to \(authorName)")
                 .accessibilityIdentifier("pulseReplyReply_\(reply.id)")
             if !isOwn, reply.canThank || reply.thankedByViewer {
