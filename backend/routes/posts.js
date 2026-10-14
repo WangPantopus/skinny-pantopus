@@ -608,14 +608,11 @@ async function canViewPersonaPostAudience(post, viewerId) {
     && requiredRank <= 2;
 }
 
-async function hasExternalShare(postId) {
-  const { data: share } = await supabaseAdmin
-    .from('PostShare')
-    .select('id')
-    .eq('post_id', postId)
-    .eq('share_type', 'external')
-    .maybeSingle();
-  return !!share;
+// A link opens outside the app only for a post its author made public and left sharing on.
+// Nobody else's Share tap widens who can read a post.
+function isPubliclyShareable(post) {
+  const isPublic = post.visibility === 'public' || post.audience === 'public';
+  return isPublic && post.allow_external_share !== false;
 }
 
 const canViewPost = async (post, userId) => {
@@ -639,10 +636,8 @@ const canViewPost = async (post, userId) => {
   }
 
   if (!userId) {
-    // Direct-link views from outside the app should only work for posts that
-    // are already public, or that a user explicitly shared externally.
-    if (post.visibility === 'public' || post.audience === 'public') return true;
-    return hasExternalShare(post.id);
+    // Direct-link views from outside the app only work for posts that are already public.
+    return isPubliclyShareable(post);
   }
 
   const targets = Array.isArray(post.distribution_targets) ? post.distribution_targets : [];
@@ -733,6 +728,7 @@ const POST_VISIBILITY_SELECT = [
   'target_tier_rank',
   'visibility',
   'audience',
+  'allow_external_share',
   'origin',
   'latitude',
   'longitude',
@@ -3194,6 +3190,15 @@ router.post('/:id/share', verifyToken, validate(sharePostSchema), async (req, re
     const { shareType = 'external' } = req.body || {};
     const post = await requireVisiblePost({ postId, userId, res, select: POST_REFS_SELECT });
     if (!post) return;
+
+    // Only a public post has a link that works outside the app. Reposting stays open to anyone who can
+    // see the post, but an external share never lets everyone else read it.
+    if (shareType === 'external' && !isPubliclyShareable(post)) {
+      return res.status(403).json({
+        error: "This post isn't public, so it can't be shared outside Pantopus.",
+        code: 'SHARE_NOT_ALLOWED',
+      });
+    }
 
     if (shareType === 'repost' && typeof req.body.reposted === 'boolean') {
       // The repost state the client wants: a repeated request changes nothing and notifies no one.
