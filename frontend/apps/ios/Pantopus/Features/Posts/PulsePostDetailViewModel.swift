@@ -616,11 +616,17 @@ public final class PulsePostDetailViewModel {
         }
     }
 
+    /// A reply this screen shows: not deleted or removed, and with words or a
+    /// file to show (a reply whose text was taken down arrives empty).
+    private static func isShown(_ comment: PostCommentDTO) -> Bool {
+        !comment.isDeleted && !(comment.comment.isEmpty && (comment.attachments ?? []).isEmpty)
+    }
+
     private func buildCommentRows(_ comments: [PostCommentDTO]) -> (rows: [PostCommentRow], hidden: Int) {
         // Group by parent → flatten with indentLevel capped at 1.
-        let topLevel = comments.filter { $0.parentCommentId == nil && !$0.isDeleted }
+        let topLevel = comments.filter { $0.parentCommentId == nil && Self.isShown($0) }
         let repliesByParent = Dictionary(
-            grouping: comments.filter { $0.parentCommentId != nil && !$0.isDeleted }
+            grouping: comments.filter { $0.parentCommentId != nil && Self.isShown($0) }
         ) { $0.parentCommentId ?? "" }
 
         var rows: [PostCommentRow] = []
