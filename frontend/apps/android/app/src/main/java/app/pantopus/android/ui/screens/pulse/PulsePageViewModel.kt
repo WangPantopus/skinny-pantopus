@@ -258,8 +258,7 @@ class PulsePageViewModel
             val q = _query.value
             val through = loaded.content.readAt ?: return
             // Seen is per view, so a filtered or other-area page must not acknowledge unread home conversations.
-            if (q.topic != null || q.areaId != null) return
-            if (_newCount.value > 0 || markingSeen?.isActive == true) return
+            if (q.topic != null || q.areaId != null || _newCount.value > 0 || markingSeen?.isActive == true) return
             if (!loaded.content.end.caughtUp || seenFor == loaded.content.readAt) return
             markingSeen =
                 viewModelScope.launch {
