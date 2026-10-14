@@ -63,7 +63,7 @@ struct PlanScreen: View {
             }
             if intent == .chat { openChat() }
         }
-        .refreshesOnPlansChange { await viewModel.load() }
+        .refreshesOnStoreChange(affects: { PlansStoreReads.affects($0) }, perform: { await viewModel.load() })
         .sheet(isPresented: $showsAsk) {
             if let card = viewModel.card {
                 PlanAskSheet(card: card, previous: askIsChange ? viewModel.askPrefill : nil) { body in
