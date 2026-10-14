@@ -324,8 +324,12 @@ object PlanFormat {
             start != null -> {
                 val zone = zone(pin.timezone)
                 val at = start.atZone(zone)
-                val relative = relativeDay(at.toLocalDate(), now.atZone(zone).toLocalDate())
-                parts += "${relative ?: at.format(dayLong)} ${at.format(clock)}"
+                val today = now.atZone(zone).toLocalDate()
+                // A week or more out names the date too ("Thursday, Oct 22 5:15 PM"), as the rows do.
+                val day =
+                    relativeDay(at.toLocalDate(), today)
+                        ?: at.format(if (ChronoUnit.DAYS.between(today, at.toLocalDate()) <= ONE_WEEK_DAYS) dayLong else dateLong)
+                parts += "$day ${at.format(clock)}"
             }
             else -> dayPart(pin.dayPart)?.let { parts += it }
         }
