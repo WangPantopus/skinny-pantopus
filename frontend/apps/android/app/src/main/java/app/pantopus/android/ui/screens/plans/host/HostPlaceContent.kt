@@ -70,36 +70,94 @@ internal fun PlacePickerStep(
     vm: HostFlowViewModel,
 ) {
     val kind = ui.draft.kind ?: PlanKind.PICKUP_GAME
-    val candidate = ui.placeCandidate
-    val query = ui.placesQuery.trim()
+    PublicPlacePicker(
+        state =
+            PlacePickerState(
+                kind = kind,
+                candidate = ui.placeCandidate,
+                query = ui.placesQuery,
+                places = ui.places,
+                loading = ui.placesLoading,
+                attribution = ui.placesAttribution,
+                origin = ui.origin,
+                error = ui.error,
+            ),
+        onClose = vm::closePlaces,
+        onUse = vm::usePlace,
+        onSearch = vm::searchPlaces,
+        onPick = vm::pickPlaceCandidate,
+        onHereNow = if (kind == PlanKind.PICKUP_GAME) vm::pickHereNow else null,
+        homeRow =
+            if (kind != PlanKind.PICKUP_GAME) {
+                { first ->
+                    HomeRow(kind = kind, home = ui.home, first = first) {
+                        vm.setAtHome(true)
+                        vm.closePlaces()
+                    }
+                }
+            } else {
+                null
+            },
+    )
+}
+
+/** What H6's list and map show: the host flow's, or H11's when a public plan moves. */
+internal data class PlacePickerState(
+    val kind: PlanKind,
+    val candidate: PickedPlace?,
+    val query: String,
+    val places: List<PlanNearbyPlaceDto>,
+    val loading: Boolean,
+    val attribution: String?,
+    val origin: Pair<Double, Double>?,
+    val error: String?,
+)
+
+/**
+ * H6's picker: search, a small map, the public places near you, then "Use …". [onHereNow] adds "You're here now"
+ * (pickup games); [homeRow] adds "My place" after the places (the host flow only).
+ */
+@Composable
+internal fun PublicPlacePicker(
+    state: PlacePickerState,
+    onClose: () -> Unit,
+    onUse: () -> Unit,
+    onSearch: (String) -> Unit,
+    onPick: (PickedPlace) -> Unit,
+    onHereNow: (() -> Unit)? = null,
+    homeRow: (@Composable (first: Boolean) -> Unit)? = null,
+) {
+    val kind = state.kind
+    val candidate = state.candidate
+    val query = state.query.trim()
     val places =
-        remember(ui.places, query) {
-            ui.places.filter { query.isEmpty() || it.name.orEmpty().contains(query, ignoreCase = true) }
+        remember(state.places, query) {
+            state.places.filter { query.isEmpty() || it.name.orEmpty().contains(query, ignoreCase = true) }
         }
     HostStepScaffold(
         title = "Where?",
         step = null,
         leadingClose = true,
-        onLeading = vm::closePlaces,
+        onLeading = onClose,
         trailingClose = true,
         footer = {
-            ui.error?.let { Text(text = it, style = PantopusTextStyle.small, color = PantopusColors.error) }
-            HostFooterButton(title = candidate?.let { "Use ${it.name}" } ?: "Choose a place", onClick = vm::usePlace)
+            state.error?.let { Text(text = it, style = PantopusTextStyle.small, color = PantopusColors.error) }
+            HostFooterButton(title = candidate?.let { "Use ${it.name}" } ?: "Choose a place", onClick = onUse)
         },
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.s4)) {
             PlanTextArea(
-                value = ui.placesQuery,
-                onValue = vm::searchPlaces,
+                value = state.query,
+                onValue = onSearch,
                 placeholder = "Search parks, courts, cafés",
                 label = "Search places",
                 singleLine = true,
             )
-            PickerMap(ui, kind)
+            PickerMap(origin = state.origin, picked = candidate, kind = kind)
             Column {
                 PlanOverline("Public places near you", modifier = Modifier.padding(bottom = 2.dp))
                 var first = true
-                if (kind == PlanKind.PICKUP_GAME) {
+                if (onHereNow != null) {
                     val here = candidate?.name == "Where I am now"
                     PlanRow(
                         title = "You're here now",
@@ -108,12 +166,12 @@ internal fun PlacePickerStep(
                         first = true,
                         leading = { PlanIconTile(PantopusIcon.Navigation, PantopusColors.primary100, PantopusColors.primary700) },
                         spoken = "You're here now${if (here) ", selected" else ""}",
-                        onClick = vm::pickHereNow,
+                        onClick = onHereNow,
                     )
                     first = false
                 }
                 when {
-                    ui.placesLoading && places.isEmpty() -> PlanRowsSkeleton(rows = 3)
+                    state.loading && places.isEmpty() -> PlanRowsSkeleton(rows = 3)
                     places.isEmpty() ->
                         Text(
                             text =
@@ -143,12 +201,12 @@ internal fun PlacePickerStep(
                                     }
                                 },
                                 spoken = "${picked.name}, ${placeRowCaption(picked)}${if (selected) ", selected" else ""}",
-                                onClick = { vm.pickPlaceCandidate(picked) },
+                                onClick = { onPick(picked) },
                             )
                             first = false
                         }
                 }
-                ui.placesAttribution?.takeIf { places.isNotEmpty() }?.let { credit ->
+                state.attribution?.takeIf { places.isNotEmpty() }?.let { credit ->
                     Text(
                         text = "Places $credit",
                         style = PantopusTextStyle.caption,
@@ -156,32 +214,7 @@ internal fun PlacePickerStep(
                         modifier = Modifier.padding(top = Spacing.s1, bottom = Spacing.s2),
                     )
                 }
-                if (kind != PlanKind.PICKUP_GAME) {
-                    val homeAllowed = kind != PlanKind.PLAYDATE && ui.home != null
-                    Box(modifier = Modifier.alpha(if (homeAllowed) 1f else 0.5f)) {
-                        PlanRow(
-                            title = if (kind == PlanKind.WALK_COFFEE) "My porch" else "My place",
-                            subtitle =
-                                when {
-                                    kind == PlanKind.PLAYDATE -> "Not for playdates: they meet in public places"
-                                    ui.home == null -> "Add your home to host there"
-                                    else -> "Only people you accept see the address"
-                                },
-                            end = PlanRowEnd.None,
-                            first = first,
-                            leading = { PlanIconTile(PantopusIcon.Home, PantopusColors.appSurfaceSunken, PantopusColors.appTextStrong) },
-                            onClick =
-                                if (homeAllowed) {
-                                    {
-                                        vm.setAtHome(true)
-                                        vm.closePlaces()
-                                    }
-                                } else {
-                                    null
-                                },
-                        )
-                    }
-                }
+                homeRow?.invoke(first)
             }
             Text(
                 text = "You can host within 3 miles of where you live or where you are now.",
@@ -189,6 +222,32 @@ internal fun PlacePickerStep(
                 color = PantopusColors.appTextSecondary,
             )
         }
+    }
+}
+
+/** "My place" / "My porch" under H6's places: only where hosting at home is allowed (never playdates). */
+@Composable
+private fun HomeRow(
+    kind: PlanKind,
+    home: HostHome?,
+    first: Boolean,
+    onUseHome: () -> Unit,
+) {
+    val homeAllowed = kind != PlanKind.PLAYDATE && home != null
+    Box(modifier = Modifier.alpha(if (homeAllowed) 1f else 0.5f)) {
+        PlanRow(
+            title = if (kind == PlanKind.WALK_COFFEE) "My porch" else "My place",
+            subtitle =
+                when {
+                    kind == PlanKind.PLAYDATE -> "Not for playdates: they meet in public places"
+                    home == null -> "Add your home to host there"
+                    else -> "Only people you accept see the address"
+                },
+            end = PlanRowEnd.None,
+            first = first,
+            leading = { PlanIconTile(PantopusIcon.Home, PantopusColors.appSurfaceSunken, PantopusColors.appTextStrong) },
+            onClick = if (homeAllowed) onUseHome else null,
+        )
     }
 }
 
@@ -220,11 +279,11 @@ private fun iconFor(category: String?): PantopusIcon {
 /** H6's small map: the place you picked, as a pin, near where you are. */
 @Composable
 private fun PickerMap(
-    ui: HostUi,
+    origin: Pair<Double, Double>?,
+    picked: PickedPlace?,
     kind: PlanKind,
 ) {
-    val origin = ui.origin ?: return
-    val picked = ui.placeCandidate
+    origin ?: return
     val center = picked?.let { LatLng(it.latitude, it.longitude) } ?: LatLng(origin.first, origin.second)
     val camera = rememberCameraPositionState { position = CameraPosition.fromLatLngZoom(center, 14.5f) }
     LaunchedEffect(center) { camera.position = CameraPosition.fromLatLngZoom(center, 14.5f) }

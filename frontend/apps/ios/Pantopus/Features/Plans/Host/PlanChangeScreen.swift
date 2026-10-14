@@ -143,10 +143,23 @@ struct PlanChangeScreen: View {
 
     /// Moving the start by more than 30 minutes, or the place, asks everyone who's in.
     private func asksStillComing(_ card: PlanCardDTO) -> Bool {
-        guard goingCount(card) > 0 else { return false }
-        if newPlace != nil { return true }
+        goingCount(card) > 0 && (newPlace != nil || timeMoved(card))
+    }
+
+    private func timeMoved(_ card: PlanCardDTO) -> Bool {
         guard let original = card.startsAtDate else { return false }
         return abs(original.timeIntervalSince(start)) > 30 * 60
+    }
+
+    /// The push the server sends, word for word (board H11; Android shows the same).
+    private func push(_ card: PlanCardDTO) -> (title: String, body: String) {
+        let calendar = PlanFormat.calendar(for: card.timezone)
+        let host = PlanCardLines.firstName(card.host.displayName)
+        let noun = card.kind.title.lowercased()
+        let now = "Now \(PlanFormat.dayPhrase(start, calendar: calendar)) at \(PlanFormat.time(start, calendar: calendar))"
+        if newPlace != nil, timeMoved(card) { return ("\(host) changed the \(noun)", "\(now), at a new place. Still coming?") }
+        if newPlace != nil { return ("\(host) changed the place", "It's at a new place now. Still coming?") }
+        return ("\(host) moved the \(noun)", "\(now). Still coming?")
     }
 
     private func warning(_ card: PlanCardDTO) -> some View {
@@ -162,18 +175,15 @@ struct PlanChangeScreen: View {
     }
 
     private func preview(_ card: PlanCardDTO) -> some View {
-        let calendar = PlanFormat.calendar(for: card.timezone)
-        let host = PlanCardLines.firstName(card.host.displayName)
+        let push = push(card)
         return VStack(alignment: .leading, spacing: Spacing.s2) {
             Text.planOverline("What they'll get")
             VStack(alignment: .leading, spacing: 3) {
                 Text("Pantopus · now").planFont(.footnote).foregroundStyle(Theme.Color.appTextSecondary)
-                Text("\(host) moved the \(card.kind.title.lowercased())").planFont(.smallStrong).foregroundStyle(Theme.Color.appText)
-                Text(
-                    "Now \(PlanFormat.dayPhrase(start, calendar: calendar)) at \(PlanFormat.time(start, calendar: calendar)). Still coming?"
-                )
-                .planFont(.small)
-                .foregroundStyle(Theme.Color.appText)
+                Text(push.title).planFont(.smallStrong).foregroundStyle(Theme.Color.appText)
+                Text(push.body)
+                    .planFont(.small)
+                    .foregroundStyle(Theme.Color.appText)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, Spacing.s3)
