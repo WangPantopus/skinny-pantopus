@@ -1,5 +1,6 @@
 package app.pantopus.android.data.upload
 
+import app.pantopus.android.data.api.models.ai.AIRadonReportResponse
 import app.pantopus.android.data.api.models.audience.PersonaMediaUploadResponse
 import app.pantopus.android.data.api.models.businesses.BusinessMediaUploadResponse
 import app.pantopus.android.data.api.models.chats.AIMediaUploadResponse
@@ -68,6 +69,18 @@ class UploadRepository
                         )
                     }
                 uploadApi.uploadAIMedia(parts)
+            }
+
+        /** One photo or PDF of a radon lab report, read for the Today radon sheet. Route `backend/routes/ai.js:281`. */
+        suspend fun readRadonReport(file: UploadFile): NetworkResult<AIRadonReportResponse> =
+            safeApiCall {
+                uploadApi.readRadonReport(
+                    MultipartBody.Part.createFormData(
+                        name = "file",
+                        filename = file.filename,
+                        body = file.bytes.toRequestBody(file.mimeType.toMediaTypeOrNull()),
+                    ),
+                )
             }
 
         /**

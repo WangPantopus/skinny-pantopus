@@ -1266,6 +1266,7 @@ public struct HubTabRoot: View {
             placeDashboard(homeId: homeId, isActive: path.isEmpty && rootTabs.selected == owningTab, isRoot: true)
                 // Another Home is another dashboard, with its own state.
                 .id(homeId)
+                .onAppear { Self.placeRootViewed("home") }
         case let .savedPlace(place):
             SavedPlaceRootView(
                 viewModel: SavedPlaceRootViewModel(place: place),
@@ -1277,6 +1278,7 @@ public struct HubTabRoot: View {
                 onLookUpAddress: { path.append(.savePlace) }
             )
             .id(place.id)
+            .onAppear { Self.placeRootViewed("saved_place") }
             .task { await refreshPlaceUnread() }
             .refreshesOnStoreChange { await refreshPlaceUnread() }
         case .firstRun:
@@ -1293,10 +1295,12 @@ public struct HubTabRoot: View {
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("place.firstRun")
             .toolbar(.hidden, for: .navigationBar)
+            .onAppear { Self.placeRootViewed("first_run") }
             .task { await refreshPlaceUnread() }
             .refreshesOnStoreChange { await refreshPlaceUnread() }
         case .homes:
             placeRootBar(destination(for: .myHomes) { path.append($0) })
+                .onAppear { Self.placeRootViewed("homes") }
         case .resolving:
             PlaceDashboardSkeleton()
                 .background(Theme.Color.appBg)
@@ -1308,6 +1312,13 @@ public struct HubTabRoot: View {
                 }
             )
         }
+    }
+
+    /// `screen.place.viewed` each time a settled root shows, as the Hub sent
+    /// `screen.hub.viewed`: first shown, back from a pushed screen or another
+    /// tab, or replaced by another Home. Not for the skeleton or the error.
+    private static func placeRootViewed(_ root: String) {
+        Analytics.track(.screenPlaceViewed(root: root))
     }
 
     /// The root depends on the home list and the saved places only. A
