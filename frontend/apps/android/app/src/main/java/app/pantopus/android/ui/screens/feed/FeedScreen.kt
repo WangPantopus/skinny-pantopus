@@ -127,6 +127,8 @@ fun FeedScreen(
      * there is nothing to show, and elsewhere.
      */
     quietStateCard: (@Composable () -> Unit)? = null,
+    /** Re-reads what the quiet-state card shows (the meter) when the Nearby posts are pulled to refresh or retried. */
+    onRefreshQuietStateCard: (() -> Unit)? = null,
     viewModel: PulseFeedViewModel = hiltViewModel(),
     contextBarViewModel: FeedContextBarViewModel = hiltViewModel(),
 ) {
@@ -178,6 +180,11 @@ fun FeedScreen(
     var viewMode by remember { mutableStateOf(FeedViewMode.List) }
     // The quiet-state card belongs to the Nearby posts, not the Connections surface.
     val topCard = quietStateCard?.takeIf { activeSurface == FeedSurface.Pulse }
+    // A pull or a retry on the Nearby posts reads the quiet-state card's meter again too, as the Nearby tab's pull did.
+    val refreshFeed = {
+        viewModel.refresh()
+        if (activeSurface == FeedSurface.Pulse) onRefreshQuietStateCard?.invoke()
+    }
     val emptyScroll = rememberScrollState()
 
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -386,7 +393,7 @@ fun FeedScreen(
                             },
                             onTapReaction = viewModel::tapReaction,
                             isRefreshing = isRefreshing,
-                            onRefresh = viewModel::refresh,
+                            onRefresh = refreshFeed,
                             isLoadingMore = isLoadingMore,
                             loadMoreError = loadMoreError,
                             onRetryLoadMore = viewModel::retryLoadMore,
@@ -401,7 +408,7 @@ fun FeedScreen(
                                 ),
                         )
                     is PulseFeedUiState.Error ->
-                        ErrorFrame(message = s.message, onRetry = { viewModel.refresh() })
+                        ErrorFrame(message = s.message, onRetry = refreshFeed)
                 }
             }
         }
@@ -1230,6 +1237,11 @@ private fun PopulatedFrame(
         }
         if (previous == null || firstRowId == null || previous == firstRowId) return@LaunchedEffect
         if (listState.firstVisibleItemIndex <= 1) listState.animateScrollToItem(0)
+    }
+    // The quiet-state card usually arrives after the posts and lands above the row the list is anchored to: show it
+    // when the person was at the top.
+    LaunchedEffect(header != null) {
+        if (header != null && listState.firstVisibleItemIndex <= 1) listState.scrollToItem(0)
     }
     Box(modifier = Modifier.fillMaxSize().pullRefresh(pullState)) {
         if (state.rows.isEmpty() && searchActive) {

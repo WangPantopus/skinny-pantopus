@@ -317,6 +317,7 @@ import app.pantopus.android.ui.screens.membership.MembershipDetailScreen
 import app.pantopus.android.ui.screens.my_bids.MyBidsScreen
 import app.pantopus.android.ui.screens.my_posts.MyPostsScreen
 import app.pantopus.android.ui.screens.my_tasks.MyTasksScreen
+import app.pantopus.android.ui.screens.nearby.NearbyViewModel
 import app.pantopus.android.ui.screens.nearby.pulseQuietStateCard
 import app.pantopus.android.ui.screens.notifications.NotificationsScreen
 import app.pantopus.android.ui.screens.offers.OffersScreen
@@ -2814,7 +2815,12 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 composable(PantopusRoute.Pulse.path) {
                     // Nearby's other content lives here now: the neighborhood meter or "Set up a home" as one
                     // quiet-state card, and Connections (Beacons too, while that launch cut is off) in the top menu.
-                    val quietStateCard = pulseQuietStateCard(onClaim = { navController.navigate(ChildRoutes.ADD_HOME) })
+                    val quietMeter: NearbyViewModel = hiltViewModel()
+                    val quietStateCard =
+                        pulseQuietStateCard(
+                            onClaim = { navController.navigate(ChildRoutes.ADD_HOME) },
+                            viewModel = quietMeter,
+                        )
                     FeedScreen(
                         onOpenPost = { postId -> navController.navigate(ChildRoutes.pulsePost(postId)) },
                         onCompose = { intent -> navController.navigate(ChildRoutes.composePost(intent.key)) },
@@ -2830,6 +2836,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 onOpenBeacons = { navController.navigate(ChildRoutes.BEACONS_FEED) }.takeIf { LaunchFeatures.beacon },
                             ),
                         quietStateCard = quietStateCard,
+                        onRefreshQuietStateCard = quietMeter::refresh,
                     )
                 }
                 composable(PantopusRoute.Tasks.path) {
