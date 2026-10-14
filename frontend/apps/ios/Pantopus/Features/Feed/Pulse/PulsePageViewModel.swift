@@ -166,6 +166,11 @@ public final class PulsePageViewModel {
             guard generation == readGeneration else { return }
             if clearRefusedPage(error) { return }
             if case .loaded = state {
+                // Forced reads rethrow after the store marks its copy stale.
+                // Reflect that notice as well as the transient error toast.
+                if let copy = store.peek(endpoint(), as: PulseFeedResponse.self) {
+                    apply(copy, readStartedAt: startedAt, mutationRevision: revision)
+                }
                 if force { toastMessage = "Couldn't refresh Pulse." }
             } else {
                 let message = (error as? APIError)?.errorDescription
@@ -179,7 +184,7 @@ public final class PulsePageViewModel {
         lastResponse = snapshot.value
         lastReadAt = snapshot.fetchedAt
         staleSince = snapshot.refreshFailed ? snapshot.fetchedAt : nil
-        refreshNotice = snapshot.refreshNotice
+        refreshNotice = snapshot.refreshNotice(afterEveryFailure: true)
         if snapshot.isFresh, newRead {
             // A fresh read shows what the pill was counting, and the server's
             // own state of every tap that has landed.

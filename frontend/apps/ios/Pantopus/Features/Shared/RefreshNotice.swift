@@ -39,7 +39,12 @@ extension ScreenSnapshot {
     /// "Couldn't refresh. Showing 3:42 PM." when the copy is past its max
     /// shown age and the last refresh failed; nil otherwise.
     var refreshNotice: String? {
-        guard showsRefreshFailureLine else { return nil }
+        refreshNotice(afterEveryFailure: false)
+    }
+
+    /// Pulse names a failed refresh immediately, even for a recent copy.
+    func refreshNotice(afterEveryFailure: Bool) -> String? {
+        guard refreshFailed, afterEveryFailure || isPastMaxShownAge else { return nil }
         let shown = Calendar.current.isDateInToday(fetchedAt)
             ? fetchedAt.formatted(date: .omitted, time: .shortened)
             : fetchedAt.formatted(.dateTime.month(.abbreviated).day().hour().minute())
