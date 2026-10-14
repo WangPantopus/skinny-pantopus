@@ -174,6 +174,8 @@ Private note to a home (signed): `POST /api/pulse/notes` `{ "toHomeId"? | "toPos
 
 `GET /api/pulse/areas/mine` → `{ "town": {...}|null, "neighborhood": {...}|null, "street": {...}|null, "home_verified": true }` (only areas that are open) · `GET /api/pulse/areas/search?q=` → towns for "another place" · `POST /api/pulse/adult-attestation` → `{ "attested_at" }`.
 
+`POST /api/pulse/adult-attestation` (in force since S5's first PR): no body; stores `User.adult_attested_at` once and returns it, the first time again on every later call (a double tap answers the same); `403 AGE_NOT_ELIGIBLE` when the date of birth on file says the person is under 18.
+
 ### 2.11 Safety (PS, S11)
 
 `GET /api/pulse/notices` → the author's own held and removed items `{ id, target_type, target_id, state, rule_code, reason_text, created_at, can_appeal }` · `POST /api/pulse/appeals` `{ "noticeId", "message" }` → `{ "appeal": {...} }`. The moderator console uses the existing `backend/routes/adminReports.js` and web `app/admin/reports`, extended.
@@ -251,6 +253,7 @@ author → yes · `moderation_state` `removed` → the author only; `held` → t
 |---|---|---|
 | 403 | `SHARE_NOT_ALLOWED` | An external share of a post that is not public (PR 2252, once merged) |
 | 403 | `ADULT_ATTESTATION_REQUIRED` | First Pulse post or reply without the attestation |
+| 403 | `AGE_NOT_ELIGIBLE` | `POST /api/pulse/adult-attestation` when the date of birth on file is under 18 |
 | 403 | `NEEDS_VERIFIED_ADDRESS` | Street or neighborhood post or read without a verified home in that area |
 | 403 | `AUDIENCE_NOT_ALLOWED` | The chosen `readScope` or `areaId` isn't one the author may use |
 | 403 | `BUSINESS_CANNOT_POST` | A business identity posting to the Place feed: `POST /api/posts` with `postAs: 'business'` (or a `businessId`) and a local audience or the `place` target, and every `POST /api/businesses/:businessId/posts` (in force since S1) |
