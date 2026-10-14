@@ -153,7 +153,7 @@ internal fun PublicPlacePicker(
             )
             PickerMap(origin = state.origin, picked = candidate, kind = kind)
             Column {
-                PlanOverline("Public places near you", modifier = Modifier.padding(bottom = 2.dp))
+                PlanOverline(if (query.length >= 2) "Results" else "Public places near you", modifier = Modifier.padding(bottom = 2.dp))
                 var first = true
                 if (onHereNow != null) {
                     val here = candidate?.name == "Where I am now"
@@ -444,7 +444,8 @@ private fun NeighborsCard(
             kind == PlanKind.PLAYDATE -> PlanFormat.dayPartPhrase(start.atZone(ui.zone))
             else -> PlanFormat.whenLine(start.atZone(ui.zone), end?.atZone(ui.zone))
         }
-    val near = ui.home?.city?.let { "Near $it" } ?: "Your area"
+    // The place's city once looked up (as on iOS); a plan at home can use the home's city meanwhile.
+    val near = ui.previewArea ?: ui.home?.city?.takeIf { draft.atHome }?.let { "Near $it" }
     val point = previewPoint(ui)
     Column(modifier = Modifier.fillMaxWidth().planCard()) {
         Box(modifier = Modifier.fillMaxWidth().height(120.dp).background(PantopusColors.appSurfaceSunken)) {
@@ -461,7 +462,7 @@ private fun NeighborsCard(
             PlanTypeTag(kind)
             Text(text = draft.title.ifBlank { kind.label }, style = planH3, color = PantopusColors.appText)
             Text(
-                text = listOf(whenText, near).filter(String::isNotBlank).joinToString(" · "),
+                text = listOfNotNull(whenText, near).filter(String::isNotBlank).joinToString(" · "),
                 style = PantopusTextStyle.small,
                 color = PantopusColors.appTextSecondary,
             )

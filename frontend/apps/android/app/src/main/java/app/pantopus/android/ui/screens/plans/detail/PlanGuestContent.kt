@@ -77,15 +77,13 @@ internal fun whereLine(plan: PlanDto): String {
     return listOfNotNull(plan.area?.label, PlanFormat.distance(plan.distanceBand), at).joinToString(" · ")
 }
 
-/** "Casual · extra paddles", "Easy pace · dogs welcome", the game: the per-type facts, or null. */
+/** "Casual · extra paddles", "Easy pace · dogs welcome" (board J6, as on iOS): the per-type facts, or null. */
 internal fun detailsLine(plan: PlanDto): String? {
     val d = plan.details ?: return null
     val parts =
         when (plan.planKind) {
-            PlanKind.WATCH_PARTY -> listOfNotNull(d.game?.label)
             PlanKind.PICKUP_GAME ->
                 listOfNotNull(
-                    d.sport?.replaceFirstChar { it.titlecase() },
                     when (d.level) {
                         "casual" -> "Casual"
                         "competitive" -> "Competitive"
@@ -96,13 +94,6 @@ internal fun detailsLine(plan: PlanDto): String? {
                 )
             PlanKind.WALK_COFFEE ->
                 listOfNotNull(
-                    when (d.walkKind) {
-                        "dog_walk" -> "Dog walk"
-                        "stroller_walk" -> "Stroller walk"
-                        "coffee" -> "Coffee"
-                        "walk" -> "Walk"
-                        else -> null
-                    },
                     when (d.pace) {
                         "easy" -> "Easy pace"
                         "brisk" -> "Brisk pace"
@@ -130,6 +121,21 @@ internal fun PlanHeading(plan: PlanDto) {
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
         plan.planKind?.let { PlanTypeTag(it) }
         Text(text = plan.title, style = planH2, color = PantopusColors.appText, modifier = Modifier.semantics { heading() })
+    }
+}
+
+/** The heading, then when and where (and the kids' ages for a playdate), as iOS's title block. */
+@Composable
+internal fun PlanTitleBlock(plan: PlanDto) {
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+        PlanHeading(plan)
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.s1)) {
+            PlanInfoLine(PantopusIcon.Calendar, PlanFormat.whenLine(plan, long = true))
+            PlanInfoLine(PantopusIcon.MapPin, whereLine(plan))
+            if (plan.isPlaydate) {
+                KidsAgeBand.rangeLabel(plan.details?.kidsAgeBands)?.let { PlanInfoLine(PantopusIcon.AdultChild, "Kids $it") }
+            }
+        }
     }
 }
 
@@ -179,16 +185,7 @@ internal fun PlanSpots(
 /** J1 and J2: a plan before you're in. */
 @Composable
 internal fun ColumnScope.PlanBeforeInBody(plan: PlanDto) {
-    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-        PlanHeading(plan)
-        Column(verticalArrangement = Arrangement.spacedBy(Spacing.s1)) {
-            PlanInfoLine(PantopusIcon.Calendar, PlanFormat.whenLine(plan, long = true))
-            PlanInfoLine(PantopusIcon.MapPin, whereLine(plan))
-            if (plan.isPlaydate) {
-                KidsAgeBand.rangeLabel(plan.details?.kidsAgeBands)?.let { PlanInfoLine(PantopusIcon.AdultChild, "Kids $it") }
-            }
-        }
-    }
+    PlanTitleBlock(plan)
     PlanHostCard(plan)
     PlanSpots(plan, note = if (plan.isPlaydate) null else "Names show once you're in")
     plan.about?.takeIf(String::isNotBlank)?.let { Text(text = it, style = PantopusTextStyle.body, color = PantopusColors.appText) }
@@ -236,54 +233,67 @@ internal fun askFooter(plan: PlanDto): AskFooter {
                 caption =
                     when {
                         !plan.hostApproves -> "You're in as soon as you ask, until the spots fill."
-                        // J2: a playdate's body has no "approves" line, so the footer says it.
-                        plan.isPlaydate -> approves ?: "$host approves each family"
+                        // J2: a playdate's body has no "approves" line, so the footer says it (the board's words, as iOS).
+                        plan.isPlaydate -> "$host approves each family"
                         else -> approves
                     },
                 action = AskAction.Ask,
             )
-        else ->
-            when (viewer?.cannotAskReason) {
-                PlanCannotAsk.NEEDS_VERIFIED_ADDRESS ->
-                    AskFooter(
-                        "Verify your address to join",
-                        enabled = true,
-                        caption = "This plan is for verified neighbors.",
-                        action = AskAction.Verify,
-                    )
-                PlanCannotAsk.NEEDS_LOCATION ->
-                    AskFooter(
-                        "Share your location to join",
-                        enabled = true,
-                        caption = "Hosts only see a distance like “about 1 mi”.",
-                        action = AskAction.Location,
-                    )
-                PlanCannotAsk.TOO_FAR ->
-                    AskFooter(
-                        "Too far to join",
-                        enabled = false,
-                        caption = "This plan is for neighbors who live or are close by.",
-                        action = AskAction.None,
-                    )
-                PlanCannotAsk.FULL_USE_WAITLIST ->
-                    AskFooter(
-                        "Join the waitlist",
-                        enabled = true,
-                        caption = "Full for now. If a spot opens, we'll tell you right away.",
-                        action = AskAction.Ask,
-                    )
-                PlanCannotAsk.TOO_MANY_REQUESTS ->
-                    AskFooter(
-                        "Ask to join",
-                        enabled = false,
-                        caption = "You have 10 open requests. Withdraw one to ask here.",
-                        action = AskAction.None,
-                    )
-                PlanCannotAsk.ENDED -> AskFooter("Asking has closed", enabled = false, caption = null, action = AskAction.None)
-                else -> AskFooter("Ask to join", enabled = false, caption = null, action = AskAction.None)
-            }
+        else -> cannotAskFooter(viewer?.cannotAskReason)
     }
 }
+
+/** The J1 footer when the server says the viewer can't ask, and why. */
+private fun cannotAskFooter(reason: String?): AskFooter =
+    when (reason) {
+        PlanCannotAsk.NEEDS_VERIFIED_ADDRESS ->
+            AskFooter(
+                "Verify your address to join",
+                enabled = true,
+                caption = "This plan is for verified neighbors.",
+                action = AskAction.Verify,
+            )
+        PlanCannotAsk.NEEDS_LOCATION ->
+            AskFooter(
+                "Share your location to join",
+                enabled = true,
+                caption = "Hosts only see a distance like “about 1 mi”.",
+                action = AskAction.Location,
+            )
+        PlanCannotAsk.TOO_FAR ->
+            AskFooter(
+                "Too far to join",
+                enabled = false,
+                caption = "This plan is for neighbors who live or are close by.",
+                action = AskAction.None,
+            )
+        PlanCannotAsk.FULL_USE_WAITLIST ->
+            AskFooter(
+                "Join the waitlist",
+                enabled = true,
+                caption = "Full for now. If a spot opens, we'll tell you right away.",
+                action = AskAction.Ask,
+            )
+        PlanCannotAsk.TOO_MANY_REQUESTS ->
+            AskFooter(
+                "Ask to join",
+                enabled = false,
+                caption = "You have 10 open requests. Withdraw one to ask here.",
+                action = AskAction.None,
+            )
+        PlanCannotAsk.ENDED -> AskFooter("Asking has closed", enabled = false, caption = null, action = AskAction.None)
+        // Why, under the greyed-out button (as on iOS).
+        PlanCannotAsk.DECLINED, PlanCannotAsk.REMOVED ->
+            AskFooter("Ask to join", enabled = false, caption = "This one didn't work out.", action = AskAction.None)
+        PlanCannotAsk.BLOCKED -> AskFooter("Ask to join", enabled = false, caption = "You can't join this plan.", action = AskAction.None)
+        else ->
+            AskFooter(
+                "Ask to join",
+                enabled = false,
+                caption = "You can't ask to join this plan right now.",
+                action = AskAction.None,
+            )
+    }
 
 /** J5: requested. */
 @Composable
@@ -368,8 +378,11 @@ internal fun ColumnScope.PlanWaitlistBody(plan: PlanDto) {
     )
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
         PlanHeading(plan)
+        // "Sunday, Oct 18 · 5:30–7:30 PM · …", the long date as J5 and iOS write it.
         Text(
-            text = listOfNotNull(PlanFormat.whenLine(plan), plan.area?.label, PlanFormat.distance(plan.distanceBand)).joinToString(" · "),
+            text =
+                listOfNotNull(PlanFormat.whenLine(plan, long = true), plan.area?.label, PlanFormat.distance(plan.distanceBand))
+                    .joinToString(" · "),
             style = PantopusTextStyle.small,
             color = PantopusColors.appTextStrong,
         )
@@ -431,10 +444,8 @@ internal fun PlanNotThisTime(
             }
         }
         GhostButton(title = "See all plans", onClick = onSeeAll, modifier = Modifier.height(50.dp))
-        val kind = plan.planKind
-        if (kind != null && kind != PlanKind.PLAYDATE) {
-            PlanTextButton(title = "Host your own ${kind.noun}", onClick = { onHost(kind.wire) })
-        }
+        // A playdate too (as on iOS): whoever saw one has the verified address hosting it needs.
+        plan.planKind?.let { kind -> PlanTextButton(title = "Host your own ${kind.noun}", onClick = { onHost(kind.wire) }) }
     }
 }
 
@@ -500,27 +511,24 @@ private fun CheckLine(text: String) {
 
 /** A cancelled or ended plan, for anyone but its host. */
 @Composable
-internal fun ColumnScope.PlanClosedBody(plan: PlanDto) {
+internal fun ColumnScope.PlanClosedBody(
+    plan: PlanDto,
+    onOpenChat: (() -> Unit)?,
+) {
     val cancelled = plan.planState == PlanState.CANCELLED
     PlanBanner(
         title = if (cancelled) "This plan was cancelled" else "This plan has ended",
-        subtitle = if (cancelled) "${plan.hostFirst} cancelled it. Everyone who was in was told." else null,
+        subtitle = if (cancelled) cancelledBy(plan.hostFirst, plan.cancelNote) else null,
         icon = if (cancelled) PantopusIcon.XCircle else PantopusIcon.CheckCircle,
         tone = PlanBannerTone.Neutral,
     )
-    plan.cancelNote?.takeIf { cancelled && it.isNotBlank() }?.let { note ->
-        Column(
-            modifier = Modifier.fillMaxWidth().planCard().padding(14.dp).semantics(mergeDescendants = true) {},
-            verticalArrangement = Arrangement.spacedBy(Spacing.s1),
-        ) {
-            PlanOverline("From ${plan.hostFirst}")
-            Text(
-                text = "“$note”",
-                style = PantopusTextStyle.body.copy(fontStyle = FontStyle.Italic),
-                color = PantopusColors.appText,
-            )
-        }
-    }
-    PlanHeading(plan)
-    Text(text = PlanFormat.whenLine(plan, long = true), style = PantopusTextStyle.small, color = PantopusColors.appTextStrong)
+    PlanTitleBlock(plan)
+    // The chat stays to read for people who were in (the server sends its room only to them), as on iOS.
+    onOpenChat?.let { GhostButton(title = "Read the group chat", onClick = it) }
 }
+
+/** "Sam cancelled it: “Sorry, the courts are closed tonight.”", or "Sam cancelled it." with no note (as on iOS). */
+internal fun cancelledBy(
+    who: String,
+    note: String?,
+): String = note?.trim()?.takeIf(String::isNotEmpty)?.let { "$who cancelled it: “$it”" } ?: "$who cancelled it."

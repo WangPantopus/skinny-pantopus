@@ -611,7 +611,7 @@ fun PlanTextButton(
     }
 }
 
-/** The stacked button (board "btn stack"): glyph over a short label, 64 dp tall. */
+/** The stacked button (board "btn stack"): glyph over a short label, 64 dp tall; [spoken] is what TalkBack reads. */
 @Composable
 fun PlanStackButton(
     title: String,
@@ -619,6 +619,7 @@ fun PlanStackButton(
     modifier: Modifier = Modifier,
     icon: PantopusIcon? = null,
     leading: (@Composable () -> Unit)? = null,
+    spoken: String = title,
 ) {
     Column(
         modifier =
@@ -629,7 +630,7 @@ fun PlanStackButton(
                 .clickable(role = Role.Button, onClick = onClick)
                 .padding(horizontal = Spacing.s1, vertical = Spacing.s2)
                 .clearAndSetSemantics {
-                    contentDescription = title
+                    contentDescription = spoken
                     role = Role.Button
                 },
         horizontalAlignment = Alignment.CenterHorizontally,

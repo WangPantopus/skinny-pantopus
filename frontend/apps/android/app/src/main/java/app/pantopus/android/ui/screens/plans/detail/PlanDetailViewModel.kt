@@ -67,7 +67,8 @@ data class AskDraft(
     val note: String = "",
     val kidsCount: Int = 1,
     val ageBands: Set<String> = emptySet(),
-    val staysWithKids: Boolean = true,
+    /** "I'll stay with my kids": the parent ticks it for a new ask (as on iOS); an edited ask kept it. */
+    val staysWithKids: Boolean = false,
     val sending: Boolean = false,
     val error: String? = null,
 )
@@ -248,6 +249,7 @@ class PlanDetailViewModel
                             note = mine?.note.orEmpty(),
                             kidsCount = mine?.kidsCount ?: 1,
                             ageBands = mine?.kidsAgeBands.orEmpty().toSet(),
+                            staysWithKids = mine != null && plan.kind == PlanKind.PLAYDATE.wire,
                         ),
                 )
             }
@@ -297,11 +299,9 @@ class PlanDetailViewModel
             }
         }
 
+        /** The server's own sentence for a refused ask, as iOS shows it; the 10-request limit says what to do. */
         private fun askError(error: NetworkError): String =
             when (error.planCode) {
-                "needs_verified_address" -> "This plan is for neighbors with a verified address."
-                "too_far" -> "This plan is too far from your home or where you are now."
-                "needs_location" -> "Share your location or add your home to ask."
                 "too_many_requests" -> "You have 10 open requests. Withdraw one to ask here."
                 "full" -> "It just filled up. You can join the waitlist."
                 else -> error.planMessage

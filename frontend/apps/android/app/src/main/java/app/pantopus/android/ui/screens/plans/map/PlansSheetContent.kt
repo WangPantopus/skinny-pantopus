@@ -149,22 +149,24 @@ internal fun rowSpoken(
     return listOfNotNull(plan.planKind?.label, plan.title, PlanFormat.rowSubtitle(plan), endWords).joinToString(", ")
 }
 
-/** One plan as a row of the list. */
+/** One plan as a row of the list; at the sheet's lowest stop ([peek], board F1) a chevron ends it, as on iOS. */
 @Composable
 internal fun PlanListRow(
     plan: PlanDto,
     first: Boolean,
     mine: Boolean,
     onOpen: (PlanDto) -> Unit,
+    peek: Boolean = false,
 ) {
-    val end = rowEnd(plan, mine)
+    val status = rowEnd(plan, mine)
     PlanRow(
         title = plan.title,
         subtitle = PlanFormat.rowSubtitle(plan),
-        end = end,
+        end = if (peek) PlanRowEnd.Chevron else status,
         first = first,
         leading = { PlanKindLeading(plan.planKind) },
-        spoken = rowSpoken(plan, end),
+        // TalkBack still hears the status or spots a peek row doesn't show (as VoiceOver does on iOS).
+        spoken = rowSpoken(plan, status),
         onClick = { onOpen(plan) },
     )
 }
@@ -175,6 +177,7 @@ internal fun ColumnScope.PlansPeekContent(
     state: PlansMapUiState,
     onSeeAll: () -> Unit,
     onOpen: (PlanDto) -> Unit,
+    onRetry: () -> Unit,
 ) {
     val all = state.mineShown + state.others
     Row(
@@ -187,7 +190,8 @@ internal fun ColumnScope.PlansPeekContent(
             color = PantopusColors.appText,
             modifier = Modifier.weight(1f).semantics { heading() },
         )
-        if (all.isNotEmpty()) {
+        // Only when the list holds more than the rows below (as on iOS).
+        if (all.size > PEEK_ROWS) {
             Text(
                 text = "See all ${all.size}",
                 style = PantopusTextStyle.small.copy(fontWeight = FontWeight.SemiBold),
@@ -202,7 +206,7 @@ internal fun ColumnScope.PlansPeekContent(
     }
     when (state.listStatus) {
         PlansListStatus.Loading -> PlanRowsSkeleton(rows = 2)
-        is PlansListStatus.Failed -> PlansFailed(state.listStatus.message, onRetry = null)
+        is PlansListStatus.Failed -> PlansFailed(state.listStatus.message, onRetry = onRetry)
         PlansListStatus.Loaded ->
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 if (all.isEmpty()) {
@@ -214,7 +218,7 @@ internal fun ColumnScope.PlansPeekContent(
                     )
                 }
                 all.take(PEEK_ROWS).forEachIndexed { index, plan ->
-                    PlanListRow(plan, first = index == 0, mine = plan in state.mineShown, onOpen = onOpen)
+                    PlanListRow(plan, first = index == 0, mine = plan in state.mineShown, onOpen = onOpen, peek = true)
                 }
             }
     }
@@ -253,6 +257,17 @@ internal fun PlansListContent(
             item(key = "title-$title") { SectionTitle(title, top = 14.dp) }
             items(plans, key = { "row-${it.id}" }) { plan ->
                 PlanListRow(plan, first = plan == plans.first(), mine = false, onOpen = onOpen)
+            }
+        }
+        // Only your own plans nearby (as on iOS): say so instead of ending the list in silence.
+        if (sections.isEmpty() && state.listStatus == PlansListStatus.Loaded) {
+            item(key = "no-others") {
+                Text(
+                    text = "No other ${state.kind?.label?.lowercase() ?: "plans"} near you yet.",
+                    style = PantopusTextStyle.small,
+                    color = PantopusColors.appTextSecondary,
+                    modifier = Modifier.padding(vertical = Spacing.s3),
+                )
             }
         }
         item(key = "more") {
@@ -417,24 +432,7 @@ internal fun PlanCardContent(
         Row(verticalAlignment = Alignment.CenterVertically) {
             PlanTypeTag(kind)
             Spacer(modifier = Modifier.weight(1f))
-            Box(
-                modifier =
-                    Modifier
-                        .size(44.dp)
-                        .clickable(role = Role.Button, onClick = onClose)
-                        .clearAndSetSemantics {
-                            contentDescription = "Close"
-                            role = Role.Button
-                        },
-                contentAlignment = Alignment.Center,
-            ) {
-                Box(
-                    modifier = Modifier.size(36.dp).clip(CircleShape).background(PantopusColors.appSurfaceSunken),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    PantopusIconImage(icon = PantopusIcon.X, contentDescription = null, size = 16.dp, tint = PantopusColors.appText)
-                }
-            }
+            CardCloseButton(onClose)
         }
         Text(
             text = plan.title,
@@ -454,14 +452,61 @@ internal fun PlanCardContent(
         }
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             val (going, left) = PlanFormat.goingLine(plan)
-            PlanSpotsCaption(going = going, left = left, note = PlanFormat.howPeopleGetIn(plan))
+            // Someone already in (or hosting) doesn't need to hear how to get in (as on iOS).
+            val inAlready = plan.standing == PlanViewerStanding.HOSTING || plan.standing == PlanViewerStanding.IN
+            PlanSpotsCaption(going = going, left = left, note = if (inAlready) null else PlanFormat.howPeopleGetIn(plan))
             PlanSpotsMeter(spots = plan.spots, taken = plan.spots - plan.spotsLeft)
         }
+        val main = mainAction(plan)
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 2.dp)) {
             GhostButton(title = "Details", onClick = onDetails, modifier = Modifier.weight(1f))
-            PrimaryButton(title = primaryLabel(plan), onClick = onPrimary, modifier = Modifier.weight(1f))
+            when {
+                main == null -> Unit
+                main.isPrimary -> PrimaryButton(title = main.title, onClick = onPrimary, modifier = Modifier.weight(1f))
+                else -> GhostButton(title = main.title, onClick = onPrimary, modifier = Modifier.weight(1f))
+            }
         }
         Spacer(modifier = Modifier.height(Spacing.s2))
+    }
+}
+
+/** A tapped pin whose plan can't be loaded (as on iOS): it may have ended or been cancelled. */
+@Composable
+internal fun PlanCardUnavailable(onClose: () -> Unit) {
+    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "This plan isn't available",
+                style = planH4,
+                color = PantopusColors.appText,
+                modifier = Modifier.weight(1f).semantics { heading() },
+            )
+            CardCloseButton(onClose)
+        }
+        Text(text = "It may have ended or been cancelled.", style = PantopusTextStyle.small, color = PantopusColors.appTextSecondary)
+    }
+}
+
+/** The card's close button: a 36 dp circle in a 44 dp target. */
+@Composable
+private fun CardCloseButton(onClose: () -> Unit) {
+    Box(
+        modifier =
+            Modifier
+                .size(44.dp)
+                .clickable(role = Role.Button, onClick = onClose)
+                .clearAndSetSemantics {
+                    contentDescription = "Close"
+                    role = Role.Button
+                },
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier.size(36.dp).clip(CircleShape).background(PantopusColors.appSurfaceSunken),
+            contentAlignment = Alignment.Center,
+        ) {
+            PantopusIconImage(icon = PantopusIcon.X, contentDescription = null, size = 16.dp, tint = PantopusColors.appText)
+        }
     }
 }
 
@@ -490,20 +535,35 @@ internal fun hostCaption(plan: PlanDto): String {
     return parts.joinToString(" · ")
 }
 
-/** The card's main button, by where the viewer stands. */
-internal fun primaryLabel(plan: PlanDto): String =
-    when (plan.standing) {
-        PlanViewerStanding.HOSTING -> "Your plan"
-        PlanViewerStanding.IN -> "You're in"
-        PlanViewerStanding.REQUESTED -> "Requested"
-        PlanViewerStanding.WAITLISTED -> "On the waitlist"
+/** The card's one main action next to "Details" (as on iOS). */
+internal data class PlanMainAction(
+    val title: String,
+    val isPrimary: Boolean,
+    /** Opens "Ask to join" (J3) rather than the plan. */
+    val asks: Boolean = false,
+)
+
+/**
+ * By where the viewer stands: "Your plan", "You're in", "Requested", "On the waitlist", "Ask to join" or "Join the
+ * waitlist"; none when they can't ask (too far, not verified, declined, ended), so "Details" alone explains why.
+ */
+internal fun mainAction(plan: PlanDto): PlanMainAction? {
+    val viewer = plan.viewer
+    return when (plan.standing) {
+        PlanViewerStanding.HOSTING -> PlanMainAction("Your plan", isPrimary = true)
+        PlanViewerStanding.IN -> PlanMainAction("You're in", isPrimary = true)
+        PlanViewerStanding.REQUESTED -> PlanMainAction("Requested", isPrimary = false)
+        PlanViewerStanding.WAITLISTED -> PlanMainAction("On the waitlist", isPrimary = false)
         else ->
             when {
-                plan.planState == PlanState.ENDED || plan.planState == PlanState.CANCELLED -> "Details"
-                plan.isFull || plan.viewer?.cannotAskReason == "full_use_waitlist" -> "Join the waitlist"
-                else -> "Ask to join"
+                plan.planState == PlanState.ENDED || plan.planState == PlanState.CANCELLED -> null
+                viewer == null -> PlanMainAction("Ask to join", isPrimary = true, asks = true)
+                viewer.canAsk -> PlanMainAction(if (plan.isFull) "Join the waitlist" else "Ask to join", isPrimary = true, asks = true)
+                viewer.cannotAskReason == "full_use_waitlist" -> PlanMainAction("Join the waitlist", isPrimary = true, asks = true)
+                else -> null
             }
     }
+}
 
 /** What "Invite a neighbor" shares (board F4, the same words as iOS). */
 const val PLANS_INVITE_MESSAGE = "I'm on Pantopus to make small plans with neighbors. Join me. https://pantopus.com/start"
@@ -545,6 +605,7 @@ internal fun PlansEmptyContent(
                     onClick = { onHost(kind, null) },
                     modifier = Modifier.weight(1f),
                     leading = { PlanSwatch(kind) },
+                    spoken = "Host a ${kind.noun}",
                 )
             }
         }
@@ -623,12 +684,14 @@ internal fun gameLine(game: PlanGameDto): String {
     return "${game.label} play $day at ${start.format(DateTimeFormatter.ofPattern("h:mm", Locale.US))}"
 }
 
-/** No location yet (board F5). */
+/** No location yet (board F5); after a refusal it says location is off, with Settings when there's no home (as on iOS). */
 @Composable
 internal fun PlansNoLocationContent(
     canUseHome: Boolean,
+    locationOff: Boolean,
     onUseLocation: () -> Unit,
     onUseHome: () -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(top = Spacing.s1),
@@ -651,9 +714,22 @@ internal fun PlansNoLocationContent(
             )
         }
         PlanScopeLine("Hosts and guests never see where you are. They see a distance like “about 1 mi”.")
+        if (locationOff) {
+            Text(
+                text =
+                    if (canUseHome) {
+                        "Location is off for Pantopus. You can use your home instead."
+                    } else {
+                        "Location is off for Pantopus. You can turn it on in Settings."
+                    },
+                style = PantopusTextStyle.small,
+                color = PantopusColors.warning,
+            )
+        }
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2), modifier = Modifier.padding(top = Spacing.s1)) {
             PrimaryButton(title = "Use my location", onClick = onUseLocation, modifier = Modifier.height(50.dp))
             if (canUseHome) GhostButton(title = "Use my home instead", onClick = onUseHome, modifier = Modifier.height(50.dp))
+            if (locationOff && !canUseHome) PlanTextButton(title = "Open Settings", onClick = onOpenSettings)
         }
         Spacer(modifier = Modifier.height(Spacing.s2))
     }

@@ -21,7 +21,7 @@ struct PlansAreaPicker: View {
                         Text.planOverline("When")
                         PlanChoiceChips(
                             options: [
-                                PlanChoiceOption(id: PlansWindow.now, label: "Now"),
+                                PlanChoiceOption(id: PlansWindow.now, label: "Happening now"),
                                 PlanChoiceOption(id: PlansWindow.today, label: "Today"),
                                 PlanChoiceOption(id: PlansWindow.week, label: "This week"),
                                 PlanChoiceOption(id: PlansWindow.weekend, label: "This weekend")
