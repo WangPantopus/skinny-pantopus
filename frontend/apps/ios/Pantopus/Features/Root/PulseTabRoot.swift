@@ -2,8 +2,14 @@
 //  PulseTabRoot.swift
 //  Pantopus
 //
-//  Pulse tab — neighborhood feed. Mirrors the React Native Pulse tab;
-//  hosts its own NavigationStack so drill-down survives tab switches.
+//  The Pulse tab (Pulse S3: a tab of the bar, where it used to be a sheet
+//  from the Nearby door). Hosts its own NavigationStack so drill-down
+//  survives tab switches. Nearby's other content moved here: Connections
+//  (and Beacons, while that launch cut is on) open from the page's top-right
+//  menu, and the neighborhood meter and "Set up a home" are one quiet-state
+//  card at the top of the feed. The launch-cut Tasks and Marketplace surfaces
+//  still present as sheets from here when a link asks for them
+//  (`NeighborhoodDoorStore`).
 //
 
 import SwiftUI
@@ -19,15 +25,21 @@ public enum PulseRoute: Hashable {
 /// NavigationStack wrapper for the Pulse tab.
 public struct PulseTabRoot: View {
     @Environment(AuthManager.self) private var auth
+    @Environment(RootTabModel.self) private var rootTabs
     @State private var path = RouteStack<PulseRoute>()
     @State private var navigationReady = false
     @State private var router = DeepLinkRouter.shared
+    @State private var door = NeighborhoodDoorStore.shared
+    @State private var presentedSurface: NeighborhoodDoorStore.Surface?
+    /// The quiet-state card's meter, held here so a pull to refresh re-reads
+    /// it with the feed (as a pull on the old Nearby door did).
+    @State private var neighborhood = NeighborhoodViewModel()
 
-    /// Closes the sheet this surface is presented in (Nearby's door).
-    private let onClose: (@MainActor () -> Void)?
+    /// Starts adding a home (the quiet card's "Set up a home"), in the Place tab.
+    private let onAddHome: @MainActor () -> Void
 
-    public init(onClose: (@MainActor () -> Void)? = nil) {
-        self.onClose = onClose
+    public init(onAddHome: @escaping @MainActor () -> Void = {}) {
+        self.onAddHome = onAddHome
     }
 
     private var currentUserId: String {
@@ -44,7 +56,9 @@ public struct PulseTabRoot: View {
                 onCompose: { intent in
                     path.append(.compose(intent: intent.rawValue))
                 },
-                onBack: onClose
+                topMenu: topMenu,
+                topCard: quietCard,
+                onRefresh: refreshQuietCard
             )
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: PulseRoute.self) { route in
@@ -52,15 +66,53 @@ public struct PulseTabRoot: View {
                     .toolbar(.hidden, for: .navigationBar)
             }
         }
+        .accessibilityIdentifier("pulseTabRoot")
+        .sheet(item: $presentedSurface) { surface in
+            surfaceRoot(surface)
+        }
         .onChange(of: router.pending) { _, pending in
             consumeDeepLinkIfNeeded(pending: pending)
+        }
+        .onChange(of: door.pendingSurface) { _, pending in
+            presentPendingSurfaceIfNeeded(pending)
+        }
+        .onChange(of: rootTabs.selected) { _, selected in
+            // A link owned by another tab selects it underneath a presented
+            // surface sheet; close the sheet so the destination is visible.
+            if selected != .pulse { presentedSurface = nil }
+            consumeDeepLinkIfNeeded(pending: router.pending)
+            presentPendingSurfaceIfNeeded(door.pendingSurface)
         }
         .task {
             await Task.yield()
             guard !Task.isCancelled else { return }
             navigationReady = true
             consumeDeepLinkIfNeeded(pending: router.pending)
+            presentPendingSurfaceIfNeeded(door.pendingSurface)
         }
+    }
+
+    /// Nearby's people entries, in the page's top-right menu.
+    private var topMenu: FeedTopMenu {
+        var onOpenBeacons: (@MainActor () -> Void)?
+        // Launch cut #1: Beacons stays hidden while the cut is on.
+        if LaunchFeatures.beacon {
+            onOpenBeacons = { DeepLinkRouter.shared.handle(path: "/beacons") }
+        }
+        return FeedTopMenu(
+            onOpenConnections: { DeepLinkRouter.shared.handle(path: "/connections") },
+            onOpenBeacons: onOpenBeacons
+        )
+    }
+
+    /// The neighborhood meter or "Set up a home", above the Nearby posts.
+    private var quietCard: AnyView {
+        AnyView(PulseQuietCard(viewModel: neighborhood, onSetUpHome: onAddHome))
+    }
+
+    /// A pull to refresh re-reads the quiet card's meter beside the feed.
+    private func refreshQuietCard() async {
+        await neighborhood.refresh()
     }
 
     private var navigationPathBinding: Binding<NavigationPath> {
@@ -71,9 +123,9 @@ public struct PulseTabRoot: View {
     }
 
     private func consumeDeepLinkIfNeeded(pending: DeepLinkRouter.Destination?) {
-        guard navigationReady, let pending, pending == router.pending else { return }
+        guard navigationReady, rootTabs.selected == .pulse, let pending, pending == router.pending else { return }
         switch pending {
-        case .feed:
+        case .feed, .pulse:
             path.replaceNavigationPath(NavigationPath())
             _ = router.consume()
         case let .post(id):
@@ -82,6 +134,28 @@ public struct PulseTabRoot: View {
             _ = router.consume()
         default:
             break
+        }
+    }
+
+    private func presentPendingSurfaceIfNeeded(_ pending: NeighborhoodDoorStore.Surface?) {
+        guard let pending, rootTabs.selected == .pulse else { return }
+        door.pendingSurface = nil
+        // Pulse is this tab itself; launch cuts #3/#4 never open a hidden surface.
+        guard pending != .pulse, pending.isAvailableAtLaunch else { return }
+        presentedSurface = pending
+    }
+
+    /// The launch-cut surfaces' own tab roots, unchanged: each brings its own
+    /// NavigationStack and consumes its own deep-link destinations.
+    @ViewBuilder
+    private func surfaceRoot(_ surface: NeighborhoodDoorStore.Surface) -> some View {
+        switch surface {
+        case .tasks:
+            TasksTabRoot { presentedSurface = nil }
+        case .marketplace:
+            MarketplaceTabRoot { presentedSurface = nil }
+        case .pulse:
+            EmptyView()
         }
     }
 
@@ -134,9 +208,9 @@ public struct PulseTabRoot: View {
                 onBack: pop,
                 onOpenGig: { gigId in
                     // The Pulse stack has no gig-detail route; hand the
-                    // public `/gig/:id` link to the router, which switches
-                    // to the Tasks tab and pushes it there
-                    // (`RootTabView.swift:149`, `TasksTabRoot.swift:100`).
+                    // public `/gig/:id` link to the router, which opens it
+                    // where tasks live (the Tasks sheet, or the Place stack
+                    // while Open gigs is cut).
                     Task { @MainActor in DeepLinkRouter.shared.handle(path: "/gig/\(gigId)") }
                 },
                 onOpenProfile: { reviewerId in
@@ -150,4 +224,5 @@ public struct PulseTabRoot: View {
 #Preview {
     PulseTabRoot()
         .environment(AuthManager.previewSignedIn)
+        .environment(RootTabModel())
 }

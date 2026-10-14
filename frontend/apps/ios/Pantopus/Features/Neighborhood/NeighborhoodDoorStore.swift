@@ -2,14 +2,14 @@
 //  NeighborhoodDoorStore.swift
 //  Pantopus
 //
-//  Wedge Phase 1 — cross-tab hand-off into the Neighborhood door.
+//  Cross-tab hand-off into the launch-cut Tasks and Marketplace surfaces.
 //
-//  Pulse / Tasks / Marketplace left the root tab bar; their surfaces now
-//  present from the Neighborhood tab. When a deep link (or the Hub pillar
-//  grid) targets one of them, the dispatcher selects the Neighborhood tab
-//  and stashes the surface here; `NeighborhoodTabRoot` observes the stash
-//  and presents the matching sheet, whose tab root then consumes the
-//  pending deep-link destination exactly as it did when it was a tab.
+//  They present as sheets from the Pulse tab (Pulse S3: the Nearby door they
+//  used to open from is gone, and Pulse is a tab of its own). When a deep
+//  link targets one of them, the dispatcher selects the Pulse tab and
+//  stashes the surface here; `PulseTabRoot` observes the stash and presents
+//  the matching sheet, whose tab root then consumes the pending deep-link
+//  destination exactly as it did when it was a tab.
 //
 
 import Foundation
@@ -39,7 +39,8 @@ public final class NeighborhoodDoorStore {
     }
 
     /// Set by the cross-tab dispatcher; consumed (nil-ed) by
-    /// `NeighborhoodTabRoot` when it presents the surface.
+    /// `PulseTabRoot` when it presents the surface. (`.pulse` is the Pulse
+    /// tab itself and presents nothing.)
     public var pendingSurface: Surface?
 
     public init() {}

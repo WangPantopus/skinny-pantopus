@@ -25,8 +25,17 @@ sealed class PantopusRoute(
     /** Today — the daily habit: weather, air, alerts, and the address calendar. */
     data object Today : PantopusRoute(path = "root/today", label = "Today", icon = PantopusIcon.CloudSun)
 
-    /** Nearby — the density door and its window (the cells map, the meter, what opens). */
-    data object Nearby : PantopusRoute(path = "root/nearby", label = "Nearby", icon = PantopusIcon.MapPin)
+    /**
+     * Pulse — what neighbors are saying and asking: the Pulse page, its composer and its conversations (Pulse build
+     * S3). It replaced the Nearby tab and opens on the feed. Keeps the `root/pulse` path.
+     */
+    data object Pulse : PantopusRoute(path = "root/pulse", label = "Pulse", icon = PantopusIcon.Activity)
+
+    /**
+     * Plans — what's on nearby and what you're going to: the Plans map and list, hosting, requests and Your plans. A
+     * tab only while the `plans` switch is on for the person ([barTabs]).
+     */
+    data object Plans : PantopusRoute(path = "root/plans", label = "Plans", icon = PantopusIcon.Calendar)
 
     /**
      * Mail — the digital mailbox, with Messages as its inbox. While Mailbox is off for launch (contract §9,
@@ -38,12 +47,15 @@ sealed class PantopusRoute(
         override val icon: PantopusIcon get() = if (LaunchFeatures.mailbox) PantopusIcon.Mailbox else PantopusIcon.MessageCircle
     }
 
-    // ── Reachable, not in the bar (Wedge v2 D2): the pillars live behind
-    // Nearby's door, and Messages lives inside Mail. Their routes stay
-    // registered so every existing push still lands.
+    // ── Reachable, not in the bar: Nearby stays only so `pantopus://nearby` links, pushes and saved state resolve
+    // (to Pulse); the pillars open from Pulse and Messages lives inside Mail. Their routes stay registered so every
+    // existing push still lands.
 
-    /** Neighborhood feed — Pulse posts near you. */
-    data object Pulse : PantopusRoute(path = "root/pulse", label = "Pulse", icon = PantopusIcon.Rss)
+    /**
+     * Nearby — no longer a tab (Pulse build S3). Its Pulse, Connections and neighborhood meter moved into the Pulse
+     * tab. The route stays registered, and opening it opens Pulse.
+     */
+    data object Nearby : PantopusRoute(path = "root/nearby", label = "Nearby", icon = PantopusIcon.MapPin)
 
     /** Neighbour gigs — browse, bid, and post tasks. */
     data object Tasks : PantopusRoute(path = "root/tasks", label = "Tasks", icon = PantopusIcon.Briefcase)
@@ -56,7 +68,8 @@ sealed class PantopusRoute(
 
     companion object {
         /**
-         * Bottom-bar destinations in display order.
+         * Bottom-bar destinations in display order, with every tab the app can show. Plans shows only while its
+         * switch is on: read [barTabs] for what the bar draws.
          *
          * `by lazy` is intentional: when this list is built eagerly, the
          * companion's <clinit> runs while `PantopusRoute`'s own class init
@@ -64,10 +77,13 @@ sealed class PantopusRoute(
          * downstream callers crash with NPE. Deferring construction until
          * first access lets every `data object` finish initialising first.
          */
-        val entries: List<PantopusRoute> by lazy { listOf(Place, Today, Nearby, Mail) }
+        val entries: List<PantopusRoute> by lazy { listOf(Place, Today, Pulse, Plans, Mail) }
+
+        /** The tabs the bar draws: five while the `plans` switch is [plansOn], four (without Plans) while it is off. */
+        fun barTabs(plansOn: Boolean): List<PantopusRoute> = if (plansOn) entries else entries - Plans
 
         /** Every root destination, bar tabs first — for `fromPath` lookups off the bar. */
-        val all: List<PantopusRoute> by lazy { entries + listOf(Pulse, Tasks, Marketplace, Messages) }
+        val all: List<PantopusRoute> by lazy { entries + listOf(Nearby, Tasks, Marketplace, Messages) }
 
         /** Lookup a route by its `path`. Returns null for unknown paths. */
         fun fromPath(path: String?): PantopusRoute? = all.firstOrNull { it.path == path }
@@ -79,13 +95,12 @@ sealed class PantopusRoute(
         val messagesTab: PantopusRoute get() = if (LaunchFeatures.mailbox) Messages else Mail
 
         /**
-         * The bar tab that owns [route]: bar tabs own themselves, the pillars
-         * (Pulse, Tasks, Marketplace) sit behind Nearby, and Messages sits
-         * inside Mail.
+         * The bar tab that owns [route]: bar tabs own themselves, the old Nearby door and the pillars behind it
+         * (Tasks, Marketplace) belong to Pulse, and Messages sits inside Mail.
          */
         fun barTabFor(route: PantopusRoute): PantopusRoute =
             when (route) {
-                Pulse, Tasks, Marketplace -> Nearby
+                Nearby, Tasks, Marketplace -> Pulse
                 Messages -> Mail
                 else -> route
             }

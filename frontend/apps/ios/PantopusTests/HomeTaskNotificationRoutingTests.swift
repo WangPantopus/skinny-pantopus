@@ -258,7 +258,7 @@ final class HomeTaskNotificationRoutingTests: XCTestCase {
         XCTAssertTrue(HubTabRoot.ownsDeepLink(destination, tab: .place))
         XCTAssertFalse(HubTabRoot.ownsDeepLink(destination, tab: .mail))
         XCTAssertFalse(HubTabRoot.ownsDeepLink(destination, tab: .today))
-        XCTAssertFalse(HubTabRoot.ownsDeepLink(destination, tab: .nearby))
+        XCTAssertFalse(HubTabRoot.ownsDeepLink(destination, tab: .pulse))
     }
 
     func testHeterogeneousMetadataDoesNotBreakNotificationDecoding() throws {

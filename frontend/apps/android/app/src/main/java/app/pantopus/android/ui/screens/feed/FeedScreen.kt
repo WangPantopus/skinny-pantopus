@@ -25,16 +25,20 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.pullrefresh.PullRefreshIndicator
 import androidx.compose.material.pullrefresh.pullRefresh
 import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -116,6 +120,15 @@ fun FeedScreen(
     /** Sports-lane starter tapped in the empty state — opens the composer
      *  with the prompt already in the body. */
     onComposeStarter: ((PulseSportsStarter) -> Unit)? = null,
+    /** The Pulse tab's top-right menu (Connections moved here from Nearby); null keeps the plain preferences button. */
+    topMenu: FeedTopMenu? = null,
+    /**
+     * The Pulse tab's quiet-state card (the neighborhood meter or "Set up a home"), above the Nearby posts; null while
+     * there is nothing to show, and elsewhere.
+     */
+    quietStateCard: (@Composable () -> Unit)? = null,
+    /** Re-reads what the quiet-state card shows (the meter) when the Nearby posts are pulled to refresh or retried. */
+    onRefreshQuietStateCard: (() -> Unit)? = null,
     viewModel: PulseFeedViewModel = hiltViewModel(),
     contextBarViewModel: FeedContextBarViewModel = hiltViewModel(),
 ) {
@@ -165,6 +178,14 @@ fun FeedScreen(
     var showsIntentPicker by remember { mutableStateOf(false) }
     // List / Map segment — mirrors RN `FeedHeader.tsx:35-52`.
     var viewMode by remember { mutableStateOf(FeedViewMode.List) }
+    // The quiet-state card belongs to the Nearby posts, not the Connections surface.
+    val topCard = quietStateCard?.takeIf { activeSurface == FeedSurface.Pulse }
+    // A pull or a retry on the Nearby posts reads the quiet-state card's meter again too, as the Nearby tab's pull did.
+    val refreshFeed = {
+        viewModel.refresh()
+        if (activeSurface == FeedSurface.Pulse) onRefreshQuietStateCard?.invoke()
+    }
+    val emptyScroll = rememberScrollState()
 
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(viewModel, lifecycle) {
@@ -218,6 +239,7 @@ fun FeedScreen(
                 },
                 onFilterTap = { showsIntentPicker = true },
                 onPreferencesTap = { viewModel.openPreferences() },
+                topMenu = topMenu,
                 viewMode = viewMode.takeIf { surface.supportsMapMode },
                 onViewModeChange = { viewMode = it },
             )
@@ -334,8 +356,15 @@ fun FeedScreen(
                 when (val s = state) {
                     is PulseFeedUiState.Loading -> LoadingFrame()
                     is PulseFeedUiState.Empty ->
-                        Column(modifier = Modifier.fillMaxSize()) {
-                            Box(modifier = Modifier.weight(1f)) {
+                        // With the quiet-state card above it, the empty state scrolls with the card (large text).
+                        Column(
+                            modifier =
+                                Modifier
+                                    .fillMaxSize()
+                                    .then(if (topCard != null) Modifier.verticalScroll(emptyScroll) else Modifier),
+                        ) {
+                            topCard?.let { card -> Box(modifier = Modifier.padding(Spacing.s3)) { card() } }
+                            Box(modifier = if (topCard != null) Modifier else Modifier.weight(1f)) {
                                 FeedEmptyState(content = s.content) {
                                     if (s.needsArea) {
                                         contextBarViewModel.openSwitcher()
@@ -353,6 +382,7 @@ fun FeedScreen(
                     is PulseFeedUiState.Loaded ->
                         PopulatedFrame(
                             state = s,
+                            header = topCard,
                             newPostCount = newPostCount,
                             onShowNewPosts = viewModel::showNewPosts,
                             onReadingPosition = viewModel::readingPosition,
@@ -363,7 +393,7 @@ fun FeedScreen(
                             },
                             onTapReaction = viewModel::tapReaction,
                             isRefreshing = isRefreshing,
-                            onRefresh = viewModel::refresh,
+                            onRefresh = refreshFeed,
                             isLoadingMore = isLoadingMore,
                             loadMoreError = loadMoreError,
                             onRetryLoadMore = viewModel::retryLoadMore,
@@ -378,7 +408,7 @@ fun FeedScreen(
                                 ),
                         )
                     is PulseFeedUiState.Error ->
-                        ErrorFrame(message = s.message, onRetry = { viewModel.refresh() })
+                        ErrorFrame(message = s.message, onRetry = refreshFeed)
                 }
             }
         }
@@ -843,6 +873,8 @@ private fun TopBar(
     onSearchTap: (() -> Unit)? = null,
     onFilterTap: (() -> Unit)? = null,
     onPreferencesTap: (() -> Unit)? = null,
+    /** Non-null (the Pulse tab) gathers Connections and Pulse preferences into one "More" menu. */
+    topMenu: FeedTopMenu? = null,
     /** Non-null renders the List / Map segment (hidden on Beacons). */
     viewMode: FeedViewMode? = null,
     onViewModeChange: (FeedViewMode) -> Unit = {},
@@ -926,7 +958,7 @@ private fun TopBar(
                         )
                     }
                 }
-                if (onPreferencesTap != null) {
+                if (onPreferencesTap != null && topMenu == null) {
                     Box(
                         modifier =
                             Modifier
@@ -944,6 +976,9 @@ private fun TopBar(
                         )
                     }
                 }
+                if (topMenu != null) {
+                    PulseMoreMenu(menu = topMenu, onPreferences = onPreferencesTap)
+                }
             }
             if (viewMode != null && stackToggle) {
                 ViewModeToggle(active = viewMode, onSelect = onViewModeChange)
@@ -958,6 +993,77 @@ private fun TopBar(
                     .background(PantopusColors.appBorder),
         )
     }
+}
+
+/**
+ * The Pulse tab's top-right menu (Pulse build S3): Nearby's people entries moved here, beside the page's preferences.
+ * iOS draws the same entries (`FeedTopMenu`).
+ */
+data class FeedTopMenu(
+    /** Opens Connections (the existing screen). */
+    val onOpenConnections: () -> Unit,
+    /** Opens Beacon updates; null while that launch cut is on. */
+    val onOpenBeacons: (() -> Unit)? = null,
+)
+
+/** Connections (and Beacons while that launch cut is off), then the page's preferences. */
+@Composable
+private fun PulseMoreMenu(
+    menu: FeedTopMenu,
+    onPreferences: (() -> Unit)?,
+) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        Box(
+            modifier =
+                Modifier
+                    .size(48.dp)
+                    .clickable(onClickLabel = "Open the menu", role = Role.Button) { open = true }
+                    .testTag("pulseMoreMenu")
+                    .semantics { contentDescription = "More" },
+            contentAlignment = Alignment.Center,
+        ) {
+            PantopusIconImage(
+                icon = PantopusIcon.MoreVertical,
+                contentDescription = null,
+                size = 20.dp,
+                tint = PantopusColors.appText,
+            )
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            PulseMenuItem("Connections", PantopusIcon.Users, "pulseMenuConnections") {
+                open = false
+                menu.onOpenConnections()
+            }
+            menu.onOpenBeacons?.let { action ->
+                PulseMenuItem("Beacons", PantopusIcon.Radio, "pulseMenuBeacons") {
+                    open = false
+                    action()
+                }
+            }
+            onPreferences?.let { action ->
+                PulseMenuItem("Pulse preferences", PantopusIcon.SlidersHorizontal, "pulseMenuPreferences") {
+                    open = false
+                    action()
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PulseMenuItem(
+    title: String,
+    icon: PantopusIcon,
+    tag: String,
+    onClick: () -> Unit,
+) {
+    DropdownMenuItem(
+        text = { Text(title, color = PantopusColors.appText) },
+        leadingIcon = { PantopusIconImage(icon = icon, contentDescription = null, size = 18.dp, tint = PantopusColors.appText) },
+        onClick = onClick,
+        modifier = Modifier.testTag(tag),
+    )
 }
 
 @Composable
@@ -1095,6 +1201,7 @@ internal fun FeedEmptyState(
 @Composable
 private fun PopulatedFrame(
     state: PulseFeedUiState.Loaded,
+    header: (@Composable () -> Unit)? = null,
     onTapPost: (String) -> Unit,
     onTapReaction: (String) -> Unit,
     isRefreshing: Boolean,
@@ -1131,6 +1238,11 @@ private fun PopulatedFrame(
         if (previous == null || firstRowId == null || previous == firstRowId) return@LaunchedEffect
         if (listState.firstVisibleItemIndex <= 1) listState.animateScrollToItem(0)
     }
+    // The quiet-state card usually arrives after the posts and lands above the row the list is anchored to: show it
+    // when the person was at the top.
+    LaunchedEffect(header != null) {
+        if (header != null && listState.firstVisibleItemIndex <= 1) listState.scrollToItem(0)
+    }
     Box(modifier = Modifier.fillMaxSize().pullRefresh(pullState)) {
         if (state.rows.isEmpty() && searchActive) {
             Text(
@@ -1150,6 +1262,7 @@ private fun PopulatedFrame(
             contentPadding = PaddingValues(Spacing.s3),
             verticalArrangement = Arrangement.spacedBy(Spacing.s2),
         ) {
+            header?.let { card -> item(key = "quietStateCard") { card() } }
             items(items = state.rows, key = { it.id }) { row ->
                 LaunchedEffect(row.id) { onRowAppeared(row.id) }
                 FeedPostRow(row, onTapPost, onTapReaction, rowActions)

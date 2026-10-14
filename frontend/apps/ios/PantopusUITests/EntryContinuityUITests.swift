@@ -160,11 +160,12 @@ final class EntryContinuityUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["A neighbor"].exists)
     }
 
-    func testNearbyFindsBeaconsWithoutAHome() {
+    func testPulseMenuFindsBeaconsWithoutAHome() {
         launch(reset: true, link: "/beacons")
         signIn()
-        tap("tab.nearby")
-        tap("nearbySocial.beacons")
+        tap("tab.pulse")
+        tap("pulseMoreMenu")
+        tapButton("Beacons")
         tap("beacons.find")
         XCTAssertTrue(element("universalSearch").waitForExistence(timeout: 10))
         let field = app.textFields.firstMatch
@@ -182,12 +183,16 @@ final class EntryContinuityUITests: XCTestCase {
         app.launchEnvironment["UI_TESTS_SOCIAL_METER"] = "error"
         launch(reset: true, link: "/beacons")
         signIn()
-        tap("tab.nearby")
-        for id in ["pulse", "beacons", "connections"] {
-            XCTAssertTrue(element("nearbySocial.\(id)").waitForExistence(timeout: 10))
+        tap("tab.pulse")
+        // The meter's quiet-state card is simply absent when the meter fails;
+        // the feed and the menu's people entries stay.
+        XCTAssertTrue(element("pulseFeed").waitForExistence(timeout: 10))
+        tap("pulseMoreMenu")
+        for label in ["Connections", "Beacons"] {
+            XCTAssertTrue(app.buttons[label].waitForExistence(timeout: 10))
         }
         capture("Social discovery during a meter outage")
-        tap("nearbySocial.beacons")
+        tapButton("Beacons")
         tap("beacons.following")
         XCTAssertTrue(app.staticTexts["Following"].waitForExistence(timeout: 10))
         capture("Following without a home")

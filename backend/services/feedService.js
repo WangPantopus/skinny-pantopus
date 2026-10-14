@@ -835,6 +835,31 @@ function boundingBoxFromCenter(lat, lng, radiusMeters) {
   };
 }
 
+// Place reads (the list feed, the Sports lane and the map) reach at most this far from their
+// point: 100 miles, the apps' default radius. A wider radius, such as the apps' 1,000-mile and
+// Global choices, reads this far, so no single request reads a whole region.
+const MAX_PLACE_RADIUS_METERS = 160934;
+
+// The radius a Place read uses: the one asked for, up to the cap. A zero, negative or
+// non-numeric radius reads the cap, which is also the routes' default.
+function placeRadiusMeters(radiusMeters) {
+  const meters = Number(radiusMeters);
+  return Number.isFinite(meters) && meters > 0
+    ? Math.min(meters, MAX_PLACE_RADIUS_METERS)
+    : MAX_PLACE_RADIUS_METERS;
+}
+
+// The part of a map box a Place read uses: at most the cap from the box's center each way.
+function capPlaceBox({ south, west, north, east }) {
+  const cap = boundingBoxFromCenter((south + north) / 2, (west + east) / 2, MAX_PLACE_RADIUS_METERS);
+  return {
+    south: Math.max(south, cap.south),
+    west: Math.max(west, cap.west),
+    north: Math.min(north, cap.north),
+    east: Math.min(east, cap.east),
+  };
+}
+
 // The box a query reads so it finds every post whose displayed point can be inside `box`.
 function widenForDisplayedPoints(box) {
   return {
@@ -885,7 +910,7 @@ function politicsPrefKey(surface) {
  * @param {string} opts.surface        – 'place' | 'connections' | 'personas'
  * @param {number} [opts.latitude]
  * @param {number} [opts.longitude]
- * @param {number} [opts.radiusMeters] – defaults to 16 000 m
+ * @param {number} [opts.radiusMeters] – defaults to 16 000 m, at most MAX_PLACE_RADIUS_METERS
  * @param {string} [opts.postType]
  * @param {string} [opts.cursorCreatedAt]
  * @param {string} [opts.cursorId]
@@ -913,6 +938,7 @@ async function getListFeed({
   if (!FEED_SURFACES.includes(surface)) {
     throw new Error(`Invalid feed surface: ${surface}`);
   }
+  radiusMeters = placeRadiusMeters(radiusMeters);
 
   // Sports topic lane: Place + topic=sports is a fundamentally different
   // query (union of local geo + national country:US) with a stable merged
@@ -1598,7 +1624,10 @@ async function loadMapPosts({
  * @returns {Promise<object[]>}
  */
 async function getMapFeed(opts) {
-  const shown = await loadMapPosts(opts);
+  // A Place map reads at most the cap around the box's center. (The empty-map hint below searches
+  // wider, but it returns one displayed point, never a post.)
+  const box = opts.surface === 'connections' ? {} : capPlaceBox(opts);
+  const shown = await loadMapPosts({ ...opts, ...box });
   // 8. Enrich; this applies the response privacy, which puts each pin at its displayed point
   return enrichFeedPosts(shown.map(({ post }) => post), opts.userId);
 }

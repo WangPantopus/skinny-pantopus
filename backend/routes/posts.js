@@ -1423,7 +1423,7 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
  *   - limit                  — items per page (default 20)
  *   - postType               — filter by post type
  *   - latitude, longitude    — for Place surface (viewing location)
- *   - radiusMiles            — proximity radius (default 10)
+ *   - radiusMiles            — proximity radius (default and at most 100, feedService.placeRadiusMeters)
  *   - tags                   — comma-separated tag filter
  *
  * Returns: { posts, pagination: { nextCursor: { createdAt, id } | null, hasMore } }
@@ -1637,7 +1637,8 @@ router.get('/map', verifyToken, async (req, res) => {
     const w = parseFloat(west);
     const n = parseFloat(north);
     const e = parseFloat(east);
-    const lim = parseInt(limit);
+    // Markers per layer: the apps ask for 200, and no request reads more.
+    const lim = Math.min(Math.max(parseInt(limit, 10) || 50, 1), 200);
 
     const boundsArea = Math.abs((n - s) * (e - w));
     const zoomLevel = req.query.zoom ? parseFloat(req.query.zoom) : null;
@@ -2082,7 +2083,7 @@ router.get('/feed/saved-place/:placeId', verifyToken, async (req, res) => {
       latitude: place.latitude,
       longitude: place.longitude,
       radiusMeters,
-      limit: parseInt(limit),
+      limit: Math.min(parseInt(limit) || 20, 50),
       postType: postType || null,
     });
 

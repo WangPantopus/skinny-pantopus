@@ -26,7 +26,11 @@ final class DeepLinkRouter {
     enum Destination: Equatable {
         case feed
         case home
-        case nearby
+        /// `/pulse`, and the retired `/nearby` (Pulse S3: the Nearby tab is
+        /// gone; its links and the server pushes that use it open Pulse).
+        case pulse
+        /// `/plans`: the Plans tab, while the `plans` switch is on.
+        case plans
         case notifications
         case supportTrain(id: String)
         /// `pantopus://support-trains/:id/manage` — A13.13 organizer
@@ -528,11 +532,11 @@ final class DeepLinkRouter {
             return queryValue("surface", in: comps) == "personas" ? .beacons : .feed
         case "home":
             return .home
-        case "nearby":
-            return segments.count == 1 ? .nearby : .unknown(url)
+        case "nearby", "pulse":
+            return segments.count == 1 ? .pulse : .unknown(url)
         case "plans", "plan":
-            // `/plans/new`, `/plans/:id`, `/plans/:id/requests`.
-            guard let id = segments.dropFirst().first, !id.isEmpty else { return .nearby }
+            // `/plans` (the tab), `/plans/new`, `/plans/:id`, `/plans/:id/requests`.
+            guard let id = segments.dropFirst().first, !id.isEmpty else { return .plans }
             if id == "new" { return .planNew }
             return segments.dropFirst(2).first == "requests" ? .planRequests(id: id) : .plan(id: id)
         case "notifications":
