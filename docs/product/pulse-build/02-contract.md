@@ -238,7 +238,7 @@ Both answer `404 POST_NOT_FOUND`, `403 NOT_POST_AUTHOR` (not the asker), `400 NO
 
 | # | Table | Owner | Purpose and key columns |
 |---|---|---|---|
-| 1 | `PulseArea` | PB | `id`, `kind` (`town`, `neighborhood`, `street`, `place`), `name`, `slug` unique, `parent_id`, `state`, `boundary geography(MultiPolygon,4326)` with a GiST index, `centroid`, `radius_m` (labeled-radius areas), `opened_at` (null = closed), `source`, `source_url`. Launch rows: the towns of Camas, Washougal and Vancouver WA from US Census place boundaries (public domain), simplified |
+| 1 | `PulseArea` | PB | `id`, `kind` (`town`, `neighborhood`, `street`, `place`), `name`, `slug` unique, `parent_id`, `state`, `boundary geography(MultiPolygon,4326)` with a GiST index, `centroid`, `radius_m` (labeled-radius areas), `opened_at` (null = closed), `source`, `source_url`. Launch rows: the towns of Camas, Washougal and Vancouver WA from US Census place boundaries (public domain), simplified. Drafted for the approval in `20261014080000_pulse_areas.sql` (with `Post.area_id` and the `PostMute.area_id` foreign key); the launch rows come in the next migration |
 | 2 | `PulseFollow` | PB | `user_id`, `target_type`, `target_id text`, `area_id`, `notify`, `ends_on_resolve`, `until_at`; unique per user, target and area |
 | 3 | `CommentThanks` | PB | `comment_id`, `from_user_id`, `to_user_id`; unique per comment and thanker |
 | 4 | `OfferClaim` | PB | `post_id`, `claimer_id`, `status` (`requested`, `chosen`, `declined`, `gone`), `note`; unique per post and claimer |
