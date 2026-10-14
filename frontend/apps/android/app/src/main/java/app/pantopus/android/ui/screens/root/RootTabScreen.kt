@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ModalNavigationDrawer
@@ -60,6 +61,7 @@ import app.pantopus.android.ui.components.InviteLinks
 import app.pantopus.android.ui.components.NavigationDrawer
 import app.pantopus.android.ui.components.NavigationDrawerContext
 import app.pantopus.android.ui.components.NavigationDrawerDestination
+import app.pantopus.android.ui.components.OfflineBannerHost
 import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.components.composeEmail
 import app.pantopus.android.ui.components.shareText
@@ -2149,6 +2151,18 @@ private fun schedulingHomeNavArg() = optionalStringNavArg(SchedulingRoutes.ARG_H
  * @param inboxBadgeCount Unread count shown on the Messages tab. Wired to
  *     live data in Prompt P8.
  */
+
+/** Home and specialist screens host their own strip; these shared tab and account routes did not. */
+private val SAVED_PAGE_OFFLINE_STRIP_ROUTES =
+    setOf(
+        PantopusRoute.Place.path, PantopusRoute.Today.path, PantopusRoute.Nearby.path, PantopusRoute.Mail.path,
+        PantopusRoute.Messages.path, PantopusRoute.Pulse.path, ChildRoutes.PLACE_DASHBOARD, ChildRoutes.PLACE_DETAIL,
+        ChildRoutes.PULSE_FEED, ChildRoutes.PULSE_POST, ChildRoutes.CHAT_CONVERSATION, ChildRoutes.PROFILE,
+        ChildRoutes.PUBLIC_PROFILE, ChildRoutes.NOTIFICATIONS_ROUTE, ChildRoutes.CONNECTIONS_ROUTE, ChildRoutes.MY_POSTS,
+        ChildRoutes.SAVED_PLACES, ChildRoutes.MENU, ChildRoutes.EXPLORE_ROUTE,
+        ChildRoutes.SETTINGS_NOTIFICATIONS, ChildRoutes.SETTINGS_PRIVACY,
+    )
+
 @Composable
 fun RootTabScreen(inboxBadgeCount: Int = 0) {
     val navController = rememberNavController()
@@ -2163,6 +2177,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
     val sessionViewModel: RootSessionViewModel = hiltViewModel()
     val chatBadgeViewModel: ChatBadgeViewModel = hiltViewModel()
     val currentHandle by sessionViewModel.currentHandle.collectAsStateWithLifecycle()
+    val online by sessionViewModel.isOnline.collectAsStateWithLifecycle()
+    val plansMapFlags by hiltViewModel<PlansGateViewModel>().flags.collectAsStateWithLifecycle()
     val liveInboxBadgeCount by chatBadgeViewModel.unreadMessages.collectAsStateWithLifecycle()
     // §1C-b — context-aware navigation drawer, opened from the Hub menu button
     // (repurposed from "open Settings"; Settings now lives as a drawer row).
@@ -2630,6 +2646,14 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
         },
     ) {
         Scaffold(
+            topBar = {
+                val route = backStackEntry?.destination?.route
+                // Nearby while `plans` is on is the Plans map, which floats its own strip over the map.
+                val plansMap = plansMapFlags.plans && route == PantopusRoute.Nearby.path
+                if (!online && route in SAVED_PAGE_OFFLINE_STRIP_ROUTES && !plansMap) {
+                    OfflineBannerHost(isOffline = true, modifier = Modifier.statusBarsPadding()) { }
+                }
+            },
             bottomBar = {
                 PantopusBottomBar(
                     selected = currentRoute,

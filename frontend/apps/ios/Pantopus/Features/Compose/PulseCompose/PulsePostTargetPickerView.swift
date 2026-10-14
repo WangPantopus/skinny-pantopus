@@ -3,18 +3,18 @@
 //  Pantopus
 //
 //  Step 1 — "Where do you want to post?" Card-based chooser grouped
-//  into "Your places" (current location / homes / businesses) and
-//  "Your network" (connections).
+//  into "Your places" (current location / homes) and "Your network"
+//  (connections). Businesses reply; they don't post to Pulse (Pulse S1;
+//  the server answers `BUSINESS_CANNOT_POST`), so there is no business card.
 //
 
 import SwiftUI
 
-// swiftlint:disable function_parameter_count multiple_closures_with_trailing_closure type_body_length
+// swiftlint:disable function_parameter_count multiple_closures_with_trailing_closure
 
 public struct PulsePostTargetPickerView: View {
     @State private var viewModel = PulsePostTargetPickerViewModel()
     @State private var expandedHomeList = false
-    @State private var expandedBusinessList = false
     @State private var locationError: String?
 
     private let onSelect: @MainActor (PulsePostingTarget) -> Void
@@ -22,6 +22,7 @@ public struct PulsePostTargetPickerView: View {
     /// Hides the "Your network / Connections" card. RN's task-share
     /// picker passes `allowedTargets={['current_location','home','business']}`
     /// (`gig/[id].tsx:1478`) because a task share is always a place post.
+    /// (No business card here: businesses don't post to Pulse.)
     private let hidesNetworkTarget: Bool
 
     public init(
@@ -127,7 +128,6 @@ public struct PulsePostTargetPickerView: View {
                 }
 
                 homeSection
-                businessSection
             }
 
             if !hidesNetworkTarget {
@@ -203,47 +203,6 @@ public struct PulsePostTargetPickerView: View {
                 ForEach(viewModel.homes) { home in
                     subRow(title: home.label, identifier: "pulseTargetHome_\(home.id)") {
                         onSelect(.home(homeId: home.id, latitude: home.latitude, longitude: home.longitude, label: home.label))
-                    }
-                }
-            }
-        }
-    }
-
-    // MARK: - Businesses
-
-    @ViewBuilder
-    private var businessSection: some View {
-        if !viewModel.businesses.isEmpty {
-            if viewModel.businesses.count == 1, let biz = viewModel.businesses.first {
-                targetCard(
-                    iconStyle: TargetCardIconStyle(
-                        icon: .building2,
-                        background: Theme.Color.businessBg,
-                        color: Theme.Color.business
-                    ),
-                    title: "Business Area",
-                    subtitle: biz.name,
-                    identifier: "pulseTarget_business"
-                ) {
-                    onSelect(.business(businessId: biz.id, latitude: biz.latitude, longitude: biz.longitude, label: biz.label))
-                }
-            } else {
-                expandableCard(
-                    iconStyle: TargetCardIconStyle(
-                        icon: .building2,
-                        background: Theme.Color.businessBg,
-                        color: Theme.Color.business
-                    ),
-                    title: "Business Area",
-                    subtitle: "\(viewModel.businesses.count) businesses",
-                    isExpanded: expandedBusinessList,
-                    identifier: "pulseTarget_businessGroup",
-                    toggle: { expandedBusinessList.toggle() }
-                ) {
-                    ForEach(viewModel.businesses) { biz in
-                        subRow(title: biz.name, hint: biz.label, identifier: "pulseTargetBusiness_\(biz.id)") {
-                            onSelect(.business(businessId: biz.id, latitude: biz.latitude, longitude: biz.longitude, label: biz.label))
-                        }
                     }
                 }
             }
