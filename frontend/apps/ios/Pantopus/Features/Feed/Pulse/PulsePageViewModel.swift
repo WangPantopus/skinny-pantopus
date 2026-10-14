@@ -48,6 +48,7 @@ public final class PulsePageViewModel {
     public private(set) var state: State = .loading
     /// The town the page reads, kept while another view or topic loads.
     public private(set) var areaName: String?
+    public private(set) var selectedAreaId: String?
     public private(set) var mode: PulsePageMode = .nearby
     public private(set) var activeTopic: PulseTopic?
     /// How many conversations wait behind "↑ N new conversations".
@@ -99,15 +100,6 @@ public final class PulsePageViewModel {
         self.store = store
         self.api = api
         self.moderation = moderation
-    }
-
-    private func endpoint(earlierBefore: String? = nil) -> Endpoint {
-        PulseEndpoints.feed(
-            view: mode.rawValue,
-            topic: activeTopic?.queryValue,
-            areaId: earlierBefore == nil ? nil : lastResponse?.area?.id,
-            earlierBefore: earlierBefore
-        )
     }
 
     // MARK: - Reading
@@ -404,5 +396,27 @@ public final class PulsePageViewModel {
     func showToast(_ text: String, kind: ToastKind) {
         toastMessage = text
         toastKind = kind
+    }
+}
+
+extension PulsePageViewModel {
+    var displayedAreaId: String? {
+        lastResponse?.area?.id ?? selectedAreaId
+    }
+
+    func selectArea(_ area: PulseAreaChoice) async {
+        guard area.id != displayedAreaId else { return }
+        selectedAreaId = area.id
+        areaName = area.title
+        await switchQuery()
+    }
+
+    private func endpoint(earlierBefore: String? = nil) -> Endpoint {
+        PulseEndpoints.feed(
+            view: mode.rawValue,
+            topic: activeTopic?.queryValue,
+            areaId: earlierBefore == nil ? selectedAreaId : lastResponse?.area?.id,
+            earlierBefore: earlierBefore
+        )
     }
 }

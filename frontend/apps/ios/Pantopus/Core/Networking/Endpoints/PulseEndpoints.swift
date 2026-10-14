@@ -11,6 +11,16 @@ import Foundation
 
 /// Endpoints of the Pulse build's own routes.
 public enum PulseEndpoints {
+    /// Route `backend/routes/pulse.js:18`: the primary home's open areas.
+    public static func myAreas() -> Endpoint {
+        Endpoint(method: .get, path: "/api/pulse/areas/mine")
+    }
+
+    /// Route `backend/routes/pulse.js:27`: open towns, without device coordinates.
+    public static func searchAreas(query: String) -> Endpoint {
+        Endpoint(method: .get, path: "/api/pulse/areas/search", query: ["q": query])
+    }
+
     /// `POST /api/pulse/posts/:postId/keep-open` — the asker keeps an open Ask
     /// open 7 more days, once (contract §2.12). Route `backend/routes/pulse.js:98`.
     public static func keepAskOpen(postId: String) -> Endpoint {
