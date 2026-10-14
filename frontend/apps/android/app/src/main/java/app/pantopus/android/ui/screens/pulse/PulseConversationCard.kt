@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -33,6 +34,8 @@ import androidx.compose.ui.unit.sp
 import app.pantopus.android.ui.components.StatusChipVariant
 import app.pantopus.android.ui.screens.feed.pulse.PostStatusPill
 import app.pantopus.android.ui.theme.PantopusColors
+import app.pantopus.android.ui.theme.PantopusIcon
+import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
 import coil.compose.AsyncImage
@@ -49,6 +52,7 @@ fun PulseConversationCard(
     card: PulseCardUi,
     onOpen: () -> Unit,
     onAction: () -> Unit,
+    onOverflow: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -63,75 +67,7 @@ fun PulseConversationCard(
                 .testTag("pulseCard_${card.id}"),
         verticalArrangement = Arrangement.spacedBy(Spacing.s2),
     ) {
-        // Everything above the action reads as one sentence in TalkBack; the action stays a control of its own.
-        Column(
-            modifier = Modifier.clearAndSetSemantics { contentDescription = card.description },
-            verticalArrangement = Arrangement.spacedBy(Spacing.s2),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-                FlowRow(
-                    modifier = Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
-                    verticalArrangement = Arrangement.spacedBy(Spacing.s1),
-                ) {
-                    Text(
-                        text = card.authorName,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = PantopusColors.appText,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.align(Alignment.CenterVertically),
-                    )
-                    card.labelText?.let {
-                            text ->
-                        PulseLabelChip(text = text, tone = card.labelTone, modifier = Modifier.align(Alignment.CenterVertically))
-                    }
-                    if (card.meta.isNotEmpty()) {
-                        Text(
-                            text = card.meta,
-                            fontSize = 13.sp,
-                            color = PantopusColors.appTextSecondary,
-                            modifier = Modifier.align(Alignment.CenterVertically),
-                        )
-                    }
-                }
-                Text(
-                    text = card.typeName,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    letterSpacing = 0.8.sp,
-                    color = PantopusColors.appTextSecondary,
-                )
-            }
-            if (card.text.isNotEmpty()) {
-                Text(
-                    text = card.text,
-                    fontSize = 16.sp,
-                    lineHeight = 22.sp,
-                    color = PantopusColors.appText,
-                    maxLines = CARD_TEXT_LINES,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            card.photoUrl?.let { url ->
-                AsyncImage(
-                    model = url,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 120.dp, max = 180.dp)
-                            .clip(RoundedCornerShape(Radii.lg))
-                            .background(PantopusColors.appSurfaceSunken)
-                            .testTag("pulseCardPhoto_${card.id}"),
-                )
-            }
-            card.aboutLine?.let { line ->
-                Text(text = line, fontSize = 13.sp, color = PantopusColors.appTextMuted, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            }
-        }
+        PulseCardBody(card)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s3)) {
             card.actionLabel?.let { label ->
                 PulseActionButton(label = label, done = card.actionDone, onClick = onAction, cardId = card.id)
@@ -149,6 +85,87 @@ fun PulseConversationCard(
                 }
                 card.status?.let { PostStatusPill(status = it, postId = card.id) }
             }
+            IconButton(onClick = onOverflow, modifier = Modifier.testTag("pulseCardOptions_${card.id}")) {
+                PantopusIconImage(
+                    icon = PantopusIcon.MoreHorizontal,
+                    contentDescription = "Post options",
+                    tint = PantopusColors.appTextSecondary,
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun PulseCardBody(card: PulseCardUi) {
+    // Everything above the action reads as one sentence in TalkBack; the action stays a control of its own.
+    Column(
+        modifier = Modifier.clearAndSetSemantics { contentDescription = card.description },
+        verticalArrangement = Arrangement.spacedBy(Spacing.s2),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+            FlowRow(
+                modifier = Modifier.weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+                verticalArrangement = Arrangement.spacedBy(Spacing.s1),
+            ) {
+                Text(
+                    text = card.authorName,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = PantopusColors.appText,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.align(Alignment.CenterVertically),
+                )
+                card.labelText?.let {
+                        text ->
+                    PulseLabelChip(text = text, tone = card.labelTone, modifier = Modifier.align(Alignment.CenterVertically))
+                }
+                if (card.meta.isNotEmpty()) {
+                    Text(
+                        text = card.meta,
+                        fontSize = 13.sp,
+                        color = PantopusColors.appTextSecondary,
+                        modifier = Modifier.align(Alignment.CenterVertically),
+                    )
+                }
+            }
+            Text(
+                text = card.typeName,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 0.8.sp,
+                color = PantopusColors.appTextSecondary,
+            )
+        }
+        if (card.text.isNotEmpty()) {
+            Text(
+                text = card.text,
+                fontSize = 16.sp,
+                lineHeight = 22.sp,
+                color = PantopusColors.appText,
+                maxLines = CARD_TEXT_LINES,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        card.photoUrl?.let { url ->
+            AsyncImage(
+                model = url,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 120.dp, max = 180.dp)
+                        .clip(RoundedCornerShape(Radii.lg))
+                        .background(PantopusColors.appSurfaceSunken)
+                        .testTag("pulseCardPhoto_${card.id}"),
+            )
+        }
+        card.aboutLine?.let { line ->
+            Text(text = line, fontSize = 13.sp, color = PantopusColors.appTextMuted, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
     }
 }

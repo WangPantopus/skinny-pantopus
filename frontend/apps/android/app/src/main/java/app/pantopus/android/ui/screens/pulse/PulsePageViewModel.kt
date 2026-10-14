@@ -6,6 +6,8 @@ import app.pantopus.android.data.api.models.pulse.PulseFeedCopy
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.api.net.refusesStoredCopy
+import app.pantopus.android.data.feed.FeedActionsRepository
+import app.pantopus.android.data.feed.FeedModerationStore
 import app.pantopus.android.data.posts.PostsRepository
 import app.pantopus.android.data.pulse.PulseFeedQuery
 import app.pantopus.android.data.pulse.PulseRepository
@@ -53,6 +55,8 @@ class PulsePageViewModel
     constructor(
         private val repository: PulseRepository,
         private val posts: PostsRepository,
+        private val feedActions: FeedActionsRepository,
+        private val moderation: FeedModerationStore,
     ) : ViewModel() {
         private val _state = MutableStateFlow<PulsePageUiState>(PulsePageUiState.Loading)
         val state: StateFlow<PulsePageUiState> = _state.asStateFlow()
@@ -79,6 +83,13 @@ class PulsePageViewModel
 
         /** Posts the viewer toggled before the server answers: id to the action's new done state. */
         private data class ActionOverride(val done: Boolean, val goingCount: Int?)
+
+        private val savedPosts = mutableMapOf<String, Boolean>()
+        private val keptOpen = mutableSetOf<String>()
+        private val removedPosts = mutableSetOf<String>()
+        private val mutedTopics = mutableSetOf<Pair<String, String?>>()
+        private val _menu = MutableStateFlow<PulsePageMenu?>(null)
+        val menu: StateFlow<PulsePageMenu?> = _menu.asStateFlow()
 
         private val toggled = mutableMapOf<String, ActionOverride>()
         private val completedActions = mutableMapOf<String, Instant>()
@@ -131,6 +142,7 @@ class PulsePageViewModel
             readingEarlier?.cancel()
             polling?.cancel()
             markingSeen?.cancel()
+            _menu.value = null
             _query.value = next
             _newCount.value = 0
             _earlier.value = PulseEarlierState.Idle
@@ -181,6 +193,7 @@ class PulsePageViewModel
             val through = runCatching { Instant.parse(copy.readAt) }.getOrNull()
             completedActions.filterValues { through != null && !it.isAfter(through) }.keys.toList().forEach { id ->
                 toggled.remove(id)
+                savedPosts.remove(id)
                 completedActions.remove(id)
             }
             val page = copy.response.toPage(readAt = copy.readAt)
@@ -189,18 +202,22 @@ class PulsePageViewModel
 
         /** The page again with the viewer's own toggles on top (a Going tapped a moment ago shows before the server says so). */
         private fun PulsePageContent.withToggles(): PulsePageContent {
-            if (toggled.isEmpty()) return this
-            return copy(
-                groups =
-                    groups.map { group ->
-                        group.copy(
-                            cards =
-                                group.cards.map { card ->
-                                    toggled[card.id]?.let { card.withAction(it) } ?: card
-                                },
-                        )
-                    },
-            )
+            val visibleGroups =
+                groups.mapNotNull { group ->
+                    val cards =
+                        group.cards.filter(::isVisible).map { card ->
+                            val action = toggled[card.id]?.let { card.withAction(it) } ?: card
+                            action.copy(
+                                actions =
+                                    action.actions.copy(
+                                        isSaved = savedPosts[card.id] ?: action.actions.isSaved,
+                                        canKeepOpen = action.actions.canKeepOpen && card.id !in keptOpen,
+                                    ),
+                            )
+                        }
+                    cards.takeIf { it.isNotEmpty() }?.let { group.copy(cards = it) }
+                }
+            return copy(groups = visibleGroups, end = end.copy(caughtUp = end.caughtUp && visibleGroups.isNotEmpty()))
         }
 
         /** Once a minute while the page is on screen: how many conversations arrived since the page was read. */
@@ -223,7 +240,8 @@ class PulsePageViewModel
         fun endShown() {
             val loaded = _state.value as? PulsePageUiState.Loaded ?: return
             val q = _query.value
-            if (q.topic != null || q.areaId != null || _newCount.value > 0 || markingSeen?.isActive == true) return
+            if (q.topic != null || q.areaId != null) return
+            if (_newCount.value > 0 || markingSeen?.isActive == true) return
             if (!loaded.content.end.caughtUp || seenFor == loaded.content.readAt) return
             markingSeen =
                 viewModelScope.launch {
@@ -244,8 +262,13 @@ class PulsePageViewModel
                     when (val result = repository.earlier(q, before = cursor)) {
                         is NetworkResult.Success -> {
                             if (q != _query.value) return@launch
-                            val page = result.data.toPage(readAt = loaded.content.readAt)
-                            val group = page.groups.firstOrNull()
+                            val page = result.data.toPage(readAt = loaded.content.readAt).withToggles()
+                            val currentIds = loaded.content.groups.flatMap { it.cards }.mapTo(mutableSetOf()) { it.id }
+                            val cards = page.groups.flatMap { it.cards }.filter { currentIds.add(it.id) }
+                            val group =
+                                cards.takeIf { it.isNotEmpty() }?.let {
+                                    PulseGroupUi("earlier", page.groups.firstOrNull()?.title.orEmpty(), it)
+                                }
                             _earlier.value = if (group == null) PulseEarlierState.NothingEarlier else PulseEarlierState.Loaded(group)
                         }
                         is NetworkResult.Failure -> {
@@ -318,6 +341,159 @@ class PulsePageViewModel
                 goingCount = edit.goingCount,
                 goingText = edit.goingCount?.let { "$it going" },
             )
+
+        private fun isVisible(card: PulseCardUi): Boolean {
+            if (card.id in removedPosts || moderation.isHidden(card.id)) return false
+            val actions = card.actions
+            val author = actions.muteEntityId
+            val entity = actions.muteEntityType
+            if (author != null && entity != null && moderation.isMuted(entity, author)) return false
+            val topic = actions.pulseTopic?.key ?: return true
+            return (topic to card.areaId) !in mutedTopics && (topic to null) !in mutedTopics
+        }
+
+        fun openMenu(card: PulseCardUi) {
+            _menu.value = PulsePageMenu(card)
+        }
+
+        fun dismissMenu() {
+            _menu.value = null
+        }
+
+        fun confirmMenu(action: PulsePageMenuAction) {
+            _menu.value = _menu.value?.copy(action = action)
+        }
+
+        fun toggleSave(card: PulseCardUi) {
+            val desired = !(savedPosts[card.id] ?: card.actions.isSaved)
+            perform(card, "Saved.", { posts.toggleSave(card.id, desired) }) { result ->
+                savedPosts[card.id] = result.saved
+                completedActions[card.id] = Instant.now()
+                updateCards { if (it.id == card.id) it.copy(actions = it.actions.copy(isSaved = result.saved)) else it }
+                _toast.value = if (result.saved) "Post saved." else "Bookmark removed."
+            }
+        }
+
+        fun hide(card: PulseCardUi) {
+            perform(card, "Post hidden from your feed.", { feedActions.hidePost(card.id) }) {
+                moderation.addHiddenPost(card.id)
+                filterCards()
+            }
+        }
+
+        fun muteAuthor(card: PulseCardUi) {
+            val entity = card.actions.muteEntityType ?: return
+            val author = card.actions.muteEntityId ?: return
+            if (!card.actions.canMuteAuthor) return
+            perform(card, "Muted ${card.authorName}.", { feedActions.mute(entity, author) }) {
+                moderation.addMute(entity, author)
+                filterCards()
+            }
+        }
+
+        fun muteTopic(card: PulseCardUi) {
+            val topic = card.actions.pulseTopic?.key ?: return
+            // An absent area must never silently turn an area mute into a global mute.
+            val area = card.areaId ?: return
+            if (!card.actions.canMuteThisTopic) return
+            perform(card, "Topic muted in this area.", { feedActions.mutePulseTopic(topic, area) }) {
+                mutedTopics.add(topic to area)
+                filterCards()
+            }
+        }
+
+        fun topicUnmuted(topic: String) {
+            mutedTopics.removeAll { it.first == topic }
+            refresh()
+        }
+
+        fun keepOpen(card: PulseCardUi) {
+            if (!card.actions.canKeepOpen || card.id in keptOpen) return
+            perform(card, "Kept open for 7 more days.", { repository.keepOpen(card.id) }) {
+                keptOpen.add(card.id)
+                updateCards { if (it.id == card.id) it.copy(actions = it.actions.copy(canKeepOpen = false)) else it }
+            }
+        }
+
+        fun closeAsk(card: PulseCardUi) {
+            if (!card.actions.canCloseAsk) return
+            perform(card, "Question closed.", { repository.close(card.id) }) {
+                removedPosts.add(card.id)
+                filterCards()
+            }
+        }
+
+        fun delete(card: PulseCardUi) {
+            if (!card.actions.canDelete) return
+            perform(card, "Post deleted.", { posts.deletePost(card.id) }) {
+                removedPosts.add(card.id)
+                filterCards()
+            }
+        }
+
+        fun report(
+            card: PulseCardUi,
+            reason: String,
+        ) {
+            if (!card.actions.canReport) return
+            perform(card, "Report submitted", { posts.report(card.id, reason) }) { }
+        }
+
+        private fun <T> perform(
+            card: PulseCardUi,
+            success: String,
+            request: suspend () -> NetworkResult<T>,
+            onSuccess: (T) -> Unit,
+        ) {
+            if (!pendingActions.add(card.id)) return
+            dismissMenu()
+            viewModelScope.launch {
+                try {
+                    when (val result = request()) {
+                        is NetworkResult.Success -> {
+                            _toast.value = success
+                            onSuccess(result.data)
+                        }
+                        is NetworkResult.Failure -> {
+                            if (PulseRepository.refusalCode(result.error) == PulseRepository.ALREADY_KEPT_OPEN) keptOpen.add(card.id)
+                            _toast.value = result.error.displayMessage("Couldn't save that. Try again.")
+                            refresh()
+                        }
+                    }
+                } finally {
+                    pendingActions.remove(card.id)
+                }
+            }
+        }
+
+        private fun updateCards(transform: (PulseCardUi) -> PulseCardUi) {
+            (_state.value as? PulsePageUiState.Loaded)?.let { loaded ->
+                _state.value =
+                    PulsePageUiState.Loaded(
+                        loaded.content.copy(
+                            groups = loaded.content.groups.map { group -> group.copy(cards = group.cards.map(transform)) },
+                        ),
+                    )
+            }
+            (_earlier.value as? PulseEarlierState.Loaded)?.let { loaded ->
+                _earlier.value = PulseEarlierState.Loaded(loaded.group.copy(cards = loaded.group.cards.map(transform)))
+            }
+        }
+
+        private fun filterCards() {
+            (_state.value as? PulsePageUiState.Loaded)?.let { loaded ->
+                _state.value = PulsePageUiState.Loaded(loaded.content.withToggles())
+            }
+            (_earlier.value as? PulseEarlierState.Loaded)?.let { loaded ->
+                val cards = loaded.group.cards.filter(::isVisible)
+                _earlier.value =
+                    if (cards.isEmpty()) {
+                        PulseEarlierState.NothingEarlier
+                    } else {
+                        PulseEarlierState.Loaded(loaded.group.copy(cards = cards))
+                    }
+            }
+        }
 
         fun dismissToast() {
             _toast.value = null

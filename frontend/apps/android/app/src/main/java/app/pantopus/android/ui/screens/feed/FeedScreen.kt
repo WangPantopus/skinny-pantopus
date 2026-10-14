@@ -84,6 +84,7 @@ import app.pantopus.android.ui.screens.feed.map.FeedViewMode
 import app.pantopus.android.ui.screens.feed.pulse.PulseFeedUiState
 import app.pantopus.android.ui.screens.feed.pulse.PulseFeedViewModel
 import app.pantopus.android.ui.screens.feed.pulse.PulseIntent
+import app.pantopus.android.ui.screens.feed.pulse.PulsePostActions
 import app.pantopus.android.ui.screens.feed.pulse.PulsePostCard
 import app.pantopus.android.ui.screens.feed.pulse.PulsePostCardContent
 import app.pantopus.android.ui.screens.feed.pulse.PulseSportsEventModule
@@ -488,7 +489,7 @@ fun FeedScreen(
     overflowPostId?.let { id ->
         loadedRows.firstOrNull { it.id == id }?.let { row ->
             PostOverflowSheet(
-                row = row,
+                actions = row.actions,
                 onDismiss = { viewModel.dismissOverflow() },
                 onToggleSave = {
                     viewModel.dismissOverflow()
@@ -632,7 +633,7 @@ fun FeedScreen(
 }
 
 /** Report reasons accepted by `reportPostSchema` (`backend/routes/posts.js:3168`). */
-private val pulseReportReasons =
+internal val pulseReportReasons =
     listOf(
         "spam" to "Spam",
         "harassment" to "Harassment",
@@ -725,12 +726,12 @@ private fun FeedSurfaceTabs(
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun PostOverflowSheet(
-    row: PulsePostCardContent,
+internal fun PostOverflowSheet(
+    actions: PulsePostActions,
     onDismiss: () -> Unit,
     onToggleSave: () -> Unit,
-    onToggleRepost: () -> Unit,
-    onShare: () -> Unit,
+    onToggleRepost: (() -> Unit)?,
+    onShare: (() -> Unit)?,
     onHide: () -> Unit,
     onNotHelpful: () -> Unit,
     onMuteAuthor: () -> Unit,
@@ -741,9 +742,9 @@ private fun PostOverflowSheet(
     onCloseAsk: () -> Unit,
     onReport: () -> Unit,
     onDelete: () -> Unit,
+    topicMuteLabel: String = "Mute this topic",
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val actions = row.actions
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -751,7 +752,7 @@ private fun PostOverflowSheet(
         modifier = Modifier.testTag("pulseFeedOverflowSheet"),
     ) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(Spacing.s4),
+            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(Spacing.s4),
             verticalArrangement = Arrangement.spacedBy(Spacing.s1),
         ) {
             Text(
@@ -765,12 +766,16 @@ private fun PostOverflowSheet(
                 testTag = "pulseFeedOverflowSave",
                 onClick = onToggleSave,
             )
-            OverflowAction(
-                label = if (actions.isReposted) "Undo repost" else "Repost",
-                testTag = "pulseFeedOverflowRepost",
-                onClick = onToggleRepost,
-            )
-            OverflowAction(label = "Share…", testTag = "pulseFeedOverflowShare", onClick = onShare)
+            onToggleRepost?.let { repost ->
+                OverflowAction(
+                    label = if (actions.isReposted) "Undo repost" else "Repost",
+                    testTag = "pulseFeedOverflowRepost",
+                    onClick = repost,
+                )
+            }
+            onShare?.let { share ->
+                OverflowAction(label = "Share…", testTag = "pulseFeedOverflowShare", onClick = share)
+            }
             OverflowAction(label = "Hide this post", testTag = "pulseFeedOverflowHide", onClick = onHide)
             if (actions.canFlagNotHelpful) {
                 OverflowAction(
@@ -788,7 +793,7 @@ private fun PostOverflowSheet(
             }
             if (actions.canMuteThisTopic) {
                 OverflowAction(
-                    label = "Mute this topic",
+                    label = topicMuteLabel,
                     testTag = "pulseFeedOverflowMuteThisTopic",
                     onClick = onMuteThisTopic,
                 )

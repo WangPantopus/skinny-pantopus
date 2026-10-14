@@ -1,5 +1,6 @@
 package app.pantopus.android.ui.screens.pulse
 
+import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -18,11 +19,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -42,10 +46,13 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -63,12 +70,18 @@ import app.pantopus.android.core.perf.ReportContentShown
 import app.pantopus.android.data.pulse.PulseFeedQuery
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.RefreshFailedLine
+import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.screens.feed.FeedEmptyState
 import app.pantopus.android.ui.screens.feed.FeedPreferencesSheet
+import app.pantopus.android.ui.screens.feed.FeedSurface
 import app.pantopus.android.ui.screens.feed.FeedTopMenu
+import app.pantopus.android.ui.screens.feed.PostOverflowSheet
 import app.pantopus.android.ui.screens.feed.PulseMoreMenu
 import app.pantopus.android.ui.screens.feed.pulse.PulseTopic
+import app.pantopus.android.ui.screens.feed.pulse.PulseTopicChipRow
+import app.pantopus.android.ui.screens.feed.pulseReportReasons
 import app.pantopus.android.ui.screens.shared.feed.FeedComposeFAB
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -107,6 +120,240 @@ fun PulsePageScreen(
     val toast by viewModel.toast.collectAsStateWithLifecycle()
     var showsPreferences by rememberSaveable { mutableStateOf(false) }
     ReportContentShown("pulse", state is PulsePageUiState.Loaded)
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    val content = (state as? PulsePageUiState.Loaded)?.content
+    PulsePageEffects(viewModel, toast, query, content, newCount, listState)
+    val callbacks =
+        PulsePageCallbacks(
+            onOpenPost = onOpenPost,
+            onAction = { card -> if (!viewModel.toggleAction(card)) onOpenPost(card.id) },
+            onShowEarlier = viewModel::showEarlier,
+            onCompose = onCompose,
+            onShowAllTopics = { viewModel.selectTopic(null) },
+            onOverflow = viewModel::openMenu,
+            onRefresh = viewModel::refresh,
+        )
+
+    Box(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg).testTag("pulsePage")) {
+        PullToRefreshBox(
+            isRefreshing = refreshing,
+            onRefresh = {
+                onRefreshQuietStateCard()
+                viewModel.refresh()
+            },
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            PulsePageList(
+                state,
+                query,
+                earlier,
+                callbacks,
+                listState,
+                header = {
+                    PulsePageHeader(
+                        content,
+                        query,
+                        refreshNotice,
+                        FeedTopMenu(onOpenConnections, onOpenBeacons),
+                        { showsPreferences = true },
+                        viewModel,
+                    )
+                },
+                quietStateCard = quietStateCard,
+            )
+        }
+        if (newCount > 0) {
+            PulseNewPill(
+                count = newCount,
+                onClick = {
+                    viewModel.refresh()
+                    scope.launch { listState.scrollToItem(0) }
+                },
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = HEADER_PILL_TOP),
+            )
+        }
+        toast?.let { message ->
+            PulsePageToast(message, Modifier.align(Alignment.BottomCenter).padding(bottom = Spacing.s16))
+        }
+        FeedComposeFAB(
+            onClick = onCompose,
+            modifier = Modifier.align(Alignment.BottomEnd).padding(end = Spacing.s4, bottom = Spacing.s4),
+        )
+    }
+    PulsePageMenus(viewModel)
+    if (showsPreferences) {
+        FeedPreferencesSheet(
+            onClose = { showsPreferences = false },
+            onPrefsChanged = viewModel::refresh,
+            onTopicUnmuted = viewModel::topicUnmuted,
+        )
+    }
+}
+
+@Composable
+private fun PulsePageHeader(
+    content: PulsePageContent?,
+    query: PulseFeedQuery,
+    refreshNotice: RefreshNotice?,
+    menu: FeedTopMenu,
+    onPreferences: () -> Unit,
+    viewModel: PulsePageViewModel,
+) {
+    PulseHeader(content?.areaName, content?.areaChoices.orEmpty(), menu, onPreferences, viewModel::selectArea)
+    PulseViews(selected = query.view, onSelect = viewModel::selectView)
+    PulseTopicChips(selected = query.topic, onSelect = viewModel::selectTopic)
+    refreshNotice?.let { RefreshFailedLine(it, modifier = Modifier.padding(horizontal = Spacing.s4, vertical = Spacing.s1)) }
+}
+
+@Composable
+private fun PulsePageList(
+    state: PulsePageUiState,
+    query: PulseFeedQuery,
+    earlier: PulseEarlierState,
+    callbacks: PulsePageCallbacks,
+    listState: LazyListState,
+    header: @Composable () -> Unit,
+    quietStateCard: @Composable () -> Unit,
+) {
+    LazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxSize().testTag("pulseList"),
+        contentPadding = PaddingValues(bottom = BOTTOM_ROOM),
+        verticalArrangement = Arrangement.spacedBy(Spacing.s2),
+    ) {
+        item(key = "header") { header() }
+        when (val s = state) {
+            PulsePageUiState.Loading -> item(key = "loading") { PulseSkeleton() }
+            is PulsePageUiState.Error ->
+                item(key = "error") {
+                    ErrorState(headline = "Couldn't load Pulse", message = s.message, onRetry = callbacks.onRefresh)
+                }
+            is PulsePageUiState.Loaded ->
+                pulseItems(
+                    content = s.content,
+                    earlier = earlier,
+                    query = query,
+                    callbacks = callbacks,
+                    quietStateCard = quietStateCard,
+                )
+        }
+    }
+}
+
+@Composable
+private fun PulsePageMenus(viewModel: PulsePageViewModel) {
+    val menu by viewModel.menu.collectAsStateWithLifecycle()
+    val selected = menu ?: return
+    val card = selected.card
+    val context = LocalContext.current
+    if (selected.action == null) {
+        PostOverflowSheet(
+            actions = card.actions.copy(pulseTopic = card.actions.pulseTopic.takeIf { card.areaId != null }),
+            onDismiss = viewModel::dismissMenu,
+            onToggleSave = { viewModel.toggleSave(card) },
+            onToggleRepost = null,
+            onShare = if (card.canShare) {
+                {
+                viewModel.dismissMenu()
+                val share =
+                    Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, "https://www.pantopus.com/posts/${card.id}")
+                    }
+                context.startActivity(Intent.createChooser(share, "Share post"))
+                }
+            } else null,
+            onHide = { viewModel.hide(card) },
+            onNotHelpful = {},
+            onMuteAuthor = { viewModel.confirmMenu(PulsePageMenuAction.MuteAuthor) },
+            onMuteTopic = {},
+            onMuteThisTopic = { viewModel.muteTopic(card) },
+            onMarkSolved = {},
+            onKeepOpen = { viewModel.keepOpen(card) },
+            onCloseAsk = { viewModel.confirmMenu(PulsePageMenuAction.Close) },
+            onReport = { viewModel.confirmMenu(PulsePageMenuAction.Report) },
+            onDelete = { viewModel.confirmMenu(PulsePageMenuAction.Delete) },
+            topicMuteLabel = "Mute this topic in this area",
+        )
+    } else if (selected.action == PulsePageMenuAction.Report) {
+        PulsePageReport(card, viewModel)
+    } else {
+        PulsePageConfirm(selected, viewModel)
+    }
+}
+
+@Composable
+private fun PulsePageReport(
+    card: PulseCardUi,
+    viewModel: PulsePageViewModel,
+) {
+    AlertDialog(
+        onDismissRequest = viewModel::dismissMenu,
+        title = { Text("Report this post?") },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                Text("Reports are reviewed by the Pantopus team. The author isn't told who reported.")
+                pulseReportReasons.forEach { (key, label) ->
+                    TextButton(
+                        onClick = { viewModel.report(card, key) },
+                        modifier = Modifier.fillMaxWidth().testTag("pulseFeedReportReason_$key"),
+                    ) {
+                        Text(label)
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = viewModel::dismissMenu) { Text("Cancel") } },
+    )
+}
+
+@Composable
+private fun PulsePageConfirm(
+    menu: PulsePageMenu,
+    viewModel: PulsePageViewModel,
+) {
+    val card = menu.card
+    val words =
+        when (menu.action) {
+            PulsePageMenuAction.Close -> Triple("Close this question?", "It leaves Pulse. You can restore it from My posts.", "Close")
+            PulsePageMenuAction.Delete -> Triple("Delete post?", "This will permanently remove your post.", "Delete")
+            PulsePageMenuAction.MuteAuthor ->
+                Triple(
+                    "Mute ${card.authorName}?",
+                    "You won't see their posts in any feed. You can undo this from their profile.",
+                    "Mute",
+                )
+            else -> return
+        }
+    AlertDialog(
+        onDismissRequest = viewModel::dismissMenu,
+        title = { Text(words.first) },
+        text = { Text(words.second) },
+        confirmButton = {
+            TextButton(onClick = {
+                when (menu.action) {
+                    PulsePageMenuAction.Close -> viewModel.closeAsk(card)
+                    PulsePageMenuAction.Delete -> viewModel.delete(card)
+                    PulsePageMenuAction.MuteAuthor -> viewModel.muteAuthor(card)
+                    else -> Unit
+                }
+            }, modifier = Modifier.testTag("pulsePageConfirm_${menu.action}")) { Text(words.third, color = PantopusColors.error) }
+        },
+        dismissButton = { TextButton(onClick = viewModel::dismissMenu) { Text("Cancel") } },
+    )
+}
+
+@Composable
+private fun PulsePageEffects(
+    viewModel: PulsePageViewModel,
+    toast: String?,
+    query: PulseFeedQuery,
+    content: PulsePageContent?,
+    newCount: Int,
+    listState: LazyListState,
+) {
     LifecycleResumeEffect(Unit) {
         viewModel.load()
         onPauseOrDispose { }
@@ -129,9 +376,6 @@ fun PulsePageScreen(
             viewModel.dismissToast()
         }
     }
-    val listState = rememberLazyListState()
-    val scope = rememberCoroutineScope()
-    val content = (state as? PulsePageUiState.Loaded)?.content
     // The end card on screen means the page was read to its end: tell the server, once per read.
     LaunchedEffect(query) { listState.scrollToItem(0) }
     LaunchedEffect(content?.readAt, query, newCount) {
@@ -140,96 +384,35 @@ fun PulsePageScreen(
             viewModel.endShown()
         }
     }
+}
 
-    Box(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg).testTag("pulsePage")) {
-        PullToRefreshBox(
-            isRefreshing = refreshing,
-            onRefresh = {
-                onRefreshQuietStateCard()
-                viewModel.refresh()
-            },
-            modifier = Modifier.fillMaxSize(),
-        ) {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxSize().testTag("pulseList"),
-                contentPadding = PaddingValues(bottom = BOTTOM_ROOM),
-                verticalArrangement = Arrangement.spacedBy(Spacing.s2),
-            ) {
-                item(key = "header") {
-                    PulseHeader(
-                        areaName = content?.areaName,
-                        areas = content?.areaChoices.orEmpty(),
-                        menu = FeedTopMenu(onOpenConnections, onOpenBeacons),
-                        onPreferences = { showsPreferences = true },
-                        onPickArea = viewModel::selectArea,
-                    )
-                    PulseViews(selected = query.view, onSelect = viewModel::selectView)
-                    PulseTopicChips(selected = query.topic, onSelect = viewModel::selectTopic)
-                    refreshNotice?.let {
-                        RefreshFailedLine(
-                            it,
-                            modifier = Modifier.padding(horizontal = Spacing.s4, vertical = Spacing.s1),
-                        )
-                    }
-                }
-                when (val s = state) {
-                    PulsePageUiState.Loading -> item(key = "loading") { PulseSkeleton() }
-                    is PulsePageUiState.Error ->
-                        item(key = "error") {
-                            ErrorState(headline = "Couldn't load Pulse", message = s.message, onRetry = viewModel::refresh)
-                        }
-                    is PulsePageUiState.Loaded ->
-                        pulseItems(
-                            content = s.content,
-                            earlier = earlier,
-                            view = query.view,
-                            onOpenPost = onOpenPost,
-                            onAction = { card -> if (!viewModel.toggleAction(card)) onOpenPost(card.id) },
-                            onShowEarlier = viewModel::showEarlier,
-                            onCompose = onCompose,
-                            quietStateCard = quietStateCard,
-                        )
-                }
-            }
-        }
-        if (newCount > 0) {
-            PulseNewPill(
-                count = newCount,
-                onClick = {
-                    viewModel.refresh()
-                    scope.launch { listState.scrollToItem(0) }
-                },
-                modifier = Modifier.align(Alignment.TopCenter).padding(top = HEADER_PILL_TOP),
-            )
-        }
-        toast?.let { message ->
-            Box(
-                modifier =
-                    Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = Spacing.s16)
-                        .clip(RoundedCornerShape(Radii.pill))
-                        .background(PantopusColors.appText)
-                        .padding(horizontal = Spacing.s4, vertical = Spacing.s2)
-                        .testTag("pulsePageToast"),
-            ) {
-                Text(text = message, fontSize = 13.sp, color = PantopusColors.appTextInverse)
-            }
-        }
-        FeedComposeFAB(
-            onClick = onCompose,
-            modifier = Modifier.align(Alignment.BottomEnd).padding(end = Spacing.s4, bottom = Spacing.s4),
-        )
-    }
-    if (showsPreferences) {
-        FeedPreferencesSheet(
-            onClose = { showsPreferences = false },
-            onPrefsChanged = viewModel::refresh,
-            onTopicUnmuted = { viewModel.refresh() },
-        )
+@Composable
+private fun PulsePageToast(
+    message: String,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier =
+            modifier
+                .clip(RoundedCornerShape(Radii.pill))
+                .background(PantopusColors.appText)
+                .padding(horizontal = Spacing.s4, vertical = Spacing.s2)
+                .testTag("pulsePageToast")
+                .semantics { liveRegion = LiveRegionMode.Polite },
+    ) {
+        Text(text = message, fontSize = 13.sp, color = PantopusColors.appTextInverse)
     }
 }
+
+private data class PulsePageCallbacks(
+    val onOpenPost: (String) -> Unit,
+    val onAction: (PulseCardUi) -> Unit,
+    val onShowEarlier: () -> Unit,
+    val onCompose: () -> Unit,
+    val onShowAllTopics: () -> Unit,
+    val onOverflow: (PulseCardUi) -> Unit,
+    val onRefresh: () -> Unit,
+)
 
 // ─── Header, views, topics ─────────────────────────────────────────────────────
 
@@ -364,51 +547,17 @@ private fun PulseViews(
     }
 }
 
-/** `All` and the 12 topics, scrolling sideways. A chip filters; it joins nothing. */
+/** Reuse S4's few-at-a-time topics, More control and accessibility names. */
 @Composable
 private fun PulseTopicChips(
     selected: String?,
     onSelect: (String?) -> Unit,
 ) {
-    val chips = remember { listOf<PulseTopic?>(null) + PulseTopic.entries }
-    LazyRow(
-        modifier = Modifier.fillMaxWidth().testTag("pulseTopicChips"),
-        contentPadding = PaddingValues(horizontal = Spacing.s4, vertical = Spacing.s2),
-        horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
-    ) {
-        items(chips, key = { it?.key ?: "all" }) { topic ->
-            val isSelected = topic?.key == selected
-            val label = topic?.label ?: "All"
-            Box(
-                modifier =
-                    Modifier
-                        .heightIn(min = 40.dp)
-                        .clip(RoundedCornerShape(Radii.pill))
-                        .background(if (isSelected) PantopusColors.primary600 else PantopusColors.appSurface)
-                        .border(
-                            1.dp,
-                            if (isSelected) PantopusColors.primary600 else PantopusColors.appBorderStrong,
-                            RoundedCornerShape(Radii.pill),
-                        )
-                        .clickable { onSelect(topic?.key) }
-                        .padding(horizontal = Spacing.s4)
-                        .semantics {
-                            role = Role.Button
-                            this.selected = isSelected
-                            contentDescription = if (isSelected) "$label, selected" else label
-                        }
-                        .testTag("pulseTopic_${topic?.key ?: "all"}"),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = label,
-                    fontSize = 14.sp,
-                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
-                    color = if (isSelected) PantopusColors.appTextInverse else PantopusColors.appText,
-                )
-            }
-        }
-    }
+    PulseTopicChipRow(
+        topics = PulseTopic.entries,
+        activeTopic = PulseTopic.fromKey(selected),
+        onSelect = { onSelect(it?.key) },
+    )
 }
 
 // ─── The list ──────────────────────────────────────────────────────────────────
@@ -416,40 +565,53 @@ private fun PulseTopicChips(
 private fun LazyListScope.pulseItems(
     content: PulsePageContent,
     earlier: PulseEarlierState,
-    view: String,
-    onOpenPost: (String) -> Unit,
-    onAction: (PulseCardUi) -> Unit,
-    onShowEarlier: () -> Unit,
-    onCompose: () -> Unit,
+    query: PulseFeedQuery,
+    callbacks: PulsePageCallbacks,
     quietStateCard: @Composable () -> Unit,
 ) {
     if (content.quiet?.card != null) {
         item(key = "quiet") { Box(modifier = Modifier.padding(horizontal = Spacing.s4)) { quietStateCard() } }
     }
     if (content.groups.isEmpty()) {
-        item(
-            key = "empty",
-        ) { PulseQuietDay(areaName = content.areaName, following = view == PulseFeedQuery.VIEW_FOLLOWING, onCompose = onCompose) }
+        item(key = "empty") {
+            val topic = PulseTopic.fromKey(query.topic)
+            if (topic == null) {
+                PulseQuietDay(content.areaName, query.view == PulseFeedQuery.VIEW_FOLLOWING, callbacks.onCompose)
+            } else {
+                val empty = FeedSurface.topicEmptyContent(topic, scopeLabel = null)
+                FeedEmptyState(
+                    content =
+                        if (query.view == PulseFeedQuery.VIEW_FOLLOWING) {
+                            empty.copy(body = "New conversations about ${topic.label.lowercase()} that you follow will show here.")
+                        } else {
+                            empty
+                        },
+                    onCta = callbacks.onShowAllTopics,
+                )
+            }
+        }
     }
     content.groups.forEach { group ->
         item(key = "group_${group.key}") { PulseGroupHeader(group.title) }
         items(group.cards, key = { it.id }) { card ->
             PulseConversationCard(
                 card = card,
-                onOpen = { onOpenPost(card.id) },
-                onAction = { onAction(card) },
+                onOpen = { callbacks.onOpenPost(card.id) },
+                onAction = { callbacks.onAction(card) },
+                onOverflow = { callbacks.onOverflow(card) },
                 modifier = Modifier.padding(horizontal = Spacing.s4),
             )
         }
     }
-    item(key = END_KEY) { PulseEnd(content.end, earlier, onShowEarlier) }
+    item(key = END_KEY) { PulseEnd(content.end, earlier, callbacks.onShowEarlier) }
     if (earlier is PulseEarlierState.Loaded) {
         item(key = "group_earlier") { PulseGroupHeader(earlier.group.title) }
         items(earlier.group.cards, key = { "earlier_${it.id}" }) { card ->
             PulseConversationCard(
                 card = card,
-                onOpen = { onOpenPost(card.id) },
-                onAction = { onAction(card) },
+                onOpen = { callbacks.onOpenPost(card.id) },
+                onAction = { callbacks.onAction(card) },
+                onOverflow = { callbacks.onOverflow(card) },
                 modifier = Modifier.padding(horizontal = Spacing.s4),
             )
         }
@@ -532,7 +694,7 @@ private fun PulseQuietDay(
         verticalArrangement = Arrangement.spacedBy(Spacing.s2),
     ) {
         Text(
-            text = if (following) "Nothing followed yet" else "Quiet in $areaName today",
+            text = if (following) "No new conversations" else "Quiet in $areaName today",
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
             color = PantopusColors.appText,
@@ -541,7 +703,7 @@ private fun PulseQuietDay(
         Text(
             text =
                 if (following) {
-                    "Follow a conversation to keep up with it here."
+                    "New activity in conversations you follow will show here."
                 } else {
                     "When neighbors post, it shows here. Start a conversation if you'd like."
                 },

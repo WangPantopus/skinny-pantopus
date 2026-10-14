@@ -1,9 +1,11 @@
 package app.pantopus.android.ui.screens.pulse
 
 import androidx.compose.runtime.Immutable
+import app.pantopus.android.data.api.models.feed.FeedMuteEntityType
 import app.pantopus.android.data.api.models.pulse.PulseFeedResponse
 import app.pantopus.android.data.api.models.pulse.PulsePostDto
 import app.pantopus.android.ui.screens.feed.pulse.PostStatus
+import app.pantopus.android.ui.screens.feed.pulse.PulsePostActions
 import app.pantopus.android.ui.screens.feed.pulse.PulseTopic
 import java.time.Duration
 import java.time.Instant
@@ -47,6 +49,9 @@ data class PulseCardUi(
     /** "✓ Answered", "Gone", "Reunited", "Happened · 14 went", or null while the post is open. */
     val status: PostStatus?,
     val isCurator: Boolean,
+    val actions: PulsePostActions,
+    val areaId: String?,
+    val canShare: Boolean,
     /** The whole card for TalkBack. */
     val description: String,
 )
@@ -139,9 +144,19 @@ internal fun relativeTime(
 ): String {
     val then = runCatching { Instant.parse(iso) }.getOrNull() ?: return ""
     val minutes = Duration.between(then, now).toMinutes()
-    if (minutes < 1) return "Just now"
-    if (minutes < MINUTES_PER_HOUR) return "${minutes}m"
-    if (minutes < MINUTES_PER_DAY) return "${minutes / MINUTES_PER_HOUR}h"
+    return when {
+        minutes < 1 -> "Just now"
+        minutes < MINUTES_PER_HOUR -> "${minutes}m"
+        minutes < MINUTES_PER_DAY -> "${minutes / MINUTES_PER_HOUR}h"
+        else -> olderPostDate(then, now, zone)
+    }
+}
+
+private fun olderPostDate(
+    then: Instant,
+    now: Instant,
+    zone: ZoneId,
+): String {
     val day = then.atZone(zone).toLocalDate()
     val today = now.atZone(zone).toLocalDate()
     val days = Duration.between(day.atStartOfDay(), today.atStartOfDay()).toDays()
@@ -224,6 +239,9 @@ internal fun PulsePostDto.toCard(
         goingCount = counts?.going?.coerceAtLeast(0)?.takeIf { type == "event" },
         status = status,
         isCurator = author?.isCurator == true || author?.label == "pantopus",
+        actions = overflowActions(),
+        areaId = this.about?.areaId,
+        canShare = readScope == "public",
         description =
             listOfNotNull(
                 listOfNotNull(name, label?.first, meta.ifEmpty { null }).joinToString(", "),
@@ -231,6 +249,28 @@ internal fun PulsePostDto.toCard(
                 body,
                 about,
             ).joinToString(". "),
+    )
+}
+
+private fun PulsePostDto.isOpenAsk(): Boolean {
+    val marker = status ?: return false
+    if (type != "ask_local" || marker.state != "open" || marker.resolution != null) return false
+    return PostStatus.askWindowIsOpen(createdAt.orEmpty(), marker.endsAt)
+}
+
+private fun PulsePostDto.overflowActions(): PulsePostActions {
+    val owner = viewer?.isAuthor == true
+    val openAsk = owner && isOpenAsk()
+
+    return PulsePostActions(
+        isOwner = owner,
+        isSaved = viewer?.saved == true,
+        muteEntityType = author?.id?.let { FeedMuteEntityType.User },
+        muteEntityId = author?.id,
+        muteEntityName = author?.displayName?.takeIf { it.isNotBlank() } ?: "this author",
+        pulseTopic = PulseTopic.fromKey(topic),
+        canKeepOpen = openAsk && viewer?.canKeepOpen == true,
+        canCloseAsk = openAsk,
     )
 }
 
@@ -246,7 +286,7 @@ internal fun PulseFeedResponse.toPage(
         groups.orEmpty().mapIndexedNotNull { index, group ->
             val cards =
                 group.items.filter { it.id.isNotBlank() && it.moderation?.state !in listOf("held", "removed") && seenIds.add(it.id) }
-                    .map { it.toCard(now, zone) }
+                    .map { post -> post.toCard(now, zone).let { it.copy(areaId = group.areaId ?: it.areaId) } }
             if (cards.isEmpty()) null else PulseGroupUi(key = "${group.key.orEmpty()}:$index", title = group.title.orEmpty(), cards = cards)
         }
     val homeTown = areasAvailable.orEmpty().firstOrNull { it.kind == "town" }?.id
@@ -275,3 +315,8 @@ private const val MINUTES_PER_HOUR = 60L
 private const val MINUTES_PER_DAY = 24 * 60L
 private const val DAYS_PER_WEEK = 7
 private const val NOON = 12
+
+/** The existing post options sheet, followed by an explicit confirmation for a destructive action. */
+data class PulsePageMenu(val card: PulseCardUi, val action: PulsePageMenuAction? = null)
+
+enum class PulsePageMenuAction { Close, Delete, MuteAuthor, Report }
