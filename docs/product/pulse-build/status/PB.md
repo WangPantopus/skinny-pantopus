@@ -31,6 +31,8 @@ Owner: the PB session. Keep this file current in your own PRs (or a small docs P
 
 ## Requests (to other streams)
 
+- → PI, PA (S5 area contract): §2.10 now freezes the `Area` shape and `{ areas: [...] }` town-search wrapper before the backend implementation PR. `/areas/mine` uses the primary home; street/neighborhood require its address verification; reading will use all verified homes. No device coordinates are accepted or returned. Backend implementation is in progress; H4 still applies.
+
 - → PV: reconcile `status/BOARD.md` with merged PRs and the owners' evidence. It still marks S1–S24 as not started and records no sweep; this is not a reliable implementation summary. PS and PV status files also record no completed work, while PC has a design note only. This audit does not claim those streams have no unpushed local work.
 - → PI, PA (S1 client half): done in iOS PR 2266 and Android PR 2271: refused Heads-up kinds and business-to-Place creation removed. The separate web request below remains open.
 - → PI, PA (S4 client half): topic chips use `GET /api/posts/feed?topic=` today and `GET /api/pulse/feed?topic=` from S6; "Mute this topic in this area" uses `POST /api/posts/mute/topic` `{ topic, areaId }` (areas from S5; without `areaId` it mutes everywhere); the preferences list reads `topic_mutes` from `GET /api/posts/mute` and undoes with `DELETE /api/posts/mute` `{ entityType: 'topic', entityId, areaId? }`.

@@ -177,7 +177,9 @@ Private note to a home (signed): `POST /api/pulse/notes` `{ "toHomeId"? | "toPos
 
 ### 2.10 Areas and eligibility
 
-`GET /api/pulse/areas/mine` → `{ "town": {...}|null, "neighborhood": {...}|null, "street": {...}|null, "home_verified": true }` (only areas that are open) · `GET /api/pulse/areas/search?q=` → towns for "another place" · `POST /api/pulse/adult-attestation` → `{ "attested_at" }`.
+`GET /api/pulse/areas/mine` → `{ "town": Area|null, "neighborhood": Area|null, "street": Area|null, "home_verified": boolean }`. `Area` is `{ "id": "uuid", "kind": "town|neighborhood|street|place", "name": "Camas", "state": "WA", "title": "Camas" }` (the same area metadata as the feed pill). Only areas whose `opened_at` has arrived appear. The primary home's town is the default; street and neighborhood require address verification for that home. Without a current home, all three areas are null and `home_verified` is false. Reading permissions still use the set of all current verified homes (S24), independently of this default.
+
+`GET /api/pulse/areas/search?q=` → `{ "areas": [Area] }`, open towns only, name order, at most 20; `q` is a literal substring (empty lists available towns), up to 80 characters. Both area endpoints require sign-in. Neither accepts device coordinates nor returns home ids, points, polygons or measured distances. Lookup failure is 503 with a plain `error` sentence; it never invents a home or verification state. `POST /api/pulse/adult-attestation` → `{ "attested_at" }`.
 
 `POST /api/pulse/adult-attestation` (in force since S5's first PR): no body; stores `User.adult_attested_at` once and returns it, the first time again on every later call (a double tap answers the same); `403 AGE_NOT_ELIGIBLE` when the date of birth on file says the person is under 18.
 
