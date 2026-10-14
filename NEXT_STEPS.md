@@ -27,7 +27,7 @@ Sessions you start for one job (Instant Screens, Nearby Plans, single fixes) wor
 
 **Made September 16. All stand.**
 
-- [x] Navigation stays Place · Today · Nearby · Mail; no relabel.
+- [x] Navigation stays Place · Today · Nearby · Mail; no relabel. (Changed October 13 for Pulse: five tabs, see below.)
 - [x] Density meter: scarcity gates status only, never access.
 - [x] Seeder stays as a visibly labeled platform publisher; strip the engagement-question and neighbor-voice prompt lines; exclude it from organic metrics.
 - [x] General ban stays; a Moment category only with an explicit place attachment, and not before place pages exist.
@@ -79,8 +79,17 @@ Sessions you start for one job (Instant Screens, Nearby Plans, single fixes) wor
 **Made by the founder on October 12 (Nearby Plans), from the picks on the [one-page design](https://claude.ai/artifact/4jx9jf3JARyLTWWaaW84NG).** Progress is in the Nearby Plans section below.
 
 - [x] Build Nearby Plans now, beside the pilot, behind flags that stay off until you turn them on: neighbors put small plans (watch party, playdate, pickup game, walk & coffee) on the Nearby map, others ask to join, the host says yes, and only then does the exact place appear. The name is "Plans"; the new tables `Plan` and `PlanRequest` are approved.
-- [x] Nearby opens on the map and the four tabs stay; Pulse and Connections move into the list under the map. Current location proves a host is nearby and never becomes the pin. Watch parties and walk & coffee may be hosted at home, with the host approving each person by hand; playdates never.
+- [x] Nearby opens on the map and the four tabs stay; Pulse and Connections move into the list under the map. (Changed October 13: the map moves to a Plans tab and Pulse becomes a tab; see below.) Current location proves a host is nearby and never becomes the pin. Watch parties and walk & coffee may be hosted at home, with the host approving each person by hand; playdates never.
 - [x] Asking to join needs an account and a location nearby, or a verified address for playdates (any host can require one). Three automatic-accept rules: verified neighbors, people you've hosted before, and anyone nearby for pickup games and walks; never for playdates or plans at home. Playdates turn on only after address verification works in production and a lawyer has read the rules. A shared link opens a small web preview showing only the area, an exception to the mobile-only rule.
+
+**Made by the founder on October 13 (Pulse).** The build kit is [docs/product/pulse-build/](docs/product/pulse-build/README.md); progress is in the Pulse section below.
+
+- [x] Build all of the [PR 625](https://github.com/WangPantopus/skinny-pantopus/pull/625) Pulse design now, in six parallel streams, with no feature flag, and without waiting for the Crew Day launch. Safety comes from merge ordering and from the founder choosing when to deploy and cut builds.
+- [x] Five tabs: Place · Today · Pulse · Plans · Messages. The Plans tab shows only while `plans` is on. Nearby is no longer a tab; its Pulse, Connections and neighborhood meter move into the Pulse tab, and the Plans map moves to the Plans tab. This replaces the September 16 and October 12 four-tab lines for this build.
+- [x] Share posts are allowed (a place attached, at most 2 a week); crime, suspicious, theft, vandalism and scam alert kinds can no longer be created; businesses reply and never post; the PR 625 review's recommendations are the defaults; the Share leak is fixed in [PR 2252](https://github.com/WangPantopus/skinny-pantopus/pull/2252).
+- [x] Labels and permissions, adult-only posting and Visitors who may start Asks (one a day) as in the design. Paid moderation is approved in principle; the founder confirms real cover before public web exposure.
+- [x] No unit tests or coverage for Pulse: every feature, flow and edge case is verified end to end by launching the web, iOS and Android apps ([scenarios](docs/product/pulse-build/05-scenarios.md)).
+- [ ] The eleven new tables in the [contract](docs/product/pulse-build/02-contract.md#42-new-tables-awaiting-founder-approval): awaiting the founder's approval.
 
 **Still open. The brief builds the default until you decide.**
 
@@ -92,7 +101,7 @@ Sessions you start for one job (Instant Screens, Nearby Plans, single fixes) wor
 - [ ] Creator network and Places order. Decide in late November with the pilot's week-four number.
 - [ ] Crew Day by hand this fall, beside the pilot (section 4A). Default: talk to the crews now; choose the first streets only if the crews pass Gate 1.
 - [ ] The by-hand Crew Day's tools. Default: a form, texts, email, and payment through the crew or a payment link, with no Pantopus web build, so the mobile-only rule holds. The Street Organizer's Phase 1 assumes a browser booking page.
-- [ ] Pulse's six approvals in [PR 625](https://github.com/WangPantopus/skinny-pantopus/pull/625): navigation, place pages, labels and permissions, adult-only posting, paid moderation, and following the Crew Day launch. Default: decide when Pulse is scheduled; the review comment recommends an answer for each.
+- [x] Pulse's six approvals in [PR 625](https://github.com/WangPantopus/skinny-pantopus/pull/625): decided October 13 (see above): five tabs; place pages in release R4 after streets, buildings, HOAs and school zones first; labels and permissions approved; adult-only posting approved; paid moderation approved in principle; Pulse is built now rather than after Crew Day.
 - [ ] The Pantopus Agent's open decisions: working name, Stage 1 entry point and languages, autonomy defaults and memory retention ([product design](docs/product/pantopus-agent-product-design-2026-10-04.md#open-decisions)). Default: its recommendations; nothing is built before the pilot's first read.
 - [ ] Record these decisions in `docs/pantopus-product-design-index-2026-09-09.md`, `docs/PROJECT_HANDOFF.md` and section 13 of the Wedge v2 page.
 
@@ -281,7 +290,7 @@ Phases 0 and 1 of the [Street Organizer launch plan](docs/product/street-organiz
 - [ ] F9 growth rows: referral rewards, tier rename, one Founding Neighbor name.
 - [ ] Ledger "Next" ideas: city founding map, open-slots card, seasonal card, weekly email digest, address-change watches, home-file chat, draft-and-approve replies, home handover, national library, health and market sections, the density-lock change, saved-place snapshot columns, an audit of shipped screens against the September docs' checklist.
 - [ ] Street Organizer Phase 2 software, only after Gate 2: plans, My plans, Nearby and Household inside existing surfaces, crew route tools, postcards with codes and the weekly digest. Its invitation pages are web, so it reopens the mobile-only decision.
-- [ ] Pulse, after Crew Day launches, per [PR 625](https://github.com/WangPantopus/skinny-pantopus/pull/625) and its review: one town-wide space first, with street areas opening on Crew Day streets. Aim for the place people ask their town, alongside the Facebook groups they already use, not a replacement for them.
+- [x] Pulse moved to the Pulse section below (October 13): built now, town-wide first, with street areas opening on Crew Day streets. Aim for the place people ask their town, alongside the Facebook groups they already use, not a replacement for them.
 - [ ] Support Train gift funds (off since October 6, PR 1624; the routes exist and are untested). First decide who receives the money (the recipient, the organizer, or Pantopus holding it), whether it waits until the Train ends, any platform fee, what happens when the recipient has no account, and whether organizers see anonymous amounts ([audit](docs/support-train-payments-audit.md)). Recommended order: first let the organizer add an outside fundraiser link (no money passes through Pantopus); in-app gifts through Stripe only after those decisions, with the same test-card checks as invoices.
 - [ ] Porchlight stays an option: at most a by-hand trial with five families after the pilot.
 - [ ] The Pantopus Agent, in four stages, each only after the one before passes its gate ([product design](docs/product/pantopus-agent-product-design-2026-10-04.md), [system design](docs/product/pantopus-agent-system-design-2026-10-04.md)):
@@ -307,12 +316,12 @@ Phases 0 and 1 of the [Street Organizer launch plan](docs/product/street-organiz
 - [ ] Claude Design pack: stop drawing and fixing cut features; finish fix passes only for the pilot screens listed in section 12 of the brief.
 - [ ] Decide whether strategy documents belong on a public repository.
 - [ ] Founder review of the Pantopus Agent designs; record each answer in the product design's Open decisions table.
-- [ ] PR 625 (Pulse): revise per the [review comment](https://github.com/WangPantopus/skinny-pantopus/pull/625#issuecomment-5974324844) before merging it as a proposal. First its eight fixes: where the Street Organizer's Nearby goes and which screen opens first; the Street Organizer's "no feed, no public comments" rule; one ask-and-offer model for the street; a text channel; street areas opening on Crew Day streets; offers not first-come by default; unanswered asks counted apart from answered ones; signed private notes. Then its fourteen smaller items.
-- [ ] Street Organizer design: when Pulse is adopted, amend its non-goals, "What we never build" and moderation sections, and record the by-hand Phase 1 tools.
+- [x] PR 625 (Pulse): the [review comment](https://github.com/WangPantopus/skinny-pantopus/pull/625#issuecomment-5974324844)'s fixes are decided and written into the [build spec](docs/product/pulse-build/01-build-spec.md#17-how-the-pr-625-reviews-items-were-decided) (October 13); PR 625 stays as the design record. The eight fixes were: where the Street Organizer's Nearby goes and which screen opens first; the Street Organizer's "no feed, no public comments" rule; one ask-and-offer model for the street; a text channel; street areas opening on Crew Day streets; offers not first-come by default; unanswered asks counted apart from answered ones; signed private notes. Its fourteen smaller items are decided there too.
+- [x] Street Organizer design: amended its non-goals, "What we never build" and moderation sections for Pulse (October 13). Still to do: record the by-hand Phase 1 tools.
 
 ## Not now (decided)
 
-Bill paying by an assistant · generic shopping and deals · any navigation relabel · the source-discovery engine and new owner-scoped tables · a news feed against Nextdoor · Recent conditions and Moment posts · photoreal 3D homes · per-city permit adapters · nationwide paid acquisition before the pilot.
+Bill paying by an assistant · generic shopping and deals · any navigation relabel (except the five-tab Pulse change approved October 13) · the source-discovery engine and new owner-scoped tables · a news feed against Nextdoor (Pulse is the calm, ending alternative approved October 13) · Recent conditions and Moment posts (Share posts approved for Pulse October 13) · photoreal 3D homes · per-city permit adapters · nationwide paid acquisition before the pilot.
 
 ## Ballot (added September 24)
 
@@ -339,6 +348,18 @@ Decided October 12 (section 0) and built by three founder-started sessions: back
 - [x] The map layer, sports games and places, quiet hours and polish (PRs 2212, 2215–2220, 2237), and the web share page with its public endpoint, which shows only the area and works only while the host has Plans (PR 2211). All merged October 13.
 - [ ] iOS (PRs 2209, 2222, 2225, 2227, 2238) and Android (PRs 2221, 2224, 2226, 2228) merged October 13. L4's release checks show both apps unchanged while the flag is off. Still to finish: each journey checked on a simulator or emulator against the design boards.
 - [ ] Turn on `plans` for the internal team or beta users once the journeys pass; `plans_playdates` waits for production address verification and a lawyer's read.
+
+## Pulse (added October 13)
+
+Decided October 13 (section 0). The [build kit](docs/product/pulse-build/README.md) has the spec, the API and data contract, the delivery plan, the verification kit and one brief per stream. Six sessions work in parallel: PB backend and data, PI iOS, PA Android, PS safety and composer checks, PC channels and public web, PV verification and release. Each keeps its status in `docs/product/pulse-build/status/`; PV keeps the [board](docs/product/pulse-build/status/BOARD.md). There is no flag: slices merge in the order the kit sets, and you choose when to deploy (backend, then web, then app builds) and cut builds.
+
+- [ ] Share leak fix: [PR 2252](https://github.com/WangPantopus/skinny-pantopus/pull/2252), built and verified; merge it before the streams start.
+- [ ] You: tick "New tables" in the kit's README (eleven tables). Nothing that creates a table merges before that.
+- [ ] R1 (about weeks 1–3): rule cleanups, tolerant decoding, the five tabs, topics, areas and labels with server-enforced audience, the Pulse page, lifecycle.
+- [ ] R2 (about weeks 3–6): composer and checks, conversations, following and controls, moderation baseline.
+- [ ] R3 (about weeks 6–10): Known, Upcoming, Right now, search, digests, the plans bridge.
+- [ ] R4 (about weeks 10–15): public web and guest browsing (after the moderation baseline and your confirmation of moderator cover), place pages and streets, business and official accounts, text channel and reply-by-email (after your provider accounts), transparency.
+- [ ] You, when the time comes: confirm moderator cover; the Anthropic key on hosted environments for the composer checks; outage-data and SMS accounts; legal review and NCMEC reporting setup; deploys; first-town acceptance rounds with 8 to 10 people.
 
 ## Background backlog
 
