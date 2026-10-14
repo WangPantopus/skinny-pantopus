@@ -13,6 +13,7 @@ import app.pantopus.android.data.saved_places.SavedPlacesRepository
 import app.pantopus.android.data.store.StoreKind
 import app.pantopus.android.ui.components.RefreshNotice
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -24,6 +25,7 @@ import javax.inject.Inject
 data class SavedPlacesToast(
     val text: String,
     val isError: Boolean = false,
+    val isPending: Boolean = false,
 )
 
 /**
@@ -58,6 +60,8 @@ class SavedPlacesViewModel
         private var items: List<SavedPlaceDto> = emptyList()
         private var loadedAtLeastOnce = false
         private var loading = false
+        private var writing = false
+        private var readJob: Job? = null
         private val _refreshing = MutableStateFlow(false)
         val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
         private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
@@ -68,7 +72,7 @@ class SavedPlacesViewModel
         fun refresh() = fetch(force = true)
 
         private fun fetch(force: Boolean) {
-            if (loading) return
+            if (loading || writing) return
             loading = true
             _refreshing.value = force && loadedAtLeastOnce
             if (!loadedAtLeastOnce) {
@@ -79,35 +83,36 @@ class SavedPlacesViewModel
                 }
                 if (!loadedAtLeastOnce) _state.value = SavedPlacesUiState.Loading
             }
-            viewModelScope.launch {
-                try {
-                    val stored = repository.listStored(force)
-                    val data = stored.data
-                    _refreshNotice.value =
-                        if (stored.showsRefreshFailure(StoreKind.YOU)) {
-                            RefreshNotice(stored.fetchedAt, ::refresh)
-                        } else {
-                            null
+            readJob =
+                viewModelScope.launch {
+                    try {
+                        val stored = repository.listStored(force)
+                        val data = stored.data
+                        _refreshNotice.value =
+                            if (stored.showsRefreshFailure(StoreKind.YOU)) {
+                                RefreshNotice(stored.fetchedAt, ::refresh)
+                            } else {
+                                null
+                            }
+                        if (data != null) {
+                            items = data.savedPlaces
+                            loadedAtLeastOnce = true
+                            rebuild()
+                        } else if (!loadedAtLeastOnce ||
+                            stored.failure.refusesStoredCopy
+                        ) {
+                            items = emptyList()
+                            loadedAtLeastOnce = false
+                            _state.value =
+                                SavedPlacesUiState.Error(
+                                    stored.failure?.displayMessage("Couldn't load saved places.") ?: "Couldn't load saved places.",
+                                )
                         }
-                    if (data != null) {
-                        items = data.savedPlaces
-                        loadedAtLeastOnce = true
-                        rebuild()
-                    } else if (!loadedAtLeastOnce ||
-                        stored.failure.refusesStoredCopy
-                    ) {
-                        items = emptyList()
-                        loadedAtLeastOnce = false
-                        _state.value =
-                            SavedPlacesUiState.Error(
-                                stored.failure?.displayMessage("Couldn't load saved places.") ?: "Couldn't load saved places.",
-                            )
+                    } finally {
+                        loading = false
+                        _refreshing.value = false
                     }
-                } finally {
-                    loading = false
-                    _refreshing.value = false
                 }
-            }
         }
 
         private fun rebuild() {
@@ -130,7 +135,7 @@ class SavedPlacesViewModel
         // region Action sheet
 
         fun openActions(row: SavedPlaceRow) {
-            _actionTarget.value = row.toActionTarget()
+            if (!writing) _actionTarget.value = row.toActionTarget()
         }
 
         fun closeActions() {
@@ -141,53 +146,75 @@ class SavedPlacesViewModel
 
         // region Remove + Undo
 
-        /**
-         * Optimistically drop the row and fire the DELETE, then surface an Undo
-         * snackbar. A failed DELETE rolls the row back; a tapped Undo re-POSTs.
-         */
+        /** Show the removal as pending, then offer Undo once DELETE has completed. */
         fun remove(target: SavedPlaceActionTarget) {
+            if (writing) return
             _actionTarget.value = null
             val index = items.indexOfFirst { it.id == target.id }
             if (index < 0) return
             val removed = items[index]
-            val previous = items
+            beginWrite("Pending · Removing ${target.label}")
             items = items.filterNot { it.id == target.id }
             rebuild()
-            _undo.value = SavedPlaceUndo(removed, index)
             viewModelScope.launch {
-                if (repository.remove(target.id) is NetworkResult.Failure) {
-                    items = previous
-                    rebuild()
-                    _undo.value = null
-                    _toast.value = SavedPlacesToast("Couldn't remove ${target.label}.", isError = true)
+                try {
+                    when (repository.remove(target.id)) {
+                        is NetworkResult.Success -> {
+                            _toast.value = null
+                            _undo.value = SavedPlaceUndo(removed, index)
+                        }
+                        is NetworkResult.Failure -> {
+                            restoreRow(removed, index)
+                            _toast.value = SavedPlacesToast("Couldn't remove ${target.label}.", isError = true)
+                        }
+                    }
+                } finally {
+                    writing = false
                 }
             }
         }
 
-        /**
-         * Re-save the just-removed place at its original position. The POST
-         * upsert returns a fresh row (new id), which replaces the optimistic copy.
-         */
+        /** Undo can only start after the removal is confirmed, and can't be submitted twice. */
         fun undoRemove() {
+            if (writing) return
             val snapshot = _undo.value ?: return
-            _undo.value = null
             val dto = snapshot.dto
-            val target = snapshot.index.coerceIn(0, items.size)
-            items = items.toMutableList().apply { add(target, dto) }
-            rebuild()
+            beginWrite("Pending · Restoring ${dto.label}")
+            restoreRow(dto, snapshot.index)
             viewModelScope.launch {
-                when (val result = repository.save(SavePlaceBody.from(dto))) {
-                    is NetworkResult.Success -> {
-                        items = items.map { if (it.id == dto.id) result.data.savedPlace else it }
-                        rebuild()
+                try {
+                    when (val result = repository.save(SavePlaceBody.from(dto))) {
+                        is NetworkResult.Success -> {
+                            items = items.map { if (it.id == dto.id) result.data.savedPlace else it }
+                            _toast.value = SavedPlacesToast("Restored ${dto.label}.")
+                        }
+                        is NetworkResult.Failure -> {
+                            items = items.filterNot { it.id == dto.id }
+                            _toast.value = SavedPlacesToast("Couldn't restore ${dto.label}.", isError = true)
+                        }
                     }
-                    is NetworkResult.Failure -> {
-                        items = items.filterNot { it.id == dto.id }
-                        rebuild()
-                        _toast.value = SavedPlacesToast("Couldn't restore ${dto.label}.", isError = true)
-                    }
+                    rebuild()
+                } finally {
+                    writing = false
                 }
             }
+        }
+
+        private fun beginWrite(message: String) {
+            writing = true
+            readJob?.cancel()
+            loading = false
+            _refreshing.value = false
+            _undo.value = null
+            _toast.value = SavedPlacesToast(message, isPending = true)
+        }
+
+        private fun restoreRow(
+            dto: SavedPlaceDto,
+            index: Int,
+        ) {
+            items = items.filterNot { it.id == dto.id }.toMutableList().apply { add(index.coerceIn(0, size), dto) }
+            rebuild()
         }
 
         /** The Undo snackbar timed out — commit the removal silently. */
@@ -196,7 +223,7 @@ class SavedPlacesViewModel
         }
 
         fun dismissToast() {
-            _toast.value = null
+            if (_toast.value?.isPending != true) _toast.value = null
         }
 
         // endregion
