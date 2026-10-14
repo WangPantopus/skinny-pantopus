@@ -23,13 +23,13 @@ public enum MarketplaceRoute: Hashable {
 /// NavigationStack wrapper for the Marketplace tab.
 public struct MarketplaceTabRoot: View {
     @Environment(AuthManager.self) private var auth
-    /// Leaving Nearby for another tab closes this sheet (`NeighborhoodTabRoot`).
+    /// Leaving Pulse for another tab closes this sheet (`PulseTabRoot`).
     @Environment(RootTabModel.self) private var rootTabs: RootTabModel?
     @State private var path = RouteStack<MarketplaceRoute>()
     @State private var router = DeepLinkRouter.shared
     @State private var systemSheet: SystemSheetRequest?
 
-    /// Closes the sheet this surface is presented in (Nearby's door).
+    /// Closes the sheet this surface is presented in (from the Pulse tab).
     private let onClose: (@MainActor () -> Void)?
 
     public init(onClose: (@MainActor () -> Void)? = nil) {

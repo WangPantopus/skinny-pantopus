@@ -29,6 +29,8 @@ public struct FeedPostDTO: Decodable, Sendable, Hashable, Identifiable {
     public let state: String?
     /// Server-derived authorship: `user`, `curator` or `system`.
     public let origin: String?
+    /// One of the twelve Pulse topics, or null (`feedService.js:246`).
+    public let topic: String?
     /// True for cold-start neighborhood facts injected by the feed handler
     /// (`backend/routes/posts.js:84`). Those rows are dismissable, not
     /// reportable.
@@ -61,7 +63,7 @@ public struct FeedPostDTO: Decodable, Sendable, Hashable, Identifiable {
         case userHasLiked
         case userHasSaved
         case userHasReposted
-        case state, origin
+        case state, origin, topic
         case isSeeded = "is_seeded"
         case isVisitorPost = "is_visitor_post"
         case businessAuthorId = "business_author_id"
@@ -94,6 +96,7 @@ public struct FeedPostDTO: Decodable, Sendable, Hashable, Identifiable {
         userHasReposted = c.lenient(Bool.self, forKey: .userHasReposted) ?? false
         state = c.lenient(String.self, forKey: .state)
         origin = c.lenient(String.self, forKey: .origin)
+        topic = c.lenient(String.self, forKey: .topic)
         isSeeded = c.lenient(Bool.self, forKey: .isSeeded) ?? false
         isVisitorPost = c.lenient(Bool.self, forKey: .isVisitorPost) ?? false
         businessAuthorId = c.lenient(String.self, forKey: .businessAuthorId)

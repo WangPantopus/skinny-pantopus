@@ -2,7 +2,7 @@
 //  PlansRoutes.swift
 //  Pantopus
 //
-//  The Plans screens pushed on the Nearby stack (`NeighborhoodTabRoot`),
+//  The Plans screens pushed on the Plans tab's stack (`PlansTabRoot`),
 //  and the composer it presents. Only `Hashable` payloads.
 //
 
@@ -19,14 +19,14 @@ enum PlansRoute: Hashable {
     case profile(userId: String)
 }
 
-/// Hand-off into the Nearby stack from outside it: a deep link, a push, a
-/// Today card. `NeighborhoodTabRoot` consumes it.
+/// Hand-off into the Plans tab's stack from outside it: a deep link, a push,
+/// a Today card. `PlansTabRoot` consumes it.
 @Observable
 @MainActor
 final class PlansNavigator {
     static let shared = PlansNavigator()
 
-    /// A route to push once the Nearby tab shows.
+    /// A route to push once the Plans tab shows.
     var pending: PlansRoute?
     /// Open the composer.
     var pendingHost: PlansHostRequest?

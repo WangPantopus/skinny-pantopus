@@ -117,7 +117,8 @@ fun PlansTodayCards(
 private fun todayTitle(plan: PlanDto): String {
     val short = plan.details?.game?.label?.let { "$it game" } ?: plan.title
     val host = plan.host?.displayName?.takeIf { plan.placeKind == "home" }?.let { "${PlanFormat.firstName(it)}'s" }
-    return if (host != null) "$short at $host" else short
+    // "Movie night at Morgan's" already says whose place it is (as on iOS).
+    return if (host != null && !short.contains(host, ignoreCase = true)) "$short at $host" else short
 }
 
 /** A1 and A2: a card whose border carries the type's color. */
@@ -233,7 +234,7 @@ private fun HostingTodayCard(
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             PlanTonalButton(
                 title = "Message guests",
-                onClick = { plan.chatRoomId?.let { actions.onOpenChat(it, plan.title, plan.id) } },
+                onClick = { plan.chatRoomId?.let { actions.onOpenChat(it, PlanFormat.shortTitle(plan), plan.id) } },
                 height = 44.dp,
                 enabled = plan.chatRoomId != null,
                 modifier = Modifier.weight(1f),
@@ -243,7 +244,7 @@ private fun HostingTodayCard(
     }
 }
 
-/** A5 for guests: "How was Sunday's watch party?" (only Pantopus sees the answer). */
+/** A5 for guests: "How was Sunday's watch party with Sam?" (as on iOS; only Pantopus sees the answer). */
 @Composable
 private fun HowWasItCard(
     plan: PlanDto,
@@ -260,7 +261,7 @@ private fun HowWasItCard(
             PlanKindLeading(kind)
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "How was ${day?.let { "$it's " } ?: "the "}${kind.noun}?",
+                    text = "How was ${day?.let { "$it's " } ?: "the "}${kind.noun} with ${PlanFormat.firstName(plan.host?.displayName)}?",
                     style = planH4,
                     color = PantopusColors.appText,
                     modifier = Modifier.semantics { heading() },

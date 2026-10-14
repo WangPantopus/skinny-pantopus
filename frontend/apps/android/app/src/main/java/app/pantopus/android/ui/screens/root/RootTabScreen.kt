@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ModalNavigationDrawer
@@ -60,6 +61,7 @@ import app.pantopus.android.ui.components.InviteLinks
 import app.pantopus.android.ui.components.NavigationDrawer
 import app.pantopus.android.ui.components.NavigationDrawerContext
 import app.pantopus.android.ui.components.NavigationDrawerDestination
+import app.pantopus.android.ui.components.OfflineBannerHost
 import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.components.composeEmail
 import app.pantopus.android.ui.components.shareText
@@ -117,6 +119,7 @@ import app.pantopus.android.ui.screens.explore.ExploreKind
 import app.pantopus.android.ui.screens.explore.ExploreMapFocus
 import app.pantopus.android.ui.screens.explore.ExploreMapScreen
 import app.pantopus.android.ui.screens.feed.FeedScreen
+import app.pantopus.android.ui.screens.feed.FeedTopMenu
 import app.pantopus.android.ui.screens.feed.beacons.BeaconsFeedScreen
 import app.pantopus.android.ui.screens.feed.pulse.PulseIntent
 import app.pantopus.android.ui.screens.following.FollowingScreen
@@ -314,7 +317,8 @@ import app.pantopus.android.ui.screens.membership.MembershipDetailScreen
 import app.pantopus.android.ui.screens.my_bids.MyBidsScreen
 import app.pantopus.android.ui.screens.my_posts.MyPostsScreen
 import app.pantopus.android.ui.screens.my_tasks.MyTasksScreen
-import app.pantopus.android.ui.screens.nearby.PulseQuietStateCard
+import app.pantopus.android.ui.screens.nearby.NearbyViewModel
+import app.pantopus.android.ui.screens.nearby.pulseQuietStateCard
 import app.pantopus.android.ui.screens.pulse.PulsePageScreen
 import app.pantopus.android.ui.screens.notifications.NotificationsScreen
 import app.pantopus.android.ui.screens.offers.OffersScreen
@@ -354,6 +358,7 @@ import app.pantopus.android.ui.screens.place.verify.PlaceVerifyStatusScreen
 import app.pantopus.android.ui.screens.plans.PlansExternalRoutes
 import app.pantopus.android.ui.screens.plans.PlansGateViewModel
 import app.pantopus.android.ui.screens.plans.PlansRoutes
+import app.pantopus.android.ui.screens.plans.map.PLANS_INVITE_MESSAGE
 import app.pantopus.android.ui.screens.plans.map.PlansMapActions
 import app.pantopus.android.ui.screens.plans.map.PlansMapScreen
 import app.pantopus.android.ui.screens.plans.plansRoutes
@@ -2149,6 +2154,18 @@ private fun schedulingHomeNavArg() = optionalStringNavArg(SchedulingRoutes.ARG_H
  * @param inboxBadgeCount Unread count shown on the Messages tab. Wired to
  *     live data in Prompt P8.
  */
+
+/** Home and specialist screens host their own strip; these shared tab and account routes did not. */
+private val SAVED_PAGE_OFFLINE_STRIP_ROUTES =
+    setOf(
+        PantopusRoute.Place.path, PantopusRoute.Today.path, PantopusRoute.Nearby.path, PantopusRoute.Mail.path,
+        PantopusRoute.Messages.path, PantopusRoute.Pulse.path, ChildRoutes.PLACE_DASHBOARD, ChildRoutes.PLACE_DETAIL,
+        ChildRoutes.PULSE_FEED, ChildRoutes.PULSE_POST, ChildRoutes.CHAT_CONVERSATION, ChildRoutes.PROFILE,
+        ChildRoutes.PUBLIC_PROFILE, ChildRoutes.NOTIFICATIONS_ROUTE, ChildRoutes.CONNECTIONS_ROUTE, ChildRoutes.MY_POSTS,
+        ChildRoutes.SAVED_PLACES, ChildRoutes.MENU, ChildRoutes.EXPLORE_ROUTE,
+        ChildRoutes.SETTINGS_NOTIFICATIONS, ChildRoutes.SETTINGS_PRIVACY,
+    )
+
 @Composable
 fun RootTabScreen(inboxBadgeCount: Int = 0) {
     val navController = rememberNavController()
@@ -2163,6 +2180,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
     val sessionViewModel: RootSessionViewModel = hiltViewModel()
     val chatBadgeViewModel: ChatBadgeViewModel = hiltViewModel()
     val currentHandle by sessionViewModel.currentHandle.collectAsStateWithLifecycle()
+    val online by sessionViewModel.isOnline.collectAsStateWithLifecycle()
+    val plansMapFlags by hiltViewModel<PlansGateViewModel>().flags.collectAsStateWithLifecycle()
     val liveInboxBadgeCount by chatBadgeViewModel.unreadMessages.collectAsStateWithLifecycle()
     // §1C-b — context-aware navigation drawer, opened from the Hub menu button
     // (repurposed from "open Settings"; Settings now lives as a drawer row).
@@ -2183,10 +2202,14 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
     // Plans is a tab only while its switch is on, and the bar follows the switch while the app runs.
     val plansGate: PlansGateViewModel = hiltViewModel()
     val plansFlags by plansGate.flags.collectAsStateWithLifecycle()
+    val plansSettled by plansGate.settled.collectAsStateWithLifecycle()
     val barTabs = remember(plansFlags.plans) { PantopusRoute.barTabs(plansFlags.plans) }
-    // Standing on Plans when the switch turns off lands on Pulse.
-    LaunchedEffect(plansFlags.plans, currentRoute) {
-        if (!plansFlags.plans && currentRoute == PantopusRoute.Plans) navController.navigateToRootTab(PantopusRoute.Pulse)
+    // Standing on Plans when the switch turns off lands on Pulse. It waits for the person's answer, so a relaunch
+    // that restores the Plans tab isn't moved off it by the moment before the answer is read.
+    LaunchedEffect(plansFlags.plans, plansSettled, currentRoute) {
+        if (plansSettled && !plansFlags.plans && currentRoute == PantopusRoute.Plans) {
+            navController.navigateToRootTab(PantopusRoute.Pulse)
+        }
     }
     val resolvedInboxBadgeCount = maxOf(inboxBadgeCount, liveInboxBadgeCount)
     val badges: Map<PantopusRoute, Int> =
@@ -2647,6 +2670,14 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
         },
     ) {
         Scaffold(
+            topBar = {
+                val route = backStackEntry?.destination?.route
+                // Nearby while `plans` is on is the Plans map, which floats its own strip over the map.
+                val plansMap = plansMapFlags.plans && route == PantopusRoute.Nearby.path
+                if (!online && route in SAVED_PAGE_OFFLINE_STRIP_ROUTES && !plansMap) {
+                    OfflineBannerHost(isOffline = true, modifier = Modifier.statusBarsPadding()) { }
+                }
+            },
             bottomBar = {
                 PantopusBottomBar(
                     selected = currentRoute,
@@ -2703,8 +2734,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     )
                 }
                 composable(PantopusRoute.Plans.path) {
-                    // Plans (the map and list of what's on) is a tab only while the `plans` flag is on; with it off
-                    // there is nothing to show here, so a stale link or saved state lands on Pulse.
+                    // Plans (the map and list of what's on) is a tab only while the `plans` flag is on. With it off there
+                    // is nothing to show here: the switch watch above moves a person standing here to Pulse.
                     if (plansFlags.plans) {
                         PlansMapScreen(
                             actions =
@@ -2714,11 +2745,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                     onHost = { kind, game -> navController.navigate(PlansRoutes.host(kind = kind?.wire, game = game?.id)) },
                                     onOpenPulse = { navController.navigateToRootTab(PantopusRoute.Pulse) },
                                     onOpenConnections = { navController.navigate(ChildRoutes.CONNECTIONS) },
-                                    onInvite = { appContext.shareText(InviteLinks.INVITE_MESSAGE, "Invite to Pantopus") },
+                                    onInvite = { appContext.shareText(PLANS_INVITE_MESSAGE, "Invite a neighbor") },
                                 ),
                         )
-                    } else {
-                        LaunchedEffect(Unit) { navController.navigateToRootTab(PantopusRoute.Pulse) }
                     }
                 }
                 // Nearby is no longer a tab; its old route (saved state, a stale entry) opens Pulse.
@@ -2785,13 +2814,18 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     )
                 }
                 composable(PantopusRoute.Pulse.path) {
-                    // The Pulse page (S6): groups that end, topic chips, new conversations behind a pill. It reads
-                    // `GET /api/pulse/feed`, so this waits for PB's S6 on master (hold point H4).
+                    // S6 stays draft until PB's feed is on master (H4).
+                    val quietMeter: NearbyViewModel = hiltViewModel()
+                    val quietStateCard =
+                        pulseQuietStateCard(
+                            onClaim = { navController.navigate(ChildRoutes.ADD_HOME) },
+                            viewModel = quietMeter,
+                        )
                     PulsePageScreen(
                         onOpenPost = { postId -> navController.navigate(ChildRoutes.pulsePost(postId)) },
                         onCompose = { navController.navigate(ChildRoutes.composePost(PulseIntent.Ask.key)) },
                         onOpenConnections = { navController.navigate(ChildRoutes.CONNECTIONS) },
-                        quietStateCard = { PulseQuietStateCard(onClaim = { navController.navigate(ChildRoutes.ADD_HOME) }) },
+                        quietStateCard = { quietStateCard?.invoke() },
                     )
                 }
                 composable(PantopusRoute.Tasks.path) {

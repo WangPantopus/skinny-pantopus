@@ -80,7 +80,7 @@ enum class PulseComposeIntent(
          */
         fun fromFeedIntent(feed: PulseIntent): PulseComposeIntent =
             when (feed) {
-                PulseIntent.All, PulseIntent.Ask -> Ask
+                PulseIntent.All, PulseIntent.Generic, PulseIntent.Ask -> Ask
                 PulseIntent.Recommend, PulseIntent.VisitorGuide -> Recommend
                 PulseIntent.Event -> Event
                 PulseIntent.Lost -> Lost
@@ -314,7 +314,7 @@ class PulseComposeViewModel
         private val _announceAudience = MutableStateFlow(PulseAnnounceAudience.Neighbors)
         val announceAudience: StateFlow<PulseAnnounceAudience> = _announceAudience.asStateFlow()
 
-        private val _safetyAlertKind = MutableStateFlow(PulseSafetyAlertKind.Theft)
+        private val _safetyAlertKind = MutableStateFlow(PulseSafetyAlertKind.Hazard)
         val safetyAlertKind: StateFlow<PulseSafetyAlertKind> = _safetyAlertKind.asStateFlow()
 
         // New Asks start on Handyman; an edited Ask posted without a category has none selected.
@@ -1358,7 +1358,6 @@ class PulseComposeViewModel
                 longitude = target.targetLongitude,
                 locationName = if (target.isPlaceTarget) target.displayLabel else null,
                 homeId = target.targetHomeId,
-                businessId = target.targetBusinessId,
                 gpsTimestamp = gps.timestamp,
                 gpsLatitude = gps.latitude,
                 gpsLongitude = gps.longitude,

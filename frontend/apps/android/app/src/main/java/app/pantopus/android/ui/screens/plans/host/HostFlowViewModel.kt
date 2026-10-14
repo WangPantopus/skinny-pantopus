@@ -13,6 +13,8 @@ import app.pantopus.android.data.api.models.plans.PlanGpsInput
 import app.pantopus.android.data.api.models.plans.PlanNearbyPlaceDto
 import app.pantopus.android.data.api.models.plans.PlanPlaceInput
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.safeApiCall
+import app.pantopus.android.data.api.services.GeoApi
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.data.location.ViewingLocationRepository
 import app.pantopus.android.data.plans.PlanAutoRule
@@ -113,6 +115,8 @@ data class HostUi(
     val posting: Boolean = false,
     val error: String? = null,
     val postedId: String? = null,
+    /** H7's "Near Camas": the city of the plan's place (or home), looked up when the preview opens (as on iOS). */
+    val previewArea: String? = null,
 )
 
 /**
@@ -131,6 +135,7 @@ class HostFlowViewModel
         private val viewing: ViewingLocationRepository,
         private val events: PlansEvents,
         private val homes: HomesRepository,
+        private val geo: GeoApi,
         feature: PlansFeature,
     ) : ViewModel() {
         /** The plan "Host again" copies (A5), sent as `hosted_again_from`. */
@@ -210,6 +215,11 @@ class HostFlowViewModel
                         ),
                 )
             }
+            // "Host again" opens the preview (board A5 → H7, as on iOS); a copy that needs a fix opens its details.
+            if (validate(_ui.value.draft) == null) {
+                _ui.update { it.copy(step = HostStep.Preview) }
+                loadPreviewArea()
+            }
         }
 
         private suspend fun loadContext(gameId: String?) {
@@ -219,7 +229,12 @@ class HostFlowViewModel
             // Hosting a playdate needs a verified address (`/mine` says where the person stands; unknown means yes).
             val verified = (repository.mineCopy() ?: repository.mine().data)?.viewer?.verifiedAddress ?: true
             _ui.update { it.copy(home = home, games = games, canHostPlaydates = verified) }
-            if (gameId != null) games.firstOrNull { it.id == gameId }?.let(::pickGame)
+            val draft = _ui.value.draft
+            when {
+                gameId != null -> games.firstOrNull { it.id == gameId }?.let(::pickGame)
+                // A watch party chosen before the games came back starts on the soonest one (see choose).
+                draft.kind == PlanKind.WATCH_PARTY && draft.gameId == null && !draft.titleEdited -> games.firstOrNull()?.let(::pickGame)
+            }
         }
 
         /** "Verify your address" from H1's playdate card. */
@@ -252,6 +267,8 @@ class HostFlowViewModel
                     draft.copy(start = start, end = start.plusHours(if (kind == PlanKind.WATCH_PARTY) 3 else 1))
                 }
             _ui.update { it.copy(step = HostStep.Details, draft = timed, error = null) }
+            // A watch party starts on the soonest game, its chip checked and its title and time filled in (board H2, as on iOS).
+            if (kind == PlanKind.WATCH_PARTY) _ui.value.games.firstOrNull()?.let(::pickGame)
         }
 
         /**
@@ -289,8 +306,19 @@ class HostFlowViewModel
                 return
             }
             val zone = _ui.value.zone
-            val start = PlanFormat.instant(game.startsAt)?.atZone(zone)?.toLocalDateTime()
-            val end = PlanFormat.instant(game.endsAt)?.atZone(zone)?.toLocalDateTime() ?: start?.plusHours(3)
+            val now = LocalDateTime.now(zone)
+            val gameStart = PlanFormat.instant(game.startsAt)?.atZone(zone)?.toLocalDateTime()
+            val gameEnd = PlanFormat.instant(game.endsAt)?.atZone(zone)?.toLocalDateTime() ?: gameStart?.plusHours(3)
+            // A plan can't start in the past: a game already on starts at the next quarter hour at least 5 minutes away
+            // (time to choose the place), until the game ends.
+            val soon = now.plusMinutes(GAME_ON_LEAD_MINUTES).truncatedTo(ChronoUnit.MINUTES)
+            val start =
+                if (gameStart != null && gameStart.isBefore(now)) {
+                    soon.truncatedTo(ChronoUnit.HOURS).plusMinutes((soon.minute + QUARTER_HOUR - 1) / QUARTER_HOUR * QUARTER_HOUR)
+                } else {
+                    gameStart
+                }
+            val end = if (start != null && gameEnd != null) maxOf(gameEnd, start.plusMinutes(MIN_MINUTES)) else gameEnd
             edit { draft ->
                 draft.copy(
                     gameId = game.id,
@@ -436,6 +464,28 @@ class HostFlowViewModel
                 return
             }
             _ui.update { it.copy(step = HostStep.Preview, error = null) }
+            loadPreviewArea()
+        }
+
+        /** The city the place is in, for the preview's "Near Camas" (iOS reverse-geocodes the same point). */
+        private fun loadPreviewArea() {
+            val ui = _ui.value
+            val point =
+                if (ui.draft.atHome) {
+                    ui.home?.let { h -> if (h.latitude != null && h.longitude != null) h.latitude to h.longitude else null }
+                } else {
+                    ui.draft.place?.let { it.latitude to it.longitude }
+                }
+            _ui.update { it.copy(previewArea = null) }
+            point ?: return
+            viewModelScope.launch {
+                val city =
+                    when (val reply = safeApiCall { geo.reverse(point.first, point.second) }) {
+                        is NetworkResult.Success -> reply.data.normalized.city?.trim()
+                        is NetworkResult.Failure -> null
+                    }
+                if (!city.isNullOrEmpty()) _ui.update { it.copy(previewArea = "Near $city") }
+            }
         }
 
         fun back(): Boolean {
@@ -573,6 +623,8 @@ class HostFlowViewModel
             const val EVENING_HOUR = 19
             const val MAX_DAYS_AHEAD = 14L
             const val MIN_MINUTES = 15L
+            const val QUARTER_HOUR = 15L
+            const val GAME_ON_LEAD_MINUTES = 5L
             const val MAX_MINUTES = 8 * 60L
             const val PLACES_ATTEMPTS = 4
             const val PLACES_RETRY_MS = 3_000L

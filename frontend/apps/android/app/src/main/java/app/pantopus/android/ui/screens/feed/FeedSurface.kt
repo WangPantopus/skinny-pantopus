@@ -2,6 +2,7 @@
 
 package app.pantopus.android.ui.screens.feed
 
+import app.pantopus.android.ui.screens.feed.pulse.PulseTopic
 import app.pantopus.android.ui.theme.PantopusIcon
 
 /**
@@ -146,6 +147,24 @@ enum class FeedSurface(
                 footerTrail = "",
             )
 
+        /** A chosen Pulse topic with nothing in it (S4.4, words agreed with iOS): the action shows all topics again. */
+        fun topicEmptyContent(
+            topic: PulseTopic,
+            scopeLabel: String?,
+        ): FeedEmptyContent =
+            FeedEmptyContent(
+                icon = topic.icon,
+                headline = "Nothing in ${topic.label} yet",
+                body = "Posts about ${topic.label.lowercase()} nearby will show here.",
+                ctaLabel = "Show all topics",
+                ctaIcon = PantopusIcon.LayoutGrid,
+                footerIcon = PantopusIcon.MapPin,
+                footerLead = "Showing posts within ",
+                footerEmphasis = scopeLabel,
+                footerTrail = " · change in filter",
+                ctaTag = "pulseTopicShowAll",
+            )
+
         /**
          * The two surfaces the in-Pulse toggle switches between. `personas`
          * lives on its own Beacon Updates route reached from the drawer, so
@@ -170,4 +189,6 @@ data class FeedEmptyContent(
     val footerLead: String,
     val footerEmphasis: String?,
     val footerTrail: String,
+    /** The call to action's test id. */
+    val ctaTag: String = "pulseEmptyCreatePost",
 )

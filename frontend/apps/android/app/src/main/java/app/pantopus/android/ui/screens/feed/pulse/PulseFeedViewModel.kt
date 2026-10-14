@@ -28,6 +28,7 @@ import app.pantopus.android.data.location.ViewingLocationRepository
 import app.pantopus.android.data.posts.FeedQuery
 import app.pantopus.android.data.posts.PostsRepository
 import app.pantopus.android.data.posts.PulsePostsRefreshNotifier
+import app.pantopus.android.data.pulse.PulseRepository
 import app.pantopus.android.data.sports.SportsRepository
 import app.pantopus.android.data.store.StoreKeys
 import app.pantopus.android.ui.screens.feed.FeedEmptyContent
@@ -62,6 +63,8 @@ sealed interface PulseFeedUiState {
         val content: FeedEmptyContent,
         /** No area was searched: the call to action opens the area switcher instead of the composer. */
         val needsArea: Boolean = false,
+        /** A topic with nothing in it: the call to action shows all topics again (Pulse build S4). */
+        val clearsTopic: Boolean = false,
     ) : PulseFeedUiState
 
     data class Loaded(
@@ -105,6 +108,8 @@ class PulseFeedViewModel
         private val moderation: FeedModerationStore,
         /** `GET /api/location` — the area chosen in the Nearby context bar. */
         private val viewingLocation: ViewingLocationRepository,
+        /** Pulse's own routes: the asker's keep-open and close (S7). */
+        private val pulseRepo: PulseRepository,
     ) : ViewModel() {
         private val _state = MutableStateFlow<PulseFeedUiState>(PulseFeedUiState.Loading)
         val state: StateFlow<PulseFeedUiState> = _state.asStateFlow()
@@ -245,6 +250,14 @@ class PulseFeedViewModel
         private val _deletingPostId = MutableStateFlow<String?>(null)
         val deletingPostId: StateFlow<String?> = _deletingPostId.asStateFlow()
 
+        /** The Ask whose "Close" waits for its confirmation (S7). */
+        private val _closingAskId = MutableStateFlow<String?>(null)
+        val closingAskId: StateFlow<String?> = _closingAskId.asStateFlow()
+
+        /** Asks kept open here (or refused as already kept open): "Keep open 7 more days" no longer shows. */
+        private var keptOpenIds: Set<String> = emptySet()
+        private val endingAskIds = mutableSetOf<String>()
+
         /** The post whose author is awaiting mute confirmation, if any. */
         private val _mutingPostId = MutableStateFlow<String?>(null)
         val mutingPostId: StateFlow<String?> = _mutingPostId.asStateFlow()
@@ -313,6 +326,12 @@ class PulseFeedViewModel
          * a surface, so a topic muted on Nearby is not muted on Beacons.
          */
         private var mutedPostTypes: Set<String> = emptySet()
+
+        /**
+         * Pulse topics muted from a card here, hidden at once; the server leaves them out of every later read. A topic
+         * unmuted from the preferences sheet leaves this set ([topicUnmuted]).
+         */
+        private var mutedTopicKeys: Set<String> = emptySet()
 
         /** Signed-in user id — gates delete / mark-solved / report per RN. */
         private val viewerId: String?
@@ -501,6 +520,71 @@ class PulseFeedViewModel
 
         fun cancelDelete() {
             _deletingPostId.value = null
+        }
+
+        /**
+         * "Keep open 7 more days" on the asker's own open Ask (S7, contract 2.12): once per Ask. A refusal shows the
+         * server's sentence; "already kept open" also hides the entry.
+         */
+        fun keepOpen(postId: String) {
+            if (!endingAskIds.add(postId)) return
+            _overflowPostId.value = null
+            viewModelScope.launch {
+                try {
+                    when (val result = pulseRepo.keepOpen(postId)) {
+                        is NetworkResult.Success -> {
+                            keptOpenIds = keptOpenIds + postId
+                            _toastMessage.value = "Kept open for 7 more days."
+                            rebuildLoadedState()
+                        }
+                        is NetworkResult.Failure -> {
+                            if (PulseRepository.refusalCode(result.error) == PulseRepository.ALREADY_KEPT_OPEN) {
+                                keptOpenIds = keptOpenIds + postId
+                                rebuildLoadedState()
+                            }
+                            _toastMessage.value = result.error.displayMessage("Couldn't keep it open. Try again.")
+                            refresh()
+                        }
+                    }
+                } finally {
+                    endingAskIds.remove(postId)
+                    rebuildLoadedState()
+                }
+            }
+        }
+
+        /** "Close" on the asker's own open Ask asks first (S7). */
+        fun beginCloseAsk(postId: String) {
+            _overflowPostId.value = null
+            _closingAskId.value = postId
+        }
+
+        fun cancelCloseAsk() {
+            _closingAskId.value = null
+        }
+
+        /** The confirmed "Close": the Ask ends (`closed` or `closed_unanswered`) and leaves the list (contract 2.12). */
+        fun closeAsk(postId: String) {
+            if (!endingAskIds.add(postId)) return
+            _closingAskId.value = null
+            viewModelScope.launch {
+                try {
+                    when (val result = pulseRepo.close(postId)) {
+                        is NetworkResult.Success -> {
+                            removedPostIds = removedPostIds + postId
+                            _toastMessage.value = "Question closed."
+                            rebuildLoadedState()
+                        }
+                        is NetworkResult.Failure -> {
+                            _toastMessage.value = result.error.displayMessage("Couldn't close it. Try again.")
+                            refresh()
+                        }
+                    }
+                } finally {
+                    endingAskIds.remove(postId)
+                    rebuildLoadedState()
+                }
+            }
         }
 
         fun beginMuteAuthor(postId: String) {
@@ -763,6 +847,34 @@ class PulseFeedViewModel
         }
 
         /**
+         * "Mute this topic" (Pulse build S4): `POST /api/posts/mute/topic` `{ topic }` mutes it everywhere until areas
+         * arrive with S5. The topic's posts leave the list at once (and the chip, if it was the chosen one), and the
+         * server leaves them out of every later read.
+         */
+        fun muteThisTopic(postId: String) {
+            val post = loadedPosts.firstOrNull { it.id == postId } ?: return
+            val topic = PulseTopic.fromKey(post.topic) ?: return
+            mutedTopicKeys = mutedTopicKeys + topic.key
+            if (_activeTopic.value == topic) selectTopic(null) else rebuildLoadedState()
+            viewModelScope.launch {
+                when (feedActions.mutePulseTopic(topic.key)) {
+                    is NetworkResult.Success -> _toastMessage.value = "${topic.label} muted."
+                    is NetworkResult.Failure -> {
+                        mutedTopicKeys = mutedTopicKeys - topic.key
+                        _toastMessage.value = "Couldn't mute ${topic.label}."
+                        rebuildLoadedState()
+                    }
+                }
+            }
+        }
+
+        /** The preferences sheet unmuted [topicKey]: show its posts again and read the page. */
+        fun topicUnmuted(topicKey: String) {
+            mutedTopicKeys = mutedTopicKeys - topicKey
+            refresh()
+        }
+
+        /**
          * `POST /api/posts/:id/report` — one of the `reportPostSchema`
          * reasons (`backend/routes/posts.js:3168`).
          */
@@ -861,17 +973,15 @@ class PulseFeedViewModel
                         userId = post.userId,
                         businessAuthorId = post.businessAuthorId,
                     ) &&
-                    (post.postType == null || post.postType !in mutedPostTypes)
+                    (post.postType == null || post.postType !in mutedPostTypes) &&
+                    (post.topic == null || post.topic !in mutedTopicKeys)
             }
 
         private fun rebuildLoadedState() {
             val visible = visiblePosts()
             if (visible.isEmpty()) {
                 if (loadedPosts.isEmpty()) return
-                _state.value =
-                    PulseFeedUiState.Empty(
-                        content = _surface.value.emptyContent(scopeLabel = scopeLabel),
-                    )
+                _state.value = topicEmptyState() ?: PulseFeedUiState.Empty(content = _surface.value.emptyContent(scopeLabel = scopeLabel))
                 return
             }
             val query = _searchText.value.trim().lowercase()
@@ -1070,10 +1180,19 @@ class PulseFeedViewModel
          */
         private fun emptyState(noAreaSearched: Boolean): PulseFeedUiState.Empty {
             if (!noAreaSearched) {
-                return PulseFeedUiState.Empty(content = _surface.value.emptyContent(scopeLabel = scopeLabel))
+                return topicEmptyState() ?: PulseFeedUiState.Empty(content = _surface.value.emptyContent(scopeLabel = scopeLabel))
             }
             _radiusSuggestion.value = null
             return PulseFeedUiState.Empty(content = FeedSurface.noAreaContent(), needsArea = true)
+        }
+
+        /**
+         * A chosen topic with nothing in it says so and offers all topics again (S4.4). Sports keeps its own empty
+         * state with the starter prompts.
+         */
+        private fun topicEmptyState(): PulseFeedUiState.Empty? {
+            val topic = _activeTopic.value?.takeIf { _surface.value == FeedSurface.Pulse && it != PulseTopic.Sports } ?: return null
+            return PulseFeedUiState.Empty(content = FeedSurface.topicEmptyContent(topic, scopeLabel), clearsTopic = true)
         }
 
         /**
@@ -1166,6 +1285,7 @@ class PulseFeedViewModel
             val likeCount = effectiveLikeCount(post)
             val isOwner = isOwner(post)
             val isSolved = effectiveIsSolved(post)
+            val openAsk = isOwner && isOpenAsk(post, isSolved)
             return PulsePostCardContent(
                 id = post.id,
                 likePending = post.id in liking,
@@ -1228,8 +1348,32 @@ class PulseFeedViewModel
                         muteEntityName = authorName,
                         postType = post.postType,
                         topicLabel = intent.cardChipLabel,
+                        pulseTopic = PulseTopic.fromKey(post.topic),
+                        canKeepOpen = openAsk && post.id !in keptOpenIds,
+                        canCloseAsk = openAsk,
                     ),
+                status = statusFor(post),
             )
+        }
+
+        private fun statusFor(post: FeedPost): PostStatus? =
+            PostStatus.of(
+                postType = post.postType,
+                state = if (effectiveIsSolved(post)) "solved" else post.state,
+                resolution = post.resolution,
+                expiresAt = post.expiresAt,
+                goingCount = effectiveLikeCount(post),
+            )
+
+        /** An Ask that hasn't ended: no resolution, not solved or archived, and not past its end. */
+        private fun isOpenAsk(
+            post: FeedPost,
+            isSolved: Boolean,
+        ): Boolean {
+            if (post.postType != "ask_local" || isSolved) return false
+            if (post.resolution != null || post.state == "archived") return false
+            val end = post.expiresAt?.let { runCatching { Instant.parse(it) }.getOrNull() } ?: return true
+            return end.isAfter(Instant.now())
         }
 
         private fun isOwner(post: FeedPost): Boolean {
@@ -1242,6 +1386,8 @@ class PulseFeedViewModel
                 relativeTimestamp(post.createdAt),
                 // Ahead of the place so a long place name never truncates it; web draws the badge beside the time.
                 "Visitor".takeIf { post.isVisitorPost },
+                // The topic too, before the place, as on iOS ("2h · Gardening · Camas").
+                PulseTopic.fromKey(post.topic)?.label,
                 post.locationName?.takeIf { it.isNotEmpty() },
             ).joinToString(" · ")
 

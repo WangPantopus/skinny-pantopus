@@ -1,5 +1,7 @@
 'use strict';
 
+const { CLARK_COUNTY_WA, OREGON_METRO } = require('../data/regionOutlines');
+
 /**
  * Haversine distance between two (lat, lng) pairs.
  * Returns distance in **meters**.
@@ -38,4 +40,43 @@ function isInCascadiaRegion(lat, lng) {
     && la >= 42 && la <= 49 && ln >= -125 && ln <= -121;
 }
 
-module.exports = { haversineMeters, haversineMiles, isInCascadiaRegion };
+/** Even-odd ray cast: is the point inside a ring of [lng, lat] points? */
+function isInRing(lat, lng, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i];
+    const [xj, yj] = ring[j];
+    if ((yi > lat) !== (yj > lat) && lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+/**
+ * Clark County, Washington, the pilot's county. Copy that names Clark
+ * County, its cities or its PUD is only true here.
+ */
+function isInClarkCountyWA(lat, lng) {
+  const la = Number(lat);
+  const ln = Number(lng);
+  return Number.isFinite(la) && Number.isFinite(ln) && isInRing(la, ln, CLARK_COUNTY_WA);
+}
+
+/**
+ * Oregon Metro's district: Portland and its Oregon suburbs, where Metro's
+ * recycling rules apply. They stop at the Columbia, and Clark County's
+ * outline decides which side of the river a point is on.
+ */
+function isInOregonMetro(lat, lng) {
+  const la = Number(lat);
+  const ln = Number(lng);
+  return Number.isFinite(la) && Number.isFinite(ln)
+    && isInRing(la, ln, OREGON_METRO) && !isInRing(la, ln, CLARK_COUNTY_WA);
+}
+
+module.exports = {
+  haversineMeters,
+  haversineMiles,
+  isInCascadiaRegion,
+  isInClarkCountyWA,
+  isInOregonMetro,
+};

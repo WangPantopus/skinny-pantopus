@@ -212,6 +212,7 @@ async function getLocalUpdateContext(options = {}) {
       .eq('purpose', 'local_update')
       .contains('distribution_targets', ['place'])
       .is('archived_at', null)
+      .eq('moderation_state', 'live')
       .gte('created_at', sinceIso)
       .or(
         `and(effective_latitude.gte.${box.south},effective_latitude.lte.${box.north},effective_longitude.gte.${box.west},effective_longitude.lte.${box.east}),` +

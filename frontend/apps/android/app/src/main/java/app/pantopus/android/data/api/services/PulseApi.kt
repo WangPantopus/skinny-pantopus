@@ -3,15 +3,17 @@ package app.pantopus.android.data.api.services
 import app.pantopus.android.data.api.models.pulse.PulseAckResponse
 import app.pantopus.android.data.api.models.pulse.PulseFeedResponse
 import app.pantopus.android.data.api.models.pulse.PulseNewCountResponse
+import app.pantopus.android.data.api.models.pulse.PulsePostStatusResponse
 import app.pantopus.android.data.api.models.pulse.PulseSeenRequest
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.POST
+import retrofit2.http.Path
 import retrofit2.http.Query
 
-/** The Pulse page's routes (`/api/pulse/*`, contract section 2; PB's `backend/routes/pulse.js`). */
+/** The Pulse page's routes (`/api/pulse/…`, contract section 2; PB's `backend/routes/pulse.js`). */
 @Suppress("LongParameterList")
 interface PulseApi {
     /**
@@ -50,4 +52,22 @@ interface PulseApi {
     suspend fun seen(
         @Body body: PulseSeenRequest,
     ): PulseAckResponse
+
+    /**
+     * `POST /api/pulse/posts/:postId/keep-open` (contract 2.12, `backend/routes/pulse.js`): the asker keeps an open Ask
+     * up for 7 more days, once (`409 ALREADY_KEPT_OPEN` the second time).
+     */
+    @POST("api/pulse/posts/{postId}/keep-open")
+    suspend fun keepOpen(
+        @Path("postId") postId: String,
+    ): PulsePostStatusResponse
+
+    /**
+     * `POST /api/pulse/posts/:postId/close` (contract 2.12): the asker closes an open Ask, `closed` when someone else
+     * replied and `closed_unanswered` when nobody did.
+     */
+    @POST("api/pulse/posts/{postId}/close")
+    suspend fun close(
+        @Path("postId") postId: String,
+    ): PulsePostStatusResponse
 }

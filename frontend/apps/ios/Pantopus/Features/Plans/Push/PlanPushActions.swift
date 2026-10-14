@@ -126,18 +126,40 @@ enum PlanPushActions {
         }
     }
 
-    /// The honest sentence the plan shows when a button didn't go through.
+    /// The honest sentence the plan shows when a button didn't go through, in
+    /// the words Android's notification uses: "Couldn't accept Priya. This
+    /// plan is full. They can stay on the waitlist."
     private static func failure(_ action: String, payload: PlanPushPayload, error: any Error) -> String {
-        let who = payload.requesterName.map { PlanCardLines.firstName($0) } ?? "them"
-        let reason = PlanErrors.sentence(for: error)
+        let who = payload.requesterName.map { PlanCardLines.firstName($0) } ?? "this request"
+        let reason = reason(for: error)
         switch action {
-        case accept: return "We couldn't accept \(who) from the notification. \(reason)"
-        case decline: return "We couldn't decline \(who) from the notification. \(reason)"
-        case onMyWay: return "We couldn't tell them you're on your way. \(reason)"
-        case stillComing: return "We couldn't send \u{201C}Still coming\u{201D}. \(reason)"
-        default: return "We couldn't tell the host you can't make it. \(reason)"
+        case accept: return "Couldn't accept \(who). \(reason)"
+        case decline: return "Couldn't decline \(who). \(reason)"
+        case onMyWay: return "Couldn't send \u{201C}On my way\u{201D}. \(reason)"
+        case stillComing: return "Couldn't send \u{201C}Still coming\u{201D}. \(reason)"
+        default: return "Couldn't tell the host you can't make it. \(reason)"
         }
     }
+
+    /// Why: the server's own sentence when it sent one ("This plan is full.
+    /// They can stay on the waitlist."), as Android shows it.
+    private static func reason(for error: any Error) -> String {
+        guard let apiError = error as? APIError else { return PlanErrors.sentence(for: error) }
+        switch apiError {
+        case let .clientError(_, body):
+            if let code = PlanErrors.code(in: body), addressCodes.contains(code) {
+                return "Accepting shares your address. Confirm it on the request first."
+            }
+            return apiError.errorDescription ?? PlanErrors.sentence(for: error)
+        case .notFound:
+            return "This plan isn't available anymore."
+        default:
+            return PlanErrors.sentence(for: error)
+        }
+    }
+
+    /// Refusals that mean the host must first agree that accepting shares their address (H10).
+    private static let addressCodes: Set = ["confirm_shares_address", "confirm_shares_address_required", "needs_address_confirmation"]
 
     private static func open(planId: String, toRequests: Bool, note: String?) {
         PlansNavigator.shared.notice = note

@@ -169,6 +169,11 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
             let planId = userInfo["plan_id"] as? String
             await MainActor.run { PlansStoreReads.changed(planId: planId) }
         }
+        // A connection request or acceptance: Connections reads its lists
+        // again, even when the socket missed the notice.
+        if ScreenStoreLive.isConnectionNotice(type) {
+            await MainActor.run { ScreenStoreLive.pushArrived(type: type) }
+        }
         // First-launch scope: a push for a feature hidden for the first
         // launch shows no banner while the app is open (its tap would land nowhere).
         let link = HomeTaskNotificationRoute.pushPath(userInfo)
@@ -270,6 +275,9 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
         // (HOME) banner tap crashed the app with SIGABRT (2026-09-22).
         Task { @MainActor in
             defer { completionHandler() }
+            // Opened while the app was in the background (willPresent never
+            // ran): a connection request or acceptance marks Connections first.
+            ScreenStoreLive.pushArrived(type: type)
             if action == UNNotificationDismissActionIdentifier { return }
             if action == "TASK_NOT_NOW" {
                 guard category == "TASK_REMINDER", let recipient, UUID(uuidString: recipient) != nil,

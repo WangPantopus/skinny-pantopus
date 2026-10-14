@@ -14,8 +14,11 @@
  * region's own seasons on top (hurricane, tornado, monsoon, heat,
  * wildfire, winter storm, pollen), and serves tip copy that never claims
  * a statistic about somewhere the home is not. The original PNW copy is
- * kept verbatim for the PNW.
+ * kept verbatim for the PNW, except that its sentences naming Clark County
+ * or Portland/Vancouver go only to homes there.
  */
+
+const { isInClarkCountyWA, isInOregonMetro } = require('../../utils/geo');
 
 // ── Climate regions ─────────────────────────────────────────────────────
 
@@ -187,11 +190,18 @@ const SEASONS = {
  * Tips are ordered by specificity — the engine picks the first matching tip.
  * Each tip has an optional `condition` function that receives home context.
  * If no condition, the tip is the generic fallback for that season.
+ *
+ * Written for the Portland–Vancouver pilot. A tip with `where` names a place
+ * and goes only to homes there (PILOT_PLACES); anywhere else in the region
+ * gets the default copy for that season instead:
+ *   clark_county        Clark County, Washington
+ *   portland_vancouver  Clark County or Oregon Metro's district
  */
 const SEASONAL_TIPS = {
   winter_ice: [
     {
       condition: (ctx) => ctx.homeYearBuilt && ctx.homeYearBuilt < 1990,
+      where: 'portland_vancouver',
       tip: 'Portland/Vancouver averages 3–5 ice events per winter. Homes built before 1990 may have vulnerable pipes — consider insulation.',
       homeTip: 'Your {{year}} home may have original plumbing. Pipe insulation and heat tape can prevent costly freeze damage.',
     },
@@ -201,6 +211,7 @@ const SEASONAL_TIPS = {
       homeTip: 'Your condo/townhouse community may benefit from shared de-icing supplies. Post a gig to get walkways treated.',
     },
     {
+      where: 'portland_vancouver',
       tip: 'Portland/Vancouver averages 3–5 ice events per winter. Keep de-icing supplies handy and protect outdoor pipes.',
       homeTip: null,
     },
@@ -208,10 +219,12 @@ const SEASONAL_TIPS = {
   spring_cleanup: [
     {
       condition: (ctx) => ctx.homeYearBuilt && ctx.homeYearBuilt < 1990,
+      where: 'clark_county',
       tip: 'Spring cleanup season starts now. Moss removal, gutter flush, and pressure washing are the top needs in Clark County, WA.',
       homeTip: 'Your {{year}} home likely has significant moss buildup after winter. Roof moss treatment now prevents damage later.',
     },
     {
+      where: 'clark_county',
       tip: 'Spring cleanup season is here. Moss removal, gutter flush, and pressure washing are the top residential needs in Clark County, WA.',
       homeTip: null,
     },
@@ -252,6 +265,7 @@ const SEASONAL_TIPS = {
   fall_prep: [
     {
       condition: (ctx) => ctx.homeYearBuilt && ctx.homeYearBuilt < 1990,
+      where: 'clark_county',
       tip: 'October is peak gutter season in Clark County, WA. Homes built before 1990 typically need annual gutter cleaning.',
       homeTip: 'Your {{year}} home likely has original gutters. Consider scheduling professional cleaning before the November rains.',
     },
@@ -273,9 +287,19 @@ const SEASONAL_TIPS = {
   ],
 };
 
+/**
+ * Is the point in the place a `where` tip names? utils/geo tests it against
+ * the official outlines; without coordinates the answer is no.
+ */
+const PILOT_PLACES = {
+  clark_county: (lat, lng) => isInClarkCountyWA(lat, lng),
+  portland_vancouver: (lat, lng) => isInClarkCountyWA(lat, lng) || isInOregonMetro(lat, lng),
+};
+
 // ── Default copy for the base seasons outside the PNW ──────────────────────
 // Same shape as SEASONAL_TIPS, no local statistics: nothing here claims a
-// number about a place. The PNW keeps its own copy above.
+// number about a place. The PNW keeps its own copy above, and gets this
+// copy where its tip names a place the home is not in.
 
 const DEFAULT_TIPS = {
   winter_ice: [
@@ -542,12 +566,12 @@ function resolveTip(template, ctx) {
  *
  * @param {string} seasonKey
  * @param {object} ctx  { homeYearBuilt, homePropertyType }
- * @returns {{ tip: string, homeTip: string|null }}
+ * @returns {{ tip: string, homeTip: string|null, where: string|null }}
  */
 function findBestTip(seasonKey, ctx, table = SEASONAL_TIPS) {
   const tips = table[seasonKey];
   if (!tips || tips.length === 0) {
-    return { tip: '', homeTip: null };
+    return { tip: '', homeTip: null, where: null };
   }
 
   for (const entry of tips) {
@@ -555,6 +579,7 @@ function findBestTip(seasonKey, ctx, table = SEASONAL_TIPS) {
     return {
       tip: resolveTip(entry.tip, ctx),
       homeTip: resolveTip(entry.homeTip, ctx),
+      where: entry.where || null,
     };
   }
 
@@ -563,6 +588,7 @@ function findBestTip(seasonKey, ctx, table = SEASONAL_TIPS) {
   return {
     tip: resolveTip(last.tip, ctx),
     homeTip: resolveTip(last.homeTip, ctx),
+    where: last.where || null,
   };
 }
 
@@ -571,8 +597,9 @@ function findBestTip(seasonKey, ctx, table = SEASONAL_TIPS) {
  *
  * @param {object} [options]
  * @param {Date}   [options.date]             Defaults to now
- * @param {number} [options.latitude]         Informational for v1 (PNW-only)
- * @param {number} [options.longitude]        Informational for v1 (PNW-only)
+ * @param {string} [options.state]            Two-letter state code; decides the region
+ * @param {number} [options.latitude]         The region without a state, and whether
+ * @param {number} [options.longitude]        copy naming the pilot's area applies
  * @param {number} [options.homeYearBuilt]    Enables home-age-specific tips
  * @param {string} [options.homePropertyType] e.g. 'house', 'condo', 'townhouse'
  * @returns {SeasonalContext}
@@ -612,10 +639,14 @@ function getSeasonalContext(options = {}) {
   //    consumer of `primary_season` (checklist, health score) keeps working
   const primarySeason = SEASON_PRIORITY.find((k) => activeSeasons.includes(k)) || activeSeasons[0] || 'early_summer';
 
-  // 4. Copy: the PNW keeps its own; everywhere else gets the number-free
-  //    default; an active regional season outranks the base tip
-  const baseTips = region === 'pacific_northwest' ? SEASONAL_TIPS : DEFAULT_TIPS;
-  const base = findBestTip(primarySeason, ctx, baseTips);
+  // 4. Copy: the PNW keeps its own, unless the tip names a place the home
+  //    is not in (or, with a state and no coordinates, may not be in);
+  //    everywhere else gets the number-free default; an active regional
+  //    season outranks the base tip
+  const pnwBase = region === 'pacific_northwest' ? findBestTip(primarySeason, ctx, SEASONAL_TIPS) : null;
+  const base = pnwBase && (!pnwBase.where || PILOT_PLACES[pnwBase.where](options.latitude, options.longitude))
+    ? pnwBase
+    : findBestTip(primarySeason, ctx, DEFAULT_TIPS);
   const overlay = regionalSeason ? findBestTip(regionalSeason, ctx, { [regionalSeason]: OVERLAYS[regionalSeason].tips }) : null;
   // No base season genuinely active this month (Hawaii in January) and no
   // regional season either → no copy, rather than a fallback's copy.

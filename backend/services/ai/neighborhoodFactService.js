@@ -18,7 +18,7 @@
 const crypto = require('crypto');
 const supabaseAdmin = require('../../config/supabaseAdmin');
 const { decodeGeohashBbox } = require('../../utils/geohash');
-const { isInCascadiaRegion } = require('../../utils/geo');
+const { isInCascadiaRegion, isInClarkCountyWA, isInOregonMetro } = require('../../utils/geo');
 const logger = require('../../utils/logger');
 const { getSeasonalContext } = require('./seasonalEngine');
 
@@ -44,20 +44,25 @@ function getWeekOfYear(date) {
 }
 
 /**
+ * Deterministic order of an array based on a seed string (hash-based shuffling).
+ */
+function deterministicOrder(arr, seed) {
+  const scored = arr.map((item, i) => {
+    const h = crypto.createHash('sha256').update(`${seed}:${i}`).digest('hex');
+    return { item, score: parseInt(h.slice(0, 8), 16) };
+  });
+  scored.sort((a, b) => a.score - b.score);
+  return scored.map((s) => s.item);
+}
+
+/**
  * Deterministic selection from an array based on a seed string.
  * Returns `count` items from `arr` using hash-based shuffling.
  */
 function deterministicPick(arr, seed, count) {
   if (arr.length === 0) return [];
   if (arr.length <= count) return [...arr];
-
-  // Create a deterministic order from the seed
-  const scored = arr.map((item, i) => {
-    const h = crypto.createHash('sha256').update(`${seed}:${i}`).digest('hex');
-    return { item, score: parseInt(h.slice(0, 8), 16) };
-  });
-  scored.sort((a, b) => a.score - b.score);
-  return scored.slice(0, count).map((s) => s.item);
+  return deterministicOrder(arr, seed).slice(0, count);
 }
 
 /**
@@ -135,6 +140,14 @@ function formatPropertyType(raw) {
 }
 
 // ── Static fact templates ───────────────────────────────────────────────
+//
+// Written for the Portland–Vancouver pilot. A tip with `where` is only true
+// in that region, so only cells whose centre is there are offered it:
+//   pnw             the Pacific Northwest climate region (seasonalEngine)
+//   cascadia        Washington and Oregon west of 121°W (utils/geo)
+//   clark_county    Clark County, Washington (utils/geo)
+//   portland_metro  Oregon Metro's district, Portland's side of the river (utils/geo)
+// A tip without `where` holds anywhere.
 
 /**
  * Safety tips — weather/climate-related for PNW.
@@ -145,30 +158,35 @@ const SAFETY_TIPS = [
     body: 'The PNW gets an average of 150 rainy days per year. Keep your gutters clear to prevent water damage.',
     source: 'PNW Safety',
     cta: 'Find gutter cleaning help',
+    // 150 wet days is the west side's count; Spokane, Yakima and Boise get far fewer.
+    where: 'cascadia',
   },
   {
     title: 'Ice Storm Safety',
     body: 'Ice storms can take down power lines and tree branches. Keep a 72-hour emergency kit with flashlights, water, and blankets.',
     source: 'PNW Safety',
     cta: 'Share tips with neighbors',
+    where: 'pnw',
   },
   {
     title: 'Earthquake Preparedness',
     body: 'The Cascadia subduction zone is overdue for a major earthquake. Secure tall furniture and have a family plan.',
     source: 'PNW Safety',
     cta: 'Ask neighbors about preparedness',
-    cascadiaOnly: true,
+    where: 'cascadia',
   },
   {
     title: 'Wildfire Smoke Prep',
     body: 'Wildfire smoke season runs July\u2013September. Stock HEPA filters and check your home\'s air sealing before summer.',
     source: 'PNW Safety',
     cta: 'Find air quality help',
+    where: 'pnw',
   },
   {
     title: 'Flood Awareness',
     body: 'Heavy rain events are increasing in the PNW. Know if your home is in a flood zone and check your sump pump.',
     source: 'PNW Safety',
+    where: 'pnw',
   },
 ];
 
@@ -181,11 +199,13 @@ const LOCAL_RESOURCE_TIPS = [
     body: 'Clark County PUD offers energy audits for $0\u201350. Great for homes built before 2000.',
     source: 'Local Resources',
     cta: 'Learn more from neighbors',
+    where: 'clark_county',
   },
   {
     title: 'Tree Removal Permits',
     body: 'Many Clark County cities require permits before removing trees over 6\u2033 diameter. Check with your city before hiring.',
     source: 'Local Resources',
+    where: 'clark_county',
   },
   {
     title: 'Water Conservation Rebates',
@@ -197,6 +217,7 @@ const LOCAL_RESOURCE_TIPS = [
     title: 'Recycling Rules',
     body: 'Portland Metro\'s recycling rules are unique \u2014 many common items aren\'t accepted curbside. Check your hauler\'s website.',
     source: 'Local Resources',
+    where: 'portland_metro',
   },
   {
     title: 'Weatherization Assistance',
@@ -215,17 +236,22 @@ const MOVING_TIPS = [
     body: 'New to the area? Portland Metro\'s recycling rules are unique \u2014 check your city\'s website for what goes where.',
     source: 'Moving Tips',
     cta: 'Introduce yourself to neighbors',
+    where: 'portland_metro',
   },
   {
     title: 'PNW Driving Tip',
     body: 'Studded tires are allowed Nov 1 \u2013 Mar 31 in Oregon and Washington. Chains are required for some mountain passes.',
     source: 'Moving Tips',
+    where: 'pnw',
   },
   {
     title: 'Utility Setup',
     body: 'New homeowners: set up accounts with your local PUD, water district, and waste hauler within the first week to avoid lapses.',
     source: 'Moving Tips',
     cta: 'Ask neighbors about local providers',
+    // Clark Public Utilities is a PUD; Portland's power companies and most
+    // of the country's aren't.
+    where: 'clark_county',
   },
   {
     title: 'Neighborhood Networks',
@@ -425,13 +451,35 @@ function generateSeasonalFacts(geohash, seasonalCtx, neighborhoodPreview, week, 
 }
 
 /**
- * Generate safety tips — deterministically pick 1 from the pool per week.
- * A Cascadia-only tip is offered only to cells in the Cascadia region.
+ * The regions a cell's centre is in, for the tips that are only true there.
  */
-function generateSafetyFacts(geohash, week, year, inCascadia = false) {
+function cellRegions({ latitude, longitude }, climateRegion) {
+  return {
+    pnw: climateRegion === 'pacific_northwest',
+    cascadia: isInCascadiaRegion(latitude, longitude),
+    clark_county: isInClarkCountyWA(latitude, longitude),
+    portland_metro: isInOregonMetro(latitude, longitude),
+  };
+}
+
+/**
+ * Pick 1 tip that is true for the cell. The whole pool is ordered before the
+ * tips that aren't true there are dropped, so a dropped tip changes only the
+ * weeks it would have been picked, and a cell where every tip is true picks
+ * exactly as before.
+ */
+function pickTipFor(regions, tips, seed) {
+  return deterministicOrder(tips, seed)
+    .filter((tip) => !tip.where || regions[tip.where])
+    .slice(0, 1);
+}
+
+/**
+ * Generate safety tips — deterministically pick 1 from the pool per week.
+ */
+function generateSafetyFacts(geohash, week, year, regions) {
   const seed = `${geohash}:safety:${week}:${year}`;
-  const pool = inCascadia ? SAFETY_TIPS : SAFETY_TIPS.filter((tip) => !tip.cascadiaOnly);
-  const picked = deterministicPick(pool, seed, 1);
+  const picked = pickTipFor(regions, SAFETY_TIPS, seed);
   return picked.map((tip, i) => ({
     id: makeFactId(geohash, 'safety_tip', week, year, i),
     type: 'safety_tip',
@@ -446,10 +494,9 @@ function generateSafetyFacts(geohash, week, year, inCascadia = false) {
 /**
  * Generate local resource tips — pick 1 per week.
  */
-function generateLocalResourceFacts(geohash, week, year) {
-  const pool = [...LOCAL_RESOURCE_TIPS];
+function generateLocalResourceFacts(geohash, week, year, regions) {
   const seed = `${geohash}:local_resource:${week}:${year}`;
-  const picked = deterministicPick(pool, seed, 1);
+  const picked = pickTipFor(regions, LOCAL_RESOURCE_TIPS, seed);
   return picked.map((tip, i) => ({
     id: makeFactId(geohash, 'local_resource', week, year, i),
     type: 'local_resource',
@@ -464,9 +511,9 @@ function generateLocalResourceFacts(geohash, week, year) {
 /**
  * Generate moving / newcomer tips — pick 1 per week.
  */
-function generateMovingFacts(geohash, week, year) {
+function generateMovingFacts(geohash, week, year, regions) {
   const seed = `${geohash}:moving:${week}:${year}`;
-  const picked = deterministicPick(MOVING_TIPS, seed, 1);
+  const picked = pickTipFor(regions, MOVING_TIPS, seed);
   return picked.map((tip, i) => ({
     id: makeFactId(geohash, 'moving_tip', week, year, i),
     type: 'moving_tip',
@@ -630,6 +677,9 @@ async function generateNeighborhoodFacts(geohash, options = {}) {
     ...seasonalCoords,
   });
 
+  // The static tips that name a region go only to cells in it.
+  const regions = cellRegions(seasonalCoords, seasonalCtx.region);
+
   // 4. Generate facts by category
   const hasPropertyData = homes.length > 0 || profiles.length > 0;
 
@@ -641,14 +691,11 @@ async function generateNeighborhoodFacts(geohash, options = {}) {
     geohash, seasonalCtx, neighborhoodPreview, week, year,
   );
 
-  const safetyFacts = generateSafetyFacts(
-    geohash, week, year,
-    isInCascadiaRegion(seasonalCoords.latitude, seasonalCoords.longitude),
-  );
+  const safetyFacts = generateSafetyFacts(geohash, week, year, regions);
 
-  const localResourceFacts = generateLocalResourceFacts(geohash, week, year);
+  const localResourceFacts = generateLocalResourceFacts(geohash, week, year, regions);
 
-  const movingFacts = generateMovingFacts(geohash, week, year);
+  const movingFacts = generateMovingFacts(geohash, week, year, regions);
 
   const homeValueFacts = hasPropertyData
     ? generateHomeValueFacts(geohash, profiles, week, year)

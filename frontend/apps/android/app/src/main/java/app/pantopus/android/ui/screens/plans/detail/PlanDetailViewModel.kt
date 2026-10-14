@@ -12,6 +12,7 @@ import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.blocks.BlocksRepository
 import app.pantopus.android.data.homes.HomesRepository
+import app.pantopus.android.data.plans.PlanFormat
 import app.pantopus.android.data.plans.PlanKind
 import app.pantopus.android.data.plans.PlanLocationResolver
 import app.pantopus.android.data.plans.PlanOrigin
@@ -66,7 +67,8 @@ data class AskDraft(
     val note: String = "",
     val kidsCount: Int = 1,
     val ageBands: Set<String> = emptySet(),
-    val staysWithKids: Boolean = true,
+    /** "I'll stay with my kids": the parent ticks it for a new ask (as on iOS); an edited ask kept it. */
+    val staysWithKids: Boolean = false,
     val sending: Boolean = false,
     val error: String? = null,
 )
@@ -209,7 +211,7 @@ class PlanDetailViewModel
                 when (val result = blocks.block(hostId)) {
                     is NetworkResult.Success -> {
                         repository.changed()
-                        _ui.update { it.copy(state = PlanDetailUiState.Gone, notice = "Blocked. You won't see their plans.") }
+                        _ui.update { it.copy(state = PlanDetailUiState.Gone, notice = "Blocked. You won't see each other's plans.") }
                     }
                     is NetworkResult.Failure -> _ui.update { it.copy(notice = result.error.planMessage) }
                 }
@@ -247,6 +249,7 @@ class PlanDetailViewModel
                             note = mine?.note.orEmpty(),
                             kidsCount = mine?.kidsCount ?: 1,
                             ageBands = mine?.kidsAgeBands.orEmpty().toSet(),
+                            staysWithKids = mine != null && plan.kind == PlanKind.PLAYDATE.wire,
                         ),
                 )
             }
@@ -296,11 +299,9 @@ class PlanDetailViewModel
             }
         }
 
+        /** The server's own sentence for a refused ask, as iOS shows it; the 10-request limit says what to do. */
         private fun askError(error: NetworkError): String =
             when (error.planCode) {
-                "needs_verified_address" -> "This plan is for neighbors with a verified address."
-                "too_far" -> "This plan is too far from your home or where you are now."
-                "needs_location" -> "Share your location or add your home to ask."
                 "too_many_requests" -> "You have 10 open requests. Withdraw one to ask here."
                 "full" -> "It just filled up. You can join the waitlist."
                 else -> error.planMessage
@@ -308,15 +309,24 @@ class PlanDetailViewModel
 
         // ---- Your request (J5, J6, J7) ----
 
-        /** Withdraw a request, leave the waitlist, or leave the plan ("Can't make it"). */
-        fun withdraw() = act { repository.withdraw(planId) }
+        /** Withdraw a request, leave the waitlist, or leave the plan ("Can't make it"); [done] says it went through. */
+        fun withdraw(done: String? = null) = act(done = done) { repository.withdraw(planId) }
 
         fun onMyWay() = act(done = "We told the group you're on the way.") { repository.onMyWay(planId) }
 
         fun stillComing(coming: Boolean) =
-            act(done = if (coming) "Thanks. The host knows you're still coming." else "You've left the plan.") {
+            act(done = if (coming) "Thanks. The host knows you're still coming." else "We told ${hostFirst()}") {
                 repository.stillComing(planId, coming)
             }
+
+        /** The host's first name for a line ("We told Sam"), from the plan on screen. */
+        private fun hostFirst(): String =
+            (_ui.value.state as? PlanDetailUiState.Ready)
+                ?.plan
+                ?.host
+                ?.displayName
+                ?.takeIf { it.isNotBlank() }
+                ?.let(PlanFormat::firstName) ?: "the host"
 
         // ---- Host (H9, H12) ----
 

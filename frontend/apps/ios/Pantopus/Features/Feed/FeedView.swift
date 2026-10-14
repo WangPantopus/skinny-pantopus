@@ -29,6 +29,20 @@ private struct FeedShareTarget: Identifiable {
     let url: URL
 }
 
+/// The Pulse tab's top-right menu (Pulse S3): Nearby's people entries moved
+/// here, beside the page's preferences.
+public struct FeedTopMenu {
+    /// Opens Connections (the existing screen).
+    public let onOpenConnections: @MainActor () -> Void
+    /// Opens Beacon Updates; nil while that launch cut is off.
+    public let onOpenBeacons: (@MainActor () -> Void)?
+
+    public init(onOpenConnections: @escaping @MainActor () -> Void, onOpenBeacons: (@MainActor () -> Void)? = nil) {
+        self.onOpenConnections = onOpenConnections
+        self.onOpenBeacons = onOpenBeacons
+    }
+}
+
 /// Pulse tab entry point.
 public struct FeedView: View {
     @State private var viewModel: PulseFeedViewModel
@@ -53,6 +67,14 @@ public struct FeedView: View {
     private let onEmptyCTA: (@MainActor () -> Void)?
     private let onFollowing: (@MainActor () -> Void)?
     private let onBack: (@MainActor () -> Void)?
+    /// The top-right menu; nil keeps the plain preferences button.
+    private let topMenu: FeedTopMenu?
+    /// A card above the Nearby posts (the Pulse tab's quiet-state card).
+    /// Type-erased so the slot doesn't make this shared screen generic.
+    private let topCard: AnyView?
+    /// Runs beside the feed's own read on a pull to refresh (the Pulse tab
+    /// re-reads its quiet-state card's meter).
+    private let onRefresh: (@MainActor () async -> Void)?
 
     init(
         viewModel: PulseFeedViewModel? = nil,
@@ -61,7 +83,10 @@ public struct FeedView: View {
         onCompose: @escaping @MainActor (PulseIntent) -> Void = { _ in },
         onEmptyCTA: (@MainActor () -> Void)? = nil,
         onFollowing: (@MainActor () -> Void)? = nil,
-        onBack: (@MainActor () -> Void)? = nil
+        onBack: (@MainActor () -> Void)? = nil,
+        topMenu: FeedTopMenu? = nil,
+        topCard: AnyView? = nil,
+        onRefresh: (@MainActor () async -> Void)? = nil
     ) {
         // Swift 5.10 crashes while lowering PulseFeedViewModel() in a default-argument thunk.
         let resolved = viewModel ?? PulseFeedViewModel()
@@ -76,6 +101,9 @@ public struct FeedView: View {
         self.onEmptyCTA = onEmptyCTA
         self.onFollowing = onFollowing
         self.onBack = onBack
+        self.topMenu = topMenu
+        self.topCard = topCard
+        self.onRefresh = onRefresh
     }
 
     public var body: some View {
@@ -109,11 +137,8 @@ public struct FeedView: View {
                 if viewModel.surface == .pulse {
                     FeedContextBar(viewModel: contextBarViewModel)
                 }
-                if !viewModel.availableTopics.isEmpty {
-                    PulseTopicChipRow(
-                        topics: viewModel.availableTopics,
-                        activeTopic: viewModel.activeTopic
-                    ) { topic in
+                if viewModel.showsTopics {
+                    PulseTopicChipRow(activeTopic: viewModel.activeTopic) { topic in
                         Task { await viewModel.selectTopic(topic) }
                     }
                 }
@@ -298,16 +323,20 @@ public struct FeedView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Filter posts")
             .accessibilityIdentifier("pulseFilterButton")
-            Button {
-                viewModel.showsPreferences = true
-            } label: {
-                Icon(.slidersHorizontal, size: 18, color: Theme.Color.appText)
-                    .frame(width: 36, height: 36)
-                    .hitArea(horizontal: 4, vertical: 4)
+            if let topMenu {
+                topMenuButton(topMenu)
+            } else {
+                Button {
+                    viewModel.showsPreferences = true
+                } label: {
+                    Icon(.slidersHorizontal, size: 18, color: Theme.Color.appText)
+                        .frame(width: 36, height: 36)
+                        .hitArea(horizontal: 4, vertical: 4)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Pulse preferences")
+                .accessibilityIdentifier("pulsePreferencesButton")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Pulse preferences")
-            .accessibilityIdentifier("pulsePreferencesButton")
         }
         .padding(.horizontal, Spacing.s4)
         .padding(.vertical, Spacing.s2)
@@ -315,6 +344,35 @@ public struct FeedView: View {
         .overlay(alignment: .bottom) {
             Rectangle().fill(Theme.Color.appBorder).frame(height: 1)
         }
+    }
+
+    /// Connections (and Beacons while that launch cut is on), then the page's
+    /// preferences: the Pulse tab's top-right menu.
+    private func topMenuButton(_ menu: FeedTopMenu) -> some View {
+        Menu {
+            Button(action: menu.onOpenConnections) {
+                Label { Text("Connections") } icon: { Icon(.users) }
+            }
+            .accessibilityIdentifier("pulseMenuConnections")
+            if let onOpenBeacons = menu.onOpenBeacons {
+                Button(action: onOpenBeacons) {
+                    Label { Text("Beacons") } icon: { Icon(.radio) }
+                }
+                .accessibilityIdentifier("pulseMenuBeacons")
+            }
+            Button {
+                viewModel.showsPreferences = true
+            } label: {
+                Label { Text("Pulse preferences") } icon: { Icon(.slidersHorizontal) }
+            }
+            .accessibilityIdentifier("pulseMenuPreferences")
+        } label: {
+            Icon(.moreHorizontal, size: 20, color: Theme.Color.appText)
+                .frame(width: 36, height: 36)
+                .hitArea(horizontal: 4, vertical: 4)
+        }
+        .accessibilityLabel("More")
+        .accessibilityIdentifier("pulseMoreMenu")
     }
 
     /// Nearby / Connections surface toggle — RN
@@ -481,82 +539,109 @@ public struct FeedView: View {
         .accessibilityIdentifier("pulseFeedLoading")
     }
 
+    @ViewBuilder
     private func emptyFrame(_ content: FeedEmptyContent) -> some View {
-        VStack(spacing: Spacing.s3) {
-            Spacer()
-            Icon(content.icon, size: 32, strokeWidth: 1.8, color: Theme.Color.primaryInk)
-                .frame(width: 72, height: 72)
-                .background(Theme.Color.primary50)
-                .clipShape(Circle())
-            Text(content.headline)
-                .font(.system(size: 20, weight: .bold))
-                .foregroundStyle(Theme.Color.appText)
-                .multilineTextAlignment(.center)
-            Text(content.body)
-                .font(.system(size: 13.5))
-                .foregroundStyle(Theme.Color.appTextSecondary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 268)
-            Button {
-                if viewModel.needsArea {
-                    Task { await contextBarViewModel.openSwitcher() }
-                } else if let onEmptyCTA {
-                    onEmptyCTA()
-                } else {
-                    onCompose(viewModel.activeIntent)
+        if let card = nearbyTopCard {
+            // The quiet-state card sits above the empty state; together they scroll.
+            ScrollView(.vertical, showsIndicators: true) {
+                VStack(spacing: Spacing.s3) {
+                    card
+                        .padding(.bottom, Spacing.s5)
+                    emptyStack(content)
                 }
-            } label: {
-                HStack(spacing: Spacing.s2) {
-                    Icon(content.ctaIcon, size: 15, strokeWidth: 2.4, color: Theme.Color.appTextInverse)
-                    Text(content.ctaLabel)
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(Theme.Color.appTextInverse)
-                }
-                .padding(.horizontal, 22)
-                .frame(height: 44)
-                .background(Theme.Color.primarySolid)
-                .clipShape(Capsule())
+                .padding(Spacing.s5)
             }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("pulseEmptyCreatePost")
-            if let emphasis = content.footerEmphasis, !emphasis.isEmpty {
-                HStack(spacing: Spacing.s2) {
-                    Icon(content.footerIcon, size: 13, color: Theme.Color.appTextMuted)
-                    Group {
-                        Text(content.footerLead)
-                            .font(.system(size: 11.5))
-                            .foregroundStyle(Theme.Color.appTextSecondary)
-                            + Text(emphasis)
-                            .font(.system(size: 11.5, weight: .bold))
-                            .foregroundStyle(Theme.Color.appTextStrong)
-                            + Text(content.footerTrail)
-                            .font(.system(size: 11.5))
-                            .foregroundStyle(Theme.Color.appTextSecondary)
-                    }
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(Theme.Color.appSurface)
-                .overlay(
-                    RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
-                        .stroke(Theme.Color.appBorder, lineWidth: 1)
-                )
-                .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
-                .padding(.top, Spacing.s4)
+            .accessibilityIdentifier("pulseFeedEmpty")
+        } else {
+            VStack(spacing: Spacing.s3) {
+                Spacer()
+                emptyStack(content)
+                Spacer()
             }
-            // Sports lane starter prompts — tapping one opens the
-            // composer pre-filled (RN `FeedEmptyState` starters).
-            if viewModel.isInSportsLane {
-                PulseSportsStarterRow { starter in
-                    onComposeStarter(starter)
-                }
-                .padding(.top, Spacing.s4)
-            }
-            Spacer()
+            .padding(Spacing.s5)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .accessibilityIdentifier("pulseFeedEmpty")
         }
-        .padding(Spacing.s5)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .accessibilityIdentifier("pulseFeedEmpty")
+    }
+
+    /// The empty state's icon, words, button, scope footer and starters.
+    @ViewBuilder
+    private func emptyStack(_ content: FeedEmptyContent) -> some View {
+        Icon(content.icon, size: 32, strokeWidth: 1.8, color: Theme.Color.primaryInk)
+            .frame(width: 72, height: 72)
+            .background(Theme.Color.primary50)
+            .clipShape(Circle())
+        Text(content.headline)
+            .font(.system(size: 20, weight: .bold))
+            .foregroundStyle(Theme.Color.appText)
+            .multilineTextAlignment(.center)
+        Text(content.body)
+            .font(.system(size: 13.5))
+            .foregroundStyle(Theme.Color.appTextSecondary)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: 268)
+        Button {
+            if viewModel.needsArea {
+                Task { await contextBarViewModel.openSwitcher() }
+            } else if viewModel.quietTopic != nil {
+                Task { await viewModel.selectTopic(nil) }
+            } else if let onEmptyCTA {
+                onEmptyCTA()
+            } else {
+                onCompose(viewModel.activeIntent)
+            }
+        } label: {
+            HStack(spacing: Spacing.s2) {
+                Icon(content.ctaIcon, size: 15, strokeWidth: 2.4, color: Theme.Color.appTextInverse)
+                Text(content.ctaLabel)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(Theme.Color.appTextInverse)
+            }
+            .padding(.horizontal, 22)
+            .frame(height: 44)
+            .background(Theme.Color.primarySolid)
+            .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(viewModel.quietTopic == nil ? "pulseEmptyCreatePost" : "pulseTopicShowAll")
+        if let emphasis = content.footerEmphasis, !emphasis.isEmpty {
+            HStack(spacing: Spacing.s2) {
+                Icon(content.footerIcon, size: 13, color: Theme.Color.appTextMuted)
+                Group {
+                    Text(content.footerLead)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                        + Text(emphasis)
+                        .font(.system(size: 11.5, weight: .bold))
+                        .foregroundStyle(Theme.Color.appTextStrong)
+                        + Text(content.footerTrail)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(Theme.Color.appSurface)
+            .overlay(
+                RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
+                    .stroke(Theme.Color.appBorder, lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
+            .padding(.top, Spacing.s4)
+        }
+        // Sports lane starter prompts — tapping one opens the
+        // composer pre-filled (RN `FeedEmptyState` starters).
+        if viewModel.isInSportsLane {
+            PulseSportsStarterRow { starter in
+                onComposeStarter(starter)
+            }
+            .padding(.top, Spacing.s4)
+        }
+    }
+
+    /// The top card, on the Nearby surface only.
+    private var nearbyTopCard: AnyView? {
+        viewModel.surface == .pulse ? topCard : nil
     }
 
     private func populatedFrame(_ rows: [PulsePostCardContent]) -> some View {
@@ -564,7 +649,7 @@ public struct FeedView: View {
             ScrollView(.vertical, showsIndicators: true) {
                 postList(rows)
             }
-            .refreshable { await viewModel.refresh() }
+            .refreshable { await refreshFeedAndCard() }
             .overlay(alignment: .top) {
                 if viewModel.newPostsCount > 0 {
                     newPostsPill { withAnimation { proxy.scrollTo(firstPostID ?? Self.listTopID, anchor: .top) } }
@@ -627,6 +712,9 @@ public struct FeedView: View {
                     viewModel.isReadingAtTop = atTop
                 }
                 .accessibilityHidden(true)
+            if let card = nearbyTopCard {
+                card
+            }
             if rows.isEmpty, !viewModel.searchText.isEmpty {
                 Text("No posts match your search")
                     .font(.system(size: 13))
@@ -765,6 +853,14 @@ public struct FeedView: View {
             await viewModel.refresh()
         }
     }
+
+    /// Pull to refresh: the feed, and beside it the host's own read.
+    @MainActor
+    private func refreshFeedAndCard() async {
+        let card = onRefresh.map { work in Task { @MainActor in await work() } }
+        await viewModel.refresh()
+        await card?.value
+    }
 }
 
 /// Every modal the Pulse card overflow menu drives: the menu itself, the
@@ -880,6 +976,15 @@ private struct FeedPostActionSurfaces: ViewModifier {
                     run { await viewModel.markNotHelpful(postId: row.id) }
                 }
                 .accessibilityIdentifier("pulseFeedOverflowNotHelpful")
+            }
+            // Pulse S4: everywhere until areas exist (S5 adds "in this area").
+            // Not on your own post, which a topic mute never hides.
+            if !actions.isSeeded, !actions.isOwner, row.pulseTopic != nil {
+                Button("Mute this topic") {
+                    dismissOverflow()
+                    run { await viewModel.mutePulseTopic(postId: row.id) }
+                }
+                .accessibilityIdentifier("pulseFeedOverflowMuteThisTopic")
             }
             if actions.canMuteAuthor {
                 Button("Mute \(actions.muteEntityName)") {

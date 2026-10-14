@@ -30,17 +30,19 @@ struct PlanRowModel: Identifiable, Equatable {
     static func listed(_ card: PlanCardDTO, trailing: PlanRowTrailing? = nil, now: Date = Date()) -> PlanRowModel {
         let calendar = PlanFormat.calendar(for: card.timezone)
         let distance = PlanFormat.distance(card.distanceBand)
+        // The row says just the place's name ("Downtown", "Prune Hill"), as on the board and Android.
+        let area = card.area.label.hasPrefix("Near ") ? String(card.area.label.dropFirst(5)) : card.area.label
         var parts: [String] = []
         if let when = PlanFormat.rowWhen(state: card.state, start: card.startsAtDate, end: card.endsAtDate, now: now, calendar: calendar) {
             parts.append(when)
             // A later day names the area too ("Sun 1:25 PM · Downtown · about 2 mi").
             if card.state != .live, let start = card.startsAtDate, !calendar.isDate(start, inSameDayAs: now) {
-                parts.append(card.area.label)
+                parts.append(area)
             }
         } else {
             // A playdate before you're in: the part of the day and the neighborhood.
             parts.append(PlanFormat.dayPartPhrase(card.dayPart, day: card.startsOnDate, now: now, calendar: calendar))
-            parts.append(card.area.label)
+            parts.append(area)
         }
         if card.kind == .playdate, let ages = PlanRowModel.ages(card.details?.kidsAgeBands) {
             parts.append(ages)

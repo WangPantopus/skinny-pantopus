@@ -5,7 +5,6 @@ package app.pantopus.android.ui.screens.root
 import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +19,8 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,9 +32,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.selected
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
@@ -93,7 +94,8 @@ fun PantopusBottomBar(
                     .fillMaxWidth()
                     .border(1.dp, PantopusColors.appBorder)
                     .navigationBarsPadding()
-                    .height(78.dp),
+                    .height(78.dp)
+                    .selectableGroup(),
             horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -127,13 +129,15 @@ private fun RowScope.TabItem(
             Modifier
                 .weight(1f)
                 .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
-                .clickable(onClick = onClick)
-                .padding(horizontal = 2.dp)
+                // One node for TalkBack and the UI tests: the tag, the tab role with its selected state, and one name
+                // for the tab (the label and badge inside are replaced by it, so nothing is read twice). It sits inside
+                // `selectable` so the role, the selected state and the click stay.
                 .testTag("tab.${route.path.substringAfterLast('/')}")
-                .semantics {
-                    selected = isSelected
+                .selectable(selected = isSelected, role = Role.Tab, onClick = onClick)
+                .clearAndSetSemantics {
                     contentDescription = if (badge > 0) "${route.label}, $badge unread" else route.label
-                },
+                }
+                .padding(horizontal = 2.dp),
     ) {
         Box {
             PantopusIconImage(

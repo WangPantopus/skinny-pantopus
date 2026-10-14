@@ -102,6 +102,7 @@ import app.pantopus.android.data.api.services.PrivacyApi
 import app.pantopus.android.data.api.services.PrivacyHandshakeApi
 import app.pantopus.android.data.api.services.ProfessionalApi
 import app.pantopus.android.data.api.services.ProfileInsightsApi
+import app.pantopus.android.data.api.services.PulseApi
 import app.pantopus.android.data.api.services.RealRentApi
 import app.pantopus.android.data.api.services.RecordWatchApi
 import app.pantopus.android.data.api.services.RelationshipsApi
@@ -768,6 +769,11 @@ object NetworkModule {
     @Provides
     @Singleton
     fun providePlansApi(retrofit: Retrofit): PlansApi = retrofit.create(PlansApi::class.java)
+
+    /** Pulse's own routes (`/api/pulse/…`): the asker's keep-open and close (S7). */
+    @Provides
+    @Singleton
+    fun providePulseApi(retrofit: Retrofit): PulseApi = retrofit.create(PulseApi::class.java)
 
     /** S2 — universal search fan-out across the five search surfaces. */
     @Provides

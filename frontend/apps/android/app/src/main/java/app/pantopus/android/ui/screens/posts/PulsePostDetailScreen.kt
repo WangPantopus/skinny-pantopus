@@ -51,6 +51,7 @@ import app.pantopus.android.ui.components.ToastKind
 import app.pantopus.android.ui.components.ToastMessage
 import app.pantopus.android.ui.screens.compose.pulse.PulseLostFoundContactPref
 import app.pantopus.android.ui.screens.compose.pulse.PulseLostFoundKind
+import app.pantopus.android.ui.screens.feed.pulse.PostStatusPill
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailShell
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailTopBar
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailTopBarAction
@@ -120,6 +121,7 @@ fun PulsePostDetailScreen(
     val isSending by viewModel.isSendingComment.collectAsStateWithLifecycle()
     val toast by viewModel.toastMessage.collectAsStateWithLifecycle()
     val showsOverflow by viewModel.showsOverflowMenu.collectAsStateWithLifecycle()
+    val confirmingClose by viewModel.confirmingClose.collectAsStateWithLifecycle()
     val didDelete by viewModel.didDeletePost.collectAsStateWithLifecycle()
     val likePending by viewModel.likePending.collectAsStateWithLifecycle()
     val savePending by viewModel.savePending.collectAsStateWithLifecycle()
@@ -277,6 +279,12 @@ fun PulsePostDetailScreen(
                         viewModel.toggleRepost()
                     }
                 }
+                if (viewModel.canKeepOpen) {
+                    OverflowAction(label = "Keep open 7 more days", testTag = "pulseAskKeepOpen") { viewModel.keepOpen() }
+                }
+                if (viewModel.canCloseAsk) {
+                    OverflowAction(label = "Close", testTag = "pulseAskClose") { viewModel.beginCloseAsk() }
+                }
                 if (viewModel.isOwner) {
                     OverflowAction(label = "Edit post", testTag = "pulsePostDetail-edit") {
                         viewModel.dismissOverflowMenu()
@@ -332,6 +340,25 @@ fun PulsePostDetailScreen(
             confirmButton = {},
             dismissButton = {
                 TextButton(onClick = { showsReportReasons = false }) { Text("Cancel") }
+            },
+        )
+    }
+
+    if (confirmingClose) {
+        AlertDialog(
+            onDismissRequest = { viewModel.cancelCloseAsk() },
+            title = { Text("Close this question?") },
+            text = { Text("It leaves Pulse. You can restore it from My posts.") },
+            confirmButton = {
+                TextButton(
+                    onClick = { viewModel.closeAsk() },
+                    modifier = Modifier.testTag("pulseAskCloseConfirm"),
+                ) {
+                    Text("Close", color = PantopusColors.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.cancelCloseAsk() }) { Text("Cancel") }
             },
         )
     }
@@ -453,6 +480,13 @@ fun PulsePostDetailLoadedContent(
                     intent = content.intent,
                     onAvatarTap = { onOpenProfile(content.post.userId) },
                 )
+                content.status?.let { status ->
+                    PostStatusPill(
+                        status = status,
+                        postId = content.post.id,
+                        modifier = Modifier.padding(horizontal = Spacing.s4),
+                    )
+                }
                 if (actionPending) {
                     Text(
                         "Pending",

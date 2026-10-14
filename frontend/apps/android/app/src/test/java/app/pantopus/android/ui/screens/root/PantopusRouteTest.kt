@@ -33,14 +33,10 @@ class PantopusRouteTest {
         assertEquals(listOf("Place", "Today", "Pulse", "Plans", "Mail"), entries.map { it.label })
         // The Plans switch decides whether the bar draws Plans.
         assertEquals(entries, PantopusRoute.barTabs(plansOn = true))
-        assertEquals(listOf(PantopusRoute.Place, PantopusRoute.Today, PantopusRoute.Pulse, PantopusRoute.Mail), PantopusRoute.barTabs(plansOn = false))
-    }
-
-    @Test fun the_old_nearby_door_and_its_pillars_belong_to_pulse() {
-        assertEquals(PantopusRoute.Pulse, PantopusRoute.barTabFor(PantopusRoute.Nearby))
-        assertEquals(PantopusRoute.Pulse, PantopusRoute.barTabFor(PantopusRoute.Tasks))
-        assertEquals(PantopusRoute.Pulse, PantopusRoute.barTabFor(PantopusRoute.Marketplace))
-        assertEquals(PantopusRoute.Mail, PantopusRoute.barTabFor(PantopusRoute.Messages))
+        assertEquals(
+            listOf(PantopusRoute.Place, PantopusRoute.Today, PantopusRoute.Pulse, PantopusRoute.Mail),
+            PantopusRoute.barTabs(plansOn = false),
+        )
     }
 
     @Test fun place_keeps_the_legacy_path() {

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -24,7 +25,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,6 +37,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -106,24 +111,73 @@ fun NearbyScreen(
 }
 
 /**
- * The Pulse page's quiet-state card (Pulse build S3): the neighborhood meter while the area is still forming or
- * growing, "Set up a home" while the person has no place, and nothing once the area is open (or while the meter
- * loads or can't be read). It reads the meter the Nearby tab used to show.
+ * The Pulse page's quiet-state card (Pulse build S3, build spec §2): Nearby's neighborhood meter and "Set up a home"
+ * prompt, moved to the top of the Pulse page. "Set up a home" while the person has no place; the meter, with the
+ * cells window folded inside, while their area is forming or growing; nothing while the meter loads or can't be read,
+ * or once the area is open, so the feed never waits on it. Returns null when there is nothing to show. It reads the
+ * meter and window the Nearby tab used to show (iOS: `PulseQuietCard`).
  */
 @Composable
-fun PulseQuietStateCard(
+fun pulseQuietStateCard(
     onClaim: () -> Unit,
     viewModel: NearbyViewModel = hiltViewModel(),
-) {
+): (@Composable () -> Unit)? {
     val state by viewModel.state.collectAsStateWithLifecycle()
     LifecycleResumeEffect(Unit) {
         viewModel.load()
         onPauseOrDispose { }
     }
-    val meter = (state as? NearbyUiState.Loaded)?.meter ?: return
-    when {
-        meter.state == "no_place" -> NoPlaceCard(onClaim)
-        !meter.unlocked -> MeterCard(meter)
+    // A home added, claimed or verified can change the meter.
+    RefreshOnStoreChange(viewModel::load)
+    val loaded = state as? NearbyUiState.Loaded ?: return null
+    val meter = loaded.meter
+    return when {
+        meter.state == "no_place" -> {
+            { Box(Modifier.testTag("pulseQuietCard.setUpHome")) { NoPlaceCard(onClaim) } }
+        }
+        !meter.unlocked -> {
+            { QuietMeterCard(meter, loaded.cells) }
+        }
+        else -> null
+    }
+}
+
+/** The meter on the Pulse page: who has verified nearby, and the cells window behind "Show the map". */
+@Composable
+private fun QuietMeterCard(
+    meter: NeighborhoodMeter,
+    cells: NeighborhoodCells?,
+) {
+    var showsMap by rememberSaveable { mutableStateOf(false) }
+    Column(modifier = Modifier.fillMaxWidth().testTag("pulseQuietCard.meter"), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        MeterCard(meter, announcesSurfaces = false) {
+            if (cells != null) {
+                Row(
+                    modifier =
+                        Modifier
+                            .heightIn(min = 44.dp)
+                            .clickable(role = Role.Button) { showsMap = !showsMap }
+                            .testTag("pulseQuietMapToggle"),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        if (showsMap) "Hide the map" else "Show the map",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = PantopusColors.primary600,
+                    )
+                    PantopusIconImage(
+                        if (showsMap) PantopusIcon.ChevronUp else PantopusIcon.ChevronDown,
+                        null,
+                        size = 14.dp,
+                        strokeWidth = 2.25f,
+                        tint = PantopusColors.primary600,
+                    )
+                }
+            }
+        }
+        if (showsMap && cells != null) NearbyCellsMap(cells)
     }
 }
 
@@ -419,8 +473,16 @@ private const val GRID_INSET = 0.9f
 
 // ─── The meter ───────────────────────────────────────────────
 
+/**
+ * [announcesSurfaces] adds the line about the local marketplace and tasks (the Nearby tab's meter); the Pulse page's
+ * quiet card leaves it out. [footer] draws at the bottom of the card.
+ */
 @Composable
-private fun MeterCard(meter: NeighborhoodMeter) {
+private fun MeterCard(
+    meter: NeighborhoodMeter,
+    announcesSurfaces: Boolean = true,
+    footer: (@Composable () -> Unit)? = null,
+) {
     val forming = meter.state == "forming"
     val count = meter.verifiedCount ?: 0
     // Launch cut #1 (Beacon): no Beacons to mention for the first launch.
@@ -455,18 +517,18 @@ private fun MeterCard(meter: NeighborhoodMeter) {
                     ).fillMaxHeight().clip(RoundedCornerShape(5.dp)).background(PantopusColors.primary600),
             )
         }
+        val surfaces = if (announcesSurfaces) " Local marketplace and tasks open at ${meter.threshold}. $available" else ""
         Text(
             if (forming) {
-                "Your area is just forming — be one of the first ${meter.kAnonMin} verified households here. " +
-                    "Local marketplace and tasks open at ${meter.threshold}. $available"
+                "Your area is just forming — be one of the first ${meter.kAnonMin} verified households here.$surfaces"
             } else {
-                "$count households have verified their address nearby. " +
-                    "Local marketplace and tasks open at ${meter.threshold}. $available"
+                "$count households have verified their address nearby.$surfaces"
             },
             fontSize = 13.5.sp,
             lineHeight = 19.sp,
             color = PantopusColors.appTextSecondary,
         )
+        footer?.invoke()
     }
 }
 

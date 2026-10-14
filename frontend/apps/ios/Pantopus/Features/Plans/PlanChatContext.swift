@@ -94,6 +94,6 @@ enum PlanChatRules {
         guard plan.chatOpen == false || card.state == .cancelled || closedByTime else { return nil }
         return card.state == .cancelled
             ? "This plan was cancelled. The chat is closed."
-            : "This chat closed 24 hours after the plan ended"
+            : "This chat closed 24 hours after the plan ended."
     }
 }

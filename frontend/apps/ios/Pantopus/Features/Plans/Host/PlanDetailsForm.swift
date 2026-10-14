@@ -160,21 +160,25 @@ struct PlanDetailsForm: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("planChoosePlace")
-                PlanScopeLine(text: placeScope)
+                if let placeScope { PlanScopeLine(text: placeScope) }
             }
         }
     }
 
+    /// "Playground · public place · 0.4 mi" (board H3, as on Android).
     private var placeSubtitle: String {
         guard let place = model.place else { return "Parks, courts, trails, libraries, cafés" }
-        return [place.category?.capitalized, "public place"].compactMap { $0 }.joined(separator: " · ")
+        let first = place.category?.split(separator: ",").first.map { $0.trimmingCharacters(in: .whitespaces) }
+        let kind = first.flatMap { $0.isEmpty ? nil : $0.prefix(1).uppercased() + $0.dropFirst() }
+        return [kind, "public place", place.distanceMeters.map(PlanFormat.placeDistance)].compactMap { $0 }.joined(separator: " · ")
     }
 
-    private var placeScope: String {
+    /// Boards H2 and H5 draw no line under a public place (as on Android).
+    private var placeScope: String? {
         switch model.kind {
         case .playdate: "Families you accept see the exact spot. Others see the neighborhood."
         case .pickupGame: "Your location only proves you're nearby. The pin shows the place's area."
-        default: "People you accept see the exact spot. Everyone else sees the area."
+        default: nil
         }
     }
 

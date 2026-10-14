@@ -35,7 +35,7 @@ sealed class PantopusRoute(
      * Plans — what's on nearby and what you're going to: the Plans map and list, hosting, requests and Your plans. A
      * tab only while the `plans` switch is on for the person ([barTabs]).
      */
-    data object Plans : PantopusRoute(path = "root/plans", label = "Plans", icon = PantopusIcon.CalendarDays)
+    data object Plans : PantopusRoute(path = "root/plans", label = "Plans", icon = PantopusIcon.Calendar)
 
     /**
      * Mail — the digital mailbox, with Messages as its inbox. While Mailbox is off for launch (contract §9,

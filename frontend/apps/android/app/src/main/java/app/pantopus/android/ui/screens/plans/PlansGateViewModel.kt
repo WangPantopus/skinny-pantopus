@@ -18,6 +18,9 @@ class PlansGateViewModel
     ) : ViewModel() {
         val flags: StateFlow<PlansFlags> = feature.flags
 
+        /** False until [flags] holds the signed-in person's answer ([PlansFeature.settled]). */
+        val settled: StateFlow<Boolean> = feature.settled
+
         /** For the offline strip on the Plans screens. */
         val online: StateFlow<Boolean> = network.isOnline
     }
