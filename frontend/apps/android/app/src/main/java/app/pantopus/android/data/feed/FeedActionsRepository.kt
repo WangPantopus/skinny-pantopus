@@ -64,6 +64,27 @@ class FeedActionsRepository
                 api.muteTopic(FeedMuteTopicRequest(postType = postType, surface = surface))
             }.feedChanged()
 
+        /**
+         * `POST /api/posts/mute/topic` `{ topic, areaId? }`: mutes one of the 12 Pulse topics, everywhere when
+         * [areaId] is null (contract section 2.9; areas arrive with S5).
+         */
+        suspend fun mutePulseTopic(
+            topic: String,
+            areaId: String? = null,
+        ): NetworkResult<FeedActionAckResponse> =
+            safeApiCall {
+                api.muteTopic(FeedMuteTopicRequest(topic = topic, areaId = areaId))
+            }.feedChanged()
+
+        /** `DELETE /api/posts/mute` `{ entityType: "topic", entityId, areaId? }`: undoes that one topic mute. */
+        suspend fun unmutePulseTopic(
+            topic: String,
+            areaId: String?,
+        ): NetworkResult<FeedActionAckResponse> =
+            safeApiCall {
+                api.unmute(FeedMuteRequest(entityType = "topic", entityId = topic, areaId = areaId))
+            }.feedChanged()
+
         /** `POST /api/posts/:id/not-helpful`. */
         suspend fun markNotHelpful(
             id: String,

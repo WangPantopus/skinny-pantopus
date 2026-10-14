@@ -12,9 +12,13 @@ import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.feed.FeedActionsRepository
 import app.pantopus.android.data.store.StoreKind
 import app.pantopus.android.ui.components.RefreshNotice
+import app.pantopus.android.ui.screens.feed.pulse.PulseTopic
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -30,6 +34,22 @@ sealed interface FeedPreferencesUiState {
     data class Error(
         val message: String,
     ) : FeedPreferencesUiState
+}
+
+/** One Pulse topic the person muted, as the "Muted topics" section lists it (Pulse build S4). */
+data class MutedTopicUi(
+    val topic: PulseTopic,
+    /** Null: muted everywhere (areas arrive with S5). */
+    val areaId: String?,
+)
+
+/** The "Muted topics" section: nothing read yet, the list, or a read that failed. */
+sealed interface MutedTopicsUiState {
+    data object Loading : MutedTopicsUiState
+
+    data class Loaded(val items: List<MutedTopicUi>) : MutedTopicsUiState
+
+    data object Error : MutedTopicsUiState
 }
 
 /**
@@ -59,9 +79,56 @@ class FeedPreferencesViewModel
         private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
         val refreshNotice: StateFlow<RefreshNotice?> = _refreshNotice.asStateFlow()
 
-        fun load() = read(force = false)
+        private val _mutedTopics = MutableStateFlow<MutedTopicsUiState>(MutedTopicsUiState.Loading)
 
-        fun refresh() = read(force = true)
+        /** The Pulse topics the person muted (`GET /api/posts/mute` → `topic_mutes`), each with an undo. */
+        val mutedTopics: StateFlow<MutedTopicsUiState> = _mutedTopics.asStateFlow()
+
+        private val _unmutedTopics = MutableSharedFlow<String>(extraBufferCapacity = 4)
+
+        /** A topic unmuted here, so the feed can show its posts again. */
+        val unmutedTopics: SharedFlow<String> = _unmutedTopics.asSharedFlow()
+
+        fun load() {
+            read(force = false)
+            readMutedTopics()
+        }
+
+        fun refresh() {
+            read(force = true)
+            readMutedTopics()
+        }
+
+        private fun readMutedTopics() {
+            viewModelScope.launch {
+                when (val result = repo.mutedEntities()) {
+                    is NetworkResult.Success ->
+                        _mutedTopics.value =
+                            MutedTopicsUiState.Loaded(
+                                result.data.topicMutes.mapNotNull { mute ->
+                                    PulseTopic.fromKey(mute.topic)?.let { MutedTopicUi(topic = it, areaId = mute.areaId) }
+                                },
+                            )
+                    is NetworkResult.Failure ->
+                        if (_mutedTopics.value !is MutedTopicsUiState.Loaded) _mutedTopics.value = MutedTopicsUiState.Error
+                }
+            }
+        }
+
+        /** "Unmute" on a muted topic: `DELETE /api/posts/mute` for that one mute; the row leaves at once. */
+        fun unmuteTopic(item: MutedTopicUi) {
+            val before = (_mutedTopics.value as? MutedTopicsUiState.Loaded)?.items ?: return
+            _mutedTopics.value = MutedTopicsUiState.Loaded(before - item)
+            viewModelScope.launch {
+                when (repo.unmutePulseTopic(item.topic.key, item.areaId)) {
+                    is NetworkResult.Success -> _unmutedTopics.tryEmit(item.topic.key)
+                    is NetworkResult.Failure -> {
+                        _mutedTopics.value = MutedTopicsUiState.Loaded(before)
+                        _toastMessage.value = "Couldn't unmute ${item.topic.label}."
+                    }
+                }
+            }
+        }
 
         private fun read(force: Boolean) {
             if (loading || _isSaving.value) return

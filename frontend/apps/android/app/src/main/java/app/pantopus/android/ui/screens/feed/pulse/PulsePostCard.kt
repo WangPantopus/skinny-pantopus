@@ -77,6 +77,8 @@ data class PulsePostActions(
     val postType: String? = null,
     /** Human label for the topic being muted ("Ask", "Event", …). */
     val topicLabel: String? = null,
+    /** The Pulse topic the post is tagged with, when it is one of the 12; "Mute this topic" mutes it. */
+    val pulseTopic: PulseTopic? = null,
 ) {
     /** Report is offered to everyone except the author. */
     val canReport: Boolean get() = !isOwner && !isSeeded
@@ -90,6 +92,9 @@ data class PulsePostActions(
 
     /** Topic mute needs a concrete post type. */
     val canMuteTopic: Boolean get() = !isSeeded && !postType.isNullOrEmpty()
+
+    /** "Mute this topic": only on a post tagged with one of the 12 Pulse topics. */
+    val canMuteThisTopic: Boolean get() = !isSeeded && pulseTopic != null
 }
 
 /** VM-prepared content for a single Pulse card. */

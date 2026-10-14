@@ -27,10 +27,21 @@ data class MutedEntityDto(
     @Json(name = "avatar_url") val avatarUrl: String? = null,
 )
 
+/** One Pulse topic the viewer muted (`GET /api/posts/mute` → `topic_mutes`, contract section 2.9). */
+@JsonClass(generateAdapter = true)
+data class TopicMuteDto(
+    val topic: String,
+    /** Null: muted everywhere. Areas arrive with S5. */
+    @Json(name = "area_id") val areaId: String? = null,
+    @Json(name = "muted_at") val mutedAt: String? = null,
+)
+
 /** `GET /api/posts/mute` reply. */
 @JsonClass(generateAdapter = true)
 data class MutedEntitiesResponse(
     val muted: List<MutedEntityDto> = emptyList(),
+    /** The Pulse topics the viewer muted, each everywhere or in one area. */
+    @Json(name = "topic_mutes") val topicMutes: List<TopicMuteDto> = emptyList(),
 )
 
 /** Body for `POST` + `DELETE /api/posts/mute`. */
@@ -38,13 +49,20 @@ data class MutedEntitiesResponse(
 data class FeedMuteRequest(
     val entityType: String,
     val entityId: String,
+    /** A topic mute in one area (`DELETE` with `entityType: "topic"`); null is the everywhere mute. */
+    val areaId: String? = null,
 )
 
-/** Body for `POST /api/posts/mute/topic`. */
+/**
+ * Body for `POST /api/posts/mute/topic`: `{ topic, areaId? }` mutes a Pulse topic (everywhere without `areaId`), and
+ * the older `{ postType, surface? }` mutes a kind of post.
+ */
 @JsonClass(generateAdapter = true)
 data class FeedMuteTopicRequest(
-    val postType: String,
+    val postType: String? = null,
     val surface: String? = null,
+    val topic: String? = null,
+    val areaId: String? = null,
 )
 
 /** Body for `POST /api/posts/:id/not-helpful`. */
