@@ -751,7 +751,7 @@ private fun PostOverflowSheet(
         modifier = Modifier.testTag("pulseFeedOverflowSheet"),
     ) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(Spacing.s4),
+            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(Spacing.s4),
             verticalArrangement = Arrangement.spacedBy(Spacing.s1),
         ) {
             Text(

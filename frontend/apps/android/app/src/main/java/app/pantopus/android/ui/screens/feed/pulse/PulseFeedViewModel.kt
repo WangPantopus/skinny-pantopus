@@ -1349,12 +1349,15 @@ class PulseFeedViewModel
                         postType = post.postType.takeUnless { intent == PulseIntent.Generic },
                         topicLabel = intent.cardChipLabel,
                         pulseTopic = PulseTopic.fromKey(post.topic),
-                        canKeepOpen = openAsk && post.id !in keptOpenIds && post.lifecycleMetadata?.keptOpenAt.isNullOrBlank(),
+                        canKeepOpen = openAsk && hasNotBeenKeptOpen(post),
                         canCloseAsk = openAsk,
                     ),
                 status = statusFor(post),
             )
         }
+
+        private fun hasNotBeenKeptOpen(post: FeedPost): Boolean =
+            post.id !in keptOpenIds && post.lifecycleMetadata?.keptOpenAt.isNullOrBlank()
 
         private fun statusFor(post: FeedPost): PostStatus? =
             PostStatus.of(
