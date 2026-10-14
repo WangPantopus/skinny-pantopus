@@ -13,7 +13,9 @@
 //
 
 import Observation
+import PhotosUI
 import SwiftUI
+import UniformTypeIdentifiers
 import UserNotifications
 
 // swiftlint:disable multiline_arguments file_length
@@ -65,7 +67,12 @@ struct PlaceTodayDetailContent: View {
     private func todayContent(proxy: ScrollViewProxy) -> some View {
         loadedContent(proxy: proxy)
             .onChange(of: rootTabs.selected) { (_: RootTab, tab: RootTab) in resumeRadon(tab == .today) }
-            .onChange(of: scenePhase) { (_: ScenePhase, phase: ScenePhase) in resumeRadon(phase == .active && rootTabs.selected == .today) }
+            .onChange(of: scenePhase) { (_: ScenePhase, phase: ScenePhase) in
+                // A picker opened from the radon sheet (the camera's permission alert) leaves the scene
+                // inactive for a moment, and the sheet stays. Going to the background still ends it.
+                if radonState?.choosingReport == true, phase != .background { return }
+                resumeRadon(phase == .active && rootTabs.selected == .today)
+            }
             .onChange(of: AppLockManager.shared.isLocked) { (_: Bool, locked: Bool) in resumeRadon(!locked && rootTabs.selected == .today) }
     }
 
@@ -502,6 +509,14 @@ struct AddressCalendarCard: View {
     /// The schedule this editor started from. A save sends it back, so a
     /// change saved meanwhile on another device is not silently undone.
     @State private var openedVersion: String?
+    /// "Read a flyer": the camera-or-library choice, the photo, and what reading it found.
+    @State private var flyerChoice = false
+    @State private var flyerCamera = false
+    @State private var flyerLibrary = false
+    @State private var flyerItem: PhotosPickerItem?
+    @State private var capturedFlyer: Data?
+    @State private var readingFlyer = false
+    @State private var flyerMessage: FlyerMessage?
     private let api = APIClient.shared
     private var calendar: PlaceAddressCalendarData {
         confirmed ?? data
@@ -550,6 +565,7 @@ struct AddressCalendarCard: View {
                         nextDate = calendar.pickupSchedule?.recyclingNextDate ?? ""
                         openedVersion = calendar.pickupVersion
                         errorText = nil
+                        flyerMessage = nil
                         picking.toggle()
                     }
                     .font(.system(size: 13, weight: .semibold))
@@ -632,6 +648,7 @@ struct AddressCalendarCard: View {
 
     private var picker: some View {
         VStack(alignment: .leading, spacing: 8) {
+            flyerControl
             Text("Which day is garbage collected each week?")
                 .font(.system(size: 13))
                 .foregroundStyle(Theme.Color.appText)
@@ -686,7 +703,7 @@ struct AddressCalendarCard: View {
                     .accessibilityIdentifier("addressCalendarClear")
             }
         }
-        .disabled(saving != nil)
+        .disabled(saving != nil || readingFlyer)
         .padding(12)
         .background(Theme.Color.appSurfaceSunken)
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -848,6 +865,136 @@ extension AddressCalendarCard {
         struct Conflict: Decodable { let calendar: PlaceAddressCalendarData? }
         guard let data = body?.data(using: .utf8) else { return nil }
         return (try? JSONDecoder().decode(Conflict.self, from: data))?.calendar
+    }
+}
+
+// MARK: - Read a flyer
+
+/// A photo of the hauler's flyer fills in the editor's fields; the person checks
+/// them and saves with Save schedule. The reading itself saves nothing.
+extension AddressCalendarCard {
+    /// What reading a flyer found, or why it couldn't.
+    struct FlyerMessage: Equatable {
+        let text: String
+        let failed: Bool
+    }
+
+    var flyerControl: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            GhostButton(title: "Read a flyer", isLoading: readingFlyer, isEnabled: saving == nil) {
+                if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                    flyerChoice = true
+                } else {
+                    flyerLibrary = true
+                }
+            }
+            .accessibilityIdentifier("addressCalendarReadFlyer")
+            .accessibilityHint(
+                "Fills in your pickup days from a photo of your hauler's flyer. Nothing is saved until you tap Save schedule."
+            )
+            if readingFlyer {
+                Text("Reading the flyer…")
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+            } else if let flyerMessage {
+                Text(flyerMessage.text)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(flyerMessage.failed ? Theme.Color.error : Theme.Color.appText)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("addressCalendarFlyerMessage")
+            }
+        }
+        .confirmationDialog("Read a flyer", isPresented: $flyerChoice, titleVisibility: .visible) {
+            Button("Take a photo") { flyerCamera = true }
+            Button("Choose a photo") { flyerLibrary = true }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Your hauler's flyer or collection calendar.")
+        }
+        // The read starts once the camera has closed: covering the card ends its
+        // lifecycle window, so a read begun under the cover would be dropped.
+        .fullScreenCover(isPresented: $flyerCamera, onDismiss: readCapturedFlyer) {
+            SystemCameraPicker(isPresented: $flyerCamera) { image in
+                capturedFlyer = ListingPhotoProcessor.uploadData(from: image)
+            }
+            .ignoresSafeArea()
+        }
+        // `.compatible` hands over a JPEG for an iPhone's HEIC photo, which the reader can't open.
+        .photosPicker(isPresented: $flyerLibrary, selection: $flyerItem, matching: .images, preferredItemEncoding: .compatible)
+        .onChange(of: flyerItem) { _, item in
+            guard let item else { return }
+            flyerItem = nil
+            Task {
+                let data = try? await item.loadTransferable(type: Data.self)
+                await readFlyer(data.flatMap { ListingPhotoProcessor.uploadData(from: $0) })
+            }
+        }
+    }
+
+    private func readCapturedFlyer() {
+        guard let photo = capturedFlyer else { return }
+        capturedFlyer = nil
+        Task { await readFlyer(photo) }
+    }
+
+    @MainActor
+    private func readFlyer(_ jpeg: Data?) async {
+        guard homeId != nil, saving == nil, !readingFlyer else { return }
+        guard let jpeg else {
+            flyerMessage = FlyerMessage(text: "Couldn't open that photo. Try another one.", failed: true)
+            return
+        }
+        let version = lifecycleVersion
+        readingFlyer = true
+        flyerMessage = nil
+        defer { readingFlyer = false }
+        do {
+            try requirePickupCurrent(version)
+            let upload = try await MultipartUploader.shared.uploadAIMedia(files: [
+                MultipartFile(fieldName: "files", filename: "flyer.jpg", mimeType: "image/jpeg", data: jpeg)
+            ])
+            try requirePickupCurrent(version)
+            let reading: AIDraftPickupScheduleResponse = try await api.request(
+                AIEndpoints.draftPickupSchedule(AIDraftPickupScheduleRequest(images: upload.images.map(\.url)))
+            )
+            try requirePickupCurrent(version)
+            fill(from: reading)
+        } catch {
+            guard (try? requirePickupCurrent(version)) != nil else { return }
+            flyerMessage = FlyerMessage(
+                text: aiReaderMessage(error, fallback: "Couldn't read that flyer. Set your pickup days below."),
+                failed: true
+            )
+        }
+        if let flyerMessage { AccessibilityNotification.Announcement(flyerMessage.text).post() }
+    }
+
+    /// Only what the flyer shows changes; a field it doesn't show keeps the editor's value.
+    private func fill(from reading: AIDraftPickupScheduleResponse) {
+        let read = reading.schedule
+        if let day = read.garbageWeekday, Self.weekdays.contains(where: { $0.id == day }) {
+            weekday = day
+        }
+        if let cycle = read.recyclingFrequency, ["not_set", "weekly", "biweekly"].contains(cycle) {
+            frequency = cycle
+            nextDate = ""
+        }
+        if frequency != "not_set", let day = read.recyclingNextDate, pickupDates.contains(day) {
+            nextDate = day
+        }
+        let lines = [read.summary, reading.note, "Check the days, then tap Save schedule."]
+        flyerMessage = FlyerMessage(text: lines.compactMap { $0 }.joined(separator: " "), failed: false)
+    }
+}
+
+/// What a failed AI reading (a flyer, a lab report) tells the person: the server's own
+/// sentence when it gave one ("This looks like a yard sale sign…"), else [fallback].
+private func aiReaderMessage(_ error: any Error, fallback: String) -> String {
+    switch error {
+    case let APIError.clientError(_, body): APIError.friendlyClientMessage(body) ?? fallback
+    case let APIError.server(_, body): APIError.friendlyClientMessage(body) ?? fallback
+    case let apiError as APIError: apiError.errorDescription ?? fallback
+    default: fallback
     }
 }
 
@@ -1060,6 +1207,27 @@ enum RadonToday {
         }
         return text
     }
+
+    /// What the result field shows for a read value: 5.2, 4.05, 0.4, 4 (at most two decimals, always
+    /// with a ".", so `Double(_:)` reads it back; `String(format:)` isn't localized).
+    static func plain(_ value: Double) -> String {
+        String(format: "%g", (value * 100).rounded() / 100)
+    }
+
+    static let actionLevelURL = URL(string: "https://www.epa.gov/radon/what-epas-action-level-radon-and-what-does-it-mean")!
+
+    /// A result against the EPA's action level of 4.0 pCi/L, in the EPA's own terms: what it
+    /// recommends at each level, and nothing about health.
+    static func explanation(_ pci: Double, testKind: String? = nil) -> String {
+        if pci >= 4 {
+            let confirm = testKind == "long_term" ? "" : " After a short-term test, it recommends testing again to confirm first."
+            return "That's at or above the EPA's action level of 4.0 pCi/L. The EPA recommends fixing a home at this level." + confirm
+        }
+        if pci >= 2 {
+            return "That's below the EPA's action level of 4.0 pCi/L. The EPA suggests considering a fix between 2 and 4 pCi/L."
+        }
+        return "That's below the EPA's action level of 4.0 pCi/L."
+    }
 }
 
 @Observable
@@ -1094,6 +1262,14 @@ private final class RadonTodayState {
     var hasDate = false
     var result = ""
     var retained: CreateHomeTaskRequest?
+    /// "Read a lab report" in the yes sheet: the reading, what it found, and the test kind it saw.
+    var readingReport = false
+    var reportMessage: String?
+    var reportFailed = false
+    var reportTestKind: String?
+    /// The person is in a camera, photo or PDF picker opened from the sheet. The scene going
+    /// inactive meanwhile (the camera's permission alert) doesn't end the sheet.
+    var choosingReport = false
     /// The viewer can't read the household's tasks (e.g. a guest): the card isn't theirs to answer.
     var noTaskAccess = false
     /// Showing the previous lifecycle's answer while this one re-checks.
@@ -1148,6 +1324,8 @@ private final class RadonTodayState {
         access.invalidatePending()
         coordinator?.hide()
         busy = false
+        readingReport = false
+        choosingReport = false
         sheet = nil
     }
 
@@ -1186,6 +1364,10 @@ private final class RadonTodayState {
         error = nil
         hasDate = false
         result = ""
+        readingReport = false
+        reportMessage = nil
+        reportFailed = false
+        reportTestKind = nil
         selectedDate = kind == "yes" ? Date() : (Calendar.autoupdatingCurrent.date(byAdding: .day, value: 14, to: Date()) ?? Date())
         retained = nil
         if kind != "change" {
@@ -1254,6 +1436,50 @@ private final class RadonTodayState {
             self.error = retained == nil ? "Couldn't save this task. Check the date and result, then try again."
                 : "Couldn't confirm your task. Your saved request is retained; try again."
         }
+    }
+
+    /// Fills the yes sheet from a photo or PDF of the lab's report. Nothing is saved: the
+    /// person checks the result and date and taps Save.
+    func readReport(_ file: MultipartFile?) async {
+        choosingReport = false
+        guard sheet == "yes", retained == nil, !busy, !readingReport else { return }
+        // VoiceOver hears what the message under the button now says (Android's is a live region).
+        defer { if let reportMessage { AccessibilityNotification.Announcement(reportMessage).post() } }
+        guard let file else {
+            reportMessage = "Couldn't open that file. Choose a photo, or a PDF of 10 MB or less."
+            reportFailed = true
+            return
+        }
+        let revision = access.lifecycleRevision
+        readingReport = true
+        reportMessage = nil
+        defer { if access.lifecycleRevision == revision, context.active { readingReport = false } }
+        do {
+            try context.requireCurrent()
+            let reading = try await MultipartUploader.shared.readRadonReport(file: file)
+            try context.requireCurrent()
+            try access.requireCurrent(revision)
+            guard sheet == "yes" else { return }
+            fill(from: reading)
+        } catch {
+            guard (try? context.requireCurrent()) != nil, access.lifecycleRevision == revision, sheet == "yes" else { return }
+            reportMessage = aiReaderMessage(error, fallback: "Couldn't read that report. Type the result yourself.")
+            reportFailed = true
+        }
+    }
+
+    /// Only what the report shows changes: the result, and the test date when it has one.
+    private func fill(from reading: AIRadonReportResponse) {
+        let read = reading.result
+        if let value = read.valuePci, value.isFinite, value >= 0 { result = RadonToday.plain(value) }
+        if let day = read.testedOn, let date = RadonToday.date(day) {
+            hasDate = true
+            selectedDate = date
+        }
+        reportTestKind = read.testKind
+        reportMessage = [read.summary, reading.note, "Check the result and date, then tap Save."]
+            .compactMap { $0 }.joined(separator: " ")
+        reportFailed = false
     }
 
     func dismiss() async {
@@ -1357,11 +1583,22 @@ private struct RadonTodaySheet: View {
                             .font(.callout)
                     }
                     if tested {
+                        RadonReportControl(state: state)
                         Toggle("Test date (optional)", isOn: $state.hasDate)
                         if state.hasDate { RadonDateRow(title: "Test date", date: $state.selectedDate) }
                         TextField("Result (pCi/L)", text: $state.result)
                             .keyboardType(.decimalPad)
                             .textFieldStyle(.roundedBorder)
+                        if let value = Double(state.result), value.isFinite, value >= 0 {
+                            Text(RadonToday.explanation(value, testKind: state.reportTestKind))
+                                .font(.system(size: 13))
+                                .foregroundStyle(Theme.Color.appTextSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .accessibilityIdentifier("radonSheetExplanation")
+                            Link("What the EPA's action level means", destination: RadonToday.actionLevelURL)
+                                .font(.system(size: 12))
+                                .foregroundStyle(Theme.Color.primaryInk)
+                        }
                     } else {
                         RadonDateRow(
                             title: "Reminder date",
@@ -1370,12 +1607,13 @@ private struct RadonTodaySheet: View {
                         )
                     }
                 }
-                .disabled(state.busy || state.retained != nil)
+                // A reading in progress fills these fields; nothing is typed over it meanwhile.
+                .disabled(state.busy || state.readingReport || state.retained != nil)
                 if let error = state.error { Text(error).foregroundStyle(Theme.Color.error) }
                 PrimaryButton(
                     title: tested ? "Save" : "Add reminder",
                     isLoading: state.busy,
-                    isEnabled: !state.busy && (state.retained != nil || valid)
+                    isEnabled: !state.busy && !state.readingReport && (state.retained != nil || valid)
                 ) { await state.save() }
                     .accessibilityIdentifier("radonSheetCommit")
             }
@@ -1394,6 +1632,97 @@ private struct RadonTodaySheet: View {
                 .map { $0.isFinite && $0 >= 0 } == true
         }
         return Calendar.autoupdatingCurrent.startOfDay(for: state.selectedDate) >= Calendar.autoupdatingCurrent.startOfDay(for: Date())
+    }
+}
+
+/// "Read a lab report" in the radon yes sheet: a photo or PDF of the lab's report fills in
+/// the result and test date, for the person to check and save. Mirrors Android `RadonReportControl`.
+private struct RadonReportControl: View {
+    @Bindable var state: RadonTodayState
+    @State private var choosing = false
+    @State private var camera = false
+    @State private var library = false
+    @State private var files = false
+    @State private var item: PhotosPickerItem?
+    @State private var captured: Data?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            GhostButton(title: "Read a lab report", isLoading: state.readingReport, isEnabled: !state.busy) { choosing = true }
+                .accessibilityIdentifier("radonSheetReadReport")
+                .accessibilityHint(
+                    "Fills in the result and test date from a photo or PDF of your radon report. Nothing is saved until you tap Save."
+                )
+            if state.readingReport {
+                Text("Reading the report…")
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+            } else if let message = state.reportMessage {
+                Text(message)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(state.reportFailed ? Theme.Color.error : Theme.Color.appText)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("radonSheetReportMessage")
+            }
+        }
+        .confirmationDialog("Read a lab report", isPresented: $choosing, titleVisibility: .visible) {
+            if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                Button("Take a photo") { present { camera = true } }
+            }
+            Button("Choose a photo") { present { library = true } }
+            Button("Choose a PDF") { present { files = true } }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The report from your radon lab or test kit.")
+        }
+        // A sheet, not a full-screen cover: covering Today would end the radon card's lifecycle.
+        .sheet(isPresented: $camera, onDismiss: readCaptured) {
+            SystemCameraPicker(isPresented: $camera) { image in
+                captured = ListingPhotoProcessor.uploadData(from: image)
+            }
+            .ignoresSafeArea()
+        }
+        // `.compatible` hands over a JPEG for an iPhone's HEIC photo, which the reader can't open.
+        .photosPicker(isPresented: $library, selection: $item, matching: .images, preferredItemEncoding: .compatible)
+        .onChange(of: item) { _, picked in
+            guard let picked else { return }
+            item = nil
+            Task {
+                let data = try? await picked.loadTransferable(type: Data.self)
+                let jpeg = data.flatMap { ListingPhotoProcessor.uploadData(from: $0) }
+                await state.readReport(jpeg.map(Self.photoFile))
+            }
+        }
+        .fileImporter(isPresented: $files, allowedContentTypes: [.pdf]) { result in
+            let file = (try? result.get()).flatMap(Self.pdf)
+            Task { await state.readReport(file) }
+        }
+        .onChange(of: camera || library || files) { _, open in
+            if !open { state.choosingReport = false }
+        }
+    }
+
+    private func present(_ picker: () -> Void) {
+        state.choosingReport = true
+        picker()
+    }
+
+    private func readCaptured() {
+        guard let photo = captured else { return }
+        captured = nil
+        Task { await state.readReport(Self.photoFile(photo)) }
+    }
+
+    private static func photoFile(_ jpeg: Data) -> MultipartFile {
+        MultipartFile(fieldName: "file", filename: "radon-report.jpg", mimeType: "image/jpeg", data: jpeg)
+    }
+
+    /// The PDF the person chose; nil when it can't be read or is over the reader's 10 MB.
+    private static func pdf(_ url: URL) -> MultipartFile? {
+        let permitted = url.startAccessingSecurityScopedResource()
+        defer { if permitted { url.stopAccessingSecurityScopedResource() } }
+        guard let data = try? Data(contentsOf: url), !data.isEmpty, data.count <= 10 * 1024 * 1024 else { return nil }
+        return MultipartFile(fieldName: "file", filename: "radon-report.pdf", mimeType: "application/pdf", data: data)
     }
 }
 

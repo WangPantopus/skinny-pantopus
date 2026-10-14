@@ -102,7 +102,7 @@ public struct PlanPinsResponse: Decodable, Sendable, Hashable {
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        markers = try container.decodeIfPresent(PlanLossyList<PlanPinDTO>.self, forKey: .markers)?.items ?? []
+        markers = try container.decodeIfPresent(LossyList<PlanPinDTO>.self, forKey: .markers)?.items ?? []
     }
 
     /// A reply with an exact point is never saved on the phone or shown from a

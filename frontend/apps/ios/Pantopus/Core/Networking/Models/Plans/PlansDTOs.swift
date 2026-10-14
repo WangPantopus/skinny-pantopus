@@ -403,7 +403,7 @@ public struct PlansListResponse: Decodable, Sendable, Hashable {
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        items = try container.decodeIfPresent(PlanLossyList<PlanCardDTO>.self, forKey: .items)?.items ?? []
+        items = try container.decodeIfPresent(LossyList<PlanCardDTO>.self, forKey: .items)?.items ?? []
         nextCursor = try container.decodeIfPresent(String.self, forKey: .nextCursor)
         nearestElsewhere = try? container.decodeIfPresent(PlansNearestElsewhere.self, forKey: .nearestElsewhere)
     }
@@ -437,11 +437,11 @@ public struct MyPlansResponse: Decodable, Sendable, Hashable {
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        hosting = try container.decodeIfPresent(PlanLossyList<PlanCardDTO>.self, forKey: .hosting)?.items ?? []
-        going = try container.decodeIfPresent(PlanLossyList<PlanCardDTO>.self, forKey: .going)?.items ?? []
-        asked = try container.decodeIfPresent(PlanLossyList<PlanCardDTO>.self, forKey: .asked)?.items ?? []
-        waitlisted = try container.decodeIfPresent(PlanLossyList<PlanCardDTO>.self, forKey: .waitlisted)?.items ?? []
-        recent = try container.decodeIfPresent(PlanLossyList<PlanCardDTO>.self, forKey: .recent)?.items ?? []
+        hosting = try container.decodeIfPresent(LossyList<PlanCardDTO>.self, forKey: .hosting)?.items ?? []
+        going = try container.decodeIfPresent(LossyList<PlanCardDTO>.self, forKey: .going)?.items ?? []
+        asked = try container.decodeIfPresent(LossyList<PlanCardDTO>.self, forKey: .asked)?.items ?? []
+        waitlisted = try container.decodeIfPresent(LossyList<PlanCardDTO>.self, forKey: .waitlisted)?.items ?? []
+        recent = try container.decodeIfPresent(LossyList<PlanCardDTO>.self, forKey: .recent)?.items ?? []
         viewer = try? container.decodeIfPresent(MyPlansViewer.self, forKey: .viewer)
     }
 
@@ -455,27 +455,6 @@ public struct MyPlansResponse: Decodable, Sendable, Hashable {
 }
 
 // MARK: - Helpers
-
-/// Decodes an array, dropping the elements it can't read.
-struct PlanLossyList<Element: Decodable & Sendable>: Decodable {
-    let items: [Element]
-
-    init(from decoder: any Decoder) throws {
-        var container = try decoder.unkeyedContainer()
-        var items: [Element] = []
-        while !container.isAtEnd {
-            if let item = try? container.decode(Element.self) {
-                items.append(item)
-            } else {
-                _ = try? container.decode(PlanSkippedValue.self)
-            }
-        }
-        self.items = items
-    }
-}
-
-/// Consumes one value of any shape.
-private struct PlanSkippedValue: Decodable {}
 
 /// ISO 8601 times from the Plans API, with or without fractional seconds.
 enum PlanTime {

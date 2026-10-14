@@ -36,12 +36,11 @@ async function readObject(key) {
   return Buffer.concat(chunks);
 }
 
-/** One of the person's own chat uploads as an inline JPEG block; null when it can't be decoded. */
-async function inlineUpload(key) {
-  const bytes = await Promise.race([
-    readObject(key),
-    new Promise((_, reject) => setTimeout(() => reject(new Error('storage read timed out')), READ_TIMEOUT_MS).unref?.()),
-  ]);
+/**
+ * Image bytes as an inline JPEG block at the size Claude reads; null when they can't be
+ * decoded (HEIC from an iPhone, a corrupt file), which Claude couldn't read either.
+ */
+async function jpegBlock(bytes, logFields = {}) {
   try {
     const jpeg = await sharp(bytes)
       .rotate()
@@ -50,10 +49,18 @@ async function inlineUpload(key) {
       .toBuffer();
     return { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: jpeg.toString('base64') } };
   } catch (err) {
-    // sharp can't decode it (HEIC from an iPhone, a corrupt file): Claude couldn't either.
-    logger.info('AI chat photo could not be decoded', { key, error: err.message });
+    logger.info('AI photo could not be decoded', { ...logFields, error: err.message });
     return null;
   }
+}
+
+/** One of the person's own chat uploads as an inline JPEG block; null when it can't be decoded. */
+async function inlineUpload(key) {
+  const bytes = await Promise.race([
+    readObject(key),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('storage read timed out')), READ_TIMEOUT_MS).unref?.()),
+  ]);
+  return jpegBlock(bytes, { key });
 }
 
 /**
@@ -78,4 +85,4 @@ async function photoBlocks(sources, userId) {
   }));
 }
 
-module.exports = { photoBlocks };
+module.exports = { photoBlocks, jpegBlock };
