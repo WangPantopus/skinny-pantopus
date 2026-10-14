@@ -2,6 +2,13 @@
 
 Owner: the PI session. Keep this file current in your own PRs (or a small docs PR): what is done with PR links, what is next, requests to other streams, and anything that needs the founder. Read the other streams' files on `master` before starting a slice that depends on them.
 
+## Continuation checkpoint — October 14, 2026
+
+- Integrated current master `b4234543c` into S6. Contract #2310 now drives optional server `read_at`, unchanged opaque earlier cursors, area-aware count/paging requests, the earlier page's `caught_up` state and monotonic `{ ok, through }` acknowledgments. Missing or malformed snapshot times do not advance a marker. `viewer.can_share` decodes optionally for the conversation consumer.
+- Live dependency audit: #2311 (distance), #2312 (feed), #2313 (claims contract) and #2317 (conversation reads) remain open. Their current CI is green; H4 still blocks merging S6/S9. Helpful, Thanks, claims, narrowing and account-deletion preservation remain unimplemented on PB's S9 branch. No new backend implementation is claimed by this client work.
+- Recreated PI's isolated database and dependencies, two synthetic accounts, and new `Pulse-PI` / `Pulse-PI-SE` simulators. Private runtime files stay outside Git. A private copy of PB's #2317 backend chain runs only against PI's database for provisional integration checks; it does not clear H4 or claim acceptance against merged backend routes.
+- S6 SwiftLint strict, SwiftFormat lint, icon and overline checks passed. Fresh simulator compilation, the existing unit suite and real-app scenarios are in progress. Earlier fixture evidence below remains historical.
+
 ## Done
 
 - **S7 client:** [PR 2299](https://github.com/WangPantopus/skinny-pantopus/pull/2299), merged October 14 at `8d8eaded9` (head `ab83ab189`). Status words, the asker’s Keep open / Close, reminder icon and refresh on empty lists. Exact-head CI was green and the prior PR records two-account simulator checks, relaunch, refusal, time zones, large type and dark mode. The takeover session reviewed that evidence; another session merged it. Its final zero-attendee wording ("Happened" alone) is integrated into S6.

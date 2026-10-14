@@ -15,6 +15,11 @@ import Foundation
 // MARK: - The card's "…"
 
 public extension PulsePageViewModel {
+    internal static func serverCode(_ error: any Error) -> String? {
+        guard case let .clientError(_, body) = error as? APIError else { return nil }
+        return APIError.code(in: body)
+    }
+
     /// "Save post" / "Remove bookmark": `POST /api/posts/:id/save`.
     func toggleSave(cardId: String) async {
         guard let card = card(cardId), let saved = card.saved, beginMutation(cardId) else { return }

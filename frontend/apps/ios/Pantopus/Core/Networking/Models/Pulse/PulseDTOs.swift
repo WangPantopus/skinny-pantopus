@@ -277,12 +277,14 @@ public struct PulseViewerDTO: Decodable, Sendable, Hashable {
     /// True exactly when keep-open would succeed: the reader's own open,
     /// unanswered Ask, inside its window, not kept open yet (PR 2298).
     public let canKeepOpen: Bool
+    public let canShare: Bool?
 
     private enum CodingKeys: String, CodingKey {
         case following, saved
         case isAuthor = "is_author"
         case canMarkHelpful = "can_mark_helpful"
         case canKeepOpen = "can_keep_open"
+        case canShare = "can_share"
     }
 
     public init(from decoder: any Decoder) throws {
@@ -292,6 +294,7 @@ public struct PulseViewerDTO: Decodable, Sendable, Hashable {
         canMarkHelpful = c.lenient(Bool.self, forKey: .canMarkHelpful) ?? false
         saved = c.lenient(Bool.self, forKey: .saved)
         canKeepOpen = c.lenient(Bool.self, forKey: .canKeepOpen) ?? false
+        canShare = c.lenient(Bool.self, forKey: .canShare)
     }
 }
 
@@ -315,6 +318,7 @@ public struct PulseModerationDTO: Decodable, Sendable, Hashable {
 public struct PulseFeedResponse: Decodable, Sendable, Hashable {
     /// `nearby` or `following`.
     public let view: String?
+    public let readAt: String?
     /// The area being read (the viewer's town by default).
     public let area: PulseAreaDTO?
     /// The area pill's choices (S5).
@@ -328,11 +332,13 @@ public struct PulseFeedResponse: Decodable, Sendable, Hashable {
     private enum CodingKeys: String, CodingKey {
         case view, area, quiet, groups, end
         case areasAvailable = "areas_available"
+        case readAt = "read_at"
     }
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         view = c.lenient(String.self, forKey: .view)
+        readAt = c.lenient(String.self, forKey: .readAt)
         area = c.lenient(PulseAreaDTO.self, forKey: .area)
         areasAvailable = c.lossyList(PulseAreaDTO.self, forKey: .areasAvailable)
         quiet = c.lenient(PulseFeedQuietDTO.self, forKey: .quiet)
@@ -448,4 +454,9 @@ public struct PulseFeedNewCountResponse: Decodable, Sendable, Hashable {
 public struct PulseFeedSeenRequest: Encodable, Sendable {
     public let view: String
     public let through: String
+}
+
+public struct PulseFeedSeenResponse: Decodable, Sendable {
+    public let ok: Bool?
+    public let through: String?
 }

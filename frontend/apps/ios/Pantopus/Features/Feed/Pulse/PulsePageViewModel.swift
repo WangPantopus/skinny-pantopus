@@ -89,6 +89,7 @@ public final class PulsePageViewModel {
     private var earlierCards: [PulsePageCard] = []
     private var earlierTitle = "EARLIER"
     private var earlierCursor: String?
+    private var earlierEnd: PulsePageEnd?
 
     public convenience init() {
         self.init(store: .shared, api: .shared, moderation: .shared)
@@ -101,7 +102,12 @@ public final class PulsePageViewModel {
     }
 
     private func endpoint(earlierBefore: String? = nil) -> Endpoint {
-        PulseEndpoints.feed(view: mode.rawValue, topic: activeTopic?.queryValue, earlierBefore: earlierBefore)
+        PulseEndpoints.feed(
+            view: mode.rawValue,
+            topic: activeTopic?.queryValue,
+            areaId: earlierBefore == nil ? nil : lastResponse?.area?.id,
+            earlierBefore: earlierBefore
+        )
     }
 
     // MARK: - Reading
@@ -208,6 +214,7 @@ public final class PulsePageViewModel {
     func rebuild() {
         guard let response = lastResponse, let readAt = lastReadAt else { return }
         var content = response.pageContent(readAt: readAt)
+        if let earlierEnd { content.end = earlierEnd }
         areaName = content.areaName
         content.groups = content.groups.compactMap(adjusted)
         state = .loaded(content)
@@ -219,6 +226,7 @@ public final class PulsePageViewModel {
         earlierCards = []
         earlierCursor = nil
         earlierGroup = nil
+        earlierEnd = nil
     }
 
     private func adjusted(_ group: PulsePageGroup) -> PulsePageGroup? {
@@ -255,12 +263,13 @@ public final class PulsePageViewModel {
     /// About once a minute while the page is on screen: how many
     /// conversations arrived since it was read.
     public func pollNewCount() async {
-        guard case let .loaded(content) = state else { return }
+        guard case let .loaded(content) = state, let through = content.readThrough else { return }
         let generation = readGeneration
         let endpoint = PulseEndpoints.feedNewCount(
             view: mode.rawValue,
             topic: activeTopic?.queryValue,
-            after: Self.iso(content.readAt)
+            areaId: lastResponse?.area?.id,
+            after: through
         )
         do {
             let response = try await api.request(endpoint, as: PulseFeedNewCountResponse.self)
@@ -278,18 +287,20 @@ public final class PulsePageViewModel {
     /// leaves it alone: the other topics' new posts haven't been seen.
     public func endShown() async {
         guard activeTopic == nil, case let .loaded(content) = state, content.end.caughtUp,
-              staleSince == nil, seenThrough != content.readAt, seenRequest == nil else { return }
+              let through = content.readThrough, staleSince == nil,
+              seenThrough.map({ $0 < content.readAt }) ?? true, seenRequest == nil else { return }
         let request = UUID()
         let generation = readGeneration
         seenRequest = request
         defer { if seenRequest == request { seenRequest = nil } }
         do {
-            _ = try await api.request(
-                PulseEndpoints.markFeedSeen(view: mode.rawValue, through: Self.iso(content.readAt)),
-                as: PostActionAckResponse.self
+            let response = try await api.request(
+                PulseEndpoints.markFeedSeen(view: mode.rawValue, through: through),
+                as: PulseFeedSeenResponse.self
             )
-            guard generation == readGeneration, !Task.isCancelled else { return }
-            seenThrough = content.readAt
+            guard generation == readGeneration, !Task.isCancelled, response.ok == true,
+                  let acknowledged = PulsePageWords.parseDate(response.through) else { return }
+            seenThrough = max(seenThrough ?? acknowledged, acknowledged)
         } catch {
             // Retry when the end is shown again or on the next visible poll.
             guard generation == readGeneration, !Task.isCancelled else { return }
@@ -315,6 +326,7 @@ public final class PulsePageViewModel {
             let response: PulseFeedResponse = try await api.request(endpoint(earlierBefore: cursor))
             guard generation == readGeneration else { return }
             let page = response.pageContent(readAt: content.readAt)
+            earlierEnd = page.end
             var ids = Set(content.groups.flatMap(\.cards).map(\.id) + earlierCards.map(\.id))
             earlierCards += page.groups.flatMap(\.cards).filter { ids.insert($0.id).inserted }
             if let title = page.groups.first?.title, !title.isEmpty { earlierTitle = title }
@@ -392,16 +404,5 @@ public final class PulsePageViewModel {
     func showToast(_ text: String, kind: ToastKind) {
         toastMessage = text
         toastKind = kind
-    }
-
-    static func serverCode(_ error: any Error) -> String? {
-        guard case let .clientError(_, body) = error as? APIError else { return nil }
-        return APIError.code(in: body)
-    }
-
-    static func iso(_ date: Date) -> String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter.string(from: date)
     }
 }

@@ -43,9 +43,10 @@ public enum PulseEndpoints {
 
     /// `GET /api/pulse/feed/new` — how many conversations arrived after
     /// `after`, for "↑ N new conversations" (contract §2.3). PB's S6 route.
-    public static func feedNewCount(view: String, topic: String?, after: String) -> Endpoint {
+    public static func feedNewCount(view: String, topic: String?, areaId: String? = nil, after: String) -> Endpoint {
         var query = ["view": view, "after": after]
         if let topic { query["topic"] = topic }
+        if let areaId { query["area_id"] = areaId }
         return Endpoint(method: .get, path: "/api/pulse/feed/new", query: query)
     }
 
