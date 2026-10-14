@@ -2,12 +2,10 @@ package app.pantopus.android.ui.screens.compose.pulse
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import app.pantopus.android.data.api.models.businesses.BusinessMembership
 import app.pantopus.android.data.api.models.homes.MyHome
 import app.pantopus.android.data.api.models.homes.areaLabel
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.services.GeoApi
-import app.pantopus.android.data.businesses.BusinessesRepository
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.data.location.LocationProvider
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -20,14 +18,6 @@ import javax.inject.Inject
 
 data class PulseHomeTargetOption(
     val id: String,
-    val label: String,
-    val latitude: Double,
-    val longitude: Double,
-)
-
-data class PulseBusinessTargetOption(
-    val id: String,
-    val name: String,
     val label: String,
     val latitude: Double,
     val longitude: Double,
@@ -46,7 +36,6 @@ class PulsePostTargetPickerViewModel
     @Inject
     constructor(
         private val homesRepository: HomesRepository,
-        private val businessesRepository: BusinessesRepository,
         private val geoApi: GeoApi,
         private val locationProvider: LocationProvider,
     ) : ViewModel() {
@@ -55,9 +44,6 @@ class PulsePostTargetPickerViewModel
 
         private val _homes = MutableStateFlow<List<PulseHomeTargetOption>>(emptyList())
         val homes: StateFlow<List<PulseHomeTargetOption>> = _homes.asStateFlow()
-
-        private val _businesses = MutableStateFlow<List<PulseBusinessTargetOption>>(emptyList())
-        val businesses: StateFlow<List<PulseBusinessTargetOption>> = _businesses.asStateFlow()
 
         private val _isLocating = MutableStateFlow(false)
         val isLocating: StateFlow<Boolean> = _isLocating.asStateFlow()
@@ -72,16 +58,6 @@ class PulsePostTargetPickerViewModel
                     }
                     is NetworkResult.Success -> {
                         _homes.value = mapHomes(homesResult.data.sharedHomes)
-                    }
-                }
-
-                when (val bizResult = businessesRepository.myBusinesses()) {
-                    is NetworkResult.Failure -> {
-                        _state.value = PulsePostTargetPickerState.Error(bizResult.error.message)
-                        return@launch
-                    }
-                    is NetworkResult.Success -> {
-                        _businesses.value = mapBusinesses(bizResult.data.businesses)
                     }
                 }
                 _state.value = PulsePostTargetPickerState.Ready
@@ -126,41 +102,4 @@ class PulsePostTargetPickerViewModel
                     longitude = loc.longitude,
                 )
             }
-
-        private suspend fun mapBusinesses(memberships: List<BusinessMembership>): List<PulseBusinessTargetOption> =
-            memberships.mapNotNull { membership ->
-                mapBusiness(membership)
-            }
-
-        private suspend fun mapBusiness(membership: BusinessMembership): PulseBusinessTargetOption? {
-            val businessId = membership.business.id
-            val detailResult = businessesRepository.business(businessId)
-            if (detailResult is NetworkResult.Failure) return null
-            val detail = (detailResult as NetworkResult.Success).data
-            val primary =
-                detail.locations.firstOrNull { it.isPrimary == true }
-                    ?: detail.locations.firstOrNull()
-            val point = primary?.location ?: return null
-            val latitude = point.lat
-            val longitude = point.lng
-            if (latitude == null || longitude == null) return null
-            val labelParts =
-                listOfNotNull(primary?.city, primary?.state)
-                    .filter { it.isNotBlank() }
-            val label =
-                if (labelParts.isEmpty()) {
-                    membership.business.name
-                        ?: membership.business.username
-                        ?: "Business"
-                } else {
-                    labelParts.joinToString(", ")
-                }
-            return PulseBusinessTargetOption(
-                id = businessId,
-                name = membership.business.name ?: membership.business.username ?: "Business",
-                label = label,
-                latitude = latitude,
-                longitude = longitude,
-            )
-        }
     }
