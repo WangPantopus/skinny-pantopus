@@ -315,6 +315,7 @@ import app.pantopus.android.ui.screens.my_bids.MyBidsScreen
 import app.pantopus.android.ui.screens.my_posts.MyPostsScreen
 import app.pantopus.android.ui.screens.my_tasks.MyTasksScreen
 import app.pantopus.android.ui.screens.nearby.PulseQuietStateCard
+import app.pantopus.android.ui.screens.pulse.PulsePageScreen
 import app.pantopus.android.ui.screens.notifications.NotificationsScreen
 import app.pantopus.android.ui.screens.offers.OffersScreen
 import app.pantopus.android.ui.screens.persona_dm.FanInboxScreen
@@ -2784,16 +2785,11 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     )
                 }
                 composable(PantopusRoute.Pulse.path) {
-                    FeedScreen(
+                    // The Pulse page (S6): groups that end, topic chips, new conversations behind a pill. It reads
+                    // `GET /api/pulse/feed`, so this waits for PB's S6 on master (hold point H4).
+                    PulsePageScreen(
                         onOpenPost = { postId -> navController.navigate(ChildRoutes.pulsePost(postId)) },
-                        onCompose = { intent -> navController.navigate(ChildRoutes.composePost(intent.key)) },
-                        onComposeStarter = { starter ->
-                            navController.navigate(
-                                ChildRoutes.composePost(PulseIntent.Ask.key, starter.placeholder),
-                            )
-                        },
-                        // Connections moved here from the Nearby tab; the neighborhood meter and "Set up a home" are
-                        // one quiet-state card at the top of the page.
+                        onCompose = { navController.navigate(ChildRoutes.composePost(PulseIntent.Ask.key)) },
                         onOpenConnections = { navController.navigate(ChildRoutes.CONNECTIONS) },
                         quietStateCard = { PulseQuietStateCard(onClaim = { navController.navigate(ChildRoutes.ADD_HOME) }) },
                     )

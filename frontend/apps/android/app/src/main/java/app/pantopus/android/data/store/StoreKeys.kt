@@ -22,6 +22,7 @@ import app.pantopus.android.data.api.models.posts.MyPostsResponse
 import app.pantopus.android.data.api.models.posts.PostDetailResponse
 import app.pantopus.android.data.api.models.posts.SavedPostsResponse
 import app.pantopus.android.data.api.models.postsmap.PostsMapResponse
+import app.pantopus.android.data.api.models.pulse.PulseFeedResponse
 import app.pantopus.android.data.api.models.profile.PublicProfileDto
 import app.pantopus.android.data.api.models.relationships.PendingRequestsResponse
 import app.pantopus.android.data.api.models.relationships.RelationshipsListResponse
@@ -34,6 +35,7 @@ import app.pantopus.android.data.api.models.users.InviteCodeDto
 import app.pantopus.android.data.api.models.users.InviteProgressDto
 import app.pantopus.android.data.api.models.users.ProfileResponse
 import app.pantopus.android.data.posts.FeedQuery
+import app.pantopus.android.data.pulse.PulseFeedQuery
 
 /** Change topics (contract §8) that more than one key or repository names. */
 object StoreTopics {
@@ -247,6 +249,21 @@ object StoreKeys {
             kind = StoreKind.NEARBY,
             topics = setOf(StoreTopics.POSTS),
             type = FeedResponse::class.java,
+        )
+
+    /** The first page of one Pulse page query (contract section 2.3; kind Nearby, fresh 2 minutes); later pages are never stored. */
+    fun pulseFeed(query: PulseFeedQuery) =
+        StoreKey<PulseFeedResponse>(
+            "api/pulse/feed",
+            mapOf(
+                "view" to query.view,
+                "topic" to query.topic,
+                "area_id" to query.areaId,
+                "limit" to PulseFeedQuery.PAGE_SIZE.toString(),
+            ),
+            kind = StoreKind.NEARBY,
+            topics = setOf(StoreTopics.POSTS),
+            type = PulseFeedResponse::class.java,
         )
 
     fun publicProfile(

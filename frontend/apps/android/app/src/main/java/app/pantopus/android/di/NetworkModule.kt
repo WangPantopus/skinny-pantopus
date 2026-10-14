@@ -9,6 +9,8 @@ import app.pantopus.android.data.api.models.notifications.NotificationDto
 import app.pantopus.android.data.api.models.posts.MyPostDto
 import app.pantopus.android.data.api.models.posts.PostCommentDto
 import app.pantopus.android.data.api.models.posts.PostDetailDto
+import app.pantopus.android.data.api.models.pulse.PulseGroupDto
+import app.pantopus.android.data.api.models.pulse.PulsePostDto
 import app.pantopus.android.data.api.net.RetryInterceptor
 import app.pantopus.android.data.api.net.SafeHttpLoggingInterceptor
 import app.pantopus.android.data.api.net.UtcTimestampInterceptor
@@ -94,6 +96,7 @@ import app.pantopus.android.data.api.services.PlaceApi
 import app.pantopus.android.data.api.services.PlansApi
 import app.pantopus.android.data.api.services.PostPrecheckApi
 import app.pantopus.android.data.api.services.PostsApi
+import app.pantopus.android.data.api.services.PulseApi
 import app.pantopus.android.data.api.services.PostsMapApi
 import app.pantopus.android.data.api.services.PrivacyApi
 import app.pantopus.android.data.api.services.PrivacyHandshakeApi
@@ -199,6 +202,8 @@ object NetworkModule {
                         PostCommentDto::class.java,
                         PostDetailDto::class.java,
                         NotificationDto::class.java,
+                        PulsePostDto::class.java,
+                        PulseGroupDto::class.java,
                     ),
                 ),
             )
@@ -536,6 +541,9 @@ object NetworkModule {
 
     @Provides @Singleton
     fun providePostsApi(retrofit: Retrofit): PostsApi = retrofit.create(PostsApi::class.java)
+
+    @Provides @Singleton
+    fun providePulseApi(retrofit: Retrofit): PulseApi = retrofit.create(PulseApi::class.java)
 
     @Provides @Singleton
     fun providePostPrecheckApi(retrofit: Retrofit): PostPrecheckApi = retrofit.create(PostPrecheckApi::class.java)
