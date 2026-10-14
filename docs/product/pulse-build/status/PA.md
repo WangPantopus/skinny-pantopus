@@ -19,6 +19,8 @@ Owner: the PA session. Keep this file current in your own PRs (or a small docs P
 - Recreated only PA: database/API 57002/57001, backend 57110, pass-through proxy 57100 with Pulse fixtures explicitly off, web 57101 and `pulse-pa` emulator 5574. Fresh Alice/Bob/Carol accounts replace the deleted fixtures; two have synthetic verified homes. Jobs and external pushes remain disabled.
 - Fresh real-database fixture check: the actual lifecycle job archived seven backdated cases with the expected separate resolutions; the reminder job created one of each day-6 notice and a second run did not duplicate them. This is setup evidence only; the new Android build and two-account UI checks are still pending.
 - Full S7 local checks are running with the isolated in-process Kotlin compiler. R8 and final native/web scenarios remain required before a push/merge claim. No hosted changes, real sends or deployments.
+- S7 review repairs: non-open Heads-ups no longer show a future ending time; detail reads the existing `archived_at` so manually archived Asks offer no Keep open/Close actions, and archived list rows do not advertise a future ending. Fresh synthetic manual-archive fixtures are ready for the native pass.
+- Fresh web check: Alice's post and Bob's reply survive reload; Bob sees both without Alice's edit/delete controls. The web still uses `Solved` for an answered Ask and a generic Post for a claimed Offer. This is compatibility evidence, not complete web lifecycle copy.
 - H4 audit: snapshot contract #2310 is on master; distance #2311, real feed #2312 and S9 #2313/#2317 are still open. S8 also still requires PS's composer checks. S25 remains reserved.
 
 ## Handoff — October 14, 2026
@@ -63,6 +65,7 @@ The detailed local continuation, commands and scratch helpers are in `~/.config/
 
 ## Requests
 
+- → Web owner: S7's current web post page renders an answered Ask as `Solved` and a claimed Offer as a generic `Post`, without `Gone`. Fresh PA two-account browser verification confirms the content loads, but the shared lifecycle wording is still absent.
 - → PS/PB: full S8 still depends on the published composer checks/Pulse-mode creation; S9 and later work waits for the corresponding routes on master (H4).
 - → PV: actual dark-palette and TalkBack spoken-output verification remain open; focused TalkBack semantics are not a speech recording.
 - Stop only a stream's exact PID/port; never use broad process patterns or stop shared Gradle/Kotlin daemons.

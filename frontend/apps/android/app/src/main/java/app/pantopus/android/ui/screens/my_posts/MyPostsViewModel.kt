@@ -683,7 +683,7 @@ class MyPostsViewModel
                     )
                 }
             val headerChips = mutableListOf(intentChip(intent, projection.isArchived))
-            statusChipFor(dto)?.let(headerChips::add)
+            statusChipFor(dto, projection.isArchived)?.let(headerChips::add)
             if (projection.isArchived) headerChips.add(archivedChip())
 
             return RowModel(
@@ -761,13 +761,16 @@ class MyPostsViewModel
              * How the post ended, or when a heads-up ends (S7), beside the type chip: "Answered" with the check,
              * "Gone", "Reunited", "Happened · 3 went", "Ends Thu 4pm" with the clock; none for the rest.
              */
-            fun statusChipFor(dto: MyPostDto): RowChip? {
+            fun statusChipFor(
+                dto: MyPostDto,
+                archived: Boolean = dto.archivedAt != null,
+            ): RowChip? {
                 val status =
                     PostStatus.of(
                         postType = dto.postType,
                         state = dto.state,
                         resolution = dto.resolution,
-                        expiresAt = dto.expiresAt,
+                        expiresAt = dto.expiresAt.takeUnless { archived },
                         goingCount = dto.likeCount,
                     ) ?: return null
                 val (foreground, background) =

@@ -192,7 +192,7 @@ class PulsePostDetailViewModel
             get() {
                 val post = (_state.value as? PulsePostDetailUiState.Loaded)?.content?.post ?: return false
                 if (!isOwner || post.postType != "ask_local" || post.resolution != null) return false
-                if (post.state != null && post.state != "open") return false
+                if (post.archivedAt != null || (post.state != null && post.state != "open")) return false
                 return PostStatus.askWindowIsOpen(post.createdAt, post.expiresAt)
             }
 
@@ -682,7 +682,7 @@ class PulsePostDetailViewModel
                         postType = post.postType,
                         state = post.state,
                         resolution = post.resolution,
-                        expiresAt = post.expiresAt,
+                        expiresAt = post.expiresAt.takeIf { post.archivedAt == null },
                         goingCount = post.likeCount,
                     ),
             )
