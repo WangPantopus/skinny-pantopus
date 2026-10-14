@@ -1,48 +1,121 @@
-# PB handoff — October 14, 2026
+# PB handoff — October 14, 2026, resumed session
 
-The founder requested that all work be committed/pushed, PRs opened, and PB-only local resources removed before the next session. Continue the existing work; do not rebuild it or treat this as a new design.
+The founder requested a handoff before the remaining implementation and verification were finished. **The rebuilt PB runtime, synthetic fixtures, native apps and build caches are being kept for the next session.** This replaces the earlier cleanup snapshot. Continue existing work; do not recreate completed slices or treat drafts as merged or accepted.
 
-## Git and PRs
+## Start here
 
-Current branch: `claude/pulse-pb-s9-conversations`. It contains the entire open PB chain. Fetch and inspect current remote state first; the following is the handoff snapshot.
+- Worktree: `/Users/yingpengwang/skinny-pantopus/.claude/worktrees/pulse-pb-backend-data-22af6b`.
+- Branch: `claude/pulse-pb-s10-follows`. Implementation head: `7113887b282a2342254ff4b33a9733709bd106a1`; the subsequent handoff commit changes documentation only. Use `git rev-parse HEAD` for the final documentation tip.
+- Fetch origin and inspect worktree/branch status, open PRs and exact-head CI first. At handoff, master is `b4234543c`, green (CI `38643228669`). No PR was merged during this resumed session.
+- Read `AGENTS.md`, `NEXT_STEPS.md`, the mobile brief, Pulse `README.md`, `streams/PB-backend.md`, `status/PB.md`, this handoff, build spec, API contract and scenarios. Check other owners' current status and branches before adding code.
+- All eleven tables and the Census download are approved. H1 and H3 are clear; Census migrations are already merged. No hosted changes or deployment are authorized.
 
-Merged this session: 2301 (reply moderation), 2298 (contract/status), 2304 (founder approval), 2305 (Plans moderation), 2278 (PulseArea), 2306 (area contract), 2307 (area APIs), 2309 (shared audience wall), 2310 (feed contract). Master `f5de3f183` passed CI 38637985918 completely; 2310 then merged as `b4234543c`; its master CI 38643228669 also passed completely. The Census boundaries for Camas, Washougal and Vancouver are already in migrations. H1 and H3 are clear; **all eleven tables and the Census download are approved**. No hosted changes or deployment were authorized.
+## Already on master
 
-Open chain:
+S1 server restrictions; S4 topics/mutes; S5 shared read checks, adult attestation, Census areas and audience wall; S7 lifecycle/expiry/reminders; block-safe replies/notifications; legacy radius caps; held/removed post/reply filtering; Plans moderation. Detailed PRs and evidence remain in `status/PB.md`.
 
-| PR | Branch | State and contents |
-|---|---|---|
-| [2311](https://github.com/WangPantopus/skinny-pantopus/pull/2311) | `claude/pulse-pb-s5-distance` | Draft; green CI at `230053f07`. Shared privacy-safe distance formatter and service-only density lookup. Native display verification still needed. |
-| [2312](https://github.com/WangPantopus/skinny-pantopus/pull/2312) | `claude/pulse-pb-s6-feed` | Draft; green CI at `6df382a77`. Grouped feed, counts, opaque pagination and monotonic seen markers. Following intentionally stays empty until S10. |
-| [2313](https://github.com/WangPantopus/skinny-pantopus/pull/2313) | `claude/pulse-pb-s9-contract` | Green documentation PR at `838c8051a`, stacked on 2312. Exact claim responses and additive legacy reply envelope. |
-| [2317](https://github.com/WangPantopus/skinny-pantopus/pull/2317) | `claude/pulse-pb-s9-conversations` | Stacked on 2313. Conversation/replies reads and additive create-reply fields. Remaining S9 actions are not implemented. Local full Jest passed: 342 suites, 6,633 tests; one suite and 16 tests skipped. The implementation head passed backend CI, safeguards and schema replay; recheck the final documentation head before merging. |
+The preceding session merged 2301, 2298, 2304 and the 2305 → 2278 → 2306 → 2307 → 2309 chain, then S6 contract 2310. Audience rules read all verified homes and label/post from the primary home. **No creation path writes the new Pulse read scopes yet.** Label limits and remaining S5/S8 work are incomplete.
 
-Retarget stacked PRs to master only when their parents have landed, or merge a verified top head containing the exact green parent heads after retargeting all to master. Keep branches. Check the shared launch-stream queue before each merge; this is distinct from the retired September workstream system. Its active file is `launch-streams/status/REQUESTS.md` in the primary checkout. No PB HOLD is left outstanding.
+## Open PB chain: implemented versus accepted
 
-Existing client work to reuse: iOS S6 2308 and S9 2314; Android S6 2303, lifecycle 2302, composer drafts 2315, share authorization 2316 and radius/comment wording 2318. These are other owners’ drafts; inspect their current state before assuming a request is still open.
+Each row is stacked on the preceding row; 2311's recorded base is the already-merged feed-contract branch. All eight heads below passed applicable CI when rechecked for handoff. Keep implementation PRs draft until required real-app checks finish. S9 and S10 are not complete.
+
+| PR | Branch suffix after `claude/pulse-pb-` | Green implementation head | Contents |
+|---|---|---|---|
+| [2311](https://github.com/WangPantopus/skinny-pantopus/pull/2311) | `s5-distance` | `230053f07` | Draft: privacy-safe distance formatter and service-only density lookup. |
+| [2312](https://github.com/WangPantopus/skinny-pantopus/pull/2312) | `s6-feed` | `6df382a77` | Draft: grouped feed, new counts, opaque pagination, snapshot time and monotonic seen markers. |
+| [2313](https://github.com/WangPantopus/skinny-pantopus/pull/2313) | `s9-contract` | `838c8051a` | Contract: claims responses and additive legacy reply envelope. |
+| [2317](https://github.com/WangPantopus/skinny-pantopus/pull/2317) | `s9-conversations` | `9587754fe` | Draft: conversation/reply reads, stable branches and additive create-reply fields. |
+| [2319](https://github.com/WangPantopus/skinny-pantopus/pull/2319) | `s9-reply-deletion` | `20a8fcb7e` | Draft: atomic reply scrubbing on account deletion, preserved descendants and legacy parent projection. |
+| [2320](https://github.com/WangPantopus/skinny-pantopus/pull/2320) | `s9-reply-actions` | `122e61e93` | Draft: atomic Helpful, private/idempotent Thanks, direct inbox notices and quiet-hours release. |
+| [2321](https://github.com/WangPantopus/skinny-pantopus/pull/2321) | `s10-contract` | `cc24a9e86` | Contract: follow/list/delete, summary undo, why and narrower-only audience DTOs. Narrowing is not implemented. |
+| [2322](https://github.com/WangPantopus/skinny-pantopus/pull/2322) | `s10-follows` | `7113887b2` | Draft: private follow graph, Following feed/counts, viewer state, preference summary/undo and why. Carries this handoff. |
+
+Retarget parents after they land, or merge a verified top head containing the exact green parent heads after retargeting included PRs to master. Keep branches. Recheck `/Users/yingpengwang/skinny-pantopus/launch-streams/status/REQUESTS.md` before each merge; this active launch-stream queue is separate from the retired September system. PB has no outstanding HOLD. Never merge another owner's client draft as part of PB's stack.
+
+### Built in this resumed session
+
+- **Reply deletion:** `20261014224000_pulse_preserve_deleted_authors_replies.sql` makes `PostComment.user_id` nullable with `SET NULL`; deletion scrubs content/identity/mentions within the User transaction. Counts exclude deleted rows. Pulse keeps anonymous removed placeholders/topology; legacy responses omit deleted parents and attach surviving descendants to the nearest live ancestor. Rollback restores author and text.
+- **Helpful/Thanks:** migrations `20261014225000_pulse_reply_actions.sql` and `20261014225100_pulse_helpful_event.sql`. Helpful locks the post then reply; multiple marks are allowed; last unmark reopens only an answered Ask, never a closed/expired one. `CommentThanks` is private, unique per sender/reply, retry-safe and refuses self-Thanks. Actor, access, moderation and blocks are checked. `pulse_helpful`/`pulse_thanks` use the inbox, hold pushes during quiet hours and recheck access before release; obsolete Helpful notices are suppressed. `pulse_helpful_marked` fires only on transition to marked. Reply names use the card identity projection.
+- **Follows:** `20261014230000_pulse_follows.sql`. Service-only `PulseFollow` supports post/topic/place, never person/business. PUT/DELETE are idempotent; repeated weekly follows keep the deadline; `on_resolve` ends permanently even after restore; `keep` survives resolution. Membership is applied before paging/counting through shared feed filters. Topic follows exclude older posts. List, preference summary undo and private why are implemented. `notify=recap|each` is stored, but delivery and core preferences still require PC integration.
+
+These migrations are already applied to PB's local stack. Do not edit applied migrations or reset the database to resume.
 
 ## Verification and limits
 
-- Merged area/wall/Plans work was checked with two synthetic accounts on PB web, iOS and Android, after relaunch. Previous S7/privacy fixtures and Alice/Carol quiet-hours rows existed locally; cleanup removes the PB database, so recreate fixtures instead of assuming they survived.
-- Distance: real PB database checks covered both readers, rounding, sparse density, duplicate occupancies, invited/ended/guest/pending/frozen homes and hidden/grid-snapped points. Privacy gates and schema replay passed.
-- Feed: 106 same-timestamp rows paged once each; scope, moderation, expiry, mute/hide, six types plus legacy/business/curator rows, labels, Going/save state, closed areas and concurrent seen markers checked through the PB API. No raw home/point fields in DTOs. Full backend checks passed in CI. Local full Jest had an intermittent homeAddressRedaction failure; its focused rerun passed all 18 tests.
-- Web S6 compatibility: legacy feed and direct post page loaded; the direct post page and replies survived reload. One existing feed detail-panel reload showed “Post not found”; that panel case remains to investigate. No new web Pulse UI is claimed complete.
-- Fresh native master/S6 builds were stopped for the founder's cleanup request before S6 display checks completed. The new feed/distance PRs must stay draft until native verification passes. A private copy of PA 2303 required changing `/api/pulse/*` in a Kotlin block comment to `/api/pulse/…`; it otherwise fails KSP with an unclosed comment. The owner is asked to fix it in PB status. No client source was changed in this worktree.
-- Conversation read draft: local two-account API probe passed with 205 replies, deep branches, repeated client request IDs, old/soft-deleted rows, held/removed moderation, bidirectional blocks, hidden parent names, microsecond polling, malformed input and scope revocation. All privacy gates and the full existing Jest suite passed (342 suites, 6,633 tests; one suite and 16 tests skipped). No native conversation check has run. `helpful` and `thanked_by_viewer` are placeholders until the next S9 actions; no Helpful/Thanks/claims endpoint or account-deletion migration ships in this draft. Do not call S9 finished.
-- No new unit/UI tests were added. Private probes used synthetic local data only. Hosted systems, physical devices, production delivery and deployment were not verified or changed.
+### Existing checks and database/API probes
 
-## Next work
+- Distance: two readers, rounding, sparse density, duplicate occupancies, invited/ended/guest/pending/frozen homes, hidden/grid-snapped points. Feed: 106 equal-timestamp rows without duplicates, scope/moderation/expiry/mute/hide, six types plus legacy/business/curator, labels, closed areas, save/Going and concurrent seen acknowledgments.
+- Conversation: 205 replies, deep branches, repeated client request IDs, soft-deleted rows, held/removed moderation, both block directions, hidden parent identity, microsecond polling, malformed input and revoked access.
+- Actions: concurrent Helpful, last-unmark reopening, closed Ask stays closed, Thanks retry/privacy/self refusal, blocked/held replies, quiet-hours release and stale-notice filtering.
+- Follows: duplicate PUT/DELETE, week deadline, on-resolve ending/restore, keep, reader isolation, restricted targets, no person targets, mute/undo, topic publication time, summary undo and private why.
+- Actions head: existing Jest passed 342 suites/6,633 tests, one suite/16 tests skipped. Follow head: local full run passed 338 suites and hit transient failures in four unrelated suites; all 61 tests in those suites passed a serial rerun. Follow CI `38651077295` passed full backend, Docker, safeguards and schema replay. Privacy gates, migration policy, SQL contracts and function lint passed (425 application functions at the follow head). No new unit/UI tests were added.
 
-1. Read AGENTS, NEXT_STEPS, the mobile brief, Pulse README, PB stream/status, contract, spec and scenarios. Audit branches/PRs/CI again. Preserve existing work.
-2. Recreate only PB runtime, accounts and devices. Reuse PI 2308 and PA 2303 for S6 verification, and PI 2314 for S9; their owners retain source ownership. Finish two-account web/native checks, including relaunch, before merging 2311/2312. The S6 contract requests in PB status cover `read_at`, selected `area_id` polling, opaque cursors and caught-up acknowledgment. Do not confuse `end.since` with the snapshot time.
-3. Finish S5 label limits and S8 creation with PS's composer-check dependency. Creation currently does not write the new read scopes or enable the new types. Do not duplicate PS-owned safety files.
-4. Finish S9: Helpful and private Thanks, atomic OfferClaim requests/choice (max five, first-wins race, retries), reports via the existing moderation model, narrower-only scope changes, and soft account-deletion replies that preserve other people's descendants. Update existing tests only if broken. Keep the old `{ message, comment }` create response intact.
-5. S10 follow graph/preferences makes Following real. Then follow the PB stream's remaining S12–S24 slices and hold points. H2 public exposure/moderation cover and H6 signup abuse verification still apply.
+### Actual apps on the rebuilt PB runtime
 
-## Runtime after cleanup
+- **Web:** feed renders six types and legacy rows; held rows absent. Alice's new reply survives reload and Bob sees it. Deleting a disposable synthetic account through Settings/password confirmation preserves Bob's descendant after reload. The earlier “Post not found” concern was an offscreen hidden detail panel, not a reproduced visible failure.
+- **Android, PA 2303:** Alice signed in; grouped Camas feed renders six types plus legacy, Resident and `1.5 mi`, verified-area content and no held post. Event Going persisted across clients (iOS sees one going). Legacy conversation shows surviving descendants after account deletion. A native Android reply appeared through iOS's “1 new reply” banner. After force-stop/relaunch, Nearby shows quiet state and Show earlier. Following displays the Ask followed from iOS, confirming persisted membership across clients.
+- **iOS, PI 2314 including 2308:** Alice signed in; types/labels/distance render. Conversation shows oldest-first flat branches, “Replying to Alice”, anonymous “Reply removed”, surviving “Replying to a neighbor” and `nearby` reply distance. Thank changes to Thanked; Follow changes to Following with notifications-off confirmation. The new-reply banner displays the Android reply. An iOS reply was submitted and appeared. After terminate/relaunch the session returns to signed-in Your Place; the conversation has not yet been reopened to verify every action's persistence.
 
-Cleanup completed: the six `pantopus-pulse-pb` containers, its two volumes and network, backend/web listeners, PB simulator/emulator, private runtime/build copies, DerivedData, web output, own worktree dependency/build caches and PB local env/config files were removed. Ports 55001, 55002, 55004, 55100 and 55101 are closed. The browser verification tab is closed. The local launcher and generated TypeScript include overrides were restored to their tracked versions. Keep this checkout and Git branches. Never remove shared package stores, system SDKs, global Gradle/Xcode caches or another stream's stack/device.
+**Still required before implementation merges:** other-account runs on both devices; reopen conversations after relaunch to verify Thanks/Follow/replies and reader-private flags; mark/unmark Helpful as the Ask author and check the other reader/inbox; finish feed paging/caught-up/new-count/topic/mute, offline/error paths, reader-specific distance and revoked access. Android's current draft has legacy conversation, not S9 actions UI. PI's claims/narrowing controls are unfinished. API probes do not substitute for these checks.
 
-Start from the current branch's migrations. Source `~/.config/pantopus/dev-env.sh` before node/pnpm/supabase/java commands; run `pnpm install --frozen-lockfile`, then `scripts/pulse/stream-runtime.sh start pb --env backend/.env`. That regenerates PB's ignored local env. Use only PB ports. Recreate synthetic accounts with reserved `example.com` addresses: the current helper's `example.invalid` default is rejected by app sign-in validation. Native devices must be recreated; the old UDID is no longer usable. Existing local runtime memory is historical after this cleanup.
+One observation for PA investigation: after relaunch Android Following displays “Add a home” although Alice has a verified home (iOS Your Place shows it). The followed Ask loads. This is not yet diagnosed as a backend or client defect.
 
-Commit footer remains `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. Branches use `claude/pulse-pb-<topic>`. PRs require “Scenarios run:” and “Not verified here” and end with `🤖 Generated with Claude Code`. Only the founder changes hosted systems, spends money or deploys.
+Hosted services, physical phones, production delivery and deployment were neither changed nor verified.
+
+## Remaining backend work, in order
+
+1. Finish native checks with existing drafts; repair PB defects, coordinate client defects with the owner, merge only eligible green/verified PB PRs. Check `read_at`, selected `area_id` polling, opaque cursors and caught-up acknowledgment; `end.since` is not the server snapshot.
+2. **S5 limits / S8 creation:** attestation/label limits, new types/read scopes, Share cap, expiry, held sales and edit-route support. PS's `evaluateComposerChecks` remains a dependency. Do not duplicate PS-owned safety files. No new-scope creation is enabled.
+3. **Remaining S9:** OfferClaim requests/choice (max five, first-wins race, retries); reports through existing moderation with PS; narrower-only audience changes from contract §2.13; remaining notifications/slowed-exchange integration. Helpful, Thanks and deletion preservation are built but not fully accepted. Existing PostReport/admin handling is post-based; inspect schema/owner before reply-report support.
+4. **Remaining S10 / PC integration:** core preferences, recap/each delivery, native acceptance and remaining specified events. Supply PC's shared-wall helpers: `digestPosts(viewerId, { since, until, limit })`, `unansweredForHelper(viewerId, { minAgeHours, limit })`, `followRecaps(viewerId, { since })`, `getSeenMarker(viewerId, view)`. These are not built. PC owns digest, preferences/delivery integration and noise-budget work; recheck its status before touching seams.
+5. **S12:** KnownEntry/KnownConfirmation, RightNowEvent/RightNowReport, search/upcoming; contract addendum first. Provider accounts remain founder work.
+6. **S14–S17:** `Plan.source_post_id` and conversation plan endpoint/card; public hooks under H2 with PC; place/area opening; libraries/council districts/visitor observations/boundaries; business offers and Official identity with PS. Reuse Plans/Business; no marketplace/Earn expansion.
+7. **S20:** code sign-in design note first, then endpoints/device binding/limits; PV abuse run before merge (H6). SMS unavailable without the founder's provider.
+8. **S21–S24:** recurring Plans/cohosts; Support Train link; duplicate-post merge/transfer hooks; secondary reading homes, pins and acquisition counts. Follow stream/spec and contract-first rule.
+
+H2 public exposure/moderation coverage and H6 auth abuse verification remain. PS status has no completed implementation and PC has a design note; this does not establish whether they have unpushed work. Inspect before assuming a dependency is absent.
+
+## Retained PB runtime
+
+Private runtime: `~/.config/pantopus/pulse-pb-runtime` (mode 700). Credentials, env, raw logs, probes and screenshots stay there, out of Git/chat. Dependencies are installed. Source `~/.config/pantopus/dev-env.sh` before node/pnpm/supabase/java.
+
+| Resource | PB identity |
+|---|---|
+| Supabase | Six running `*_pantopus-pulse-pb` containers; API 55001, Postgres 55002, inbox 55004 |
+| Backend / web | `http://127.0.0.1:55100` / `http://127.0.0.1:55101`; PID files/logs in private runtime |
+| iOS | `Pulse-PB`, UDID `65EB814A-0BF5-4310-BACE-BFEF34EEEAF1`, bundle `app.pantopus.ios`, booted |
+| Android | AVD `pulse-pb`, serial `emulator-5572`, package `app.pantopus.android.debug`, booted |
+
+Never operate PA's `emulator-5574`, PI's simulator or another stack. Verify device identity and listener working directory before stop/restart. Backend was restarted without its temporary HTTP diagnostic preload for handoff. `.env` remains local, background jobs off and `PUSH_EXPO_ENABLED=false`.
+
+Use the live stack first. If stopped, `scripts/pulse/stream-runtime.sh start pb --env backend/.env` starts Supabase, not backend/web, and rewrites ignored backend env. Preserve local-only delivery settings. If dependencies actually need reinstalling, use `pnpm install --frozen-lockfile`. Do not reset/reseed/reinstall/rebuild everything by default.
+
+### Client artifacts and control notes
+
+- iOS private `ios-client/`: PI 2314 `d9422a46b` (includes PI 2308 `c9d4554c9`). Installed app: `dd/Build/Products/Debug-iphonesimulator/Pantopus.app`. Android private `android-client/`: PA 2303 `a5f8d9ee3`; installed APK: `android-client/app/build/outputs/apk/debug/app-debug.apk`. Both builds finished. PA's Kotlin-comment issue is already fixed; do not redo it.
+- Existing client drafts 2302, 2315, 2316 and 2318 remain owner work. No tracked client source was changed by PB. Reuse rather than replace them.
+- iOS API/socket uses `http://localhost:55100`; Android API uses `http://10.0.2.2:55100`. Check public-web settings before external-sharing tests: Android defaults to hosted and iOS rebuild may restore port 3000. Configure the private verification copy for PB web 55101 before opening those links.
+- iOS local signing is needed for device-bound login. Working incremental command (set `PB_RUNTIME="$HOME/.config/pantopus/pulse-pb-runtime"`):
+
+  ```sh
+  xcodebuild -project "$PB_RUNTIME/ios-client/Pantopus.xcodeproj" \
+    -scheme Pantopus -configuration Debug \
+    -destination 'id=65EB814A-0BF5-4310-BACE-BFEF34EEEAF1' \
+    -derivedDataPath "$PB_RUNTIME/dd" CODE_SIGNING_ALLOWED=YES \
+    CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=NO \
+    ONLY_ACTIVE_ARCH=YES ARCHS=x86_64 build
+  ```
+
+  Unsigned builds could not create the device key; manual entitlements did not fix launch. Reuse the working app unless source changes require rebuilding.
+- The founder explicitly authorized local adb/AppleScript controls on PB devices. Native CUA was disabled and iOS Simulator MCP unavailable in this chat. Private `ios-tap.js` guards the Pulse-PB front window and maps 1206×2622 screenshot coordinates; it also supports dragging. Read its guard before use and abort subsequent keystrokes if it fails. System Events window enumeration was unreliable; helper uses CoreGraphics. Always pass `-s emulator-5572` to adb.
+- Android entry needs pacing; fast long strings lost characters. Tap password explicitly: Tab selected Forgot password. Keep credentials private. No new UI tests are needed for manual native verification.
+
+### Fixtures/current state
+
+- `accounts.json`: synthetic Alice, Bob, Carol, visitor and now-deleted disposable “official”. Existing `example.com` logins work; shared helper's `example.invalid` default is rejected by app validation. Never print passwords/tokens. Do not rerun the whole seeder and duplicate rows.
+- `fixtures.json`, `pb-api.cjs`, private probes and `bin/psql` are retained. The psql wrapper refuses non-PB hosts/ports. Inspect helpers first: some probes mutate/reset fixture state.
+- Main Ask: `21513d76-09cf-45a7-97d2-bf0d2fff06bd`, author Carol. Alice is signed in on both devices; native-created follow/Thanks remain; her Event Going is true. Disposable author is deleted and Bob's child remains. Native replies are retained for persistence checks. No active probe mutes remain.
+- Android is on Following with the Ask visible; iOS cold-launched to signed-in Your Place. Private `android.png`/`ios.png` show those states. Web sessions may remain; reauthenticate privately if needed.
+
+Commit footer: `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. Branches: `claude/pulse-pb-<topic>`. PRs include “Scenarios run:” and “Not verified here”, ending with `🤖 Generated with [Claude Code](https://claude.com/claude-code)`. No new unit tests, hosted changes/deployment, paid actions, messages to real people or changes to another session's resources.
