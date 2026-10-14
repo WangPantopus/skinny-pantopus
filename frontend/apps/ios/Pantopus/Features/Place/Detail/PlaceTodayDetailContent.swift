@@ -15,6 +15,7 @@
 import Observation
 import PhotosUI
 import SwiftUI
+import UniformTypeIdentifiers
 import UserNotifications
 
 // swiftlint:disable multiline_arguments file_length
@@ -66,7 +67,12 @@ struct PlaceTodayDetailContent: View {
     private func todayContent(proxy: ScrollViewProxy) -> some View {
         loadedContent(proxy: proxy)
             .onChange(of: rootTabs.selected) { (_: RootTab, tab: RootTab) in resumeRadon(tab == .today) }
-            .onChange(of: scenePhase) { (_: ScenePhase, phase: ScenePhase) in resumeRadon(phase == .active && rootTabs.selected == .today) }
+            .onChange(of: scenePhase) { (_: ScenePhase, phase: ScenePhase) in
+                // A picker opened from the radon sheet (the camera's permission alert) leaves the scene
+                // inactive for a moment, and the sheet stays. Going to the background still ends it.
+                if radonState?.choosingReport == true, phase != .background { return }
+                resumeRadon(phase == .active && rootTabs.selected == .today)
+            }
             .onChange(of: AppLockManager.shared.isLocked) { (_: Bool, locked: Bool) in resumeRadon(!locked && rootTabs.selected == .today) }
     }
 
@@ -955,7 +961,10 @@ extension AddressCalendarCard {
             fill(from: reading)
         } catch {
             guard (try? requirePickupCurrent(version)) != nil else { return }
-            flyerMessage = FlyerMessage(text: Self.flyerFailure(error), failed: true)
+            flyerMessage = FlyerMessage(
+                text: aiReaderMessage(error, fallback: "Couldn't read that flyer. Set your pickup days below."),
+                failed: true
+            )
         }
         if let flyerMessage { AccessibilityNotification.Announcement(flyerMessage.text).post() }
     }
@@ -976,16 +985,16 @@ extension AddressCalendarCard {
         let lines = [read.summary, reading.note, "Check the days, then tap Save schedule."]
         flyerMessage = FlyerMessage(text: lines.compactMap { $0 }.joined(separator: " "), failed: false)
     }
+}
 
-    /// The server's own sentence when it gave one ("This looks like a yard sale sign…").
-    private static func flyerFailure(_ error: any Error) -> String {
-        let fallback = "Couldn't read that flyer. Set your pickup days below."
-        switch error {
-        case let APIError.clientError(_, body): return APIError.friendlyClientMessage(body) ?? fallback
-        case let APIError.server(_, body): return APIError.friendlyClientMessage(body) ?? fallback
-        case let apiError as APIError: return apiError.errorDescription ?? fallback
-        default: return fallback
-        }
+/// What a failed AI reading (a flyer, a lab report) tells the person: the server's own
+/// sentence when it gave one ("This looks like a yard sale sign…"), else [fallback].
+private func aiReaderMessage(_ error: any Error, fallback: String) -> String {
+    switch error {
+    case let APIError.clientError(_, body): APIError.friendlyClientMessage(body) ?? fallback
+    case let APIError.server(_, body): APIError.friendlyClientMessage(body) ?? fallback
+    case let apiError as APIError: apiError.errorDescription ?? fallback
+    default: fallback
     }
 }
 
@@ -1198,6 +1207,27 @@ enum RadonToday {
         }
         return text
     }
+
+    /// What the result field shows for a read value: 5.2, 4.05, 0.4, 4 (at most two decimals, always
+    /// with a ".", so `Double(_:)` reads it back; `String(format:)` isn't localized).
+    static func plain(_ value: Double) -> String {
+        String(format: "%g", (value * 100).rounded() / 100)
+    }
+
+    static let actionLevelURL = URL(string: "https://www.epa.gov/radon/what-epas-action-level-radon-and-what-does-it-mean")!
+
+    /// A result against the EPA's action level of 4.0 pCi/L, in the EPA's own terms: what it
+    /// recommends at each level, and nothing about health.
+    static func explanation(_ pci: Double, testKind: String? = nil) -> String {
+        if pci >= 4 {
+            let confirm = testKind == "long_term" ? "" : " After a short-term test, it recommends testing again to confirm first."
+            return "That's at or above the EPA's action level of 4.0 pCi/L. The EPA recommends fixing a home at this level." + confirm
+        }
+        if pci >= 2 {
+            return "That's below the EPA's action level of 4.0 pCi/L. The EPA suggests considering a fix between 2 and 4 pCi/L."
+        }
+        return "That's below the EPA's action level of 4.0 pCi/L."
+    }
 }
 
 @Observable
@@ -1232,6 +1262,14 @@ private final class RadonTodayState {
     var hasDate = false
     var result = ""
     var retained: CreateHomeTaskRequest?
+    /// "Read a lab report" in the yes sheet: the reading, what it found, and the test kind it saw.
+    var readingReport = false
+    var reportMessage: String?
+    var reportFailed = false
+    var reportTestKind: String?
+    /// The person is in a camera, photo or PDF picker opened from the sheet. The scene going
+    /// inactive meanwhile (the camera's permission alert) doesn't end the sheet.
+    var choosingReport = false
     /// The viewer can't read the household's tasks (e.g. a guest): the card isn't theirs to answer.
     var noTaskAccess = false
     /// Showing the previous lifecycle's answer while this one re-checks.
@@ -1286,6 +1324,8 @@ private final class RadonTodayState {
         access.invalidatePending()
         coordinator?.hide()
         busy = false
+        readingReport = false
+        choosingReport = false
         sheet = nil
     }
 
@@ -1324,6 +1364,10 @@ private final class RadonTodayState {
         error = nil
         hasDate = false
         result = ""
+        readingReport = false
+        reportMessage = nil
+        reportFailed = false
+        reportTestKind = nil
         selectedDate = kind == "yes" ? Date() : (Calendar.autoupdatingCurrent.date(byAdding: .day, value: 14, to: Date()) ?? Date())
         retained = nil
         if kind != "change" {
@@ -1392,6 +1436,50 @@ private final class RadonTodayState {
             self.error = retained == nil ? "Couldn't save this task. Check the date and result, then try again."
                 : "Couldn't confirm your task. Your saved request is retained; try again."
         }
+    }
+
+    /// Fills the yes sheet from a photo or PDF of the lab's report. Nothing is saved: the
+    /// person checks the result and date and taps Save.
+    func readReport(_ file: MultipartFile?) async {
+        choosingReport = false
+        guard sheet == "yes", retained == nil, !busy, !readingReport else { return }
+        // VoiceOver hears what the message under the button now says (Android's is a live region).
+        defer { if let reportMessage { AccessibilityNotification.Announcement(reportMessage).post() } }
+        guard let file else {
+            reportMessage = "Couldn't open that file. Choose a photo, or a PDF of 10 MB or less."
+            reportFailed = true
+            return
+        }
+        let revision = access.lifecycleRevision
+        readingReport = true
+        reportMessage = nil
+        defer { if access.lifecycleRevision == revision, context.active { readingReport = false } }
+        do {
+            try context.requireCurrent()
+            let reading = try await MultipartUploader.shared.readRadonReport(file: file)
+            try context.requireCurrent()
+            try access.requireCurrent(revision)
+            guard sheet == "yes" else { return }
+            fill(from: reading)
+        } catch {
+            guard (try? context.requireCurrent()) != nil, access.lifecycleRevision == revision, sheet == "yes" else { return }
+            reportMessage = aiReaderMessage(error, fallback: "Couldn't read that report. Type the result yourself.")
+            reportFailed = true
+        }
+    }
+
+    /// Only what the report shows changes: the result, and the test date when it has one.
+    private func fill(from reading: AIRadonReportResponse) {
+        let read = reading.result
+        if let value = read.valuePci, value.isFinite, value >= 0 { result = RadonToday.plain(value) }
+        if let day = read.testedOn, let date = RadonToday.date(day) {
+            hasDate = true
+            selectedDate = date
+        }
+        reportTestKind = read.testKind
+        reportMessage = [read.summary, reading.note, "Check the result and date, then tap Save."]
+            .compactMap { $0 }.joined(separator: " ")
+        reportFailed = false
     }
 
     func dismiss() async {
@@ -1495,11 +1583,22 @@ private struct RadonTodaySheet: View {
                             .font(.callout)
                     }
                     if tested {
+                        RadonReportControl(state: state)
                         Toggle("Test date (optional)", isOn: $state.hasDate)
                         if state.hasDate { RadonDateRow(title: "Test date", date: $state.selectedDate) }
                         TextField("Result (pCi/L)", text: $state.result)
                             .keyboardType(.decimalPad)
                             .textFieldStyle(.roundedBorder)
+                        if let value = Double(state.result), value.isFinite, value >= 0 {
+                            Text(RadonToday.explanation(value, testKind: state.reportTestKind))
+                                .font(.system(size: 13))
+                                .foregroundStyle(Theme.Color.appTextSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .accessibilityIdentifier("radonSheetExplanation")
+                            Link("What the EPA's action level means", destination: RadonToday.actionLevelURL)
+                                .font(.system(size: 12))
+                                .foregroundStyle(Theme.Color.primaryInk)
+                        }
                     } else {
                         RadonDateRow(
                             title: "Reminder date",
@@ -1508,12 +1607,13 @@ private struct RadonTodaySheet: View {
                         )
                     }
                 }
-                .disabled(state.busy || state.retained != nil)
+                // A reading in progress fills these fields; nothing is typed over it meanwhile.
+                .disabled(state.busy || state.readingReport || state.retained != nil)
                 if let error = state.error { Text(error).foregroundStyle(Theme.Color.error) }
                 PrimaryButton(
                     title: tested ? "Save" : "Add reminder",
                     isLoading: state.busy,
-                    isEnabled: !state.busy && (state.retained != nil || valid)
+                    isEnabled: !state.busy && !state.readingReport && (state.retained != nil || valid)
                 ) { await state.save() }
                     .accessibilityIdentifier("radonSheetCommit")
             }
@@ -1532,6 +1632,97 @@ private struct RadonTodaySheet: View {
                 .map { $0.isFinite && $0 >= 0 } == true
         }
         return Calendar.autoupdatingCurrent.startOfDay(for: state.selectedDate) >= Calendar.autoupdatingCurrent.startOfDay(for: Date())
+    }
+}
+
+/// "Read a lab report" in the radon yes sheet: a photo or PDF of the lab's report fills in
+/// the result and test date, for the person to check and save. Mirrors Android `RadonReportControl`.
+private struct RadonReportControl: View {
+    @Bindable var state: RadonTodayState
+    @State private var choosing = false
+    @State private var camera = false
+    @State private var library = false
+    @State private var files = false
+    @State private var item: PhotosPickerItem?
+    @State private var captured: Data?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            GhostButton(title: "Read a lab report", isLoading: state.readingReport, isEnabled: !state.busy) { choosing = true }
+                .accessibilityIdentifier("radonSheetReadReport")
+                .accessibilityHint(
+                    "Fills in the result and test date from a photo or PDF of your radon report. Nothing is saved until you tap Save."
+                )
+            if state.readingReport {
+                Text("Reading the report…")
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+            } else if let message = state.reportMessage {
+                Text(message)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(state.reportFailed ? Theme.Color.error : Theme.Color.appText)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("radonSheetReportMessage")
+            }
+        }
+        .confirmationDialog("Read a lab report", isPresented: $choosing, titleVisibility: .visible) {
+            if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                Button("Take a photo") { present { camera = true } }
+            }
+            Button("Choose a photo") { present { library = true } }
+            Button("Choose a PDF") { present { files = true } }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The report from your radon lab or test kit.")
+        }
+        // A sheet, not a full-screen cover: covering Today would end the radon card's lifecycle.
+        .sheet(isPresented: $camera, onDismiss: readCaptured) {
+            SystemCameraPicker(isPresented: $camera) { image in
+                captured = ListingPhotoProcessor.uploadData(from: image)
+            }
+            .ignoresSafeArea()
+        }
+        // `.compatible` hands over a JPEG for an iPhone's HEIC photo, which the reader can't open.
+        .photosPicker(isPresented: $library, selection: $item, matching: .images, preferredItemEncoding: .compatible)
+        .onChange(of: item) { _, picked in
+            guard let picked else { return }
+            item = nil
+            Task {
+                let data = try? await picked.loadTransferable(type: Data.self)
+                let jpeg = data.flatMap { ListingPhotoProcessor.uploadData(from: $0) }
+                await state.readReport(jpeg.map(Self.photoFile))
+            }
+        }
+        .fileImporter(isPresented: $files, allowedContentTypes: [.pdf]) { result in
+            let file = (try? result.get()).flatMap(Self.pdf)
+            Task { await state.readReport(file) }
+        }
+        .onChange(of: camera || library || files) { _, open in
+            if !open { state.choosingReport = false }
+        }
+    }
+
+    private func present(_ picker: () -> Void) {
+        state.choosingReport = true
+        picker()
+    }
+
+    private func readCaptured() {
+        guard let photo = captured else { return }
+        captured = nil
+        Task { await state.readReport(Self.photoFile(photo)) }
+    }
+
+    private static func photoFile(_ jpeg: Data) -> MultipartFile {
+        MultipartFile(fieldName: "file", filename: "radon-report.jpg", mimeType: "image/jpeg", data: jpeg)
+    }
+
+    /// The PDF the person chose; nil when it can't be read or is over the reader's 10 MB.
+    private static func pdf(_ url: URL) -> MultipartFile? {
+        let permitted = url.startAccessingSecurityScopedResource()
+        defer { if permitted { url.stopAccessingSecurityScopedResource() } }
+        guard let data = try? Data(contentsOf: url), !data.isEmpty, data.count <= 10 * 1024 * 1024 else { return nil }
+        return MultipartFile(fieldName: "file", filename: "radon-report.pdf", mimeType: "application/pdf", data: data)
     }
 }
 

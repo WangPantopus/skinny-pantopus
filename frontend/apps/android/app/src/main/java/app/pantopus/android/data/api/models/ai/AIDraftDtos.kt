@@ -118,3 +118,32 @@ data class AIDraftPickupScheduleResponse(
     /** One sentence about what the flyer shows that the editor doesn't keep (yard waste, holidays). */
     val note: String? = null,
 )
+
+/**
+ * A radon test result read from a photo or PDF of the lab's report, for the Today radon sheet to
+ * fill in. Mirror of iOS `AIRadonReportResponse.Result`.
+ */
+@JsonClass(generateAdapter = true)
+data class AIRadonReportResultDto(
+    /** The result in pCi/L (converted when the report gave Bq/m³). */
+    @Json(name = "value_pci") val valuePci: Double? = null,
+    /** The report gave the result as below this limit ("<0.4"). */
+    @Json(name = "below_limit") val belowLimit: Boolean? = null,
+    /** `YYYY-MM-DD`: the day the test ended. */
+    @Json(name = "tested_on") val testedOn: String? = null,
+    /** `short_term`, `long_term`, or null when the report doesn't say. */
+    @Json(name = "test_kind") val testKind: String? = null,
+    /** "Short-term test, October 1 to October 3, 2026: 5.2 pCi/L. From …" */
+    val summary: String? = null,
+)
+
+/**
+ * Envelope from `POST /api/ai/draft/radon-result` (`backend/routes/ai.js:281`). The report isn't
+ * kept, and nothing is saved until the person taps the sheet's Save.
+ */
+@JsonClass(generateAdapter = true)
+data class AIRadonReportResponse(
+    val result: AIRadonReportResultDto,
+    /** One sentence on how the report was read (which of several results, a missing date). */
+    val note: String? = null,
+)

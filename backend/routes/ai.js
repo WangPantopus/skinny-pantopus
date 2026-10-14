@@ -7,6 +7,7 @@
  *   POST /draft/listing          — Single-turn listing draft
  *   POST /draft/post             — Single-turn post draft
  *   POST /draft/pickup-schedule  — Pickup days from a flyer photo, for the Today editor
+ *   POST /draft/radon-result     — Radon result from a lab report photo or PDF, for the Today radon sheet
  *   POST /draft/mail-opening    — Mail opening line suggestion
  *   POST /summarize/mail         — Mail summarization
  *   GET  /place-brief            — Place brief with external data
@@ -17,6 +18,7 @@
  */
 const express = require('express');
 const Joi = require('joi');
+const multer = require('multer');
 const router = express.Router();
 
 const verifyToken = require('../middleware/verifyToken');
@@ -24,6 +26,7 @@ const validate = require('../middleware/validate');
 const { aiChatLimiter, aiDraftLimiter } = require('../middleware/rateLimiter');
 const { asyncHandler } = require('../errorHandler');
 const agentService = require('../services/ai/agentService');
+const radonReport = require('../services/ai/radonReport');
 const { CHAT_MODEL, DRAFT_MODEL } = require('../config/anthropic');
 const propertyIntelligenceService = require('../services/ai/propertyIntelligenceService');
 const neighborhoodPulseComposer = require('../services/ai/neighborhoodPulseComposer');
@@ -250,6 +253,36 @@ const draftPickupScheduleSchema = Joi.object({
 router.post('/draft/pickup-schedule', verifyToken, aiDraftLimiter, validate(draftPickupScheduleSchema), asyncHandler(async (req, res) => {
   const { images, text } = req.body;
   const result = await agentService.readPickupSchedule({ images, text, userId: req.user.id });
+  if (result.error) {
+    return res.status(aiErrorStatus(result.error)).json(result);
+  }
+  res.json(result);
+}));
+
+// ─── Radon Result from a Lab Report ─────────────────────────────────────────
+// Fills the Today radon sheet; the sheet's own Save records the answer. The
+// report (one photo or PDF, as `file`) is read in memory and never stored.
+
+const receiveRadonReport = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: radonReport.MAX_REPORT_BYTES, files: 1 },
+}).single('file');
+
+function radonReportUpload(req, res, next) {
+  receiveRadonReport(req, res, (err) => {
+    if (!err) return next();
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({ error: 'FILE_TOO_LARGE', message: 'That file is over 10 MB. Try a photo of the report instead.' });
+    }
+    return res.status(400).json({ error: 'FILE_UNREADABLE', message: "Couldn't read that file. Try a photo or a PDF of the report." });
+  });
+}
+
+router.post('/draft/radon-result', verifyToken, aiDraftLimiter, radonReportUpload, asyncHandler(async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'NO_FILE', message: 'Choose a photo or a PDF of your radon report.' });
+  }
+  const result = await agentService.readRadonReport({ file: req.file.buffer, userId: req.user.id });
   if (result.error) {
     return res.status(aiErrorStatus(result.error)).json(result);
   }

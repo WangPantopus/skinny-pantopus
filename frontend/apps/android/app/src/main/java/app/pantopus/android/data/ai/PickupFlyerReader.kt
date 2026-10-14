@@ -51,17 +51,17 @@ class PickupFlyerReader
             val urls =
                 when (val upload = uploads.uploadAIMedia(listOf(UploadFile("flyer.jpg", "image/jpeg", jpeg)))) {
                     is NetworkResult.Success -> upload.data.images.map { it.url }
-                    is NetworkResult.Failure -> return PickupFlyerReading.Failed(upload.error.flyerMessage())
+                    is NetworkResult.Failure -> return PickupFlyerReading.Failed(upload.error.readerMessage())
                 }
             return when (val result = drafts.readPickupSchedule(AIDraftPickupScheduleRequest(images = urls))) {
                 is NetworkResult.Success -> PickupFlyerReading.Read(result.data.schedule, result.data.note)
-                is NetworkResult.Failure -> PickupFlyerReading.Failed(result.error.flyerMessage())
+                is NetworkResult.Failure -> PickupFlyerReading.Failed(result.error.readerMessage())
             }
         }
     }
 
-/** The server's sentence when it gave one ("This looks like a yard sale sign…"), else the error's own copy. */
-private fun NetworkError.flyerMessage(): String =
+/** What a failed AI reading tells the person: the server's sentence when it gave one ("This looks like a yard sale sign…"). */
+internal fun NetworkError.readerMessage(): String =
     when (this) {
         is NetworkError.Server -> NetworkError.ClientError.friendlyClientMessage(body) ?: message
         else -> message
