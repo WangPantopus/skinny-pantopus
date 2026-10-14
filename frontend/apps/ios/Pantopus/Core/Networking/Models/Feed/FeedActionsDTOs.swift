@@ -44,19 +44,86 @@ public struct MutedEntityDTO: Decodable, Sendable, Hashable {
     }
 }
 
-/// `GET /api/posts/mute` reply.
+/// `GET /api/posts/mute` reply: the people and businesses muted, and the
+/// Pulse topics muted (Pulse S4; absent from older servers).
 public struct MutedEntitiesResponse: Decodable, Sendable, Hashable {
     public let muted: [MutedEntityDTO]
+    public let topicMutes: [TopicMuteDTO]
+
+    private enum CodingKeys: String, CodingKey {
+        case muted
+        case topicMutes = "topic_mutes"
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        muted = try c.decode([MutedEntityDTO].self, forKey: .muted)
+        topicMutes = c.lossyList(TopicMuteDTO.self, forKey: .topicMutes)
+    }
 }
 
-/// Body for `POST /api/posts/mute/topic`.
+/// `GET /api/posts/mute` — one muted Pulse topic, everywhere (`areaId` nil)
+/// or in one area (contract §2.9).
+public struct TopicMuteDTO: Decodable, Sendable, Hashable, Identifiable {
+    public let topic: String
+    public let areaId: String?
+
+    public var id: String {
+        "\(topic)|\(areaId ?? "")"
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case topic
+        case areaId = "area_id"
+    }
+
+    public init(topic: String, areaId: String?) {
+        self.topic = topic
+        self.areaId = areaId
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        topic = try c.decode(String.self, forKey: .topic)
+        areaId = c.lenient(String.self, forKey: .areaId)
+    }
+}
+
+/// Body for `POST /api/posts/mute/topic`: a Pulse topic, everywhere or in
+/// one area (`topic`, `areaId`), or, from the older card menu, a kind of
+/// post on one surface (`postType`, `surface`).
 public struct FeedMuteTopicRequest: Encodable, Sendable, Hashable {
-    public let postType: String
+    public let postType: String?
     public let surface: String?
+    public let topic: String?
+    public let areaId: String?
 
     public init(postType: String, surface: String?) {
         self.postType = postType
         self.surface = surface
+        topic = nil
+        areaId = nil
+    }
+
+    public init(topic: String, areaId: String?) {
+        postType = nil
+        surface = nil
+        self.topic = topic
+        self.areaId = areaId
+    }
+}
+
+/// Body for `DELETE /api/posts/mute` undoing one topic mute: the one in
+/// `areaId`, or the everywhere mute without it.
+public struct FeedUnmuteTopicRequest: Encodable, Sendable, Hashable {
+    public let entityType: String
+    public let entityId: String
+    public let areaId: String?
+
+    public init(topic: String, areaId: String?) {
+        entityType = "topic"
+        entityId = topic
+        self.areaId = areaId
     }
 }
 
