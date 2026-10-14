@@ -199,6 +199,36 @@ The claims-list response is frozen for the giver's screen:
 - Mutes (in force since S4): `POST /api/posts/mute/topic` accepts `{ "topic", "areaId"? }` → `{ "message", "mute": { "topic", "area_id" } }`; without `areaId` the topic is muted everywhere; an unknown topic or a malformed or nonexistent `areaId` is a 400; muting twice keeps one mute. The legacy `{ "postType", "surface"? }` still works. `GET /api/posts/mute` → `{ "muted": [ …people and businesses, unchanged ], "topic_mutes": [{ "topic", "area_id", "muted_at" }] }`. `DELETE /api/posts/mute` `{ "entityType": "topic", "entityId": "<topic>", "areaId"? }` (body or query string) removes that one mute (without `areaId`, the everywhere mute). A topic muted in an area hides that topic's posts in the area and posts that have no area (every post until `Post.area_id` arrives with S5). User mutes as today.
 - Topic filter (in force since S4): `GET /api/posts/feed?surface=place&topic=<topic>` returns only that topic's posts, for any of the 12; `sports` keeps its Sports lane.
 
+#### S10 follow envelopes and duration rules
+
+`targetType` is `post`, `topic` or `place`; a person is never a follow target. `targetId` is a post UUID, one of the twelve topic ids, or a place-area UUID respectively. A topic requires `areaId`; post and place targets omit it. All targets must be currently readable and their area open. A follow never grants reading access. Businesses cannot follow.
+
+`notify` is `off` (default), `recap` or `each`. `ends` is `on_resolve` (default for a post), `week` or `keep`; topic/place targets default to `keep` and reject `on_resolve`. Following a post that already ended is allowed only with `week` or `keep`. Repeating the same PUT updates the existing follow, never duplicates it or restarts a running week; switching to `week` starts seven days from the server time. After a week has expired, following again starts a new week. `on_resolve` ends permanently when that conversation ends, even if it is later restored. A retained `keep` follow remains in preferences after the post ends, but the ended post stays out of the Following feed.
+
+`PUT /follows` returns `{ "follow": PulseFollow }`; `GET /follows` returns `{ "follows": [PulseFollow] }` in creation order, oldest first. `DELETE /follows` returns `{ "ok": true }` even when already absent. A `PulseFollow` is:
+
+```jsonc
+{
+  "id": "uuid", "target_type": "post", "target_id": "uuid-or-topic",
+  "area_id": null, "notify": "off", "ends": "on_resolve",
+  "until_at": null, "created_at": "<iso>", "updated_at": "<iso>"
+}
+```
+
+The list contains only active follows whose targets the viewer can still read; no target text, author or home fields are included. Nearby and Following use the same area/topic/time, moderation, block, mute and hide rules. Following additionally requires an active matching post follow, a matching topic-and-area follow, or a matching place follow, before pagination and new-count calculation. A follow does not subscribe to older topic/place posts: those targets match posts created at or after that follow's `created_at`. A post follow can show that conversation regardless of its creation time. `PulsePost.viewer.following` means an active **conversation** follow; a topic follow does not turn that header toggle on.
+
+`GET /preferences/summary` returns `{ "follows": [PulseFollow], "mutes": [...], "alerts": [...] }`. Each list item adds `undo: { method, path, body? }`: follow undo is the DELETE query above, mute undo is the existing `DELETE /api/posts/mute` body, and a follow alert's undo is PUT with its existing target/duration and `notify: off`. Quiet-hours and digest settings remain in `/preferences`; the summary does not expose another person's choices. Muted or unreadable targets never gain visibility because they are followed.
+
+`GET /posts/:id/why` accepts optional `view`, `topic` and `area_id` with the same validation as the feed. It checks current post access first and explains only the viewer's selected area, topic, explicit matching follow and newest-first order. It never asserts a follow the viewer does not have.
+
+### 2.13 Narrower conversation audiences (S9)
+
+`PUT /api/pulse/posts/:id/read-scope` accepts `{ "readScope": "public" | "verified_town" | "verified_area", "areaId"?: "uuid" }` and returns `{ "post": PulsePost }`. Only the author can change it. A repeated request for the current scope and area succeeds; any widening or lateral move returns `409 CANNOT_WIDEN`.
+
+Public can narrow to the post's town, then to an open street/neighborhood inside that town where the author's primary home is currently verified. `areaId` selects that street/neighborhood for `verified_area`; it is required when changing from a town reference, and may be omitted when the existing reference already names the desired street/neighborhood. Town narrowing keeps the post's existing area reference, whose town ancestry supplies the wall. Changing between two street/neighborhood areas is refused even if both contain the author's home: it would admit a different set of readers. No device coordinates are accepted. A closed area or missing primary-home verification returns `403 NEEDS_VERIFIED_ADDRESS`.
+
+Legacy rows with null `read_scope` can narrow only when their existing audience is public; other legacy audience sets are not assumed to contain every verified town resident. The server derives their town from the author's primary home and requires an open town. If no safe town can be derived, it refuses without changing the row. A successful narrowing turns off external sharing. The shared wall immediately revokes direct reads, feeds, replies, notification quotes and share links for readers outside the new audience; stored replies and follows stay.
+
 ### 2.10 Areas and eligibility
 
 `GET /api/pulse/areas/mine` → `{ "town": Area|null, "neighborhood": Area|null, "street": Area|null, "home_verified": boolean }`. `Area` is `{ "id": "uuid", "kind": "town|neighborhood|street|place", "name": "Camas", "state": "WA", "title": "Camas" }` (the same area metadata as the feed pill). Only areas whose `opened_at` has arrived appear. The primary home's town is the default; street and neighborhood require address verification for that home. Without a current home, all three areas are null and `home_verified` is false. Reading permissions still use the set of all current verified homes (S24), independently of this default.
@@ -229,7 +259,7 @@ Both answer `404 POST_NOT_FOUND`, `403 NOT_POST_AUTHOR` (not the asker), `400 NO
 | S14 | `GET /api/pulse/posts/:id` fills `plan`; `POST /api/pulse/posts/:id/plan` creates a Plan through the existing Plans services with `Plan.source_post_id` (PB) |
 | S15 | `GET /api/public/pulse/areas`, `GET /api/public/pulse/feed?area=`, `GET /api/public/pulse/posts/:id` (public posts only; no distance, no street, first name and label) (PC with PB) |
 | S16–S17 | Place pages, area opening, business and official identities (PB, PS) |
-| S9 (addition) | `PUT /api/pulse/posts/:id/read-scope` `{ "readScope" }`: the author only, toward narrower only, `409 CANNOT_WIDEN` (PB) |
+| S9 (addition) | Narrower audiences are frozen in §2.13 (PB); the endpoint is not live until its implementation merges |
 | S11 (addition) | `GET /api/pulse/rules` → `{ "rules": [...], "review_hours": "…", "appeals_text": "…", "law_enforcement_text": "…" }`; the text is the founder's and counsel's, PS serves it (PS) |
 | S17 (addition) | Local offers: `POST /api/businesses/:businessId/offers`; staff approve in the console; `GET /api/pulse/local-offer?area=` → the one offer to show, or null (PB, PS) |
 | S20 | `POST /api/users/code/start` `{ "email", "firstName" }` → always `{ "ok": true }` (no account enumeration); `POST /api/users/code/verify` `{ "email", "code", "deviceId" }` → the same session body as `POST /api/users/login` plus `is_new`. Codes are 6 digits, valid 10 minutes, single use, 5 tries. Errors: `CODE_INVALID`, `CODE_EXPIRED`, `TOO_MANY_ATTEMPTS`, `CHANNEL_UNAVAILABLE` (text codes, until a provider exists). The `authEndpointLimiter`, DPoP and device rules that cover login cover these (PB) |
