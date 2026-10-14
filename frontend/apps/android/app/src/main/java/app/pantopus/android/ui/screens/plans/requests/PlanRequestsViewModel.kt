@@ -115,6 +115,7 @@ class PlanRequestsViewModel
                             current.copy(
                                 working = current.working - requestId,
                                 pending = current.pending.filterNot { it.id == requestId },
+                                waitlisted = current.waitlisted.filterNot { it.id == requestId },
                                 notice = if (accept) "Accepted. They're in." else "Declined. They won't see who said no.",
                             )
                         is NetworkResult.Failure ->
@@ -122,7 +123,7 @@ class PlanRequestsViewModel
                                 // At home the first yes shows H10's sentence first (409 from the server).
                                 current.copy(
                                     working = current.working - requestId,
-                                    confirmAccept = current.pending.firstOrNull { it.id == requestId },
+                                    confirmAccept = (current.pending + current.waitlisted).firstOrNull { it.id == requestId },
                                 )
                             } else {
                                 current.copy(

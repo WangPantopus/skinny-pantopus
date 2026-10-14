@@ -353,6 +353,7 @@ import app.pantopus.android.ui.screens.place.verify.PlaceVerifyStatusScreen
 import app.pantopus.android.ui.screens.plans.PlansExternalRoutes
 import app.pantopus.android.ui.screens.plans.PlansGateViewModel
 import app.pantopus.android.ui.screens.plans.PlansRoutes
+import app.pantopus.android.ui.screens.plans.map.PLANS_INVITE_MESSAGE
 import app.pantopus.android.ui.screens.plans.map.PlansMapActions
 import app.pantopus.android.ui.screens.plans.map.PlansMapScreen
 import app.pantopus.android.ui.screens.plans.plansRoutes
@@ -2697,7 +2698,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                     onHost = { kind, game -> navController.navigate(PlansRoutes.host(kind = kind?.wire, game = game?.id)) },
                                     onOpenPulse = { navController.navigate(ChildRoutes.PULSE_FEED) },
                                     onOpenConnections = { navController.navigate(ChildRoutes.CONNECTIONS) },
-                                    onInvite = { appContext.shareText(InviteLinks.INVITE_MESSAGE, "Invite to Pantopus") },
+                                    onInvite = { appContext.shareText(PLANS_INVITE_MESSAGE, "Invite a neighbor") },
                                 ),
                         )
                     } else {
