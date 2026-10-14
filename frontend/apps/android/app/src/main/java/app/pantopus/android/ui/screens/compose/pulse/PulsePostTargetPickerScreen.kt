@@ -64,10 +64,8 @@ fun PulsePostTargetPickerScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val homes by viewModel.homes.collectAsStateWithLifecycle()
-    val businesses by viewModel.businesses.collectAsStateWithLifecycle()
     val isLocating by viewModel.isLocating.collectAsStateWithLifecycle()
     var expandedHomes by remember { mutableStateOf(false) }
-    var expandedBusinesses by remember { mutableStateOf(false) }
     var locationError by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -167,7 +165,7 @@ fun PulsePostTargetPickerScreen(
                             )
                         }
                         HomeSection(homes, expandedHomes, { expandedHomes = !expandedHomes }, onSelect)
-                        BusinessSection(businesses, expandedBusinesses, { expandedBusinesses = !expandedBusinesses }, onSelect)
+                        // No "Business Area": businesses reply in Pulse; they don't post to the Place feed (Pulse S1).
                     }
 
                     TargetSectionLabel("Your network", modifier = Modifier.padding(top = Spacing.s1))
@@ -246,46 +244,6 @@ private fun HomeSection(
                     }
                 }
             }
-    }
-}
-
-@Composable
-private fun BusinessSection(
-    businesses: List<PulseBusinessTargetOption>,
-    expanded: Boolean,
-    onToggle: () -> Unit,
-    onSelect: (PulsePostingTarget) -> Unit,
-) {
-    if (businesses.isEmpty()) return
-    if (businesses.size == 1) {
-        val biz = businesses.first()
-        TargetCard(
-            icon = PantopusIcon.Building2,
-            iconBackground = PantopusColors.businessBg,
-            iconColor = PantopusColors.business,
-            title = "Business Area",
-            subtitle = biz.name,
-            tag = "pulseTarget_business",
-        ) {
-            onSelect(PulsePostingTarget.Business(biz.id, biz.latitude, biz.longitude, biz.label))
-        }
-    } else {
-        ExpandableTargetCard(
-            icon = PantopusIcon.Building2,
-            iconBackground = PantopusColors.businessBg,
-            iconColor = PantopusColors.business,
-            title = "Business Area",
-            subtitle = "${businesses.size} businesses",
-            isExpanded = expanded,
-            tag = "pulseTarget_businessGroup",
-            onToggle = onToggle,
-        ) {
-            businesses.forEach { biz ->
-                TargetSubRow(title = biz.name, hint = biz.label, tag = "pulseTargetBusiness_${biz.id}") {
-                    onSelect(PulsePostingTarget.Business(biz.id, biz.latitude, biz.longitude, biz.label))
-                }
-            }
-        }
     }
 }
 

@@ -1358,7 +1358,6 @@ class PulseComposeViewModel
                 longitude = target.targetLongitude,
                 locationName = if (target.isPlaceTarget) target.displayLabel else null,
                 homeId = target.targetHomeId,
-                businessId = target.targetBusinessId,
                 gpsTimestamp = gps.timestamp,
                 gpsLatitude = gps.latitude,
                 gpsLongitude = gps.longitude,
