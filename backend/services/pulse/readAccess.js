@@ -8,6 +8,7 @@ const { isFanBlockedFromPersona } = require('../personaBlockService');
 const { getPersonaMembershipForUser, getViewerTierRankForPersona } = require('../../utils/identityProfiles');
 const { haversineMeters } = require('../../utils/trustState');
 const { homeAreaContext } = require('./areas');
+const { scopeAccessForHomes } = require('./readScopes');
 
 // The Post columns canReadPost reads; a path that checks a post it selected itself selects these.
 const POST_READ_SELECT = [
@@ -104,37 +105,11 @@ function isPubliclyShareable(post) {
 // The query form runs before paging; caller coordinates never enter this function.
 async function postScopeAccess(userId, context) {
   const homes = context || await homeAreaContext(userId);
-  const townIds = new Set(homes.areas.filter(area => area.kind === 'town'
-    && homes.verifiedAreaIds.has(area.id)).map(area => area.id));
-  const areaIds = homes.verifiedAreaIds;
-  const townLookups = new Map();
-  function allows(post) {
-    if (post.read_scope == null || (userId && post.user_id === userId)) return true;
-    if (post.read_scope === 'public') return true;
-    if (post.read_scope === 'verified_area') return areaIds.has(post.area_id);
-    if (post.read_scope === 'verified_town') return townIds.has(post.pulse_post_town_id);
-    return false;
-  }
-  async function canRead(post) {
-    if (post.read_scope !== 'verified_town' || post.pulse_post_town_id !== undefined
-      || (userId && post.user_id === userId)) return allows(post);
-    if (!post.area_id || !townIds.size) return false;
-    if (!townLookups.has(post.area_id)) {
-      townLookups.set(post.area_id, supabaseAdmin.rpc('pulse_area_town_id', { p_area_id: post.area_id })
-        .then(({ data, error }) => { if (error) throw error; return data; }));
-    }
-    return allows({ ...post, pulse_post_town_id: await townLookups.get(post.area_id) });
-  }
-  function query(q, referencedTable, jsonColumn) {
-    const field = name => jsonColumn ? `${jsonColumn}->>${name}` : name;
-    const scope = field('read_scope');
-    const clauses = [`${scope}.is.null`, `${scope}.eq.public`];
-    if (userId) clauses.push(`${field('user_id')}.eq.${userId}`);
-    if (townIds.size) clauses.push(`and(${scope}.eq.verified_town,${field('pulse_post_town_id')}.in.(${[...townIds].join(',')}))`);
-    if (areaIds.size) clauses.push(`and(${scope}.eq.verified_area,${field('area_id')}.in.(${[...areaIds].join(',')}))`);
-    return q.or(clauses.join(','), referencedTable ? { referencedTable } : {});
-  }
-  return { allows, canRead, query };
+  return scopeAccessForHomes(userId, homes, async areaId => {
+    const { data, error } = await supabaseAdmin.rpc('pulse_area_town_id', { p_area_id: areaId });
+    if (error) throw error;
+    return data;
+  });
 }
 
 // A notification can quote a post or reply. Resolve its current access fields in

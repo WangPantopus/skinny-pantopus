@@ -1,5 +1,5 @@
 const { personaPostVisibleToViewer, filterFollowingPosts } = require('../utils/personaPostVisibility');
-const { postScopeAccess } = require('./pulse/readAccess');
+const { scopeAccessForHomes } = require('./pulse/readScopes');
 
 // The clients display 25+ at this ceiling. It applies to permitted posts
 // within EACH Beacon, never to a shared pool across the whole follow list.
@@ -48,7 +48,7 @@ async function loadMembershipActivity(membership, db, scopeAccess) {
  * an error rejects the list rather than presenting partial empty updates.
  */
 async function loadFollowingActivity(memberships, { db = require('../config/supabaseAdmin'), scopeAccess } = {}) {
-  const access = scopeAccess || await postScopeAccess(null);
+  const access = scopeAccess || scopeAccessForHomes(null);
   const decorated = [];
   for (let start = 0; start < memberships.length; start += QUERY_CONCURRENCY) {
     const batch = memberships.slice(start, start + QUERY_CONCURRENCY);
