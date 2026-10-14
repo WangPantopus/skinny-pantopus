@@ -253,6 +253,8 @@ public extension PulsePostDTO {
         let openAsk = isAuthor && type == "ask_local" && status?.resolution == nil
             && (status?.state == nil || status?.state == "open")
             && (endsAt.map { $0 > now } ?? true)
+        let knownType = ["ask_local", "share", "offer", "alert", "event", "lost_found", "legacy"].contains(type ?? "")
+        let genericAction = !knownType || (action != nil && PulsePageWords.defaultActionLabel(action?.kind) == nil)
         return PulsePageCard(
             id: id,
             authorId: author?.id,
@@ -264,9 +266,10 @@ public extension PulsePostDTO {
             photoURL: photo,
             photoCount: photos.count,
             aboutLine: aboutLine.isEmpty ? nil : aboutLine,
-            actionKind: action?.kind,
-            actionLabel: action?.label.flatMap { $0.isEmpty ? nil : $0 } ?? PulsePageWords.defaultActionLabel(action?.kind),
-            actionDone: action?.done ?? false,
+            actionKind: genericAction ? "reply" : action?.kind,
+            actionLabel: genericAction ? "Reply"
+                : action?.label.flatMap { $0.isEmpty ? nil : $0 } ?? PulsePageWords.defaultActionLabel(action?.kind),
+            actionDone: !genericAction && action?.done == true,
             repliesText: replies == 1 ? "1 reply" : (replies > 1 ? "\(replies) replies" : nil),
             goingCount: going,
             // The words of how it ended; a heads-up's end reads in the line above.
