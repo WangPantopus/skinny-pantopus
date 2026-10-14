@@ -17,8 +17,9 @@
 //  smoke test into a fixture-management project. This test instead walks
 //  one representative tap-path per route GROUP (root tab → first-class
 //  destination), covering every parent route enum and every entry point
-//  on the tab landings (Place · Today · Pulse · Mail, plus Plans while its switch is on; You is a cover). The static reachability of the remaining
-//  ID-bearing children is enumerated in `docs/nav-graph-closure.md` and
+//  on the tab landings (Place · Today · Pulse · Mail, plus Plans while
+//  its switch is on; You is a cover). The static reachability of the
+//  remaining ID-bearing children is enumerated in `docs/nav-graph-closure.md` and
 //  the route-by-route summary in `docs/nav-smoke-results.md`.
 //
 //  Like `RootTabUITests`, this suite launches with
