@@ -3474,6 +3474,14 @@ public struct HubTabRoot: View {
                 onOpenPrivacyMirror: { path.append(.privacyMirror(homeId: homeId)) },
                 onOpenMailDay: { path.append(.mailDay(variant: .populated)) },
                 onOpenHubHome: { path.append(.homeDashboard(homeId: homeId)) },
+                onOpenHomeShortcut: { shortcut in
+                    switch shortcut {
+                    case .tasks: path.append(.homeTasks(homeId: homeId))
+                    case .members: path.append(.homeMembers(homeId: homeId))
+                    case .documents: path.append(.homeDocs(homeId: homeId))
+                    case .emergency: path.append(.homeEmergency(homeId: homeId))
+                    }
+                },
                 onOpenNotifications: { path.append(.notifications) }
             ),
             isActive: isActive,
