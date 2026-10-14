@@ -5,11 +5,11 @@ Owner: the PB session. Keep this file current in your own PRs (or a small docs P
 ## Done
 
 - **S1 rule cleanups** (server half): [PR 2259](https://github.com/WangPantopus/skinny-pantopus/pull/2259), merged, verified on web, iOS and Android. Heads-ups about crime and suspicion (`theft`, `vandalism`, `suspicious`, `scam`, `crime_incident`) are refused at creation with `400 ALERT_KIND_NOT_ALLOWED`; `official_notice` and `public_safety` only from Official or curator accounts, each with `sourceUrl` (stored as `post_metadata.source_url`); an edit can't switch a post to a refused kind; businesses can't post to the Place feed (`403 BUSINESS_CANNOT_POST`, also from `POST /api/businesses/:id/posts`). Old posts of those kinds stay readable and editable. The seeder now sends each alert's source. Contract §1, §2.5 and §8 updated.
-- **S4 topics** (server half, in review): the twelve topics in `Post_topic_check`, `?topic=` on the legacy Place feed, topic mutes with `areaId` (listed in `GET /api/posts/mute` as `topic_mutes`, undone by area), `PostMute.area_id`. Contract §2.9 and §4.1 updated.
+- **S4 topics** (server half): [PR 2264](https://github.com/WangPantopus/skinny-pantopus/pull/2264), merged, verified on web, iOS and Android: the twelve topics in `Post_topic_check`, `?topic=` on the legacy Place feed, topic mutes with `areaId` (listed in `GET /api/posts/mute` as `topic_mutes`, undone by area), `PostMute.area_id`. Contract §2.9 and §4.1 updated.
 
 ## Next
 
-- **One read check on every path** (S5, no table needed): move `canViewPost` into one shared function and use it on every path that returns a post. An inventory of the backend's post read paths found several that check access their own way, or not at all; the details went to the founder in chat. Each repair is its own small privacy PR.
+- **One read check on every path** (S5, no table needed): `canReadPost` now lives in `backend/services/pulse/readAccess.js` (this PR), and the profile post list and the business Mentions list use it. The other paths that check access their own way get their own small privacy PRs, one at a time.
 - Then `labelFor` (built on `isVerifiedResident` in `utils/homePermissions.js`, which Plans already uses), `canReadPost`'s area scopes, and the `PulseArea` migration with the three town boundaries, ready for the table approval.
 
 ## Requests (to other streams)

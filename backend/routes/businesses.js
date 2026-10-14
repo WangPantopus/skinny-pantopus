@@ -67,6 +67,7 @@ const { geocodeAddress } = require('../utils/geocoding');
 const { validateBusinessAddress, PUBLIC_LOCATION_COLUMNS, toPublicBusinessLocation } = require('../services/businessAddressService');
 const { computeAddressHash } = require('../utils/normalizeAddress');
 const { isPublicStorageUrl } = require('../services/s3Service');
+const { POST_READ_SELECT, readablePosts } = require('../services/pulse/readAccess');
 const rateLimit = require('express-rate-limit');
 const {
   checkBusinessPermission,
@@ -4504,10 +4505,13 @@ router.get('/:businessId/matched-posts', verifyToken, async (req, res) => {
     const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
     const pageSize = Math.min(Math.max(parseInt(req.query.page_size, 10) || 20, 1), 50);
 
+    // Matching reads only a post's place and category, so it also matches posts meant for
+    // connections or a household. A business sees only Place posts its team member may read.
     const { data: posts, error, count } = await supabaseAdmin
       .from('Post')
-      .select('id, title, content, post_type, like_count, comment_count, created_at, user_id, creator:user_id (id, name, username, profile_picture_url)', { count: 'exact' })
+      .select(`${POST_READ_SELECT}, title, content, post_type, like_count, comment_count, created_at, creator:user_id (id, name, username, profile_picture_url)`, { count: 'exact' })
       .contains('matched_business_ids', [businessId])
+      .contains('distribution_targets', ['place'])
       .is('archived_at', null)
       .order('created_at', { ascending: false })
       .range((page - 1) * pageSize, page * pageSize - 1);
@@ -4517,8 +4521,10 @@ router.get('/:businessId/matched-posts', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch matched posts' });
     }
 
+    const readable = await readablePosts(posts || [], userId);
     res.json({
-      posts: posts || [],
+      posts: readable.map(({ id, title, content, post_type, like_count, comment_count, created_at, user_id, creator }) => (
+        { id, title, content, post_type, like_count, comment_count, created_at, user_id, creator })),
       pagination: {
         page,
         page_size: pageSize,
