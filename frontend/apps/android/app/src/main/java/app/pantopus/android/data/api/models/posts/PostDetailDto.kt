@@ -115,6 +115,11 @@ data class PostDetailDto(
     val comments: List<PostCommentDto> = emptyList(),
     // Edit-mode prefill fields — see iOS PostDetailDTO parity.
     val visibility: String? = null,
+    @Json(name = "read_scope") val readScope: String? = null,
+    @Json(name = "allow_external_share") val allowExternalShare: Boolean? = null,
+    @Json(name = "moderation_state") val moderationState: String? = null,
+    val audience: String? = null,
+
     @Json(name = "event_date") val eventDate: String? = null,
     @Json(name = "event_venue") val eventVenue: String? = null,
     @Json(name = "lost_found_type") val lostFoundType: String? = null,
@@ -136,4 +141,8 @@ data class PostDetailDto(
 ) {
     /** A moderator removed the post: neighbors can't see it or reply. */
     val isRemovedByModerator: Boolean get() = archiveReason == "moderation"
+
+    val canShareExternally: Boolean
+        get() = !isRemovedByModerator && moderationState !in listOf("held", "removed") &&
+            permitsExternalPostShare(readScope, visibility, audience, allowExternalShare)
 }

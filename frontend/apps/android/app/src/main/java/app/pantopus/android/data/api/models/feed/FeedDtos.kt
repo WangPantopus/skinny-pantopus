@@ -1,6 +1,7 @@
 package app.pantopus.android.data.api.models.feed
 
 import app.pantopus.android.core.identity.MadeUpUsername
+import app.pantopus.android.data.api.models.posts.permitsExternalPostShare
 import app.pantopus.android.data.api.models.pulse.PostLifecycleMetadata
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
@@ -59,7 +60,16 @@ data class FeedPost(
     @Json(name = "media_types") val mediaTypes: List<String> = emptyList(),
     @Json(name = "media_live_urls") val mediaLiveUrls: List<String> = emptyList(),
     val creator: FeedPostCreator? = null,
-)
+    val visibility: String? = null,
+    @Json(name = "read_scope") val readScope: String? = null,
+    @Json(name = "allow_external_share") val allowExternalShare: Boolean? = null,
+    @Json(name = "moderation_state") val moderationState: String? = null,
+    val audience: String? = null,
+) {
+    val canShareExternally: Boolean
+        get() = !isSeeded && moderationState !in listOf("held", "removed") &&
+            permitsExternalPostShare(readScope, visibility, audience, allowExternalShare)
+}
 
 /**
  * Author projection on a feed post. Mirrors the iOS `PostCreatorDTO`
