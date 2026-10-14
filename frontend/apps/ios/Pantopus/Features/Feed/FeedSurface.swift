@@ -114,6 +114,22 @@ public enum FeedSurface: String, Sendable, Hashable, CaseIterable {
         footerTrail: ""
     )
 
+    /// Nearby filtered to a topic with nothing in it (Pulse S4): says so, and
+    /// offers the way back to every topic.
+    public static func quietTopicContent(_ topic: PulseTopic) -> FeedEmptyContent {
+        FeedEmptyContent(
+            icon: .hash,
+            headline: "Nothing in \(topic.label) yet",
+            body: "Posts about \(topic.label.lowercased()) nearby will show here.",
+            ctaLabel: "Show all topics",
+            ctaIcon: .layers,
+            footerIcon: .hash,
+            footerLead: "",
+            footerEmphasis: nil,
+            footerTrail: ""
+        )
+    }
+
     public func emptyContent(scopeLabel: String?, followCount _: Int) -> FeedEmptyContent {
         switch self {
         case .pulse:
