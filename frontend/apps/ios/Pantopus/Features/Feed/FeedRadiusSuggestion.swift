@@ -17,12 +17,20 @@ public struct FeedRadiusSuggestion: Sendable, Hashable {
     public let reason: String
     public let direction: Direction
 
-    /// Radius ladder — RN `useRadiusSuggestion.ts:34`.
-    public static let radiusOptions: [Double] = [1, 3, 10, 25, 100, 1000, 25000]
+    /// Radius ladder — RN `useRadiusSuggestion.ts:34`, ending at 100 mi: the
+    /// Place feed reads at most 100 miles (until Pulse reads `/api/pulse/feed`,
+    /// which has no radius), so 1,000 mi and Global would search 100 and say
+    /// otherwise.
+    public static let radiusOptions: [Double] = [1, 3, 10, 25, 100]
 
-    /// `25000` reads "Global"; everything else is "<n> mi".
+    /// The radius the feed reads: a 1,000 mi or Global saved before the cap
+    /// reads 100.
+    public static func readRadius(_ miles: Double) -> Double {
+        min(miles, radiusOptions[radiusOptions.count - 1])
+    }
+
+    /// "<n> mi".
     public static func formatRadius(_ miles: Double) -> String {
-        if miles >= 25000 { return "Global" }
         if miles == miles.rounded() { return "\(Int(miles)) mi" }
         return String(format: "%.1f mi", miles)
     }
@@ -36,28 +44,29 @@ public struct FeedRadiusSuggestion: Sendable, Hashable {
         singularLabel: String = "post",
         pluralLabel: String = "posts"
     ) -> FeedRadiusSuggestion? {
-        guard let index = radiusOptions.firstIndex(of: currentRadius) else { return nil }
+        let radius = readRadius(currentRadius)
+        guard let index = radiusOptions.firstIndex(of: radius) else { return nil }
         let noun = itemCount == 1 ? singularLabel : pluralLabel
 
         if itemCount == 0, index < radiusOptions.count - 1 {
             let next = radiusOptions[index + 1]
             return FeedRadiusSuggestion(
                 suggestedRadius: next,
-                reason: "No \(pluralLabel) within \(formatRadius(currentRadius)). "
+                reason: "No \(pluralLabel) within \(formatRadius(radius)). "
                     + "Expand to \(formatRadius(next))?",
                 direction: .expand
             )
         }
-        if itemCount <= 2, currentRadius < 25000, index < radiusOptions.count - 1 {
+        if itemCount <= 2, index < radiusOptions.count - 1 {
             let next = radiusOptions[index + 1]
             return FeedRadiusSuggestion(
                 suggestedRadius: next,
-                reason: "\(itemCount) \(noun) within \(formatRadius(currentRadius)). "
+                reason: "\(itemCount) \(noun) within \(formatRadius(radius)). "
                     + "Expand to \(formatRadius(next))?",
                 direction: .expand
             )
         }
-        if itemCount >= 50, currentRadius > 1, index > 0 {
+        if itemCount >= 50, index > 0 {
             let next = radiusOptions[index - 1]
             return FeedRadiusSuggestion(
                 suggestedRadius: next,

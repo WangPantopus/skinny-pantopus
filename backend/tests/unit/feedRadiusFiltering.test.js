@@ -48,6 +48,7 @@ function makePost(overrides) {
     effective_longitude: CENTER_LON,
     created_at: new Date().toISOString(),
     archived_at: null,
+    moderation_state: 'live', // the column's default; the feeds show live posts only
     ...overrides,
   };
 }

@@ -300,7 +300,8 @@ struct FeedContextBar: View {
                     .foregroundStyle(Theme.Color.appText)
                     .lineLimit(1)
                 Spacer(minLength: Spacing.s2)
-                Text(FeedRadiusSuggestion.formatRadius(viewModel.radiusMiles))
+                // What the feed reads (a saved 1,000 mi reads 100).
+                Text(FeedRadiusSuggestion.formatRadius(FeedRadiusSuggestion.readRadius(viewModel.radiusMiles)))
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .padding(.horizontal, Spacing.s2)

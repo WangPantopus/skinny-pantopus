@@ -130,6 +130,9 @@ public struct PulsePostCardContent: Sendable, Hashable, Identifiable {
     public let isVisitor: Bool
     /// Curator attribution comes from `origin`, never the cold-start fact flag.
     public let origin: String?
+    /// The post's Pulse topic, when it has one this build knows (Pulse S4):
+    /// named on the meta line and muted by "Mute this topic".
+    public let pulseTopic: PulseTopic?
     public var isCurator: Bool {
         origin == "curator"
     }
@@ -158,7 +161,8 @@ public struct PulsePostCardContent: Sendable, Hashable, Identifiable {
         actions: PulsePostActions = PulsePostActions(),
         chipLabel: String? = nil,
         isVisitor: Bool = false,
-        origin: String? = nil
+        origin: String? = nil,
+        pulseTopic: PulseTopic? = nil
     ) {
         self.id = id
         self.authorName = authorName
@@ -178,6 +182,7 @@ public struct PulsePostCardContent: Sendable, Hashable, Identifiable {
         self.chipLabel = chipLabel ?? intent.cardChipLabel
         self.isVisitor = isVisitor
         self.origin = origin
+        self.pulseTopic = pulseTopic
     }
 }
 
@@ -513,6 +518,7 @@ public struct PulsePostCard: View {
         var parts = [content.authorName, content.chipLabel]
         if content.isCurator { parts.append("Pantopus curator") }
         if content.isVisitor { parts.append("Visitor") }
+        if let topic = content.pulseTopic { parts.append(topic.label) }
         if let title = content.title, !title.isEmpty { parts.append(title) }
         if !content.body.isEmpty { parts.append(content.body) }
         if !content.media.isEmpty {

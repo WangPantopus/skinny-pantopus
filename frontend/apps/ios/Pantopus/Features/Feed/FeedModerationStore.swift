@@ -16,6 +16,9 @@
 //  moment the surface toggled (`selectSurface` cleared the local set). This
 //  store lifts that state to the session, exactly like RN's context.
 //
+//  Pulse topics muted from a post's menu (Pulse S4) live here too, so their
+//  posts leave every surface at once, as the server's everywhere mute does.
+//
 //  Session-scoped by design: RN's context state is memory-only too, and the
 //  server owns the durable mute list. `clear()` runs on sign-out.
 //
@@ -46,6 +49,8 @@ public final class FeedModerationStore {
     public private(set) var mutedEntities: Set<FeedMutedEntity> = []
     /// Posts the viewer hid. RN's `hiddenPostIds`.
     public private(set) var hiddenPostIds: Set<String> = []
+    /// Pulse topics muted this session (`POST /api/posts/mute/topic`).
+    public private(set) var mutedTopics: Set<String> = []
 
     public init() {}
 
@@ -61,9 +66,11 @@ public final class FeedModerationStore {
 
     /// Whether a feed row survives the mute/hide layer. Business authorship
     /// wins when both ids are present — that is the identity the mute call
-    /// sends.
-    public func isVisible(postId: String, userId: String?, businessAuthorId: String?) -> Bool {
+    /// sends. `topic` is the post's Pulse topic, nil for the viewer's own
+    /// posts (a topic mute never hides them).
+    public func isVisible(postId: String, userId: String?, businessAuthorId: String?, topic: String? = nil) -> Bool {
         if hiddenPostIds.contains(postId) { return false }
+        if let topic, mutedTopics.contains(topic) { return false }
         if let businessAuthorId, isMuted(entityType: .business, entityId: businessAuthorId) {
             return false
         }
@@ -89,10 +96,19 @@ public final class FeedModerationStore {
         hiddenPostIds.remove(postId)
     }
 
+    public func addTopicMute(_ topic: String) {
+        mutedTopics.insert(topic)
+    }
+
+    public func removeTopicMute(_ topic: String) {
+        mutedTopics.remove(topic)
+    }
+
     /// Drop everything — called on sign-out so one account's mutes never
     /// filter another's feed.
     public func clear() {
         mutedEntities = []
         hiddenPostIds = []
+        mutedTopics = []
     }
 }
