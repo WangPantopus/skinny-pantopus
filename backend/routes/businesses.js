@@ -4422,139 +4422,22 @@ router.get('/:businessId/insights', verifyToken, async (req, res) => {
 
 /**
  * POST /:businessId/posts
- * Create a post as the business identity. Requires editor-level seat.
- * Body accepts the same fields as the regular post creation endpoint.
- * Automatically sets business_author_id = businessId.
+ * Businesses reply; they don't post to the Place feed (docs/product/pulse-build/02-contract.md,
+ * BUSINESS_CANNOT_POST). Older apps still call this, so it answers with the reason. The business
+ * page keeps showing earlier posts (GET below).
  */
 router.post('/:businessId/posts', verifyToken, async (req, res) => {
   try {
-    const { businessId } = req.params;
-    const userId = req.user.id;
-
-    // Check editor-level access
-    const access = await checkBusinessPermission(businessId, userId, 'profile.edit');
+    const access = await checkBusinessPermission(req.params.businessId, req.user.id, 'profile.edit');
     if (!access.hasAccess) {
       return res.status(403).json({ error: 'You need at least editor role to post as this business' });
     }
-
-    // Forward to the standard post creation with business context pre-set
-    // We'll directly create the post here with business_author_id
-    const {
-      content, title, mediaUrls, mediaTypes, postType,
-      visibility, tags, audience, targetPlaceId,
-      eventDate, eventEndDate, eventVenue,
-      dealExpiresAt, dealBusinessName,
-      serviceCategory, latitude, longitude, locationName, locationAddress,
-    } = req.body;
-
-    if (!content || content.trim().length === 0) {
-      return res.status(400).json({ error: 'Content is required' });
-    }
-    // Uploaded files only: an outside link would show its owner who viewed the post and when.
-    if (mediaUrls != null && (!Array.isArray(mediaUrls)
-      || mediaUrls.some((url) => typeof url !== 'string' || !isPublicStorageUrl(url)))) {
-      return res.status(400).json({ error: 'Attach photos and videos by uploading them.' });
-    }
-
-    // Get business location for post coordinates if not provided
-    let effectiveLat = latitude;
-    let effectiveLon = longitude;
-    let effectiveLocationName = locationName;
-    let effectiveLocationAddress = locationAddress;
-
-    if (effectiveLat == null || effectiveLon == null) {
-      const { data: primaryLoc } = await supabaseAdmin
-        .from('BusinessLocation')
-        .select('address, city, state, location')
-        .eq('business_user_id', businessId)
-        .eq('is_primary', true)
-        .eq('is_active', true)
-        .maybeSingle();
-
-      if (primaryLoc?.location) {
-        const coords = primaryLoc.location;
-        if (coords.coordinates) {
-          effectiveLon = coords.coordinates[0];
-          effectiveLat = coords.coordinates[1];
-        }
-        if (!effectiveLocationAddress) {
-          effectiveLocationAddress = [primaryLoc.address, primaryLoc.city, primaryLoc.state].filter(Boolean).join(', ');
-        }
-      }
-    }
-
-    // Get business name for locationName default
-    const { data: bizUser } = await supabaseAdmin
-      .from('User')
-      .select('name, username')
-      .eq('id', businessId)
-      .single();
-
-    const postData = {
-      user_id: userId,
-      business_id: businessId,
-      business_author_id: businessId,
-      title: title || null,
-      content: content.trim(),
-      media_urls: mediaUrls || [],
-      media_types: mediaTypes || [],
-      post_type: postType || 'local_update',
-      post_format: 'standard',
-      visibility: visibility || 'neighborhood',
-      visibility_scope: 'neighborhood',
-      location_precision: 'approx_area',
-      latitude: effectiveLat ?? null,
-      longitude: effectiveLon ?? null,
-      location_name: effectiveLocationName || bizUser?.name || null,
-      location_address: effectiveLocationAddress || null,
-      tags: tags || [],
-      post_as: 'business',
-      audience: audience || 'nearby',
-      target_place_id: targetPlaceId || null,
-      distribution_targets: ['place'],
-      event_date: eventDate || null,
-      event_end_date: eventEndDate || null,
-      event_venue: eventVenue || null,
-      deal_expires_at: dealExpiresAt || null,
-      deal_business_name: dealBusinessName || bizUser?.name || null,
-      service_category: serviceCategory || null,
-      // The same purpose a regular post of this type gets; 'promote', 'invite' and 'inform'
-      // aren't purposes the Post table allows, so every business post failed.
-      purpose: require('./posts').derivePurposeFromPostType(postType || 'local_update'),
-      profile_visibility_scope: 'public',
-      show_on_profile: true,
-      is_visitor_post: false,
-      state: 'open',
-    };
-
-    const { data: post, error } = await supabaseAdmin
-      .from('Post')
-      .insert(postData)
-      .select('*')
-      .single();
-
-    if (error) {
-      logger.error('Error creating business post', { error: error.message, businessId });
-      return res.status(500).json({ error: 'Failed to create post' });
-    }
-
-    // Attach business author info to response
-    post.business_author = bizUser ? {
-      id: businessId,
-      name: bizUser.name,
-      username: bizUser.username,
-    } : null;
-
-    await writeAuditLog(businessId, userId, 'create_post', 'Post', post.id, {
-      post_type: post.post_type,
-    });
-
-    res.status(201).json({
-      message: 'Post created as business',
-      post,
+    res.status(403).json({
+      error: require('./posts').BUSINESS_CANNOT_POST_ERROR,
+      code: 'BUSINESS_CANNOT_POST',
     });
   } catch (err) {
-    logger.error('Business post creation error', { error: err.message, businessId: req.params.businessId });
+    logger.error('Business post permission error', { error: err.message, businessId: req.params.businessId });
     res.status(500).json({ error: 'Failed to create business post' });
   }
 });

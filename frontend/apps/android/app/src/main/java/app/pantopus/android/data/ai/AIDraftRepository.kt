@@ -1,6 +1,8 @@
 package app.pantopus.android.data.ai
 
 import app.pantopus.android.data.api.models.ai.AIDraftListingVisionRequest
+import app.pantopus.android.data.api.models.ai.AIDraftPickupScheduleRequest
+import app.pantopus.android.data.api.models.ai.AIDraftPickupScheduleResponse
 import app.pantopus.android.data.api.models.ai.AIDraftPostRequest
 import app.pantopus.android.data.api.models.ai.AIListingVisionResponse
 import app.pantopus.android.data.api.models.ai.AIPostDraftResponse
@@ -23,4 +25,8 @@ class AIDraftRepository
 
         /** Single-turn post draft from a free-text prompt. Route `backend/routes/ai.js:218`. */
         suspend fun draftPost(request: AIDraftPostRequest): NetworkResult<AIPostDraftResponse> = safeApiCall { api.draftPost(request) }
+
+        /** Pickup days read from photos of a hauler's flyer. Route `backend/routes/ai.js:249`. */
+        suspend fun readPickupSchedule(request: AIDraftPickupScheduleRequest): NetworkResult<AIDraftPickupScheduleResponse> =
+            safeApiCall { api.draftPickupSchedule(request) }
     }
