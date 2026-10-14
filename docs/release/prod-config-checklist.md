@@ -54,8 +54,9 @@ here supersede their earlier status snapshots, not founder decisions.
   organization, with **No backups** shown. Storage lists only
   `home-documents` at 25 MB. The saved Auth Site URL and all four redirect URLs
   match P3. Custom SMTP is enabled at `smtp.postmarkapp.com`, port 587, and
-  email confirmation is on. Both **Apple and Google Auth providers are
-  disabled**. This pass did not replay migrations, export users or verify
+  email confirmation is on. Auth limits match S3: sign-ups/sign-ins 300,
+  refreshes 1500 and verifications 300 per five minutes. Both **Apple and
+  Google Auth providers are disabled**. This pass did not replay migrations, export users or verify
   SMTP delivery, OAuth sign-in, Storage policies or the server's private env file.
 - [x] Verified Apple's native App IDs already exist. The main app has
   Sign In with Apple, Push Notifications, Associated Domains and App Groups
