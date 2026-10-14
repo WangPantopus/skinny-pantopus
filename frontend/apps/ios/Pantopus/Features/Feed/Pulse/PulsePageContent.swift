@@ -119,12 +119,13 @@ public struct PulsePageEnd: Sendable, Hashable {
 public struct PulsePageContent: Sendable, Hashable {
     public let areaName: String
     public var groups: [PulsePageGroup]
-    public let end: PulsePageEnd
+    public var end: PulsePageEnd
     /// `meter` or `set_up_home`: the quiet-state card shows; nil: no card.
     public let quietCard: String?
     /// When this read was made: `after` for the new-conversations count and
     /// `through` for the seen marker.
     public let readAt: Date
+    public let readThrough: String?
 
     public var isEmpty: Bool {
         groups.allSatisfy(\.cards.isEmpty)
@@ -314,7 +315,8 @@ public extension PulseFeedResponse {
                 earlierCursor: cursor
             ),
             quietCard: quiet?.card,
-            readAt: readAt
+            readAt: PulsePageWords.parseDate(self.readAt) ?? readAt,
+            readThrough: PulsePageWords.parseDate(self.readAt) == nil ? nil : self.readAt
         )
     }
 }

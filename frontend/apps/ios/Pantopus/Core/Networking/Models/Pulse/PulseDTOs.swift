@@ -318,6 +318,7 @@ public struct PulseModerationDTO: Decodable, Sendable, Hashable {
 public struct PulseFeedResponse: Decodable, Sendable, Hashable {
     /// `nearby` or `following`.
     public let view: String?
+    public let readAt: String?
     /// The area being read (the viewer's town by default).
     public let area: PulseAreaDTO?
     /// The area pill's choices (S5).
@@ -331,11 +332,13 @@ public struct PulseFeedResponse: Decodable, Sendable, Hashable {
     private enum CodingKeys: String, CodingKey {
         case view, area, quiet, groups, end
         case areasAvailable = "areas_available"
+        case readAt = "read_at"
     }
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         view = c.lenient(String.self, forKey: .view)
+        readAt = c.lenient(String.self, forKey: .readAt)
         area = c.lenient(PulseAreaDTO.self, forKey: .area)
         areasAvailable = c.lossyList(PulseAreaDTO.self, forKey: .areasAvailable)
         quiet = c.lenient(PulseFeedQuietDTO.self, forKey: .quiet)
@@ -451,4 +454,9 @@ public struct PulseFeedNewCountResponse: Decodable, Sendable, Hashable {
 public struct PulseFeedSeenRequest: Encodable, Sendable {
     public let view: String
     public let through: String
+}
+
+public struct PulseFeedSeenResponse: Decodable, Sendable {
+    public let ok: Bool?
+    public let through: String?
 }

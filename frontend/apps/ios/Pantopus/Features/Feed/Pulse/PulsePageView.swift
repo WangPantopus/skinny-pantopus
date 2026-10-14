@@ -276,7 +276,7 @@ public struct PulsePageView: View {
 
     private var visibleEndRead: Date? {
         guard pageIsActive, case let .loaded(content) = viewModel.state,
-              endVisibleForRead == content.readAt else { return nil }
+              content.end.caughtUp, endVisibleForRead == content.readAt else { return nil }
         return content.readAt
     }
 

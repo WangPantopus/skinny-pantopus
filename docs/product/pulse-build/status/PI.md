@@ -2,7 +2,17 @@
 
 Owner: the PI session. Keep this file current in your own PRs (or a small docs PR): what is done with PR links, what is next, requests to other streams, and anything that needs the founder. Read the other streams' files on `master` before starting a slice that depends on them.
 
-## Handoff checkpoint — October 14, 2026
+## Continuation checkpoint — October 14, 2026
+
+This section supersedes the earlier handoff and runtime observations below. The iOS lane remains unfinished; green CI alone does not authorize a merge.
+
+- Integrated master `b4234543c` into S6 and carried S6 commit `c70b8aa96` into S9. Contract #2310 now drives optional server `read_at`, opaque earlier cursors, area-aware count/paging, updated earlier-page `caught_up` and monotonic `{ ok, through }` acknowledgments. Missing or malformed snapshot times do not advance a marker. `viewer.can_share` remains optional.
+- Dependency audit: distance #2311, feed #2312, claims contract #2313 and conversation reads #2317 remain open. H4 still blocks merging S6/S9. Helpful, Thanks, claims, narrowing and account-deletion preservation are not implemented on PB's inspected S9 branch. Do not infer backend completion from these client controls.
+- Recreated PI's isolated database, frozen dependencies, two synthetic accounts and new `Pulse-PI` / `Pulse-PI-SE` simulators. The private #2317 backend source copy uses only PI's database on 56100; this is provisional integration, not acceptance against merged routes. Web runs on 56101. Private tools, credentials and evidence remain outside Git.
+- S6 SwiftLint strict, SwiftFormat lint, icon and overline checks pass. An exact committed S6 source copy is building with four compiler jobs in PI's private runtime so S9 edits cannot change its inputs. Existing tests and native scenarios remain pending.
+- Web: synthetic Alice signed in, opened My posts and the detail panel, and sent a reply successfully. Reload restored the post panel as “Post not found”; the surrounding authenticated page still loads. Direct-page reload and the native round trip remain to verify. No web source changes are retained.
+
+## Earlier handoff — October 14, 2026 (historical)
 
 The founder requested a committed, pushed handoff and removal of PI's local resources. This section is the current checkpoint; dated observations below are history, not the current runtime state. The iOS lane is **unfinished**. Do not merge the drafts merely because CI passes.
 
