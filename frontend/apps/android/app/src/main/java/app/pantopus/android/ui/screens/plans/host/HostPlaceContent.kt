@@ -495,4 +495,3 @@ private fun previewPoint(ui: HostUi): LatLng? =
     } else {
         ui.draft.place?.let { LatLng(it.latitude, it.longitude) }
     }
-
