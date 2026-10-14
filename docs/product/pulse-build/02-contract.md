@@ -31,7 +31,7 @@ Checked against `master` on October 13, 2026: `backend/routes/posts.js`, `backen
 | `follow.ends` | `on_resolve`, `week`, `never` |
 | `area.kind` | `town`, `neighborhood`, `street`, `place` |
 
-Heads-up kinds a resident may create: `road_hazard`, `power_outage`, `weather_damage`, `hazard`, `other`. Official and curator accounts additionally: `official_notice`, `public_safety`, `crime_incident` (with `sourceUrl`). `theft`, `vandalism`, `suspicious`, `scam` are rejected at creation (`ALERT_KIND_NOT_ALLOWED`) and remain valid when reading old rows.
+Heads-up kinds a resident may create: `road_hazard`, `power_outage`, `weather_damage`, `hazard`, `other`, and `missing_pet` (an existing alert template, kept). Official and curator accounts additionally: `official_notice`, `public_safety`, `crime_incident`, each with `sourceUrl`. `theft`, `vandalism`, `suspicious`, `scam` are rejected at creation for everyone (`ALERT_KIND_NOT_ALLOWED`) and remain valid when reading old rows (older posts store them as `crime_incident` or `public_safety`). An edit may change a post's kind only to one its author may create. `hazard` and `other` are stored as themselves (before S1, `other` was stored as `public_safety`).
 
 ## 2. Frozen shapes
 
@@ -119,7 +119,7 @@ Query: `view` = `nearby` (default) | `following`; `topic` (enum, optional); `are
 
 ### 2.5 Creating a post (Pulse mode)
 
-`POST /api/posts` is the one creation path. A request is in **Pulse mode** when it contains `readScope`. New optional fields (camelCase): `readScope`, `areaId`, `topic` (the 12), `postType` (adds `share`, `offer`), `claimMode`, `expiresAt` (alerts only: the time the heads-up names), `sourceUrl` (official or curator alerts), `locationName` (Share needs a place: `locationName` or `areaId` besides the town). In Pulse mode the server:
+`POST /api/posts` is the one creation path. A request is in **Pulse mode** when it contains `readScope`. New optional fields (camelCase): `readScope`, `areaId`, `topic` (the 12), `postType` (adds `share`, `offer`), `claimMode`, `expiresAt` (alerts only: the time the heads-up names), `sourceUrl` (official or curator alerts; accepted in every mode since S1, stored as `post_metadata.source_url` only on an Official or curator alert; a `source_url` sent inside `postMetadata` is dropped), `locationName` (Share needs a place: `locationName` or `areaId` besides the town). In Pulse mode the server:
 
 1. requires the adult attestation (`ADULT_ATTESTATION_REQUIRED`) and applies the label limits (section 5);
 2. runs the composer checks (PS's `evaluateComposerChecks`); a blocking result returns `422 COMPOSER_BLOCKED` with the same `blocks` list the check endpoint returns, and nothing is created;
@@ -252,8 +252,8 @@ author → yes · `moderation_state` `removed` → the author only; `held` → t
 | 403 | `ADULT_ATTESTATION_REQUIRED` | First Pulse post or reply without the attestation |
 | 403 | `NEEDS_VERIFIED_ADDRESS` | Street or neighborhood post or read without a verified home in that area |
 | 403 | `AUDIENCE_NOT_ALLOWED` | The chosen `readScope` or `areaId` isn't one the author may use |
-| 403 | `BUSINESS_CANNOT_POST` | A business identity posting to the Place feed |
-| 400 | `ALERT_KIND_NOT_ALLOWED` | A Heads-up kind the author may not create |
+| 403 | `BUSINESS_CANNOT_POST` | A business identity posting to the Place feed: `POST /api/posts` with `postAs: 'business'` (or a `businessId`) and a local audience or the `place` target, and every `POST /api/businesses/:businessId/posts` (in force since S1) |
+| 400 | `ALERT_KIND_NOT_ALLOWED` | A Heads-up kind the author may not create, or an Official or curator notice without `sourceUrl`; on create and on an edit that changes the kind (in force since S1) |
 | 422 | `COMPOSER_BLOCKED` | A call-out or private detail; body carries `blocks` |
 | 429 | `DAILY_LIMIT_REACHED` | `{ limit, resets_at, scope }` |
 | 429 | `SHARE_WEEKLY_CAP` | The third Share in a rolling week |
