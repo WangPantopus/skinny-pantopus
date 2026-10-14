@@ -63,7 +63,11 @@ Heads-up kinds a resident may create: `road_hazard`, `power_outage`, `weather_da
   "event": null,                  // { starts_at, ends_at, venue } for events
   "lost_found": null,             // { kind: "lost" | "found" }
   "offer": null,                  // { claim_mode, requests_open, gone } for offers
-  "viewer": { "is_author": false, "following": false, "can_mark_helpful": false },
+  "viewer": {
+    "is_author": false, "following": false, "can_mark_helpful": false,
+    "saved": false,               // the viewer saved it; POST /api/posts/:id/save toggles it, as on today's cards
+    "can_keep_open": false        // the asker's own open Ask, not yet kept open (2.12); false for everyone else
+  },
   "moderation": { "state": "live" }   // "held" / "removed" only ever reaches the author
 }
 ```
@@ -111,6 +115,7 @@ Query: `view` = `nearby` (default) | `following`; `topic` (enum, optional); `are
 - `earlier_before` returns the next older items in one flat group `{ "key": "earlier", "title": "EARLIER", … }` (the client appends it below the end card); nothing loads by itself.
 - `GET /api/pulse/feed/new?view=&topic=&after=<iso>` → `{ "count": 3 }` for the "↑ 3 new conversations" pill (poll about once a minute while the screen is visible, or on a socket event).
 - `POST /api/pulse/feed/seen` `{ "view": "nearby", "through": "<iso>" }` advances the marker. The client calls it when the end card has been on screen, never earlier.
+- The marker belongs to the view, not to a topic, and there is no per-topic marker. With a `topic` chosen, the page reads from the same marker, and the client does not call `/feed/seen` from it: a topic page shows only part of the view, so moving the view's marker would put the other topics' unseen posts behind "Show earlier". Only the unfiltered page (no `topic`) moves the marker.
 - Reader checks (section 5) apply to every item; hidden, muted, blocked and held items never appear. The legacy `/api/posts/feed` keeps its shape for the web.
 
 ### 2.4 Conversation
@@ -184,7 +189,7 @@ Private note to a home (signed): `POST /api/pulse/notes` `{ "toHomeId"? | "toPos
 
 The asker's two actions on an open Ask, offered by the day-6 reminder (`ask_still_open`, section 6) and on the Ask itself when `viewer.is_author`:
 
-- `POST /api/pulse/posts/:postId/keep-open`, no body → `{ "post_status": { "state": "open", "resolution": null, "ends_at": "<iso>" } }`. Moves the end 7 days past where it was, once per Ask (stored as `post_metadata.kept_open_at`); a second time answers `409 ALREADY_KEPT_OPEN`.
+- `POST /api/pulse/posts/:postId/keep-open`, no body → `{ "post_status": { "state": "open", "resolution": null, "ends_at": "<iso>" } }`. Moves the end 7 days past where it was, once per Ask (stored as `post_metadata.kept_open_at`); a second time answers `409 ALREADY_KEPT_OPEN`. On a `PulsePost`, `viewer.can_keep_open` is true exactly when this call would succeed, so clients offer "Keep open 7 more days" only then.
 - `POST /api/pulse/posts/:postId/close`, no body → `{ "post_status": { "state": "resolved", "resolution": "closed" | "closed_unanswered" } }`. `closed` when someone other than the asker replied, `closed_unanswered` when nobody did. The Ask leaves the views like any ended post; restoring it from My posts reopens it for another window (section 5).
 
 Both answer `404 POST_NOT_FOUND`, `403 NOT_POST_AUTHOR` (not the asker), `400 NOT_AN_ASK` (another type), and `409 ASK_ENDED` when the Ask is already answered, closed or past its end.
