@@ -34,6 +34,9 @@ private struct PulsePostOverride {
     var isSolved: Bool?
     var hasReacted: Bool?
     var likeCount: Int?
+    /// The asker kept the Ask open; `expiresAt` is its new end (Pulse S7).
+    var keptOpen: Bool?
+    var expiresAt: String?
 }
 
 /// Pulse / Connections / Beacons feed view-model. The same engine backs all
@@ -169,6 +172,9 @@ public final class PulseFeedViewModel {
 
     /// The post whose author is awaiting mute confirmation, if any.
     public var mutingPostId: String?
+
+    /// The asker's Ask awaiting "Close this question?", if any (Pulse S7).
+    public var closingAskPostId: String?
 
     /// True while the preferences sheet is presented.
     public var showsPreferences = false
@@ -656,6 +662,47 @@ public final class PulseFeedViewModel {
         )
     }
 
+    /// "Keep open 7 more days" on the asker's own open Ask (contract §2.12):
+    /// once; the card keeps its place and the Ask its replies.
+    public func keepAskOpen(postId: String) async {
+        do {
+            let response: PulseAskActionResponse = try await api.request(PulseEndpoints.keepAskOpen(postId: postId))
+            overrides[postId, default: PulsePostOverride()].keptOpen = true
+            if let endsAt = response.postStatus?.endsAt {
+                overrides[postId, default: PulsePostOverride()].expiresAt = endsAt
+            }
+            toastMessage = "Kept open for 7 more days."
+        } catch {
+            // Already kept open (another device, an earlier tap): the option goes away.
+            if Self.serverCode(error) == "ALREADY_KEPT_OPEN" {
+                overrides[postId, default: PulsePostOverride()].keptOpen = true
+            }
+            toastMessage = (error as? APIError)?.errorDescription ?? "Couldn't keep it open."
+        }
+        rebuildLoadedState()
+    }
+
+    /// "Close" on the asker's own open Ask, after "Close this question?"
+    /// (contract §2.12): it ends and leaves Pulse; My posts can restore it.
+    public func closeAsk(postId: String) async {
+        do {
+            _ = try await api.request(PulseEndpoints.closeAsk(postId: postId), as: PulseAskActionResponse.self)
+            removedPostIds.insert(postId)
+            rebuildLoadedState()
+            toastMessage = "Question closed."
+            // My posts lists it under Archived; the saved feed pages still hold it.
+            PulsePostsRefresh.notifyPostsDidChange()
+        } catch {
+            toastMessage = (error as? APIError)?.errorDescription ?? "Couldn't close it."
+        }
+    }
+
+    /// The server's `code` for a refused request, when it sent one.
+    private static func serverCode(_ error: any Error) -> String? {
+        guard case let .clientError(_, body) = error as? APIError else { return nil }
+        return APIError.code(in: body)
+    }
+
     /// `POST /api/posts/:id/report` — one of the `reportPostSchema`
     /// reasons (`backend/routes/posts.js:3168`).
     public func reportPost(postId: String, reason: String) async {
@@ -1037,6 +1084,15 @@ public final class PulseFeedViewModel {
             : nil
         let isOwner = Self.isOwner(post: post, viewerId: viewerId)
         let isSolved = effectiveIsSolved(post)
+        let expiresAt = overrides[post.id]?.expiresAt ?? post.expiresAt
+        let askIsOpen = isOwner && !isSolved && PulsePostStatus.askIsOpen(
+            postType: post.postType,
+            state: post.state,
+            resolution: post.resolution,
+            expiresAt: expiresAt,
+            createdAt: post.createdAt
+        )
+        let keptOpen = post.keptOpenAt != nil || overrides[post.id]?.keptOpen == true
         return PulsePostCardContent(
             id: post.id,
             authorName: post.creator?.displayName ?? "Pantopus user",
@@ -1084,12 +1140,22 @@ public final class PulseFeedViewModel {
                 // A type this build doesn't know has no chip to name, so no type mute.
                 postType: intent == .generic ? nil : post.postType,
                 topicLabel: intent.cardChipLabel,
-                pending: pendingActions[post.id] ?? []
+                pending: pendingActions[post.id] ?? [],
+                canCloseAsk: askIsOpen,
+                canKeepAskOpen: askIsOpen && !keptOpen
             ),
             chipLabel: intent.chipLabel(lostFoundType: post.lostFoundType),
             isVisitor: post.isVisitorPost,
             origin: post.origin,
-            pulseTopic: PulseTopic(stored: post.topic)
+            pulseTopic: PulseTopic(stored: post.topic),
+            status: PulsePostStatus.from(
+                resolution: post.resolution,
+                // "Mark solved" tapped here reads as answered before the next read.
+                state: isSolved ? "solved" : post.state,
+                postType: post.postType,
+                goingCount: likeCount,
+                expiresAt: expiresAt
+            )
         )
     }
 

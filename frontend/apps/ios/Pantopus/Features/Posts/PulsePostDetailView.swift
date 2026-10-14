@@ -51,7 +51,7 @@ public struct PulsePostDetailView: View {
         return ZStack(alignment: .bottom) {
             content
             if let toast = viewModel.toastMessage {
-                ToastView(message: ToastMessage(text: toast, kind: .error))
+                ToastView(message: ToastMessage(text: toast, kind: viewModel.toastKind))
                     .padding(.bottom, Spacing.s10)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .task(id: toast) {
@@ -87,6 +87,16 @@ public struct PulsePostDetailView: View {
                 Button("Edit post") {
                     if case let .loaded(detail) = viewModel.state { onEdit(detail.post.id) }
                 }
+                if viewModel.canKeepAskOpen {
+                    Button("Keep open 7 more days") {
+                        Task { await viewModel.keepAskOpen() }
+                    }
+                    .accessibilityIdentifier("pulseAskKeepOpen")
+                }
+                if viewModel.canCloseAsk {
+                    Button("Close") { viewModel.showsCloseAskConfirm = true }
+                        .accessibilityIdentifier("pulseAskClose")
+                }
                 Button("Delete post", role: .destructive) { showsDeleteConfirm = true }
             } else {
                 Button("Report post", role: .destructive) { showsReportDialog = true }
@@ -104,6 +114,15 @@ public struct PulsePostDetailView: View {
                 }
             }
             Button("Cancel", role: .cancel) {}
+        }
+        .alert("Close this question?", isPresented: $bindable.showsCloseAskConfirm) {
+            Button("Close", role: .destructive) {
+                Task { await viewModel.closeAsk() }
+            }
+            .accessibilityIdentifier("pulseAskCloseConfirm")
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("It leaves Pulse. You can restore it from My posts.")
         }
         .alert("Delete this post?", isPresented: $showsDeleteConfirm) {
             Button("Delete", role: .destructive) {
@@ -317,6 +336,11 @@ public struct PulsePostDetailLoadedContent: View {
                         intent: detail.intent,
                         onAvatarTap: authorProfileTap
                     )
+                    // How it ended, or when a Heads-up ends (Pulse S7).
+                    if let status = detail.status {
+                        PulsePostStatusPill(status: status, postId: detail.post.id)
+                            .padding(.horizontal, Spacing.s4)
+                    }
                 }
             },
             body: {

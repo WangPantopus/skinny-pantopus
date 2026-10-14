@@ -753,7 +753,9 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
         } else {
             []
         }
+        // How the post ended (Pulse S7): the feed card's words, beside Archived.
         let chips = [intentChip(for: intent, isArchived: projection.isArchived)] + statusChips
+            + [lifecycleChip(for: dto)].compactMap(\.self)
         let cta: RowEngagementCTA? = if isRemoved {
             nil
         } else if projection.isArchived {
@@ -810,6 +812,27 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
             tint: .custom(
                 background: isArchived ? Theme.Color.appSurfaceSunken : palette.background,
                 foreground: isArchived ? Theme.Color.appTextSecondary : palette.foreground
+            )
+        )
+    }
+
+    /// How the post ended, or when a Heads-up ends, in the feed card's words
+    /// ("Answered", "Gone", "Reunited", "Happened · 3 went", "Ends Wed 4pm").
+    public static func lifecycleChip(for dto: MyPostDTO) -> RowChip? {
+        guard let status = PulsePostStatus.from(
+            resolution: dto.resolution,
+            state: dto.state,
+            postType: dto.postType,
+            goingCount: dto.likeCount,
+            expiresAt: dto.expiresAt
+        ) else { return nil }
+        let answered = status == .answered
+        return RowChip(
+            text: status.text,
+            icon: status.icon,
+            tint: .custom(
+                background: answered ? Theme.Color.successLight : Theme.Color.appSurfaceSunken,
+                foreground: answered ? Theme.Color.success : Theme.Color.appTextSecondary
             )
         )
     }

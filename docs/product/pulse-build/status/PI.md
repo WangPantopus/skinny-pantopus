@@ -14,7 +14,8 @@ Owner: the PI session. Keep this file current in your own PRs (or a small docs P
 
 ## Next
 
-- **S7 client** (status words on cards, the asker's Keep open / Close), then the Pulse page (S6) and the conversation (S9) against contract fixtures while PB's S5 and S6 land.
+- **S7 client** (status words on cards, the post page, My posts and Saved; the asker's Keep open / Close; the `ask_still_open` icon; a pull now refreshes an empty list, PB's report): built and checked on `Pulse-PI` and `Pulse-PI-SE` on branch `claude/pulse-pi-s7-status`, stacked on S4; PR after S4 merges.
+- Then the Pulse page (S6) and the conversation (S9) against contract fixtures while PB's S5 and S6 land.
 
 ### Agreed with PA (October 14), so both apps match
 

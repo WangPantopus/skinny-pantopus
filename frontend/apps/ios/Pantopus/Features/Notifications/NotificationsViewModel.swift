@@ -851,6 +851,8 @@ public final class NotificationsViewModel: ListOfRowsDataSource {
     ) -> RowModel {
         let unread = dto.isRead != true
         let category = NotificationCategory.from(rawType: dto.type)
+        // The day-6 Ask reminder (Pulse S7) has its own icon in its bucket.
+        let icon: PantopusIcon = dto.type?.lowercased() == "ask_still_open" ? .helpCircle : category.icon
         let rowId = dto.id
         let destructive = onDelete.map { handler in
             RowDestructiveAction(
@@ -863,7 +865,7 @@ public final class NotificationsViewModel: ListOfRowsDataSource {
             title: dto.title ?? "Notification",
             template: .statusChip,
             leading: .typeIcon(
-                category.icon,
+                icon,
                 background: category.tileBackground,
                 foreground: category.tileForeground
             ),
@@ -873,7 +875,7 @@ public final class NotificationsViewModel: ListOfRowsDataSource {
             chips: [
                 RowChip(
                     text: category.label,
-                    icon: category.icon,
+                    icon: icon,
                     tint: .status(category.chipVariant)
                 )
             ],

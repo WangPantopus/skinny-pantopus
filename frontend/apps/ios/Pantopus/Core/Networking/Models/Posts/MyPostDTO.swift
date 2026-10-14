@@ -37,6 +37,12 @@ public struct MyPostDTO: Decodable, Sendable, Hashable, Identifiable {
     public let archiveReason: String?
     /// Who wrote it (`author.displayName`); the Saved tab's rows name the author.
     public let authorName: String?
+    /// Lifecycle state: `open`, `solved` or `archived`.
+    public let state: String?
+    /// How the post ended (Pulse S7, contract §1); nil while open.
+    public let resolution: String?
+    /// When the post ends (ISO 8601), when it names a time.
+    public let expiresAt: String?
 
     public init(
         id: String,
@@ -54,7 +60,10 @@ public struct MyPostDTO: Decodable, Sendable, Hashable, Identifiable {
         lostFoundType: String? = nil,
         archivedAt: String? = nil,
         archiveReason: String? = nil,
-        authorName: String? = nil
+        authorName: String? = nil,
+        state: String? = nil,
+        resolution: String? = nil,
+        expiresAt: String? = nil
     ) {
         self.id = id
         self.userId = userId
@@ -72,6 +81,9 @@ public struct MyPostDTO: Decodable, Sendable, Hashable, Identifiable {
         self.archivedAt = archivedAt
         self.archiveReason = archiveReason
         self.authorName = authorName
+        self.state = state
+        self.resolution = resolution
+        self.expiresAt = expiresAt
     }
 
     /// A moderator removed the post, so it can't be restored.
@@ -95,6 +107,8 @@ public struct MyPostDTO: Decodable, Sendable, Hashable, Identifiable {
         case archivedAt = "archived_at"
         case archiveReason = "archive_reason"
         case author
+        case state, resolution
+        case expiresAt = "expires_at"
     }
 
     private struct AuthorBrief: Decodable {
@@ -121,6 +135,9 @@ public struct MyPostDTO: Decodable, Sendable, Hashable, Identifiable {
         archivedAt = c.lenient(String.self, forKey: .archivedAt)
         archiveReason = c.lenient(String.self, forKey: .archiveReason)
         authorName = c.lenient(AuthorBrief.self, forKey: .author)?.displayName
+        state = c.lenient(String.self, forKey: .state)
+        resolution = c.lenient(String.self, forKey: .resolution)
+        expiresAt = c.lenient(String.self, forKey: .expiresAt)
     }
 }
 

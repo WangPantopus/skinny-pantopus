@@ -244,6 +244,16 @@ public struct PostDetailDTO: Decodable, Sendable, Hashable, Identifiable {
     /// `moderation` when a moderator removed the post. Only its author can
     /// still open it then.
     public let archiveReason: String?
+    /// Lifecycle state: `open`, `solved` or `archived`.
+    public let state: String?
+    /// How the post ended (Pulse S7, contract §1); nil while open.
+    public let resolution: String?
+    /// When the post ends (ISO 8601), when it names a time.
+    public let expiresAt: String?
+    /// `choose` or `first`; it means something only on an offer.
+    public let claimMode: String?
+    /// The asker already used "Keep open 7 more days" (`post_metadata.kept_open_at`).
+    public let keptOpenAt: String?
 
     /// A moderator removed the post: neighbors can't see it or reply.
     public var isRemovedByModerator: Bool {
@@ -280,6 +290,10 @@ public struct PostDetailDTO: Decodable, Sendable, Hashable, Identifiable {
         case dealBusinessName = "deal_business_name"
         case locationName = "location_name"
         case archiveReason = "archive_reason"
+        case state, resolution
+        case expiresAt = "expires_at"
+        case claimMode = "claim_mode"
+        case postMetadata = "post_metadata"
     }
 
     /// Tolerant (Pulse S2): only `id` and `created_at` are required; any
@@ -322,6 +336,11 @@ public struct PostDetailDTO: Decodable, Sendable, Hashable, Identifiable {
         dealBusinessName = c.lenient(String.self, forKey: .dealBusinessName)
         locationName = c.lenient(String.self, forKey: .locationName)
         archiveReason = c.lenient(String.self, forKey: .archiveReason)
+        state = c.lenient(String.self, forKey: .state)
+        resolution = c.lenient(String.self, forKey: .resolution)
+        expiresAt = c.lenient(String.self, forKey: .expiresAt)
+        claimMode = c.lenient(String.self, forKey: .claimMode)
+        keptOpenAt = c.lenient(PostLifecycleMetadata.self, forKey: .postMetadata)?.keptOpenAt
     }
 }
 
@@ -363,6 +382,11 @@ extension PostDetailDTO {
         dealBusinessName = nil
         locationName = post.locationName
         archiveReason = nil
+        state = post.state
+        resolution = post.resolution
+        expiresAt = post.expiresAt
+        claimMode = post.claimMode
+        keptOpenAt = post.keptOpenAt
     }
 }
 
