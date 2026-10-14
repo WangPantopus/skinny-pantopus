@@ -158,6 +158,8 @@ extension PulsePostDetailViewModel {
             conversationReadAt = nil
             conversationPollAfter = nil
             conversationRefreshNotice = nil
+            offerRequestsState = .error("This conversation is no longer available.")
+            offerRequestStatus = nil
             state = .error(message: apiError.errorDescription ?? "This conversation is no longer available.", retryable: false)
             return true
         default:

@@ -69,7 +69,8 @@ struct PulseOfferRequestsSheet: View {
             }
             if claim.status == "requested", offer?.gone == false, offer?.claimMode == "choose" {
                 Button("Choose") { pendingChoice = claim }
-                    .pulseFont(.button).frame(minHeight: 44)
+                    .pulseFont(.button)
+                    .frame(minHeight: 44)
                     .disabled(!viewModel.pendingConversationActions.isEmpty)
                     .accessibilityLabel("Choose \(claim.author?.displayName ?? "this requester")")
                     .accessibilityIdentifier("pulseOfferChoose_\(claim.id)")

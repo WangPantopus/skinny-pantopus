@@ -8,13 +8,15 @@ enum PulseOfferRequestsState: Equatable {
 
 extension PulsePostDetailViewModel {
     var offerActionLabel: String {
+        if conversation?.post.offer?.gone == true, offerRequestStatus != "chosen" {
+            return offerRequestStatus == "requested" ? "Someone else got this one." : "Gone"
+        }
         switch offerRequestStatus {
         case "requested": return "Requested"
         case "chosen": return "It's yours"
         case "enough_requests": return "Enough requests already"
         case "gone": return "Gone"
         default:
-            if conversation?.post.offer?.gone == true { return "Gone" }
             if conversation?.post.action?.done == true { return "Requested" }
             if conversation?.post.offer?.requestsOpen == false { return "Enough requests already" }
             return "I'd like it"
@@ -33,7 +35,7 @@ extension PulsePostDetailViewModel {
         defer { finishConversationAction("claim") }
         do {
             let response: PulseOfferClaimResponse = try await client.request(PulseEndpoints.requestOffer(postId: postId))
-            guard let claim = response.claim, ["requested", "chosen"].contains(claim.status ?? "") else {
+            guard let claim = response.claim, !claim.id.isEmpty, ["requested", "chosen"].contains(claim.status ?? "") else {
                 showToast("Couldn't confirm your request. Try again.")
                 return
             }
@@ -72,6 +74,7 @@ extension PulsePostDetailViewModel {
     func chooseConversationOffer(_ claim: PulseOfferClaimDTO) async {
         guard isOwner, claim.status == "requested", case let .loaded(requests) = offerRequestsState,
               requests.offer?.gone == false, requests.offer?.claimMode == "choose",
+              requests.claims.contains(where: { $0.id == claim.id && $0.status == "requested" }),
               beginConversationAction("choose") else { return }
         defer { finishConversationAction("choose") }
         do {

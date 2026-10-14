@@ -130,17 +130,20 @@ struct PulseConversationDetailContent: View {
         if content.post.type == "offer" {
             if viewModel.isOwner {
                 Button("Requests", action: onOfferRequests)
-                    .pulseFont(.button).frame(minHeight: 44)
+                    .pulseFont(.button)
+                    .frame(minHeight: 44)
                     .accessibilityIdentifier("pulseOfferOpenRequests")
             } else {
                 Button(viewModel.offerActionLabel) { Task { await viewModel.requestConversationOffer() } }
-                    .pulseFont(.button).frame(minHeight: 44)
+                    .pulseFont(.button)
+                    .frame(minHeight: 44)
                     .disabled(!viewModel.canRequestOffer)
                     .accessibilityIdentifier("pulseOfferRequest")
             }
         } else if card.actionKind == "its_mine", !viewModel.isOwner, card.authorId != nil {
             Button("It's mine", action: onPrivateMessage)
-                .pulseFont(.button).frame(minHeight: 44)
+                .pulseFont(.button)
+                .frame(minHeight: 44)
                 .disabled(!viewModel.pendingConversationActions.isEmpty)
                 .accessibilityIdentifier("pulseLostFoundPrivateMessage")
         } else if ["answer", "reply", "going", "seen_it"].contains(card.actionKind ?? "reply") {

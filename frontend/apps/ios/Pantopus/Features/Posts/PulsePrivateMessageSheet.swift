@@ -28,7 +28,7 @@ struct PulsePrivateMessageSheet: View {
 
     var body: some View {
         NavigationStack {
-            ChatConversationView(viewModel: chat, onBack: { dismiss() })
+            ChatConversationView(viewModel: chat) { dismiss() }
                 .toolbar(.hidden, for: .navigationBar)
         }
     }
@@ -42,8 +42,9 @@ extension PulsePostDetailViewModel {
         defer { finishConversationAction("privateMessage") }
         do {
             let response: PulseConversationResponse = try await client.request(conversationEndpoint)
-            guard let post = response.post, post.type == "lost_found", post.action?.kind == "its_mine",
+            guard let post = response.post, post.id == postId, post.type == "lost_found", post.action?.kind == "its_mine",
                   post.moderation?.state == nil || post.moderation?.state == "live",
+                  case let .signedIn(user) = AuthManager.shared.state, user.id == currentUserId,
                   let authorId = post.author?.id, !authorId.isEmpty, authorId != currentUserId else {
                 showToast("This conversation is no longer available.")
                 return nil
