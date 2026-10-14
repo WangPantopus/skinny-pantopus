@@ -39,11 +39,11 @@ public struct NewItemsPill: View {
     public var body: some View {
         Button(action: action) {
             HStack(spacing: Spacing.s2) {
-                Icon(direction == .up ? .arrowUp : .arrowDown, size: 16, strokeWidth: 2.4, color: Theme.Color.appTextInverse)
+                Icon(direction == .up ? .arrowUp : .arrowDown, size: 16, strokeWidth: 2.4, color: Theme.Color.appBg)
                     .accessibilityHidden(true)
                 Text(text)
                     .pulseFont(.button)
-                    .foregroundStyle(Theme.Color.appTextInverse)
+                    .foregroundStyle(Theme.Color.appBg)
                     .multilineTextAlignment(.center)
             }
             .padding(.horizontal, Spacing.s4)
