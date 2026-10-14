@@ -66,6 +66,7 @@ Heads-up kinds a resident may create: `road_hazard`, `power_outage`, `weather_da
   "viewer": {
     "is_author": false, "following": false, "can_mark_helpful": false,
     "saved": false,               // the viewer saved it; POST /api/posts/:id/save toggles it, as on today's cards
+    "can_share": false,           // true only when isPubliclyShareable permits an external link; check before opening a share sheet
     "can_keep_open": false        // the asker's own open Ask, not yet kept open (2.12); false for everyone else
   },
   "moderation": { "state": "live" }   // "held" / "removed" only ever reaches the author
@@ -100,6 +101,7 @@ Query: `view` = `nearby` (default) | `following`; `topic` (enum, optional); `are
 ```jsonc
 {
   "view": "nearby",
+  "read_at": "2026-10-14T18:00:00Z", // server snapshot boundary; use for /new after and /seen through
   "area": { "id": "uuid", "kind": "town", "name": "Camas", "state": "WA" },
   "areas_available": [{ "id": "uuid", "kind": "town", "name": "Camas", "title": "Camas" }],   // area pill; streets and neighborhoods only when opened
   "quiet": null,   // or { "reason": "sparse" | "no_home" | "empty", "card": "meter" | "set_up_home" | null }
@@ -111,10 +113,11 @@ Query: `view` = `nearby` (default) | `following`; `topic` (enum, optional); `are
 }
 ```
 
+- `read_at` is the server time captured before the query; only items created at or before it enter the response. `end.since` is the lower bound of the new-items window, for the end card's wording; it is not a seen acknowledgment. Clients read `read_at` optionally until this backend ships and then use it instead of their device clock for polling and acknowledgments.
 - The first response holds items **newer than the viewer's last-seen marker** for that view (at least the last 24 hours if the marker is older), capped at `limit`. `caught_up` is true when nothing newer remains beyond the cap.
 - `earlier_before` returns the next older items in one flat group `{ "key": "earlier", "title": "EARLIER", … }` (the client appends it below the end card); nothing loads by itself.
-- `GET /api/pulse/feed/new?view=&topic=&after=<iso>` → `{ "count": 3 }` for the "↑ 3 new conversations" pill (poll about once a minute while the screen is visible, or on a socket event).
-- `POST /api/pulse/feed/seen` `{ "view": "nearby", "through": "<iso>" }` advances the marker. The client calls it when the end card has been on screen, never earlier.
+- `GET /api/pulse/feed/new?view=&topic=&area_id=&after=<iso>` → `{ "count": 3 }` for the "↑ 3 new conversations" pill (poll about once a minute while the screen is visible, or on a socket event). `area_id` is optional and uses the same area as `/feed`; a client browsing another area passes it to both routes.
+- `POST /api/pulse/feed/seen` `{ "view": "nearby", "through": "<iso>" }` advances the marker and returns `{ "ok": true, "through": "<iso>" }`. The stored marker never moves backward, including concurrent taps; a future `through` is capped at the server time. The client calls it when the unfiltered end card has been on screen and `caught_up` is true, never earlier.
 - The marker belongs to the view, not to a topic, and there is no per-topic marker. With a `topic` chosen, the page reads from the same marker, and the client does not call `/feed/seen` from it: a topic page shows only part of the view, so moving the view's marker would put the other topics' unseen posts behind "Show earlier". Only the unfiltered page (no `topic`) moves the marker.
 - Reader checks (section 5) apply to every item; hidden, muted, blocked and held items never appear. The legacy `/api/posts/feed` keeps its shape for the web.
 
