@@ -21,6 +21,7 @@ function resolutionWhenTimeRunsOut(post, repliedAskIds) {
 }
 
 // The ids of the Asks (rows with `id` and `user_id`) that someone other than the asker replied to.
+// A reply held for review or removed by moderation doesn't count: the asker never saw it.
 async function askIdsWithReplies(asks) {
   const replied = new Set();
   if (!asks.length) return replied;
@@ -32,6 +33,7 @@ async function askIdsWithReplies(asks) {
       .select('post_id, user_id')
       .in('post_id', [...askerByPost.keys()])
       .eq('is_deleted', false)
+      .eq('moderation_state', 'live')
       .order('id', { ascending: true })
       .range(from, from + REPLY_PAGE_SIZE - 1);
     if (error) throw new Error(`Failed to read replies: ${error.message}`);

@@ -206,4 +206,19 @@ async function readablePosts(posts, userId) {
   return (posts || []).filter((_, i) => readable[i] === true);
 }
 
-module.exports = { canReadPost, readablePosts, isPubliclyShareable, POST_READ_SELECT };
+// A reply held for review or removed by moderation (S11) reads only for its author, on a post the
+// viewer can read. `reply` needs `user_id` and `moderation_state`; without the state it reads as hidden.
+function canReadReply(reply, userId) {
+  return reply.moderation_state === 'live' || (!!userId && reply.user_id === userId);
+}
+
+// The same rule in a PostComment query, so lists filter before paging.
+function onlyShownReplies(query, userId) {
+  return userId
+    ? query.or(`moderation_state.eq.live,user_id.eq.${userId}`)
+    : query.eq('moderation_state', 'live');
+}
+
+module.exports = {
+  canReadPost, readablePosts, isPubliclyShareable, POST_READ_SELECT, canReadReply, onlyShownReplies,
+};
