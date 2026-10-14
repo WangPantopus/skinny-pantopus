@@ -2907,10 +2907,16 @@ router.post('/:id/comments', verifyToken, validate(createCommentSchema), async (
     });
     if (!post) return;
 
+    let parent = null;
     if (parentCommentId) {
-      const { data: parent } = await supabaseAdmin.from('PostComment').select('id, post_id')
-        .eq('id', parentCommentId).eq('is_deleted', false).maybeSingle();
+      ({ data: parent } = await supabaseAdmin.from('PostComment').select('id, post_id, user_id')
+        .eq('id', parentCommentId).eq('is_deleted', false).maybeSingle());
       if (!parent || parent.post_id !== postId) return res.status(400).json({ error: 'Invalid parent comment' });
+      // Blocks hide people from each other in both directions, so nobody replies to someone across one
+      // (their comment list already hides that reply, and the reply notification would reach them).
+      if (await blockService.isBlocked(userId, parent.user_id)) {
+        return res.status(403).json({ error: "You can't reply to this comment." });
+      }
     }
 
     const normalizedComment = typeof comment === 'string' ? comment.trim() : '';
@@ -2972,9 +2978,9 @@ router.post('/:id/comments', verifyToken, validate(createCommentSchema), async (
     }
     if (!newComment) throw new Error('Comment insert returned no row');
 
-    // Notify post owner of new comment (not on own post)
+    // Notify post owner of new comment (not on own post, and never across a block)
     if (post.user_id !== userId) {
-      commenterName().then(name => {
+      blockService.isBlocked(userId, post.user_id).then(blocked => blocked ? null : commenterName().then(name => {
         notificationService.createNotification({
           userId: post.user_id,
           type: 'post_commented',
@@ -2989,30 +2995,27 @@ router.post('/:id/comments', verifyToken, validate(createCommentSchema), async (
             ...(audienceAuthors ? { persona_id: post.identity_context_id } : { user_id: userId }),
           },
         });
-      }).catch(err => {
+      })).catch(err => {
         logger.warn('Comment notification failed (non-blocking)', { error: err.message, postId });
       });
     }
 
     // Notify parent comment author of reply (if different from commenter and post owner)
-    if (parentCommentId) {
-      const { data: parentComment } = await supabaseAdmin.from('PostComment').select('user_id').eq('id', parentCommentId).single();
-      if (parentComment && parentComment.user_id !== userId && parentComment.user_id !== post.user_id) {
-        commenterName().then(name => {
-          notificationService.createNotification({
-            userId: parentComment.user_id,
-            type: 'comment_replied',
-            title: `${name} replied to your comment`,
-            body: normalizedComment.length > 100 ? normalizedComment.substring(0, 100) + '…' : normalizedComment,
-            icon: '💬',
-            ...(audienceAuthors ? { context: 'audience' } : {}),
-            link: `/posts/${postId}`,
-            metadata: { post_id: postId, comment_id: newComment.id, parent_comment_id: parentCommentId, ...(audienceAuthors ? { persona_id: post.identity_context_id } : { user_id: userId }) },
-          });
-        }).catch(err => {
-          logger.warn('Reply notification failed (non-blocking)', { error: err.message, postId });
+    if (parent && parent.user_id !== userId && parent.user_id !== post.user_id) {
+      commenterName().then(name => {
+        notificationService.createNotification({
+          userId: parent.user_id,
+          type: 'comment_replied',
+          title: `${name} replied to your comment`,
+          body: normalizedComment.length > 100 ? normalizedComment.substring(0, 100) + '…' : normalizedComment,
+          icon: '💬',
+          ...(audienceAuthors ? { context: 'audience' } : {}),
+          link: `/posts/${postId}`,
+          metadata: { post_id: postId, comment_id: newComment.id, parent_comment_id: parentCommentId, ...(audienceAuthors ? { persona_id: post.identity_context_id } : { user_id: userId }) },
         });
-      }
+      }).catch(err => {
+        logger.warn('Reply notification failed (non-blocking)', { error: err.message, postId });
+      });
     }
 
     res.status(201).json({
