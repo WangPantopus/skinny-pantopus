@@ -66,24 +66,7 @@ fun PlanChangeScreen(
     LaunchedEffect(Unit) { viewModel.load() }
     LaunchedEffect(ui.saved) { if (ui.saved) onDone() }
     if (ui.picking) {
-        BackHandler(onBack = viewModel::closePlaces)
-        PublicPlacePicker(
-            state =
-                PlacePickerState(
-                    kind = ui.plan?.planKind ?: PlanKind.WATCH_PARTY,
-                    candidate = ui.placeCandidate,
-                    query = ui.placesQuery,
-                    places = ui.places,
-                    loading = ui.placesLoading,
-                    attribution = ui.placesAttribution,
-                    origin = ui.placesOrigin,
-                    error = ui.error,
-                ),
-            onClose = viewModel::closePlaces,
-            onUse = viewModel::usePlace,
-            onSearch = viewModel::searchPlaces,
-            onPick = viewModel::pickPlaceCandidate,
-        )
+        ChangePlacePicker(ui, viewModel)
         return
     }
     val clock = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
@@ -130,6 +113,32 @@ fun PlanChangeScreen(
             NotificationPreview(ui)
         }
     }
+}
+
+/** H6 over H11: another public place for the plan, near the one it's at; Back returns to H11. */
+@Composable
+private fun ChangePlacePicker(
+    ui: PlanChangeUi,
+    viewModel: PlanChangeViewModel,
+) {
+    BackHandler(onBack = viewModel::closePlaces)
+    PublicPlacePicker(
+        state =
+            PlacePickerState(
+                kind = ui.plan?.planKind ?: PlanKind.WATCH_PARTY,
+                candidate = ui.placeCandidate,
+                query = ui.placesQuery,
+                places = ui.places,
+                loading = ui.placesLoading,
+                attribution = ui.placesAttribution,
+                origin = ui.placesOrigin,
+                error = ui.error,
+            ),
+        onClose = viewModel::closePlaces,
+        onUse = viewModel::usePlace,
+        onSearch = viewModel::searchPlaces,
+        onPick = viewModel::pickPlaceCandidate,
+    )
 }
 
 /** "Where": the plan's place, or the new one in the accent color, opening H6 (public plans, as on iOS). */

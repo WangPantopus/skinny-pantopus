@@ -240,10 +240,10 @@ private fun RequestCard(
         // TalkBack hears whom each button answers ("Accept Priya"), as VoiceOver does on iOS.
         val first = user?.displayName?.takeIf { it.isNotBlank() }?.let(PlanFormat::firstName) ?: "Neighbor"
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            SpokenAs("Decline $first", enabled = !working, onClick = onDecline, modifier = Modifier.weight(1f)) {
+            SpokenAs("Decline $first", enabled = !working, action = onDecline, modifier = Modifier.weight(1f)) {
                 GhostButton(title = "Decline", onClick = onDecline, isEnabled = !working)
             }
-            SpokenAs("Accept $first", enabled = !working, onClick = onAccept, modifier = Modifier.weight(1f)) {
+            SpokenAs("Accept $first", enabled = !working, action = onAccept, modifier = Modifier.weight(1f)) {
                 PrimaryButton(title = "Accept", onClick = onAccept, isLoading = working)
             }
         }
@@ -255,7 +255,7 @@ private fun RequestCard(
 private fun SpokenAs(
     label: String,
     enabled: Boolean,
-    onClick: () -> Unit,
+    action: () -> Unit,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
@@ -266,7 +266,7 @@ private fun SpokenAs(
                 role = Role.Button
                 if (enabled) {
                     onClick(label = label) {
-                        onClick()
+                        action()
                         true
                     }
                 } else {

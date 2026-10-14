@@ -156,7 +156,7 @@ class PlanChangeViewModel
         fun usePlace() {
             val place = _ui.value.placeCandidate ?: return
             val current = _ui.value.plan?.place
-            val same = current?.name == place.name && current.latitude == place.latitude && current.longitude == place.longitude
+            val same = current != null && current.name == place.name && current.latitude == place.latitude && current.longitude == place.longitude
             _ui.update { it.copy(picking = false, newPlace = if (same) null else place, error = null) }
         }
 
