@@ -180,6 +180,15 @@ Private note to a home (signed): `POST /api/pulse/notes` `{ "toHomeId"? | "toPos
 
 `GET /api/pulse/notices` → the author's own held and removed items `{ id, target_type, target_id, state, rule_code, reason_text, created_at, can_appeal }` · `POST /api/pulse/appeals` `{ "noticeId", "message" }` → `{ "appeal": {...} }`. The moderator console uses the existing `backend/routes/adminReports.js` and web `app/admin/reports`, extended.
 
+### 2.12 Ending an Ask (S7)
+
+The asker's two actions on an open Ask, offered by the day-6 reminder (`ask_still_open`, section 6) and on the Ask itself when `viewer.is_author`:
+
+- `POST /api/pulse/posts/:postId/keep-open`, no body → `{ "post_status": { "state": "open", "resolution": null, "ends_at": "<iso>" } }`. Moves the end 7 days past where it was, once per Ask (stored as `post_metadata.kept_open_at`); a second time answers `409 ALREADY_KEPT_OPEN`.
+- `POST /api/pulse/posts/:postId/close`, no body → `{ "post_status": { "state": "resolved", "resolution": "closed" | "closed_unanswered" } }`. `closed` when someone other than the asker replied, `closed_unanswered` when nobody did. The Ask leaves the views like any ended post; restoring it from My posts reopens it for another window (section 5).
+
+Both answer `404 POST_NOT_FOUND`, `403 NOT_POST_AUTHOR` (not the asker), `400 NOT_AN_ASK` (another type), and `409 ASK_ENDED` when the Ask is already answered, closed or past its end.
+
 ## 3. Outlined (shapes are published by the owner before the first client PR)
 
 | Slice | Endpoints (owner) |
@@ -236,11 +245,11 @@ author → yes · `moderation_state` `removed` → the author only; `held` → t
 
 **Limits** (constants in one file): Visitor: Asks only, 1 a day · New here: 2 town posts a day · Share: 2 per person per rolling 7 days · offer requests: 5 per offer · replies: 5 a minute per post (today's) · heated pair: 1 reply an hour to each other in that conversation (PS) · business replies: weekly cap (R4).
 
-**How posts end** (S7, `backend/jobs/autoArchivePosts.js`, hourly): a post with `expires_at` ends at that time, whatever its audience. Older posts (no `expires_at`) end as before, local audiences only: by `PostCategoryTTL` days from `created_at`; events 24 hours after `event_end_date`, or after `event_date` when there is no end; deals by `deal_expires_at`; stories by `story_expires_at`. Ending archives the post and, unless it already has a resolution, sets `resolution` with `state: archived`: an Ask someone other than the asker replied to `closed`, one nobody did `closed_unanswered`; Lost and found `closed`; an Event `happened`; anything else `expired`. An answered Ask keeps `answered` and `state: solved`. The views (`/api/posts/feed`, `/api/posts/map`, the Sports lane and global pins, and `/api/pulse/feed` from S6) leave out a post whose `expires_at` has passed at once, before the job runs. Restoring a post that ended by time (`POST /api/posts/:id/unarchive`) gives it one more of its type's windows from now and reopens it (`state: open`, `resolution: null`) unless it ended its own way.
+**How posts end** (S7, `backend/jobs/autoArchivePosts.js`, hourly): a post with `expires_at` ends at that time, whatever its audience. Older posts (no `expires_at`) end as before, local audiences only: by `PostCategoryTTL` days from `created_at`; events 24 hours after `event_end_date`, or after `event_date` when there is no end; deals by `deal_expires_at`; stories by `story_expires_at`. Ending archives the post and, unless it already has a resolution, sets `resolution` with `state: archived`: an Ask someone other than the asker replied to `closed`, one nobody did `closed_unanswered`; Lost and found `closed`; an Event `happened`; anything else `expired`. An answered Ask keeps `answered` and `state: solved`. The views (`/api/posts/feed`, `/api/posts/map`, the Sports lane and global pins, and `/api/pulse/feed` from S6) leave out a post whose `expires_at` has passed at once, before the job runs. Restoring a post that ended by time, or an Ask its author closed (`POST /api/posts/:id/unarchive`), gives it one more of its type's windows from now and reopens it (`state: open`, `resolution: null`) unless it ended its own way.
 
 ## 6. Notifications (additive types)
 
-`pulse_helpful` (a reply was marked Helpful), `pulse_thanks` (private thanks), `offer_request` (instant, to the giver), `offer_chosen` / `offer_gone` (to requesters), `ask_still_open` (the day-6 reminder: "Did a reply help?" or "Still need an answer?"), `pulse_moderation_notice` (held, removed, restored, appeal decided). Existing `post_commented` and `comment_replied` stay instant. All respect quiet hours except Right now. Copy is in the build spec's appendix or written by the owning stream in plain words.
+`pulse_helpful` (a reply was marked Helpful), `pulse_thanks` (private thanks), `offer_request` (instant, to the giver), `offer_chosen` / `offer_gone` (to requesters), `ask_still_open` (the day-6 reminder, once per Ask, sent in the first hour outside the asker's quiet hours on the Ask's last day: "Did a reply help?" when someone else replied, "Still need an answer?" when nobody did; `link` `/posts/<id>`, `metadata` `{ post_id, has_replies }`; its actions are section 2.12; in force since S7), `pulse_moderation_notice` (held, removed, restored, appeal decided). Existing `post_commented` and `comment_replied` stay instant. All respect quiet hours except Right now. Copy is in the build spec's appendix or written by the owning stream in plain words.
 
 ## 7. Routing (tabs)
 
@@ -265,6 +274,11 @@ author → yes · `moderation_state` `removed` → the author only; `held` → t
 | 429 | `SHARE_WEEKLY_CAP` | The third Share in a rolling week |
 | 409 | `OFFER_GONE` | Claiming or choosing on an offer already claimed |
 | 429 | `ENOUGH_REQUESTS` | The sixth request on an offer |
+| 404 | `POST_NOT_FOUND` | The post doesn't exist (section 2.12) |
+| 403 | `NOT_POST_AUTHOR` | Someone other than the asker keeps open or closes an Ask (section 2.12) |
+| 400 | `NOT_AN_ASK` | Keep-open or close on a post that isn't an Ask (section 2.12) |
+| 409 | `ASK_ENDED` | Keep-open or close on an Ask already answered, closed or past its end (section 2.12) |
+| 409 | `ALREADY_KEPT_OPEN` | A second keep-open on the same Ask (section 2.12) |
 
 ## 9. Funnel events
 

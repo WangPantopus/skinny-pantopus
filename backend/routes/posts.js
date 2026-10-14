@@ -211,6 +211,7 @@ const AUDIENCE_TYPES = ['connections', 'followers', 'network', 'nearby', 'saved_
 const LOCAL_AUDIENCES = ['nearby', 'neighborhood', 'saved_place', 'target_area'];
 
 const { PULSE_TOPICS, PULSE_TOPIC_NAMES, isPulseTopic } = require('../services/pulse/topics');
+const pulseLifecycle = require('../services/pulse/lifecycle');
 // The one read check every path uses (this file keeps calling it canViewPost).
 const { canReadPost: canViewPost, readablePosts, isPubliclyShareable, POST_READ_SELECT } = require('../services/pulse/readAccess');
 
@@ -2687,9 +2688,6 @@ router.post('/:id/archive', verifyToken, async (req, res) => {
   }
 });
 
-// How a post ended when its time ran out (the archive job's endings, contract §1).
-const TIMED_OUT_RESOLUTIONS = ['expired', 'closed', 'closed_unanswered', 'happened'];
-
 router.post('/:id/unarchive', verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
@@ -2704,15 +2702,16 @@ router.post('/:id/unarchive', verifyToken, async (req, res) => {
 
     const updatedAt = new Date().toISOString();
     const restored = { archived_at: null, updated_at: updatedAt };
-    if (existing.archive_reason === 'expired') {
-      // A post that ended by time comes back for one more of its type's windows from now, open
-      // again unless it ended its own way (contract §5); otherwise the next job run would end it.
-      const { data: ttl } = await supabaseAdmin
-        .from('PostCategoryTTL').select('ttl_days').eq('post_type', existing.post_type).maybeSingle();
-      const days = ttl?.ttl_days || 7;
+    if (['expired', 'resolved'].includes(existing.archive_reason)) {
+      // A post that ended by time, or an Ask its author closed, comes back for one more of its type's
+      // windows from now, open again unless it ended its own way (contract §5); otherwise the next
+      // job run would end it.
+      const days = await pulseLifecycle.windowDays(existing.post_type);
       restored.is_archived = false;
-      restored.expires_at = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
-      if (TIMED_OUT_RESOLUTIONS.includes(existing.resolution)) Object.assign(restored, { state: 'open', resolution: null });
+      restored.expires_at = new Date(Date.now() + days * pulseLifecycle.DAY_MS).toISOString();
+      if (pulseLifecycle.TIMED_OUT_RESOLUTIONS.includes(existing.resolution)) {
+        Object.assign(restored, { state: 'open', resolution: null });
+      }
     }
     const { error } = await supabaseAdmin
       .from('Post')
