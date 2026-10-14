@@ -72,6 +72,9 @@ public struct FeedView: View {
     /// A card above the Nearby posts (the Pulse tab's quiet-state card).
     /// Type-erased so the slot doesn't make this shared screen generic.
     private let topCard: AnyView?
+    /// Runs beside the feed's own read on a pull to refresh (the Pulse tab
+    /// re-reads its quiet-state card's meter).
+    private let onRefresh: (@MainActor () async -> Void)?
 
     init(
         viewModel: PulseFeedViewModel? = nil,
@@ -82,7 +85,8 @@ public struct FeedView: View {
         onFollowing: (@MainActor () -> Void)? = nil,
         onBack: (@MainActor () -> Void)? = nil,
         topMenu: FeedTopMenu? = nil,
-        topCard: AnyView? = nil
+        topCard: AnyView? = nil,
+        onRefresh: (@MainActor () async -> Void)? = nil
     ) {
         // Swift 5.10 crashes while lowering PulseFeedViewModel() in a default-argument thunk.
         let resolved = viewModel ?? PulseFeedViewModel()
@@ -99,6 +103,7 @@ public struct FeedView: View {
         self.onBack = onBack
         self.topMenu = topMenu
         self.topCard = topCard
+        self.onRefresh = onRefresh
     }
 
     public var body: some View {
@@ -565,74 +570,74 @@ public struct FeedView: View {
     /// The empty state's icon, words, button, scope footer and starters.
     @ViewBuilder
     private func emptyStack(_ content: FeedEmptyContent) -> some View {
-            Icon(content.icon, size: 32, strokeWidth: 1.8, color: Theme.Color.primaryInk)
-                .frame(width: 72, height: 72)
-                .background(Theme.Color.primary50)
-                .clipShape(Circle())
-            Text(content.headline)
-                .font(.system(size: 20, weight: .bold))
-                .foregroundStyle(Theme.Color.appText)
-                .multilineTextAlignment(.center)
-            Text(content.body)
-                .font(.system(size: 13.5))
-                .foregroundStyle(Theme.Color.appTextSecondary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 268)
-            Button {
-                if viewModel.needsArea {
-                    Task { await contextBarViewModel.openSwitcher() }
-                } else if let onEmptyCTA {
-                    onEmptyCTA()
-                } else {
-                    onCompose(viewModel.activeIntent)
-                }
-            } label: {
-                HStack(spacing: Spacing.s2) {
-                    Icon(content.ctaIcon, size: 15, strokeWidth: 2.4, color: Theme.Color.appTextInverse)
-                    Text(content.ctaLabel)
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(Theme.Color.appTextInverse)
-                }
-                .padding(.horizontal, 22)
-                .frame(height: 44)
-                .background(Theme.Color.primarySolid)
-                .clipShape(Capsule())
+        Icon(content.icon, size: 32, strokeWidth: 1.8, color: Theme.Color.primaryInk)
+            .frame(width: 72, height: 72)
+            .background(Theme.Color.primary50)
+            .clipShape(Circle())
+        Text(content.headline)
+            .font(.system(size: 20, weight: .bold))
+            .foregroundStyle(Theme.Color.appText)
+            .multilineTextAlignment(.center)
+        Text(content.body)
+            .font(.system(size: 13.5))
+            .foregroundStyle(Theme.Color.appTextSecondary)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: 268)
+        Button {
+            if viewModel.needsArea {
+                Task { await contextBarViewModel.openSwitcher() }
+            } else if let onEmptyCTA {
+                onEmptyCTA()
+            } else {
+                onCompose(viewModel.activeIntent)
             }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("pulseEmptyCreatePost")
-            if let emphasis = content.footerEmphasis, !emphasis.isEmpty {
-                HStack(spacing: Spacing.s2) {
-                    Icon(content.footerIcon, size: 13, color: Theme.Color.appTextMuted)
-                    Group {
-                        Text(content.footerLead)
-                            .font(.system(size: 11.5))
-                            .foregroundStyle(Theme.Color.appTextSecondary)
-                            + Text(emphasis)
-                            .font(.system(size: 11.5, weight: .bold))
-                            .foregroundStyle(Theme.Color.appTextStrong)
-                            + Text(content.footerTrail)
-                            .font(.system(size: 11.5))
-                            .foregroundStyle(Theme.Color.appTextSecondary)
-                    }
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(Theme.Color.appSurface)
-                .overlay(
-                    RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
-                        .stroke(Theme.Color.appBorder, lineWidth: 1)
-                )
-                .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
-                .padding(.top, Spacing.s4)
+        } label: {
+            HStack(spacing: Spacing.s2) {
+                Icon(content.ctaIcon, size: 15, strokeWidth: 2.4, color: Theme.Color.appTextInverse)
+                Text(content.ctaLabel)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(Theme.Color.appTextInverse)
             }
-            // Sports lane starter prompts — tapping one opens the
-            // composer pre-filled (RN `FeedEmptyState` starters).
-            if viewModel.isInSportsLane {
-                PulseSportsStarterRow { starter in
-                    onComposeStarter(starter)
+            .padding(.horizontal, 22)
+            .frame(height: 44)
+            .background(Theme.Color.primarySolid)
+            .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("pulseEmptyCreatePost")
+        if let emphasis = content.footerEmphasis, !emphasis.isEmpty {
+            HStack(spacing: Spacing.s2) {
+                Icon(content.footerIcon, size: 13, color: Theme.Color.appTextMuted)
+                Group {
+                    Text(content.footerLead)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                        + Text(emphasis)
+                        .font(.system(size: 11.5, weight: .bold))
+                        .foregroundStyle(Theme.Color.appTextStrong)
+                        + Text(content.footerTrail)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Theme.Color.appTextSecondary)
                 }
-                .padding(.top, Spacing.s4)
             }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(Theme.Color.appSurface)
+            .overlay(
+                RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
+                    .stroke(Theme.Color.appBorder, lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
+            .padding(.top, Spacing.s4)
+        }
+        // Sports lane starter prompts — tapping one opens the
+        // composer pre-filled (RN `FeedEmptyState` starters).
+        if viewModel.isInSportsLane {
+            PulseSportsStarterRow { starter in
+                onComposeStarter(starter)
+            }
+            .padding(.top, Spacing.s4)
+        }
     }
 
     /// The top card, on the Nearby surface only.
@@ -645,7 +650,7 @@ public struct FeedView: View {
             ScrollView(.vertical, showsIndicators: true) {
                 postList(rows)
             }
-            .refreshable { await viewModel.refresh() }
+            .refreshable { await refreshFeedAndCard() }
             .overlay(alignment: .top) {
                 if viewModel.newPostsCount > 0 {
                     newPostsPill { withAnimation { proxy.scrollTo(firstPostID ?? Self.listTopID, anchor: .top) } }
@@ -848,6 +853,14 @@ public struct FeedView: View {
         let _: Task<Void, Never> = Task(priority: nil) { @MainActor in
             await viewModel.refresh()
         }
+    }
+
+    /// Pull to refresh: the feed, and beside it the host's own read.
+    @MainActor
+    private func refreshFeedAndCard() async {
+        let card = onRefresh.map { work in Task { @MainActor in await work() } }
+        await viewModel.refresh()
+        await card?.value
     }
 }
 

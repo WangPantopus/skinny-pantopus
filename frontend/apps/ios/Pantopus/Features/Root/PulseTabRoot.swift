@@ -31,6 +31,9 @@ public struct PulseTabRoot: View {
     @State private var router = DeepLinkRouter.shared
     @State private var door = NeighborhoodDoorStore.shared
     @State private var presentedSurface: NeighborhoodDoorStore.Surface?
+    /// The quiet-state card's meter, held here so a pull to refresh re-reads
+    /// it with the feed (as a pull on the old Nearby door did).
+    @State private var neighborhood = NeighborhoodViewModel()
 
     /// Starts adding a home (the quiet card's "Set up a home"), in the Place tab.
     private let onAddHome: @MainActor () -> Void
@@ -54,7 +57,8 @@ public struct PulseTabRoot: View {
                     path.append(.compose(intent: intent.rawValue))
                 },
                 topMenu: topMenu,
-                topCard: quietCard
+                topCard: quietCard,
+                onRefresh: { [neighborhood] in await neighborhood.refresh() }
             )
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: PulseRoute.self) { route in
@@ -103,7 +107,7 @@ public struct PulseTabRoot: View {
 
     /// The neighborhood meter or "Set up a home", above the Nearby posts.
     private var quietCard: AnyView {
-        AnyView(PulseQuietCard(onSetUpHome: onAddHome))
+        AnyView(PulseQuietCard(viewModel: neighborhood, onSetUpHome: onAddHome))
     }
 
     private var navigationPathBinding: Binding<NavigationPath> {

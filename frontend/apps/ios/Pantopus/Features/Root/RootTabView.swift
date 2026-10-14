@@ -142,8 +142,8 @@ public struct RootTabView: View {
             .tag(RootTab.place)
 
             TodayTabRoot(onAddHome: startAddingHome)
-            .tabItem { tabLabel(.today) }
-            .tag(RootTab.today)
+                .tabItem { tabLabel(.today) }
+                .tag(RootTab.today)
 
             PulseTabRoot(onAddHome: startAddingHome)
                 .tabItem { tabLabel(.pulse) }
