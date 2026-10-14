@@ -922,7 +922,10 @@ private fun RadonCardContent(
     ) {
         val task = state.task
         if (!state.loaded) {
-            Text("Checking your home's radon tasks…", fontSize = 14.sp, color = PantopusColors.appTextSecondary)
+            // A failed read says so below, with Try again; "Checking" only while a read can still answer.
+            if (state.error == null) {
+                Text("Checking your home's radon tasks…", fontSize = 14.sp, color = PantopusColors.appTextSecondary)
+            }
         } else if (task != null) {
             Text(RadonToday.message(task), fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
             if (task.status != "done" && task.capabilities?.canEdit == true) {
@@ -967,7 +970,12 @@ private fun RadonCardContent(
             }
         }
         state.error?.let { Text(it, fontSize = 13.sp, color = PantopusColors.error) }
-        if (!state.loaded) GhostButton("Try again", onClick = { state.lifetime.launch { state.load() } })
+        if (!state.loaded) {
+            GhostButton("Try again", onClick = {
+                state.error = null
+                state.lifetime.launch { state.load() }
+            })
+        }
         Text(
             "EPA radon zones",
             fontSize = 12.sp,
