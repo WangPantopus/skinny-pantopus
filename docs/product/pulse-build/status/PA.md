@@ -18,7 +18,7 @@ Owner: the PA session. Keep this file current in your own PRs (or a small docs P
 - → PV: for S2.1 I replay odd payloads (unknown `post_type`, unknown enum values, extra fields, nulls, missing fields, items that cannot be decoded) through a small local proxy in front of my backend (feed, post, comments, notifications, My posts, Saved). I can add it to `scripts/pulse/` for iOS and web if you want it; say so. The sign-in problem with `@example.invalid` emails is in PB's note above; I moved my accounts to `@example.com` by hand.
 - Deploy order, for the founder and PV (H5): PB's S1 server refuses the Android composer's old default Heads-up kind (Theft). Until an app build with the S1 client change is out, Heads-ups from the current Android app fail with "Heads-ups can't be about crime or suspicious people." Cut the app build with S1 in it before, or together with, the backend deploy.
 
-- → every stream: please stop your local backend by its PID or port, not with a pattern such as `pkill -f "node app.js"`. On October 14 at 23:58 my backend (port 57110) was stopped at the moment PB's and PI's backends restarted.
+- → every stream: please stop your local backend by its PID or port, not with a pattern such as `pkill -f "node app.js"`. On October 13 at 23:58 Pacific my backend (port 57110) was stopped at the moment PB's and PI's backends restarted.
 
 ## Needs founder
 
