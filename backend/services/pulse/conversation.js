@@ -3,7 +3,7 @@
 const db = require('../../config/supabaseAdmin');
 const legacy = require('../feedService');
 const blockService = require('../blockService');
-const { SAFE_CREATOR_SELECT, serializeUserAsLocalIdentity } = require('../../serializers/identitySerializers');
+const { SAFE_CREATOR_SELECT } = require('../../serializers/identitySerializers');
 const { homeAreaContext, myAreas, labelFor, openAreas, AREA_SELECT } = require('./areas');
 const { canReadPost, onlyShownReplies, postScopeAccess } = require('./readAccess');
 const { postCards } = require('./cards');
@@ -13,7 +13,7 @@ const { UUID } = require('./feedCursor');
 
 const POST_SELECT = `${legacy.FEED_POST_SELECT}, allow_external_share, moderation_state, radius_miles`;
 const REPLY_SELECT = `id, post_id, user_id, comment, parent_comment_id, created_at, is_edited, is_deleted,
-  moderation_state, author:user_id (${SAFE_CREATOR_SELECT})`;
+  moderation_state, helpful_at, helpful_by, author:user_id (${SAFE_CREATOR_SELECT})`;
 
 async function checked(query) {
   const { data, error } = await query;
@@ -71,7 +71,7 @@ function firstLevel(id, topology) {
  */
 async function repliesFor(context, after) {
   const { post, viewerId, homes, blocked, area } = context;
-  const [topologyRows, rows, distance, newerRows] = await Promise.all([
+  const [topologyRows, rows, distance, newerRows, thanks] = await Promise.all([
     allRows(() => db.from('PostComment').select('id, parent_comment_id, created_at').eq('post_id', post.id)),
     allRows(() => {
       let query = onlyShownReplies(db.from('PostComment').select(REPLY_SELECT).eq('post_id', post.id), viewerId);
@@ -81,12 +81,27 @@ async function repliesFor(context, after) {
     distanceFormatter(viewerId, { homes }),
     after ? allRows(() => db.from('PostComment').select('id, created_at')
       .eq('post_id', post.id).gt('created_at', after)) : null,
+    allRows(() => db.from('CommentThanks').select('id, comment_id, created_at, reply:comment_id!inner(post_id)')
+      .eq('from_user_id', viewerId).eq('reply.post_id', post.id)),
   ]);
+  const thanked = new Set(thanks.map(row => row.comment_id));
+  // The feed's identity projection honors the chosen LocalProfile name. Raw
+  // SAFE_CREATOR_SELECT intentionally has no private name fields and is only a
+  // fallback handle, so projecting it alone would disagree with the post header.
+  const identityInputs = new Map([[post.user_id, post]]);
+  for (const row of rows) if (row.user_id && !identityInputs.has(row.user_id)) {
+    identityInputs.set(row.user_id, { user_id: row.user_id, creator: row.author });
+  }
+  const identities = await legacy.attachIdentityAuthors([...identityInputs.values()], viewerId);
+  const identityByUser = new Map([...identityInputs.keys()].map((id, i) => [id, identities[i]?.author]));
+  const asker = identityByUser.get(post.user_id);
+  let helpfulTo = asker?.displayName || 'Neighbor';
+  if (post.read_scope === 'public') helpfulTo = helpfulTo.trim().split(/\s+/)[0] || 'Neighbor';
   const topology = new Map(topologyRows.map(row => [row.id, row.parent_comment_id]));
   const authors = new Map();
   const authorFor = row => {
     if (!authors.has(row.user_id)) authors.set(row.user_id, (async () => {
-      const identity = serializeUserAsLocalIdentity(row.author);
+      const identity = identityByUser.get(row.user_id);
       const authorHomes = row.user_id === post.user_id ? context.authorHomes : await homeAreaContext(row.user_id);
       const label = await labelFor({ userId: row.user_id, accountType: row.author?.account_type,
         origin: row.author?.account_type === 'curator' ? 'curator' : null,
@@ -110,8 +125,9 @@ async function repliesFor(context, after) {
       text: removed ? '' : row.comment, created_at: row.created_at, edited: !removed && !!row.is_edited,
       author: removed ? { id: null, display_name: 'Reply removed', label: 'visitor',
         distance_text: null, avatar_url: null, is_curator: false } : await authorFor(row),
-      helpful: false, helpful_to: null, can_thank: !removed && row.user_id !== viewerId,
-      thanked_by_viewer: false, removed, moderation: { state: row.moderation_state },
+      helpful: !removed && !!row.helpful_at, helpful_to: !removed && row.helpful_at ? helpfulTo : null,
+      can_thank: !removed && row.user_id !== viewerId,
+      thanked_by_viewer: !removed && thanked.has(row.id), removed, moderation: { state: row.moderation_state },
     };
   }));
   const visible = new Map(result.map(reply => [reply.id, reply]));

@@ -9,6 +9,7 @@ const pulseFeed = require('../services/pulse/feed');
 const feedSeen = require('../services/pulse/seen');
 const feedCursor = require('../services/pulse/feedCursor');
 const conversation = require('../services/pulse/conversation');
+const replyActions = require('../services/pulse/replyActions');
 const { isPulseTopic } = require('../services/pulse/topics');
 const {
   DAY_MS, askIdsWithReplies, windowDays, endsAt,
@@ -78,6 +79,19 @@ router.get('/posts/:postId/replies', verifyToken, async (req, res) => {
     }
     res.set('Cache-Control', 'private, no-store');
     res.json(await conversation.read(req.params.postId, req.user.id, { repliesOnly: true, after: req.query.after }));
+  } catch (error) { feedError(res, error); }
+});
+
+router.post('/posts/:postId/replies/:replyId/helpful', verifyToken, async (req, res) => {
+  try {
+    if (typeof req.body?.helpful !== 'boolean') return res.status(400).json({ error: 'Choose whether this reply was Helpful.' });
+    res.json(await replyActions.act(req.params.postId, req.params.replyId, req.user.id, 'helpful', req.body.helpful));
+  } catch (error) { feedError(res, error); }
+});
+
+router.post('/posts/:postId/replies/:replyId/thanks', verifyToken, async (req, res) => {
+  try {
+    res.json(await replyActions.act(req.params.postId, req.params.replyId, req.user.id, 'thanks'));
   } catch (error) { feedError(res, error); }
 });
 
