@@ -2269,7 +2269,8 @@ router.patch('/resolve/:id', verifyToken, async (req, res) => {
     const now = new Date().toISOString();
     const { data: updated, error } = await supabaseAdmin
       .from('Post')
-      .update({ resolved_at: now, state: 'solved', solved_at: now })
+      // A solved Ask is an answered one (contract §4.1: state and resolution stay in step).
+      .update({ resolved_at: now, state: 'solved', solved_at: now, resolution: 'answered' })
       .eq('id', postId)
       .select(`*, creator:user_id (${SAFE_CREATOR_SELECT})`)
       .single();
@@ -3592,9 +3593,10 @@ router.patch('/:id/solve', verifyToken, async (req, res) => {
 
     const { data: updated, error } = await supabaseAdmin
       .from('Post')
-      .update({ state: 'solved', solved_at: new Date().toISOString() })
+      // A solved Ask is an answered one (contract §4.1: state and resolution stay in step).
+      .update({ state: 'solved', solved_at: new Date().toISOString(), resolution: 'answered' })
       .eq('id', postId)
-      .select('id, state, solved_at')
+      .select('id, state, solved_at, resolution')
       .single();
 
     if (error) return res.status(500).json({ error: 'Failed to update post state' });
