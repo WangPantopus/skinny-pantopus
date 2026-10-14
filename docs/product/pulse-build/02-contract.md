@@ -263,6 +263,8 @@ author → yes · `moderation_state` `removed` → the author only; `held` → t
 
 **Label** (`labelFor(author, area)`, computed at read time, never stored on the post): `pantopus` if `origin = 'curator'` · `official` if `account_type = 'official'` · `business` for a business reply identity · `resident` if the author has a verified address occupancy (postcard, document, landlord or admin; **not** a household invite) for a home whose point is inside the area · `new_here` if a postcard for a home in the area is pending · `nearby` if verified within 15 miles of the area's edge · else `visitor`.
 
+Labels use the author's **primary** home, as posting and limits do. A second verified home adds reading access only; it cannot change the author's label.
+
 **Distance text:** from the reader's verified home to the author's displayed (grid-snapped) point, using the helpers in `backend/utils/locationPrivacy.js` (PRs 2199, 2201, 2203 and 2204 are changing them; build on `master`, not on the old behavior). Round to 0.1 mi under 1 mi, 0.5 mi under 10 mi, whole miles beyond; `"nearby"` when closer than the grid or when fewer than five verified homes fall in the band; `null` for readers without a verified home and on every public or signed-out response.
 
 **Limits** (constants in one file): Visitor: Asks only, 1 a day · New here: 2 town posts a day · Share: 2 per person per rolling 7 days · offer requests: 5 per offer · replies: 5 a minute per post (today's) · heated pair: 1 reply an hour to each other in that conversation (PS) · business replies: weekly cap (R4).

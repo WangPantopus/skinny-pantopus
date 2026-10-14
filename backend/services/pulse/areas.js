@@ -86,12 +86,13 @@ async function labelFor(author, areaId, context) {
   if (author.identityType === 'business') return 'business';
   if (!areaId || !author.userId) return 'visitor';
   const homes = context || await homeAreaContext(author.userId);
-  if (homes.verifiedAreaIds.has(areaId)) return 'resident';
-  const matches = homes.matches.filter(match => match.area_id === areaId);
-  if (matches.some(match => match.inside === true && homes.homes.some(home => home.id === match.home_id
-    && home.pendingPostcard))) return 'new_here';
+  // Extra homes grant reading access only. Posting, limits and the author's label
+  // always use their primary home (build spec §12, two homes).
+  const matches = homes.matches.filter(match => match.area_id === areaId && match.home_id === homes.primary?.id);
+  if (homes.primary?.verified && matches.some(match => match.inside === true)) return 'resident';
+  if (homes.primary?.pendingPostcard && matches.some(match => match.inside === true)) return 'new_here';
   if (matches.some(match => Number.isFinite(match.distance_m) && match.distance_m <= NEARBY_METRES
-    && homes.homes.some(home => home.id === match.home_id && home.verified))) return 'nearby';
+    && homes.primary?.verified)) return 'nearby';
   return 'visitor';
 }
 
