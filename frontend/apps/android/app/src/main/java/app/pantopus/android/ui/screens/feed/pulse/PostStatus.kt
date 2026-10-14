@@ -96,7 +96,7 @@ data class PostStatus(
                 null ->
                     when {
                         state == "solved" -> ANSWERED
-                        postType == "alert" -> endsStatus(expiresAt, now, zone)
+                        postType == "alert" && (state == null || state == "open") -> endsStatus(expiresAt, now, zone)
                         else -> null
                     }
                 else -> null
