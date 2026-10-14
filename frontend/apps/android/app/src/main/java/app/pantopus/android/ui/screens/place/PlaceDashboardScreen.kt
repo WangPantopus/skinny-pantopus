@@ -107,6 +107,8 @@ fun PlaceDashboardScreen(
     onOpenMailDay: () -> Unit = {},
     onOpenPrivacyMirror: () -> Unit = {},
     onOpenHomeTools: () -> Unit = {},
+    /** A household shortcut under Home tools (Tasks, Members, Documents, Emergency). */
+    onOpenHomeShortcut: (PlaceHomeShortcut) -> Unit = {},
     onOpenMenu: () -> Unit = {},
     onOpenNotifications: () -> Unit = {},
     onPlaceUnavailable: (homeId: String) -> Unit = {},
@@ -121,6 +123,7 @@ fun PlaceDashboardScreen(
     val unreadCount by viewModel.unreadCount.collectAsStateWithLifecycle()
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
+    val homeShortcuts by viewModel.homeShortcuts.collectAsStateWithLifecycle()
     // A Home this account can no longer read (left, removed, deleted): the Place tab moves on.
     LaunchedEffect(state) {
         if ((state as? PlaceDashboardUiState.Error)?.unavailable == true) onPlaceUnavailable(homeId)
@@ -168,6 +171,11 @@ fun PlaceDashboardScreen(
                     onOpenHomeTools = {
                         viewModel.reloadOnReturn()
                         onOpenHomeTools()
+                    },
+                    homeShortcuts = homeShortcuts,
+                    onOpenHomeShortcut = { shortcut ->
+                        viewModel.reloadOnReturn()
+                        onOpenHomeShortcut(shortcut)
                     },
                     onOpenMenu = onOpenMenu,
                     onOpenNotifications = onOpenNotifications,
@@ -234,6 +242,9 @@ internal fun PlaceDashboardContent(
     onOpenMailDay: () -> Unit = {},
     onOpenPrivacyMirror: () -> Unit = {},
     onOpenHomeTools: () -> Unit = {},
+    /** The household shortcuts under Home tools that the person's access allows. */
+    homeShortcuts: List<PlaceHomeShortcut> = emptyList(),
+    onOpenHomeShortcut: (PlaceHomeShortcut) -> Unit = {},
     onOpenMenu: () -> Unit = {},
     onOpenNotifications: () -> Unit = {},
     unreadCount: Int = 0,
@@ -275,12 +286,11 @@ internal fun PlaceDashboardContent(
             }
         }
         item {
-            PlaceMessagesActionRow(
-                icon = PantopusIcon.Home,
-                title = "Home tools",
-                subtitle = "Tasks and tools for your household.",
-                onTap = onOpenHomeTools,
-                modifier = Modifier.padding(horizontal = 16.dp).padding(top = 12.dp).testTag("place.homeTools"),
+            PlaceHomeToolsCard(
+                shortcuts = homeShortcuts,
+                onOpen = onOpenHomeTools,
+                onShortcut = onOpenHomeShortcut,
+                modifier = Modifier.padding(horizontal = 16.dp).padding(top = 12.dp),
             )
         }
         // Movers first (Wedge v2 D5): the first-week checklist for a recent move-in.
