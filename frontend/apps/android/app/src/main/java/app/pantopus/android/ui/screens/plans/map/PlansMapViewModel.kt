@@ -59,6 +59,8 @@ data class PlansMapUiState(
     val locationStatus: PlansLocationStatus = PlansLocationStatus.Resolving,
     val location: PlanLocation? = null,
     val canUseHome: Boolean = false,
+    /** "Use my location" was refused or found no fix (F5 then says location is off, as on iOS). */
+    val locationOff: Boolean = false,
     val window: PlanWindow = PlanWindow.WEEK,
     val kind: PlanKind? = null,
     val pins: List<PlanPinDto> = emptyList(),
@@ -179,7 +181,13 @@ class PlansMapViewModel
         /** The person granted location: browse from where they are. */
         fun useMyLocation() {
             locations.prefersHome = false
-            resolveLocation()
+            _state.update { it.copy(locationOff = false) }
+            resolveLocation(asked = true)
+        }
+
+        /** The person said no to location (F5). */
+        fun locationRefused() {
+            _state.update { it.copy(locationOff = true) }
         }
 
         /** "Use my home instead" (board F5). */
@@ -191,7 +199,7 @@ class PlansMapViewModel
             }
         }
 
-        private fun resolveLocation() {
+        private fun resolveLocation(asked: Boolean = false) {
             viewModelScope.launch {
                 val resolved = locations.resolve()
                 if (resolved != null) {
@@ -199,7 +207,12 @@ class PlansMapViewModel
                 } else {
                     val canUseHome = locations.hasHome()
                     _state.update {
-                        it.copy(locationStatus = PlansLocationStatus.Missing, canUseHome = canUseHome, refreshing = false)
+                        it.copy(
+                            locationStatus = PlansLocationStatus.Missing,
+                            canUseHome = canUseHome,
+                            refreshing = false,
+                            locationOff = it.locationOff || asked,
+                        )
                     }
                 }
             }

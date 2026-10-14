@@ -183,14 +183,15 @@ object PlanFormat {
     /** "Seahawks game" for a game's watch party (boards J3, H10, A4), else the plan's title. */
     fun shortTitle(plan: PlanDto): String = plan.details?.game?.label?.let { "$it game" } ?: plan.title
 
-    /** "1:25–4:45 PM", or "11:30 AM–1:00 PM" across noon. */
+    /** "1:25–4:45 PM", or "11:30 AM–1:00 PM" across noon, or "11:00 PM–Mon 1:00 AM" across days (as on iOS). */
     fun timeRange(
         start: ZonedDateTime,
         end: ZonedDateTime?,
     ): String {
         if (end == null) return start.format(clock)
+        if (start.toLocalDate() != end.toLocalDate()) return "${start.format(clock)}–${end.format(dayShort)} ${end.format(clock)}"
         val sameHalf = start.format(DateTimeFormatter.ofPattern("a", locale)) == end.format(DateTimeFormatter.ofPattern("a", locale))
-        return if (sameHalf && start.toLocalDate() == end.toLocalDate()) {
+        return if (sameHalf) {
             "${start.format(clockShort)}–${end.format(clock)}"
         } else {
             "${start.format(clock)}–${end.format(clock)}"

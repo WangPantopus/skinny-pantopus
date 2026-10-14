@@ -13,6 +13,8 @@ import app.pantopus.android.data.api.models.plans.PlanGpsInput
 import app.pantopus.android.data.api.models.plans.PlanNearbyPlaceDto
 import app.pantopus.android.data.api.models.plans.PlanPlaceInput
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.safeApiCall
+import app.pantopus.android.data.api.services.GeoApi
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.data.location.ViewingLocationRepository
 import app.pantopus.android.data.plans.PlanAutoRule
@@ -113,6 +115,8 @@ data class HostUi(
     val posting: Boolean = false,
     val error: String? = null,
     val postedId: String? = null,
+    /** H7's "Near Camas": the city of the plan's place (or home), looked up when the preview opens (as on iOS). */
+    val previewArea: String? = null,
 )
 
 /**
@@ -131,6 +135,7 @@ class HostFlowViewModel
         private val viewing: ViewingLocationRepository,
         private val events: PlansEvents,
         private val homes: HomesRepository,
+        private val geo: GeoApi,
         feature: PlansFeature,
     ) : ViewModel() {
         /** The plan "Host again" copies (A5), sent as `hosted_again_from`. */
@@ -211,7 +216,10 @@ class HostFlowViewModel
                 )
             }
             // "Host again" opens the preview (board A5 → H7, as on iOS); a copy that needs a fix opens its details.
-            if (validate(_ui.value.draft) == null) _ui.update { it.copy(step = HostStep.Preview) }
+            if (validate(_ui.value.draft) == null) {
+                _ui.update { it.copy(step = HostStep.Preview) }
+                loadPreviewArea()
+            }
         }
 
         private suspend fun loadContext(gameId: String?) {
@@ -456,6 +464,28 @@ class HostFlowViewModel
                 return
             }
             _ui.update { it.copy(step = HostStep.Preview, error = null) }
+            loadPreviewArea()
+        }
+
+        /** The city the place is in, for the preview's "Near Camas" (iOS reverse-geocodes the same point). */
+        private fun loadPreviewArea() {
+            val ui = _ui.value
+            val point =
+                if (ui.draft.atHome) {
+                    ui.home?.let { h -> if (h.latitude != null && h.longitude != null) h.latitude to h.longitude else null }
+                } else {
+                    ui.draft.place?.let { it.latitude to it.longitude }
+                }
+            _ui.update { it.copy(previewArea = null) }
+            point ?: return
+            viewModelScope.launch {
+                val city =
+                    when (val reply = safeApiCall { geo.reverse(point.first, point.second) }) {
+                        is NetworkResult.Success -> reply.data.normalized.city?.trim()
+                        is NetworkResult.Failure -> null
+                    }
+                if (!city.isNullOrEmpty()) _ui.update { it.copy(previewArea = "Near $city") }
+            }
         }
 
         fun back(): Boolean {

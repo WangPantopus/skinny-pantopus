@@ -51,12 +51,12 @@ import app.pantopus.android.ui.theme.Spacing
 import app.pantopus.android.ui.theme.rememberReduceMotion
 import kotlinx.coroutines.launch
 
-/** The report reasons a plan offers (the posts report queue's vocabulary). */
+/** The report reasons a plan offers (the posts report queue's vocabulary), in iOS's order. */
 private val reportReasons =
     listOf(
         "safety" to "Something unsafe",
-        "inappropriate" to "Inappropriate",
         "harassment" to "Harassment",
+        "inappropriate" to "Inappropriate",
         "spam" to "Spam or a scam",
         "misinformation" to "Not a real plan",
         "other" to "Something else",
@@ -100,7 +100,7 @@ fun PlanDetailScreen(
             PlanDetailUiState.Loading -> PlanLoading(onBack)
             is PlanDetailUiState.Failed ->
                 PlanPlainScaffold(onBack = onBack) {
-                    ErrorState(headline = "Couldn't open this plan", message = state.message, onRetry = viewModel::load)
+                    ErrorState(headline = "Couldn't load this plan", message = state.message, onRetry = viewModel::load)
                 }
             PlanDetailUiState.Gone -> PlanGone(onBack = onBack, onSeeAll = onSeeAllPlans)
             is PlanDetailUiState.PlaydateLocked ->
@@ -202,7 +202,7 @@ private fun PlanReady(
                     onCancel = viewModel::openCancel,
                     onRemove = { person -> person.requestId?.let(viewModel::removeGuest) },
                 )
-            closed -> PlanClosedBody(plan)
+            closed -> PlanClosedBody(plan, onOpenChat = plan.chatRoomId?.let { room -> { onOpenChat(room) } })
             standing == PlanViewerStanding.IN && plan.hasPrivatePart ->
                 PlanInBody(
                     plan = plan,
@@ -273,12 +273,16 @@ private fun LeaveKind.done(plan: PlanDto): String =
         LeaveKind.Plan -> "We told ${plan.hostFirst}"
     }
 
-private fun scopeChip(plan: PlanDto): String? =
-    when {
-        plan.hasPrivatePart -> null
+/** J1/J2 promise the place over the map; J5, J6, J8 and a closed plan carry no chip (the boards, as on iOS). */
+private fun scopeChip(plan: PlanDto): String? {
+    val browsing = plan.standing == PlanViewerStanding.NONE || plan.standing == PlanViewerStanding.LEFT
+    val closed = plan.planState == PlanState.CANCELLED || plan.planState == PlanState.ENDED
+    return when {
+        plan.hasPrivatePart || !browsing || closed -> null
         plan.isPlaydate -> "Exact place and time shared when you're in"
         else -> "Exact place shared when you're in"
     }
+}
 
 private fun footerFor(
     plan: PlanDto,

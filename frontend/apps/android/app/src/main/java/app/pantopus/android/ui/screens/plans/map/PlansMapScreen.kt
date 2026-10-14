@@ -152,7 +152,7 @@ fun PlansMapScreen(
     val reduceMotion = rememberReduceMotion()
     val permission =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
-            if (results.values.any { it }) viewModel.useMyLocation()
+            if (results.values.any { it }) viewModel.useMyLocation() else viewModel.locationRefused()
         }
 
     fun askLocation() = permission.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
@@ -277,7 +277,13 @@ private fun PlansSheetHost(
                     onDone = viewModel::dismissPosted,
                 )
             state.locationStatus == PlansLocationStatus.Missing ->
-                PlansNoLocationContent(state.canUseHome, onUseLocation = askLocation, onUseHome = viewModel::useHome)
+                PlansNoLocationContent(
+                    canUseHome = state.canUseHome,
+                    locationOff = state.locationOff,
+                    onUseLocation = askLocation,
+                    onUseHome = viewModel::useHome,
+                    onOpenSettings = { context.openAppSettings() },
+                )
             state.selectedId != null && selected != null ->
                 PlanCardContent(
                     plan = selected,
@@ -298,7 +304,12 @@ private fun PlansSheetHost(
                     onShowElsewhere = { onZoomOut(state.elsewhere?.miles ?: ELSEWHERE_DEFAULT_MILES) },
                 )
             current == PlanSheetStop.Peek ->
-                PlansPeekContent(state, onSeeAll = { onStop(PlanSheetStop.Full) }, onOpen = { actions.onOpenPlan(it.id) })
+                PlansPeekContent(
+                    state,
+                    onSeeAll = { onStop(PlanSheetStop.Full) },
+                    onOpen = { actions.onOpenPlan(it.id) },
+                    onRetry = viewModel::refresh,
+                )
             else ->
                 PlansListContent(
                     state = state,
@@ -501,7 +512,7 @@ private fun PlansMap(
         if (state.locationStatus == PlansLocationStatus.Ready) {
             PlansMapOverlay(
                 cameraState = camera,
-                pins = remember(state.pins, state.list, state.mine, state.postedId) { mapPins(state) },
+                pins = remember(state.pins, state.list, state.mine, state.postedId, state.selectedId) { mapPins(state) },
                 selectedId = state.selectedId,
                 onPin = { onPin(it.id) },
                 onCluster = { pins ->
@@ -584,8 +595,9 @@ private fun mapPins(state: PlansMapUiState): List<MapPin> {
     val cards: Map<String, PlanDto> = (state.list + state.mineAll).associateBy { it.id }
     return state.pins.mapNotNull { pin ->
         val mapPin = pin.toMapPin(cards[pin.id]) ?: return@mapNotNull null
-        // H8: the plan just posted reads "Your plan · Sun 1:25".
-        if (pin.id == state.postedId) mapPin.copy(tag = "Your plan · ${mapPin.tag}") else mapPin
+        // H8: the plan just posted reads "Your plan · Sun 1:25", and so does your own pin once you tap it.
+        val yours = pin.id == state.postedId || (pin.id == state.selectedId && pin.standing == PlanViewerStanding.HOSTING)
+        if (yours) mapPin.copy(tag = "Your plan · ${mapPin.tag}") else mapPin
     }
 }
 
@@ -861,6 +873,16 @@ private fun HostButton(
         PantopusIconImage(icon = PantopusIcon.Plus, contentDescription = null, size = 20.dp, tint = PantopusColors.appTextInverse)
         Text(text = "Host", style = PantopusTextStyle.body.copy(fontWeight = FontWeight.Bold), color = PantopusColors.appTextInverse)
     }
+}
+
+/** This app's page in the system settings, where location can be turned back on (F5 "Open Settings"). */
+private fun android.content.Context.openAppSettings() {
+    val intent =
+        android.content.Intent(
+            android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+            android.net.Uri.fromParts("package", packageName, null),
+        ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+    runCatching { startActivity(intent) }
 }
 
 /** The system share sheet with a plan's link (the web preview shows the area only). */

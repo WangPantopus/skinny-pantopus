@@ -496,7 +496,7 @@ fun ChatConversationScreen(
                 )
             }
             if (planChat.closed) {
-                PlanChatClosedBar()
+                PlanChatClosedBar(planChat)
             } else if (isSelectionMode) {
                 SelectionDeleteBar(
                     enabled = selectedMessageIds.isNotEmpty(),
