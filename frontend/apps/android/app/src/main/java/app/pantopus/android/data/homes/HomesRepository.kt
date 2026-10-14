@@ -44,11 +44,11 @@ import app.pantopus.android.data.api.models.homes.HomeTaskResponse
 import app.pantopus.android.data.api.models.homes.InviteOwnerRequest
 import app.pantopus.android.data.api.models.homes.MoveOutResponse
 import app.pantopus.android.data.api.models.homes.MyHomesResponse
-import app.pantopus.android.data.api.models.homes.SetDefaultHomeBody
-import app.pantopus.android.data.api.models.homes.SetDefaultHomeResponse
 import app.pantopus.android.data.api.models.homes.MyOwnershipClaimsResponse
 import app.pantopus.android.data.api.models.homes.PropertyDetailsResponse
 import app.pantopus.android.data.api.models.homes.PropertySuggestionsRequest
+import app.pantopus.android.data.api.models.homes.SetDefaultHomeBody
+import app.pantopus.android.data.api.models.homes.SetDefaultHomeResponse
 import app.pantopus.android.data.api.models.homes.SubmitClaimRequest
 import app.pantopus.android.data.api.models.homes.SubmitClaimResponse
 import app.pantopus.android.data.api.models.homes.UpdateAccessSecretRequest
