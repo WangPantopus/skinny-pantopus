@@ -15,6 +15,7 @@ const {
   DISPLAYED_POINT_MAX_SHIFT_DEGREES,
 } = require('../utils/locationPrivacy');
 const s3 = require('./s3Service');
+const { readablePosts } = require('./pulse/readAccess');
 const {
   SAFE_CREATOR_SELECT,
   serializeAudienceProfileForViewer,
@@ -88,9 +89,11 @@ async function getGlobalPins() {
     return _globalPinsCache.data;
   }
 
+  // Rows as stored, with the two columns the read check needs beyond the feed's own; each
+  // viewer's feed checks them (getListFeed step 12).
   const { data, error } = await excludeEndedPosts(supabaseAdmin
     .from('Post')
-    .select(FEED_POST_SELECT)
+    .select(`${FEED_POST_SELECT}, allow_external_share, radius_miles`)
     .eq('is_global_pin', true)
     .is('archived_at', null))
     .order('created_at', { ascending: false })
@@ -101,7 +104,7 @@ async function getGlobalPins() {
     return [];
   }
 
-  const pins = (data || []).map(r => normalizeFeedPostRow(r));
+  const pins = data || [];
   _globalPinsCache = { data: pins, expires: now + GLOBAL_PINS_TTL };
   return pins;
 }
@@ -1057,13 +1060,16 @@ async function getListFeed({
   let posts = accumulated.slice(0, parsedLimit);
 
   // 12. Prepend global pins on the first page (no cursor = first page).
-  // These bypass all surface/location/author filters.
+  // These bypass the surface, location and author filters, but not the read check or the
+  // viewer's own blocks, mutes and hides (contract §0 and §5).
   if (isFirstPage) {
     const globalPins = await outcome(globalPinsRead);
     if (globalPins.length) {
+      const readablePins = (await readablePosts(globalPins, userId)).map(r => normalizeFeedPostRow(r));
+      const shownPins = applyMuteHideFilters(readablePins, await outcome(filtersRead), surface, userId);
       // Deduplicate — a global pin might also match the regular query
       const regularIds = new Set(posts.map(p => p.id));
-      const uniquePins = globalPins.filter(p => !regularIds.has(p.id));
+      const uniquePins = shownPins.filter(p => !regularIds.has(p.id));
       posts = [...uniquePins, ...posts];
     }
   }
