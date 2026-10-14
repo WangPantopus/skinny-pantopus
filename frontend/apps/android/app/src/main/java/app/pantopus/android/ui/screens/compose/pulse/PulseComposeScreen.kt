@@ -5,6 +5,7 @@ package app.pantopus.android.ui.screens.compose.pulse
 import android.app.DatePickerDialog
 import android.content.ContentResolver
 import android.net.Uri
+import androidx.activity.compose.ManagedActivityResultLauncher
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -153,9 +154,6 @@ fun PulseComposeScreen(
         }
     }
 
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-
     LaunchedEffect(Unit) {
         Analytics.track(AnalyticsEvent.ScreenPulseComposeViewed(intent = activeIntent.key))
         if (viewModel.isEditing && prefillState is PulseComposePrefillState.Loading) {
@@ -181,39 +179,7 @@ fun PulseComposeScreen(
         }
     }
 
-    val photoPicker =
-        rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = PULSE_COMPOSE_MAX_PHOTOS),
-        ) { uris ->
-            if (uris.isEmpty()) return@rememberLauncherForActivityResult
-            scope.launch {
-                val loaded =
-                    withContext(Dispatchers.IO) {
-                        uris.take(PULSE_COMPOSE_MAX_PHOTOS).mapNotNull { uri ->
-                            readBytes(context.contentResolver, uri)?.let { bytes ->
-                                // Capture-location anchor (ADDENDUM 2):
-                                // EXIF GPS is read off the picked bytes as
-                                // a LOCAL place-picker anchor only — it is
-                                // never auto-attached to the outgoing post.
-                                // On API 29+ the system photo picker
-                                // redacts location EXIF at read time
-                                // (ACCESS_MEDIA_LOCATION does not apply to
-                                // picker URIs), so this legitimately
-                                // returns null there → no anchor chips;
-                                // API 26-28 bytes still carry GPS.
-                                val captured = MediaLocationExtractor.fromImageBytes(bytes)
-                                PulseComposePhoto(
-                                    id = UUID.randomUUID().toString(),
-                                    data = bytes,
-                                    capturedLatitude = captured?.latitude,
-                                    capturedLongitude = captured?.longitude,
-                                )
-                            }
-                        }
-                    }
-                viewModel.setPhotos(loaded)
-            }
-        }
+    val photoPicker = rememberPulsePhotoPicker(viewModel::setPhotos)
 
     Box(
         modifier =
@@ -350,6 +316,46 @@ fun PulseComposeScreen(
             },
             onDismiss = { showPlacePicker = false },
         )
+    }
+}
+
+@Composable
+private fun rememberPulsePhotoPicker(
+    onPhotos: (List<PulseComposePhoto>) -> Unit,
+): ManagedActivityResultLauncher<PickVisualMediaRequest, List<Uri>> {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    return rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = PULSE_COMPOSE_MAX_PHOTOS),
+    ) { uris ->
+        if (uris.isEmpty()) return@rememberLauncherForActivityResult
+        scope.launch {
+            val loaded =
+                withContext(Dispatchers.IO) {
+                    uris.take(PULSE_COMPOSE_MAX_PHOTOS).mapNotNull { uri ->
+                        readBytes(context.contentResolver, uri)?.let { bytes ->
+                            // Capture-location anchor (ADDENDUM 2):
+                            // EXIF GPS is read off the picked bytes as
+                            // a LOCAL place-picker anchor only — it is
+                            // never auto-attached to the outgoing post.
+                            // On API 29+ the system photo picker
+                            // redacts location EXIF at read time
+                            // (ACCESS_MEDIA_LOCATION does not apply to
+                            // picker URIs), so this legitimately
+                            // returns null there → no anchor chips;
+                            // API 26-28 bytes still carry GPS.
+                            val captured = MediaLocationExtractor.fromImageBytes(bytes)
+                            PulseComposePhoto(
+                                id = UUID.randomUUID().toString(),
+                                data = bytes,
+                                capturedLatitude = captured?.latitude,
+                                capturedLongitude = captured?.longitude,
+                            )
+                        }
+                    }
+                }
+            onPhotos(loaded)
+        }
     }
 }
 
