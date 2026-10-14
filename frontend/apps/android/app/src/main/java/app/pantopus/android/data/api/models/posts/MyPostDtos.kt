@@ -14,7 +14,7 @@ import com.squareup.moshi.JsonClass
 @JsonClass(generateAdapter = true)
 data class MyPostDto(
     val id: String,
-    @Json(name = "user_id") val userId: String,
+    @Json(name = "user_id") val userId: String? = null,
     val title: String? = null,
     val content: String? = null,
     @Json(name = "post_type") val postType: String? = null,
