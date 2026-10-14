@@ -144,7 +144,7 @@ Checks: …              (what passed)
 
 ## Release-candidate sweep (PV, before each founder cut)
 
-On the merged `master`: **iOS Release** on a simulator and **Android Release** (R8-shrunk) on an emulator signed in as a homeowner, a household member and a new user: cold start online and offline, the five tabs (and four with `plans` off), every push and link route opens without a crash, signing out leaves nothing behind, large text, dark mode, VoiceOver and TalkBack name every control; the **production web build** with the same accounts; the privacy matrix against the release backend; a read of the staging logs after the founder's deploy. Findings go to the owning stream's status file as "Requests".
+On the merged `master`: **iOS Release** on a simulator and **Android Release** (R8-shrunk) on an emulator signed in as a homeowner, a household member and a new user: cold start online and offline, the five tabs (and four with `plans` off), every push and link route opens without a crash, signing out leaves nothing behind, large text, dark mode, VoiceOver and TalkBack name every control; the **production web build** with the same accounts; the privacy matrix against the release backend; a read of the staging logs after the founder's deploy. Findings go to the owning stream's status file as "Requests". At each sweep PV also updates the Verified column of [`06-coverage.md`](06-coverage.md); the **launch bar** ([`03-delivery-plan.md`](03-delivery-plan.md#the-launch-bar)) needs every row verified, the S20 abuse run recorded, and the first-town rounds passed.
 
 ## Cleanup
 
