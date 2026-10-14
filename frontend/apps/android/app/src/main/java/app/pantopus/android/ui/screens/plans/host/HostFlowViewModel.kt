@@ -210,6 +210,8 @@ class HostFlowViewModel
                         ),
                 )
             }
+            // "Host again" opens the preview (board A5 → H7, as on iOS); a copy that needs a fix opens its details.
+            if (validate(_ui.value.draft) == null) _ui.update { it.copy(step = HostStep.Preview) }
         }
 
         private suspend fun loadContext(gameId: String?) {
