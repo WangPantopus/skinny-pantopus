@@ -8,7 +8,7 @@
 //   - processPendingTransfers    → hourly at :15
 //   - retryCaptureFailures        → every 15 minutes at :05/:20/:35/:50
 //   - expireUncapturedAuths      → daily at 3:00 AM
-//   - autoArchivePosts           → daily at 4:00 AM
+//   - autoArchivePosts           → hourly at :23
 //   - mailDayNotification        → every 15 minutes
 //   - mailInterruptNotification  → every 5 minutes
 //   - mailPartyExpiry            → every minute (Phase 2)
@@ -246,10 +246,10 @@ function startJobs(options = {}) {
   });
 
   // ─── Auto-Archive Expired Posts ───
-  // Runs daily at 4:00 AM UTC.
-  // Archives local posts (Nearby, Neighborhood, etc.) based on
-  // category TTL rules: stories=24h, events=24h after end, deals=3d, etc.
-  scheduleCron('0 4 * * *', wrapJob('autoArchivePosts', autoArchivePosts), {
+  // Runs hourly at minute 23, so a Heads-up ends close to the time it names.
+  // Ends local posts at their own end time or by category TTL rules
+  // (stories=24h, events=24h after end, deals=3d, etc.) and records how each ended.
+  scheduleCron('23 * * * *', wrapJob('autoArchivePosts', autoArchivePosts), {
     scheduled: true,
     timezone: 'UTC',
   });

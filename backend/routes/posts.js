@@ -2687,11 +2687,15 @@ router.post('/:id/archive', verifyToken, async (req, res) => {
   }
 });
 
+// How a post ended when its time ran out (the archive job's endings, contract §1).
+const TIMED_OUT_RESOLUTIONS = ['expired', 'closed', 'closed_unanswered', 'happened'];
+
 router.post('/:id/unarchive', verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user.id;
-    const { data: existing } = await supabaseAdmin.from('Post').select('user_id, archive_reason').eq('id', id).single();
+    const { data: existing } = await supabaseAdmin
+      .from('Post').select('user_id, archive_reason, post_type, resolution').eq('id', id).single();
     if (!existing) return res.status(404).json({ error: 'Post not found' });
     if (existing.user_id !== userId) return res.status(403).json({ error: 'You can only restore your own posts' });
     if (existing.archive_reason === 'moderation') {
@@ -2699,9 +2703,20 @@ router.post('/:id/unarchive', verifyToken, async (req, res) => {
     }
 
     const updatedAt = new Date().toISOString();
+    const restored = { archived_at: null, updated_at: updatedAt };
+    if (existing.archive_reason === 'expired') {
+      // A post that ended by time comes back for one more of its type's windows from now, open
+      // again unless it ended its own way (contract §5); otherwise the next job run would end it.
+      const { data: ttl } = await supabaseAdmin
+        .from('PostCategoryTTL').select('ttl_days').eq('post_type', existing.post_type).maybeSingle();
+      const days = ttl?.ttl_days || 7;
+      restored.is_archived = false;
+      restored.expires_at = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+      if (TIMED_OUT_RESOLUTIONS.includes(existing.resolution)) Object.assign(restored, { state: 'open', resolution: null });
+    }
     const { error } = await supabaseAdmin
       .from('Post')
-      .update({ archived_at: null, updated_at: updatedAt })
+      .update(restored)
       .eq('id', id);
     if (error) {
       logger.error('Error unarchiving post', { error: error.message, postId: id });
