@@ -309,7 +309,7 @@ public struct PulsePostDetailView: View {
         ContentDetailTopBarAction(
             icon: .share,
             accessibilityLabel: "Share post"
-        ) { requestShare() }
+        ) { Task { @MainActor in requestShare() } }
     }
 
     private func requestShare() {
