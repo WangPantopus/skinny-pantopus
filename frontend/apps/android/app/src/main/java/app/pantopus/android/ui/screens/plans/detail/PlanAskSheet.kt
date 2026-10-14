@@ -109,7 +109,12 @@ internal fun PlanAskSheet(
             )
             draft.error?.let { Text(text = it, style = PantopusTextStyle.small, color = PantopusColors.error) }
             PrimaryButton(
-                title = if (plan.isFull) "Join the waitlist" else "Send request",
+                title =
+                    when {
+                        plan.myRequest != null -> "Update request"
+                        plan.isFull -> "Join the waitlist"
+                        else -> "Send request"
+                    },
                 onClick = onSend,
                 isLoading = draft.sending,
                 isEnabled = !draft.sending && (!plan.isPlaydate || (draft.staysWithKids && draft.ageBands.isNotEmpty())),
@@ -204,7 +209,7 @@ private fun HelloField(
         PlanTextArea(
             value = draft.note,
             onValue = { text -> onEdit { it.copy(note = text.take(NOTE_MAX)) } },
-            placeholder = if (plan.isPlaydate) "Add a short hello" else "Hi ${plan.hostFirst}! I'm two streets over.",
+            placeholder = "Add a short hello",
             label = "Say hi, optional",
         )
         if (plan.planKind != PlanKind.PLAYDATE) {

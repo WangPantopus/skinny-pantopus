@@ -65,10 +65,10 @@ AIRNOW_API_KEY=
 # Generate a strong random key: openssl rand -hex 32
 INTERNAL_API_KEY=your-random-key-here
 
-# OpenAI (already set if using AI chat)
+# Claude (already set if using AI chat)
 # Used for AI-polished briefings (optional — templates work without it)
-OPENAI_API_KEY=sk-...
-OPENAI_DRAFT_MODEL=gpt-4o-mini
+ANTHROPIC_API_KEY=sk-ant-...
+ANTHROPIC_DRAFT_MODEL=claude-sonnet-5-5
 ```
 
 ### 2.3 Minimum viable setup (no API keys)
@@ -343,7 +343,7 @@ Expected response:
 
 **Key things to check:**
 - `should_send`: `true` means the briefing has useful content
-- `mode`: `template` (no AI) or `ai_polished` (used gpt-4o-mini)
+- `mode`: `template` (no AI) or `ai_polished` (used Claude)
 - `signals`: array of ranked signals with scores
 - `skip_reason`: if `should_send` is `false`, tells you why (`low_signal_day`, `no_location`)
 
@@ -488,7 +488,7 @@ aws secretsmanager put-secret-value \
     "PANTOPUS_API_BASE_URL": "...",
     "CURATOR_EMAIL": "...",
     "CURATOR_PASSWORD": "...",
-    "OPENAI_API_KEY": "...",
+    "ANTHROPIC_API_KEY": "...",
     "INTERNAL_API_KEY": "same-key-as-backend-env"
   }'
 ```

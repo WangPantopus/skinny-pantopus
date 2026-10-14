@@ -169,6 +169,7 @@ struct PlaceHeroCard: View {
                         .kerning(-0.2)
                         .lineSpacing(3)
                         .foregroundStyle(Theme.Color.appText)
+                        .lineLimit(3)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .padding(.bottom, nudgeText.isEmpty ? 0 : 14)
@@ -184,11 +185,14 @@ struct PlaceHeroCard: View {
                 } label: {
                     HStack(spacing: 10) {
                         Icon(nudgeIcon, size: 17, strokeWidth: 2, color: isAlert ? Theme.Color.warning : Theme.Color.home)
+                        // An alert's full bulletin can run a screen long: the
+                        // hero shows its start, and the tap opens all of it.
                         Text(nudgeText)
                             .font(.system(size: 13.5))
                             .lineSpacing(2.5)
                             .foregroundStyle(Theme.Color.appTextStrong)
                             .multilineTextAlignment(.leading)
+                            .lineLimit(3)
                             .frame(maxWidth: .infinity, alignment: .leading)
                         Icon(.chevronRight, size: 17, strokeWidth: 2.25, color: Theme.Color.appTextMuted)
                     }

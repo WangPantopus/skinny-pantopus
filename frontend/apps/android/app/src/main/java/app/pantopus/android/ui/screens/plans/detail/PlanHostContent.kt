@@ -227,7 +227,7 @@ private fun GoingSection(
         PlanSpotsMeter(spots = plan.spots, taken = taken, modifier = Modifier.padding(bottom = 6.dp))
         if (guests.isEmpty()) {
             Text(
-                text = if (asked) "Nobody in yet." else "Nobody yet. We'll tell you when someone asks.",
+                text = if (asked) "Nobody's in yet." else "Nobody yet. We'll tell you when someone asks.",
                 style = PantopusTextStyle.small,
                 color = PantopusColors.appTextSecondary,
                 modifier = Modifier.padding(top = Spacing.s2),
@@ -253,7 +253,7 @@ private fun GuestRow(
     val title = if (person.partySize > 1) "$name + ${person.partySize - 1}" else name
     val kids =
         person.kidsCount?.let { count ->
-            listOfNotNull("$count ${if (count == 1) "kid" else "kids"}", KidsAgeBand.rangeLabel(person.kidsAgeBands)?.let { "ages $it" })
+            listOfNotNull("$count ${if (count == 1) "kid" else "kids"}", KidsAgeBand.rangeLabel(person.kidsAgeBands))
                 .joinToString(", ")
         }
     val subtitle =
@@ -322,7 +322,7 @@ private fun GuestRow(
                     onRemove(person)
                 }) { Text("Remove", color = PantopusColors.error) }
             },
-            dismissButton = { TextButton(onClick = { confirm = false }) { Text("Keep") } },
+            dismissButton = { TextButton(onClick = { confirm = false }) { Text("Not now") } },
         )
     }
 }

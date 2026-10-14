@@ -324,9 +324,6 @@ public enum HubRoute: Hashable {
     /// `InboxConversationDestination` so the same `ChatConversationView`
     /// can host the thread inside the Hub stack.
     case chatConversation(InboxConversationDestination)
-    /// P1.5 — Recent activity log. Pushed when the Hub's
-    /// `HubRecentActivity` "See all" CTA fires.
-    case recentActivity
     /// Hub top-bar menu icon target. Replaced by Settings in T3.1.
     case menu
     /// Drawer Help & Support → existing Help center (parity with You tab /
@@ -500,7 +497,7 @@ public enum HubRoute: Hashable {
 }
 
 /// Which surface roots a `HubTabRoot` stack (wedge Phase 1 four-tab IA).
-/// `.hub` is the Place tab (Hub root + Place auto-land, unchanged);
+/// `.hub` is the Place tab (its root is the person's place: see `PlaceRoot`);
 /// `.mailbox` roots the same stack — same `HubRoute` destination
 /// universe — at the Mailbox, powering the Mail tab without duplicating
 /// the mailbox cluster's wiring.
@@ -517,17 +514,19 @@ public struct HubTabRoot: View {
     @State private var navigationReady = false
     @Binding private var addHomeRequest: UUID?
     @State private var router = DeepLinkRouter.shared
-    /// W3 — guards the one-shot Place auto-land so it fires at most once.
-    @State private var didAutoLandPlace = false
-    /// The landing found no home yet (or Add Home opened first). A home joined
-    /// or added later in this session lands Place when the Hub root reappears.
-    @State private var placeLandingNeedsHome = false
-    /// A landing cut off mid-request (see `placeLandingDropped`); it runs again
-    /// at the next chance.
-    @State private var placeLandingOwed = false
-    @State private var placeResolutionError: String?
-    @State private var isResolvingPlace = false
-    @State private var placeResolutionGeneration = 0
+    /// What the Place tab shows at its root (hub mode). See `PlaceRoot`.
+    @State private var placeRoot: PlaceRoot = .resolving
+    /// The Home chosen in this session (the homes sheet, Add Home, a link).
+    /// Until one is chosen the landing rule picks it.
+    @State private var currentHomeId: String?
+    /// A newer root read wins over an older one still in flight.
+    @State private var placeRootGeneration = 0
+    /// A preview kept through sign-in opens its save step once per session.
+    @State private var didOfferPendingArrival = false
+    /// A Home was just created or chosen that the kept list may not have yet:
+    /// root reads skip the kept copy until one fresh list has come back.
+    @State private var placeRootNeedsFreshList = false
+    @State private var placeUnreadCount = 0
     /// P6.6 — share / mail system sheet driven by "Share listing",
     /// "Share train", and "Invite a business".
     @State private var systemSheet: SystemSheetRequest?
@@ -697,8 +696,9 @@ public struct HubTabRoot: View {
             consumeDeepLinkIfNeeded(pending: pending)
         }
         .onChange(of: scenePhase) { _, phase in
-            // A system sheet (such as "Save Password?") or prompt has closed.
-            if phase == .active, placeLandingOwed { Task { await resolvePlaceLanding() } }
+            // Back from the background, or a system sheet (such as "Save
+            // Password?") has closed: the root reads the home list again.
+            if phase == .active, rootTabs.selected == owningTab { Task { await resolvePlaceRoot() } }
         }
         .onChange(of: addHomeRequest) { _, _ in
             consumeAddHomeRequestIfNeeded()
@@ -707,29 +707,13 @@ public struct HubTabRoot: View {
         .onChange(of: path.isEmpty, initial: true) { _, atRoot in
             if mode == .mailbox { MailTabStore.shared.mailboxAtRoot = atRoot }
             if mode == .hub { rootTabs.placeAtRoot = atRoot }
-            // Somewhere opened on top (a tap or a link): that navigation wins over an owed landing.
-            if !atRoot { placeLandingOwed = false }
-            if atRoot, placeLandingNeedsHome || placeLandingOwed { Task { await resolvePlaceLanding() } }
+            // Back on the root (a save, a join or a removal may have changed it).
+            if atRoot, navigationReady { Task { await resolvePlaceRoot() } }
         }
-        // Tapping Place again on the Hub root lands on Your Place again (a tap
-        // on Your Place still opens the Hub, which keeps its bell and tools),
-        // also when an earlier landing never finished.
-        .onChange(of: rootTabs.placeReselectedAtRoot) { _, token in
-            guard token != nil, mode == .hub, path.isEmpty else { return }
-            didAutoLandPlace = false
-            Task { await resolvePlaceLanding() }
-        }
-        .onChange(of: rootTabs.selected) { old, new in
+        .onChange(of: rootTabs.selected) { _, _ in
             // Cross-tab dispatch may select this tab *after* the pending
             // destination landed — re-attempt once ownership arrives.
             consumeDeepLinkIfNeeded(pending: router.pending)
-            // Leaving Place from the Hub root (after Back from Your Place): the
-            // next visit to the tab lands on Your Place again, quietly. Back
-            // itself still shows the Hub.
-            if mode == .hub, old == owningTab, new != owningTab, path.isEmpty, didAutoLandPlace {
-                didAutoLandPlace = false
-                placeLandingNeedsHome = true
-            }
         }
         .task(id: rootTabs.selected) {
             // Let the NavigationStack install its initial binding before
@@ -740,13 +724,7 @@ public struct HubTabRoot: View {
             navigationReady = true
             consumeAddHomeRequestIfNeeded()
             consumeDeepLinkIfNeeded(pending: router.pending)
-            // W3 — land the Place tab on the Place dashboard when the user
-            // has a primary home. One-shot at an empty stack so we never
-            // fight the user's navigation or an inbound deep link; Hub
-            // stays the stack root (reachable via back-swipe) and the
-            // no-home fallback. Hub-mode only — the Mail tab's instance
-            // roots at the mailbox and must not auto-land.
-            await resolvePlaceLanding()
+            if rootTabs.selected == owningTab { await resolvePlaceRoot() }
         }
         .fullScreenCover(item: $modalRoute) { item in
             launchScopedDestination(for: item.route) { path.append($0) }
@@ -890,22 +868,13 @@ public struct HubTabRoot: View {
     private var stackRoot: some View {
         switch mode {
         case .hub:
-            Group {
-                if !didAutoLandPlace, !placeLandingNeedsHome, path.isEmpty, isResolvingPlace || placeResolutionError != nil {
-                    if let placeResolutionError {
-                        ErrorState(headline: "Couldn't load your place", message: placeResolutionError) {
-                            await resolvePlaceLanding()
-                        }
-                    } else {
-                        ScrollView { HubSkeleton() }
-                            .background(Theme.Color.appBg)
-                    }
-                } else {
-                    hub
-                }
-            }
-            .navigationTitle("Hub")
-            .toolbar(.hidden, for: .navigationBar)
+            placeRootContent
+                // A Home joined, added, left or verified, or an address saved,
+                // on any device: the root follows.
+                .refreshesOnStoreChange(affects: Self.affectsPlaceRoot) { await resolvePlaceRoot() }
+            #if DEBUG
+                .simultaneousGesture(debugTapGesture)
+            #endif
         case .mailbox:
             // The Mail tab: same destination universe, mailbox at the root.
             makeMailboxRoot { path.append($0) }
@@ -1029,7 +998,6 @@ public struct HubTabRoot: View {
     private func consumeAddHomeRequestIfNeeded() {
         guard mode == .hub, navigationReady, rootTabs.selected == .place, addHomeRequest != nil else { return }
         addHomeRequest = nil
-        placeLandingNeedsHome = true
         path.append(.addHome)
     }
 
@@ -1166,24 +1134,13 @@ public struct HubTabRoot: View {
             _ = router.consume()
         case let .place(homeId, slug):
             // `pantopus://place` — the destination every Place-derived push
-            // carries. Before this, Place had no deep link at all: the Home
-            // tab auto-landed on it once per launch and there was no way
-            // back after a swipe, while briefing pushes routed to `/hub`.
-            //
-            // Server-sent links carry the home id, so the common path pushes
-            // the dashboard straight away. A bare link has to resolve the
-            // primary home the same way the auto-land does — the `.task`
-            // auto-land only fires on an empty stack, so it cannot be relied
-            // on for a link arriving mid-session.
+            // carries. Server-sent links carry the home id: that Home becomes
+            // the root when the person can open it. A bare link opens the root.
             _ = router.consume()
             if let homeId, !homeId.isEmpty {
-                pushPlace(homeId: homeId, slug: slug)
+                openPlace(homeId: homeId, slug: slug)
             } else {
-                Task {
-                    if let resolved = try? await Self.primaryHomeId() {
-                        pushPlace(homeId: resolved, slug: slug)
-                    }
-                }
+                openPlaceRoot(slug: slug)
             }
         case .mailDay:
             // pantopus://mailbox/mailday lands on the Mailbox root first
@@ -1299,65 +1256,93 @@ public struct HubTabRoot: View {
         }
     }
 
-    private var hub: some View {
-        HubView { intent in
-            switch intent {
-            case .openNotifications: path.append(.notifications)
-            case .openAudienceNotifications:
-                path.append(.notificationsZone(context: NotificationsZone.audience.rawValue))
-            case .openMenu: showNavDrawer = true
-            case .startVerification: Task { @MainActor in await startVerification() }
-            case .action(.addHome): path.append(.addHome)
-            case .action(.scanMail): path.append(.mailboxRoot)
-            case .action(.postTask): path.append(.quickPostGig(category: GigsCategory.all.rawValue))
-            case .action(.snapAndSell): path.append(.composeListing)
-            case .pillar(.mail): rootTabs.selected = .mail
-            case .pillar(.pulse):
-                rootTabs.selected = .nearby
-                NeighborhoodDoorStore.shared.pendingSurface = .pulse
-            case .pillar(.gigs):
-                rootTabs.selected = .nearby
-                NeighborhoodDoorStore.shared.pendingSurface = .tasks
-            case .pillar(.marketplace):
-                rootTabs.selected = .nearby
-                NeighborhoodDoorStore.shared.pendingSurface = .marketplace
-            case .openProfile: onOpenProfile()
-            case let .openDiscovery(item): path.append(Self.route(forDiscovery: item))
-            case .openDiscoverHub: path.append(.discoverHub)
-            case .openExploreMap: path.append(.explore)
-            case .openFindBusinesses: path.append(.discoverBusinesses)
-            case let .jumpBackIn(item):
-                if item.route.hasPrefix("/app/chat") {
-                    MailTabStore.shared.pendingSegment = .messages
-                    rootTabs.selected = .mail
-                } else {
-                    path.append(Self.route(forJumpBackIn: item))
+    /// The Place tab's root (see `PlaceRoot`). Your Place, the saved address and
+    /// the first-run screen draw the bell and menu in their own header; My homes
+    /// and the error state get them in the bar.
+    @ViewBuilder
+    private var placeRootContent: some View {
+        switch placeRoot {
+        case let .home(homeId):
+            placeDashboard(homeId: homeId, isActive: path.isEmpty && rootTabs.selected == owningTab, isRoot: true)
+                // Another Home is another dashboard, with its own state.
+                .id(homeId)
+        case let .savedPlace(place):
+            SavedPlaceRootView(
+                viewModel: SavedPlaceRootViewModel(place: place),
+                unreadCount: placeUnreadCount,
+                scrollToTop: rootTabs.placeReselectedAtRoot,
+                onOpenNotifications: { path.append(.notifications) },
+                onOpenMenu: { showNavDrawer = true },
+                onSetUpHome: { path.append(.addHomeAt(address: place.label)) },
+                onLookUpAddress: { path.append(.savePlace) }
+            )
+            .id(place.id)
+            .task { await refreshPlaceUnread() }
+            .refreshesOnStoreChange { await refreshPlaceUnread() }
+        case .firstRun:
+            PlaceLaunchView(
+                onSignIn: {},
+                onCreateAccount: {},
+                onSavePreview: { path.append(.placeArrival) },
+                embedded: PlaceLaunchEmbedding(
+                    unreadCount: placeUnreadCount,
+                    onOpenNotifications: { path.append(.notifications) },
+                    onOpenMenu: { showNavDrawer = true }
+                )
+            )
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("place.firstRun")
+            .toolbar(.hidden, for: .navigationBar)
+            .task { await refreshPlaceUnread() }
+            .refreshesOnStoreChange { await refreshPlaceUnread() }
+        case .homes:
+            placeRootBar(destination(for: .myHomes) { path.append($0) })
+        case .resolving:
+            PlaceDashboardSkeleton()
+                .background(Theme.Color.appBg)
+                .toolbar(.hidden, for: .navigationBar)
+        case let .error(message):
+            placeRootBar(
+                ErrorState(headline: "Couldn't load your place", message: message) {
+                    await resolvePlaceRoot()
                 }
-            case let .statusItem(item):
-                // `statusItems[].route` uses the same canonical web paths
-                // as `jumpBackIn[].route`, so they share one resolver.
-                if item.route.hasPrefix("/app/chat") {
-                    MailTabStore.shared.pendingSegment = .messages
-                    rootTabs.selected = .mail
-                } else {
-                    path.append(Self.route(
-                        forJumpBackIn: JumpBackItem(
-                            id: item.id,
-                            title: item.title,
-                            icon: item.icon,
-                            route: item.route
-                        )
-                    ))
-                }
-            // `openToday` taps the weather/today card → full Today briefing
-            // (A10.3 — weather, air, daylight, and neighbourhood signals).
-            case .openToday: path.append(.todayDetail(briefingDeliveryId: nil, briefingKind: nil))
-            case .openRecentActivity: path.append(.recentActivity)
-            }
+            )
         }
-        #if DEBUG
-        .simultaneousGesture(debugTapGesture)
-        #endif
+    }
+
+    /// The root depends on the home list and the saved places only. A
+    /// reconnect names kinds instead of topics: read again then.
+    private static func affectsPlaceRoot(_ note: Notification) -> Bool {
+        guard let topics = note.userInfo?["topics"] as? Set<String> else { return true }
+        return topics.contains(ScreenTopic.homes) || topics.contains(ScreenTopic.savedPlaces)
+    }
+
+    /// The bell and menu for the roots that keep the navigation bar.
+    private func placeRootBar(_ content: some View) -> some View {
+        content
+            .toolbar(.visible, for: .navigationBar)
+            .toolbar {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    PlaceBellButton(unreadCount: placeUnreadCount) { path.append(.notifications) }
+                    Button { showNavDrawer = true } label: {
+                        Icon(.menu, size: 20, color: Theme.Color.appText)
+                    }
+                    .accessibilityLabel("Menu")
+                    .accessibilityIdentifier("place.menu")
+                }
+            }
+            .task { await refreshPlaceUnread() }
+            .refreshesOnStoreChange { await refreshPlaceUnread() }
+    }
+
+    private func refreshPlaceUnread() async {
+        guard let unread = try? await ScreenStore.shared.load(
+            NotificationsEndpoints.unreadCount,
+            as: NotificationUnreadCountResponse.self,
+            kind: .notifications,
+            topics: [ScreenTopic.notifications]
+        ).value else { return }
+        placeUnreadCount = unread.personalBellCount
     }
 
     /// Project an `InboxConversationDestination.Mode` onto the
@@ -1419,65 +1404,6 @@ public struct HubTabRoot: View {
         ))
     }
 
-    /// Dispatch a discovery card tap to the matching detail route.
-    private static func route(forDiscovery item: DiscoveryCardContent) -> HubRoute {
-        switch item.kind {
-        case .post: .pulsePost(postId: item.id)
-        case .person: .publicProfile(userId: item.id)
-        case .gig: .gigDetail(gigId: item.id)
-        case .business: .businessProfile(businessId: item.id)
-        case .unknown: .placeholder(label: item.title)
-        }
-    }
-
-    /// Backend `jumpBackIn` items carry a canonical web route (e.g.
-    /// `/app/mailbox?scope=home&homeId=…`, `/app/homes/<id>/dashboard`,
-    /// `/app/chat`, `/gigs/new`). Map that onto a native destination;
-    /// fall back to a labeled placeholder when nothing matches.
-    private static func route(forJumpBackIn item: JumpBackItem) -> HubRoute {
-        let path = item.route
-        if path.hasPrefix("/app/mailbox") {
-            return .mailboxRoot
-        }
-        if let homeId = Self.homeId(in: path) {
-            return .homeDashboard(homeId: homeId)
-        }
-        if path.hasPrefix("/app/chat") {
-            // Consumed in `hub` — switches to the Messages tab.
-            return .placeholder(label: "Messages")
-        }
-        if path.hasPrefix("/gigs/new") {
-            return .composeGig(category: GigsCategory.all.rawValue)
-        }
-        if path.hasPrefix("/gigs") {
-            return .gigsFeed
-        }
-        // Hub status pills: "N notifications" and "$X ready · Tap to
-        // withdraw". The wallet holds the balance and the Withdraw action.
-        if path.hasPrefix("/app/notifications") {
-            return .notifications
-        }
-        if path.hasPrefix("/app/settings/payments") || path.hasPrefix("/app/wallet") {
-            return .wallet
-        }
-        if path.hasPrefix("/app/map") {
-            return .explore
-        }
-        if let businessId = Self.businessId(inDashboardRoute: path) {
-            return .businessOwner(businessId: businessId)
-        }
-        return .placeholder(label: item.title)
-    }
-
-    /// Extracts `<id>` from `/app/businesses/<id>/dashboard`.
-    private static func businessId(inDashboardRoute route: String) -> String? {
-        let prefix = "/app/businesses/"
-        guard route.hasPrefix(prefix) else { return nil }
-        let rest = route.dropFirst(prefix.count)
-        let id = rest.split { $0 == "/" || $0 == "?" }.first.map(String.init) ?? ""
-        return id.isEmpty ? nil : id
-    }
-
     /// Two-letter initials derived from a display name. Falls back to
     /// `··` when the input has no alphanumeric content so the chat header's
     /// avatar still renders.
@@ -1485,16 +1411,6 @@ public struct HubTabRoot: View {
         let parts = name.split(separator: " ").prefix(2)
         let joined = parts.compactMap { $0.first.map(String.init) }.joined().uppercased()
         return joined.isEmpty ? "··" : joined
-    }
-
-    /// Extracts `<id>` from `/app/homes/<id>/dashboard`. Returns `nil`
-    /// when the prefix doesn't match.
-    private static func homeId(in route: String) -> String? {
-        let prefix = "/app/homes/"
-        guard route.hasPrefix(prefix) else { return nil }
-        let after = route.dropFirst(prefix.count)
-        let segment = after.split(separator: "/").first.map(String.init)
-        return segment?.isEmpty == false ? segment : nil
     }
 
     #if DEBUG
@@ -2673,25 +2589,6 @@ public struct HubTabRoot: View {
             InvoiceDetailView(
                 viewModel: InvoiceDetailViewModel(invoiceId: invoiceId)
             ) { Task { @MainActor in pop() } }
-        case .recentActivity:
-            RecentActivityView(
-                viewModel: RecentActivityViewModel { destination in
-                    switch destination {
-                    case let .gigDetail(id): push(.gigDetail(gigId: id))
-                    case let .listingDetail(id): push(.listingDetail(listingId: id))
-                    case let .mailItemDetail(id): push(.mailItemDetail(mailId: id))
-                    case let .pulsePost(id): push(.pulsePost(postId: id))
-                    case let .homeDashboard(id): push(.homeDashboard(homeId: id))
-                    case let .link(path, label):
-                        if DeepLinkRouter.shared.canResolve(path: path) {
-                            DeepLinkRouter.shared.handle(path: path)
-                        } else {
-                            push(.placeholder(label: label))
-                        }
-                    case let .placeholder(label): push(.placeholder(label: label))
-                    }
-                }
-            )
         case .notifications:
             NotificationsView(
                 viewModel: NotificationsViewModel()
@@ -3449,12 +3346,15 @@ public struct HubTabRoot: View {
             AddHomeWizardView(
                 viewModel: AddHomeWizardViewModel(
                     requiredHomeId: route.homeEntryTarget,
-                    initialSearchQuery: route.addHomeSearchQuery
+                    initialSearchQuery: route.addHomeSearchQuery,
+                    completionOpensPlace: mode == .hub
                 ),
                 onOpenHomes: {
                     path.removeAll { $0.isHomeEntry || $0 == .myHomes }
                     path.append(.myHomes)
                 },
+                // The Place tab lands on Your Place for the new Home.
+                onOpenHome: mode == .hub ? { homeId in openPlaceRoot(homeId: homeId) } : nil,
                 onOpenClaimOwnership: { homeId in
                     path.removeAll { $0.isHomeEntry }
                     path.append(.claimOwnership(homeId: homeId))
@@ -3473,33 +3373,7 @@ public struct HubTabRoot: View {
                 onOpenAddHome: { Task { @MainActor in push(.addHome) } }
             )
         case let .placeDashboard(homeId):
-            PlaceDashboardView(
-                viewModel: PlaceDashboardViewModel(
-                    homeId: homeId,
-                    onOpenDetail: { group in push(.placeDetail(homeId: homeId, group: group)) },
-                    onOpenPulse: { push(.placePulse(homeId: homeId)) },
-                    onSelectHome: { id in push(.placeDashboard(homeId: id)) },
-                    onAddPlace: { push(.addHome) },
-                    // The sheet's doors open the REAL flows (Wedge Phase 2, D3);
-                    // the simulated status screen stays only for previews.
-                    onStartVerify: { method, _ in
-                        switch method {
-                        case .document: push(.verifyResidency(homeId: homeId))
-                        case .mail: push(.postcardVerification(homeId: homeId))
-                        case .landlord: push(.verifyLandlord(homeId: homeId))
-                        }
-                    },
-                    onComposeMessage: { address in
-                        push(.neighborCompose(homeId: homeId, address: address, recipient: nil))
-                    },
-                    onOpenInbox: { push(.neighborInbox) },
-                    onOpenPrivacyMirror: { push(.privacyMirror(homeId: homeId)) },
-                    onOpenMailDay: { push(.mailDay(variant: .populated)) },
-                    onOpenHubHome: { push(.homeDashboard(homeId: homeId)) },
-                    onOpenNotifications: { push(.notifications) }
-                ),
-                isActive: path.last == route && rootTabs.selected == owningTab
-            ) { showNavDrawer = true }
+            placeDashboard(homeId: homeId, isActive: path.last == route && rootTabs.selected == owningTab)
         case let .placeDetail(homeId, group):
             PlaceDetailView(
                 viewModel: PlaceDetailViewModel(homeId: homeId, group: group) { method in
@@ -3561,149 +3435,153 @@ public struct HubTabRoot: View {
         }
     }
 
-    /// W3 — the primary home id used to auto-land the Home tab on Place.
-    /// Prefers the verified primary owner, else the first home; nil when
-    /// the user has no home (Hub stays the landing).
-    /// Push the Place dashboard, and a group-detail page on top when the
-    /// link named one. The dashboard always goes on first so Back lands
-    /// there rather than leaving the stack — matching `.mailDay` above.
-    /// An unrecognised slug degrades to the dashboard rather than a dead end.
-    private func pushPlace(homeId: String, slug: String?) {
+    /// Your Place for one Home: the Place tab's root, or pushed by a link to a
+    /// Home the tab can't open. Choosing a Home in its sheet makes that Home
+    /// the root, so the stack never grows a dashboard per switch.
+    private func placeDashboard(homeId: String, isActive: Bool, isRoot: Bool = false) -> some View {
+        PlaceDashboardView(
+            viewModel: PlaceDashboardViewModel(
+                homeId: homeId,
+                onOpenDetail: { group in path.append(.placeDetail(homeId: homeId, group: group)) },
+                onOpenPulse: { path.append(.placePulse(homeId: homeId)) },
+                onSelectHome: { id in openPlaceRoot(homeId: id) },
+                onAddPlace: { path.append(.addHome) },
+                onManageHomes: { path.append(.myHomes) },
+                // The sheet's doors open the REAL flows (Wedge Phase 2, D3);
+                // the simulated status screen stays only for previews.
+                onStartVerify: { method, _ in
+                    switch method {
+                    case .document: path.append(.verifyResidency(homeId: homeId))
+                    case .mail: path.append(.postcardVerification(homeId: homeId))
+                    case .landlord: path.append(.verifyLandlord(homeId: homeId))
+                    }
+                },
+                onComposeMessage: { address in
+                    path.append(.neighborCompose(homeId: homeId, address: address, recipient: nil))
+                },
+                onOpenInbox: { path.append(.neighborInbox) },
+                onOpenPrivacyMirror: { path.append(.privacyMirror(homeId: homeId)) },
+                onOpenMailDay: { path.append(.mailDay(variant: .populated)) },
+                onOpenHubHome: { path.append(.homeDashboard(homeId: homeId)) },
+                onOpenNotifications: { path.append(.notifications) }
+            ),
+            isActive: isActive,
+            isRoot: isRoot,
+            scrollToTop: isRoot ? rootTabs.placeReselectedAtRoot : nil
+        ) { showNavDrawer = true }
+    }
+
+    /// A Place link. A Home the person can open becomes the root (the named
+    /// section page goes on top, so Back lands on Your Place); any other Home
+    /// opens on top of the stack. An unrecognised slug degrades to the
+    /// dashboard rather than a dead end.
+    private func openPlace(homeId: String, slug: String?) {
+        let group = slug.flatMap(PlaceDetailGroup.init(rawValue:))
+        guard mode == .hub else { return pushPlace(homeId: homeId, group: group) }
+        if let copy = HomesStoreReads.peekMyHomes() {
+            showPlace(homeId: homeId, group: group, openable: PlaceRootResolver.isOpenable(homeId, in: copy.value))
+            return
+        }
+        Task {
+            let homes = try? await HomesStoreReads.myHomes().value
+            showPlace(homeId: homeId, group: group, openable: homes.map { PlaceRootResolver.isOpenable(homeId, in: $0) } ?? false)
+        }
+    }
+
+    private func showPlace(homeId: String, group: PlaceDetailGroup?, openable: Bool) {
+        guard openable else { return pushPlace(homeId: homeId, group: group) }
+        openPlaceRoot(homeId: homeId)
+        if let group { path.append(.placeDetail(homeId: homeId, group: group)) }
+    }
+
+    private func pushPlace(homeId: String, group: PlaceDetailGroup?) {
         // Already showing this dashboard: stay rather than push a copy.
         if path.last != .placeDashboard(homeId: homeId) {
             path.append(.placeDashboard(homeId: homeId))
         }
-        if let slug, let group = PlaceDetailGroup(rawValue: slug) {
-            path.append(.placeDetail(homeId: homeId, group: group))
+        if let group { path.append(.placeDetail(homeId: homeId, group: group)) }
+    }
+
+    /// A bare Place link: the root, with the named section page on top of the
+    /// root's Home once there is one.
+    private func openPlaceRoot(slug: String?) {
+        openPlaceRoot(homeId: nil)
+        guard let group = slug.flatMap(PlaceDetailGroup.init(rawValue:)) else { return }
+        Task {
+            if case .home = placeRoot {} else { await resolvePlaceRoot() }
+            if case let .home(homeId) = placeRoot, path.isEmpty {
+                path.append(.placeDetail(homeId: homeId, group: group))
+            }
         }
     }
 
-    private var canResolvePlaceLanding: Bool {
-        mode == .hub && path.isEmpty && router.pending == nil && PendingDeepLinkStore.peek() == nil
-            && rootTabs.selected == owningTab && !didAutoLandPlace
+    /// Back to the Place tab's root, on `homeId` when one was chosen (the homes
+    /// sheet, a finished Add Home, a link). The root then re-reads the list.
+    private func openPlaceRoot(homeId: String?) {
+        if let homeId {
+            currentHomeId = homeId
+            // A Home the kept list knows shows at once; a new one waits for the
+            // fresh list (the root never opens a Home the person can't open).
+            if let copy = HomesStoreReads.peekMyHomes(), PlaceRootResolver.isOpenable(homeId, in: copy.value) {
+                placeRoot = .home(homeId)
+            } else {
+                placeRootNeedsFreshList = true
+            }
+        }
+        path.removeAll { _ in true }
+        Task { await resolvePlaceRoot() }
     }
 
-    private func resolvePlaceLanding() async {
-        guard canResolvePlaceLanding else { return }
-        placeLandingOwed = false
-        placeResolutionGeneration += 1
-        let generation = placeResolutionGeneration
-        placeResolutionError = nil
-        isResolvingPlace = true
-        defer {
-            if generation == placeResolutionGeneration { isResolvingPlace = false }
-        }
-        if PlacePendingStore.bind(to: currentUserId) != nil {
-            didAutoLandPlace = true
-            path.append(.placeArrival)
-            return
-        }
-        // The home list the phone kept (owners and household roles only) lands
-        // at once, also offline; the server's list then confirms it.
-        if let copy = HomesStoreReads.peekMyHomes(), let homeId = Self.primaryHomeId(in: copy.value) {
-            didAutoLandPlace = true
-            path.append(.placeDashboard(homeId: homeId))
-            isResolvingPlace = false
-            await confirmPlaceLanding(homeId)
-            return
+    /// Works out the Place tab's root (see `PlaceRoot`). The kept home list
+    /// answers at once, also offline; the server's list then confirms it.
+    /// Saved places count only when there are no Home entries at all. What is
+    /// on screen stays when a read fails; only an empty root shows the error.
+    private func resolvePlaceRoot() async {
+        guard mode == .hub, !currentUserId.isEmpty else { return }
+        placeRootGeneration += 1
+        let generation = placeRootGeneration
+        openPendingArrivalIfNeeded()
+        let fresh = placeRootNeedsFreshList
+        if !fresh, let copy = HomesStoreReads.peekMyHomes() {
+            if let root = PlaceRootResolver.root(for: copy.value, current: currentHomeId) {
+                placeRoot = root
+            } else if let saved = HomesStoreReads.peekSavedPlaces() {
+                placeRoot = PlaceRootResolver.savedPlace(in: saved.value.savedPlaces).map(PlaceRoot.savedPlace) ?? .firstRun
+            }
         }
         do {
-            let homeId = try await Self.primaryHomeId()
-            // A tab change, link, or newer retry must win over this response.
-            guard generation == placeResolutionGeneration else { return }
-            guard !Task.isCancelled, canResolvePlaceLanding else { return placeLandingDropped() }
-            if PlacePendingStore.bind(to: currentUserId) != nil {
-                didAutoLandPlace = true
-                path.append(.placeArrival)
-            } else if let homeId {
-                didAutoLandPlace = true
-                path.append(.placeDashboard(homeId: homeId))
-            } else {
-                // No home yet: the Hub stays the landing, checked again quietly.
-                placeLandingNeedsHome = true
+            let homes = try await HomesStoreReads.myHomes(force: fresh).value
+            if fresh { placeRootNeedsFreshList = false }
+            // A newer read (a switch, a link, a retry) wins over this one.
+            guard generation == placeRootGeneration else { return }
+            if let root = PlaceRootResolver.root(for: homes, current: currentHomeId) {
+                placeRoot = root
+                return
             }
+            let saved = try await HomesStoreReads.savedPlaces().value
+            guard generation == placeRootGeneration else { return }
+            placeRoot = PlaceRootResolver.savedPlace(in: saved.savedPlaces).map(PlaceRoot.savedPlace) ?? .firstRun
         } catch {
-            guard generation == placeResolutionGeneration else { return }
-            guard !Task.isCancelled, canResolvePlaceLanding else { return placeLandingDropped() }
-            placeResolutionError = (error as? APIError)?.errorDescription
-                ?? "Check your connection and try again."
-        }
-    }
-
-    /// A landing made from the kept home list: when the server's list names
-    /// another home (or none) while that dashboard is still the only screen
-    /// open, the landing follows the server. A failed read keeps the landing.
-    private func confirmPlaceLanding(_ homeId: String) async {
-        guard let response = try? await HomesStoreReads.myHomes().value else { return }
-        let current = Self.primaryHomeId(in: response)
-        guard current != homeId, path.last == .placeDashboard(homeId: homeId) else { return }
-        path.removeLast()
-        if let current {
-            path.append(.placeDashboard(homeId: current))
-        } else {
-            didAutoLandPlace = false
-            placeLandingNeedsHome = true
-        }
-    }
-
-    /// The landing's answer came back but couldn't be used. A tab, screen or
-    /// link that took over wins. A landing whose task ended mid-request (the
-    /// first sign-in covers the shell with the Face ID offer and the "Save
-    /// Password?" sheet) is owed: it runs again when the app is active, or
-    /// shortly if the view's task doesn't restart on its own. Opening anything
-    /// on top cancels it. The breadcrumb names the reason for crash reports.
-    private func placeLandingDropped() {
-        let cancelled = Task.isCancelled
-        Observability.shared.track("place.landing_dropped", properties: ["reason": placeLandingDropReason(cancelled: cancelled)])
-        guard cancelled, mode == .hub, !didAutoLandPlace, rootTabs.selected == owningTab, path.isEmpty else { return }
-        placeLandingOwed = true
-        Task {
-            try? await Task.sleep(for: .seconds(1))
-            if placeLandingOwed { await resolvePlaceLanding() }
-        }
-    }
-
-    private func placeLandingDropReason(cancelled: Bool) -> String {
-        if cancelled { return "cancelled" }
-        if didAutoLandPlace { return "landed" }
-        if !path.isEmpty { return "navigated" }
-        return rootTabs.selected == owningTab ? "link" : "other_tab"
-    }
-
-    /// The setup banner's "Verify your address": a Home that already waits on
-    /// verification continues there, as My Homes does (a filed claim's Waiting
-    /// Room, residency status, or ownership evidence); with none, Add Home.
-    private func startVerification() async {
-        let response = try? await HomesStoreReads.myHomes().value
-        guard rootTabs.selected == owningTab else { return }
-        path.append(Self.verificationRoute(response?.homes ?? []))
-    }
-
-    static func verificationRoute(_ homes: [MyHome]) -> HubRoute {
-        for entry in homes {
-            if entry.pendingClaimId != nil { return .waitingRoom(homeId: entry.id) }
-            if entry.accessKind == "private_setup" { return .residencyStatus(homeId: entry.id) }
-            switch MyHomesListViewModel.pendingVerification(for: entry) {
-            case .owner: return .claimOwnership(homeId: entry.id)
-            case .residency: return .residencyStatus(homeId: entry.id)
-            case nil: continue
+            // A cancelled read (the tab changed, or the first sign-in covered the
+            // shell) shows nothing; the next showing reads again.
+            guard generation == placeRootGeneration, !Task.isCancelled, !(error is CancellationError) else { return }
+            switch placeRoot {
+            case .resolving, .error:
+                placeRoot = .error((error as? APIError)?.errorDescription ?? "Check your connection and try again.")
+            default:
+                break
             }
         }
-        return .addHome
     }
 
-    private static func primaryHomeId() async throws -> String? {
-        // One home list for every screen (the screen store): shown at once while fresh.
-        try await primaryHomeId(in: HomesStoreReads.myHomes().value)
-    }
-
-    private static func primaryHomeId(in response: MyHomesResponse) -> String? {
-        // A resident's own private setup is their Place until a household shares
-        // it (as on the web): public readings, with the Home's records waiting on
-        // verification.
-        response.sharedHomes.first { $0.isPrimaryOwner == true }?.id
-            ?? response.sharedHomes.first?.id
-            ?? response.homes.first { $0.hasValidListContext && $0.accessKind == "private_setup" }?.id
+    /// A preview kept through sign-in opens its save step over the root, once,
+    /// unless a link or another screen already took the stack.
+    private func openPendingArrivalIfNeeded() {
+        guard !didOfferPendingArrival, navigationReady, path.isEmpty, rootTabs.selected == owningTab,
+              router.pending == nil, PendingDeepLinkStore.peek() == nil,
+              PlacePendingStore.bind(to: currentUserId) != nil else { return }
+        didOfferPendingArrival = true
+        path.append(.placeArrival)
     }
 
     private static func billsListViewModel(

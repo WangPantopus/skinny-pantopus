@@ -66,6 +66,10 @@ data class AddHomeUiState(
     val isCheckingAddress: Boolean = false,
     val isSubmitting: Boolean = false,
     val createdHomeId: String? = null,
+    /** The created entry is a residency request, not a Home the person can open yet. */
+    val createdResidency: Boolean = false,
+    /** Started from the Place tab: finishing opens Your Place for the new Home. */
+    val completionOpensPlace: Boolean = false,
     val pendingCreation: PendingHomeCreation? = null,
     val creationOutcome: HomeCreationOutcome? = null,
     val showsCreationRecovery: Boolean = false,
@@ -105,10 +109,16 @@ data class AddHomeUiState(
     /** Non-null while the Wi-Fi QR scanner is open; carries the target row. */
     val scannerTargetItemId: String? = null,
 ) {
+    /**
+     * Finishing opens Your Place for the new Home (from the Place tab). A residency request, or a creation recovered
+     * without its id, opens My homes.
+     */
+    val completionOpensYourPlace: Boolean get() = completionOpensPlace && createdHomeId != null && !createdResidency
+
     val creationPrimaryLabel: String get() =
         when {
             creationStorageUnavailable || pendingCreation == null -> "Retry recovery"
-            creationOutcome?.state == "completed" -> "Open My Homes"
+            creationOutcome?.state == "completed" -> if (completionOpensYourPlace) "Open Your Place" else "Open My Homes"
             creationOutcome?.isTerminal == true -> "Edit details"
             else -> "Try saving again"
         }
@@ -265,7 +275,7 @@ open class AddHomeWizardViewModel
         }
 
         override fun onSecondary() {
-            // Success step's "Back to Hub" — no other step uses the secondary.
+            // Success step's "Done" (it closes the wizard) — no other step uses the secondary.
             if (_state.value.form.currentStep == AddHomeStep.Success) {
                 pendingEvent.value = AddHomeOutboundEvent.Dismiss
             }
@@ -372,6 +382,11 @@ open class AddHomeWizardViewModel
         }
 
         fun retryAddressSearch() = updateSearchQuery(_state.value.homeSearchQuery)
+
+        /** Where finishing goes: Your Place for the new Home when the wizard was opened from the Place tab. */
+        fun setCompletionOpensPlace(opensPlace: Boolean) {
+            _state.update { it.copy(completionOpensPlace = opensPlace) }
+        }
 
         /**
          * The saved address "Set up a Home" came from (nav arg `address`): searched once on first
@@ -749,7 +764,9 @@ open class AddHomeWizardViewModel
                 AddHomeStep.Role -> if (_state.value.isClaimingExistingHome || validateAccessItems()) transitionTo(AddHomeStep.Review)
                 AddHomeStep.Review -> submit()
                 AddHomeStep.Success -> {
-                    if (_state.value.createdHomeId != null) pendingEvent.value = AddHomeOutboundEvent.OpenHomes
+                    _state.value.createdHomeId?.let { id ->
+                        pendingEvent.value = AddHomeOutboundEvent.OpenHomes(id.takeIf { _state.value.completionOpensYourPlace })
+                    }
                 }
             }
         }
@@ -1238,6 +1255,7 @@ open class AddHomeWizardViewModel
                         showsCreationRecovery = true,
                         creationStorageUnavailable = false,
                         createdHomeId = result.residencyHomeId ?: result.home?.id,
+                        createdResidency = result.residencyHomeId != null,
                     )
                 }
             } catch (cancelled: CancellationException) {
@@ -1296,7 +1314,8 @@ open class AddHomeWizardViewModel
                     )
                 }
                 if (outcome.state == "completed") {
-                    pendingEvent.value = AddHomeOutboundEvent.OpenHomes
+                    val opened = _state.value
+                    pendingEvent.value = AddHomeOutboundEvent.OpenHomes(opened.createdHomeId.takeIf { opened.completionOpensYourPlace })
                 } else if (form != null) {
                     invalidateAddress()
                     _state.update {
@@ -1465,12 +1484,12 @@ open class AddHomeWizardViewModel
             when (step) {
                 AddHomeStep.Address, AddHomeStep.Confirm, AddHomeStep.Role -> "Continue"
                 AddHomeStep.Review -> if (_state.value.isClaimingExistingHome) "Submit claim" else "Submit"
-                AddHomeStep.Success -> "View home"
+                AddHomeStep.Success -> if (_state.value.completionOpensYourPlace) "Open Your Place" else "View home"
             }
 
         private fun secondaryCta(step: AddHomeStep): WizardSecondaryCta? =
             if (step == AddHomeStep.Success) {
-                WizardSecondaryCta(label = "Back to Hub", testTag = "addHomeBackToHub")
+                WizardSecondaryCta(label = "Done", testTag = "addHomeBackToHub")
             } else {
                 null
             }

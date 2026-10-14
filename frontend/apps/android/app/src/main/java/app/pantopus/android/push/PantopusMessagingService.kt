@@ -7,6 +7,9 @@ import app.pantopus.android.data.auth.DeviceIdentity
 import app.pantopus.android.data.notifications.NotificationsRepository
 import app.pantopus.android.data.plans.PlansEvents
 import app.pantopus.android.data.plans.PlansRepository
+import app.pantopus.android.data.store.ScreenStore
+import app.pantopus.android.data.store.StoreTopics
+import app.pantopus.android.data.store.isConnectionNotice
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import dagger.hilt.android.AndroidEntryPoint
@@ -47,6 +50,8 @@ class PantopusMessagingService : FirebaseMessagingService() {
     @Inject lateinit var plansRepository: dagger.Lazy<PlansRepository>
 
     @Inject lateinit var plansEvents: dagger.Lazy<PlansEvents>
+
+    @Inject lateinit var screenStore: dagger.Lazy<ScreenStore>
 
     // FCM invokes Service callbacks on the main thread. Hop off it
     // before doing IO so the binder thread is freed quickly.
@@ -89,9 +94,11 @@ class PantopusMessagingService : FirebaseMessagingService() {
             }
             return
         }
+        val type = message.data["type"].orEmpty()
+        // A connection request or acceptance: Connections reads its lists again, even when its socket was down.
+        if (isConnectionNotice(type)) screenStore.get().markStale(StoreTopics.CONNECTIONS)
         // Nearby Plans: a plan push means the map, the lists, Today and an open plan page are out of date
         // (a "You're in" plays the reveal on the open page).
-        val type = message.data["type"].orEmpty()
         if (type.startsWith("plan_")) {
             plansRepository.get().changed(message.data["plan_id"])
             plansRepository.get().changed()

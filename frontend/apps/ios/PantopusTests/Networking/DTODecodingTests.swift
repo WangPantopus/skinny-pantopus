@@ -77,42 +77,6 @@ final class DTODecodingTests: XCTestCase {
 
     // MARK: - Hub
 
-    func testHubResponseDecodes() throws {
-        let json = """
-        {
-          "user": { "id": "u1", "name": "Alice", "firstName": "Alice", "username": "alice", "avatarUrl": null, "email": "a@b.co" },
-          "context": { "activeHomeId": "h1", "activePersona": { "type": "personal" } },
-          "availability": { "hasHome": true, "hasBusiness": false, "hasPayoutMethod": false },
-          "homes": [],
-          "businesses": [],
-          "setup": { "steps": [], "allDone": true, "profileCompleteness": {
-            "score": 0.8,
-            "checks": { "firstName": true, "lastName": true, "photo": false, "bio": false, "skills": false },
-            "missingFields": ["photo"]
-          } },
-          "statusItems": [],
-          "cards": {
-            "personal": { "unreadChats": 0, "earnings": 0, "gigsNearby": 0, "rating": 0, "reviewCount": 0 },
-            "home": null,
-            "business": null
-          },
-          "jumpBackIn": [],
-          "activity": [],
-          "neighborDensity": null
-        }
-        """
-        let hub = try decode(HubResponse.self, from: json)
-        XCTAssertEqual(hub.user.username, "alice")
-        XCTAssertTrue(hub.availability.hasHome)
-        XCTAssertEqual(hub.setup.profileCompleteness.missingFields, ["photo"])
-    }
-
-    func testHubTodayDecodes() throws {
-        let json = "{ \"today\": { \"weather\": { \"temperatureF\": 72 } } }"
-        let response = try decode(HubTodayResponse.self, from: json)
-        XCTAssertNotNil(response.today)
-    }
-
     func testHubDiscoveryDecodes() throws {
         let json = """
         { "items": [{

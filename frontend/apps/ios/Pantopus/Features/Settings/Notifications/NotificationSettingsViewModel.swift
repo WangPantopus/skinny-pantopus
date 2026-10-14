@@ -446,7 +446,16 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
                 )
             )
         }
-        return GroupedListGroup(id: GroupID.quietHours, overline: "Quiet hours", rows: rows)
+        return GroupedListGroup(id: GroupID.quietHours, overline: "Quiet hours", helper: plansQuietHelper(prefs), rows: rows)
+    }
+
+    /// Plans holds its notifications overnight even with Quiet Hours off
+    /// (backend/services/plans/planNotifications.js), so say so here.
+    private func plansQuietHelper(_ prefs: NotificationPreferencesDTO) -> String? {
+        guard PlansFlags.shared.plans else { return nil }
+        return prefs.quietHoursEnabled
+            ? "Plans notifications wait until your quiet hours end."
+            : "Plans notifications at night wait until 8 AM unless you set quiet hours."
     }
 
     private func locationGroup(_ prefs: NotificationPreferencesDTO) -> GroupedListGroup {

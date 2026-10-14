@@ -18,14 +18,12 @@ const express = require('express');
 const Joi = require('joi');
 const router = express.Router();
 
-const multer = require('multer');
-const { toFile } = require('openai/uploads');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
 const { aiChatLimiter, aiDraftLimiter } = require('../middleware/rateLimiter');
 const { asyncHandler } = require('../errorHandler');
 const agentService = require('../services/ai/agentService');
-const { getOpenAIClient } = require('../config/openai');
+const { CHAT_MODEL, DRAFT_MODEL } = require('../config/anthropic');
 const propertyIntelligenceService = require('../services/ai/propertyIntelligenceService');
 const neighborhoodPulseComposer = require('../services/ai/neighborhoodPulseComposer');
 const supabaseAdmin = require('../config/supabaseAdmin');
@@ -48,6 +46,9 @@ const chatSchema = Joi.object({
     state: Joi.string().max(50),
   }).optional(),
   images: Joi.array().items(Joi.string().uri()).max(5).optional(),
+  // The draft cards this app can show beyond the original ones (e.g. "pickup_schedule").
+  // Unknown names are ignored, so older servers and newer apps get along.
+  cards: Joi.array().items(Joi.string().max(40)).max(20).optional(),
 });
 
 const draftGigSchema = Joi.object({
@@ -109,8 +110,8 @@ router.get('/health', (req, res) => {
   res.json({
     status: 'ok',
     models: {
-      chat: process.env.OPENAI_CHAT_MODEL || 'gpt-4o',
-      draft: process.env.OPENAI_DRAFT_MODEL || 'gpt-4o-mini',
+      chat: CHAT_MODEL,
+      draft: DRAFT_MODEL,
     },
   });
 });
@@ -118,13 +119,15 @@ router.get('/health', (req, res) => {
 // ─── Streaming Chat ─────────────────────────────────────────────────────────
 
 router.post('/chat', verifyToken, aiChatLimiter, validate(chatSchema), asyncHandler(async (req, res) => {
-  const { message, conversationId, coarseLocation, images } = req.body;
+  const { message, conversationId, coarseLocation, images, cards } = req.body;
   const userId = req.user.id;
 
   // Set up SSE headers
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
+    // no-transform: a compressing proxy (the web app's Next server, which forwards /api) would
+    // otherwise gzip the stream and hold every event until the turn ends.
+    'Cache-Control': 'no-cache, no-transform',
     'Connection': 'keep-alive',
     'X-Accel-Buffering': 'no',    // Disable nginx buffering
   });
@@ -148,13 +151,16 @@ router.post('/chat', verifyToken, aiChatLimiter, validate(chatSchema), asyncHand
     },
   };
 
-  // Handle client disconnect
-  req.on('close', () => {
-    logger.debug('AI chat SSE client disconnected', { userId });
+  // Handle client disconnect: stop the model call rather than pay for a reply
+  // nobody is reading. (req 'close' also fires when the request body has been
+  // read, so the response is the one to watch.)
+  const clientGone = new AbortController();
+  res.on('close', () => {
+    if (!res.writableEnded) clientGone.abort();
   });
 
   await agentService.streamChat(
-    { userId, conversationId, message, coarseLocation, images },
+    { userId, conversationId, message, coarseLocation, images, cards, signal: clientGone.signal },
     sseWriter
   );
 }));
@@ -360,6 +366,15 @@ router.get('/conversations', verifyToken, asyncHandler(async (req, res) => {
   res.json({ conversations });
 }));
 
+// A conversation's history, so an app can show it again after a relaunch.
+router.get('/conversations/:id/messages', verifyToken, asyncHandler(async (req, res) => {
+  const { error: invalid } = Joi.string().uuid().validate(req.params.id);
+  if (invalid) return res.status(404).json({ error: 'Conversation not found' });
+  const conversation = await agentService.getConversationMessages(req.user.id, req.params.id);
+  if (!conversation) return res.status(404).json({ error: 'Conversation not found' });
+  res.json(conversation);
+}));
+
 router.delete('/conversations/:id', verifyToken, asyncHandler(async (req, res) => {
   const { id } = req.params;
   const deleted = await agentService.deleteConversation(req.user.id, id);
@@ -369,63 +384,13 @@ router.delete('/conversations/:id', verifyToken, asyncHandler(async (req, res) =
   res.json({ message: 'Conversation deleted' });
 }));
 
-// ─── Audio Transcription (Whisper) ───────────────────────────────────────────
-
-const audioUpload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 25 * 1024 * 1024 }, // 25MB (Whisper API limit)
-  fileFilter: (_req, file, cb) => {
-    const allowed = /^audio\//;
-    if (allowed.test(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error(`Audio file required, got: ${file.mimetype}`), false);
-    }
-  },
+// ─── Audio Transcription ─────────────────────────────────────────────────────
+// Claude takes no audio, and no speech-to-text service has replaced Whisper, so
+// this answers "unavailable" at once rather than buffering a 25 MB upload only
+// to refuse it. The voice-note button in the task composer (Open Gigs, a launch
+// cut) is its only caller, and it already ignores a failed transcription.
+router.post('/transcribe', verifyToken, aiDraftLimiter, (_req, res) => {
+  res.status(503).json({ error: 'AI transcription service unavailable' });
 });
-
-router.post('/transcribe', verifyToken, aiDraftLimiter, (req, res, next) => {
-  audioUpload.single('audio')(req, res, (err) => {
-    if (err) {
-      if (err.code === 'LIMIT_FILE_SIZE') {
-        return res.status(413).json({ error: 'Audio file exceeds 25MB limit' });
-      }
-      return res.status(400).json({ error: err.message });
-    }
-    next();
-  });
-}, asyncHandler(async (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({ error: 'No audio file provided (field name: "audio")' });
-  }
-
-  const openai = getOpenAIClient();
-  if (!openai) {
-    return res.status(503).json({ error: 'AI transcription service unavailable' });
-  }
-
-  // OpenAI SDK multipart upload expects File / Blob / fs.ReadStream — not Readable.from().
-  // toFile() accepts Buffer and produces a uploadable File (see openai/uploads.js).
-  const uploadable = await toFile(req.file.buffer, req.file.originalname || 'audio.m4a', {
-    type: req.file.mimetype || 'application/octet-stream',
-  });
-
-  const transcription = await openai.audio.transcriptions.create({
-    file: uploadable,
-    model: 'whisper-1',
-    language: 'en',
-  });
-
-  logger.info('Audio transcription completed', {
-    userId: req.user.id,
-    fileSize: req.file.size,
-    textLength: transcription.text?.length || 0,
-  });
-
-  res.json({
-    text: transcription.text,
-    duration_seconds: transcription.duration || null,
-  });
-}));
 
 module.exports = router;
