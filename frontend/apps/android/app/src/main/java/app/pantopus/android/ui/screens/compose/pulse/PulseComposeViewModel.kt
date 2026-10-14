@@ -332,10 +332,18 @@ class PulseComposeViewModel
          */
         private val prefillBody: String? = savedStateHandle.get<String>(PREFILL_BODY_KEY)
 
+        /** A Pantopus AI post draft's headline, seeded the same way. */
+        private val prefillTitle: String? = savedStateHandle.get<String>(PREFILL_TITLE_KEY)
+
         private val _fields =
             MutableStateFlow(
                 PulseComposeField.entries.associateWith { field ->
-                    val seed = prefillBody.takeIf { field == PulseComposeField.Body && !it.isNullOrEmpty() }
+                    val seed =
+                        when (field) {
+                            PulseComposeField.Body -> prefillBody
+                            PulseComposeField.Title -> prefillTitle
+                            else -> null
+                        }
                     FormFieldState(id = field.key, value = seed.orEmpty())
                 },
             )
@@ -1423,6 +1431,9 @@ class PulseComposeViewModel
 
             /** Nav arg carrying a Sports-lane starter's prompt text. */
             const val PREFILL_BODY_KEY = "prefillBody"
+
+            /** Nav arg carrying a Pantopus AI post draft's headline. */
+            const val PREFILL_TITLE_KEY = "prefillTitle"
             private const val TITLE_MAX = 255
             private const val BODY_MAX = 5000
             private const val LOCATION_MAX = 255

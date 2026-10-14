@@ -18,6 +18,14 @@ public enum SavedPlacesEndpoints {
         Endpoint(method: .get, path: "/api/saved-places/\(id)/today")
     }
 
+    /// `GET /api/saved-places/:id/preview` — the public address preview for
+    /// the saved point itself (its stored coordinates; a label can be a name
+    /// that geocodes elsewhere). Same shape as `GET /api/public/place`.
+    /// Route `backend/routes/savedPlaces.js:54`.
+    public static func preview(id: String) -> Endpoint {
+        Endpoint(method: .get, path: "/api/saved-places/\(id)/preview")
+    }
+
     /// `POST /api/saved-places` — upsert a saved place on
     /// `(user, latitude, longitude)`. `label`, `latitude`, `longitude` are
     /// required; `placeType` defaults to `searched`. Returns `201` with the

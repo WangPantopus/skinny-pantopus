@@ -1,20 +1,28 @@
-"""OpenAI API integration for rewriting raw content into curator tone."""
+"""Claude (Anthropic) integration for rewriting raw content into curator tone."""
 
 from __future__ import annotations
 
 import calendar
 import logging
+import os
 import re
 from datetime import date
 
 try:
-    import openai
+    import anthropic
 except ImportError:
-    openai = None  # type: ignore[assignment]
+    anthropic = None  # type: ignore[assignment]
 
 from src.config.constants import MAX_HUMANIZED_LENGTH
 
-HUMANIZER_MODEL = "gpt-5.4-mini"
+HUMANIZER_MODEL = os.environ.get("ANTHROPIC_HUMANIZER_MODEL") or "claude-sonnet-5-5"
+# max_tokens covers Claude's thinking as well as the post (~500 characters), so
+# leave room: a limit of a few hundred tokens can run out before any text is written.
+HUMANIZER_MAX_TOKENS = 2048
+# Rewriting a few sentences needs little thinking. The default effort ("high") is slow.
+HUMANIZER_EFFORT = "low"
+# Per request; the SDK retries 429s, 5xx and dropped connections twice on its own.
+HUMANIZER_TIMEOUT_SECONDS = 30.0
 from src.sources.seasonal import get_active_seasons, is_tip_active
 
 log = logging.getLogger("seeder.pipeline.humanizer")
@@ -307,7 +315,7 @@ def humanize(
     source_display_name: str,
     category: str,
     region: str,
-    openai_api_key: str,
+    anthropic_api_key: str,
     region_display_name: str = "",
     scope: str = "local",
 ) -> tuple[str | None, str | None]:
@@ -319,8 +327,8 @@ def humanize(
     For category='sports', a conversation-first prompt is used; `scope` can be
     'national' or 'local' (default 'local') and controls the prompt flavor.
     """
-    if openai is None:
-        return None, "api_error:openai package not installed"
+    if anthropic is None:
+        return None, "api_error:anthropic package not installed"
 
     today = date.today()
     if category == "seasonal":
@@ -370,7 +378,7 @@ def humanize(
         system_prompt = _build_system_prompt(region_display_name)
 
     try:
-        client = openai.OpenAI(api_key=openai_api_key)
+        client = anthropic.Anthropic(api_key=anthropic_api_key, timeout=HUMANIZER_TIMEOUT_SECONDS)
     except Exception as exc:
         return None, f"api_error:{type(exc).__name__}"
 
@@ -416,21 +424,27 @@ def humanize(
 
 
 def _call_api(client, messages: list[dict], system_prompt: str = "") -> tuple[str | None, str | None]:
-    """Call OpenAI and return (text, error). error is None on success."""
+    """Call Claude and return (text, error). error is None on success."""
     try:
-        # Prepend system message to the conversation
-        full_messages = [{"role": "system", "content": system_prompt or SYSTEM_PROMPT}]
-        full_messages.extend(messages)
-
-        response = client.chat.completions.create(
+        response = client.messages.create(
             model=HUMANIZER_MODEL,
-            max_completion_tokens=300,
-            messages=full_messages,
+            max_tokens=HUMANIZER_MAX_TOKENS,
+            system=system_prompt or SYSTEM_PROMPT,
+            messages=messages,
+            output_config={"effort": HUMANIZER_EFFORT},
         )
-        text = (response.choices[0].message.content or "").strip()
+        if response.stop_reason == "refusal":
+            log.warning("Claude declined the request")
+            return None, "api_error:refusal"
+        if response.stop_reason == "max_tokens":
+            # A post cut off mid-sentence can still pass the length checks; never publish one.
+            log.warning("Claude's reply hit max_tokens")
+            return None, "api_error:max_tokens"
+        # A reply can open with a thinking block, so read the text blocks by type.
+        text = "".join(block.text for block in response.content if block.type == "text").strip()
         if not text:
             return None, "empty_response"
         return text, None
     except Exception as exc:
-        log.warning("OpenAI API error (error_type=%s)", type(exc).__name__)
+        log.warning("Claude API error (error_type=%s)", type(exc).__name__)
         return None, f"api_error:{type(exc).__name__}"

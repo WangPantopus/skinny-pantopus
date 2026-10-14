@@ -52,7 +52,9 @@ class ChatListViewModel
         private var serverTotalUnread: Int = 0
         private var hiddenKeys: Set<String> = emptySet()
         private var mutedKeys: Set<String> = emptySet()
-        private val aiRow =
+
+        /** The pinned assistant row. The empty state shows it too: before a first conversation it is the only way in. */
+        val aiRow =
             ConversationRowContent(
                 id = "ai_assistant",
                 variant = ConversationRowVariant.AiAssistant,
@@ -61,7 +63,7 @@ class ChatListViewModel
                 avatarUrl = null,
                 identityChip = null,
                 verified = false,
-                preview = "Summaries, drafts, neighborhood help.",
+                preview = "Pickup days, alerts, posts and more.",
                 timeLabel = "now",
                 unread = 0,
                 pinned = true,

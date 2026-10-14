@@ -165,7 +165,7 @@ def _process_region(region_cfg: RegionConfig, slot_name: str, supabase, secrets)
             source_display_name=source_display_name,
             category=item["category"],
             region=region,
-            openai_api_key=secrets.openai_api_key,
+            anthropic_api_key=secrets.anthropic_api_key,
             region_display_name=region_cfg.display_name,
         )
 

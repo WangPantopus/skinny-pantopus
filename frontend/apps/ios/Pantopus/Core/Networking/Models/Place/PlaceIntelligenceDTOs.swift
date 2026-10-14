@@ -1079,9 +1079,11 @@ public struct PlaceYourHomeData: Decodable, Sendable, Hashable {
     public let valueLow: Double?
     public let valueHigh: Double?
     public let assessedValue: Double?
+    /// The home's outline for the Today sky. Absent from older servers.
+    public let house: PlaceHouseShape?
 
     private enum CodingKeys: String, CodingKey {
-        case sqft, bedrooms, bathrooms
+        case sqft, bedrooms, bathrooms, house
         case yearBuilt = "year_built"
         case lotSqft = "lot_sqft"
         case homeType = "home_type"
@@ -1089,6 +1091,64 @@ public struct PlaceYourHomeData: Decodable, Sendable, Hashable {
         case valueLow = "value_low"
         case valueHigh = "value_high"
         case assessedValue = "assessed_value"
+    }
+}
+
+/// The home's outline for the Today sky: the county record (ATTOM) with the
+/// kind of home the household chose over it. A nil field means the record
+/// doesn't say, and the sky draws its default (`SkyHome`). Each field
+/// decodes on its own, so an unexpected value never fails the section.
+public struct PlaceHouseShape: Decodable, Sendable, Hashable {
+    /// "house", "townhouse", "apartment" or "mobile".
+    public let kind: String?
+    /// 1, 1.5, 2 or 3.
+    public let stories: Double?
+    /// The ground floor: "small", "medium" or "large".
+    public let footprint: String?
+    /// "gable", "hip" or "flat".
+    public let roof: String?
+    /// "attached", "detached", "carport" or "none".
+    public let garage: String?
+    /// 1–3 with a garage or carport.
+    public let garageSpaces: Int?
+    public let fireplace: Bool?
+    public let pool: Bool?
+
+    private enum CodingKeys: String, CodingKey {
+        case kind, stories, footprint, roof, garage, fireplace, pool
+        case garageSpaces = "garage_spaces"
+    }
+
+    public init(
+        kind: String? = nil,
+        stories: Double? = nil,
+        footprint: String? = nil,
+        roof: String? = nil,
+        garage: String? = nil,
+        garageSpaces: Int? = nil,
+        fireplace: Bool? = nil,
+        pool: Bool? = nil
+    ) {
+        self.kind = kind
+        self.stories = stories
+        self.footprint = footprint
+        self.roof = roof
+        self.garage = garage
+        self.garageSpaces = garageSpaces
+        self.fireplace = fireplace
+        self.pool = pool
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        kind = try? c.decodeIfPresent(String.self, forKey: .kind)
+        stories = try? c.decodeIfPresent(Double.self, forKey: .stories)
+        footprint = try? c.decodeIfPresent(String.self, forKey: .footprint)
+        roof = try? c.decodeIfPresent(String.self, forKey: .roof)
+        garage = try? c.decodeIfPresent(String.self, forKey: .garage)
+        garageSpaces = try? c.decodeIfPresent(Int.self, forKey: .garageSpaces)
+        fireplace = try? c.decodeIfPresent(Bool.self, forKey: .fireplace)
+        pool = try? c.decodeIfPresent(Bool.self, forKey: .pool)
     }
 }
 

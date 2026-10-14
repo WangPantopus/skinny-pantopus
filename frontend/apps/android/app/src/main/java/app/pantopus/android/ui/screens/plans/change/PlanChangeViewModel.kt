@@ -131,7 +131,7 @@ class PlanChangeViewModel
             val now = LocalDateTime.now(_ui.value.zone)
             val minutes = Duration.between(start, end).toMinutes()
             return when {
-                start.isBefore(now) -> "Pick a start that hasn't passed yet."
+                start.isBefore(now) -> "Pick a time that hasn't passed."
                 start.isAfter(now.plusDays(MAX_DAYS_AHEAD)) -> "Plans can start up to 14 days from now."
                 minutes < MIN_MINUTES -> "A plan lasts at least 15 minutes."
                 minutes > MAX_MINUTES -> "A plan lasts at most 8 hours."

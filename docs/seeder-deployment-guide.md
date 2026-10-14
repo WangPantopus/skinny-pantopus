@@ -34,10 +34,10 @@ The seeder consists of three AWS Lambda functions running on schedules:
 | Component | Schedule | Purpose |
 |-----------|----------|---------|
 | **Fetcher** | Every 2 hours | Pulls content from RSS feeds, Google News, weather APIs, earthquake feeds, and more; filters, deduplicates, and inserts into `seeder_content_queue` |
-| **Poster** | Hourly, 14:00–01:00 UTC | Selects the best queued item (by source priority), humanizes it via OpenAI (gpt-5-mini), authenticates as the curator, and posts to the Pantopus API |
+| **Poster** | Hourly, 14:00–01:00 UTC | Selects the best queued item (by source priority), humanizes it via Claude (Sonnet 5.5), authenticates as the curator, and posts to the Pantopus API |
 | **Discovery** | Daily | Detects user clusters in new areas, reverse-geocodes them, and auto-provisions new regions with default sources |
 
-**Data flow:** Content Sources → Fetcher Lambda → `seeder_content_queue` (Supabase) → Poster Lambda → OpenAI gpt-5-mini (humanize) → Pantopus API → Post in The Pulse
+**Data flow:** Content Sources → Fetcher Lambda → `seeder_content_queue` (Supabase) → Poster Lambda → Claude Sonnet 5.5 (humanize) → Pantopus API → Post in The Pulse
 
 **Content sources (10 types):**
 - RSS feeds (local news, community, sports)
@@ -91,7 +91,7 @@ You need **6 secrets** before deployment. Here's where to get each one:
 | `PANTOPUS_API_BASE_URL` | Your deployed Pantopus backend URL (e.g. `https://api.pantopus.com`) |
 | `CURATOR_EMAIL` | Choose an email for the curator bot account (e.g. `curator@pantopus.com`). This account will be created in Step 3. |
 | `CURATOR_PASSWORD` | Choose a strong password for the curator account. Store securely. |
-| `OPENAI_API_KEY` | [platform.openai.com](https://platform.openai.com) → API Keys → Create key. Used for gpt-5-mini to humanize content. |
+| `ANTHROPIC_API_KEY` | [platform.claude.com](https://platform.claude.com) → Settings → API keys → Create key (use a workspace with a spend limit). Used by Claude Sonnet 5.5 to humanize content. |
 
 ---
 
@@ -381,7 +381,7 @@ future `sam deploy` runs will not overwrite them.
   "PANTOPUS_API_BASE_URL": "https://api.pantopus.com",
   "CURATOR_EMAIL": "curator@pantopus.com",
   "CURATOR_PASSWORD": "your-secure-password",
-  "OPENAI_API_KEY": "sk-...",
+  "ANTHROPIC_API_KEY": "sk-ant-...",
   "INTERNAL_API_KEY": "your-internal-api-key",
   "WEATHERKIT_KEY_ID": "",
   "WEATHERKIT_TEAM_ID": "",
@@ -401,7 +401,7 @@ aws secretsmanager update-secret \
     "PANTOPUS_API_BASE_URL": "https://api.pantopus.com",
     "CURATOR_EMAIL": "curator@pantopus.com",
     "CURATOR_PASSWORD": "your-secure-password",
-    "OPENAI_API_KEY": "sk-...",
+    "ANTHROPIC_API_KEY": "sk-ant-...",
     "INTERNAL_API_KEY": "your-internal-api-key",
     "WEATHERKIT_KEY_ID": "",
     "WEATHERKIT_TEAM_ID": "",
@@ -710,7 +710,7 @@ The fetcher automatically:
 | Function | Timeout |
 |----------|---------|
 | Fetcher | 120 seconds |
-| Poster | 600 seconds (includes jitter sleep + OpenAI API call) |
+| Poster | 600 seconds (includes jitter sleep + Claude API call) |
 | Discovery | 120 seconds |
 
 ### Logs
@@ -758,7 +758,7 @@ aws logs tail /aws/lambda/pantopus-seeder-SeederPosterFunction-XXXXX --follow
 ### Humanizer fails
 
 - Check your Anthropic API key is valid and has credits
-- The humanizer uses OpenAI (`gpt-5-mini`) with a dynamic system prompt tailored to each region's display name
+- The humanizer uses Claude (`claude-sonnet-5-5`) with a dynamic system prompt tailored to each region's display name
 - PNW regions get seasonal context in the prompt; non-PNW regions do not
 - Look at the `failure_reason` column for failed items:
   ```sql

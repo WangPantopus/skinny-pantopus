@@ -457,6 +457,11 @@ export default function ChatListPage() {
             ))}
           </div>
         ) : listFailed ? null : conversations.length === 0 ? (
+          <>
+          {/* Before a first conversation the assistant is still reachable here. */}
+          <div className="bg-surface rounded-xl border border-app shadow-sm overflow-hidden">
+            <AIAssistantEntry onOpen={() => router.push('/app/chat/ai-assistant')} />
+          </div>
           <div className="bg-surface rounded-2xl border border-app shadow-sm p-10 text-center mt-4">
             <div className="mb-3 flex justify-center"><MessageCircle className="w-10 h-10 text-app-muted" /></div>
             <div className="text-app font-semibold text-lg">No messages yet</div>
@@ -466,6 +471,7 @@ export default function ChatListPage() {
                 : 'Messages will appear here when you chat about tasks or anything else.'}
             </div>
           </div>
+          </>
         ) : filteredConversations.length === 0 ? (
           <div className="bg-surface rounded-2xl border border-app shadow-sm p-10 text-center mt-4">
             <div className="mb-3 flex justify-center"><Search className="w-8 h-8 text-app-muted" /></div>
@@ -475,24 +481,7 @@ export default function ChatListPage() {
         ) : (
           <div className="bg-surface rounded-xl border border-app shadow-sm overflow-hidden">
             {/* Pinned AI Assistant entry (outside the virtualized list) */}
-            <button
-              onClick={() => router.push('/app/chat/ai-assistant')}
-              className="w-full text-left px-4 py-3 hover:bg-violet-50/60 transition-colors bg-gradient-to-r from-violet-50/40 dark:from-violet-950/40 to-transparent border-b border-app"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center flex-shrink-0 shadow-sm">
-                  <Sparkles className="w-5 h-5 text-white" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-sm text-app">Pantopus Assistant</span>
-                    <span className="px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700 text-[10px] font-semibold uppercase tracking-wide">AI</span>
-                  </div>
-                  {/* Launch cuts #3/#4: the copy names only drafts still offered. */}
-                  <p className="text-xs text-app-text-secondary truncate mt-0.5">{launchFeatures.openGigs && launchFeatures.marketplace ? 'Draft gigs, listings, posts & more with AI' : `Draft ${[launchFeatures.openGigs && 'gigs', launchFeatures.marketplace && 'listings', 'posts'].filter(Boolean).join(', ')} & more with AI`}</p>
-                </div>
-              </div>
-            </button>
+            <AIAssistantEntry onOpen={() => router.push('/app/chat/ai-assistant')} />
 
             {/* Virtualized conversation list */}
             <div
@@ -695,5 +684,29 @@ export default function ChatListPage() {
         document.body,
       )}
     </div>
+  );
+}
+
+/** The pinned Pantopus Assistant row: on top of the list, and alone when there are no conversations yet. */
+function AIAssistantEntry({ onOpen }: { onOpen: () => void }) {
+  return (
+    <button
+      onClick={onOpen}
+      className="w-full text-left px-4 py-3 hover:bg-violet-50/60 transition-colors bg-gradient-to-r from-violet-50/40 dark:from-violet-950/40 to-transparent border-b border-app"
+    >
+      <div className="flex items-center gap-3">
+        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center flex-shrink-0 shadow-sm">
+          <Sparkles className="w-5 h-5 text-white" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-sm text-app">Pantopus Assistant</span>
+            <span className="px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700 text-[10px] font-semibold uppercase tracking-wide">AI</span>
+          </div>
+          {/* Launch cuts #3/#4: the copy names only drafts still offered. */}
+          <p className="text-xs text-app-text-secondary truncate mt-0.5">{launchFeatures.openGigs && launchFeatures.marketplace ? 'Draft gigs, listings, posts & more with AI' : `Draft ${[launchFeatures.openGigs && 'gigs', launchFeatures.marketplace && 'listings', 'posts'].filter(Boolean).join(', ')} & more with AI`}</p>
+        </div>
+      </div>
+    </button>
   );
 }

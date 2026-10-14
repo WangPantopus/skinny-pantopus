@@ -207,8 +207,9 @@ final class HomeResidencyReviewJourneyUITests: XCTestCase {
 
     private func openQueue(fromMembers: Bool = false) throws {
         try press("tab.place")
-        if !element("hubAvatarButton").waitForExistence(timeout: 2) { try press("place.back") }
-        try press("hubAvatarButton")
+        if !element("place.menu").waitForExistence(timeout: 2) { try press("place.back") }
+        try press("place.menu")
+        try press("navDrawer.contextPill.profile")
         let identity = app.buttons.matching(NSPredicate(format: "label == %@", "Home")).firstMatch
         try reveal(identity)
         identity.tap()
