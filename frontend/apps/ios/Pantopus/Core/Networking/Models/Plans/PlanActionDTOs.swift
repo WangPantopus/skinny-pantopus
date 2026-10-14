@@ -307,8 +307,8 @@ public struct PlanRequestsResponse: Decodable, Sendable, Hashable {
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        pending = try container.decodeIfPresent(PlanLossyList<PlanRequestViewDTO>.self, forKey: .pending)?.items ?? []
-        waitlisted = try container.decodeIfPresent(PlanLossyList<PlanRequestViewDTO>.self, forKey: .waitlisted)?.items ?? []
+        pending = try container.decodeIfPresent(LossyList<PlanRequestViewDTO>.self, forKey: .pending)?.items ?? []
+        waitlisted = try container.decodeIfPresent(LossyList<PlanRequestViewDTO>.self, forKey: .waitlisted)?.items ?? []
     }
 }
 
@@ -348,7 +348,7 @@ public struct PlanGamesResponse: Decodable, Sendable, Hashable {
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        games = try container.decodeIfPresent(PlanLossyList<PlanGameOptionDTO>.self, forKey: .games)?.items ?? []
+        games = try container.decodeIfPresent(LossyList<PlanGameOptionDTO>.self, forKey: .games)?.items ?? []
     }
 }
 
@@ -420,7 +420,7 @@ public struct PlanPlacesResponse: Decodable, Sendable, Hashable {
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        places = try container.decodeIfPresent(PlanLossyList<PlanPlaceOptionDTO>.self, forKey: .places)?.items ?? []
+        places = try container.decodeIfPresent(LossyList<PlanPlaceOptionDTO>.self, forKey: .places)?.items ?? []
         loading = try container.decodeIfPresent(Bool.self, forKey: .loading) ?? false
         attribution = try container.decodeIfPresent(String.self, forKey: .attribution)
     }
