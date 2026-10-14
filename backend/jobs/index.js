@@ -9,6 +9,7 @@
 //   - retryCaptureFailures        → every 15 minutes at :05/:20/:35/:50
 //   - expireUncapturedAuths      → daily at 3:00 AM
 //   - autoArchivePosts           → hourly at :23
+//   - askStillOpenReminders      → hourly at :41
 //   - mailDayNotification        → every 15 minutes
 //   - mailInterruptNotification  → every 5 minutes
 //   - mailPartyExpiry            → every minute (Phase 2)
@@ -26,6 +27,7 @@ const authorizeUpcomingGigs = require('./authorizeUpcomingGigs');
 const processPendingTransfers = require('./processPendingTransfers');
 const expireUncapturedAuthorizations = require('./expireUncapturedAuthorizations');
 const autoArchivePosts = require('./autoArchivePosts');
+const askStillOpenReminders = require('./askStillOpenReminders');
 const mailDayNotification = require('./mailDayNotification');
 const mailInterruptNotification = require('./mailInterruptNotification');
 // Phase 2 jobs
@@ -112,6 +114,7 @@ const LAMBDA_BACKED_CRON_JOBS = new Set([
   'retryCaptureFailures',
   'expireUncapturedAuthorizations',
   'autoArchivePosts',
+  'askStillOpenReminders',
   'computeAvgResponseTime',
   'trustAnomalyDetection',
   'chatRedactionJob',
@@ -250,6 +253,14 @@ function startJobs(options = {}) {
   // Ends local posts at their own end time or by category TTL rules
   // (stories=24h, events=24h after end, deals=3d, etc.) and records how each ended.
   scheduleCron('23 * * * *', wrapJob('autoArchivePosts', autoArchivePosts), {
+    scheduled: true,
+    timezone: 'UTC',
+  });
+
+  // ─── Ask reminders ───
+  // Runs hourly at minute 41: the day-6 "Did a reply help?" / "Still need an answer?" reminder,
+  // once per Ask, held during the asker's quiet hours.
+  scheduleCron('41 * * * *', wrapJob('askStillOpenReminders', askStillOpenReminders), {
     scheduled: true,
     timezone: 'UTC',
   });

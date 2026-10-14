@@ -545,6 +545,14 @@ Resources:
             Description: !Sub 'End expired local posts — hourly at :23 [${Environment}]'
             Input: '{"job": "auto-archive-posts"}'
             Enabled: true
+        AskStillOpenReminders:
+          Type: Schedule
+          Properties:
+            Name: !Sub pantopus-job-ask-still-open-reminders-${Environment}
+            Schedule: cron(41 * * * ? *)
+            Description: !Sub 'Day-6 reminders for open Asks — hourly at :41 [${Environment}]'
+            Input: '{"job": "ask-still-open-reminders"}'
+            Enabled: true
       Policies:
         - Statement:
             - Effect: Allow

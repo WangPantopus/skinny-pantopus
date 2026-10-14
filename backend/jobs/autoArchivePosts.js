@@ -26,47 +26,17 @@
 
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
+const {
+  DAY_MS, LOCAL_AUDIENCES, askIdsWithReplies, resolutionWhenTimeRunsOut,
+} = require('../services/pulse/lifecycle');
 
-const LOCAL_AUDIENCES = ['nearby', 'neighborhood', 'saved_place', 'target_area'];
-const DAY_MS = 24 * 60 * 60 * 1000;
 // End of a deal's stated expiry day in US Pacific, measured from the stored midnight (see step 4).
 const DEAL_EXPIRY_GRACE_MS = 32 * 60 * 60 * 1000;
 // Posts ended per read (their ids go in the request URL); each step takes up to MAX_BATCHES
 // reads a run and the next run continues.
 const BATCH_SIZE = 100;
 const MAX_BATCHES = 10;
-const REPLY_PAGE_SIZE = 1000;
 const ENDING_SELECT = 'id, user_id, post_type, resolution';
-
-// How a post ends when its time runs out (contract §1).
-function resolutionWhenTimeRunsOut(post, repliedAskIds) {
-  if (post.post_type === 'ask_local') return repliedAskIds.has(post.id) ? 'closed' : 'closed_unanswered';
-  if (post.post_type === 'lost_found') return 'closed';
-  if (post.post_type === 'event') return 'happened';
-  return 'expired';
-}
-
-// The ids of the Asks someone other than the asker replied to.
-async function askIdsWithReplies(asks) {
-  const replied = new Set();
-  if (!asks.length) return replied;
-  const askerByPost = new Map(asks.map((post) => [post.id, post.user_id]));
-
-  for (let from = 0; ; from += REPLY_PAGE_SIZE) {
-    const { data, error } = await supabaseAdmin
-      .from('PostComment')
-      .select('post_id, user_id')
-      .in('post_id', [...askerByPost.keys()])
-      .eq('is_deleted', false)
-      .order('id', { ascending: true })
-      .range(from, from + REPLY_PAGE_SIZE - 1);
-    if (error) throw new Error(`Failed to read replies: ${error.message}`);
-    for (const reply of data || []) {
-      if (reply.user_id !== askerByPost.get(reply.post_id)) replied.add(reply.post_id);
-    }
-    if (!data || data.length < REPLY_PAGE_SIZE) return replied;
-  }
-}
 
 // Archives `posts`, giving each one that is still open its resolution. Returns how many it archived.
 async function endPosts(posts, label) {
