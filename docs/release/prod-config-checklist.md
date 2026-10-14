@@ -319,7 +319,7 @@ reminders:
    (staging), `PANTOPUS_API_BASE_URL=https://staging-api.pantopus.com`,
    `INTERNAL_API_KEY` (the value in `hosted-secrets/staging.env`),
    `CURATOR_EMAIL` and `CURATOR_PASSWORD` (a staging curator account),
-   `OPENAI_API_KEY`, `AIRNOW_API_KEY` (air-quality alerts; the backend's
+   `ANTHROPIC_API_KEY`, `AIRNOW_API_KEY` (air-quality alerts; the backend's
    `AIRNOW_KEY` value), and optionally `WEATHERKIT_KEY_ID`, `WEATHERKIT_TEAM_ID`,
    `WEATHERKIT_SERVICE_ID`, `WEATHERKIT_PRIVATE_KEY`:
    ```bash
@@ -609,7 +609,7 @@ In this order:
    production project's `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`,
    `PANTOPUS_API_BASE_URL=https://api.pantopus.com`, the production
    `INTERNAL_API_KEY` (in `hosted-secrets/production.env`), a production
-   curator account, `OPENAI_API_KEY`, `AIRNOW_API_KEY` and the WeatherKit keys:
+   curator account, `ANTHROPIC_API_KEY`, `AIRNOW_API_KEY` and the WeatherKit keys:
    ```bash
    aws secretsmanager put-secret-value --secret-id pantopus/seeder/production --secret-string file://<private json file>
    ```
@@ -809,9 +809,11 @@ Write these as `KEY=value` lines (no quotes, one line each) into
 | `ATTOM_API_KEY` | optional | required for property facts | ATTOM |
 | `AIRNOW_API_KEY` | required for air quality | required for air quality | free AirNow key; without it the air section says it couldn't load. Also goes in the Lambda secret (S8) |
 | `CENSUS_API_KEY` | required for area facts | required for area facts | free Census key (api.census.gov/data/key_signup.html); the Census API refuses keyless calls, so without it Place's "Homes here", the address preview's area facts and the tract medians are unavailable (checked on staging October 9) |
-| `OPENAI_API_KEY` | required for AI features | required for AI features | OpenAI project with a budget cap |
-| `OPENAI_CHAT_MODEL`, `OPENAI_DRAFT_MODEL` | `gpt-6-luna` | `gpt-6-luna` | the model the streams verify against locally (a reasoning model: code paths pass `max_completion_tokens`, no custom `temperature`) |
-| `PROPERTY_SUGGESTIONS_LLM_MODEL`, `MAGIC_TASK_AI_MODEL` | unset | unset | their defaults (`gpt-4o-mini`, `gpt-4o`) match how those calls are written; a reasoning model there rejects `max_tokens`/`temperature` |
+| `ANTHROPIC_API_KEY` | required for AI features | required for AI features | Anthropic Console workspace with a spend limit. Also goes in the seeder secret (S8): the seeder Lambdas refuse to start without it, so set it before deploying them |
+| `ANTHROPIC_CHAT_MODEL`, `ANTHROPIC_DRAFT_MODEL` | unset | unset | default `claude-sonnet-5-5` (Claude Sonnet 5.5). A value that doesn't start with `claude-` is ignored, so a leftover `OPENAI_CHAT_MODEL` / `OPENAI_DRAFT_MODEL` does no harm; remove them and `OPENAI_API_KEY` once the Claude key works |
+| `ANTHROPIC_CHAT_EFFORT`, `ANTHROPIC_DRAFT_EFFORT`, `ANTHROPIC_SUPPORT_TRAIN_EFFORT` | unset | unset | how long Claude thinks before it answers (`low` to `max`); defaults `low`, `low`, `medium`. `low` keeps replies fast (the API's own default, `high`, is several times slower); raise one only with a measured quality gain |
+| `AI_WARMUP` | unset | unset | on by default in staging and production (`NODE_ENV=production`): one one-token request per response schema at startup and every 20 hours, so the first draft after a quiet day doesn't pay about 3 s of schema compilation (under a cent a round). `off` disables it |
+| `PROPERTY_SUGGESTIONS_LLM_MODEL`, `MAGIC_TASK_AI_MODEL` | unset | unset | follow the draft model (`claude-sonnet-5-5`); a value that isn't a Claude model is ignored. Claude Sonnet 5.5 takes no `temperature`, so none is sent (`MAGIC_TASK_AI_TEMPERATURE` no longer exists) |
 | `LOB_ENV` | `test` | `live` when Lob is enabled | D5 |
 | `LOB_API_KEY` | `test_…` | deferred; `live_…` when enabled | Lob |
 | `LOB_WEBHOOK_SECRET` | Lob test webhook | deferred; live webhook secret when enabled | Lob → Webhooks |
@@ -848,7 +850,7 @@ month), Smarty ($552 a year if the Professional plan is chosen), the Apple
 Developer membership ($99 a year), Play registration ($25 once if not already
 paid), Lob postcards (from $0.905 each), Stripe fees on live payments (2.9% +
 $0.30 per card charge; Connect payouts $2 per active account a month plus 0.25%
-+ $0.25), Google and Mapbox usage beyond their free tiers, and OpenAI usage.
++ $0.25), Google and Mapbox usage beyond their free tiers, and Claude (Anthropic) usage.
 Check current prices before buying; these are not approvals to spend.
 
 ## Appendix C. Backups and restore (O02)

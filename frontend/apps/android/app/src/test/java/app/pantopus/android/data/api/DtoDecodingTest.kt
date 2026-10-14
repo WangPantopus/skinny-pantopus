@@ -6,8 +6,6 @@ import app.pantopus.android.data.api.models.homes.CheckAddressResponse
 import app.pantopus.android.data.api.models.homes.HomePublicProfileResponse
 import app.pantopus.android.data.api.models.homes.MyHomesResponse
 import app.pantopus.android.data.api.models.hub.HubDiscoveryResponse
-import app.pantopus.android.data.api.models.hub.HubResponse
-import app.pantopus.android.data.api.models.hub.HubTodayResponse
 import app.pantopus.android.data.api.models.mailbox.AckResponse
 import app.pantopus.android.data.api.models.mailbox.MailboxListResponse
 import app.pantopus.android.data.api.models.mailbox.v2.DrawerListResponse
@@ -17,7 +15,6 @@ import com.squareup.moshi.Moshi
 import com.squareup.moshi.adapters.Rfc3339DateJsonAdapter
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.Instant
@@ -68,32 +65,6 @@ class DtoDecodingTest {
         """
         val response = decode<ProfileResponse>(json)
         assertEquals("u", response.user.id)
-    }
-
-    @Test fun hub_response() {
-        val json = """
-            {"user":{"id":"u","name":"A","firstName":"A","username":"a","avatarUrl":null,"email":"a@b"},
-             "context":{"activeHomeId":null,"activePersona":{"type":"personal"}},
-             "availability":{"hasHome":false,"hasBusiness":false,"hasPayoutMethod":false},
-             "homes":[],"businesses":[],
-             "setup":{"steps":[],"allDone":true,
-                      "profileCompleteness":{"score":1.0,
-                        "checks":{"firstName":true,"lastName":true,"photo":true,"bio":true,"skills":true},
-                        "missingFields":[]}},
-             "statusItems":[],
-             "cards":{"personal":{"unreadChats":0,"earnings":0,"gigsNearby":0,"rating":0,"reviewCount":0},
-                      "home":null,"business":null},
-             "jumpBackIn":[],"activity":[],"neighborDensity":null}
-        """
-        val response = decode<HubResponse>(json)
-        assertEquals("personal", response.context.activePersona.type)
-        assertEquals(1.0, response.setup.profileCompleteness.score, 0.0001)
-    }
-
-    @Test fun hub_today_allows_unknown_payload() {
-        val json = """{"today":{"weather":{"temperatureF":72}}}"""
-        val response = decode<HubTodayResponse>(json)
-        assertNotNull(response.today)
     }
 
     @Test fun hub_discovery() {

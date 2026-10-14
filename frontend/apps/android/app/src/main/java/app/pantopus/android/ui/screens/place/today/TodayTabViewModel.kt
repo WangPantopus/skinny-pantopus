@@ -2,9 +2,14 @@ package app.pantopus.android.ui.screens.place.today
 
 import android.app.KeyguardManager
 import android.content.Context
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.security.AppLockManager
+import app.pantopus.android.data.ai.PickupFlyerReader
+import app.pantopus.android.data.ai.PickupFlyerReading
+import app.pantopus.android.data.ai.RadonReportReader
+import app.pantopus.android.data.ai.RadonReportReading
 import app.pantopus.android.data.analytics.PilotEvents
 import app.pantopus.android.data.api.models.homes.MyHomesResponse
 import app.pantopus.android.data.api.models.homes.showsCopyBeforeRecheck
@@ -123,6 +128,32 @@ class TodayTabViewModel
 
         override fun dismissPickupPrimer() {
             _pickupPrimerHomeId.value = null
+        }
+
+        /** "Read a flyer" in the pickup editor (unit tests build this without Hilt). */
+        @Inject lateinit var flyerReader: PickupFlyerReader
+
+        override val readsPickupFlyers: Boolean get() = ::flyerReader.isInitialized
+
+        override suspend fun readPickupFlyer(photo: Uri): PickupFlyerReading? {
+            val id = homeId ?: return null
+            val version = loadVersion
+            if (!pickupCurrent(id, version)) return null
+            val reading = flyerReader.read(photo)
+            return reading.takeIf { pickupCurrent(id, version) }
+        }
+
+        /** "Read a lab report" in the radon sheet (unit tests build this without Hilt). */
+        @Inject lateinit var radonReader: RadonReportReader
+
+        override val readsRadonReports: Boolean get() = ::radonReader.isInitialized
+
+        override suspend fun readRadonReport(report: Uri): RadonReportReading? {
+            val id = homeId ?: return null
+            val version = loadVersion
+            if (!pickupCurrent(id, version)) return null
+            val reading = radonReader.read(report)
+            return reading.takeIf { pickupCurrent(id, version) }
         }
 
         override suspend fun enablePickupReminders(

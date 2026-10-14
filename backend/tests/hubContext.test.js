@@ -17,8 +17,10 @@ jest.mock('../utils/logger', () => ({
   debug: jest.fn(),
 }));
 
-jest.mock('../config/openai', () => ({
-  getOpenAIClient: jest.fn(() => null),
+jest.mock('../config/anthropic', () => ({
+  getAnthropicClient: jest.fn(() => null),
+  resolveEffort: jest.fn((_configured, fallback) => fallback),
+  DRAFT_MODEL: 'claude-sonnet-5-5',
 }));
 
 jest.mock('../services/external/noaa', () => ({
@@ -986,7 +988,11 @@ describe('Provider Orchestrator', () => {
     jest.mock('../services/context/localUpdateProvider', () => ({
       getLocalUpdateContext: jest.fn(() => null),
     }));
-    jest.mock('../config/openai', () => ({ getOpenAIClient: jest.fn(() => null) }));
+    jest.mock('../config/anthropic', () => ({
+      getAnthropicClient: jest.fn(() => null),
+      resolveEffort: jest.fn((_configured, fallback) => fallback),
+      DRAFT_MODEL: 'claude-sonnet-5-5',
+    }));
     jest.mock('../services/context/contextCacheService', () => ({
       getContextCache: jest.fn(() => null), setContextCache: jest.fn(),
     }));

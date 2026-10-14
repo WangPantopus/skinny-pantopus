@@ -169,10 +169,11 @@ final class HomeClaimRelationshipJourneyUITests: XCTestCase {
     private func openReviewQueue() throws {
         // The isolated fixture leaves Place intelligence unavailable. Its
         // real error-state Back action must still reach the profile menu.
-        if !element("hubAvatarButton").waitForExistence(timeout: 2) {
+        if !element("place.menu").waitForExistence(timeout: 2) {
             try press(element("place.back"))
         }
-        try press(element("hubAvatarButton"))
+        try press(element("place.menu"))
+        try press(element("navDrawer.contextPill.profile"))
         let homeIdentity = app.buttons.matching(NSPredicate(format: "label == 'Home'")).firstMatch
         try require(homeIdentity.waitForExistence(timeout: 20))
         try press(homeIdentity)

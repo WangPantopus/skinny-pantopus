@@ -308,7 +308,7 @@ All Lambda functions are defined in `pantopus-seeder/deploy/template.yaml`. They
 All Lambda functions read credentials from a single AWS Secrets Manager secret:
 
 - **Secret name:** `pantopus/seeder/{environment}`
-- **Keys:** `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `PANTOPUS_API_BASE_URL`, `CURATOR_EMAIL`, `CURATOR_PASSWORD`, `OPENAI_API_KEY`, `INTERNAL_API_KEY`
+- **Keys:** `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `PANTOPUS_API_BASE_URL`, `CURATOR_EMAIL`, `CURATOR_PASSWORD`, `ANTHROPIC_API_KEY`, `INTERNAL_API_KEY`
 
 ### CloudWatch Metrics Namespaces
 

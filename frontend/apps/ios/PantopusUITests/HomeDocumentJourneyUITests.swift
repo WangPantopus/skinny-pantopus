@@ -136,7 +136,7 @@ final class HomeDocumentJourneyUITests: XCTestCase {
         if element("place.homeTools").waitForExistence(timeout: 5) {
             tap("place.homeTools")
         } else {
-            tap("hubMenuButton")
+            tap("place.menu")
             tap("navDrawer.item.my-homes")
             let home = app.staticTexts["Document Storage Test"].firstMatch
             XCTAssertTrue(home.waitForExistence(timeout: 20))
@@ -148,7 +148,7 @@ final class HomeDocumentJourneyUITests: XCTestCase {
     }
 
     private func signIn() throws {
-        if element("place.homeTools").waitForExistence(timeout: 3) || element("hubMenuButton").exists {
+        if element("place.homeTools").waitForExistence(timeout: 3) || element("place.menu").exists {
             // The dedicated simulator may retain this fixture's session from
             // an earlier read. The requested private document below proves
             // access; never replace its Keychain from the runner.
@@ -160,7 +160,7 @@ final class HomeDocumentJourneyUITests: XCTestCase {
         try enter(XCTUnwrap(inputs["DOCUMENT_TEST_PASSWORD"]), into: "loginPasswordField")
         tap("loginSubmitButton")
         let signedIn = NSPredicate { [self] _, _ in
-            element("hubMenuButton").exists || element("place.homeTools").exists
+            element("place.menu").exists || element("place.homeTools").exists
         }
         expectation(for: signedIn, evaluatedWith: app)
         waitForExpectations(timeout: 30)
@@ -187,7 +187,7 @@ final class HomeDocumentJourneyUITests: XCTestCase {
     }
 
     private func signOut() {
-        tap("hubMenuButton")
+        tap("place.menu")
         tap("navDrawer.item.settings")
         tapButton("Log out")
         XCTAssertTrue(element("placeLaunchSignIn").waitForExistence(timeout: 20))

@@ -127,6 +127,10 @@ final class AddHomeWizardViewModel: WizardModel {
     /// Set once the user reaches the success step, holds the new home's
     /// id so the "View home" CTA can route to the dashboard.
     private(set) var createdHomeId: String?
+    /// The created entry is a residency request, not a Home the person can open yet.
+    private(set) var createdResidency = false
+    /// Started from the Place tab: finishing opens Your Place for the new Home.
+    let completionOpensPlace: Bool
 
     // MARK: - Existing-home (address already claimed) branch
 
@@ -205,9 +209,11 @@ final class AddHomeWizardViewModel: WizardModel {
         // a closure returning a fixed value so the simulator's
         // NWPathMonitor (which can transiently report `.unsatisfied` on
         // CI runners with limited network) doesn't gate `submit()`.
-        isOnlineProvider: @escaping @MainActor () -> Bool = { NetworkMonitor.shared.isOnline }
+        isOnlineProvider: @escaping @MainActor () -> Bool = { NetworkMonitor.shared.isOnline },
+        completionOpensPlace: Bool = false
     ) {
         self.api = api
+        self.completionOpensPlace = completionOpensPlace
         self.requiredHomeId = requiredHomeId?.lowercased()
         self.initialSearchQuery = initialSearchQuery?.trimmingCharacters(in: .whitespacesAndNewlines)
         let sessionScope = HomeClaimSessionScope(api: api, identity: identity)
@@ -318,7 +324,7 @@ final class AddHomeWizardViewModel: WizardModel {
     #endif
 
     func secondaryTapped() {
-        // Success step's "Back to Hub" — no other step uses the secondary.
+        // Success step's "Done" — no other step uses the secondary.
         if currentStep == .success { pendingEvent = .dismiss }
     }
 
@@ -1187,10 +1193,16 @@ final class AddHomeWizardViewModel: WizardModel {
         creationReadFailed || creation.storageFailed
     }
 
+    /// Finishing opens Your Place for the new Home (from the Place tab). A
+    /// residency request, or a creation recovered without its id, opens My homes.
+    var completionOpensYourPlace: Bool {
+        completionOpensPlace && createdHomeId != nil && !createdResidency
+    }
+
     private var creationPrimaryLabel: String {
         if creationStorageUnavailable || creation.pending == nil { return "Retry recovery" }
         switch creation.outcome?.state {
-        case .completed: return "Open My Homes"
+        case .completed: return completionOpensYourPlace ? "Open Your Place" : "Open My Homes"
         case .rejected, .cancelled: return "Edit details"
         case .pending, nil: return "Try saving again"
         }
@@ -1239,7 +1251,10 @@ final class AddHomeWizardViewModel: WizardModel {
             creationReadFailed = false
             errorMessage = nil
             showsSavedCreation = true
-            if result.state == .completed { createdHomeId = result.residencyHomeId ?? result.home?.id }
+            if result.state == .completed {
+                createdHomeId = result.residencyHomeId ?? result.home?.id
+                createdResidency = result.residencyHomeId != nil
+            }
         } catch {
             guard isCurrent, revision == creationRevision else { return }
             errorMessage = error.localizedDescription
@@ -1314,13 +1329,13 @@ final class AddHomeWizardViewModel: WizardModel {
         switch step {
         case .address, .confirm, .role: "Continue"
         case .review: isClaimingExistingHome ? "Submit claim" : "Submit"
-        case .success: "Open My Homes"
+        case .success: completionOpensYourPlace ? "Open Your Place" : "Open My Homes"
         }
     }
 
     private func secondaryCTA(for step: AddHomeStep) -> WizardSecondaryCTA? {
         guard step == .success else { return nil }
-        return WizardSecondaryCTA(label: "Back to Hub", identifier: "addHomeBackToHub")
+        return WizardSecondaryCTA(label: "Done", identifier: "addHomeBackToHub")
     }
 
     private func primaryEnabled(for step: AddHomeStep) -> Bool {

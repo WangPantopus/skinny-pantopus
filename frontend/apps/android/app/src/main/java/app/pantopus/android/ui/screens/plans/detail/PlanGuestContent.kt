@@ -55,20 +55,17 @@ import app.pantopus.android.ui.theme.Spacing
 /** The host's first name for sentences ("Sam approves each person"). */
 internal val PlanDto.hostFirst: String get() = PlanFormat.firstName(host?.displayName)
 
-/** "within an hour": how fast the host usually answers, or null with too little history. */
+/** "within an hour": how fast the host usually answers (iOS's table), or null with too little history. */
 internal fun answerTime(plan: PlanDto): String? {
     val minutes = plan.host?.typicalAnswerMinutes ?: return null
     return when {
-        minutes <= ANSWER_HOUR -> "within an hour"
-        minutes <= ANSWER_FEW_HOURS -> "within a few hours"
-        minutes <= ANSWER_DAY -> "within a day"
-        else -> null
+        minutes < 20 -> "within minutes"
+        minutes < 75 -> "within an hour"
+        minutes < 180 -> "within a few hours"
+        minutes < 24 * 60 -> "within a day"
+        else -> "in a day or two"
     }
 }
-
-private const val ANSWER_HOUR = 60
-private const val ANSWER_FEW_HOURS = 240
-private const val ANSWER_DAY = 1440
 
 /** "Near Prune Hill · under 1 mi · at Sam's place" (or "a public place"). */
 internal fun whereLine(plan: PlanDto): String {
@@ -168,7 +165,7 @@ internal fun PlanSpots(
                 } else if (plan.planKind == PlanKind.PICKUP_GAME) {
                     "players"
                 } else {
-                    "spots"
+                    "people"
                 }
             PlanSpotsCaption(going = "Full", left = "${plan.spots} of ${plan.spots} $noun", note = note, noteMuted = true)
         } else {
@@ -226,7 +223,12 @@ internal fun askFooter(plan: PlanDto): AskFooter {
     return when {
         ended -> AskFooter("This plan has ended", enabled = false, caption = null, action = AskAction.None)
         viewer?.canAsk == true && (plan.isFull || viewer.cannotAskReason == PlanCannotAsk.FULL_USE_WAITLIST) ->
-            AskFooter("Join the waitlist", enabled = true, caption = "If a spot opens, we'll tell you right away.", action = AskAction.Ask)
+            AskFooter(
+                "Join the waitlist",
+                enabled = true,
+                caption = "Full for now. If a spot opens, we'll tell you right away.",
+                action = AskAction.Ask,
+            )
         viewer?.canAsk == true ->
             AskFooter(
                 "Ask to join",
@@ -253,7 +255,7 @@ internal fun askFooter(plan: PlanDto): AskFooter {
                     AskFooter(
                         "Share your location to join",
                         enabled = true,
-                        caption = "Hosts only see a distance like \"about 1 mi\".",
+                        caption = "Hosts only see a distance like “about 1 mi”.",
                         action = AskAction.Location,
                     )
                 PlanCannotAsk.TOO_FAR ->
@@ -267,7 +269,7 @@ internal fun askFooter(plan: PlanDto): AskFooter {
                     AskFooter(
                         "Join the waitlist",
                         enabled = true,
-                        caption = "If a spot opens, we'll tell you right away.",
+                        caption = "Full for now. If a spot opens, we'll tell you right away.",
                         action = AskAction.Ask,
                     )
                 PlanCannotAsk.TOO_MANY_REQUESTS ->

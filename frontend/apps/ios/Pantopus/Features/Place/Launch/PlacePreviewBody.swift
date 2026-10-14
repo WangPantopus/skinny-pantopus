@@ -31,26 +31,7 @@ struct PlacePreviewBody: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     previewHero
-                    // A real dollar band when the backend had one for
-                    // this address, and nothing at all when it did not —
-                    // the tiles carry the page as before. Never
-                    // synthesized client-side.
-                    // The aha card leads (D1): the most surprising ready
-                    // fact, in the server's words.
-                    if let aha = preview.aha, aha.isRenderable {
-                        ahaCard(aha)
-                    }
-                    if let lead = preview.moneyLead, lead.isRenderable {
-                        moneyLeadCard(lead)
-                    }
-                    if let sections = preview.sections, !sections.isEmpty {
-                        previewSections(sections)
-                    } else if let free = preview.free {
-                        freeSections(free)
-                    }
-                    if let locked = preview.locked, !locked.isEmpty {
-                        lockedSections(locked)
-                    }
+                    PlacePreviewContent(preview: preview, onAction: onCreateAccount, onRetry: onRetry, retrying: retrying)
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 120)
@@ -106,6 +87,65 @@ struct PlacePreviewBody: View {
         .placeCard()
         .padding(.top, 8)
         .padding(.bottom, 4)
+    }
+
+    private var wall: some View {
+        VStack(spacing: 10) {
+            Text(signedInEntry
+                ? "Keep this address handy. Choose whether to save it privately."
+                : "Keep this address handy. Choose whether to save it privately after sign-in.")
+                .font(.system(size: 14.5, weight: .semibold))
+                .multilineTextAlignment(.center)
+                .foregroundStyle(Theme.Color.appText)
+            PrimaryButton(title: "Continue") { onCreateAccount() }
+                .accessibilityIdentifier("place.preview.continue")
+            Text(signedInEntry
+                ? "Saving a place does not create or verify a Home."
+                : "Your preview stays on this device for up to 24 hours while you sign in.")
+                .font(Theme.Font.caption).foregroundStyle(Theme.Color.appTextMuted)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 14)
+        .padding(.bottom, Spacing.s6)
+        .frame(maxWidth: .infinity)
+        .background(.bar)
+        .overlay(alignment: .top) { Rectangle().fill(Theme.Color.appBorder).frame(height: 1) }
+    }
+}
+
+/// The facts of a preview: the aha card, the money lead, the section groups
+/// and (signed out) the locked descriptors. The funnel's preview and the
+/// Place tab's saved address both show them.
+struct PlacePreviewContent: View {
+    let preview: PlacePreview
+    /// "More with a free account": only for someone without an account.
+    var showsLocked = true
+    /// The aha follow-up and every locked, verify or claim call to action.
+    var onAction: () -> Void
+    var onRetry: () -> Void
+    var retrying: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // The aha card leads (D1): the most surprising ready fact, in the
+            // server's words. A real dollar band follows when the backend had
+            // one for this address, and nothing at all when it did not. Never
+            // synthesized client-side.
+            if let aha = preview.aha, aha.isRenderable {
+                ahaCard(aha)
+            }
+            if let lead = preview.moneyLead, lead.isRenderable {
+                moneyLeadCard(lead)
+            }
+            if let sections = preview.sections, !sections.isEmpty {
+                previewSections(sections)
+            } else if let free = preview.free {
+                freeSections(free)
+            }
+            if showsLocked, let locked = preview.locked, !locked.isEmpty {
+                lockedSections(locked)
+            }
+        }
     }
 
     /// "FEMA · OpenFEMA NFIP policies · census tract-level, not this home"
@@ -215,7 +255,7 @@ struct PlacePreviewBody: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             if !aha.followUp.isEmpty {
-                Button(action: onCreateAccount) {
+                Button(action: onAction) {
                     HStack(spacing: 4) {
                         Text(aha.followUp)
                             .font(.system(size: 13.5, weight: .semibold))
@@ -259,8 +299,8 @@ struct PlacePreviewBody: View {
                         PlaceSectionView(
                             env: env,
                             onOpen: nil,
-                            onVerify: onCreateAccount,
-                            onClaim: onCreateAccount,
+                            onVerify: onAction,
+                            onClaim: onAction,
                             onRetry: onRetry,
                             retrying: retrying
                         )
@@ -306,7 +346,7 @@ struct PlacePreviewBody: View {
                     title: section.title,
                     reason: section.reason,
                     cta: section.unlock == .claim ? "Claim home" : "Create account",
-                    onTap: onCreateAccount
+                    onTap: onAction
                 )
             }
         }
@@ -323,29 +363,6 @@ struct PlacePreviewBody: View {
         default: .mapPin
         }
     }
-
-    private var wall: some View {
-        VStack(spacing: 10) {
-            Text(signedInEntry
-                ? "Keep this address handy. Choose whether to save it privately."
-                : "Keep this address handy. Choose whether to save it privately after sign-in.")
-                .font(.system(size: 14.5, weight: .semibold))
-                .multilineTextAlignment(.center)
-                .foregroundStyle(Theme.Color.appText)
-            PrimaryButton(title: "Continue") { onCreateAccount() }
-                .accessibilityIdentifier("place.preview.continue")
-            Text(signedInEntry
-                ? "Saving a place does not create or verify a Home."
-                : "Your preview stays on this device for up to 24 hours while you sign in.")
-                .font(Theme.Font.caption).foregroundStyle(Theme.Color.appTextMuted)
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 14)
-        .padding(.bottom, Spacing.s6)
-        .frame(maxWidth: .infinity)
-        .background(.bar)
-        .overlay(alignment: .top) { Rectangle().fill(Theme.Color.appBorder).frame(height: 1) }
-    }
 }
 
 // MARK: - A6 — coming to your region
@@ -353,6 +370,8 @@ struct PlacePreviewBody: View {
 struct PlaceComingRegionBody: View {
     let message: String
     var signedInEntry = false
+    /// Replaces the primary button's title (the Place tab's first-run screen).
+    var primaryTitle: String?
     var onBrowse: () -> Void
     var onBack: () -> Void
 
@@ -389,7 +408,7 @@ struct PlaceComingRegionBody: View {
                     .multilineTextAlignment(.center)
                     .lineSpacing(2)
                     .foregroundStyle(Theme.Color.appTextSecondary)
-                PrimaryButton(title: signedInEntry ? "Back to saved places" : "Follow people & places") { onBrowse() }
+                PrimaryButton(title: primaryTitle ?? (signedInEntry ? "Back to saved places" : "Follow people & places")) { onBrowse() }
             }
             .padding(.horizontal, 28)
             Spacer(minLength: 0)

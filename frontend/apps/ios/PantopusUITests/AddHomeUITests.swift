@@ -22,24 +22,23 @@ final class AddHomeUITests: XCTestCase {
         app.launchEnvironment["UI_TESTS_STUB_API"] = "1"
         app.launchEnvironment["UI_TESTS_DISABLE_NOTIFICATIONS"] = "1"
         app.launch()
-        guard app.staticTexts["Hub"].waitForExistence(timeout: 5) else {
+        guard app.buttons["place.menu"].firstMatch.waitForExistence(timeout: 5) else {
             app.terminateAfterSkippedLaunch()
             return nil
         }
         return app
     }
 
-    /// Tap the 5-tap easter egg on the Hub to surface the debug sheet,
-    /// then jump to the Add-Home wizard. Returns the wizard root or
-    /// `nil` if the test build doesn't honour the launch env.
+    /// Opens the Add-Home wizard from Your Place: the address opens Your
+    /// homes, and its "Add a home" row starts the wizard. Returns the wizard
+    /// root, or `nil` when the stubbed root isn't a Home's Your Place.
     private func openAddHome(in app: XCUIApplication) -> XCUIElement? {
-        // For now we route via MyHomes from the You tab → not yet wired.
-        // Easier path: use the Add Home action chip from Hub. We send
-        // it via a sheet by tapping the Hub's action strip. Skip if the
-        // chip isn't visible (older builds).
-        let scanMail = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "Add home"))
-        guard scanMail.firstMatch.waitForExistence(timeout: 3) else { return nil }
-        scanMail.firstMatch.tap()
+        let address = app.buttons["place.addressSwitcher"].firstMatch
+        guard address.waitForExistence(timeout: 3) else { return nil }
+        address.tap()
+        let addHome = app.buttons["place.switcher.add"].firstMatch
+        guard addHome.waitForExistence(timeout: 3) else { return nil }
+        addHome.tap()
         let shell = app.descendants(matching: .any).matching(identifier: "wizardShell").firstMatch
         guard shell.waitForExistence(timeout: 5) else { return nil }
         return shell
@@ -47,7 +46,7 @@ final class AddHomeUITests: XCTestCase {
 
     func testCloseEmptyDismissesImmediately() throws {
         guard let app = launch() else { throw XCTSkip("Hooks not honoured.") }
-        guard openAddHome(in: app) != nil else { throw XCTSkip("Add Home action chip not present.") }
+        guard openAddHome(in: app) != nil else { throw XCTSkip("Your homes' Add a home not reachable.") }
         app.buttons["wizardLeadingButton"].tap()
         XCTAssertFalse(
             app.staticTexts["Discard your progress?"].waitForExistence(timeout: 1),
@@ -57,7 +56,7 @@ final class AddHomeUITests: XCTestCase {
 
     func testDirtyFormPromptsDiscardConfirm() throws {
         guard let app = launch() else { throw XCTSkip("Hooks not honoured.") }
-        guard openAddHome(in: app) != nil else { throw XCTSkip("Add Home action chip not present.") }
+        guard openAddHome(in: app) != nil else { throw XCTSkip("Your homes' Add a home not reachable.") }
 
         let street = app.descendants(matching: .any)
             .matching(identifier: "addHome_street").firstMatch
@@ -78,7 +77,7 @@ final class AddHomeUITests: XCTestCase {
 
     func testHappyPathReachesSuccessStep() throws {
         guard let app = launch() else { throw XCTSkip("Hooks not honoured.") }
-        guard openAddHome(in: app) != nil else { throw XCTSkip("Add Home action chip not present.") }
+        guard openAddHome(in: app) != nil else { throw XCTSkip("Your homes' Add a home not reachable.") }
 
         // Step 1 — fill all required fields.
         for (id, value) in [

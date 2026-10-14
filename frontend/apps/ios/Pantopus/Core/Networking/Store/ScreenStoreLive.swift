@@ -139,7 +139,8 @@ private struct RefreshOnStoreChange: ViewModifier {
     }
 
     private func detached() {
-        guard recheckOnAttach else { return }
+        // A dropped copy can leave the window while another one still shows the screen.
+        guard recheckOnAttach, !probe.isOnScreen else { return }
         _ = onBackground?()
         recheckOnResume = true
     }
@@ -168,15 +169,31 @@ private struct RefreshOnStoreChange: ViewModifier {
 /// SwiftUI can reattach a covered screen and fire its appearance callbacks
 /// while another navigation destination is on top. Sensitive callers also
 /// check the containing controller's position in every navigation stack.
+/// SwiftUI can also give one screen a second probe view and then drop the
+/// first (iOS 27: Nearby's "See your plan", pushed right after a full-screen
+/// cover closes). The view it updated last isn't always the one that stays,
+/// so the probe watches every copy and counts the ones in the window.
 @MainActor
 private final class WindowProbe {
-    weak var view: UIView?
+    private let views = NSHashTable<UIView>.weakObjects()
+
+    func watch(_ view: UIView) {
+        views.add(view)
+    }
 
     var isOnScreen: Bool {
-        view?.window != nil
+        !viewsInWindow.isEmpty
     }
 
     var isTopNavigationScreen: Bool {
+        viewsInWindow.contains { Self.isTopNavigationScreen($0) }
+    }
+
+    private var viewsInWindow: [UIView] {
+        views.allObjects.filter { $0.window != nil }
+    }
+
+    private static func isTopNavigationScreen(_ view: UIView) -> Bool {
         var responder: UIResponder? = view
         while let current = responder, !(current is UIViewController) {
             responder = current.next
@@ -206,12 +223,12 @@ private struct WindowProbeView: UIViewRepresentable {
         view.isUserInteractionEnabled = false
         view.onAttach = onAttach
         view.onDetach = onDetach
-        probe.view = view
+        probe.watch(view)
         return view
     }
 
     func updateUIView(_ view: WindowProbeUIView, context _: Context) {
-        probe.view = view
+        probe.watch(view)
         view.onAttach = onAttach
         view.onDetach = onDetach
     }
