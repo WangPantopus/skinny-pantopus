@@ -370,20 +370,25 @@ struct PlanWaitlistSection: View {
                 Text(details).planFont(.small).foregroundStyle(Theme.Color.appTextSecondary)
             }
         }
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                (Text("Full").fontWeight(.semibold) + Text(" · \(card.goingCount) of \(card.spots) \(noun)")
-                    .foregroundColor(Theme.Color.appTextSecondary))
-                    .planFont(.small)
-                    .foregroundStyle(Theme.Color.appText)
-                Spacer()
-                if let waiting = card.waitlistCount, waiting > 0 {
-                    Text("\(waiting) waiting").planFont(.small).foregroundStyle(Theme.Color.appTextMuted)
+        if card.isFull {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    (Text("Full").fontWeight(.semibold) + Text(" · \(card.goingCount) of \(card.spots) \(noun)")
+                        .foregroundColor(Theme.Color.appTextSecondary))
+                        .planFont(.small)
+                        .foregroundStyle(Theme.Color.appText)
+                    Spacer()
+                    if let waiting = card.waitlistCount, waiting > 0 {
+                        Text("\(waiting) waiting").planFont(.small).foregroundStyle(Theme.Color.appTextMuted)
+                    }
                 }
+                PlanSlotMeter(spots: card.spots, filled: card.goingCount)
             }
-            PlanSlotMeter(spots: card.spots, filled: card.goingCount)
+            .accessibilityElement(children: .combine)
+        } else {
+            // A spot opened while you wait (the host hasn't let the next person in yet): say so, as Android does.
+            PlanSpotsBlock(card: card, trailing: (card.waitlistCount ?? 0) > 0 ? "\(card.waitlistCount ?? 0) waiting" : nil)
         }
-        .accessibilityElement(children: .combine)
         PlanCardBox {
             HStack(spacing: Spacing.s3) {
                 PlanAvatar(name: card.host.displayName, url: card.host.avatarUrl)

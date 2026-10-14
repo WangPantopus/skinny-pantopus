@@ -326,6 +326,11 @@ final class PlansMapViewModel {
         return mine.hosting + mine.going + mine.asked + mine.waitlisted
     }
 
+    /// Your plans after the type filter: the list's "Your plans" follows the chip, as the map and the days do.
+    var visibleYourPlans: [PlanCardDTO] {
+        yourPlans.filter { kindFilter == nil || $0.kind == kindFilter }
+    }
+
     // MARK: - Selection
 
     func select(_ pin: PlanPinDTO) {
