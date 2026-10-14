@@ -61,7 +61,8 @@ const RULES = {
   ChatMessage: { scope: 'room', topics: ({ r }) => [`chat:${r}`, 'chats'] },
   Notification: { scope: 'user', topics: () => ['notifications'] },
   User: { scope: 'user', topics: () => ['profile:me'] },
-  UserNotificationPreferences: { scope: 'user', topics: () => ['profile:me', 'today'] },
+  // default_home_id lives here too: another device reads its home list again.
+  UserNotificationPreferences: { scope: 'user', topics: () => ['profile:me', 'today', 'homes'] },
   UserPrivacySettings: { scope: 'user', topics: () => ['profile:me'] },
   MailPreferences: { scope: 'user', topics: () => ['profile:me'] },
   UserViewingLocation: { scope: 'user', topics: () => ['profile:me', 'today'] },

@@ -50,6 +50,8 @@ final class PlaceDashboardViewModel {
     let onAddPlace: () -> Void
     /// The full Home list (the homes sheet's "Manage homes" and pending rows).
     let onManageHomes: () -> Void
+    /// The homes sheet made another Home the default.
+    let onDefaultHomeChanged: () -> Void
     /// Begin verification with the chosen method + address (pushes B2).
     let onStartVerify: (PlaceVerifyMethod, String) -> Void
     /// W7 — compose a verified-neighbor heads-up (carries the address for
@@ -73,6 +75,7 @@ final class PlaceDashboardViewModel {
         onSelectHome: @escaping (String) -> Void = { _ in },
         onAddPlace: @escaping () -> Void = {},
         onManageHomes: @escaping () -> Void = {},
+        onDefaultHomeChanged: @escaping () -> Void = {},
         onStartVerify: @escaping (PlaceVerifyMethod, String) -> Void = { _, _ in },
         onComposeMessage: @escaping (String) -> Void = { _ in },
         onOpenInbox: @escaping () -> Void = {},
@@ -88,6 +91,7 @@ final class PlaceDashboardViewModel {
         self.onSelectHome = onSelectHome
         self.onAddPlace = onAddPlace
         self.onManageHomes = onManageHomes
+        self.onDefaultHomeChanged = onDefaultHomeChanged
         self.onStartVerify = onStartVerify
         self.onComposeMessage = onComposeMessage
         self.onOpenInbox = onOpenInbox

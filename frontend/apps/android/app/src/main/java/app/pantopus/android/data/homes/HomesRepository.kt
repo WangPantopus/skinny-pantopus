@@ -44,6 +44,8 @@ import app.pantopus.android.data.api.models.homes.HomeTaskResponse
 import app.pantopus.android.data.api.models.homes.InviteOwnerRequest
 import app.pantopus.android.data.api.models.homes.MoveOutResponse
 import app.pantopus.android.data.api.models.homes.MyHomesResponse
+import app.pantopus.android.data.api.models.homes.SetDefaultHomeBody
+import app.pantopus.android.data.api.models.homes.SetDefaultHomeResponse
 import app.pantopus.android.data.api.models.homes.MyOwnershipClaimsResponse
 import app.pantopus.android.data.api.models.homes.PropertyDetailsResponse
 import app.pantopus.android.data.api.models.homes.PropertySuggestionsRequest
@@ -111,6 +113,18 @@ open class HomesRepository
 
         /** The stored My Homes as it is now, without a request (null before the first read or after a wipe). */
         open fun myHomesCopy(): MyHomesResponse? = store.peek(StoreKeys.myHomes).data
+
+        /**
+         * `PUT /api/homes/default` — makes [homeId] the person's default Home. Place lands on it and Today follows it,
+         * so both read again on their next visit.
+         */
+        open suspend fun setDefaultHome(homeId: String): NetworkResult<SetDefaultHomeResponse> =
+            safeApiCall { api.setDefaultHome(SetDefaultHomeBody(homeId)) }.also {
+                if (it is NetworkResult.Success) {
+                    store.markStale(StoreTopics.HOMES)
+                    store.markStale(StoreTopics.TODAY)
+                }
+            }
 
         /**
          * An own edit that changes the viewer's list of homes (contract §6 and §8, topic `homes`): every screen

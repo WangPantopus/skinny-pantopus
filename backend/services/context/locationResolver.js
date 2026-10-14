@@ -182,6 +182,12 @@ function dedupeHomeCandidates(...candidateLists) {
   return merged;
 }
 
+// The Home the person chose as their default goes first when it is one of the candidates.
+function preferDefaultHome(candidates, homeId) {
+  const index = homeId ? candidates.findIndex((row) => (row?.home?.id || row?.home_id) === homeId) : -1;
+  return index > 0 ? [candidates[index], ...candidates.slice(0, index), ...candidates.slice(index + 1)] : candidates;
+}
+
 async function loadFallbackHomeCandidates(userId) {
   const [ownerResult, legacyResult] = await Promise.all([
     supabaseAdmin
@@ -246,9 +252,16 @@ async function resolveLocation(userId) {
         .from('HomeOccupancy')
         .select(`home_id, home:home_id(${HOME_LOCATION_SELECT})`)
         .eq('user_id', userId)
-        .eq('is_active', true),
+        .eq('is_active', true)
+        .order('created_at', { ascending: true }),
       loadFallbackHomeCandidates(userId),
     ]));
+    // Read on its own so a database without the column (before its migration) keeps every other preference.
+    const defaultHomeRead = settle(supabaseAdmin
+      .from('UserNotificationPreferences')
+      .select('default_home_id')
+      .eq('user_id', userId)
+      .maybeSingle());
 
     // ── Step 1: Read preferences ──
     const { data: prefs, error: prefsErr } = await supabaseAdmin
@@ -289,7 +302,11 @@ async function resolveLocation(userId) {
       logger.warn('locationResolver: occupancy query error', { userId, error: occErr.message });
     }
 
-    const homeCandidates = dedupeHomeCandidates(occupancies || [], fallbackHomes);
+    const { value: defaultHome } = await defaultHomeRead;
+    const homeCandidates = preferDefaultHome(
+      dedupeHomeCandidates(occupancies || [], fallbackHomes),
+      defaultHome?.error ? null : defaultHome?.data?.default_home_id || null,
+    );
 
     // ── Step 4: Honor the explicit location_mode when possible ──
     if (locationMode === 'viewing_location') {

@@ -206,12 +206,8 @@ struct AddressTodayTabView: View {
             try Task.checkCancellation()
             try scope.requireCurrent()
             guard resolveID == requestID else { return }
-            let privateHome = response.homes
-                .filter { $0.hasValidListContext && $0.accessKind == "private_setup" }
-                .max { ($0.home.createdAt ?? "", $0.id) < ($1.home.createdAt ?? "", $1.id) }
-            let id = response.sharedHomes.first { $0.isPrimaryOwner == true }?.id
-                ?? response.sharedHomes.first?.id ?? privateHome?.id
-            if let id {
+            // The default Home, as Place lands on it (`MyHomesResponse.defaultHomeId`).
+            if let id = response.defaultHomeId {
                 if detail?.homeId != id || detail?.savedPlaceId != nil {
                     detail = PlaceDetailViewModel(homeId: id, group: .today)
                 }
