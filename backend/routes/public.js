@@ -132,7 +132,7 @@ router.get('/posts/:id', async (req, res) => {
 
     const { data: post, error } = await supabaseAdmin
       .from('Post')
-      .select('id, title, content, post_type, city, state, visibility, created_at')
+      .select('id, title, content, post_type, city, state, visibility, allow_external_share, created_at')
       .eq('id', id)
       .single();
 
@@ -140,9 +140,8 @@ router.get('/posts/:id', async (req, res) => {
       return res.status(404).json({ error: 'Not found' });
     }
 
-    // Only expose publicly visible posts
-    const publicVisibilities = ['public', 'neighborhood', 'city', 'global'];
-    if (!publicVisibilities.includes(post.visibility)) {
+    // Only a post its author made public, with sharing left on. Neighborhood and city posts stay inside the app.
+    if (post.visibility !== 'public' || post.allow_external_share === false) {
       return res.status(404).json({ error: 'Not found' });
     }
 

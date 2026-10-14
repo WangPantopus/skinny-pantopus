@@ -212,6 +212,7 @@ def _process_region(region_cfg: RegionConfig, slot_name: str, supabase, secrets)
             topic="sports" if is_sports_item else None,
             sports_scope="regional" if is_sports_item else None,
             post_metadata=sports_metadata,
+            source_url=item.get("source_url"),
         )
 
         if post_error:

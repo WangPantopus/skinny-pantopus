@@ -22,13 +22,14 @@ const { toolDefinitions, executeTool, closingForDrafts } = require('./tools');
 const prompts = require('./prompts');
 const schemas = require('./schemas');
 const {
-  AIRefusalError, complete, emptyUsage, imageBlock, isImageError, isTimeoutError, systemBlocks,
+  AIRefusalError, complete, emptyUsage, imageBlock, isDocumentError, isImageError, isTimeoutError, systemBlocks,
   supportsSystemMessages, describeNow, todayLine,
 } = require('./llm');
 const { runAgentTurn, sanitizeHistory, compactForStorage } = require('./agentLoop');
 const { buildChatContext, lastContextText, userTimeZone, CONTEXT_HEADER } = require('./chatContext');
 const { photoBlocks } = require('./photos');
-const { refreshPickupDraft } = require('./pickupDraft');
+const { refreshPickupDraft, editorFields } = require('./pickupDraft');
+const radonReport = require('./radonReport');
 const { getAuthorizedMail } = require('./mailAccess');
 const noaa = require('../external/noaa');
 const { isLaunchFeatureEnabled } = require('../../utils/featureFlags');
@@ -793,6 +794,146 @@ async function draftPost({ text, surface, coarseLocation, userId }) {
   }
 }
 
+// ─── Pickup Days from a Flyer (for the pickup editor) ────────────────────────
+
+/** A note from the model for people to read: trimmed, without a stray closing bracket ("…in the photo.}"). */
+function noteText(note) {
+  const text = typeof note === 'string' ? note.trim() : '';
+  return (/[{[]/.test(text) ? text : text.replace(/[}\]\s]+$/, '')) || null;
+}
+
+/**
+ * Read a household's pickup days from photos of their hauler's flyer, or from what they
+ * wrote, for the pickup editor to fill in. Nothing is saved here: the person checks the
+ * editor's fields and saves them with its own Save.
+ */
+async function readPickupSchedule({ images = [], text, userId }) {
+  const startTime = Date.now();
+  const client = getAnthropicClient();
+  if (!client) {
+    return { error: 'AI_UNAVAILABLE', message: 'AI is temporarily unavailable. Please set your pickup days yourself.', fallback: true };
+  }
+
+  const photos = images.length ? (await photoBlocks(images, userId)).filter(Boolean) : [];
+  if (images.length && !photos.length) {
+    return { error: 'IMAGE_UNREADABLE', message: "I couldn't open that photo. Try a JPEG or PNG, or a different photo." };
+  }
+  const ask = (text || 'Read the pickup schedule from this flyer.').trim();
+  const content = [...photos, { type: 'text', text: `${ask}\n\n${todayLine(await userTimeZone(userId))}` }];
+  const log = (fields) => logRequest({
+    userId, endpoint: 'draft/pickup-schedule', model: DRAFT_MODEL,
+    promptVersion: prompts.VERSIONS.pickupSchedule, latencyMs: Date.now() - startTime, ...fields,
+  });
+
+  try {
+    const response = await complete({
+      client,
+      model: DRAFT_MODEL,
+      system: prompts.PICKUP_SCHEDULE_SYSTEM,
+      messages: [{ role: 'user', content }],
+      schema: schemas.claudeSchemas.pickupSchedule,
+      effort: DRAFT_EFFORT,
+      maxTokens: DRAFT_MAX_TOKENS,
+      timeoutMs: DRAFT_TIMEOUT_MS,
+    });
+    let reading = null;
+    try {
+      reading = JSON.parse(response.text);
+    } catch {
+      // Treated as invalid below.
+    }
+    const valid = Boolean(reading) && schemas.validatePickupSchedule(reading);
+    await log({
+      status: valid ? 'ok' : 'schema_error', schemaValid: valid,
+      inputTokens: response.inputTokens, outputTokens: response.outputTokens,
+    });
+    if (!valid) {
+      return { error: 'DRAFT_INVALID', message: "Couldn't read a pickup schedule. Try again, or set your pickup days yourself.", fallback: true };
+    }
+    const fields = editorFields(reading);
+    const note = noteText(reading.note);
+    if (!fields.garbage_weekday && !fields.recycling_frequency) {
+      return { error: 'NO_SCHEDULE', message: note || "That doesn't look like a pickup schedule.", fallback: true };
+    }
+    return { schedule: fields, note };
+  } catch (err) {
+    logger.error('readPickupSchedule error', { userId, error: err.message });
+    await log({ status: err instanceof AIRefusalError ? 'refusal' : 'error', errorMessage: err.message });
+    if (err instanceof AIRefusalError) return { ...DECLINED };
+    if (isImageError(err)) return { error: 'IMAGE_UNREADABLE', message: "I couldn't read that photo. Try a clearer one." };
+    if (isTimeoutError(err)) return { error: 'AI_TIMEOUT', message: 'Reading the flyer took too long. Please try again.', fallback: true };
+    return { error: 'AI_UNAVAILABLE', message: 'AI is temporarily unavailable. Please set your pickup days yourself.', fallback: true };
+  }
+}
+
+// ─── Radon Result from a Lab Report (for the Today radon sheet) ──────────────
+
+/**
+ * Read a home's radon result from a photo or PDF of the lab's report, for the
+ * Today radon sheet to fill in. Nothing is saved here and the file isn't kept:
+ * the person checks the result and test date and saves with the sheet's Save.
+ */
+async function readRadonReport({ file, userId }) {
+  const startTime = Date.now();
+  const client = getAnthropicClient();
+  if (!client) {
+    return { error: 'AI_UNAVAILABLE', message: 'AI is temporarily unavailable. Please type your result yourself.', fallback: true };
+  }
+
+  const report = await radonReport.reportBlock(file);
+  if (!report) {
+    return { error: 'FILE_UNREADABLE', message: "I couldn't open that file. Try a photo (JPEG or PNG) or a PDF of the report." };
+  }
+  const timeZone = await userTimeZone(userId);
+  const content = [report, { type: 'text', text: `Read the radon test result from this report.\n\n${todayLine(timeZone)}` }];
+  const log = (fields) => logRequest({
+    userId, endpoint: 'draft/radon-result', model: DRAFT_MODEL,
+    promptVersion: prompts.VERSIONS.radonResult, latencyMs: Date.now() - startTime, ...fields,
+  });
+
+  try {
+    const response = await complete({
+      client,
+      model: DRAFT_MODEL,
+      system: prompts.RADON_RESULT_SYSTEM,
+      messages: [{ role: 'user', content }],
+      schema: schemas.claudeSchemas.radonResult,
+      effort: DRAFT_EFFORT,
+      maxTokens: DRAFT_MAX_TOKENS,
+      timeoutMs: DRAFT_TIMEOUT_MS,
+    });
+    let reading = null;
+    try {
+      reading = JSON.parse(response.text);
+    } catch {
+      // Treated as invalid below.
+    }
+    const valid = Boolean(reading) && schemas.validateRadonResult(reading);
+    await log({
+      status: valid ? 'ok' : 'schema_error', schemaValid: valid,
+      inputTokens: response.inputTokens, outputTokens: response.outputTokens,
+    });
+    if (!valid) {
+      return { error: 'DRAFT_INVALID', message: "Couldn't read a radon result. Try again, or type your result yourself.", fallback: true };
+    }
+    const fields = radonReport.sheetFields(reading, radonReport.todayIn(timeZone));
+    const note = noteText(reading.note);
+    if (fields.value_pci === null) {
+      return { error: 'NO_RESULT', message: note || "That doesn't look like a radon test result.", fallback: true };
+    }
+    return { result: fields, note };
+  } catch (err) {
+    logger.error('readRadonReport error', { userId, error: err.message });
+    await log({ status: err instanceof AIRefusalError ? 'refusal' : 'error', errorMessage: err.message });
+    if (err instanceof AIRefusalError) return { ...DECLINED };
+    if (isImageError(err) || isDocumentError(err)) {
+      return { error: 'FILE_UNREADABLE', message: "I couldn't read that file. Try a clearer photo, or a PDF that isn't password-protected." };
+    }
+    if (isTimeoutError(err)) return { error: 'AI_TIMEOUT', message: 'Reading the report took too long. Please try again.', fallback: true };
+    return { error: 'AI_UNAVAILABLE', message: 'AI is temporarily unavailable. Please type your result yourself.', fallback: true };
+  }
+}
+
 // ─── 4. Mail Summarization ──────────────────────────────────────────────────
 
 async function summarizeMail({ mailItemId, userId }) {
@@ -1243,6 +1384,8 @@ module.exports = {
   draftListing,
   draftListingFromImages,
   draftPost,
+  readPickupSchedule,
+  readRadonReport,
   summarizeMail,
   generatePlaceBrief,
   draftMailOpening,

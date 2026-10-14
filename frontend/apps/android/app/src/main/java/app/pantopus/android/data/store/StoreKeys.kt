@@ -5,6 +5,7 @@ import app.pantopus.android.data.api.models.chats.ChatMessagesResponse
 import app.pantopus.android.data.api.models.chats.UnifiedConversationsResponse
 import app.pantopus.android.data.api.models.connections.BlockedRelationshipsResponse
 import app.pantopus.android.data.api.models.connections.SentRequestsResponse
+import app.pantopus.android.data.api.models.feed.FeedPreferencesResponse
 import app.pantopus.android.data.api.models.feed.FeedResponse
 import app.pantopus.android.data.api.models.homedashboard.HomeDashboardResponse
 import app.pantopus.android.data.api.models.homes.MyHomesResponse
@@ -26,6 +27,7 @@ import app.pantopus.android.data.api.models.profile.PublicProfileDto
 import app.pantopus.android.data.api.models.relationships.PendingRequestsResponse
 import app.pantopus.android.data.api.models.relationships.RelationshipsListResponse
 import app.pantopus.android.data.api.models.saved_places.SavedPlacesListResponse
+import app.pantopus.android.data.api.models.settings.PrivacySettingsResponse
 import app.pantopus.android.data.api.models.support_trains.SupportTrainDetailDto
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsListResponse
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsNearbyResponse
@@ -93,6 +95,14 @@ object StoreKeys {
             "api/relationships/blocked",
             kind = StoreKind.PEOPLE,
             topics = setOf(StoreTopics.PROFILE_ME, StoreTopics.CONNECTIONS),
+        )
+
+    /** Search privacy preferences are copied in memory and removed after a PATCH. */
+    val privacySettings =
+        StoreKey<PrivacySettingsResponse>(
+            "api/privacy/settings",
+            kind = StoreKind.YOU,
+            topics = setOf(StoreTopics.PROFILE_ME),
         )
 
     /** Private bookmarks use the account-scoped phone copy so saved-place Today can open offline. */
@@ -266,6 +276,14 @@ object StoreKeys {
             mapOf("limit" to limit.toString()),
             kind = StoreKind.POST,
             topics = setOf(StoreTopics.POSTS, StoreTopics.PROFILE_ME),
+        )
+
+    val feedPreferences =
+        StoreKey<FeedPreferencesResponse>(
+            "api/posts/feed-preferences",
+            kind = StoreKind.YOU,
+            topics = setOf(StoreTopics.PROFILE_ME),
+            type = FeedPreferencesResponse::class.java,
         )
 
     /** One post and its comments (contract §4 "A post": fresh 1 minute, never saved on the phone). */

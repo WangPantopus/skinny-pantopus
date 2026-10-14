@@ -8,12 +8,15 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.RefreshOnStoreChange
+import app.pantopus.android.ui.components.ToastController
+import app.pantopus.android.ui.components.ToastHost
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsScreen
 import app.pantopus.android.ui.theme.PantopusColors
 
@@ -46,6 +49,14 @@ fun ConnectionsScreen(
     val fab by viewModel.fab.collectAsStateWithLifecycle()
     val searchBar by viewModel.searchBar.collectAsStateWithLifecycle()
     val pendingRemoval by viewModel.pendingRemoval.collectAsStateWithLifecycle()
+    val actionError by viewModel.actionError.collectAsStateWithLifecycle()
+    val toastController = remember { ToastController() }
+    LaunchedEffect(actionError) {
+        actionError?.let {
+            toastController.error(it)
+            viewModel.dismissActionError()
+        }
+    }
 
     LaunchedEffect(Unit) {
         viewModel.onMessage = onOpenChat
@@ -76,6 +87,7 @@ fun ConnectionsScreen(
             onBack = onBack,
             searchBar = searchBar,
         )
+        ToastHost(controller = toastController)
     }
 
     pendingRemoval?.let { request ->

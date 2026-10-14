@@ -1,5 +1,6 @@
 package app.pantopus.android.data.api.services
 
+import app.pantopus.android.data.api.models.ai.AIRadonReportResponse
 import app.pantopus.android.data.api.models.audience.PersonaMediaUploadResponse
 import app.pantopus.android.data.api.models.businesses.BusinessMediaUploadResponse
 import app.pantopus.android.data.api.models.chats.AIMediaUploadResponse
@@ -44,6 +45,17 @@ interface UploadApi {
     suspend fun uploadAIMedia(
         @Part files: @JvmSuppressWildcards List<MultipartBody.Part>,
     ): AIMediaUploadResponse
+
+    /**
+     * A radon test result read from one photo or PDF of the lab's report (part `file`), for the Today
+     * radon sheet to fill in. The server reads the report in memory and doesn't keep it.
+     * Route `backend/routes/ai.js:281`.
+     */
+    @Multipart
+    @POST("api/ai/draft/radon-result")
+    suspend fun readRadonReport(
+        @Part file: MultipartBody.Part,
+    ): AIRadonReportResponse
 
     /**
      * Replace the signed-in user's avatar. Single part named `file`; the

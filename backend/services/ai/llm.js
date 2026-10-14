@@ -73,6 +73,12 @@ function isImageError(err) {
   return /image|download the file/i.test(String(err.error?.error?.message || err.message || ''));
 }
 
+/** True when Claude rejected a PDF (encrypted, corrupt, too many pages). Retrying won't help either. */
+function isDocumentError(err) {
+  if (!(err instanceof Anthropic.BadRequestError)) return false;
+  return /pdf|document|page/i.test(String(err.error?.error?.message || err.message || ''));
+}
+
 /**
  * A system prompt as a cacheable block. `ttl: '1h'` keeps a prompt that every
  * person shares (the chat's) cached through quiet stretches; the default is
@@ -232,6 +238,7 @@ module.exports = {
   addUsage,
   isTimeoutError,
   isImageError,
+  isDocumentError,
   systemBlocks,
   supportsSystemMessages,
   describeNow,
