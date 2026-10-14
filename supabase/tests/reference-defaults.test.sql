@@ -10,7 +10,7 @@ SET LOCAL statement_timeout = '30s';
 SET LOCAL ROLE service_role;
 DO $$ BEGIN
   IF (SELECT count(*) FROM public."HomeRolePermission") <> 31
-    OR (SELECT count(*) FROM public."PostCategoryTTL") <> 18
+    OR (SELECT count(*) FROM public."PostCategoryTTL") <> 20
     OR (SELECT count(*) FROM public."AddressCalendarRule") <> 87
     OR (SELECT count(*) FROM public."CountyRadonZone") <> 3128
     OR (SELECT count(*) FROM public."HudFmr") <> 3223 THEN
