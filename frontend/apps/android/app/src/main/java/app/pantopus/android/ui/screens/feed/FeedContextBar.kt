@@ -271,10 +271,11 @@ class FeedContextBarViewModel
             miles: Double,
             onApplied: (Boolean) -> Unit = {},
         ) {
+            val radius = FeedRadiusSuggestion.effectiveRadius(miles)
             viewModelScope.launch {
-                when (val result = repo.setRadius(miles)) {
+                when (val result = repo.setRadius(radius)) {
                     is NetworkResult.Success -> {
-                        _radiusMiles.value = result.data.radiusMiles ?: miles
+                        _radiusMiles.value = FeedRadiusSuggestion.effectiveRadius(result.data.radiusMiles ?: radius)
                         onChange()
                         onApplied(true)
                     }
@@ -290,7 +291,7 @@ class FeedContextBarViewModel
         fun applyCurrent(dto: ViewingLocationDto?) {
             if (dto == null) return
             _locationLabel.value = dto.label
-            dto.radiusMiles?.let { _radiusMiles.value = it }
+            _radiusMiles.value = FeedRadiusSuggestion.effectiveRadius(dto.radiusMiles)
         }
 
         /**
