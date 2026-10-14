@@ -225,6 +225,10 @@ public struct PostDetailDTO: Decodable, Sendable, Hashable, Identifiable {
     /// Visibility scope — needed by the edit-mode prefill so the compose
     /// form can show the saved audience.
     public let visibility: String?
+    public let audience: String?
+    public let readScope: String?
+    public let allowExternalShare: Bool?
+    public let moderationState: String?
     /// Event date in ISO-8601 — populated for `event` posts.
     public let eventDate: String?
     /// Event venue — populated for `event` posts.
@@ -282,6 +286,10 @@ public struct PostDetailDTO: Decodable, Sendable, Hashable, Identifiable {
         case userHasLiked, userHasSaved, userHasReposted
         case comments
         case visibility
+        case audience
+        case readScope = "read_scope"
+        case allowExternalShare = "allow_external_share"
+        case moderationState = "moderation_state"
         case eventDate = "event_date"
         case eventVenue = "event_venue"
         case lostFoundType = "lost_found_type"
@@ -328,6 +336,10 @@ public struct PostDetailDTO: Decodable, Sendable, Hashable, Identifiable {
         userHasReposted = c.lenient(Bool.self, forKey: .userHasReposted) ?? false
         comments = c.lossyList(PostCommentDTO.self, forKey: .comments)
         visibility = c.lenient(String.self, forKey: .visibility)
+        audience = c.lenient(String.self, forKey: .audience)
+        readScope = c.lenient(String.self, forKey: .readScope)
+        allowExternalShare = c.lenient(Bool.self, forKey: .allowExternalShare)
+        moderationState = c.lenient(String.self, forKey: .moderationState)
         eventDate = c.lenient(String.self, forKey: .eventDate)
         eventVenue = c.lenient(String.self, forKey: .eventVenue)
         lostFoundType = c.lenient(String.self, forKey: .lostFoundType)
@@ -374,6 +386,10 @@ extension PostDetailDTO {
         userHasReposted = post.userHasReposted
         comments = []
         visibility = nil
+        audience = nil
+        readScope = nil
+        allowExternalShare = nil
+        moderationState = nil
         eventDate = post.eventDate
         eventVenue = post.eventVenue
         lostFoundType = post.lostFoundType
