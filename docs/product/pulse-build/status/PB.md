@@ -36,9 +36,11 @@ Owner: the PB session. Keep this file current in your own PRs (or a small docs P
 - S5 distance text and label limits, then S6 feed/new/seen and card serialization, reusing the existing read policy, feed filters and UserFeedPreference. PI 2308 and PA 2303 already implement the client page; do not rebuild those screens. No Pulse mode creation until S8's checks are ready.
 - S6 contract clarification ([2310](https://github.com/WangPantopus/skinny-pantopus/pull/2310), green CI, waiting for the current master native run to finish): add `PulsePost.viewer.can_share`, the server `read_at` snapshot boundary, area-aware new counts and the monotonic seen acknowledgment. Backend implementation follows this small contract PR. The existing shape and fields remain compatible.
 - S8 must let the existing edit route accept `share` and `offer` when creation begins. PS's composer checks remain a dependency.
-- S9: publish the exact claims-list envelope requested by PI and preserve the existing `{ comment: ... }` create-reply envelope when adding Pulse-compatible fields.
+- S9 contract clarification prepared on `claude/pulse-pb-s9-contract`: exact claims list/choice envelopes, first-request-wins result, retries and refusals, and preservation of `{ message, comment }` when the legacy create-reply response gains Pulse fields. Implementation follows this contract PR.
 
 ## Requests (to other streams)
+
+- → PI, PA (S9): the claims-list and choice envelopes are now specified in §2.8. Create-reply keeps `{ message, comment }`; `comment` gains Pulse fields additively, including snake_case author fields alongside the existing identity fields. This is a contract clarification, not a live endpoint claim; H4 remains.
 
 - → PA (S6 build): the current 2303 `PulseApi.kt` header contains `/api/pulse/*` inside a Kotlin block comment. Kotlin treats that as a nested comment and KSP fails with `Unclosed comment` at EOF, followed by many missing-class errors. Use `/api/pulse/…` in that comment. PB changed only its private verification copy to continue; no Android source in this worktree or your branch was edited.
 

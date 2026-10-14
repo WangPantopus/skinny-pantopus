@@ -124,7 +124,7 @@ Query: `view` = `nearby` (default) | `following`; `topic` (enum, optional); `are
 
 ### 2.4 Conversation
 
-`GET /api/pulse/posts/:id` → `{ "post": PulsePost, "replies": [PulseReply], "plan": null }` (`plan` in R3). `GET /api/pulse/posts/:id/replies?after=<iso>` → `{ "replies": [...] }` for the "↓ 2 new replies" pill. Writing a reply uses the existing `POST /api/posts/:id/comments` (`comment`, `parentCommentId`, `clientRequestId`); its response is a `PulseReply`-compatible object plus the legacy fields.
+`GET /api/pulse/posts/:id` → `{ "post": PulsePost, "replies": [PulseReply], "plan": null }` (`plan` in R3). `GET /api/pulse/posts/:id/replies?after=<iso>` → `{ "replies": [...] }` for the "↓ 2 new replies" pill. Writing a reply uses the existing `POST /api/posts/:id/comments` (`comment`, `parentCommentId`, `clientRequestId`); its response keeps the existing `{ "message": "Comment added successfully", "comment": ... }` envelope. `comment` gains the `PulseReply` fields alongside its legacy fields; `author` retains its existing identity fields while adding `display_name`, `label`, `distance_text`, `avatar_url` and `is_curator`. Existing `comment`, `user_id`, `is_edited`, attachments and author identity fields are not renamed or removed. An idempotent retry returns the same reply id in that envelope.
 
 ### 2.5 Creating a post (Pulse mode)
 
@@ -168,7 +168,27 @@ Private note to a home (signed): `POST /api/pulse/notes` `{ "toHomeId"? | "toPos
 
 ### 2.8 Offers
 
-`POST /api/pulse/posts/:postId/claims` `{ "note"? }` → `{ "claim": { "id", "status": "requested" | "enough_requests" | "gone" } }` · `GET /api/pulse/posts/:postId/claims` (giver) → requests with each requester's `author` · `POST /api/pulse/posts/:postId/claims/:claimId/choose` → claimed; the others become `gone` and are told.
+`POST /api/pulse/posts/:postId/claims` `{ "note"? }` → `{ "claim": { "id", "status": "requested" | "chosen" | "enough_requests" | "gone" } }` · `GET /api/pulse/posts/:postId/claims` (giver) → requests with each requester's `author` · `POST /api/pulse/posts/:postId/claims/:claimId/choose` → claimed; the others become `gone` and are told.
+
+The claims-list response is frozen for the giver's screen:
+
+```jsonc
+{
+  "claims": [{
+    "id": "uuid", "status": "requested", // requested | chosen | declined | gone
+    "note": null,                        // nullable, at most 500 characters
+    "created_at": "<iso>",
+    "author": { /* the PulsePost author shape, relative to the giver */ }
+  }],
+  "offer": { "claim_mode": "choose", "requests_open": true, "gone": false }
+}
+```
+
+- Only the post's author can list requests or choose; other readers get `403 NOT_POST_AUTHOR`. Rows are oldest first, with id as the tie-breaker, and include the giver's prior decision. The list exposes no home or address fields. Blocked people are omitted and cannot be chosen.
+- Creation is idempotent per person and offer: retrying returns the same claim. `choose` returns `claim.status: requested`; `first` atomically gives the first requester `chosen`. A successful choice (including a winning `first` request) adds `post_status: { state: "resolved", resolution: "claimed" }`.
+- `POST /claims/:claimId/choose` returns `{ "claim": { "id": "uuid", "status": "chosen" }, "post_status": { "state": "resolved", "resolution": "claimed" } }`; choosing that winner again returns the same success. Choosing another after that returns `409 OFFER_GONE`.
+- A sixth distinct request returns `429 ENOUGH_REQUESTS`; an offer that has ended returns `409 OFFER_GONE`. These error bodies retain the normal `error` and `code`, with `claim: { id: null, status: "enough_requests" | "gone" }` for clients using the status descriptor. No request is inserted on either refusal. Requests and choices always recheck post access and current offer state; a stale screen grants nothing.
+
 
 ### 2.9 Follow, preferences, why, mutes
 
@@ -306,7 +326,7 @@ Labels use the author's **primary** home, as posting and limits do. A second ver
 | 422 | `COMPOSER_BLOCKED` | A call-out or private detail; body carries `blocks` |
 | 429 | `DAILY_LIMIT_REACHED` | `{ limit, resets_at, scope }` |
 | 429 | `SHARE_WEEKLY_CAP` | The third Share in a rolling week |
-| 409 | `OFFER_GONE` | Claiming or choosing on an offer already claimed |
+| 409 | `OFFER_GONE` | Claiming or choosing on an offer already claimed or ended |
 | 429 | `ENOUGH_REQUESTS` | The sixth request on an offer |
 | 404 | `POST_NOT_FOUND` | The post doesn't exist (section 2.12) |
 | 403 | `NOT_POST_AUTHOR` | Someone other than the asker keeps open or closes an Ask (section 2.12) |
