@@ -252,6 +252,7 @@ public extension PulsePostDTO {
         let isAuthor = viewer?.isAuthor ?? false
         let openAsk = isAuthor && type == "ask_local" && status?.resolution == nil
             && (status?.state == nil || status?.state == "open")
+            && (endsAt.map { $0 > now } ?? true)
         return PulsePageCard(
             id: id,
             authorId: author?.id,
@@ -292,10 +293,11 @@ public extension PulseFeedResponse {
     /// empty one is dropped), the end and the quiet-state card.
     func pageContent(readAt: Date, now: Date = Date(), timeZone: TimeZone = .current) -> PulsePageContent {
         let town = area?.name.flatMap { $0.isEmpty ? nil : $0 } ?? "your area"
-        let pageGroups = groups.compactMap { group -> PulsePageGroup? in
-            let cards = group.items.map { $0.pageCard(now: now, timeZone: timeZone) }
+        var ids = Set<String>()
+        let pageGroups = groups.enumerated().compactMap { index, group -> PulsePageGroup? in
+            let cards = group.items.filter { ids.insert($0.id).inserted }.map { $0.pageCard(now: now, timeZone: timeZone) }
             guard !cards.isEmpty else { return nil }
-            return PulsePageGroup(key: group.key ?? "group", title: group.title ?? "", cards: cards)
+            return PulsePageGroup(key: group.key ?? "group-\(index)", title: group.title ?? "", cards: cards)
         }
         let since = PulsePageWords.since(PulsePageWords.parseDate(end?.since), now: now, timeZone: timeZone)
         let cursor = end?.earlierCursor.flatMap { $0.isEmpty ? nil : $0 }
@@ -303,7 +305,7 @@ public extension PulseFeedResponse {
             areaName: town,
             groups: pageGroups,
             end: PulsePageEnd(
-                caughtUp: end?.caughtUp ?? true,
+                caughtUp: end?.caughtUp ?? false,
                 sentence: "That's everything new around \(town) since \(since).",
                 canShowEarlier: (end?.canShowEarlier ?? false) && cursor != nil,
                 earlierCursor: cursor

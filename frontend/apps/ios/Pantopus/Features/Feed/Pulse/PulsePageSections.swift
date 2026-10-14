@@ -121,8 +121,6 @@ struct PulsePageEndCard: View {
     let content: PulsePageContent
     let showsEarlierButton: Bool
     let onShowEarlier: () -> Void
-    /// The end has been on screen: the page was read to its end.
-    let onShown: () -> Void
 
     var body: some View {
         VStack(spacing: Spacing.s2) {
@@ -152,7 +150,6 @@ struct PulsePageEndCard: View {
         .padding(.horizontal, Spacing.s6)
         .padding(.vertical, Spacing.s6)
         .accessibilityIdentifier("pulseEnd")
-        .onAppear(perform: onShown)
     }
 }
 
@@ -206,24 +203,39 @@ struct PulsePageShowEarlierButton: View {
 struct PulsePageQuietDay: View {
     let areaName: String
     let following: Bool
+    let topic: PulseTopic?
     let onCompose: () -> Void
+    let onShowAllTopics: () -> Void
+
+    private var topicContent: FeedEmptyContent? {
+        topic.map(FeedSurface.quietTopicContent)
+    }
 
     var body: some View {
         VStack(spacing: Spacing.s2) {
-            Text(following ? "Nothing followed yet" : "Quiet in \(areaName) today")
+            Text(topicContent?.headline ?? (following ? "Nothing followed yet" : "Quiet in \(areaName) today"))
                 .pulseFont(.headline)
                 .foregroundStyle(Theme.Color.appText)
                 .multilineTextAlignment(.center)
             Text(
-                following
+                topicContent?.body ?? (following
                     ? "Follow a conversation to keep up with it here."
-                    : "When neighbors post, it shows here. Start a conversation if you'd like."
+                    : "When neighbors post, it shows here. Start a conversation if you'd like.")
             )
             .pulseFont(.body)
             .foregroundStyle(Theme.Color.appTextSecondary)
             .multilineTextAlignment(.center)
             .fixedSize(horizontal: false, vertical: true)
-            if !following {
+            if topic != nil {
+                Button(action: onShowAllTopics) {
+                    Text("Show all topics")
+                        .pulseFont(.button)
+                        .foregroundStyle(Theme.Color.primary600)
+                        .frame(minHeight: 44)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("pulseTopicShowAll")
+            } else if !following {
                 Button(action: onCompose) {
                     Text("Start a conversation")
                         .pulseFont(.button)

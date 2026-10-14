@@ -19,11 +19,11 @@ struct RefreshNotice: View {
             Icon(.cloudOff, size: 14, color: Theme.Color.appTextSecondary)
                 .accessibilityHidden(true)
             Text(text)
-                .font(.system(size: 13))
+                .font(.footnote)
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
             Button("Retry", action: onRetry)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.footnote.weight(.semibold))
                 .foregroundStyle(Theme.Color.primaryInk)
                 .accessibilityIdentifier("refreshNoticeRetry")
         }

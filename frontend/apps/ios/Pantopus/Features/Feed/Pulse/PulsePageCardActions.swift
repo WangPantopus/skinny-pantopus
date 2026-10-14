@@ -17,10 +17,9 @@ import Foundation
 public extension PulsePageViewModel {
     /// "Save post" / "Remove bookmark": `POST /api/posts/:id/save`.
     func toggleSave(cardId: String) async {
-        guard let card = card(cardId), let saved = card.saved else { return }
+        guard let card = card(cardId), let saved = card.saved, beginMutation(cardId) else { return }
         savedOverrides[cardId] = !saved
-        pending.insert(cardId)
-        defer { pending.remove(cardId) }
+        defer { finishMutation(cardId) }
         rebuild()
         do {
             let response: PostSaveResponse = try await api.request(PostsEndpoints.toggleSave(id: cardId, saved: !saved))

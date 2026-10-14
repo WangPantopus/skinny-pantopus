@@ -15,12 +15,16 @@
 import SwiftUI
 
 public struct PulsePageView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @State private var viewModel: PulsePageViewModel
     @State private var menuCardId: String?
     @State private var reportingCardId: String?
     @State private var deletingCardId: String?
     @State private var mutingCardId: String?
     @State private var showsPreferences = false
+    @State private var viewportHeight: CGFloat = 0
+    @State private var endVisibleForRead: Date?
+    private let isActive: Bool
     private let onOpenPost: @MainActor (String) -> Void
     private let onCompose: @MainActor () -> Void
     private let onEdit: @MainActor (String) -> Void
@@ -36,7 +40,8 @@ public struct PulsePageView: View {
         onEdit: @escaping @MainActor (String) -> Void,
         topMenu: FeedTopMenu? = nil,
         quietCard: AnyView? = nil,
-        onRefresh: (@MainActor () async -> Void)? = nil
+        onRefresh: (@MainActor () async -> Void)? = nil,
+        isActive: Bool = true
     ) {
         _viewModel = State(initialValue: PulsePageViewModel())
         self.onOpenPost = onOpenPost
@@ -45,6 +50,7 @@ public struct PulsePageView: View {
         self.topMenu = topMenu
         self.quietCard = quietCard
         self.onRefresh = onRefresh
+        self.isActive = isActive
     }
 
     public var body: some View {
@@ -66,6 +72,7 @@ public struct PulsePageView: View {
                 // The end of the page scrolls clear of the compose button.
                 .padding(.bottom, Spacing.s16 + Spacing.s5)
             }
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { viewportHeight = $0 }
             .background(Theme.Color.appBg)
             .refreshable {
                 await viewModel.refresh()
@@ -93,8 +100,16 @@ public struct PulsePageView: View {
         .overlay(alignment: .bottom) { toast }
         .animation(.easeOut(duration: 0.2), value: viewModel.newCount > 0)
         .accessibilityIdentifier("pulsePage")
-        .task { await viewModel.load() }
-        .task { await pollNewConversations() }
+        .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
+        .task(id: pageIsActive) {
+            guard pageIsActive else { return }
+            await viewModel.load()
+            await pollNewConversations()
+        }
+        .task(id: visibleEndRead) {
+            guard visibleEndRead != nil else { return }
+            await viewModel.endShown()
+        }
         .confirmationDialog("Post options", isPresented: presenting($menuCardId), titleVisibility: .hidden) {
             cardMenu
         }
@@ -169,6 +184,9 @@ public struct PulsePageView: View {
                 Task { await viewModel.refresh() }
             }
         case let .loaded(content):
+            if let notice = viewModel.refreshNotice {
+                RefreshNotice(text: notice) { Task { await viewModel.refresh() } }
+            }
             if content.quietCard != nil, let quietCard {
                 quietCard.padding(.horizontal, Spacing.s4)
             }
@@ -176,18 +194,26 @@ public struct PulsePageView: View {
                 PulsePageQuietDay(
                     areaName: content.areaName,
                     following: viewModel.mode == .following,
+                    topic: viewModel.mode == .nearby ? viewModel.activeTopic : nil,
                     onCompose: onCompose
-                )
+                ) {
+                    Task { await viewModel.selectTopic(nil) }
+                }
             }
             ForEach(content.groups) { group in
                 groupSection(group)
             }
             PulsePageEndCard(
                 content: content,
-                showsEarlierButton: viewModel.earlierPhase == .idle && content.end.canShowEarlier,
-                onShowEarlier: { Task { await viewModel.showEarlier() } },
-                onShown: { Task { await viewModel.endShown() } }
-            )
+                showsEarlierButton: viewModel.earlierPhase == .idle && content.end.canShowEarlier
+            ) {
+                Task { await viewModel.showEarlier() }
+            }
+            .onGeometryChange(for: Date?.self) { proxy in
+                let middle = proxy.frame(in: .scrollView).midY
+                return viewportHeight > 0 && middle >= 0 && middle <= viewportHeight ? content.readAt : nil
+            } action: { endVisibleForRead = $0 }
+            .onDisappear { endVisibleForRead = nil }
             if let earlier = viewModel.earlierGroup {
                 groupSection(earlier)
             }
@@ -198,21 +224,11 @@ public struct PulsePageView: View {
     }
 
     private func groupSection(_ group: PulsePageGroup) -> some View {
-        VStack(alignment: .leading, spacing: Spacing.s3) {
-            if !group.title.isEmpty {
-                Text(group.title)
-                    .pulseFont(.overline)
-                    .foregroundStyle(Theme.Color.appTextSecondary)
-                    .padding(.horizontal, Spacing.s4)
-                    .padding(.vertical, Spacing.s2)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Theme.Color.appSurfaceSunken)
-                    .accessibilityAddTraits(.isHeader)
-                    .accessibilityIdentifier("pulseGroup_\(group.key)")
-            }
+        Section {
             ForEach(group.cards) { card in
                 PulsePageCardView(
                     card: card,
+                    isPending: viewModel.pending.contains(card.id),
                     onOpen: { onOpenPost(card.id) },
                     onAction: {
                         Task {
@@ -224,6 +240,18 @@ public struct PulsePageView: View {
                     onMenu: { menuCardId = card.id }
                 )
                 .padding(.horizontal, Spacing.s4)
+            }
+        } header: {
+            if !group.title.isEmpty {
+                Text(group.title)
+                    .pulseFont(.overline)
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                    .padding(.horizontal, Spacing.s4)
+                    .padding(.vertical, Spacing.s2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Theme.Color.appSurfaceSunken)
+                    .accessibilityAddTraits(.isHeader)
+                    .accessibilityIdentifier("pulseGroup_\(group.key)")
             }
         }
     }
@@ -242,13 +270,23 @@ public struct PulsePageView: View {
         }
     }
 
-    /// About once a minute while the page is on screen (`.task` ends when it
-    /// leaves): how many conversations arrived since it was read.
+    private var pageIsActive: Bool {
+        isActive && scenePhase == .active && !showsPreferences
+    }
+
+    private var visibleEndRead: Date? {
+        guard pageIsActive, case let .loaded(content) = viewModel.state,
+              endVisibleForRead == content.readAt else { return nil }
+        return content.readAt
+    }
+
+    /// Poll only while this tab's root is visible and the app is active.
     private func pollNewConversations() async {
         while !Task.isCancelled {
             try? await Task.sleep(nanoseconds: 60_000_000_000)
             guard !Task.isCancelled else { return }
             await viewModel.pollNewCount()
+            if visibleEndRead != nil, !Task.isCancelled { await viewModel.endShown() }
         }
     }
 

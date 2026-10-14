@@ -14,6 +14,7 @@ import SwiftUI
 
 struct PulsePageCardView: View {
     let card: PulsePageCard
+    let isPending: Bool
     let onOpen: () -> Void
     let onAction: () -> Void
     /// Opens the card's "…" (the page shows its entries).
@@ -130,6 +131,7 @@ struct PulsePageCardView: View {
                     .overlay(Capsule().stroke(card.actionDone ? Color.clear : Theme.Color.appBorderStrong, lineWidth: 1))
                 }
                 .buttonStyle(.plain)
+                .disabled(isPending)
                 .accessibilityLabel(card.actionDone ? "\(label), done" : label)
                 .accessibilityIdentifier("pulseCardAction_\(card.id)")
             }

@@ -58,6 +58,7 @@ public final class PulsePageViewModel {
     public private(set) var earlierGroup: PulsePageGroup?
     /// A refresh failed while a copy is on screen: when that copy is from.
     public private(set) var staleSince: Date?
+    public private(set) var refreshNotice: String?
     public var toastMessage: String? {
         // Every message is an error unless `showToast` says otherwise.
         didSet { if toastMessage != nil { toastKind = .error } }
@@ -75,6 +76,9 @@ public final class PulsePageViewModel {
     private var lastReadAt: Date?
     private var readGeneration = 0
     private var seenThrough: Date?
+    private var seenRequest: UUID?
+    private var mutationRevision = 0
+    private var cardMutationRevisions: [String: Int] = [:]
     /// The viewer's own taps before the server answers: card id → done.
     private var actionOverrides: [String: Bool] = [:]
     var keptOpen: Set<String> = []
@@ -134,6 +138,8 @@ public final class PulsePageViewModel {
         lastResponse = nil
         lastReadAt = nil
         staleSince = nil
+        refreshNotice = nil
+        seenRequest = nil
         state = .loading
         await read(force: false)
     }
@@ -141,6 +147,8 @@ public final class PulsePageViewModel {
     private func read(force: Bool) async {
         readGeneration += 1
         let generation = readGeneration
+        let startedAt = Date()
+        let revision = mutationRevision
         do {
             try await store.show(
                 endpoint(),
@@ -150,12 +158,26 @@ public final class PulsePageViewModel {
                 force: force
             ) { snapshot in
                 guard generation == readGeneration else { return }
-                apply(snapshot)
+                apply(snapshot, readStartedAt: startedAt, mutationRevision: revision)
             }
         } catch is CancellationError {
             return
         } catch {
             guard generation == readGeneration else { return }
+            if let error = error as? APIError {
+                switch error {
+                case .unauthorized, .forbidden, .notFound:
+                    // A refusal invalidates the saved page; never leave its
+                    // posts visible behind an error toast.
+                    lastResponse = nil
+                    lastReadAt = nil
+                    newCount = 0
+                    resetEarlier()
+                    state = .error(message: error.errorDescription ?? "Couldn't load Pulse.")
+                    return
+                default: break
+                }
+            }
             if case .loaded = state {
                 if force { toastMessage = "Couldn't refresh Pulse." }
             } else {
@@ -165,17 +187,26 @@ public final class PulsePageViewModel {
         }
     }
 
-    private func apply(_ snapshot: ScreenSnapshot<PulseFeedResponse>) {
+    private func apply(_ snapshot: ScreenSnapshot<PulseFeedResponse>, readStartedAt: Date, mutationRevision: Int) {
+        let newRead = snapshot.fetchedAt != lastReadAt
         lastResponse = snapshot.value
         lastReadAt = snapshot.fetchedAt
         staleSince = snapshot.refreshFailed ? snapshot.fetchedAt : nil
-        if snapshot.isFresh {
+        refreshNotice = snapshot.refreshNotice
+        if snapshot.isFresh, newRead {
             // A fresh read shows what the pill was counting, and the server's
             // own state of every tap that has landed.
             newCount = 0
             resetEarlier()
-            actionOverrides = actionOverrides.filter { pending.contains($0.key) }
-            savedOverrides = savedOverrides.filter { pending.contains($0.key) }
+            if snapshot.fetchedAt >= readStartedAt {
+                // A read already in flight when a tap landed may still carry
+                // the old value. Keep that tap until a later read confirms it.
+                let keep: (String) -> Bool = { id in
+                    self.pending.contains(id) || (self.cardMutationRevisions[id] ?? 0) > mutationRevision
+                }
+                actionOverrides = actionOverrides.filter { keep($0.key) }
+                savedOverrides = savedOverrides.filter { keep($0.key) }
+            }
         }
         rebuild()
     }
@@ -240,8 +271,8 @@ public final class PulsePageViewModel {
             after: Self.iso(content.readAt)
         )
         guard let response = try? await api.request(endpoint, as: PulseFeedNewCountResponse.self),
-              generation == readGeneration else { return }
-        newCount = response.count
+              generation == readGeneration, !Task.isCancelled else { return }
+        newCount = max(0, response.count)
     }
 
     /// The end card has been on screen: move the last-seen marker, once per
@@ -250,12 +281,21 @@ public final class PulsePageViewModel {
     /// leaves it alone: the other topics' new posts haven't been seen.
     public func endShown() async {
         guard activeTopic == nil, case let .loaded(content) = state, content.end.caughtUp,
-              seenThrough != content.readAt else { return }
-        seenThrough = content.readAt
-        _ = try? await api.request(
-            PulseEndpoints.markFeedSeen(view: mode.rawValue, through: Self.iso(content.readAt)),
-            as: PostActionAckResponse.self
-        )
+              staleSince == nil, seenThrough != content.readAt, seenRequest == nil else { return }
+        let request = UUID()
+        let generation = readGeneration
+        seenRequest = request
+        defer { if seenRequest == request { seenRequest = nil } }
+        do {
+            _ = try await api.request(
+                PulseEndpoints.markFeedSeen(view: mode.rawValue, through: Self.iso(content.readAt)),
+                as: PostActionAckResponse.self
+            )
+            guard generation == readGeneration, !Task.isCancelled else { return }
+            seenThrough = content.readAt
+        } catch {
+            // Retry when the end is shown again or on the next visible poll.
+        }
     }
 
     /// "Show earlier": the next older items, below the end card and the
@@ -276,9 +316,10 @@ public final class PulsePageViewModel {
             let response: PulseFeedResponse = try await api.request(endpoint(earlierBefore: cursor))
             guard generation == readGeneration else { return }
             let page = response.pageContent(readAt: content.readAt)
-            earlierCards += page.groups.flatMap(\.cards)
+            var ids = Set(content.groups.flatMap(\.cards).map(\.id) + earlierCards.map(\.id))
+            earlierCards += page.groups.flatMap(\.cards).filter { ids.insert($0.id).inserted }
             if let title = page.groups.first?.title, !title.isEmpty { earlierTitle = title }
-            earlierCursor = page.end.canShowEarlier ? page.end.earlierCursor : nil
+            earlierCursor = page.end.canShowEarlier && page.end.earlierCursor != cursor ? page.end.earlierCursor : nil
             earlierPhase = earlierCursor == nil ? .done : .more
             rebuild()
         } catch {
@@ -294,10 +335,10 @@ public final class PulsePageViewModel {
     /// in the conversation, which the caller opens (this returns false).
     public func tapAction(cardId: String) async -> Bool {
         guard let card = card(cardId), card.actionKind == "going" || card.actionKind == "seen_it" else { return false }
+        guard beginMutation(cardId) else { return true }
         let done = !(actionOverrides[cardId] ?? card.actionDone)
         actionOverrides[cardId] = done
-        pending.insert(cardId)
-        defer { pending.remove(cardId) }
+        defer { finishMutation(cardId) }
         rebuild()
         do {
             _ = try await api.request(PostsEndpoints.toggleLike(id: cardId, liked: done), as: PostLikeResponse.self)
@@ -310,6 +351,20 @@ public final class PulsePageViewModel {
     }
 
     // MARK: - Helpers
+
+    func beginMutation(_ id: String) -> Bool {
+        guard pending.insert(id).inserted else { return false }
+        mutationRevision += 1
+        cardMutationRevisions[id] = mutationRevision
+        return true
+    }
+
+    func finishMutation(_ id: String) {
+        pending.remove(id)
+        mutationRevision += 1
+        cardMutationRevisions[id] = mutationRevision
+        store.markStale(topics: [ScreenTopic.posts])
+    }
 
     public func card(_ id: String) -> PulsePageCard? {
         guard case let .loaded(content) = state else { return nil }

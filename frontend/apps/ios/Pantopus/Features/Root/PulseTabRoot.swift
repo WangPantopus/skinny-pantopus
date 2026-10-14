@@ -62,7 +62,8 @@ public struct PulseTabRoot: View {
                 },
                 topMenu: topMenu,
                 quietCard: quietCard,
-                onRefresh: refreshQuietCard
+                onRefresh: refreshQuietCard,
+                isActive: path.isEmpty && rootTabs.selected == .pulse && presentedSurface == nil
             )
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: PulseRoute.self) { route in
