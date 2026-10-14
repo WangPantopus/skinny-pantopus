@@ -15,16 +15,17 @@ Owner: the PA session. Keep this file current in your own PRs (or a small docs P
 ## Resumed — October 14, 2026
 
 - Resumed in the primary PA checkout on `claude/pulse-pa-s7-status`; fetched origin and merged master `b4234543c` into S7 (`b583dc54f`). The unrelated `.claude/launch.json` modification is preserved unchanged.
-- All five PA PRs remain drafts. At resume, S7 and the radius/comment PR still had Android CI running; S6, draft persistence and external sharing had failed CI to investigate. No draft is verified complete or ready to merge.
+- All five PA PRs remain drafts. S7's old pushed head has green CI; the new local repairs still need current-head checks. No draft is verified complete or ready to merge.
 - Recreated only PA: database/API 57002/57001, backend 57110, pass-through proxy 57100 with Pulse fixtures explicitly off, web 57101 and `pulse-pa` emulator 5574. Fresh Alice/Bob/Carol accounts replace the deleted fixtures; two have synthetic verified homes. Jobs and external pushes remain disabled.
 - Fresh real-database fixture check: the actual lifecycle job archived seven backdated cases with the expected separate resolutions; the reminder job created one of each day-6 notice and a second run did not duplicate them. This is setup evidence only; the new Android build and two-account UI checks are still pending.
-- Full S7 local checks are running with the isolated in-process Kotlin compiler. R8 and final native/web scenarios remain required before a push/merge claim. No hosted changes, real sends or deployments.
+- S7's first Debug compilation finished. The reordered final run packages Debug first, then R8 Release and all required checks, using the isolated in-process Kotlin compiler. Final native scenarios remain pending. No hosted changes, real sends or deployments.
 - S7 review repairs: non-open Heads-ups no longer show a future ending time; detail reads the existing `archived_at` so manually archived Asks offer no Keep open/Close actions, and archived list rows do not advertise a future ending. Fresh synthetic manual-archive fixtures are ready for the native pass.
 - Closing an Ask now uses a separate local marker from deleted/hidden posts. A fresh later feed page can clear that marker when My posts restores the Ask; an older in-flight read cannot bring it back. Native close/restore verification remains pending.
 - Fresh web check: Alice's post and Bob's reply survive reload; Bob sees both without Alice's edit/delete controls. The web still uses `Solved` for an answered Ask and a generic Post for a claimed Offer. This is compatibility evidence, not complete web lifecycle copy.
-- H4 audit: snapshot contract #2310 is on master; distance #2311, real feed #2312 and S9 #2313/#2317 are still open. S8 also still requires PS's composer checks. S25 remains reserved.
+- Prepared local follow-ups while S7 builds, without another Gradle run: sharing rejects unknown moderation values and fixes its two overlong lines (`ac8d6a7f2`); S6 appends/deduplicates older batches, keeps loaded rows during failures/actions, carries the original snapshot and observes the moved end before acknowledging (`a0d1fc8cd`); draft persistence extracts its photo-picker callback to address CI's complexity finding (`e16c0900c`). These commits are not pushed or verified yet. S7 remains first for app verification and merge.
+- H4 audit: snapshot contract #2310 is on master; distance #2311, real feed #2312 and the S9/S10 chain #2313/#2317/#2319–#2322 are open. S8 also still requires PS's composer checks. S25 remains reserved.
 
-## Handoff — October 14, 2026
+## Historical cleanup handoff — October 14, 2026
 
 The founder requested a handoff, all work committed/pushed with PRs, and removal of this session's local resources. Development and final checks stopped at that request. **The Android lane is not complete.** All five branches below are pushed; all five PRs remain drafts. Earlier green checks do not validate their final heads.
 
