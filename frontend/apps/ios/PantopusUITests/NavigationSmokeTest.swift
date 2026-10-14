@@ -3,7 +3,7 @@
 //  PantopusUITests
 //
 //  P8.3 — End-to-end navigation smoke test. Walks the principal route
-//  groups in `HubRoute`, `YouRoute`, `InboxRoute`, and `NearbyRoute` via
+//  groups in `HubRoute`, `YouRoute`, `InboxRoute`, and `PulseRoute` via
 //  `accessibilityIdentifier` taps, asserting each destination renders
 //  without crashing.
 //
@@ -17,7 +17,7 @@
 //  smoke test into a fixture-management project. This test instead walks
 //  one representative tap-path per route GROUP (root tab → first-class
 //  destination), covering every parent route enum and every entry point
-//  on the four tab landings (Place · Today · Nearby · Mail; You is a cover). The static reachability of the remaining
+//  on the tab landings (Place · Today · Pulse · Mail, plus Plans while its switch is on; You is a cover). The static reachability of the remaining
 //  ID-bearing children is enumerated in `docs/nav-graph-closure.md` and
 //  the route-by-route summary in `docs/nav-smoke-results.md`.
 //
@@ -93,7 +93,7 @@ final class NavigationSmokeTest: XCTestCase {
         )
     }
 
-    // MARK: - Root tab landings (Place · Today · Nearby · Mail)
+    // MARK: - Root tab landings (Place · Today · Pulse · Mail)
 
     func testTab_placeLanding() throws {
         guard let app = launchSignedIn() else {
@@ -402,20 +402,6 @@ final class NavigationSmokeTest: XCTestCase {
         search.tap()
         // ChatSearch surfaces via the SearchListShell — surface its search bar.
         assertReaches("listOfRowsSearchBar", in: app)
-    }
-
-    // MARK: - Nearby (NearbyRoute landing + category filters)
-
-    func testNearby_categoryAllIsSelectable() throws {
-        guard let app = launchSignedIn() else {
-            throw XCTSkip("Signed-in launch env not honoured.")
-        }
-        tabButton("nearby", in: app).tap()
-        let allChip = app.buttons["nearbyCategoryChip_all"].firstMatch
-        XCTAssertTrue(allChip.waitForExistence(timeout: 5))
-        allChip.tap()
-        // After tap the chip should remain selected and the map view stays mounted.
-        assertReaches("nearbyMap", in: app, timeout: 2)
     }
 }
 
