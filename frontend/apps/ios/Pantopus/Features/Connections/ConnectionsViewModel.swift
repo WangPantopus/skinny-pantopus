@@ -370,9 +370,9 @@ public final class ConnectionsViewModel: ListOfRowsDataSource {
         pendingRemoval = nil
     }
 
-    /// Run the confirmed disconnect.
-    public func confirmRemoval() async {
-        guard let request = pendingRemoval else { return }
+    /// Run the confirmed disconnect for the request the dialog showed. The
+    /// dialog's dismissal clears `pendingRemoval` before this task runs.
+    public func confirmRemoval(_ request: ConnectionRemovalRequest) async {
         pendingRemoval = nil
         await disconnect(relationshipId: request.id)
     }
