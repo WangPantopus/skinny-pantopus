@@ -225,7 +225,7 @@ Slices that need no new table can start now: rule cleanups, tolerant decoding, t
 
 ## 5. Rules the server enforces
 
-**Who can read a post** (`canReadPost(post, viewer)`; one function, used everywhere):
+**Who can read a post** (`canReadPost(post, viewer)` in `backend/services/pulse/readAccess.js`, with `readablePosts(posts, viewer)` for lists and `POST_READ_SELECT`, the columns it reads; one function, used everywhere; today it is the post page's rule, and the scopes below arrive with S5):
 author → yes · `moderation_state` `removed` → the author only; `held` → the author and staff · signed out → only a post that is public with `allow_external_share` not false · `read_scope = public` → yes · `verified_town` → the viewer has a verified address home inside the post's town area · `verified_area` → inside that street or neighborhood area · `read_scope` null (older posts) → today's `canViewPost` rules, unchanged. Feeds apply the same predicate in the query, never after paging. A client can no longer choose coordinates to read restricted posts.
 
 **Label** (`labelFor(author, area)`, computed at read time, never stored on the post): `pantopus` if `origin = 'curator'` · `official` if `account_type = 'official'` · `business` for a business reply identity · `resident` if the author has a verified address occupancy (postcard, document, landlord or admin; **not** a household invite) for a home whose point is inside the area · `new_here` if a postcard for a home in the area is pending · `nearby` if verified within 15 miles of the area's edge · else `visitor`.
