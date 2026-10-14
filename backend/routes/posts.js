@@ -13,8 +13,6 @@ const { canPostWithIdentityToAudience } = require('../utils/identityPolicy');
 const {
   ensureLocalProfile,
   getPersonaById,
-  getPersonaMembershipForUser,
-  getViewerTierRankForPersona,
   localDisplayNames,
 } = require('../utils/identityProfiles');
 const { isPersonaEnabled } = require('../utils/featureFlags');
@@ -114,7 +112,6 @@ async function loadDismissedSeededFactIds(userId) {
 
 const DISMISSED_FACTS_CAP = 50;
 const notificationService = require('../services/notificationService');
-const { isFanBlockedFromPersona } = require('../services/personaBlockService');
 const { runPostCreatedHooks } = require('../services/postCreationHooksService');
 const { chosenUsernameOrNull } = require('../utils/personalUsername');
 const {
@@ -213,27 +210,15 @@ const POST_AS_TYPES = ['personal', 'business', 'home', 'persona'];
 const AUDIENCE_TYPES = ['connections', 'followers', 'network', 'nearby', 'saved_place', 'household', 'neighborhood', 'target_area', 'national', 'public'];
 const LOCAL_AUDIENCES = ['nearby', 'neighborhood', 'saved_place', 'target_area'];
 
-const TOPIC_VALUES = ['sports'];
+const { PULSE_TOPICS, PULSE_TOPIC_NAMES, isPulseTopic } = require('../services/pulse/topics');
+// The one read check every path uses (this file keeps calling it canViewPost).
+const { canReadPost: canViewPost, readablePosts, isPubliclyShareable, POST_READ_SELECT } = require('../services/pulse/readAccess');
+
+const TOPIC_VALUES = PULSE_TOPICS;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SPORTS_SCOPES = ['local', 'regional', 'national', 'youth', 'school', 'rec', 'watch'];
 const SPORTS_LEAGUES = ['nba', 'nfl', 'mls', 'nwsl', 'mlb', 'nhl', 'college', 'youth', 'other'];
 const DISTRIBUTION_TARGET_VALUES = ['place', 'connections', 'persona_followers', 'public', 'country:US'];
-const METERS_PER_MILE = 1609.34;
-const LEGACY_LOCAL_POST_RADIUS_METERS = 40000; // ~25 miles
-const MAX_POST_RADIUS_MILES = 25000;
-
-function resolvePostVisibilityRadiusMeters(post) {
-  if (post.visibility !== 'radius') {
-    return LEGACY_LOCAL_POST_RADIUS_METERS;
-  }
-
-  const radiusMiles = Number(post.radius_miles);
-  if (!Number.isFinite(radiusMiles) || radiusMiles <= 0) {
-    return LEGACY_LOCAL_POST_RADIUS_METERS;
-  }
-
-  return Math.round(Math.min(radiusMiles, MAX_POST_RADIUS_MILES) * METERS_PER_MILE);
-}
-
 const createPostSchema = Joi.object({
   clientRequestId: Joi.string().uuid().optional(),
   content: Joi.string().min(1).max(5000).required(),
@@ -435,7 +420,8 @@ function isUniqueConstraintError(error) {
   return message.includes('duplicate key') || message.includes('unique constraint') || details.includes('duplicate key');
 }
 
-async function findExistingMute({ userId, entityType, entityId, surface = null }) {
+// `areaId` applies to Pulse topic mutes only (null: everywhere); other mutes never read the column.
+async function findExistingMute({ userId, entityType, entityId, surface = null, areaId }) {
   let query = supabaseAdmin
     .from('PostMute')
     .select('id')
@@ -444,14 +430,15 @@ async function findExistingMute({ userId, entityType, entityId, surface = null }
     .eq('muted_entity_id', entityId);
 
   query = surface == null ? query.is('surface', null) : query.eq('surface', surface);
+  if (areaId !== undefined) query = areaId == null ? query.is('area_id', null) : query.eq('area_id', areaId);
 
   const { data, error } = await query.maybeSingle();
   if (error) throw error;
   return data;
 }
 
-async function ensurePostMute({ userId, entityType, entityId, surface = null }) {
-  const existing = await findExistingMute({ userId, entityType, entityId, surface });
+async function ensurePostMute({ userId, entityType, entityId, surface = null, areaId }) {
+  const existing = await findExistingMute({ userId, entityType, entityId, surface, areaId });
   if (existing) return existing;
 
   const muteRow = {
@@ -459,6 +446,7 @@ async function ensurePostMute({ userId, entityType, entityId, surface = null }) 
     muted_entity_type: entityType,
     muted_entity_id: entityId,
     surface,
+    ...(areaId !== undefined ? { area_id: areaId } : {}),
   };
 
   const { data, error } = await supabaseAdmin
@@ -470,7 +458,7 @@ async function ensurePostMute({ userId, entityType, entityId, surface = null }) 
   }
 
   if (error) {
-    return findExistingMute({ userId, entityType, entityId, surface });
+    return findExistingMute({ userId, entityType, entityId, surface, areaId });
   }
 
   return Array.isArray(data) ? data[0] : data;
@@ -591,173 +579,7 @@ async function serializePostForViewer(post, viewerUserId) {
 
 
 
-async function isConnectedToUser(viewerId, authorId) {
-  const { data: rel } = await supabaseAdmin
-    .from('Relationship')
-    .select('id')
-    .eq('status', 'accepted')
-    .or(
-      `and(requester_id.eq.${viewerId},addressee_id.eq.${authorId}),and(requester_id.eq.${authorId},addressee_id.eq.${viewerId})`
-    )
-    .maybeSingle();
-  return !!rel;
-}
-
-async function isPersonaAudienceMember(viewerId, personaId) {
-  if (!viewerId || !personaId) return false;
-  const membership = await getPersonaMembershipForUser(personaId, viewerId);
-  return ['active', 'past_due'].includes(membership?.status);
-}
-
-async function canViewPersonaPostAudience(post, viewerId) {
-  if (!viewerId || !post?.identity_context_id) return false;
-
-  const requiredRank = Number(post.target_tier_rank || 0);
-  if (!requiredRank) {
-    return isPersonaAudienceMember(viewerId, post.identity_context_id);
-  }
-
-  const rank = await getViewerTierRankForPersona(post.identity_context_id, viewerId);
-  if (rank >= requiredRank) return true;
-
-  const membership = await getPersonaMembershipForUser(post.identity_context_id, viewerId);
-  return ['active', 'past_due'].includes(membership?.status)
-    && membership.relationship_type === 'subscriber'
-    && requiredRank <= 2;
-}
-
-async function hasExternalShare(postId) {
-  const { data: share } = await supabaseAdmin
-    .from('PostShare')
-    .select('id')
-    .eq('post_id', postId)
-    .eq('share_type', 'external')
-    .maybeSingle();
-  return !!share;
-}
-
-const canViewPost = async (post, userId) => {
-  if (post.user_id === userId) return true;
-  // Removed by moderation: only its author still sees it.
-  if (post.archive_reason === 'moderation') return false;
-  // Profile blocks (UserBlock) hide posts in both directions, like messaging.
-  if (userId && post.user_id && await blockService.isBlocked(post.user_id, userId)) return false;
-  if (post.identity_context_type === 'persona'
-      && (post.archived_at || post.status === 'removed'
-        || (post.post_metadata?.broadcast_status != null
-          && post.post_metadata.broadcast_status !== 'published'))) return false;
-
-  if (
-    userId
-    && post.identity_context_type === 'persona'
-    && post.identity_context_id
-    && await isFanBlockedFromPersona(post.identity_context_id, userId)
-  ) {
-    return false;
-  }
-
-  if (!userId) {
-    // Direct-link views from outside the app should only work for posts that
-    // are already public, or that a user explicitly shared externally.
-    if (post.visibility === 'public' || post.audience === 'public') return true;
-    return hasExternalShare(post.id);
-  }
-
-  const targets = Array.isArray(post.distribution_targets) ? post.distribution_targets : [];
-  if (targets.length > 0) {
-    if (targets.includes('place')) return true;
-    if (targets.includes('persona_followers') && await canViewPersonaPostAudience(post, userId)) return true;
-    if (targets.includes('public')) return true;
-    // Legacy 'followers' target is treated as 'connections' after the
-    // peer-follow removal — see migration 140.
-    if ((targets.includes('connections') || targets.includes('followers')) && await isConnectedToUser(userId, post.user_id)) return true;
-    if (
-      targets.includes('country:US')
-      && post.audience === 'national'
-      && post.origin === 'curator'
-    ) {
-      return true;
-    }
-    return false;
-  }
-
-  if (post.visibility === 'followers' || post.audience === 'followers') {
-    // Persona-context posts target Beacon members (PersonaMembership).
-    // Personal posts no longer use a peer 'followers' audience — any straggler
-    // value here is treated as 'connections' for safety.
-    if (post.identity_context_type === 'persona') {
-      return canViewPersonaPostAudience(post, userId);
-    }
-    return isConnectedToUser(userId, post.user_id);
-  }
-
-  if (post.visibility === 'connections' || post.audience === 'connections') {
-    return isConnectedToUser(userId, post.user_id);
-  }
-
-  if (post.visibility === 'public') return true;
-
-  if (['neighborhood', 'city', 'radius'].includes(post.visibility)) {
-    const visibilityRadiusMeters = resolvePostVisibilityRadiusMeters(post);
-    if (post.latitude && post.longitude) {
-      const { data: viewer } = await supabaseAdmin
-        .from('User')
-        .select('latitude, longitude, city')
-        .eq('id', userId)
-        .single();
-      if (viewer) {
-        if (viewer.latitude && viewer.longitude) {
-          const { haversineMeters } = require('../utils/trustState');
-          const distMeters = haversineMeters(
-            post.latitude, post.longitude,
-            viewer.latitude, viewer.longitude
-          );
-          if (distMeters <= visibilityRadiusMeters) return true;
-        }
-        // Fallback: city match
-        if (viewer.city && post.location_name &&
-            viewer.city.toLowerCase() === post.location_name.toLowerCase()) {
-          return true;
-        }
-      }
-    }
-
-    // Fallback: city match between poster and viewer
-    const { data: users } = await supabaseAdmin
-      .from('User')
-      .select('city')
-      .in('id', [userId, post.user_id]);
-    if (users && users.length === 2 &&
-        users[0].city && users[1].city &&
-        users[0].city.toLowerCase() === users[1].city.toLowerCase()) {
-      return true;
-    }
-
-    // No location match — deny access to local-scope posts
-    return false;
-  }
-
-  return false;
-};
-
-const POST_VISIBILITY_SELECT = [
-  'id',
-  'user_id',
-  'archived_at',
-  'archive_reason',
-  'post_metadata',
-  'identity_context_type',
-  'identity_context_id',
-  'target_tier_rank',
-  'visibility',
-  'audience',
-  'origin',
-  'latitude',
-  'longitude',
-  'location_name',
-  'distribution_targets',
-].join(', ');
-
+const POST_VISIBILITY_SELECT = POST_READ_SELECT;
 const POST_REFS_SELECT = `${POST_VISIBILITY_SELECT},ref_task_id,ref_listing_id`;
 
 /** Web notification `link` + metadata extras for gig/listing-backed posts (canonical public URLs). */
@@ -2331,19 +2153,31 @@ router.post('/mute', verifyToken, async (req, res) => {
 });
 
 /**
- * GET /api/posts/mute — The people and businesses this person muted, so Settings can list them
- * and undo a mute (DELETE below). Topic mutes and Personas (a launch cut) aren't listed.
+ * GET /api/posts/mute — The people and businesses this person muted (`muted`), and the Pulse topics
+ * they muted (`topic_mutes`, each everywhere or in one area), so Settings can list them and undo a
+ * mute (DELETE below). Muted kinds of post and Personas (a launch cut) aren't listed.
  */
 router.get('/mute', verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
-    const { data: mutes, error } = await supabaseAdmin
+    const { data: rows, error } = await supabaseAdmin
       .from('PostMute')
-      .select('muted_entity_type, muted_entity_id, created_at')
+      .select('muted_entity_type, muted_entity_id, area_id, created_at')
       .eq('user_id', userId)
-      .in('muted_entity_type', ['user', 'business'])
+      .in('muted_entity_type', ['user', 'business', 'topic'])
       .order('created_at', { ascending: false });
     if (error) throw error;
+
+    // A topic muted once per surface by older apps is one topic mute to undo.
+    const topicMutes = new Map();
+    for (const row of rows || []) {
+      if (row.muted_entity_type !== 'topic' || !isPulseTopic(row.muted_entity_id)) continue;
+      const key = `${row.muted_entity_id}|${row.area_id || ''}`;
+      if (!topicMutes.has(key)) {
+        topicMutes.set(key, { topic: row.muted_entity_id, area_id: row.area_id || null, muted_at: row.created_at });
+      }
+    }
+    const mutes = (rows || []).filter((m) => m.muted_entity_type !== 'topic');
 
     const ids = [...new Set((mutes || []).map((m) => m.muted_entity_id))];
     let accounts = new Map();
@@ -2371,7 +2205,7 @@ router.get('/mute', verifyToken, async (req, res) => {
           muted_at: m.created_at,
         };
       });
-    res.json({ muted });
+    res.json({ muted, topic_mutes: [...topicMutes.values()] });
   } catch (err) {
     logger.error('List mutes error', { error: err.message });
     res.status(500).json({ error: 'Failed to load muted accounts' });
@@ -2379,19 +2213,30 @@ router.get('/mute', verifyToken, async (req, res) => {
 });
 
 /**
- * DELETE /api/posts/mute — Unmute a user, business, or persona
+ * DELETE /api/posts/mute — Unmute a user, business, or persona, or (entityType 'topic') a Pulse topic
+ * in the area given by areaId, or everywhere without it. Body or query string.
  */
 router.delete('/mute', verifyToken, async (req, res) => {
   try {
-    const { entityType, entityId } = req.body || req.query;
+    const { entityType, entityId, areaId } = req.body && Object.keys(req.body).length ? req.body : req.query;
     const userId = req.user.id;
+    if (!entityType || !entityId) {
+      return res.status(400).json({ error: 'entityType and entityId are required' });
+    }
 
-    const { error } = await supabaseAdmin
+    let query = supabaseAdmin
       .from('PostMute')
       .delete()
       .eq('user_id', userId)
       .eq('muted_entity_type', entityType)
       .eq('muted_entity_id', entityId);
+    if (entityType === 'topic' && isPulseTopic(entityId)) {
+      if (areaId != null && !UUID_RE.test(String(areaId))) {
+        return res.status(400).json({ error: 'That area could not be found.' });
+      }
+      query = areaId == null ? query.is('area_id', null) : query.eq('area_id', areaId);
+    }
+    const { error } = await query;
     if (error) throw error;
 
     feedService.invalidateFilterCache(userId);
@@ -2561,12 +2406,26 @@ router.put('/feed-preferences', verifyToken, async (req, res) => {
 });
 
 /**
- * POST /api/posts/mute/topic — Mute a post type on a specific surface
+ * POST /api/posts/mute/topic — `{ topic, areaId? }` mutes a Pulse topic in one area, or everywhere
+ * without areaId (contract §2.9). The older `{ postType, surface? }` mutes a kind of post, as before.
  */
 router.post('/mute/topic', verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
-    const { postType, surface } = req.body;
+    const { postType, surface, topic, areaId } = req.body;
+
+    if (topic != null) {
+      if (!isPulseTopic(topic)) return res.status(400).json({ error: 'Choose one of the Pulse topics to mute.' });
+      if (areaId != null && !UUID_RE.test(String(areaId))) {
+        return res.status(400).json({ error: 'That area could not be found.' });
+      }
+      await ensurePostMute({ userId, entityType: 'topic', entityId: topic, areaId: areaId || null });
+      feedService.invalidateFilterCache(userId);
+      return res.json({
+        message: `${PULSE_TOPIC_NAMES[topic]} muted`,
+        mute: { topic, area_id: areaId || null },
+      });
+    }
 
     if (!postType) return res.status(400).json({ error: 'postType is required' });
     if (surface != null && !FEED_SURFACES.includes(surface)) {
@@ -2578,6 +2437,7 @@ router.post('/mute/topic', verifyToken, async (req, res) => {
       entityType: 'topic',
       entityId: postType,
       surface: surface || null,
+      areaId: null,
     });
 
     feedService.invalidateFilterCache(userId);
@@ -3213,6 +3073,15 @@ router.post('/:id/share', verifyToken, validate(sharePostSchema), async (req, re
     const post = await requireVisiblePost({ postId, userId, res, select: POST_REFS_SELECT });
     if (!post) return;
 
+    // Only a public post has a link that works outside the app. Reposting stays open to anyone who can
+    // see the post, but an external share never lets everyone else read it.
+    if (shareType === 'external' && !isPubliclyShareable(post)) {
+      return res.status(403).json({
+        error: "This post isn't public, so it can't be shared outside Pantopus.",
+        code: 'SHARE_NOT_ALLOWED',
+      });
+    }
+
     if (shareType === 'repost' && typeof req.body.reposted === 'boolean') {
       // The repost state the client wants: a repeated request changes nothing and notifies no one.
       const { data, error } = await supabaseAdmin.rpc('set_post_repost', {
@@ -3594,14 +3463,17 @@ router.get('/user/:userId', verifyToken, async (req, res) => {
         // any network-only targeting rules above.
         return true;
       });
+      // And never a post its own page would refuse this viewer (household, private, a Beacon tier).
+      filtered = await readablePosts(filtered, requestingUserId);
     }
 
     const normalized = filtered.map(r => normalizeFeedPostRow(r, new Set(), new Set()));
     const serialized = await enrichFeedPosts(normalized, requestingUserId);
 
+    // Pages follow the rows read, not the posts left after the checks, so a short page isn't the end.
     res.json({
       posts: serialized,
-      pagination: buildCursorPagination(serialized, parsedLimit),
+      pagination: buildCursorPagination(posts || [], parsedLimit),
     });
   } catch (err) {
     logger.error('User posts fetch error', { error: err.message });

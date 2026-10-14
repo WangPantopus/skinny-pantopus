@@ -64,14 +64,15 @@ public enum PulseComposeIntent: String, CaseIterable, Sendable, Hashable {
     /// `.all` falls back to `.ask`. The four read-only lanes added for
     /// the RN chip-row parity pass (`alert` / `deal` / `neighborhoodWin`
     /// / `visitorGuide`) have no dedicated compose form yet, so they
-    /// pre-fill the generic Announce composer.
+    /// pre-fill the generic Announce composer, as does a post type this
+    /// build doesn't know (`generic`, when its author edits it).
     public static func from(feedIntent: PulseIntent) -> PulseComposeIntent {
         switch feedIntent {
         case .all, .ask: .ask
         case .recommend, .visitorGuide: .recommend
         case .event: .event
         case .lost: .lost
-        case .announce, .alert, .deal, .neighborhoodWin: .announce
+        case .announce, .alert, .deal, .neighborhoodWin, .generic: .announce
         }
     }
 
@@ -309,7 +310,7 @@ public final class PulseComposeViewModel {
     public var announceAudience: PulseAnnounceAudience = .neighbors
 
     /// Heads Up alert sub-type — required when `postType == alert`.
-    public var safetyAlertKind: PulseSafetyAlertKind = .theft
+    public var safetyAlertKind: PulseSafetyAlertKind = .hazard
 
     /// Ask category chip selection. New Asks start on Handyman; an edited Ask posted without a
     /// category has none selected.

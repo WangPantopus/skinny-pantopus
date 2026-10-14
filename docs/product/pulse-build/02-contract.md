@@ -167,11 +167,14 @@ Private note to a home (signed): `POST /api/pulse/notes` `{ "toHomeId"? | "toPos
 - `GET|PUT /api/pulse/preferences` → `{ "digest": { "enabled", "time_local", "timezone", "channel": "email"|"push"|"both" }, "weekly_street_digest": false, "quiet_hours": { "start_local", "end_local" } (existing fields), "nudge_helper": true }`.
 - `GET /api/pulse/preferences/summary` → every follow, mute and alert with an `undo` descriptor, for the preferences page.
 - `GET /api/pulse/posts/:id/why` → `{ "reasons": [{ "kind": "area" | "topic" | "follow" | "time", "text": "You're viewing Camas, all topics, newest first." }] }`. Only the reader's own choices.
-- Mutes: `POST /api/posts/mute/topic` accepts `{ "topic", "areaId" }` (the legacy `{ "postType" }` still works); `GET /api/posts/mute` also lists topic mutes; `DELETE /api/posts/mute` undoes them. User mutes as today.
+- Mutes (in force since S4): `POST /api/posts/mute/topic` accepts `{ "topic", "areaId"? }` → `{ "message", "mute": { "topic", "area_id" } }`; without `areaId` the topic is muted everywhere; an unknown topic or a malformed `areaId` is a 400; muting twice keeps one mute. The legacy `{ "postType", "surface"? }` still works. `GET /api/posts/mute` → `{ "muted": [ …people and businesses, unchanged ], "topic_mutes": [{ "topic", "area_id", "muted_at" }] }`. `DELETE /api/posts/mute` `{ "entityType": "topic", "entityId": "<topic>", "areaId"? }` (body or query string) removes that one mute (without `areaId`, the everywhere mute). A topic muted in an area hides that topic's posts in the area and posts that have no area (every post until `Post.area_id` arrives with S5). User mutes as today.
+- Topic filter (in force since S4): `GET /api/posts/feed?surface=place&topic=<topic>` returns only that topic's posts, for any of the 12; `sports` keeps its Sports lane.
 
 ### 2.10 Areas and eligibility
 
 `GET /api/pulse/areas/mine` → `{ "town": {...}|null, "neighborhood": {...}|null, "street": {...}|null, "home_verified": true }` (only areas that are open) · `GET /api/pulse/areas/search?q=` → towns for "another place" · `POST /api/pulse/adult-attestation` → `{ "attested_at" }`.
+
+`POST /api/pulse/adult-attestation` (in force since S5's first PR): no body; stores `User.adult_attested_at` once and returns it, the first time again on every later call (a double tap answers the same); `403 AGE_NOT_ELIGIBLE` when the date of birth on file says the person is under 18.
 
 ### 2.11 Safety (PS, S11)
 
@@ -195,7 +198,7 @@ Private note to a home (signed): `POST /api/pulse/notes` `{ "toHomeId"? | "toPos
 |---|---|
 | `Post` | `read_scope text` (check: `public`, `verified_town`, `verified_area`), `area_id uuid` (FK `PulseArea`, after approval), `expires_at timestamptz`, `resolution text` (check, section 1), `claim_mode text default 'choose'`, `moderation_state text not null default 'live'`, `moderation_rule text`, `moderation_note text`, `moderated_at timestamptz`, `search_tsv tsvector` generated + GIN (R3). Widen `Post_post_type_check` with `share`, `offer`; widen `Post_topic_check` to the 12 topics (plus legacy `sports`); keep `state` in sync (`open` → `solved` when `answered`, `archived` otherwise) so older clients still read it |
 | `PostComment` | `helpful_at timestamptz`, `helpful_by uuid`, `moderation_state text not null default 'live'`, `moderation_rule text`. Account deletion must leave a "Reply removed" row instead of cascading (change `user_id` to nullable with `ON DELETE SET NULL`, and soft-delete the text) |
-| `PostMute` | `area_id uuid null` (the `topic` entity type already exists) |
+| `PostMute` | `area_id uuid null` (the `topic` entity type already exists); its unique index includes `area_id`. Added with `Post_topic_check`'s widening in `20261014031000_pulse_topics.sql` (S4); the foreign key to `PulseArea` comes with that table |
 | `User` | `adult_attested_at timestamptz`; `account_type` check widened with `official` |
 | `UserFeedPreference` | `pulse_seen_nearby_at timestamptz`, `pulse_seen_following_at timestamptz` |
 | `UserNotificationPreferences` | `digest_enabled boolean`, `digest_time_local time`, `digest_channel text`, `weekly_street_digest_enabled boolean` (PC), `nudge_helper boolean default true` |
@@ -224,7 +227,7 @@ Slices that need no new table can start now: rule cleanups, tolerant decoding, t
 
 ## 5. Rules the server enforces
 
-**Who can read a post** (`canReadPost(post, viewer)`; one function, used everywhere):
+**Who can read a post** (`canReadPost(post, viewer)` in `backend/services/pulse/readAccess.js`, with `readablePosts(posts, viewer)` for lists and `POST_READ_SELECT`, the columns it reads; one function, used everywhere; today it is the post page's rule, and the scopes below arrive with S5):
 author → yes · `moderation_state` `removed` → the author only; `held` → the author and staff · signed out → only a post that is public with `allow_external_share` not false · `read_scope = public` → yes · `verified_town` → the viewer has a verified address home inside the post's town area · `verified_area` → inside that street or neighborhood area · `read_scope` null (older posts) → today's `canViewPost` rules, unchanged. Feeds apply the same predicate in the query, never after paging. A client can no longer choose coordinates to read restricted posts.
 
 **Label** (`labelFor(author, area)`, computed at read time, never stored on the post): `pantopus` if `origin = 'curator'` · `official` if `account_type = 'official'` · `business` for a business reply identity · `resident` if the author has a verified address occupancy (postcard, document, landlord or admin; **not** a household invite) for a home whose point is inside the area · `new_here` if a postcard for a home in the area is pending · `nearby` if verified within 15 miles of the area's edge · else `visitor`.
@@ -250,6 +253,7 @@ author → yes · `moderation_state` `removed` → the author only; `held` → t
 |---|---|---|
 | 403 | `SHARE_NOT_ALLOWED` | An external share of a post that is not public (PR 2252, once merged) |
 | 403 | `ADULT_ATTESTATION_REQUIRED` | First Pulse post or reply without the attestation |
+| 403 | `AGE_NOT_ELIGIBLE` | `POST /api/pulse/adult-attestation` when the date of birth on file is under 18 |
 | 403 | `NEEDS_VERIFIED_ADDRESS` | Street or neighborhood post or read without a verified home in that area |
 | 403 | `AUDIENCE_NOT_ALLOWED` | The chosen `readScope` or `areaId` isn't one the author may use |
 | 403 | `BUSINESS_CANNOT_POST` | A business identity posting to the Place feed: `POST /api/posts` with `postAs: 'business'` (or a `businessId`) and a local audience or the `place` target, and every `POST /api/businesses/:businessId/posts` (in force since S1) |

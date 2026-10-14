@@ -202,7 +202,7 @@ public struct FeedView: View {
             isPresented: $showsIntentPicker,
             titleVisibility: .visible
         ) {
-            ForEach(PulseIntent.allCases, id: \.rawValue) { intent in
+            ForEach(PulseIntent.filterCases, id: \.rawValue) { intent in
                 Button(intent.label) { selectIntent(intent) }
             }
             Button("Cancel", role: .cancel) {}
@@ -251,7 +251,7 @@ public struct FeedView: View {
             }
         } else {
             FeedChipRow(
-                chips: PulseIntent.allCases.map { FeedChipItem(id: $0.rawValue, label: $0.label) },
+                chips: PulseIntent.filterCases.map { FeedChipItem(id: $0.rawValue, label: $0.label) },
                 activeId: viewModel.activeIntent.rawValue,
                 skeleton: isInitialLoading
             ) { id in
