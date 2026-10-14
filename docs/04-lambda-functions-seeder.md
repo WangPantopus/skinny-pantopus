@@ -32,7 +32,7 @@ The **pantopus-seeder** is a standalone AWS Lambda service that automatically se
 | Triggers | EventBridge schedule rules |
 | Secrets | AWS Secrets Manager |
 | Metrics | CloudWatch custom namespaces |
-| AI | OpenAI (gpt-4o-mini) for humanization |
+| AI | Anthropic Claude (Sonnet 5.5) for humanization |
 | HTTP | httpx (async) |
 | RSS | feedparser |
 | Validation | Pydantic 2.0 |
@@ -132,7 +132,7 @@ The **pantopus-seeder** is a standalone AWS Lambda service that automatically se
          +-- Seasonal: only if none posted in 7 days
          |
          v
-       Humanize via OpenAI API (gpt-4o-mini)
+       Humanize via Claude API (Sonnet 5.5)
          |
          v
        Quality gate (length, tone, format validation)
@@ -474,7 +474,7 @@ Four-pass filter:
  Raw content
    |
    v
- OpenAI API (gpt-4o-mini)
+ Claude API (Sonnet 5.5)
    |
    +-- System prompt: Two-part gate
    |     [QUALITY GATE] -> reject low-value -> "SKIP"
@@ -591,7 +591,7 @@ Simple longitude-based rules for CONUS:
 | `PANTOPUS_API_BASE_URL` | Poster, Briefing, Alerts, Reminders | Backend API endpoint |
 | `CURATOR_EMAIL` | Poster | Curator auth (seeded posts) |
 | `CURATOR_PASSWORD` | Poster | Curator auth |
-| `OPENAI_API_KEY` | Poster | Content humanization |
+| `ANTHROPIC_API_KEY` | Poster | Content humanization |
 | `INTERNAL_API_KEY` | Briefing, Alerts, Reminders | Internal API auth |
 | `AIRNOW_API_KEY` | AlertChecker | AQI data |
 

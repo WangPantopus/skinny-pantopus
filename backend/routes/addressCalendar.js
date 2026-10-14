@@ -23,6 +23,7 @@ const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
 const logger = require('../utils/logger');
 const addressCalendarService = require('../services/addressCalendarService');
+const { forgetChatContext } = require('../services/ai/chatContext');
 
 const PICKUP_VERSION = /^(none|[0-9a-f]{32})$/;
 
@@ -73,6 +74,8 @@ router.put('/:id/calendar/pickup-day', verifyToken, validate(pickupSchema), asyn
       userId: req.user.id,
       expectedVersion: req.body.expected_version,
     });
+    // The assistant's remembered view of this home is out of date now.
+    forgetChatContext(req.user.id);
     const refreshed = await addressCalendarService.getPickupContext(req.params.id, req.user.id);
     const calendar = await addressCalendarService.composeForHome(refreshed.home, { rules: refreshed.rules });
     return res.json({ pickup: result, calendar });
@@ -93,6 +96,7 @@ router.delete('/:id/calendar/pickup-day', verifyToken, async (req, res) => {
   try {
     const { home } = await addressCalendarService.getPickupContext(req.params.id, req.user.id);
     await addressCalendarService.clearPickupDay(home, req.user.id, expectedVersion);
+    forgetChatContext(req.user.id);
     const refreshed = await addressCalendarService.getPickupContext(req.params.id, req.user.id);
     const calendar = await addressCalendarService.composeForHome(refreshed.home, { rules: refreshed.rules });
     return res.json({ calendar });

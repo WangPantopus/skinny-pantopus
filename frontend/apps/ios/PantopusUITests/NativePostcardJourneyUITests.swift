@@ -87,11 +87,11 @@ final class NativePostcardJourneyUITests: XCTestCase {
     private func waitForConfirmationReturn() {
         expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: element("postcardVerification"))
         waitForExpectations(timeout: 30)
-        XCTAssertTrue(element("hubMenuButton").waitForExistence(timeout: 5) || element("place.homeTools").waitForExistence(timeout: 15))
+        XCTAssertTrue(element("place.menu").waitForExistence(timeout: 5) || element("place.homeTools").waitForExistence(timeout: 15))
     }
 
     private func signIn() throws {
-        if element("hubMenuButton").waitForExistence(timeout: 3) || element("place.homeTools").exists {
+        if element("place.menu").waitForExistence(timeout: 3) || element("place.homeTools").exists {
             // A failed prior UI assertion may leave a session in Keychain.
             // Use normal logout and login so the requested fixture account is
             // established without trusting a previous screen or session.
@@ -102,7 +102,7 @@ final class NativePostcardJourneyUITests: XCTestCase {
         try enter(XCTUnwrap(inputs["POSTCARD_TEST_EMAIL"]), into: "loginEmailField")
         try enter(XCTUnwrap(inputs["POSTCARD_TEST_PASSWORD"]), into: "loginPasswordField")
         tap("loginSubmitButton")
-        XCTAssertTrue(element("hubMenuButton").waitForExistence(timeout: 25))
+        XCTAssertTrue(element("place.menu").waitForExistence(timeout: 25))
         dismissSignInPrompts()
     }
 
@@ -126,7 +126,7 @@ final class NativePostcardJourneyUITests: XCTestCase {
     }
 
     private func signOut() {
-        tap(element("place.menu").exists ? "place.menu" : "hubMenuButton")
+        tap("place.menu")
         tap("navDrawer.item.settings")
         tapButton("Log out")
         XCTAssertTrue(element("placeLaunchSignIn").waitForExistence(timeout: 20))

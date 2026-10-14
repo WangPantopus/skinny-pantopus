@@ -133,7 +133,7 @@ fun PlanRequestsScreen(
                 )
             },
             confirmButton = { TextButton(onClick = viewModel::confirmSharingAddress) { Text("Accept and share") } },
-            dismissButton = { TextButton(onClick = viewModel::dismissConfirm) { Text("Not yet") } },
+            dismissButton = { TextButton(onClick = viewModel::dismissConfirm) { Text("Not now") } },
         )
     }
 }
@@ -162,7 +162,11 @@ private fun RequestsHeader(
                 color = PantopusColors.appText,
                 modifier = Modifier.weight(1f),
             )
-            Text(text = "${plan.spotsLeft} left", style = PantopusTextStyle.small, color = PantopusColors.appTextSecondary)
+            Text(
+                text = if (plan.spotsLeft <= 0) "Full" else "${plan.spotsLeft} left",
+                style = PantopusTextStyle.small,
+                color = PantopusColors.appTextSecondary,
+            )
         }
         PlanSpotsMeter(spots = plan.spots, taken = taken)
     }
@@ -244,16 +248,15 @@ private fun requesterCaption(request: PlanRequestViewDto): String {
     return parts.joinToString(" · ")
 }
 
-/** "You + 1", "Just me", or for a playdate "2 kids · 2–5". */
+/** "Just Priya", "Priya + 1" (as the host's push says it), or for a playdate "2 kids · ages 2–5". */
 private fun partyLabel(
     request: PlanRequestViewDto,
     playdate: Boolean,
-): String =
+): String {
     if (playdate) {
         val kids = request.kidsCount ?: 1
-        listOfNotNull("$kids ${if (kids == 1) "kid" else "kids"}", KidsAgeBand.rangeLabel(request.kidsAgeBands)).joinToString(" · ")
-    } else if (request.partySize <= 1) {
-        "Just me"
-    } else {
-        "You + ${request.partySize - 1}"
+        return listOfNotNull("$kids ${if (kids == 1) "kid" else "kids"}", KidsAgeBand.rangeLabel(request.kidsAgeBands)).joinToString(" · ")
     }
+    val name = request.user?.displayName?.takeIf { it.isNotBlank() }?.let(PlanFormat::firstName) ?: "Neighbor"
+    return if (request.partySize <= 1) "Just $name" else "$name + ${request.partySize - 1}"
+}

@@ -172,16 +172,32 @@ enum PlanCardLines {
 
     /// How people get in: "Sam approves each person", or the rule that lets
     /// this viewer (or, for the host, anyone) in right away, in the words of
-    /// boards H4 and H5. Playdates: "Maya approves each family".
+    /// board J6 and the Android app. Playdates: "Maya approves each family".
     static func approval(_ card: PlanCardDTO) -> String {
         let first = firstName(card.host.displayName)
         if card.kind == .playdate { return "\(first) approves each family" }
         let rule = card.viewer?.isHost == true ? card.autoRules?.first : card.viewer?.autoRule
         switch rule {
-        case .anyoneNearby: return "Anyone nearby gets in right away"
-        case .verified: return "Verified neighbors get in right away"
-        case .hostedBefore: return "People \(first) has hosted get in right away"
+        case .anyoneNearby: return "Lets in anyone nearby automatically"
+        case .verified: return "Lets in verified neighbors automatically"
+        case .hostedBefore: return card.viewer?.isHost == true ? "Lets in people you've hosted automatically" : "You can get in right away"
         case nil: return "\(first) approves each person"
+        }
+    }
+
+    /// "watch party", "game", "dog walk": the plan in a sentence, as the server's notifications say it.
+    static func noun(_ card: PlanCardDTO) -> String {
+        switch card.kind {
+        case .watchParty: "watch party"
+        case .playdate: "playdate"
+        case .pickupGame: "pickup game"
+        case .walkCoffee:
+            switch card.details?.walkKind {
+            case "coffee": "coffee"
+            case "dog_walk": "dog walk"
+            case "stroller_walk": "stroller walk"
+            default: "walk"
+            }
         }
     }
 

@@ -912,6 +912,32 @@ data class PlaceYourHomeData(
     @Json(name = "value_low") val valueLow: Double? = null,
     @Json(name = "value_high") val valueHigh: Double? = null,
     @Json(name = "assessed_value") val assessedValue: Double? = null,
+    /** The home's outline for the Today sky. Absent from older servers. */
+    val house: PlaceHouseShape? = null,
+)
+
+/**
+ * The home's outline for the Today sky: the county record (ATTOM) with the
+ * kind of home the household chose over it. A null field means the record
+ * doesn't say, and the sky draws its default (`SkyHome`). Plain strings, so
+ * a value this build doesn't know never fails the section.
+ */
+@JsonClass(generateAdapter = true)
+data class PlaceHouseShape(
+    /** "house", "townhouse", "apartment" or "mobile". */
+    val kind: String? = null,
+    /** 1, 1.5, 2 or 3. */
+    val stories: Double? = null,
+    /** The ground floor: "small", "medium" or "large". */
+    val footprint: String? = null,
+    /** "gable", "hip" or "flat". */
+    val roof: String? = null,
+    /** "attached", "detached", "carport" or "none". */
+    val garage: String? = null,
+    /** 1–3 with a garage or carport. */
+    @Json(name = "garage_spaces") val garageSpaces: Int? = null,
+    val fireplace: Boolean? = null,
+    val pool: Boolean? = null,
 )
 
 /**

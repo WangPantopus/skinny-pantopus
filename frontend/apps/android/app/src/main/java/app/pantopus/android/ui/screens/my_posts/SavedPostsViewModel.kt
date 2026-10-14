@@ -61,6 +61,12 @@ class SavedPostsViewModel
         private var loadingMore = false
         private var loadMoreFailed = false
 
+        /** A return or mutation during a read must recheck once it settles; true preserves an explicit refresh. */
+        private var pendingRead: Boolean? = null
+
+        private val readingOrRemoving: Boolean
+            get() = loading || loadingMore || removing.isNotEmpty()
+
         /** Bumped by every first-page load so a page that lands later can't append to its replacement. */
         private var generation = 0
         private val removing = mutableSetOf<String>()
@@ -79,7 +85,10 @@ class SavedPostsViewModel
         fun refresh() = read(force = true)
 
         private fun read(force: Boolean) {
-            if (loading || loadingMore || removing.isNotEmpty()) return
+            if (readingOrRemoving) {
+                pendingRead = force || pendingRead == true
+                return
+            }
             loading = true
             val gen = ++generation
             loadMoreFailed = false
@@ -122,7 +131,15 @@ class SavedPostsViewModel
                         }
                     }
                 }
+                readPending()
             }
+        }
+
+        private fun readPending() {
+            val force = pendingRead ?: return
+            if (readingOrRemoving) return
+            pendingRead = null
+            read(force)
         }
 
         /**
@@ -179,11 +196,12 @@ class SavedPostsViewModel
                 }
                 if (gen != generation) return@launch
                 loadingMore = false
-                if (complete && removalsBefore == removals) {
+                if (complete && removalsBefore == removals && pendingRead == null) {
                     posts = (head + tail).distinctBy { it.id }
                     nextOffset = next
                 }
                 applyState()
+                readPending()
             }
         }
 
@@ -211,6 +229,7 @@ class SavedPostsViewModel
                 }
                 applyState()
                 if (result is NetworkResult.Success && !addedRows && nextOffset != offset) loadMoreIfNeeded()
+                readPending()
             }
         }
 
@@ -236,6 +255,7 @@ class SavedPostsViewModel
                     result is NetworkResult.Success -> load()
                     else -> _toastMessage.value = "Couldn't remove it. Try again."
                 }
+                readPending()
             }
         }
 

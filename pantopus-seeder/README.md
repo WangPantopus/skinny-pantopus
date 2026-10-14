@@ -48,7 +48,7 @@ pantopus-seeder/
 Five Lambda functions share a common Python package:
 
 - **Fetcher** (every 2 hours): Pulls content from RSS feeds, NOAA, and a seasonal engine into a `seeder_content_queue` table in Supabase.
-- **Poster** (hourly, self-selects 3 slots/day at ~7am, 12pm, 5pm PT): Picks the best queued item, humanizes it via Claude Haiku, and posts to the Pantopus API as the curator account.
+- **Poster** (hourly, self-selects 3 slots/day at ~7am, 12pm, 5pm PT): Picks the best queued item, humanizes it via Claude Sonnet 5.5, and posts to the Pantopus API as the curator account.
 - **Discovery** (daily): Detects user clusters and auto-provisions new seeder regions.
 - **Briefing Scheduler** (every 15 minutes): Finds users whose morning briefing time is now and sends personalized push notifications (see below).
 - **Briefing Cleanup** (daily): Purges old delivery logs, cleans expired context cache, retries failed briefings.
@@ -74,7 +74,7 @@ aws secretsmanager put-secret-value \
     "PANTOPUS_API_BASE_URL": "...",
     "CURATOR_EMAIL": "...",
     "CURATOR_PASSWORD": "...",
-    "OPENAI_API_KEY": "...",
+    "ANTHROPIC_API_KEY": "...",
     "INTERNAL_API_KEY": "your-internal-api-key-here"
   }'
 ```
@@ -135,7 +135,7 @@ The briefing scheduler publishes metrics to `Pantopus/Briefing/{environment}`:
        "PANTOPUS_API_BASE_URL": "https://api.pantopus.com",
        "CURATOR_EMAIL": "curator@pantopus.com",
        "CURATOR_PASSWORD": "your-curator-password",
-       "OPENAI_API_KEY": "sk-...",
+       "ANTHROPIC_API_KEY": "sk-ant-...",
        "INTERNAL_API_KEY": "your-internal-api-key",
        "WEATHERKIT_KEY_ID": "",
        "WEATHERKIT_TEAM_ID": "",

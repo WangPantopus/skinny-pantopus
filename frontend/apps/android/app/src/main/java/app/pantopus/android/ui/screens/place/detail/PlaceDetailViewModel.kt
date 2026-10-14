@@ -2,10 +2,13 @@ package app.pantopus.android.ui.screens.place.detail
 
 import android.app.KeyguardManager
 import android.content.Context
+import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.security.AppLockManager
+import app.pantopus.android.data.ai.PickupFlyerReader
+import app.pantopus.android.data.ai.PickupFlyerReading
 import app.pantopus.android.data.api.models.homes.showsCopyBeforeRecheck
 import app.pantopus.android.data.api.models.hub.NotificationPreferencesPatch
 import app.pantopus.android.data.api.models.place.BlockInviteRecipient
@@ -109,6 +112,17 @@ class PlaceDetailViewModel
 
         override fun dismissPickupPrimer() {
             _pickupPrimerHomeId.value = null
+        }
+
+        /** "Read a flyer" in the pickup editor (unit tests build this without Hilt). */
+        @Inject lateinit var flyerReader: PickupFlyerReader
+
+        override val readsPickupFlyers: Boolean get() = ::flyerReader.isInitialized
+
+        override suspend fun readPickupFlyer(photo: Uri): PickupFlyerReading? {
+            if (!pickupCurrent()) return null
+            val reading = flyerReader.read(photo)
+            return reading.takeIf { pickupCurrent() }
         }
 
         override suspend fun enablePickupReminders(
