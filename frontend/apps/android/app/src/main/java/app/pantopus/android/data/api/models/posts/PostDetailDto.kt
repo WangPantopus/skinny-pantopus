@@ -10,7 +10,8 @@ import com.squareup.moshi.JsonClass
  */
 @JsonClass(generateAdapter = true)
 data class PostCreatorDto(
-    val id: String,
+    /** Null for a curator or a removed account's row. */
+    val id: String?,
     val username: String?,
     val name: String?,
     @Json(name = "first_name") val firstName: String?,
@@ -57,17 +58,18 @@ data class PostHomeRefDto(
 
 /**
  * A single comment on a post. Route reference:
- * `backend/routes/posts.js:2157`.
+ * `backend/routes/posts.js:2157`. A reply whose account was deleted keeps its row without a `user_id` and may
+ * have no text, so both read as absent instead of failing the post.
  */
 @JsonClass(generateAdapter = true)
 data class PostCommentDto(
     val id: String,
     @Json(name = "post_id") val postId: String,
-    @Json(name = "user_id") val userId: String,
+    @Json(name = "user_id") val userId: String?,
     @Json(name = "parent_comment_id") val parentCommentId: String?,
-    val comment: String,
+    val comment: String = "",
     @Json(name = "created_at") val createdAt: String,
-    @Json(name = "is_deleted") val isDeleted: Boolean,
+    @Json(name = "is_deleted") val isDeleted: Boolean = false,
     val userHasLiked: Boolean? = null,
     @Json(name = "like_count") val likeCount: Int? = null,
     val author: PostCreatorDto? = null,
@@ -88,7 +90,7 @@ data class PostDetailDto(
     val id: String,
     @Json(name = "user_id") val userId: String,
     val title: String?,
-    val content: String,
+    val content: String = "",
     @Json(name = "post_type") val postType: String?,
     @Json(name = "post_format") val postFormat: String?,
     val purpose: String?,

@@ -256,11 +256,11 @@ final class PulseComposeViewModelTests: XCTestCase {
         )
         vm.update(.title, to: "Hello")
         vm.update(.body, to: "What's up")
-        vm.safetyAlertKind = .suspicious
+        vm.safetyAlertKind = .other
         let request = vm.buildRequest()
         XCTAssertEqual(request.postType, "alert")
         XCTAssertEqual(request.purpose, "heads_up")
-        XCTAssertEqual(request.safetyAlertKind, "suspicious")
+        XCTAssertEqual(request.safetyAlertKind, "other")
     }
 
     // MARK: - Place tag
