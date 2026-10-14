@@ -29,6 +29,8 @@ Owner: the PB session. Keep this file current in your own PRs (or a small docs P
 
 ## Next
 
+- **S5 distance helper, prepared on `claude/pulse-pb-s5-distance`:** uses the existing grid privacy helper, server-derived verified reader home and a service-only density lookup. Public/signed-out/unverified readers get null; fewer than five distinct currently verified homes in the band gets “nearby”; values otherwise round by the frozen contract. Real PB database checks cover both readers, rounding, duplicate occupancies, invitations, ended/guest/pending/frozen homes, hidden points and stable grid cells. Area regression and privacy gates pass. It is not wired into a response until the S6 card serializer, so native display verification and merge wait for that integration.
+
 - S5 distance text and label limits, then S6 feed/new/seen and card serialization, reusing the existing read policy, feed filters and UserFeedPreference. PI 2308 and PA 2303 already implement the client page; do not rebuild those screens. No Pulse mode creation until S8's checks are ready.
 - S6 contract clarification: add `PulsePost.viewer.can_share`, the server `read_at` snapshot boundary, area-aware new counts and the monotonic seen acknowledgment. Backend implementation follows this small contract PR. The existing shape and fields remain compatible.
 - S8 must let the existing edit route accept `share` and `offer` when creation begins. PS's composer checks remain a dependency.
