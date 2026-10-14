@@ -159,10 +159,6 @@ const HOME_PLACE_TYPES = [
   'alert', 'deal', 'local_update', 'neighborhood_win', 'visitor_guide',
 ];
 
-const BUSINESS_PLACE_TYPES = [
-  'event', 'deal', 'local_update',
-];
-
 const POST_FORMATS = ['standard', 'quick_pulse', 'deep_dive', 'shout_out', 'show_and_tell'];
 
 const LOCATION_PRECISIONS = ['exact_place', 'approx_area', 'neighborhood_only', 'none'];
@@ -176,14 +172,14 @@ const SAFETY_ALERT_KINDS = [
   'theft', 'vandalism', 'suspicious', 'hazard', 'scam', 'other',
 ];
 
-// Map frontend alert kinds to valid DB enum values until migration 081 is applied
+// Posts from before migration 081 stored these composer kinds under older enum names. They can't
+// be created any more; an edit that sends one back compares it with the stored name. ('hazard' and
+// 'other' are stored as themselves: 'other' used to become 'public_safety', a notice kind.)
 const SAFETY_KIND_TO_DB = {
   theft: 'crime_incident',
   vandalism: 'crime_incident',
   suspicious: 'public_safety',
-  hazard: 'road_hazard',
   scam: 'crime_incident',
-  other: 'public_safety',
 };
 
 // `(?<!ok)http`: the Android app's client is OkHttp ("okhttp/4.x"), a person, not a bot.
@@ -192,6 +188,26 @@ const BOT_UA_PATTERN = /bot|crawl|spider|slurp|facebookexternal|whatsapp|telegra
 function toDbSafetyKind(kind) {
   return kind ? (SAFETY_KIND_TO_DB[kind] || kind) : null;
 }
+
+// Heads-up kinds anyone may create (docs/product/pulse-build/02-contract.md §1). Official and
+// curator accounts may also post the notice kinds, with a link to their source. Crime and
+// suspicion kinds can't be created by anyone; old posts of those kinds stay readable.
+const RESIDENT_ALERT_KINDS = ['road_hazard', 'power_outage', 'weather_damage', 'missing_pet', 'hazard', 'other'];
+const SOURCED_ALERT_KINDS = ['official_notice', 'public_safety', 'crime_incident'];
+const SOURCED_ALERT_ACCOUNT_TYPES = ['official', 'curator'];
+
+/** The sentence refusing a Heads-up of this kind from this account, or null when it may post it. */
+function alertKindRefusal(kind, accountType, sourceUrl) {
+  if (!kind || RESIDENT_ALERT_KINDS.includes(kind)) return null;
+  if (!SOURCED_ALERT_ACCOUNT_TYPES.includes(accountType) || !SOURCED_ALERT_KINDS.includes(kind)) {
+    return ['official_notice', 'public_safety'].includes(kind)
+      ? 'Only official accounts and Pantopus can post this kind of notice. Choose another kind of Heads-up.'
+      : "Heads-ups can't be about crime or suspicious people. In an emergency, call 911.";
+  }
+  return sourceUrl ? null : 'Add a link to the official source for this notice.';
+}
+
+const BUSINESS_CANNOT_POST_ERROR = "Businesses can't post to Pulse. Your business page and earlier posts are unchanged.";
 
 const POST_AS_TYPES = ['personal', 'business', 'home', 'persona'];
 const AUDIENCE_TYPES = ['connections', 'followers', 'network', 'nearby', 'saved_place', 'household', 'neighborhood', 'target_area', 'national', 'public'];
@@ -259,6 +275,8 @@ const createPostSchema = Joi.object({
   safetyBehaviorDescription: Joi.string().max(2000).optional(),
   // Frontend alias for safetyBehaviorDescription
   behaviorDescription: Joi.string().max(2000).optional(),
+  // The official source of an Official or curator notice; stored as post_metadata.source_url.
+  sourceUrl: Joi.string().uri({ scheme: ['https', 'http'] }).max(2048).optional(),
   // Deal fields
   dealExpiresAt: Joi.date().iso().optional(),
   dealBusinessName: Joi.string().max(255).optional(),
@@ -979,7 +997,7 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
       distributionTargets, crossPostToConnections, gpsTimestamp, gpsLatitude, gpsLongitude,
       purpose, profileVisibilityScope, showOnProfile,
       geocodeProvider, geocodeAccuracy, geocodePlaceId,
-      topic, sportsScope, postMetadata,
+      topic, sportsScope, postMetadata, sourceUrl,
     } = req.body;
     // P2.4 / unified-IA §4.1 — defense-in-depth. Persona-context posts
     // must go through the audience-zone composer (P2.5) and the
@@ -1012,7 +1030,7 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
 	    let requestedAudience = audience || (postAs === 'persona' ? 'followers' : 'nearby');
 	    if (postAs === 'business' && (requestedAudience === 'followers' || visibility === 'followers')) {
 	      return res.status(400).json({
-	        error: 'Business posts can no longer target followers. Use Target Area or Public instead.',
+	        error: 'Business posts can no longer target followers. Use Public instead.',
 	        code: 'business_followers_audience_removed',
 	      });
 	    }
@@ -1053,6 +1071,15 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
     }
     if (hasCountryDistributionTarget && requestedAudience !== 'national') {
       return res.status(400).json({ error: 'Country-wide distribution requires national audience.' });
+    }
+    // Businesses reply; they don't post to the Place feed. Their other audiences are unchanged.
+    if (postAs === 'business'
+      && (LOCAL_AUDIENCES.includes(requestedAudience) || requestedDistributionTargets.includes('place'))) {
+      return res.status(403).json({ error: BUSINESS_CANNOT_POST_ERROR, code: 'BUSINESS_CANNOT_POST' });
+    }
+    const alertRefusal = alertKindRefusal(safetyAlertKind, req.user.accountType, sourceUrl);
+    if (alertRefusal) {
+      return res.status(400).json({ error: alertRefusal, code: 'ALERT_KIND_NOT_ALLOWED' });
     }
 
     let homeContext = null;
@@ -1109,20 +1136,6 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
 
       if (!hasEditorAccess) {
         return res.status(403).json({ error: 'You need at least editor role to post as this business' });
-      }
-      // v1.1: Business rate limiting — 1 per 24h to Place (tightened from 3)
-      if (['nearby', 'target_area'].includes(requestedAudience) ||
-          (distributionTargets && distributionTargets.includes('place'))) {
-        const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-        const { count } = await supabaseAdmin
-          .from('Post')
-          .select('id', { count: 'exact', head: true })
-          .eq('business_id', businessId)
-          .contains('distribution_targets', ['place'])
-          .gte('created_at', oneDayAgo);
-        if (count >= 1) {
-          return res.status(429).json({ error: 'Business posting limit reached (1 post per 24h to Place feed). Try again later.' });
-        }
       }
     }
 
@@ -1245,13 +1258,6 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
         return res.status(400).json({ error: 'Alerts must specify an alert type (e.g., road_hazard, power_outage).' });
       }
 
-      // Business Place type enforcement
-      if (postAs === 'business' && !BUSINESS_PLACE_TYPES.includes(postType)) {
-        return res.status(400).json({
-          error: `Businesses can only post Events, Deals, and Local Updates to the Place feed.`,
-        });
-      }
-
       // Home Place type enforcement
       if (postAs === 'home' && !HOME_PLACE_TYPES.includes(postType)) {
         return res.status(400).json({
@@ -1355,9 +1361,13 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
       // Sports topic lane (Phase 1)
       topic: topic || null,
       sports_scope: sportsScope || null,
-      post_metadata: postMetadata || {},
+      // A source link comes only from sourceUrl on an Official or curator notice (below).
+      post_metadata: Object.fromEntries(Object.entries(postMetadata || {}).filter(([key]) => key !== 'source_url')),
       origin,
     };
+    if (postType === 'alert' && sourceUrl && SOURCED_ALERT_ACCOUNT_TYPES.includes(req.user.accountType)) {
+      postData.post_metadata = { ...postData.post_metadata, source_url: sourceUrl };
+    }
 
     // v1.1: Compute distribution_targets from audience + cross-post toggles
     if (distributionTargets && distributionTargets.length > 0) {
@@ -2661,12 +2671,20 @@ router.patch('/:id', verifyToken, validate(updatePostSchema), async (req, res) =
     const userId = req.user.id;
 
     const { data: existing } = await supabaseAdmin.from('Post')
-      .select('user_id, media_urls, media_thumbnails, media_live_urls').eq('id', id).single();
+      .select('user_id, media_urls, media_thumbnails, media_live_urls, safety_alert_kind, post_metadata')
+      .eq('id', id).single();
     if (!existing) return res.status(404).json({ error: 'Post not found' });
     if (existing.user_id !== userId) return res.status(403).json({ error: 'You can only edit your own posts' });
     if (req.user.accountType !== 'curator' && hasOutsideMedia(req.body, [normalizeMediaUrls(existing.media_urls),
       normalizeAlignedMediaUrls(existing.media_thumbnails), normalizeAlignedMediaUrls(existing.media_live_urls)])) {
       return res.status(400).json({ error: OUTSIDE_MEDIA_ERROR });
+    }
+    // A new Heads-up kind must be one this author may create. The edit forms send the posted
+    // kind back, sometimes under its stored name; an unchanged kind is always fine.
+    const kind = req.body.safetyAlertKind;
+    if (kind && ![kind, toDbSafetyKind(kind)].includes(existing.safety_alert_kind)) {
+      const refusal = alertKindRefusal(kind, req.user.accountType, existing.post_metadata?.source_url);
+      if (refusal) return res.status(400).json({ error: refusal, code: 'ALERT_KIND_NOT_ALLOWED' });
     }
 
     const fieldMap = {
@@ -3818,5 +3836,5 @@ router.post('/seeded/:factId/dismiss', verifyToken, async (req, res) => {
 });
 
 module.exports = router;
-// Business posts (businesses.js) derive purpose the same way.
-module.exports.derivePurposeFromPostType = derivePurposeFromPostType;
+// The business post route (businesses.js) gives the same answer.
+module.exports.BUSINESS_CANNOT_POST_ERROR = BUSINESS_CANNOT_POST_ERROR;
