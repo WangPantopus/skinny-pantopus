@@ -27,8 +27,8 @@ import app.pantopus.android.data.location.LocationProvider
 import app.pantopus.android.data.location.ViewingLocationRepository
 import app.pantopus.android.data.posts.FeedQuery
 import app.pantopus.android.data.posts.PostsRepository
-import app.pantopus.android.data.pulse.PulseRepository
 import app.pantopus.android.data.posts.PulsePostsRefreshNotifier
+import app.pantopus.android.data.pulse.PulseRepository
 import app.pantopus.android.data.sports.SportsRepository
 import app.pantopus.android.data.store.StoreKeys
 import app.pantopus.android.ui.screens.feed.FeedEmptyContent
@@ -1336,23 +1336,26 @@ class PulseFeedViewModel
                         canKeepOpen = openAsk && post.id !in keptOpenIds,
                         canCloseAsk = openAsk,
                     ),
-                status =
-                    PostStatus.of(
-                        postType = post.postType,
-                        state = if (isSolved) "solved" else post.state,
-                        resolution = post.resolution,
-                        expiresAt = post.expiresAt,
-                        goingCount = likeCount,
-                    ),
+                status = statusFor(post),
             )
         }
+
+        private fun statusFor(post: FeedPost): PostStatus? =
+            PostStatus.of(
+                postType = post.postType,
+                state = if (effectiveIsSolved(post)) "solved" else post.state,
+                resolution = post.resolution,
+                expiresAt = post.expiresAt,
+                goingCount = effectiveLikeCount(post),
+            )
 
         /** An Ask that hasn't ended: no resolution, not solved or archived, and not past its end. */
         private fun isOpenAsk(
             post: FeedPost,
             isSolved: Boolean,
         ): Boolean {
-            if (post.postType != "ask_local" || isSolved || post.resolution != null || post.state == "archived") return false
+            if (post.postType != "ask_local" || isSolved) return false
+            if (post.resolution != null || post.state == "archived") return false
             val end = post.expiresAt?.let { runCatching { Instant.parse(it) }.getOrNull() } ?: return true
             return end.isAfter(Instant.now())
         }

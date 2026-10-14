@@ -92,7 +92,6 @@ import app.pantopus.android.data.api.services.PersonaDmApi
 import app.pantopus.android.data.api.services.PersonaEditApi
 import app.pantopus.android.data.api.services.PlaceApi
 import app.pantopus.android.data.api.services.PlansApi
-import app.pantopus.android.data.api.services.PulseApi
 import app.pantopus.android.data.api.services.PostPrecheckApi
 import app.pantopus.android.data.api.services.PostsApi
 import app.pantopus.android.data.api.services.PostsMapApi
@@ -100,6 +99,7 @@ import app.pantopus.android.data.api.services.PrivacyApi
 import app.pantopus.android.data.api.services.PrivacyHandshakeApi
 import app.pantopus.android.data.api.services.ProfessionalApi
 import app.pantopus.android.data.api.services.ProfileInsightsApi
+import app.pantopus.android.data.api.services.PulseApi
 import app.pantopus.android.data.api.services.RealRentApi
 import app.pantopus.android.data.api.services.RecordWatchApi
 import app.pantopus.android.data.api.services.RelationshipsApi
