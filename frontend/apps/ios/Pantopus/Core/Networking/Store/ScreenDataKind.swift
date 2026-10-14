@@ -117,7 +117,8 @@ enum ScreenTopic {
     static let chats = "chats"
     /// Client-only: your connection lists (accepted, requests in and out,
     /// blocked). Marked by your own connect, accept, ignore, remove, block
-    /// and unblock here.
+    /// and unblock here, and by a connection request or acceptance arriving
+    /// as a notice or a push (`ScreenStoreLive`).
     static let connections = "connections"
     static let notifications = "notifications"
     static let profileMe = "profile:me"
