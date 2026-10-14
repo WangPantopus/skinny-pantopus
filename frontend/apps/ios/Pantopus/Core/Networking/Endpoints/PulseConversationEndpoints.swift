@@ -67,9 +67,14 @@ public extension PulseEndpoints {
         )
     }
 
-    /// `PUT /api/pulse/follows` — §2.9; one tap means notifications off.
-    static func followPost(postId: String) -> Endpoint {
-        Endpoint(method: .put, path: "/api/pulse/follows", body: FollowPostRequest(targetId: postId))
+    /// `backend/routes/pulse.js` in PR 2322: `GET /api/pulse/follows`, contract §2.9.
+    static func follows() -> Endpoint {
+        Endpoint(method: .get, path: "/api/pulse/follows")
+    }
+
+    /// `backend/routes/pulse.js` in PR 2322: `PUT /api/pulse/follows`, contract §2.9.
+    static func followPost(postId: String, notify: String = "off", ends: String = "on_resolve") -> Endpoint {
+        Endpoint(method: .put, path: "/api/pulse/follows", body: FollowPostRequest(targetId: postId, notify: notify, ends: ends))
     }
 
     /// `DELETE /api/pulse/follows?targetType=post&targetId=…` — §2.9.
@@ -99,6 +104,6 @@ private struct ReadScopeRequest: Encodable {
 private struct FollowPostRequest: Encodable {
     let targetType = "post"
     let targetId: String
-    let notify = "off"
-    let ends = "on_resolve"
+    let notify: String
+    let ends: String
 }

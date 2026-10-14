@@ -20,6 +20,7 @@ public struct PulsePostDetailView: View {
     @State private var replyPendingReport: PulseReplyDTO?
     @State private var isVisible = false
     @State private var showsOfferRequests = false
+    @State private var showsFollowSettings = false
     @State private var showsReadScopeConfirm = false
     @State private var privateMessage: PulsePrivateMessageDestination?
     @Environment(\.scenePhase) private var scenePhase
@@ -158,6 +159,11 @@ public struct PulsePostDetailView: View {
             .sheet(isPresented: $showsReadScopeConfirm) {
                 PulseAudiencePickerView(viewModel: viewModel)
             }
+            .sheet(isPresented: $showsFollowSettings) {
+                PulseFollowSettingsView(postId: viewModel.postId, canFollowUntilEnd: viewModel.canFollowConversationUntilEnd) {
+                    await viewModel.refresh()
+                }
+            }
     }
 
     private var baseContent: some View {
@@ -182,8 +188,8 @@ public struct PulsePostDetailView: View {
             isVisible = false
             showsShareSheet = false
         }
-        .task(id: isVisible && scenePhase == .active) {
-            guard isVisible, scenePhase == .active else { return }
+        .task(id: canPollReplies) {
+            guard canPollReplies else { return }
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .seconds(60)) } catch { return }
                 await viewModel.pollConversationReplies()
@@ -199,6 +205,11 @@ public struct PulsePostDetailView: View {
         .onChange(of: viewModel.didDeletePost) { _, deleted in
             if deleted { onBack() }
         }
+    }
+
+    private var canPollReplies: Bool {
+        isVisible && scenePhase == .active && !showsFollowSettings && !showsReadScopeConfirm
+            && !showsOfferRequests && !showsShareSheet && privateMessage == nil
     }
 
     private var replyDialogs: some View {
@@ -253,7 +264,8 @@ public struct PulsePostDetailView: View {
                         let destination = await viewModel.prepareLostFoundMessage()
                         if isVisible, scenePhase == .active { privateMessage = destination }
                     }
-                }
+                },
+                onFollowSettings: { if isVisible, scenePhase == .active { showsFollowSettings = true } }
             )
         case let .error(message, retryable):
             if retryable {
@@ -308,7 +320,9 @@ public struct PulsePostDetailView: View {
             accessibilityLabel: "Share post"
         ) { requestShare() }
     }
+}
 
+extension PulsePostDetailView {
     private func requestShare() {
         Task {
             if await viewModel.authorizeShare(), isVisible, scenePhase == .active {
@@ -316,9 +330,7 @@ public struct PulsePostDetailView: View {
             }
         }
     }
-}
 
-extension PulsePostDetailView {
     /// `reportPostSchema` reasons (`backend/routes/posts.js:339`).
     private static let reportReasons: [(token: String, label: String)] = [
         ("spam", "Spam"),
