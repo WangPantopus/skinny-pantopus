@@ -213,7 +213,9 @@ const LOCAL_AUDIENCES = ['nearby', 'neighborhood', 'saved_place', 'target_area']
 const { PULSE_TOPICS, PULSE_TOPIC_NAMES, isPulseTopic } = require('../services/pulse/topics');
 const pulseLifecycle = require('../services/pulse/lifecycle');
 // The one read check every path uses (this file keeps calling it canViewPost).
-const { canReadPost: canViewPost, readablePosts, isPubliclyShareable, POST_READ_SELECT } = require('../services/pulse/readAccess');
+const {
+  canReadPost: canViewPost, readablePosts, isPubliclyShareable, POST_READ_SELECT, canReadReply, onlyShownReplies,
+} = require('../services/pulse/readAccess');
 
 const TOPIC_VALUES = PULSE_TOPICS;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -2475,10 +2477,11 @@ router.get('/:id', optionalAuth, async (req, res) => {
     const hasAccess = await canViewPost(post, userId);
     if (!hasAccess) return res.status(403).json({ error: 'You do not have access to this post' });
 
-    const { data: comments } = await supabaseAdmin
+    const { data: comments } = await onlyShownReplies(supabaseAdmin
       .from('PostComment')
       .select(`*, author:user_id (id, username, name, first_name, last_name, profile_picture_url)`)
-      .eq('post_id', id).eq('is_deleted', false).order('created_at', { ascending: true });
+      .eq('post_id', id).eq('is_deleted', false), userId)
+      .order('created_at', { ascending: true });
 
     const commentRows = await serializeCommentsForViewer(await attachFilesToComments(comments || []), post, userId);
 
@@ -2918,9 +2921,12 @@ router.post('/:id/comments', verifyToken, validate(createCommentSchema), async (
 
     let parent = null;
     if (parentCommentId) {
-      ({ data: parent } = await supabaseAdmin.from('PostComment').select('id, post_id, user_id')
+      ({ data: parent } = await supabaseAdmin.from('PostComment').select('id, post_id, user_id, moderation_state')
         .eq('id', parentCommentId).eq('is_deleted', false).maybeSingle());
-      if (!parent || parent.post_id !== postId) return res.status(400).json({ error: 'Invalid parent comment' });
+      // A held or removed reply is missing for everyone but its author, so nobody else can answer it.
+      if (!parent || parent.post_id !== postId || !canReadReply(parent, userId)) {
+        return res.status(400).json({ error: 'Invalid parent comment' });
+      }
       // Blocks hide people from each other in both directions, so nobody replies to someone across one
       // (their comment list already hides that reply, and the reply notification would reach them).
       if (await blockService.isBlocked(userId, parent.user_id)) {
@@ -3045,9 +3051,10 @@ router.get('/:id/comments', verifyToken, async (req, res) => {
     const post = await requireVisiblePost({ postId, userId, res });
     if (!post) return;
 
-    const { data: comments, error } = await supabaseAdmin.from('PostComment')
+    const { data: comments, error } = await onlyShownReplies(supabaseAdmin.from('PostComment')
       .select(`*, author:user_id (id, username, name, first_name, last_name, profile_picture_url)`)
-      .eq('post_id', postId).eq('is_deleted', false).order('created_at', { ascending: true })
+      .eq('post_id', postId).eq('is_deleted', false), userId)
+      .order('created_at', { ascending: true })
       .range(parseInt(offset), parseInt(offset) + parseInt(limit) - 1);
     if (error) { logger.error('Error fetching comments', { error: error.message, postId }); return res.status(500).json({ error: 'Failed to fetch comments' }); }
 
@@ -3314,7 +3321,7 @@ router.post('/:postId/comments/:commentId/like', verifyToken, async (req, res) =
     // Verify comment exists and belongs to this post
     const { data: comment, error: commentErr } = await supabaseAdmin
       .from('PostComment')
-      .select('id, post_id, user_id, like_count')
+      .select('id, post_id, user_id, like_count, moderation_state')
       .eq('id', commentId)
       .eq('post_id', postId)
       .eq('is_deleted', false)
@@ -3324,7 +3331,7 @@ router.post('/:postId/comments/:commentId/like', verifyToken, async (req, res) =
       logger.error('Comment like lookup error', { error: commentErr.message, commentId, postId });
       return res.status(500).json({ error: 'Failed to toggle comment like' });
     }
-    if (!comment) return res.status(404).json({ error: 'Comment not found' });
+    if (!comment || !canReadReply(comment, userId)) return res.status(404).json({ error: 'Comment not found' });
 
     // The like state the client wants: a repeated request changes nothing. Without it, the toggle below.
     if (typeof req.body?.liked === 'boolean') {
