@@ -12,9 +12,10 @@ const { personaPostVisibleToViewer } = require('../utils/personaPostVisibility')
 const {
   applyLocationPrecision,
   leastPrecise,
-  DISPLAYED_POINT_MAX_SHIFT_DEGREES,
+  MAX_DISPLAY_OFFSET_DEGREES,
 } = require('../utils/locationPrivacy');
 const s3 = require('./s3Service');
+const { readablePosts } = require('./pulse/readAccess');
 const {
   SAFE_CREATOR_SELECT,
   serializeAudienceProfileForViewer,
@@ -88,11 +89,13 @@ async function getGlobalPins() {
     return _globalPinsCache.data;
   }
 
-  const { data, error } = await supabaseAdmin
+  // Rows as stored, with the two columns the read check needs beyond the feed's own; each
+  // viewer's feed checks them (getListFeed step 12).
+  const { data, error } = await excludeEndedPosts(supabaseAdmin
     .from('Post')
-    .select(FEED_POST_SELECT)
+    .select(`${FEED_POST_SELECT}, allow_external_share, radius_miles`)
     .eq('is_global_pin', true)
-    .is('archived_at', null)
+    .is('archived_at', null))
     .order('created_at', { ascending: false })
     .limit(10);
 
@@ -101,7 +104,7 @@ async function getGlobalPins() {
     return [];
   }
 
-  const pins = (data || []).map(r => normalizeFeedPostRow(r));
+  const pins = data || [];
   _globalPinsCache = { data: pins, expires: now + GLOBAL_PINS_TTL };
   return pins;
 }
@@ -128,6 +131,7 @@ const FEED_POST_SELECT = `
   purpose, utility_score, show_on_profile, profile_visibility_scope,
   is_visitor_post, state, solved_at, not_helpful_count,
   topic, sports_scope, post_metadata, origin,
+  expires_at, resolution, claim_mode,
   creator:user_id (${SAFE_CREATOR_SELECT}),
   business_author:business_author_id (${SAFE_CREATOR_SELECT}),
   home:home_id (id, address, city)
@@ -243,6 +247,11 @@ function normalizeFeedPostRow(row, likedPostIds = new Set(), savedPostIds = new 
     sports_scope: row.sports_scope || null,
     post_metadata: row.post_metadata || {},
     origin: row.origin || 'user',
+    // Lifecycle (contract §1): when the post ends, how it ended (null while open), and how an
+    // Offer is claimed (stored on every row; it means something only on an offer).
+    expires_at: row.expires_at || null,
+    resolution: row.resolution || null,
+    claim_mode: row.claim_mode || null,
     // P0.3: project the raw User row through the serializer wall so the
     // legacy `creator` slot never carries User.name / city / state to a
     // client even if a callsite skips attachIdentityAuthors.
@@ -276,13 +285,54 @@ function applyPostLocationPrivacy(post, viewerUserId) {
         address: null,
       };
     }
+    // The match job measured these distances from the stored point to public business
+    // locations and ranked the businesses partly by them; non-authors get neither.
+    if (Array.isArray(post.matched_businesses_cache)) {
+      post.matched_businesses_cache = sortMatchedBusinessesByRating(
+        post.matched_businesses_cache.map((business) => ({ ...business, distance_miles: null })),
+      );
+    }
+    if (Array.isArray(post.matched_business_ids)) {
+      post.matched_business_ids = [...post.matched_business_ids].sort();
+    }
   }
 
   return post;
 }
 
-function applyPostLocationPrivacyBatch(posts, viewerUserId) {
-  return posts.map((post) => applyPostLocationPrivacy(post, viewerUserId));
+// Matched businesses in an order that says nothing about where the post is: by rating,
+// then review count, then name.
+function sortMatchedBusinessesByRating(businesses) {
+  return [...businesses].sort((a, b) => (
+    (b.average_rating ?? -1) - (a.average_rating ?? -1)
+    || (b.review_count || 0) - (a.review_count || 0)
+    || String(a.name || '').localeCompare(String(b.name || ''))
+    || String(a.business_user_id || '').localeCompare(String(b.business_user_id || ''))
+  ));
+}
+
+// Where this viewer is shown a post: the stored point for its author, the point
+// applyPostLocationPrivacy gives everyone else, or null when it shows none. Worked out on a
+// copy, so the post itself still gets privacy exactly once (in enrichWithUserStatus). Area
+// filters and distances use this point, so a non-author's box, radius or distance never
+// measures the stored one. The map draws a post at its own point; lists also place a post
+// that has none at its effective point (`orEffective`), as their query does.
+function displayedPoint(post, viewerUserId, { orEffective = false } = {}) {
+  const shown = applyPostLocationPrivacy({
+    user_id: post.user_id,
+    location_precision: post.location_precision,
+    latitude: post.latitude,
+    longitude: post.longitude,
+    effective_latitude: post.effective_latitude,
+    effective_longitude: post.effective_longitude,
+  }, viewerUserId);
+  if (shown.latitude != null && shown.longitude != null) {
+    return { latitude: shown.latitude, longitude: shown.longitude };
+  }
+  if (orEffective && shown.effective_latitude != null && shown.effective_longitude != null) {
+    return { latitude: shown.effective_latitude, longitude: shown.effective_longitude };
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -439,7 +489,7 @@ function loadUserStatusRows(posts, userId) {
 }
 
 // NOTE: This function applies location privacy via applyPostLocationPrivacy.
-// Callers should NOT also call applyPostLocationPrivacy/applyPostLocationPrivacyBatch.
+// Callers should NOT also call applyPostLocationPrivacy.
 // `statusRows` is loadUserStatusRows' result when the caller has already read it.
 async function enrichWithUserStatus(posts, userId, statusRows = null) {
   if (!posts.length) return posts;
@@ -626,6 +676,16 @@ function isPoliticsPost(post) {
 }
 
 // ---------------------------------------------------------------------------
+// Ended posts
+// ---------------------------------------------------------------------------
+
+// A post whose own end time has passed leaves the views at once, before the archive job
+// ends it (contract §5, S7: a Heads-up ends at the time it names).
+function excludeEndedPosts(query) {
+  return query.or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`);
+}
+
+// ---------------------------------------------------------------------------
 // Cursor pagination helpers
 // ---------------------------------------------------------------------------
 
@@ -775,6 +835,47 @@ function boundingBoxFromCenter(lat, lng, radiusMeters) {
   };
 }
 
+// Place reads (the list feed, the Sports lane and the map) reach at most this far from their
+// point: 100 miles, the apps' default radius. A wider radius, such as the apps' 1,000-mile and
+// Global choices, reads this far, so no single request reads a whole region.
+const MAX_PLACE_RADIUS_METERS = 160934;
+
+// The radius a Place read uses: the one asked for, up to the cap. A zero, negative or
+// non-numeric radius reads the cap, which is also the routes' default.
+function placeRadiusMeters(radiusMeters) {
+  const meters = Number(radiusMeters);
+  return Number.isFinite(meters) && meters > 0
+    ? Math.min(meters, MAX_PLACE_RADIUS_METERS)
+    : MAX_PLACE_RADIUS_METERS;
+}
+
+// The part of a map box a Place read uses: at most the cap from the box's center each way.
+function capPlaceBox({ south, west, north, east }) {
+  const cap = boundingBoxFromCenter((south + north) / 2, (west + east) / 2, MAX_PLACE_RADIUS_METERS);
+  return {
+    south: Math.max(south, cap.south),
+    west: Math.max(west, cap.west),
+    north: Math.min(north, cap.north),
+    east: Math.min(east, cap.east),
+  };
+}
+
+// The box a query reads so it finds every post whose displayed point can be inside `box`.
+function widenForDisplayedPoints(box) {
+  return {
+    south: box.south - MAX_DISPLAY_OFFSET_DEGREES,
+    north: box.north + MAX_DISPLAY_OFFSET_DEGREES,
+    west: box.west - MAX_DISPLAY_OFFSET_DEGREES,
+    east: box.east + MAX_DISPLAY_OFFSET_DEGREES,
+  };
+}
+
+function pointInBox(point, box) {
+  return point != null
+    && point.latitude >= box.south && point.latitude <= box.north
+    && point.longitude >= box.west && point.longitude <= box.east;
+}
+
 /**
  * Haversine distance in meters between two lat/lng points.
  */
@@ -809,7 +910,7 @@ function politicsPrefKey(surface) {
  * @param {string} opts.surface        – 'place' | 'connections' | 'personas'
  * @param {number} [opts.latitude]
  * @param {number} [opts.longitude]
- * @param {number} [opts.radiusMeters] – defaults to 16 000 m
+ * @param {number} [opts.radiusMeters] – defaults to 16 000 m, at most MAX_PLACE_RADIUS_METERS
  * @param {string} [opts.postType]
  * @param {string} [opts.cursorCreatedAt]
  * @param {string} [opts.cursorId]
@@ -837,6 +938,7 @@ async function getListFeed({
   if (!FEED_SURFACES.includes(surface)) {
     throw new Error(`Invalid feed surface: ${surface}`);
   }
+  radiusMeters = placeRadiusMeters(radiusMeters);
 
   // Sports topic lane: Place + topic=sports is a fundamentally different
   // query (union of local geo + national country:US) with a stable merged
@@ -905,12 +1007,13 @@ async function getListFeed({
     }
   }
 
-  // Pre-compute bounding box and center for place surface
+  // Pre-compute the query box and center for place surface. The box is widened so it holds
+  // every post whose displayed point can be inside the radius; step 8b keeps those that are.
   let box, centerLat, centerLng;
   if (surface === 'place') {
     centerLat = parseFloat(latitude);
     centerLng = parseFloat(longitude);
-    box = boundingBoxFromCenter(centerLat, centerLng, radiusMeters);
+    box = widenForDisplayedPoints(boundingBoxFromCenter(centerLat, centerLng, radiusMeters));
   }
 
   // Fetch loop: keep fetching until we have enough visible posts or the
@@ -925,10 +1028,10 @@ async function getListFeed({
 
   for (let round = 0; round < MAX_ROUNDS && accumulated.length < parsedLimit && !dbExhausted; round++) {
     // 5. Build base query
-    let query = supabaseAdmin
+    let query = excludeEndedPosts(supabaseAdmin
       .from('Post')
       .select(FEED_POST_SELECT)
-      .is('archived_at', null)
+      .is('archived_at', null))
       .order('is_pinned', { ascending: false })
       .order('created_at', { ascending: false })
       .order('id', { ascending: false })
@@ -991,13 +1094,14 @@ async function getListFeed({
     let posts = visibleRows.map(r => normalizeFeedPostRow(r, new Set(), new Set()));
 
     // 8b. Haversine distance filter for place surface (bounding box is a
-    // square approximation; this removes posts outside the true radius)
+    // square approximation; this removes posts outside the true radius).
+    // Radius and distance use the point each post shows this viewer; a post
+    // that shows no point can't be placed in the area, so it stays out.
     if (surface === 'place') {
       posts = posts.filter(p => {
-        const lat = p.latitude ?? p.effective_latitude;
-        const lng = p.longitude ?? p.effective_longitude;
-        if (lat == null || lng == null) return true;
-        const dist = haversineMeters(centerLat, centerLng, lat, lng);
+        const point = displayedPoint(p, userId, { orEffective: true });
+        if (!point) return false;
+        const dist = haversineMeters(centerLat, centerLng, point.latitude, point.longitude);
         p.distance_meters = Math.round(dist);
         return dist <= radiusMeters;
       });
@@ -1041,13 +1145,16 @@ async function getListFeed({
   let posts = accumulated.slice(0, parsedLimit);
 
   // 12. Prepend global pins on the first page (no cursor = first page).
-  // These bypass all surface/location/author filters.
+  // These bypass the surface, location and author filters, but not the read check or the
+  // viewer's own blocks, mutes and hides (contract §0 and §5).
   if (isFirstPage) {
     const globalPins = await outcome(globalPinsRead);
     if (globalPins.length) {
+      const readablePins = (await readablePosts(globalPins, userId)).map(r => normalizeFeedPostRow(r));
+      const shownPins = applyMuteHideFilters(readablePins, await outcome(filtersRead), surface, userId);
       // Deduplicate — a global pin might also match the regular query
       const regularIds = new Set(posts.map(p => p.id));
-      const uniquePins = globalPins.filter(p => !regularIds.has(p.id));
+      const uniquePins = shownPins.filter(p => !regularIds.has(p.id));
       posts = [...uniquePins, ...posts];
     }
   }
@@ -1104,15 +1211,11 @@ function computeSportsRankBucket(post, ctx) {
 
   const metadata = post.post_metadata || {};
   const scope = post.sports_scope || null;
-  const lat = post.latitude ?? post.effective_latitude;
-  const lng = post.longitude ?? post.effective_longitude;
 
-  const withinRadius = (() => {
-    if (viewerLatitude == null || viewerLongitude == null) return false;
-    if (lat == null || lng == null) return false;
-    const d = haversineMeters(viewerLatitude, viewerLongitude, lat, lng);
-    return d <= radiusMeters;
-  })();
+  // distance_meters is measured to the point the post shows the viewer
+  // (fetchSportsCandidates), so the ranking never tests the stored point.
+  const withinRadius = viewerLatitude != null && viewerLongitude != null
+    && post.distance_meters != null && post.distance_meters <= radiusMeters;
 
   // Bucket 0: Nearby user-created sports posts
   if (post.origin === 'user' && withinRadius) return 0;
@@ -1182,6 +1285,9 @@ async function fetchSportsCandidates({
   maxRowsPerSide = SPORTS_FETCH_MAX_ROWS_PER_SIDE,
 }) {
   const cutoffIso = new Date(Date.now() - SPORTS_MAX_AGE_MS).toISOString();
+  // The local query reads a widened box; a local row counts when the point it
+  // shows this viewer is inside localBox.
+  const localQueryBox = localBox ? widenForDisplayedPoints(localBox) : null;
 
   async function fetchSide(kind) {
     const rows = [];
@@ -1190,10 +1296,10 @@ async function fetchSportsCandidates({
     let exhausted = false;
 
     while (!exhausted && rows.length < maxRowsPerSide) {
-      let query = supabaseAdmin
+      let query = excludeEndedPosts(supabaseAdmin
         .from('Post')
         .select(FEED_POST_SELECT)
-        .is('archived_at', null)
+        .is('archived_at', null))
         .eq('topic', 'sports')
         .gte('created_at', cutoffIso)
         .order('created_at', { ascending: false })
@@ -1204,8 +1310,8 @@ async function fetchSportsCandidates({
         query = query
           .contains('distribution_targets', ['place'])
           .or(
-            `and(effective_latitude.gte.${localBox.south},effective_latitude.lte.${localBox.north},effective_longitude.gte.${localBox.west},effective_longitude.lte.${localBox.east}),`
-            + `and(effective_latitude.is.null,latitude.gte.${localBox.south},latitude.lte.${localBox.north},longitude.gte.${localBox.west},longitude.lte.${localBox.east})`
+            `and(effective_latitude.gte.${localQueryBox.south},effective_latitude.lte.${localQueryBox.north},effective_longitude.gte.${localQueryBox.west},effective_longitude.lte.${localQueryBox.east}),`
+            + `and(effective_latitude.is.null,latitude.gte.${localQueryBox.south},latitude.lte.${localQueryBox.north},longitude.gte.${localQueryBox.west},longitude.lte.${localQueryBox.east})`
           );
       } else {
         // National Sports content is platform-curated only. User-created
@@ -1236,7 +1342,10 @@ async function fetchSportsCandidates({
       logger.warn('Sports candidate scan hit per-side cap', { kind, maxRowsPerSide });
     }
 
-    return { kind, data: rows, error: null };
+    const shown = kind === 'local'
+      ? rows.filter((row) => pointInBox(displayedPoint(row, userId, { orEffective: true }), localBox))
+      : rows;
+    return { kind, data: shown, error: null };
   }
 
   const tasks = [];
@@ -1260,13 +1369,13 @@ async function fetchSportsCandidates({
 
   let posts = merged.map(row => normalizeFeedPostRow(row, new Set(), new Set()));
 
-  // Distance bookkeeping for the local bucket scoring.
+  // Distance bookkeeping for the local bucket scoring, to the point each post
+  // shows this viewer.
   if (localCenterLat != null && localCenterLng != null) {
     posts.forEach(p => {
-      const lat = p.latitude ?? p.effective_latitude;
-      const lng = p.longitude ?? p.effective_longitude;
-      if (lat != null && lng != null) {
-        p.distance_meters = Math.round(haversineMeters(localCenterLat, localCenterLng, lat, lng));
+      const point = displayedPoint(p, userId, { orEffective: true });
+      if (point) {
+        p.distance_meters = Math.round(haversineMeters(localCenterLat, localCenterLng, point.latitude, point.longitude));
       }
     });
   }
@@ -1360,15 +1469,9 @@ async function getSportsFeed({
   }
 
   // For Local mode, enforce the true radius (the bounding box was a
-  // square approximation).
+  // square approximation), measured to the point each post shows this viewer.
   if (sportsMode === 'local') {
-    candidates = candidates.filter(p => {
-      const lat = p.latitude ?? p.effective_latitude;
-      const lng = p.longitude ?? p.effective_longitude;
-      if (lat == null || lng == null) return false;
-      const d = haversineMeters(centerLat, centerLng, lat, lng);
-      return d <= radiusMeters;
-    });
+    candidates = candidates.filter(p => p.distance_meters != null && p.distance_meters <= radiusMeters);
   }
 
   const rankCtx = {
@@ -1424,15 +1527,6 @@ async function getSportsFeed({
 // ---------------------------------------------------------------------------
 
 /**
- * Where this viewer's map shows a post: its point after the location rule,
- * worked out on a copy so the response privacy still runs once, in enrichment.
- */
-function displayedPoint(post, viewerUserId) {
-  const shown = applyPostLocationPrivacy({ ...post }, viewerUserId);
-  return { latitude: shown.latitude, longitude: shown.longitude };
-}
-
-/**
  * The posts this viewer may see on the map that are displayed inside the
  * bounding box, newest first, each with its displayed point, not enriched.
  *
@@ -1470,15 +1564,15 @@ async function loadMapPosts({
   // Stored points are searched in the box widened by the most the location rule moves
   // a point; step 6 keeps the posts displayed inside the box itself, so which posts
   // come back follows the points the viewer sees, never the stored ones.
-  const shift = DISPLAYED_POINT_MAX_SHIFT_DEGREES;
-  const [qSouth, qWest, qNorth, qEast] = [south - shift, west - shift, north + shift, east + shift];
-  let query = supabaseAdmin
+  const box = { south, west, north, east };
+  const queryBox = widenForDisplayedPoints(box);
+  let query = excludeEndedPosts(supabaseAdmin
     .from('Post')
     .select(FEED_POST_SELECT)
-    .is('archived_at', null)
+    .is('archived_at', null))
     .or(
-      `and(effective_latitude.gte.${qSouth},effective_latitude.lte.${qNorth},effective_longitude.gte.${qWest},effective_longitude.lte.${qEast}),` +
-      `and(effective_latitude.is.null,latitude.gte.${qSouth},latitude.lte.${qNorth},longitude.gte.${qWest},longitude.lte.${qEast})`
+      `and(effective_latitude.gte.${queryBox.south},effective_latitude.lte.${queryBox.north},effective_longitude.gte.${queryBox.west},effective_longitude.lte.${queryBox.east}),` +
+      `and(effective_latitude.is.null,latitude.gte.${queryBox.south},latitude.lte.${queryBox.north},longitude.gte.${queryBox.west},longitude.lte.${queryBox.east})`
     )
     .overlaps('distribution_targets', [distributionTarget])
     .order('created_at', { ascending: false })
@@ -1509,11 +1603,7 @@ async function loadMapPosts({
   // 6. Keep the posts displayed inside the box (a post without a displayed point has no pin)
   const shown = posts
     .map(post => ({ post, point: displayedPoint(post, userId) }))
-    .filter(({ point }) =>
-      point.latitude != null && point.longitude != null
-      && point.latitude >= south && point.latitude <= north
-      && point.longitude >= west && point.longitude <= east
-    );
+    .filter(({ point }) => pointInBox(point, box));
 
   // 7. Trim
   return shown.slice(0, queryLimit);
@@ -1534,7 +1624,10 @@ async function loadMapPosts({
  * @returns {Promise<object[]>}
  */
 async function getMapFeed(opts) {
-  const shown = await loadMapPosts(opts);
+  // A Place map reads at most the cap around the box's center. (The empty-map hint below searches
+  // wider, but it returns one displayed point, never a post.)
+  const box = opts.surface === 'connections' ? {} : capPlaceBox(opts);
+  const shown = await loadMapPosts({ ...opts, ...box });
   // 8. Enrich; this applies the response privacy, which puts each pin at its displayed point
   return enrichFeedPosts(shown.map(({ post }) => post), opts.userId);
 }
@@ -1595,7 +1688,7 @@ module.exports = {
   enrichWithUserStatus,
   enrichFeedPosts,
   applyPostLocationPrivacy,
-  applyPostLocationPrivacyBatch,
+  sortMatchedBusinessesByRating,
   applyCursorCondition,
   buildCursorPagination,
   applyPinnedCursorCondition,

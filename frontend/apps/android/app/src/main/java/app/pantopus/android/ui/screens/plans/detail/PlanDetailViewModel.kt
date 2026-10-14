@@ -12,6 +12,7 @@ import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.blocks.BlocksRepository
 import app.pantopus.android.data.homes.HomesRepository
+import app.pantopus.android.data.plans.PlanFormat
 import app.pantopus.android.data.plans.PlanKind
 import app.pantopus.android.data.plans.PlanLocationResolver
 import app.pantopus.android.data.plans.PlanOrigin
@@ -209,7 +210,7 @@ class PlanDetailViewModel
                 when (val result = blocks.block(hostId)) {
                     is NetworkResult.Success -> {
                         repository.changed()
-                        _ui.update { it.copy(state = PlanDetailUiState.Gone, notice = "Blocked. You won't see their plans.") }
+                        _ui.update { it.copy(state = PlanDetailUiState.Gone, notice = "Blocked. You won't see each other's plans.") }
                     }
                     is NetworkResult.Failure -> _ui.update { it.copy(notice = result.error.planMessage) }
                 }
@@ -308,15 +309,24 @@ class PlanDetailViewModel
 
         // ---- Your request (J5, J6, J7) ----
 
-        /** Withdraw a request, leave the waitlist, or leave the plan ("Can't make it"). */
-        fun withdraw() = act { repository.withdraw(planId) }
+        /** Withdraw a request, leave the waitlist, or leave the plan ("Can't make it"); [done] says it went through. */
+        fun withdraw(done: String? = null) = act(done = done) { repository.withdraw(planId) }
 
         fun onMyWay() = act(done = "We told the group you're on the way.") { repository.onMyWay(planId) }
 
         fun stillComing(coming: Boolean) =
-            act(done = if (coming) "Thanks. The host knows you're still coming." else "You've left the plan.") {
+            act(done = if (coming) "Thanks. The host knows you're still coming." else "We told ${hostFirst()}") {
                 repository.stillComing(planId, coming)
             }
+
+        /** The host's first name for a line ("We told Sam"), from the plan on screen. */
+        private fun hostFirst(): String =
+            (_ui.value.state as? PlanDetailUiState.Ready)
+                ?.plan
+                ?.host
+                ?.displayName
+                ?.takeIf { it.isNotBlank() }
+                ?.let(PlanFormat::firstName) ?: "the host"
 
         // ---- Host (H9, H12) ----
 

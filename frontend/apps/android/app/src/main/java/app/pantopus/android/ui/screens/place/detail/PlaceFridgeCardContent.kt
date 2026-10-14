@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -77,12 +78,15 @@ fun PlaceFridgeCardSection(viewModel: PlaceDetailViewModel) {
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        FridgeCardComposer(viewModel)
+        FridgeCardComposer(viewModel, isAvailable = state is FridgeCardsUiState.Loaded)
         PlaceActionToastLine(viewModel, retainErrors = true)
         when (val current = state) {
             is FridgeCardsUiState.Loading -> Unit
             is FridgeCardsUiState.Error ->
-                PlaceDetailCard { Text(current.message, fontSize = 13.5.sp, color = PantopusColors.appTextMuted) }
+                PlaceDetailCard {
+                    Text(current.message, fontSize = 13.5.sp, color = PantopusColors.appTextMuted)
+                    TextButton(onClick = viewModel::loadFridgeCards) { Text("Try again") }
+                }
             is FridgeCardsUiState.Loaded ->
                 current.cards.forEach { FridgeCardRow(it, viewModel) }
         }
@@ -90,7 +94,10 @@ fun PlaceFridgeCardSection(viewModel: PlaceDetailViewModel) {
 }
 
 @Composable
-private fun FridgeCardComposer(viewModel: PlaceDetailViewModel) {
+private fun FridgeCardComposer(
+    viewModel: PlaceDetailViewModel,
+    isAvailable: Boolean,
+) {
     var label by remember { mutableStateOf("") }
     val drafts = remember { mutableStateMapOf<String, SnapshotStateList<FridgeCardItem>>() }
     val seed by viewModel.utilitySeed.collectAsStateWithLifecycle()
@@ -102,6 +109,9 @@ private fun FridgeCardComposer(viewModel: PlaceDetailViewModel) {
             drafts["utilities"] = seed.toMutableStateList()
         }
     }
+
+    // Keep the person's draft independent of the access check, but never display its private prefill before it passes.
+    if (!isAvailable) return
 
     val hasContent = drafts.values.any { list -> list.any { it.label.isNotBlank() || it.note.isNotBlank() } }
 

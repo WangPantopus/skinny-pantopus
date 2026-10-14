@@ -339,8 +339,9 @@ internal fun PlanCancelSheet(
     onKeep: () -> Unit,
 ) {
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val inCount = plan.people.orEmpty().count { !it.isHost }
-    val asked = requests?.let { it.pending.size + it.waitlisted.size } ?: (plan.requestsCount ?: 0)
+    // People in count with their parties ("Chris + 1" is two), as on H9 and H11; everyone asking or waiting is told too.
+    val inCount = plan.people.orEmpty().filter { !it.isHost }.sumOf { it.partySize.coerceAtLeast(1) }
+    val asked = requests?.let { it.pending.size + it.waitlisted.size } ?: ((plan.requestsCount ?: 0) + plan.waitlistCount)
     ModalBottomSheet(onDismissRequest = onKeep, sheetState = sheet, containerColor = PantopusColors.appSurface) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s4).padding(bottom = Spacing.s6).navigationBarsPadding(),

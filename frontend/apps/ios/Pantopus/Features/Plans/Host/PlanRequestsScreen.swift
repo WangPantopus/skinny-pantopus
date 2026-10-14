@@ -129,7 +129,7 @@ struct PlanRequestsScreen: View {
             }
             await viewModel.load()
         }
-        .refreshesOnPlansChange { await viewModel.load() }
+        .refreshesOnStoreChange(affects: { PlansStoreReads.affects($0) }, perform: { await viewModel.load() })
         .alert(
             // The brief's words (section 6), as on Android.
             "Accepting shares your address with them",

@@ -318,7 +318,14 @@ export default function PostDetailPage() {
       showToast('Link copied!');
     };
 
-    share().catch(() => showToast('Failed to share post'));
+    share().catch((err: unknown) => {
+      // A post that isn't public is never counted as shared, but the link is already copied and opens for people who can see the post.
+      if ((err as { code?: string } | null)?.code === 'SHARE_NOT_ALLOWED') {
+        showToast('Link copied! Only people who can see this post in Pantopus can open it.');
+        return;
+      }
+      showToast('Failed to share post');
+    });
   };
 
   const showToast = (msg: string) => {

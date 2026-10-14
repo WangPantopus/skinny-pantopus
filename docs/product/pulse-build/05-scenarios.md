@@ -60,6 +60,7 @@
 - S5.7 Limits: a New here account's third town post in a day, a Visitor's non-Ask, a Visitor's second Ask in a day each show the plain sentence and reset time; a Resident is unaffected; the limit really resets (move the clock by changing the stored times).
 - S5.8 The area pill shows the town; "another place" lets a Visitor browse read-only and ask but not post other types.
 - S5.9 Only open areas appear: a closed street or neighborhood is offered nowhere; set its `opened_at` and its group and picker entry appear without an app update; posting there needs a verified home inside it (`NEEDS_VERIFIED_ADDRESS`).
+- S5.10 No live location: no Pulse screen asks for location permission or sends the device's position (watch the network log on each client); a Right now "Me too" carries the home, never the device.
 
 ### S6 The Pulse page
 - S6.1 First visit: no posts (quiet message), a sparse town (meter card), no home ("Set up a home"), a quiet day ("Quiet on NW 23rd today" style): nothing invented.
@@ -103,6 +104,7 @@
 - S9.8 Report a reply; mute a person from "…"; a blocked person's replies are gone.
 - S9.9 Heated pair (PS): two accounts trade heated replies; both are told plainly; their next reply to each other within an hour is refused; a third account replies freely.
 - S9.10 A reply draft survives scrolling, opening another branch and switching apps; 200-reply threads stay smooth; a failed send is shown and retried without duplicates.
+- S9.11 Narrow who can read: the author changes Public to Verified neighbors from the post's "…": it vanishes at once for a signed-out browser and a Visitor on every path in the matrix and stays for neighbors; the UI offers only narrower choices and the API refuses widening (`CANNOT_WIDEN`); replies and follows stay; a share link to it stops working; a second device agrees after a refresh; a non-author has no control.
 
 ### S10 Following and controls
 - S10.1 Follow a conversation: "Saved to Following. Notifications are off."; toggles persist; the three durations behave (resolve the Ask: "until it ends" ends; a week ends after a week; "Keep" stays); "Stop following" works; Following lists it and drops it when it ends.
@@ -120,24 +122,78 @@
 - S11.5 Automatic holds: a new account's link, several reports, a sale. Crisis: a self-harm phrase holds the post, shows the writer crisis resources, and records the staff alert.
 - S11.6 Notices screens and their notifications open the right place from cold and warm starts, on both apps.
 - S11.7 The console works at phone and desktop widths. The existing report flow still works. Held and removed items stay invisible on every read path (re-run the matrix rows).
+- S11.8 Rules screen: reachable from a removal notice, the first-post review and the Pulse menu on both apps and from the web; the seven rules in plain words, the review hours, how appeals work and the law-enforcement policy text; opens from a cold and a warm start; named by VoiceOver and TalkBack; readable at the largest text; the hours shown are the ones the founder approved.
 
 ### S12 Known, Upcoming, Right now, search (owners expand before starting)
 - S12.1 Known: sources and "last confirmed" show; Confirm, Suggest a correction and Outdated work; two matching confirmations publish a refresh; official-sourced and neighbor-sourced entries look different; asking something Known covers shows the entry first; recommendations are newest first with no stars; a business cannot pay or edit.
 - S12.2 Upcoming: events in date order; "Going" works; past events leave.
 - S12.3 Right now: an official alert (inject one like the October 13 checks) shows the card; neighbors' "Me too" and "It's back" count; a neighbors-only card says "Reported by neighbors" until an official source confirms; it ends when cleared or reports stop; never for crime; pushes respect quiet hours except Right now.
 - S12.4 Search: posts, Known and places in the area, with date, distance and state; includes resolved posts; excludes held, removed and unreadable ones; empty results; accents, emoji and tsquery-looking input (quotes, `&`, `|`, `:*`) are safe; fast on the volume fixture.
+- S12.5 Known and the walls: a `verified_area` post and a `verified_town` post that both recommend a plumber never appear in any Known entry, its quotes, its "and N others" count or its sources; a public post does; delete the public post (or its author's account) and its quote and its share of the count disappear; a Known entry may cite a public property fact (school zone, flood zone) and never a valuation or ownership detail.
+- S12.6 A Heads-up posted while a Right now event is active for the area and tagged to it reads "Ends when power returns"; clearing the event ends it everywhere (Nearby, Following, the conversation, search); a Heads-up with its own end time ignores the event.
 
 ### S13 Digests
 - S13.1 The daily digest: content order, "Still unanswered", an ending line; right local time across time zones and daylight-saving; once a day (run twice); nothing when nothing is new; it respects mutes, blocks and walls; the email renders in the local inbox in light and dark and as plain text; one push a day at most for anything not about you; quiet hours hold; the weekly street digest stays quiet while no street is open. **Nothing is sent to a real address.**
+- S13.2 Helper nudge: an Ask in a topic with no reply for 24 hours nudges a person who answered in that topic before or follows it (a digest line, or at most one push a day); never inside quiet hours, for a muted topic, or to the asker; one nudge per question per person; `nudge_helper` off stops them; the wording never says "someone posted near you"; run the job twice and nothing duplicates.
 
 ### S14 Plans bridge
 - S14.1 "Suggest a plan" from a conversation is prefilled; only walk & coffee, pickup game and watch party are offered; the audience choices work; the invitation card appears in the conversation; Going and Not this time count; "sounds nice" does not; the toast and "Your plans" (and Today) show it; the plan links back; a closing line appears when it happens; with `plans` off nothing half-appears.
+- S14.2 Going chip and caption: a reply by someone who tapped Going carries a "Going" chip (text, not color alone) and loses it when they tap "Not this time"; a first-level reply that only expresses interest ("Sounds nice! Maybe next week.") from someone not going shows "Not counted as going"; a question ("Where do we park?") shows nothing; when the phrase check is unsure, nothing shows.
+- S14.3 "Suggest a plan" is in an Event conversation's "…", prefilled from the event (what, when, where); the plan and the event link to each other.
+- S14.4 "People I invite": the host picks two participants; only they and the host can see and join the plan (check it from a third participant and a signed-out browser on every path); the conversation shows no invitation card; the invited people are notified; removing someone removes their access at once.
 
-### R4 (owners write the full list before starting; minimum below)
-- S15 Public web and guest browsing: signed out, a public town page and post show only first name and label, no street, no distance; a non-public post page is unavailable; the sitemap lists only public posts; "remove from the web view" makes the page vanish; share links open; in the apps "Pick a town" browses read-only and a draft survives sign-up.
-- S16 Places and streets: opening a street area; the street wall; the Residents-only view; a building place shows no unit numbers.
-- S17 Businesses and officials: the label, the weekly cap, no posting, Official verification in the console.
-- S18 Text and email: STOP is honored; a one-word reply works; texts go only to people who replied first; reply-by-email lands in the right conversation.
+### R4 (owners write the full list before starting; the minimum is below)
+- S15.1 Public web: signed out, a public town page and post show only first name and label, no street, no distance; a non-public post page is unavailable; the sitemap lists only public posts; "remove from the web view" makes the page vanish; share links open.
+- S15.2 A signed-out person opening a neighbors-only post's link sees "Only verified neighbors can read this" with a way to sign in or verify, and nothing from the post: not its title, text, author, image or link-preview tags.
+- S15.3 In the apps, "Pick a town to look around" opens that town's Pulse read-only, without claiming to live there; replying or posting opens the sign-up sheet (S20) and the draft survives it.
+- S16.1 Areas are data: set an area's `opened_at` and its group and picker entry appear in the apps with no build; a new town is added with rows only; a rural area by drive time exists (or the labeled radius says it is a radius); a dense town has small areas.
+- S16.2 Place pages: a park, a trail, a lake, a library, a school zone, an HOA, a council district and a building each open a page with its conversations, Upcoming events there, sourced facts, official updates and dated observations; following a place grants nothing.
+- S16.3 A Visitor adds a dated observation to a place ("trail flooded by the north lot"): it shows its date and label, ages out, and counts against posting limits.
+- S16.4 A building's or HOA's page shows conversation only to verified homes inside it; anyone else sees a plain "Only verified residents" card; unit numbers appear nowhere; the street wall holds on every read path (re-run the matrix rows).
+- S16.5 "Residents only" on Local government and Getting around conversations shows only verified residents' replies, for every label, and remembers the choice.
+- S16.6 An open street's group shows one line, "N plans on your street → Plans", only while `plans` is on; it opens the Plans tab; the weekly street digest carries the street's plans; with the street closed or `plans` off, nothing shows.
+- S17.1 Business reply: a verified business can reply only under a conversation where someone asked about its kind of service; it wears "Business"; the weekly cap shows a plain sentence and resets; it cannot start a post, follow, message first or edit Known.
+- S17.2 Officials: staff verify an account in the console; it posts a Heads-up, an Event and a Right now update with a source; it cannot remove residents' replies to it.
+- S17.3 A business owner who lives here posts as a Resident and replies as the business; the two never share a label in one thread.
+- S17.4 Local offers: a verified business submits an offer, staff approve it in the console, and it shows only in the labeled "Local offers" spot, one at a time, never in the conversation list; two different people in one town see the same offer (no targeting); no marketplace or Earn screen is reachable from it.
+- S17.5 A Local government thread carries a pinned, labeled summary of positions written by staff or an Official.
+- S18 Text and email: STOP is honored; a one-word reply works; texts go only to people who replied first; reply-by-email lands in the right conversation. Needs the founder's accounts: until they exist, nothing is verified beyond the local logs, and the PR says so.
+- S19.1 Metrics: a scripted session (open, post, reply, Helpful, follow, mute a topic, a composer redirect, Known viewed, plan suggested, reach "You're caught up") produces each event and derived number; the dashboard shows them; no never-goal number (time in app, daily opens, reply counts, posts per person, notification open rates) is shown.
+- S19.2 Moderation numbers: held, removed, restored on appeal, time to decision and actions per 1,000 posts match the console after a scripted day.
+- S19.3 Transparency: the quarterly report's numbers can be produced for a period; the law-enforcement-request count is a field the founder fills; nothing identifies a person.
+
+### R5: the rest of the design (owners write the full list before starting; the minimum is below)
+- S20.1 Fresh email: signed out on each app, open a public town conversation, write a reply, tap Post: the sheet asks for a first name and an email; the six-digit code arrives in the local inbox; entering it creates the account with no password; the reply posts at once with the right label; the adult confirmation is asked once; the database row is right; relaunch keeps the person signed in.
+- S20.2 Existing account: the code signs in to it ("Welcome back, {Name}") and the draft posts as that person; before the code, the sheet and the response are the same for a known and an unknown email (compare the replies and their timing).
+- S20.3 Wrong, expired and reused codes: five wrong tries need a new code; an expired code and a used code are refused; a new code cancels the old one; every refusal is a plain sentence; the per-email, per-device and per-network limits show a plain sentence and reset.
+- S20.4 The draft survives everything: killing the app, switching to the mail app and back, airplane mode between the code and the send; it posts exactly once, even on a double-tap.
+- S20.5 Starting a new post from a guest follows the same path; Visitor limits apply right after (Asks only, one a day).
+- S20.6 Set a password later from settings and sign in with it; "Forgot password" works for a code account.
+- S20.7 No date of birth is asked; the "I'm 18 or older" confirmation is asked once before the first post; declining blocks posting politely and keeps the draft.
+- S20.8 The abuse run (PV, before the PR merges): brute force on codes, parallel verifies, replaying a code from another device, codes in server logs (there must be none), account enumeration by reply or timing, bulk account creation; findings go in PV's status file.
+- S20.9 Text codes: while there is no SMS provider the phone option is absent and the API answers `CHANNEL_UNAVAILABLE`; with one, repeat S20.1 to S20.4 by text (founder-run).
+- S20.10 Password sign-in, Apple and Google sign-in, sign-out and back, session refresh and device binding still work exactly as before.
+- S21.1 Create a weekly plan from a conversation with "Every week": the card reads "Thursdays · 6:00pm", the next 8 occurrences exist, and each shows in Your plans only for people going.
+- S21.2 Going, "Going every time" and "Not this time": counts per occurrence ("7 going · 2 can't make it this week"); joining the series adds future occurrences and leaving removes them; skipping one occurrence keeps series membership.
+- S21.3 Host controls: pause, resume, end; edit one occurrence (the people going are told) or cancel it; ending the series tells members.
+- S21.4 Two occurrences in a row not confirmed: the host is asked first, with no answer the series pauses and members are told; resume restarts it; deleting the host's account ends it.
+- S21.5 Co-hosts: invite, accept, decline; a co-host edits and approves requests; removing a co-host removes the powers; the limit is two; "Hosted by Priya and Sam" reads right.
+- S21.6 Existing rules hold for every occurrence: only walk & coffee, pickup game and watch party from a conversation; never playdates; a plan at a home needs the host's approval by hand each time; the audience choices work.
+- S21.7 Time: occurrences across a daylight-saving change, in another time zone, a monthly plan in a five-week month, and the reminder times.
+- S21.8 Single plans work exactly as before; with `plans` off nothing half-appears in Pulse.
+- S22.1 "Start a Support Train" shows in a conversation's "…" for a verified resident who took part, never for a Visitor or a signed-out person, and never where Support Trains are off.
+- S22.2 It opens the existing Start a Train flow with nothing copied from the conversation; a train can name only a Home its organizer belongs to (the existing rule).
+- S22.3 The train's details and sign-ups never appear in the conversation, the feed, search or a digest; the optional line says only "A Support Train was started. Ask to join." and only when the organizer chose it.
+- S22.4 The existing Support Train flows (create, slots, sign-up, updates) still work.
+- S22.5 Deleting the conversation or the account leaves the train intact and removes the link.
+- S23.1 Merge: a moderator merges duplicate B into A in the console; B becomes a stub "Merged into {title}" that opens A; replies, follows and Helpful marks carry over with no duplicates; both authors are told; counts are right; the feed shows only A.
+- S23.2 Undo within 7 days restores B and what moved; after 7 days it is final; merging a merged post, or a post into itself, is refused.
+- S23.3 Emergency hold: while a Right now event is active for the area, a post that states a cause ("the outage was caused by …") or blames a person or group is held with a plain reason; "Me too", official updates and ordinary posts pass; with no event active nothing is held for this reason.
+- S23.4 The hold rule has a written eval (30+ synthetic examples, the false-positive rate in PS's status file); the author sees the notice and can appeal.
+- S24.1 Second home: a person with verified homes in two towns chooses "Also read around {Town}"; the area pill lists both; reads cover both; posting, limits and the label use the primary home; removing the second home removes the access at once; a person with one home sees no picker.
+- S24.2 Pins: an Official pins a source on a conversation and it shows at the top with its label and time; unpinning removes it; a Resident cannot pin; a pin never replaces replies; held and removed rules apply to it.
+- S24.3 `signup_source` is recorded for code sign-ups and public-page sign-ups; the count of verified homes by source matches; no profile of an anonymous visitor is stored.
+- S25 Reserved (Crew Day option, Crew Day provider pages, street welcomes): no scenarios until those products exist. When they do, the owner writes them before starting.
 
 ## C. Cross-client round trips (PV at every sweep; owners for their own slices)
 

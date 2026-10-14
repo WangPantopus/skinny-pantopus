@@ -30,6 +30,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.api.models.plans.PlanDto
+import app.pantopus.android.data.plans.PlanFormat
 import app.pantopus.android.data.plans.PlanState
 import app.pantopus.android.data.plans.PlanViewerStanding
 import app.pantopus.android.data.plans.hasPrivatePart
@@ -114,7 +115,7 @@ fun PlanDetailScreen(
                     onOpenRequests = { onOpenRequests(state.plan.id) },
                     onChange = { onChange(state.plan.id) },
                     onHost = onHost,
-                    onOpenChat = { room -> onOpenChat(room, state.plan.title, state.plan.id) },
+                    onOpenChat = { room -> onOpenChat(room, PlanFormat.shortTitle(state.plan), state.plan.id) },
                     onVerify = openVerification,
                     onSeeAllPlans = onSeeAllPlans,
                 )
@@ -166,6 +167,7 @@ private fun PlanReady(
     }
     var confirmLeave by remember { mutableStateOf<LeaveKind?>(null) }
     var reporting by remember { mutableStateOf(false) }
+    var confirmBlock by remember { mutableStateOf(false) }
     val hosting = standing == PlanViewerStanding.HOSTING
     val menu =
         if (hosting) {
@@ -173,7 +175,7 @@ private fun PlanReady(
         } else {
             listOf(
                 PlanMenuItem("Report this plan") { reporting = true },
-                PlanMenuItem("Block ${plan.hostFirst}", danger = true) { viewModel.blockHost() },
+                PlanMenuItem("Block ${plan.hostFirst}", danger = true) { confirmBlock = true },
             )
         }
     val closed = plan.planState == PlanState.CANCELLED || plan.planState == PlanState.ENDED
@@ -232,8 +234,25 @@ private fun PlanReady(
     confirmLeave?.let { kind ->
         LeaveDialog(kind, plan, onConfirm = {
             confirmLeave = null
-            if (kind == LeaveKind.Plan && plan.myRequest?.reconfirmNeeded == true) viewModel.stillComing(false) else viewModel.withdraw()
+            if (kind == LeaveKind.Plan && plan.myRequest?.reconfirmNeeded == true) {
+                viewModel.stillComing(false)
+            } else {
+                viewModel.withdraw(done = kind.done(plan))
+            }
         }, onDismiss = { confirmLeave = null })
+    }
+    // Asks first, as on iOS: blocking hides both people's plans, requests and messages.
+    if (confirmBlock) {
+        PlanConfirmDialog(
+            title = "Block ${plan.hostFirst}?",
+            body = "You won't see each other's plans, requests or messages.",
+            action = "Block",
+            onConfirm = {
+                confirmBlock = false
+                viewModel.blockHost()
+            },
+            onDismiss = { confirmBlock = false },
+        )
     }
     if (reporting) {
         ReportDialog(onReport = { reason ->
@@ -245,6 +264,14 @@ private fun PlanReady(
 
 /** What a person is about to walk away from. */
 internal enum class LeaveKind { Request, Waitlist, Plan }
+
+/** The line once it went through (as on iOS): "Request withdrawn", "You left the waitlist", "We told Sam". */
+private fun LeaveKind.done(plan: PlanDto): String =
+    when (this) {
+        LeaveKind.Request -> "Request withdrawn"
+        LeaveKind.Waitlist -> "You left the waitlist"
+        LeaveKind.Plan -> "We told ${plan.hostFirst}"
+    }
 
 private fun scopeChip(plan: PlanDto): String? =
     when {
@@ -333,10 +360,23 @@ private fun LeaveDialog(
             LeaveKind.Plan ->
                 Triple(
                     "Can't make it?",
-                    "Your spot goes to the next person waiting. You'll lose the exact place, the note and the chat.",
-                    "Leave the plan",
+                    "We'll tell ${plan.hostFirst}, and your spot goes to the next person waiting. " +
+                        "You'll lose the exact place, the note and the chat.",
+                    "I can't make it",
                 )
         }
+    PlanConfirmDialog(title = title, body = body, action = action, onConfirm = onConfirm, onDismiss = onDismiss)
+}
+
+/** A plan's yes-or-not-now question: the action in red, "Not now" to keep things as they are. */
+@Composable
+private fun PlanConfirmDialog(
+    title: String,
+    body: String,
+    action: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
