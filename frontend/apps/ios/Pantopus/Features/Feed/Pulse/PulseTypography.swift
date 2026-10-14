@@ -27,6 +27,8 @@ enum PulseTextRole {
     case smallStrong
     /// 13/18.
     case footnote
+    /// 13/18 semibold: a status pill.
+    case footnoteStrong
     /// 12/16 semibold, upper case, +0.07em: section labels.
     case overline
 
@@ -37,7 +39,7 @@ enum PulseTextRole {
         case .body: 16
         case .button: 15
         case .small, .smallStrong: 14
-        case .footnote: 13
+        case .footnote, .footnoteStrong: 13
         case .overline: 12
         }
     }
@@ -45,7 +47,7 @@ enum PulseTextRole {
     var weight: Font.Weight {
         switch self {
         case .title: .bold
-        case .headline, .button, .overline, .smallStrong: .semibold
+        case .headline, .button, .overline, .smallStrong, .footnoteStrong: .semibold
         case .body, .small, .footnote: .regular
         }
     }
@@ -57,7 +59,7 @@ enum PulseTextRole {
         case .headline: .headline
         case .body: .body
         case .button, .small, .smallStrong: .subheadline
-        case .footnote: .footnote
+        case .footnote, .footnoteStrong: .footnote
         case .overline: .caption
         }
     }
