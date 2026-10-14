@@ -89,11 +89,11 @@ async function getGlobalPins() {
     return _globalPinsCache.data;
   }
 
-  // Rows as stored, with the two columns the read check needs beyond the feed's own; each
+  // Rows as stored, with the columns the read check needs beyond the feed's own; each
   // viewer's feed checks them (getListFeed step 12).
-  const { data, error } = await excludeEndedPosts(supabaseAdmin
+  const { data, error } = await onlyShownPosts(supabaseAdmin
     .from('Post')
-    .select(`${FEED_POST_SELECT}, allow_external_share, radius_miles`)
+    .select(`${FEED_POST_SELECT}, allow_external_share, radius_miles, moderation_state`)
     .eq('is_global_pin', true)
     .is('archived_at', null))
     .order('created_at', { ascending: false })
@@ -676,13 +676,17 @@ function isPoliticsPost(post) {
 }
 
 // ---------------------------------------------------------------------------
-// Ended posts
+// What the views show
 // ---------------------------------------------------------------------------
 
-// A post whose own end time has passed leaves the views at once, before the archive job
-// ends it (contract §5, S7: a Heads-up ends at the time it names).
-function excludeEndedPosts(query) {
-  return query.or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`);
+// The feeds, the map and the pins show live posts that haven't ended (contract §5). A post whose
+// own end time has passed leaves them at once, before the archive job ends it (S7: a Heads-up ends
+// at the time it names). A post held for review or removed by moderation (S11) leaves them too;
+// its author still reads it on its page and in their own list (canReadPost).
+function onlyShownPosts(query) {
+  return query
+    .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
+    .eq('moderation_state', 'live');
 }
 
 // ---------------------------------------------------------------------------
@@ -1028,7 +1032,7 @@ async function getListFeed({
 
   for (let round = 0; round < MAX_ROUNDS && accumulated.length < parsedLimit && !dbExhausted; round++) {
     // 5. Build base query
-    let query = excludeEndedPosts(supabaseAdmin
+    let query = onlyShownPosts(supabaseAdmin
       .from('Post')
       .select(FEED_POST_SELECT)
       .is('archived_at', null))
@@ -1296,7 +1300,7 @@ async function fetchSportsCandidates({
     let exhausted = false;
 
     while (!exhausted && rows.length < maxRowsPerSide) {
-      let query = excludeEndedPosts(supabaseAdmin
+      let query = onlyShownPosts(supabaseAdmin
         .from('Post')
         .select(FEED_POST_SELECT)
         .is('archived_at', null))
@@ -1566,7 +1570,7 @@ async function loadMapPosts({
   // come back follows the points the viewer sees, never the stored ones.
   const box = { south, west, north, east };
   const queryBox = widenForDisplayedPoints(box);
-  let query = excludeEndedPosts(supabaseAdmin
+  let query = onlyShownPosts(supabaseAdmin
     .from('Post')
     .select(FEED_POST_SELECT)
     .is('archived_at', null))

@@ -1,6 +1,6 @@
 // Who may read a post: the one check every path that returns a post uses
 // (docs/product/pulse-build/02-contract.md §0 and §5). It is the post page's rule, moved here from
-// routes/posts.js unchanged; S5 adds the Pulse audience scopes and S11 the moderation states.
+// routes/posts.js, plus S11's moderation states; S5 adds the Pulse audience scopes.
 
 const supabaseAdmin = require('../../config/supabaseAdmin');
 const blockService = require('../blockService');
@@ -27,6 +27,7 @@ const POST_READ_SELECT = [
   'location_name',
   'radius_miles',
   'distribution_targets',
+  'moderation_state',
 ].join(', ');
 
 const METERS_PER_MILE = 1609.34;
@@ -81,6 +82,13 @@ async function canViewPersonaPostAudience(post, viewerId) {
     && requiredRank <= 2;
 }
 
+// Staff are the admin accounts, as for the report console (requireAdmin). A failed read is not staff.
+async function isStaff(userId) {
+  if (!userId) return false;
+  const { data, error } = await supabaseAdmin.from('User').select('role').eq('id', userId).maybeSingle();
+  return !error && data?.role === 'admin';
+}
+
 // A link opens outside the app only for a post its author made public and left sharing on.
 // Nobody else's Share tap widens who can read a post.
 function isPubliclyShareable(post) {
@@ -92,7 +100,9 @@ function isPubliclyShareable(post) {
 async function canReadPost(post, userId) {
   if (post.user_id === userId) return true;
   // Removed by moderation: only its author still sees it.
-  if (post.archive_reason === 'moderation') return false;
+  if (post.archive_reason === 'moderation' || post.moderation_state === 'removed') return false;
+  // Held for review: its author and staff.
+  if (post.moderation_state === 'held') return isStaff(userId);
   // Profile blocks (UserBlock) hide posts in both directions, like messaging.
   if (userId && post.user_id && await blockService.isBlocked(post.user_id, userId)) return false;
   if (post.identity_context_type === 'persona'
