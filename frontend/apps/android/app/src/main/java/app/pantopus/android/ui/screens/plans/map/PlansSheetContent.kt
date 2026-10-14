@@ -417,24 +417,7 @@ internal fun PlanCardContent(
         Row(verticalAlignment = Alignment.CenterVertically) {
             PlanTypeTag(kind)
             Spacer(modifier = Modifier.weight(1f))
-            Box(
-                modifier =
-                    Modifier
-                        .size(44.dp)
-                        .clickable(role = Role.Button, onClick = onClose)
-                        .clearAndSetSemantics {
-                            contentDescription = "Close"
-                            role = Role.Button
-                        },
-                contentAlignment = Alignment.Center,
-            ) {
-                Box(
-                    modifier = Modifier.size(36.dp).clip(CircleShape).background(PantopusColors.appSurfaceSunken),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    PantopusIconImage(icon = PantopusIcon.X, contentDescription = null, size = 16.dp, tint = PantopusColors.appText)
-                }
-            }
+            CardCloseButton(onClose)
         }
         Text(
             text = plan.title,
@@ -454,14 +437,61 @@ internal fun PlanCardContent(
         }
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             val (going, left) = PlanFormat.goingLine(plan)
-            PlanSpotsCaption(going = going, left = left, note = PlanFormat.howPeopleGetIn(plan))
+            // Someone already in (or hosting) doesn't need to hear how to get in (as on iOS).
+            val inAlready = plan.standing == PlanViewerStanding.HOSTING || plan.standing == PlanViewerStanding.IN
+            PlanSpotsCaption(going = going, left = left, note = if (inAlready) null else PlanFormat.howPeopleGetIn(plan))
             PlanSpotsMeter(spots = plan.spots, taken = plan.spots - plan.spotsLeft)
         }
+        val main = mainAction(plan)
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 2.dp)) {
             GhostButton(title = "Details", onClick = onDetails, modifier = Modifier.weight(1f))
-            PrimaryButton(title = primaryLabel(plan), onClick = onPrimary, modifier = Modifier.weight(1f))
+            when {
+                main == null -> Unit
+                main.isPrimary -> PrimaryButton(title = main.title, onClick = onPrimary, modifier = Modifier.weight(1f))
+                else -> GhostButton(title = main.title, onClick = onPrimary, modifier = Modifier.weight(1f))
+            }
         }
         Spacer(modifier = Modifier.height(Spacing.s2))
+    }
+}
+
+/** A tapped pin whose plan can't be loaded (as on iOS): it may have ended or been cancelled. */
+@Composable
+internal fun PlanCardUnavailable(onClose: () -> Unit) {
+    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "This plan isn't available",
+                style = planH4,
+                color = PantopusColors.appText,
+                modifier = Modifier.weight(1f).semantics { heading() },
+            )
+            CardCloseButton(onClose)
+        }
+        Text(text = "It may have ended or been cancelled.", style = PantopusTextStyle.small, color = PantopusColors.appTextSecondary)
+    }
+}
+
+/** The card's close button: a 36 dp circle in a 44 dp target. */
+@Composable
+private fun CardCloseButton(onClose: () -> Unit) {
+    Box(
+        modifier =
+            Modifier
+                .size(44.dp)
+                .clickable(role = Role.Button, onClick = onClose)
+                .clearAndSetSemantics {
+                    contentDescription = "Close"
+                    role = Role.Button
+                },
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier.size(36.dp).clip(CircleShape).background(PantopusColors.appSurfaceSunken),
+            contentAlignment = Alignment.Center,
+        ) {
+            PantopusIconImage(icon = PantopusIcon.X, contentDescription = null, size = 16.dp, tint = PantopusColors.appText)
+        }
     }
 }
 
@@ -490,20 +520,35 @@ internal fun hostCaption(plan: PlanDto): String {
     return parts.joinToString(" · ")
 }
 
-/** The card's main button, by where the viewer stands. */
-internal fun primaryLabel(plan: PlanDto): String =
-    when (plan.standing) {
-        PlanViewerStanding.HOSTING -> "Your plan"
-        PlanViewerStanding.IN -> "You're in"
-        PlanViewerStanding.REQUESTED -> "Requested"
-        PlanViewerStanding.WAITLISTED -> "On the waitlist"
+/** The card's one main action next to "Details" (as on iOS). */
+internal data class PlanMainAction(
+    val title: String,
+    val isPrimary: Boolean,
+    /** Opens "Ask to join" (J3) rather than the plan. */
+    val asks: Boolean = false,
+)
+
+/**
+ * By where the viewer stands: "Your plan", "You're in", "Requested", "On the waitlist", "Ask to join" or "Join the
+ * waitlist"; none when they can't ask (too far, not verified, declined, ended), so "Details" alone explains why.
+ */
+internal fun mainAction(plan: PlanDto): PlanMainAction? {
+    val viewer = plan.viewer
+    return when (plan.standing) {
+        PlanViewerStanding.HOSTING -> PlanMainAction("Your plan", isPrimary = true)
+        PlanViewerStanding.IN -> PlanMainAction("You're in", isPrimary = true)
+        PlanViewerStanding.REQUESTED -> PlanMainAction("Requested", isPrimary = false)
+        PlanViewerStanding.WAITLISTED -> PlanMainAction("On the waitlist", isPrimary = false)
         else ->
             when {
-                plan.planState == PlanState.ENDED || plan.planState == PlanState.CANCELLED -> "Details"
-                plan.isFull || plan.viewer?.cannotAskReason == "full_use_waitlist" -> "Join the waitlist"
-                else -> "Ask to join"
+                plan.planState == PlanState.ENDED || plan.planState == PlanState.CANCELLED -> null
+                viewer == null -> PlanMainAction("Ask to join", isPrimary = true, asks = true)
+                viewer.canAsk -> PlanMainAction(if (plan.isFull) "Join the waitlist" else "Ask to join", isPrimary = true, asks = true)
+                viewer.cannotAskReason == "full_use_waitlist" -> PlanMainAction("Join the waitlist", isPrimary = true, asks = true)
+                else -> null
             }
     }
+}
 
 /** What "Invite a neighbor" shares (board F4, the same words as iOS). */
 const val PLANS_INVITE_MESSAGE = "I'm on Pantopus to make small plans with neighbors. Join me. https://pantopus.com/start"

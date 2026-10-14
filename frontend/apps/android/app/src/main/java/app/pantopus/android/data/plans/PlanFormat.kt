@@ -387,7 +387,7 @@ object PlanFormat {
 
     /**
      * "Starts in 25 minutes", "Starts in 7 hours", "Starts tomorrow", "Starts Saturday", "Starts Sunday, Oct 25" a
-     * week or more out; "Happening now" once it's on (as on iOS).
+     * week or more out; "Starting now" once its start has passed, "Happening now" once it's on (as on iOS).
      */
     fun startsIn(
         plan: PlanDto,
@@ -399,7 +399,7 @@ object PlanFormat {
         val minutes = Duration.between(now, start.toInstant()).toMinutes()
         val days = ChronoUnit.DAYS.between(now.atZone(zone).toLocalDate(), start.toLocalDate())
         return when {
-            minutes <= 0 -> null
+            minutes <= 0 -> "Starting now"
             minutes < 60 -> "Starts in $minutes minute${if (minutes == 1L) "" else "s"}"
             minutes < 60 * 24 -> (minutes / 60).let { "Starts in $it hour${if (it == 1L) "" else "s"}" }
             days == 1L -> "Starts tomorrow"
