@@ -96,7 +96,7 @@ Replies are returned oldest first, flat. Clients show first-level replies and on
 
 ### 2.3 `GET /api/pulse/feed`
 
-Query: `view` = `nearby` (default) | `following`; `topic` (enum, optional); `area_id` (optional, default the viewer's town); `earlier_before` (ISO, for "Show earlier"); `limit` (default 30, max 40).
+Query: `view` = `nearby` (default) | `following`; `topic` (enum, optional); `area_id` (optional, default the viewer's town); `earlier_before` (the opaque `earlier_cursor`, or an ISO timestamp for compatibility, for "Show earlier"); `limit` (default 30, max 40).
 
 ```jsonc
 {
@@ -109,13 +109,14 @@ Query: `view` = `nearby` (default) | `following`; `topic` (enum, optional); `are
   "groups": [
     { "key": "town", "title": "AROUND CAMAS", "area_id": "uuid", "items": [ /* PulsePost */ ] }
   ],                                       // order: street, neighborhood, town; only open areas; newest first inside a group
-  "end": { "caught_up": true, "since": "2026-10-14T15:00:00Z", "can_show_earlier": true, "earlier_cursor": "2026-10-13T20:11:00Z" }
+  "end": { "caught_up": true, "since": "2026-10-14T15:00:00Z", "can_show_earlier": true, "earlier_cursor": "<opaque cursor>" }
 }
 ```
 
 - `read_at` is the server time captured before the query; only items created at or before it enter the response. `end.since` is the lower bound of the new-items window, for the end card's wording; it is not a seen acknowledgment. Clients read `read_at` optionally until this backend ships and then use it instead of their device clock for polling and acknowledgments.
 - The first response holds items **newer than the viewer's last-seen marker** for that view (at least the last 24 hours if the marker is older), capped at `limit`. `caught_up` is true when nothing newer remains beyond the cap.
-- `earlier_before` returns the next older items in one flat group `{ "key": "earlier", "title": "EARLIER", … }` (the client appends it below the end card); nothing loads by itself.
+- `earlier_cursor` is an opaque string: clients pass it back unchanged. It contains the time/id tie-breaker and the original new-items window, so equal timestamps cannot skip posts and later pages preserve the snapshot. The server also accepts an ISO `earlier_before` for older callers.
+- `earlier_before` returns the next older items in one flat group `{ "key": "earlier", "title": "EARLIER", … }` (the client appends it below the end card); nothing loads by itself. If the first page was capped (`caught_up: false`), an earlier page sets `caught_up: true` once all remaining new items have been delivered. The client then updates the end card and can acknowledge the original `read_at` after that end is visible; it must not acknowledge an older page's device time.
 - `GET /api/pulse/feed/new?view=&topic=&area_id=&after=<iso>` → `{ "count": 3 }` for the "↑ 3 new conversations" pill (poll about once a minute while the screen is visible, or on a socket event). `area_id` is optional and uses the same area as `/feed`; a client browsing another area passes it to both routes.
 - `POST /api/pulse/feed/seen` `{ "view": "nearby", "through": "<iso>" }` advances the marker and returns `{ "ok": true, "through": "<iso>" }`. The stored marker never moves backward, including concurrent taps; a future `through` is capped at the server time. The client calls it when the unfiltered end card has been on screen and `caught_up` is true, never earlier.
 - The marker belongs to the view, not to a topic, and there is no per-topic marker. With a `topic` chosen, the page reads from the same marker, and the client does not call `/feed/seen` from it: a topic page shows only part of the view, so moving the view's marker would put the other topics' unseen posts behind "Show earlier". Only the unfiltered page (no `topic`) moves the marker.
