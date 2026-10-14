@@ -121,4 +121,32 @@ function refreshPickupDraft(draft, now = new Date()) {
   return card({ ...draft, recycling_frequency: frequency, recycling_next_date: next, replaces: false });
 }
 
-module.exports = { draftPickupSchedule, refreshPickupDraft, nextInCycle };
+/**
+ * What the pickup editor fills in from a reading of someone's schedule (a flyer photo):
+ * only the fields that were read, null for the rest so the editor keeps its own, and a
+ * recycling date moved into the window the save route accepts.
+ */
+function editorFields(reading, today = localToday(null)) {
+  const garbage = WEEKDAY_NAMES[reading.garbage_weekday] ? reading.garbage_weekday : null;
+  let frequency = null;
+  let next = null;
+  if (reading.recycling_frequency === 'none') frequency = 'not_set';
+  if (CYCLE_DAYS[reading.recycling_frequency]) {
+    frequency = reading.recycling_frequency;
+    next = isCalendarDay(reading.recycling_next_date) ? nextInCycle(reading.recycling_next_date, frequency, today) : null;
+  }
+  const read = [];
+  if (garbage) read.push(`Garbage every ${WEEKDAY_NAMES[garbage]}.`);
+  if (frequency === 'weekly' && next) read.push(`Recycling every ${WEEKDAY_NAMES[weekdayOf(next)]}.`);
+  if (frequency === 'biweekly' && next) read.push(`Recycling every other ${WEEKDAY_NAMES[weekdayOf(next)]}, next on ${longDay(next)}.`);
+  if (frequency && frequency !== 'not_set' && !next) read.push(`Recycling ${frequency === 'weekly' ? 'every week' : 'every other week'}; choose the next date.`);
+  if (frequency === 'not_set') read.push('No recycling pickup.');
+  return {
+    garbage_weekday: garbage,
+    recycling_frequency: frequency,
+    recycling_next_date: next,
+    summary: read.join(' ') || null,
+  };
+}
+
+module.exports = { draftPickupSchedule, refreshPickupDraft, editorFields, nextInCycle };

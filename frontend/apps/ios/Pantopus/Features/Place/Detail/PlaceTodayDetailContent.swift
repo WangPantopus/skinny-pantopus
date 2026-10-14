@@ -13,6 +13,7 @@
 //
 
 import Observation
+import PhotosUI
 import SwiftUI
 import UserNotifications
 
@@ -502,6 +503,14 @@ struct AddressCalendarCard: View {
     /// The schedule this editor started from. A save sends it back, so a
     /// change saved meanwhile on another device is not silently undone.
     @State private var openedVersion: String?
+    /// "Read a flyer": the camera-or-library choice, the photo, and what reading it found.
+    @State private var flyerChoice = false
+    @State private var flyerCamera = false
+    @State private var flyerLibrary = false
+    @State private var flyerItem: PhotosPickerItem?
+    @State private var capturedFlyer: Data?
+    @State private var readingFlyer = false
+    @State private var flyerMessage: FlyerMessage?
     private let api = APIClient.shared
     private var calendar: PlaceAddressCalendarData {
         confirmed ?? data
@@ -550,6 +559,7 @@ struct AddressCalendarCard: View {
                         nextDate = calendar.pickupSchedule?.recyclingNextDate ?? ""
                         openedVersion = calendar.pickupVersion
                         errorText = nil
+                        flyerMessage = nil
                         picking.toggle()
                     }
                     .font(.system(size: 13, weight: .semibold))
@@ -632,6 +642,7 @@ struct AddressCalendarCard: View {
 
     private var picker: some View {
         VStack(alignment: .leading, spacing: 8) {
+            flyerControl
             Text("Which day is garbage collected each week?")
                 .font(.system(size: 13))
                 .foregroundStyle(Theme.Color.appText)
@@ -686,7 +697,7 @@ struct AddressCalendarCard: View {
                     .accessibilityIdentifier("addressCalendarClear")
             }
         }
-        .disabled(saving != nil)
+        .disabled(saving != nil || readingFlyer)
         .padding(12)
         .background(Theme.Color.appSurfaceSunken)
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -848,6 +859,133 @@ extension AddressCalendarCard {
         struct Conflict: Decodable { let calendar: PlaceAddressCalendarData? }
         guard let data = body?.data(using: .utf8) else { return nil }
         return (try? JSONDecoder().decode(Conflict.self, from: data))?.calendar
+    }
+}
+
+// MARK: - Read a flyer
+
+/// A photo of the hauler's flyer fills in the editor's fields; the person checks
+/// them and saves with Save schedule. The reading itself saves nothing.
+extension AddressCalendarCard {
+    /// What reading a flyer found, or why it couldn't.
+    struct FlyerMessage: Equatable {
+        let text: String
+        let failed: Bool
+    }
+
+    var flyerControl: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            GhostButton(title: "Read a flyer", isLoading: readingFlyer, isEnabled: saving == nil) {
+                if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                    flyerChoice = true
+                } else {
+                    flyerLibrary = true
+                }
+            }
+            .accessibilityIdentifier("addressCalendarReadFlyer")
+            .accessibilityHint(
+                "Fills in your pickup days from a photo of your hauler's flyer. Nothing is saved until you tap Save schedule."
+            )
+            if readingFlyer {
+                Text("Reading the flyer…")
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+            } else if let flyerMessage {
+                Text(flyerMessage.text)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(flyerMessage.failed ? Theme.Color.error : Theme.Color.appText)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("addressCalendarFlyerMessage")
+            }
+        }
+        .confirmationDialog("Read a flyer", isPresented: $flyerChoice, titleVisibility: .visible) {
+            Button("Take a photo") { flyerCamera = true }
+            Button("Choose a photo") { flyerLibrary = true }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Your hauler's flyer or collection calendar.")
+        }
+        // The read starts once the camera has closed: covering the card ends its
+        // lifecycle window, so a read begun under the cover would be dropped.
+        .fullScreenCover(isPresented: $flyerCamera, onDismiss: readCapturedFlyer) {
+            SystemCameraPicker(isPresented: $flyerCamera) { image in
+                capturedFlyer = ListingPhotoProcessor.uploadData(from: image)
+            }
+            .ignoresSafeArea()
+        }
+        // `.compatible` hands over a JPEG for an iPhone's HEIC photo, which the reader can't open.
+        .photosPicker(isPresented: $flyerLibrary, selection: $flyerItem, matching: .images, preferredItemEncoding: .compatible)
+        .onChange(of: flyerItem) { _, item in
+            guard let item else { return }
+            flyerItem = nil
+            Task {
+                let data = try? await item.loadTransferable(type: Data.self)
+                await readFlyer(data.flatMap { ListingPhotoProcessor.uploadData(from: $0) })
+            }
+        }
+    }
+
+    private func readCapturedFlyer() {
+        guard let photo = capturedFlyer else { return }
+        capturedFlyer = nil
+        Task { await readFlyer(photo) }
+    }
+
+    @MainActor
+    private func readFlyer(_ jpeg: Data?) async {
+        guard homeId != nil, saving == nil, !readingFlyer else { return }
+        guard let jpeg else {
+            flyerMessage = FlyerMessage(text: "Couldn't open that photo. Try another one.", failed: true)
+            return
+        }
+        let version = lifecycleVersion
+        readingFlyer = true
+        flyerMessage = nil
+        defer { readingFlyer = false }
+        do {
+            try requirePickupCurrent(version)
+            let upload = try await MultipartUploader.shared.uploadAIMedia(files: [
+                MultipartFile(fieldName: "files", filename: "flyer.jpg", mimeType: "image/jpeg", data: jpeg)
+            ])
+            try requirePickupCurrent(version)
+            let reading: AIDraftPickupScheduleResponse = try await api.request(
+                AIEndpoints.draftPickupSchedule(AIDraftPickupScheduleRequest(images: upload.images.map(\.url)))
+            )
+            try requirePickupCurrent(version)
+            fill(from: reading)
+        } catch {
+            guard (try? requirePickupCurrent(version)) != nil else { return }
+            flyerMessage = FlyerMessage(text: Self.flyerFailure(error), failed: true)
+        }
+        if let flyerMessage { AccessibilityNotification.Announcement(flyerMessage.text).post() }
+    }
+
+    /// Only what the flyer shows changes; a field it doesn't show keeps the editor's value.
+    private func fill(from reading: AIDraftPickupScheduleResponse) {
+        let read = reading.schedule
+        if let day = read.garbageWeekday, Self.weekdays.contains(where: { $0.id == day }) {
+            weekday = day
+        }
+        if let cycle = read.recyclingFrequency, ["not_set", "weekly", "biweekly"].contains(cycle) {
+            frequency = cycle
+            nextDate = ""
+        }
+        if frequency != "not_set", let day = read.recyclingNextDate, pickupDates.contains(day) {
+            nextDate = day
+        }
+        let lines = [read.summary, reading.note, "Check the days, then tap Save schedule."]
+        flyerMessage = FlyerMessage(text: lines.compactMap { $0 }.joined(separator: " "), failed: false)
+    }
+
+    /// The server's own sentence when it gave one ("This looks like a yard sale sign…").
+    private static func flyerFailure(_ error: any Error) -> String {
+        let fallback = "Couldn't read that flyer. Set your pickup days below."
+        switch error {
+        case let APIError.clientError(_, body): return APIError.friendlyClientMessage(body) ?? fallback
+        case let APIError.server(_, body): return APIError.friendlyClientMessage(body) ?? fallback
+        case let apiError as APIError: return apiError.errorDescription ?? fallback
+        default: return fallback
+        }
     }
 }
 

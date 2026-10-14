@@ -1,5 +1,7 @@
 package app.pantopus.android.ui.screens.place.detail
 
+import android.net.Uri
+import app.pantopus.android.data.ai.PickupFlyerReading
 import app.pantopus.android.data.api.models.place.PlaceAddressCalendarData
 import app.pantopus.android.data.api.models.place.SetPickupDayRequest
 import kotlinx.coroutines.flow.StateFlow
@@ -35,4 +37,13 @@ interface AddressCalendarActions {
 
     /** [expectedVersion] is the calendar's `pickupVersion` when the editor opened. */
     fun clearPickupDay(expectedVersion: String?)
+
+    /** The editor offers "Read a flyer" only where [readPickupFlyer] works. */
+    val readsPickupFlyers: Boolean get() = false
+
+    /**
+     * The pickup days on a photo of the household's hauler's flyer, for the editor to fill in.
+     * Saves nothing. Null when the answer no longer belongs on screen (the home or session changed).
+     */
+    suspend fun readPickupFlyer(photo: Uri): PickupFlyerReading? = null
 }

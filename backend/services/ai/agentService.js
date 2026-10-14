@@ -28,7 +28,7 @@ const {
 const { runAgentTurn, sanitizeHistory, compactForStorage } = require('./agentLoop');
 const { buildChatContext, lastContextText, userTimeZone, CONTEXT_HEADER } = require('./chatContext');
 const { photoBlocks } = require('./photos');
-const { refreshPickupDraft } = require('./pickupDraft');
+const { refreshPickupDraft, editorFields } = require('./pickupDraft');
 const { getAuthorizedMail } = require('./mailAccess');
 const noaa = require('../external/noaa');
 const { isLaunchFeatureEnabled } = require('../../utils/featureFlags');
@@ -793,6 +793,78 @@ async function draftPost({ text, surface, coarseLocation, userId }) {
   }
 }
 
+// ─── Pickup Days from a Flyer (for the pickup editor) ────────────────────────
+
+/** A note from the model for people to read: trimmed, without a stray closing bracket ("…in the photo.}"). */
+function noteText(note) {
+  const text = typeof note === 'string' ? note.trim() : '';
+  return (/[{[]/.test(text) ? text : text.replace(/[}\]\s]+$/, '')) || null;
+}
+
+/**
+ * Read a household's pickup days from photos of their hauler's flyer, or from what they
+ * wrote, for the pickup editor to fill in. Nothing is saved here: the person checks the
+ * editor's fields and saves them with its own Save.
+ */
+async function readPickupSchedule({ images = [], text, userId }) {
+  const startTime = Date.now();
+  const client = getAnthropicClient();
+  if (!client) {
+    return { error: 'AI_UNAVAILABLE', message: 'AI is temporarily unavailable. Please set your pickup days yourself.', fallback: true };
+  }
+
+  const photos = images.length ? (await photoBlocks(images, userId)).filter(Boolean) : [];
+  if (images.length && !photos.length) {
+    return { error: 'IMAGE_UNREADABLE', message: "I couldn't open that photo. Try a JPEG or PNG, or a different photo." };
+  }
+  const ask = (text || 'Read the pickup schedule from this flyer.').trim();
+  const content = [...photos, { type: 'text', text: `${ask}\n\n${todayLine(await userTimeZone(userId))}` }];
+  const log = (fields) => logRequest({
+    userId, endpoint: 'draft/pickup-schedule', model: DRAFT_MODEL,
+    promptVersion: prompts.VERSIONS.pickupSchedule, latencyMs: Date.now() - startTime, ...fields,
+  });
+
+  try {
+    const response = await complete({
+      client,
+      model: DRAFT_MODEL,
+      system: prompts.PICKUP_SCHEDULE_SYSTEM,
+      messages: [{ role: 'user', content }],
+      schema: schemas.claudeSchemas.pickupSchedule,
+      effort: DRAFT_EFFORT,
+      maxTokens: DRAFT_MAX_TOKENS,
+      timeoutMs: DRAFT_TIMEOUT_MS,
+    });
+    let reading = null;
+    try {
+      reading = JSON.parse(response.text);
+    } catch {
+      // Treated as invalid below.
+    }
+    const valid = Boolean(reading) && schemas.validatePickupSchedule(reading);
+    await log({
+      status: valid ? 'ok' : 'schema_error', schemaValid: valid,
+      inputTokens: response.inputTokens, outputTokens: response.outputTokens,
+    });
+    if (!valid) {
+      return { error: 'DRAFT_INVALID', message: "Couldn't read a pickup schedule. Try again, or set your pickup days yourself.", fallback: true };
+    }
+    const fields = editorFields(reading);
+    const note = noteText(reading.note);
+    if (!fields.garbage_weekday && !fields.recycling_frequency) {
+      return { error: 'NO_SCHEDULE', message: note || "That doesn't look like a pickup schedule.", fallback: true };
+    }
+    return { schedule: fields, note };
+  } catch (err) {
+    logger.error('readPickupSchedule error', { userId, error: err.message });
+    await log({ status: err instanceof AIRefusalError ? 'refusal' : 'error', errorMessage: err.message });
+    if (err instanceof AIRefusalError) return { ...DECLINED };
+    if (isImageError(err)) return { error: 'IMAGE_UNREADABLE', message: "I couldn't read that photo. Try a clearer one." };
+    if (isTimeoutError(err)) return { error: 'AI_TIMEOUT', message: 'Reading the flyer took too long. Please try again.', fallback: true };
+    return { error: 'AI_UNAVAILABLE', message: 'AI is temporarily unavailable. Please set your pickup days yourself.', fallback: true };
+  }
+}
+
 // ─── 4. Mail Summarization ──────────────────────────────────────────────────
 
 async function summarizeMail({ mailItemId, userId }) {
@@ -1243,6 +1315,7 @@ module.exports = {
   draftListing,
   draftListingFromImages,
   draftPost,
+  readPickupSchedule,
   summarizeMail,
   generatePlaceBrief,
   draftMailOpening,
