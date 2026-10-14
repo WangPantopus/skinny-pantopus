@@ -429,7 +429,7 @@ class TodayTabViewModel
                     refreshFailed = copy.failure != null,
                 )
             _state.value = shown
-            val matches = checkSavedAnchor(place, force)
+            val matches = checkSavedAnchor(place)
             if (!current(version)) return
             _state.value = shown.copy(savedAnchorMatches = matches)
             if (copy.failure == null && ::todayWidget.isInitialized) todayWidget.write(intelligence.todayWidgetSnapshot())
@@ -446,14 +446,11 @@ class TodayTabViewModel
         private fun shownAnchor(place: SavedPlaceDto): Boolean =
             (_state.value as? TodayTabUiState.Loaded)?.takeIf { it.savedPlace?.id == place.id }?.savedAnchorMatches == true
 
-        private suspend fun checkSavedAnchor(
-            place: SavedPlaceDto,
-            force: Boolean,
-        ): Boolean {
+        private suspend fun checkSavedAnchor(place: SavedPlaceDto): Boolean {
             if (!sessionScope.confirmCurrent()) return false
-            val today = hubRepository.todayStored(force)
-            if (!sessionScope.confirmCurrent() || today.failure != null) return false
-            val payload = today.data ?: return false
+            val today = hubRepository.todayDetail()
+            if (!sessionScope.confirmCurrent()) return false
+            val payload = (today as? NetworkResult.Success)?.data ?: return false
             val location = payload.location
             val latitude = location?.latitude
             val longitude = location?.longitude
@@ -506,7 +503,7 @@ class TodayTabViewModel
             _preferenceError.value = null
             viewModelScope.launch {
                 if (!current(version)) return@launch
-                val matches = checkSavedAnchor(place, force = true)
+                val matches = checkSavedAnchor(place)
                 if (!current(version)) return@launch
                 if (!matches) {
                     _state.value = loaded.copy(savedAnchorMatches = false)
