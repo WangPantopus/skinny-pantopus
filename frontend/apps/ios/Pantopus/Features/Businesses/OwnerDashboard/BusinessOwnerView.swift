@@ -28,8 +28,6 @@ import SwiftUI
 public struct BusinessOwnerView: View {
     @State private var viewModel: BusinessOwnerViewModel
     @State private var mode: OwnerViewMode = .owner
-    /// C2 — "Post as this business" composer sheet (role-gated).
-    @State private var showsComposer = false
 
     private let businessId: String
     private let onBack: @MainActor () -> Void
@@ -90,16 +88,6 @@ public struct BusinessOwnerView: View {
             .overlay(alignment: .bottom) { toastOverlay }
             .accessibilityIdentifier("businessOwner")
             .task { await viewModel.load() }
-            .sheet(isPresented: $showsComposer) {
-                // C2 — reuse the shared Pulse composer, pointed at
-                // `POST /api/businesses/:businessId/posts`.
-                PulseComposeView(
-                    intent: .announce,
-                    identity: .business,
-                    businessAuthorId: businessId,
-                    managesDismiss: true
-                ) { _ in Task { await viewModel.refresh() } }
-            }
     }
 
     @ViewBuilder private var content: some View {
@@ -124,7 +112,6 @@ public struct BusinessOwnerView: View {
                         onPreview: { mode = .preview },
                         onManageCatalog: { mode = .catalog },
                         onOpenInbox: { mode = .inbox },
-                        onComposePost: { showsComposer = true },
                         onSubmitReply: { reviewId, text in
                             viewModel.submitReply(reviewId: reviewId, text: text)
                         },
@@ -227,9 +214,6 @@ struct OwnerEditFrame: View {
     var onManageCatalog: @MainActor () -> Void = {}
     /// Opens the business inbox frame (Messages + Mentions).
     var onOpenInbox: @MainActor () -> Void = {}
-    /// C2 — opens the "Post as this business" composer. Only reachable
-    /// when `content.canPostAsBusiness`.
-    var onComposePost: @MainActor () -> Void = {}
     let onSubmitReply: @MainActor (String, String) -> Void
     /// Founding-business offer banner actions.
     var onClaimFounding: @MainActor () -> Void = {}
@@ -269,15 +253,6 @@ struct OwnerEditFrame: View {
             }
         }
         .background(Theme.Color.appBg)
-        .overlay(alignment: .bottomTrailing) {
-            // C2 — "Post as this business". RN floats the same FAB above
-            // its dock, gated on `access.role_base`.
-            if content.canPostAsBusiness {
-                OwnerComposeFab(action: onComposePost)
-                    .padding(.trailing, Spacing.s4)
-                    .padding(.bottom, 88)
-            }
-        }
         .overlay(alignment: .bottom) {
             OwnerDock(onPreview: onPreview, onEditPage: onEditPage)
         }

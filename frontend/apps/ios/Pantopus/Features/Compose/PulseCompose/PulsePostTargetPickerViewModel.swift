@@ -2,8 +2,9 @@
 //  PulsePostTargetPickerViewModel.swift
 //  Pantopus
 //
-//  Loads homes + businesses for step 1 of the Pulse compose flow and
-//  resolves current-location coordinates via Core Location + reverse geocode.
+//  Loads homes for step 1 of the Pulse compose flow and resolves
+//  current-location coordinates via Core Location + reverse geocode.
+//  (Businesses don't post to Pulse, Pulse S1, so none are offered.)
 //
 
 import Foundation
@@ -11,14 +12,6 @@ import Observation
 
 public struct PulseHomeTargetOption: Sendable, Hashable, Identifiable {
     public let id: String
-    public let label: String
-    public let latitude: Double
-    public let longitude: Double
-}
-
-public struct PulseBusinessTargetOption: Sendable, Hashable, Identifiable {
-    public let id: String
-    public let name: String
     public let label: String
     public let latitude: Double
     public let longitude: Double
@@ -35,7 +28,6 @@ public enum PulsePostTargetPickerState: Sendable, Equatable {
 public final class PulsePostTargetPickerViewModel {
     public private(set) var state: PulsePostTargetPickerState = .loading
     public private(set) var homes: [PulseHomeTargetOption] = []
-    public private(set) var businesses: [PulseBusinessTargetOption] = []
     public private(set) var isLocating = false
 
     private let api: APIClient
@@ -52,10 +44,7 @@ public final class PulsePostTargetPickerViewModel {
     public func load() async {
         state = .loading
         do {
-            async let homesTask: MyHomesResponse = api.request(HomesEndpoints.myHomes())
-            async let businessesTask: MyBusinessesResponse = api.request(BusinessesEndpoints.myBusinesses())
-            let (homesResponse, businessesResponse) = try await (homesTask, businessesTask)
-
+            let homesResponse: MyHomesResponse = try await api.request(HomesEndpoints.myHomes())
             homes = homesResponse.sharedHomes.compactMap { row in
                 guard let loc = row.location else { return nil }
                 return PulseHomeTargetOption(
@@ -65,35 +54,6 @@ public final class PulsePostTargetPickerViewModel {
                     longitude: loc.longitude
                 )
             }
-
-            var mappedBusinesses: [PulseBusinessTargetOption] = []
-            for membership in businessesResponse.businesses {
-                let businessId = membership.business.id
-                do {
-                    let detail: BusinessDetailResponse = try await api.request(
-                        BusinessesEndpoints.business(businessId: businessId)
-                    )
-                    let primary = detail.locations.first { $0.isPrimary == true }
-                        ?? detail.locations.first
-                    guard let point = primary?.location else { continue }
-                    let labelParts = [primary?.city, primary?.state].compactMap { $0 }.filter { !$0.isEmpty }
-                    let label = labelParts.isEmpty
-                        ? (membership.business.name ?? membership.business.username ?? "Business")
-                        : labelParts.joined(separator: ", ")
-                    mappedBusinesses.append(
-                        PulseBusinessTargetOption(
-                            id: businessId,
-                            name: membership.business.name ?? membership.business.username ?? "Business",
-                            label: label,
-                            latitude: point.lat,
-                            longitude: point.lng
-                        )
-                    )
-                } catch {
-                    continue
-                }
-            }
-            businesses = mappedBusinesses
             state = .ready
         } catch {
             state = .error(error.localizedDescription)
