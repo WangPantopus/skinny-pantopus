@@ -61,7 +61,7 @@ data class PlansExternalRoutes(
     val openChat: (roomId: String, title: String, planId: String) -> Unit,
     /** "Verify your address" (J9): the Home that waits on verification, or Add Home. */
     val openVerification: (HubVerificationTarget) -> Unit,
-    /** Back to the Nearby map, closing the Plans pages on top of it. */
+    /** Back to the Plans tab (the map), closing the Plans pages on top of it. */
     val openNearby: () -> Unit,
 )
 

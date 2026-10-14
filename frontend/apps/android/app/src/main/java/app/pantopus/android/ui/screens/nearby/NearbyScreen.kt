@@ -105,6 +105,28 @@ fun NearbyScreen(
     }
 }
 
+/**
+ * The Pulse page's quiet-state card (Pulse build S3): the neighborhood meter while the area is still forming or
+ * growing, "Set up a home" while the person has no place, and nothing once the area is open (or while the meter
+ * loads or can't be read). It reads the meter the Nearby tab used to show.
+ */
+@Composable
+fun PulseQuietStateCard(
+    onClaim: () -> Unit,
+    viewModel: NearbyViewModel = hiltViewModel(),
+) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    LifecycleResumeEffect(Unit) {
+        viewModel.load()
+        onPauseOrDispose { }
+    }
+    val meter = (state as? NearbyUiState.Loaded)?.meter ?: return
+    when {
+        meter.state == "no_place" -> NoPlaceCard(onClaim)
+        !meter.unlocked -> MeterCard(meter)
+    }
+}
+
 // Keep each destination callback explicit at this screen boundary.
 @Suppress("LongParameterList")
 @Composable

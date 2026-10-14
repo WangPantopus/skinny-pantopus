@@ -35,6 +35,8 @@ import androidx.compose.material.pullrefresh.pullRefresh
 import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -116,6 +118,10 @@ fun FeedScreen(
     /** Sports-lane starter tapped in the empty state — opens the composer
      *  with the prompt already in the body. */
     onComposeStarter: ((PulseSportsStarter) -> Unit)? = null,
+    /** Opens the Connections screen from the top-right menu (the Pulse tab; Connections moved here from Nearby). */
+    onOpenConnections: (() -> Unit)? = null,
+    /** The quiet-state card at the top of the page (neighborhood meter or "Set up a home"); null elsewhere. */
+    quietStateCard: (@Composable () -> Unit)? = null,
     viewModel: PulseFeedViewModel = hiltViewModel(),
     contextBarViewModel: FeedContextBarViewModel = hiltViewModel(),
 ) {
@@ -218,6 +224,7 @@ fun FeedScreen(
                 },
                 onFilterTap = { showsIntentPicker = true },
                 onPreferencesTap = { viewModel.openPreferences() },
+                onOpenConnections = onOpenConnections,
                 viewMode = viewMode.takeIf { surface.supportsMapMode },
                 onViewModeChange = { viewMode = it },
             )
@@ -335,6 +342,7 @@ fun FeedScreen(
                     is PulseFeedUiState.Loading -> LoadingFrame()
                     is PulseFeedUiState.Empty ->
                         Column(modifier = Modifier.fillMaxSize()) {
+                            quietStateCard?.let { card -> Box(modifier = Modifier.padding(Spacing.s3)) { card() } }
                             Box(modifier = Modifier.weight(1f)) {
                                 FeedEmptyState(content = s.content) {
                                     if (s.needsArea) {
@@ -353,6 +361,7 @@ fun FeedScreen(
                     is PulseFeedUiState.Loaded ->
                         PopulatedFrame(
                             state = s,
+                            header = quietStateCard,
                             newPostCount = newPostCount,
                             onShowNewPosts = viewModel::showNewPosts,
                             onReadingPosition = viewModel::readingPosition,
@@ -843,6 +852,8 @@ private fun TopBar(
     onSearchTap: (() -> Unit)? = null,
     onFilterTap: (() -> Unit)? = null,
     onPreferencesTap: (() -> Unit)? = null,
+    /** Non-null (the Pulse tab) gathers Pulse preferences and Connections into one "More" menu. */
+    onOpenConnections: (() -> Unit)? = null,
     /** Non-null renders the List / Map segment (hidden on Beacons). */
     viewMode: FeedViewMode? = null,
     onViewModeChange: (FeedViewMode) -> Unit = {},
@@ -926,7 +937,7 @@ private fun TopBar(
                         )
                     }
                 }
-                if (onPreferencesTap != null) {
+                if (onPreferencesTap != null && onOpenConnections == null) {
                     Box(
                         modifier =
                             Modifier
@@ -945,6 +956,10 @@ private fun TopBar(
                     }
                 }
             }
+                if (onOpenConnections != null) {
+                    PulseMoreMenu(onPreferences = onPreferencesTap, onConnections = onOpenConnections)
+                }
+            }
             if (viewMode != null && stackToggle) {
                 ViewModeToggle(active = viewMode, onSelect = onViewModeChange)
             }
@@ -957,6 +972,53 @@ private fun TopBar(
                     .height(1.dp)
                     .background(PantopusColors.appBorder),
         )
+    }
+}
+
+/** The Pulse tab's top-right menu: Pulse preferences and Connections (which moved here from the Nearby tab). */
+@Composable
+private fun PulseMoreMenu(
+    onPreferences: (() -> Unit)?,
+    onConnections: () -> Unit,
+) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        Box(
+            modifier =
+                Modifier
+                    .size(48.dp)
+                    .clickable { open = true }
+                    .testTag("pulseMoreButton")
+                    .semantics { contentDescription = "More" },
+            contentAlignment = Alignment.Center,
+        ) {
+            PantopusIconImage(
+                icon = PantopusIcon.MoreVertical,
+                contentDescription = null,
+                size = 20.dp,
+                tint = PantopusColors.appText,
+            )
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            onPreferences?.let { action ->
+                DropdownMenuItem(
+                    text = { Text("Pulse preferences") },
+                    onClick = {
+                        open = false
+                        action()
+                    },
+                    modifier = Modifier.testTag("pulseMenuPreferences"),
+                )
+            }
+            DropdownMenuItem(
+                text = { Text("Connections") },
+                onClick = {
+                    open = false
+                    onConnections()
+                },
+                modifier = Modifier.testTag("pulseMenuConnections"),
+            )
+        }
     }
 }
 
@@ -1095,6 +1157,7 @@ internal fun FeedEmptyState(
 @Composable
 private fun PopulatedFrame(
     state: PulseFeedUiState.Loaded,
+    header: (@Composable () -> Unit)? = null,
     onTapPost: (String) -> Unit,
     onTapReaction: (String) -> Unit,
     isRefreshing: Boolean,
@@ -1150,6 +1213,7 @@ private fun PopulatedFrame(
             contentPadding = PaddingValues(Spacing.s3),
             verticalArrangement = Arrangement.spacedBy(Spacing.s2),
         ) {
+            header?.let { card -> item(key = "quietStateCard") { card() } }
             items(items = state.rows, key = { it.id }) { row ->
                 LaunchedEffect(row.id) { onRowAppeared(row.id) }
                 FeedPostRow(row, onTapPost, onTapReaction, rowActions)
