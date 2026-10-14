@@ -299,11 +299,9 @@ class PlanDetailViewModel
             }
         }
 
+        /** The server's own sentence for a refused ask, as iOS shows it; the 10-request limit says what to do. */
         private fun askError(error: NetworkError): String =
             when (error.planCode) {
-                "needs_verified_address" -> "This plan is for neighbors with a verified address."
-                "too_far" -> "This plan is too far from your home or where you are now."
-                "needs_location" -> "Share your location or add your home to ask."
                 "too_many_requests" -> "You have 10 open requests. Withdraw one to ask here."
                 "full" -> "It just filled up. You can join the waitlist."
                 else -> error.planMessage

@@ -152,13 +152,18 @@ fun PlanChatStrip(
     }
 }
 
-/** Instead of the composer once a plan's chat has closed (cancelled, or 24 hours after the end). */
+/** Instead of the composer once a plan's chat has closed: cancelled, or 24 hours after the end (as on iOS). */
 @Composable
-fun PlanChatClosedBar() {
+fun PlanChatClosedBar(state: PlanChatState) {
     Box(modifier = Modifier.fillMaxWidth().background(PantopusColors.appSurface).navigationBarsPadding()) {
         PlanDivider()
         Text(
-            text = "This chat has closed. It stays here to read.",
+            text =
+                if (state.plan?.planState == PlanState.CANCELLED) {
+                    "This plan was cancelled. The chat is closed."
+                } else {
+                    "This chat closed 24 hours after the plan ended."
+                },
             style = PantopusTextStyle.small,
             color = PantopusColors.appTextSecondary,
             modifier = Modifier.padding(horizontal = Spacing.s4, vertical = 14.dp).align(Alignment.Center),
