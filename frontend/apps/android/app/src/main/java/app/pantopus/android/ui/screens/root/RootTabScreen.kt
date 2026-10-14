@@ -2151,16 +2151,15 @@ private fun schedulingHomeNavArg() = optionalStringNavArg(SchedulingRoutes.ARG_H
  */
 
 /** Home and specialist screens host their own strip; these shared tab and account routes did not. */
-private fun usesSavedPageOfflineStrip(route: String?): Boolean =
-    route in
-        setOf(
-            PantopusRoute.Place.path, PantopusRoute.Today.path, PantopusRoute.Nearby.path, PantopusRoute.Mail.path,
-            PantopusRoute.Messages.path, PantopusRoute.Pulse.path, ChildRoutes.PLACE_DASHBOARD, ChildRoutes.PLACE_DETAIL,
-            ChildRoutes.PULSE_FEED, ChildRoutes.PULSE_POST, ChildRoutes.CHAT_CONVERSATION, ChildRoutes.PROFILE,
-            ChildRoutes.PUBLIC_PROFILE, ChildRoutes.NOTIFICATIONS_ROUTE, ChildRoutes.CONNECTIONS_ROUTE, ChildRoutes.MY_POSTS,
-            ChildRoutes.SAVED_PLACES, ChildRoutes.MENU, ChildRoutes.EXPLORE_ROUTE,
-            ChildRoutes.SETTINGS_NOTIFICATIONS, ChildRoutes.SETTINGS_PRIVACY,
-        )
+private val SAVED_PAGE_OFFLINE_STRIP_ROUTES =
+    setOf(
+        PantopusRoute.Place.path, PantopusRoute.Today.path, PantopusRoute.Nearby.path, PantopusRoute.Mail.path,
+        PantopusRoute.Messages.path, PantopusRoute.Pulse.path, ChildRoutes.PLACE_DASHBOARD, ChildRoutes.PLACE_DETAIL,
+        ChildRoutes.PULSE_FEED, ChildRoutes.PULSE_POST, ChildRoutes.CHAT_CONVERSATION, ChildRoutes.PROFILE,
+        ChildRoutes.PUBLIC_PROFILE, ChildRoutes.NOTIFICATIONS_ROUTE, ChildRoutes.CONNECTIONS_ROUTE, ChildRoutes.MY_POSTS,
+        ChildRoutes.SAVED_PLACES, ChildRoutes.MENU, ChildRoutes.EXPLORE_ROUTE,
+        ChildRoutes.SETTINGS_NOTIFICATIONS, ChildRoutes.SETTINGS_PRIVACY,
+    )
 
 @Composable
 fun RootTabScreen(inboxBadgeCount: Int = 0) {
@@ -2649,7 +2648,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 val route = backStackEntry?.destination?.route
                 // Nearby while `plans` is on is the Plans map, which floats its own strip over the map.
                 val plansMap = plansMapFlags.plans && route == PantopusRoute.Nearby.path
-                if (!online && usesSavedPageOfflineStrip(route) && !plansMap) {
+                if (!online && route in SAVED_PAGE_OFFLINE_STRIP_ROUTES && !plansMap) {
                     OfflineBannerHost(isOffline = true, modifier = Modifier.statusBarsPadding()) { }
                 }
             },
