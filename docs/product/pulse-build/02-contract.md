@@ -115,6 +115,7 @@ Query: `view` = `nearby` (default) | `following`; `topic` (enum, optional); `are
 - `earlier_before` returns the next older items in one flat group `{ "key": "earlier", "title": "EARLIER", … }` (the client appends it below the end card); nothing loads by itself.
 - `GET /api/pulse/feed/new?view=&topic=&after=<iso>` → `{ "count": 3 }` for the "↑ 3 new conversations" pill (poll about once a minute while the screen is visible, or on a socket event).
 - `POST /api/pulse/feed/seen` `{ "view": "nearby", "through": "<iso>" }` advances the marker. The client calls it when the end card has been on screen, never earlier.
+- The marker belongs to the view, not to a topic, and there is no per-topic marker. With a `topic` chosen, the page reads from the same marker, and the client does not call `/feed/seen` from it: a topic page shows only part of the view, so moving the view's marker would put the other topics' unseen posts behind "Show earlier". Only the unfiltered page (no `topic`) moves the marker.
 - Reader checks (section 5) apply to every item; hidden, muted, blocked and held items never appear. The legacy `/api/posts/feed` keeps its shape for the web.
 
 ### 2.4 Conversation
