@@ -94,10 +94,11 @@ enum PlanFormat {
     /// "Sun, Oct 18 · 1:25–4:45 PM" (`long`: "Sunday, Oct 18 · …"); "Today ·
     /// 5:30–7:30 PM" and "Tomorrow · …" when they apply (board J6, as on Android).
     static func when(start: Date, end: Date?, long: Bool = false, now: Date = Date(), calendar: Calendar = .current) -> String {
+        let date = long ? longDay(start, calendar: calendar) : shortDay(start, calendar: calendar)
         let day = switch days(from: now, to: start, calendar: calendar) {
         case 0: "Today"
         case 1: "Tomorrow"
-        default: long ? longDay(start, calendar: calendar) : shortDay(start, calendar: calendar)
+        default: date
         }
         guard let end else { return "\(day) · \(time(start, calendar: calendar))" }
         return "\(day) · \(range(start, end, calendar: calendar))"
@@ -135,10 +136,10 @@ enum PlanFormat {
     /// earlier this week, else "Oct 12" (as on Android).
     static func past(_ date: Date, now: Date = Date(), calendar: Calendar = .current) -> String {
         switch days(from: date, to: now, calendar: calendar) {
-        case ...0: return time(date, calendar: calendar)
-        case 1: return "Yesterday \(time(date, calendar: calendar))"
-        case ..<(oneWeek - 1): return "\(shortWeekday(date, calendar: calendar)) \(time(date, calendar: calendar))"
-        default: return formatted(date, template: "MMM d", calendar: calendar)
+        case ...0: time(date, calendar: calendar)
+        case 1: "Yesterday \(time(date, calendar: calendar))"
+        case ..<(oneWeek - 1): "\(shortWeekday(date, calendar: calendar)) \(time(date, calendar: calendar))"
+        default: formatted(date, template: "MMM d", calendar: calendar)
         }
     }
 

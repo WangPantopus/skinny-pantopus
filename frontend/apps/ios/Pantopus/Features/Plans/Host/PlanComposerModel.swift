@@ -148,27 +148,6 @@ final class PlanComposerModel {
         }
     }
 
-    /// Drops a title the app filled in; one the host typed stays.
-    private func dropAutoTitle() {
-        if let autoTitle, title == autoTitle { title = "" }
-        autoTitle = nil
-    }
-
-    /// The boards' starting titles, as on Android: "Playground morning" (H3),
-    /// "Coffee walk" (H5). A watch party starts from its game; a pickup game
-    /// has no title field.
-    private func startTitle() {
-        guard title.isEmpty else { return }
-        let starting: String? = switch kind {
-        case .playdate: "Playground morning"
-        case .walkCoffee: "Coffee walk"
-        case .watchParty, .pickupGame: nil
-        }
-        guard let starting else { return }
-        title = starting
-        autoTitle = starting
-    }
-
     // MARK: - Choices
 
     /// Picking a game fills in the title and the time (H2).
@@ -467,3 +446,28 @@ extension PlanComposerModel {
 
 /// H11 presents the place picker over a draft.
 extension PlanComposerModel: Identifiable {}
+
+// MARK: - Starting titles
+
+private extension PlanComposerModel {
+    /// Drops a title the app filled in; one the host typed stays.
+    func dropAutoTitle() {
+        if let autoTitle, title == autoTitle { title = "" }
+        autoTitle = nil
+    }
+
+    /// The boards' starting titles, as on Android: "Playground morning" (H3),
+    /// "Coffee walk" (H5). A watch party starts from its game; a pickup game
+    /// has no title field.
+    func startTitle() {
+        guard title.isEmpty else { return }
+        let starting: String? = switch kind {
+        case .playdate: "Playground morning"
+        case .walkCoffee: "Coffee walk"
+        case .watchParty, .pickupGame: nil
+        }
+        guard let starting else { return }
+        title = starting
+        autoTitle = starting
+    }
+}
