@@ -66,7 +66,10 @@ function timeText(date, tz) {
   return new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit' }).format(date);
 }
 
-/** "today 5:30 PM", "tomorrow 9:00 AM", "Sun 1:25 PM" (or "Sunday 1:25 PM" with long; "Sunday at 1:25 PM" with at). */
+/**
+ * "today 5:30 PM", "tomorrow 9:00 AM", "Sun 1:25 PM" (or "Sunday 1:25 PM" with long; "Sunday at 1:25 PM" with at);
+ * a week or more out the date too, "Thu, Oct 22 5:15 PM", as the apps' rows say it.
+ */
 function whenText(startsAt, tz, { long = false, hideTime = false, dayPart = null, at = false } = {}) {
   const date = new Date(startsAt);
   if (Number.isNaN(date.getTime())) return '';
@@ -74,10 +77,14 @@ function whenText(startsAt, tz, { long = false, hideTime = false, dayPart = null
   const today = rules.localParts(new Date(), zone).date;
   const tomorrow = rules.localParts(new Date(Date.now() + 24 * 60 * 60 * 1000), zone).date;
   const day = rules.localParts(date, zone).date;
+  const daysAhead = Math.round((Date.parse(`${day}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / (24 * 60 * 60 * 1000));
   let dayText;
   if (day === today) dayText = 'today';
   else if (day === tomorrow) dayText = 'tomorrow';
-  else dayText = new Intl.DateTimeFormat('en-US', { timeZone: zone, weekday: long ? 'long' : 'short' }).format(date);
+  else {
+    dayText = new Intl.DateTimeFormat('en-US', { timeZone: zone, weekday: long ? 'long' : 'short' }).format(date);
+    if (daysAhead >= 7) dayText += `, ${new Intl.DateTimeFormat('en-US', { timeZone: zone, month: 'short', day: 'numeric' }).format(date)}`;
+  }
   if (hideTime) return `${dayText} ${dayPart || ''}`.trim();
   return `${dayText} ${at ? 'at ' : ''}${timeText(date, zone)}`;
 }
