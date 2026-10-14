@@ -41,6 +41,7 @@ import app.pantopus.android.ui.screens.plans.components.PlanTextArea
 import app.pantopus.android.ui.screens.plans.components.PlanWell
 import app.pantopus.android.ui.screens.plans.map.planH3
 import app.pantopus.android.ui.theme.PantopusColors
+import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Spacing
 
@@ -81,21 +82,25 @@ internal fun PlanAskSheet(
                     .imePadding(),
             verticalArrangement = Arrangement.spacedBy(Spacing.s4),
         ) {
-            Column {
-                Text(
-                    text = "Ask $host to join",
-                    style = planH3,
-                    color = PantopusColors.appText,
-                    modifier = Modifier.semantics { heading() },
-                )
-                Text(
-                    text =
-                        listOf(PlanFormat.shortTitle(plan), PlanFormat.rowWhen(plan) ?: PlanFormat.hiddenWhen(plan))
-                            .filter(String::isNotBlank)
-                            .joinToString(" · "),
-                    style = PantopusTextStyle.small,
-                    color = PantopusColors.appTextSecondary,
-                )
+            Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Ask $host to join",
+                        style = planH3,
+                        color = PantopusColors.appText,
+                        modifier = Modifier.semantics { heading() },
+                    )
+                    Text(
+                        text =
+                            listOf(PlanFormat.shortTitle(plan), PlanFormat.rowWhen(plan) ?: PlanFormat.hiddenWhen(plan))
+                                .filter(String::isNotBlank)
+                                .joinToString(" · "),
+                        style = PantopusTextStyle.small,
+                        color = PantopusColors.appTextSecondary,
+                    )
+                }
+                // Close, as boards J3 and J4 draw it (and iOS has it).
+                PlanRoundButton(icon = PantopusIcon.X, label = "Close", onClick = onClose, glass = false)
             }
             if (plan.isPlaydate) {
                 KidsFields(draft, onEdit)

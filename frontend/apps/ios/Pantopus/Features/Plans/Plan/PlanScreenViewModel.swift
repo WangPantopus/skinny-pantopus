@@ -48,6 +48,8 @@ final class PlanScreenViewModel {
     private(set) var isWorking = false
     /// A sentence for a failed action, shown under the footer.
     var actionError: String?
+    /// A toast for an action a section ran ("Plan cancelled. Everyone has been told."), as on Android.
+    var notice: String?
     /// The plan became "in" while this screen was open: play the reveal.
     private(set) var revealToken = 0
     /// Other plans nearby, for J8.
@@ -160,6 +162,21 @@ final class PlanScreenViewModel {
 
     // MARK: - Joining
 
+    /// J1 "Share your location to join": one fix, then the plan again from
+    /// there (the server measures the distance band; as on Android).
+    func shareLocation() async {
+        isWorking = true
+        actionError = nil
+        defer { isWorking = false }
+        guard let fix = await DeviceLocationProvider.shared.requestCurrent(timeoutSeconds: 6) else {
+            actionError = "Couldn't find your location. Check that location is on."
+            return
+        }
+        PlansStoreReads.lastCenter = fix
+        PlansStoreReads.lastFix = (fix, Date())
+        await load()
+    }
+
     /// J3 / J4 "Send request". Returns true when it went through.
     func ask(_ body: AskToJoinBody) async -> Bool {
         await perform {
@@ -191,19 +208,24 @@ final class PlanScreenViewModel {
 
     /// "Still coming?" (H11 / the PLAN_CHANGED push). False leaves the plan.
     func stillComing(_ coming: Bool) async -> Bool {
-        await perform {
+        let done = await perform {
             _ = try await api.request(PlansEndpoints.stillComing(planId: planId, coming: coming), as: EmptyResponse.self)
             await load()
         }
+        // "Can't make it" shows its own "We told Sam" (PlanConfirmation).
+        if done, coming { notice = "Thanks. The host knows you're still coming." }
+        return done
     }
 
     // MARK: - Hosting
 
     func cancelPlan(note: String?) async -> Bool {
-        await perform {
+        let done = await perform {
             _ = try await api.request(PlansEndpoints.cancel(id: planId, note: note), as: EmptyResponse.self)
             await load()
         }
+        if done { notice = "Plan cancelled. Everyone has been told." }
+        return done
     }
 
     func remove(requestId: String) async -> Bool {
@@ -310,6 +332,8 @@ enum PlanErrors {
         switch apiError {
         case let .clientError(status, body):
             if status == 409, code(in: body) == "full" { return "That plan just filled up." }
+            // What to do about it, as the J1 footer says it (and Android).
+            if code(in: body) == "too_many_requests" { return "You have 10 open requests. Withdraw one to ask here." }
             return apiError.errorDescription ?? "Something went wrong. Please try again."
         case .transport:
             return "Can't reach Pantopus. Check your connection and try again."

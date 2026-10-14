@@ -81,6 +81,7 @@ const LOCAL_ACTIVITY_POST_SELECT = [
   'target_tier_rank',
   'allow_external_share',
   'radius_miles',
+  'moderation_state',
 ].join(', ');
 
 const LOCAL_PROFILE_PUBLIC_POST_FIELDS = [

@@ -137,11 +137,8 @@ public struct FeedView: View {
                 if viewModel.surface == .pulse {
                     FeedContextBar(viewModel: contextBarViewModel)
                 }
-                if !viewModel.availableTopics.isEmpty {
-                    PulseTopicChipRow(
-                        topics: viewModel.availableTopics,
-                        activeTopic: viewModel.activeTopic
-                    ) { topic in
+                if viewModel.showsTopics {
+                    PulseTopicChipRow(activeTopic: viewModel.activeTopic) { topic in
                         Task { await viewModel.selectTopic(topic) }
                     }
                 }
@@ -586,6 +583,8 @@ public struct FeedView: View {
         Button {
             if viewModel.needsArea {
                 Task { await contextBarViewModel.openSwitcher() }
+            } else if viewModel.quietTopic != nil {
+                Task { await viewModel.selectTopic(nil) }
             } else if let onEmptyCTA {
                 onEmptyCTA()
             } else {
@@ -604,7 +603,7 @@ public struct FeedView: View {
             .clipShape(Capsule())
         }
         .buttonStyle(.plain)
-        .accessibilityIdentifier("pulseEmptyCreatePost")
+        .accessibilityIdentifier(viewModel.quietTopic == nil ? "pulseEmptyCreatePost" : "pulseTopicShowAll")
         if let emphasis = content.footerEmphasis, !emphasis.isEmpty {
             HStack(spacing: Spacing.s2) {
                 Icon(content.footerIcon, size: 13, color: Theme.Color.appTextMuted)
@@ -977,6 +976,15 @@ private struct FeedPostActionSurfaces: ViewModifier {
                     run { await viewModel.markNotHelpful(postId: row.id) }
                 }
                 .accessibilityIdentifier("pulseFeedOverflowNotHelpful")
+            }
+            // Pulse S4: everywhere until areas exist (S5 adds "in this area").
+            // Not on your own post, which a topic mute never hides.
+            if !actions.isSeeded, !actions.isOwner, row.pulseTopic != nil {
+                Button("Mute this topic") {
+                    dismissOverflow()
+                    run { await viewModel.mutePulseTopic(postId: row.id) }
+                }
+                .accessibilityIdentifier("pulseFeedOverflowMuteThisTopic")
             }
             if actions.canMuteAuthor {
                 Button("Mute \(actions.muteEntityName)") {

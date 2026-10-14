@@ -30,14 +30,15 @@ public enum FeedActionsEndpoints {
     }
 
     /// `GET /api/posts/mute` — the people and businesses the viewer muted,
-    /// listed in Settings → Blocked users so a mute can be undone.
-    /// Route `backend/routes/posts.js:2297`.
+    /// listed in Settings → Blocked users so a mute can be undone, and the
+    /// Pulse topics muted, listed in Pulse preferences.
+    /// Route `backend/routes/posts.js:2161`.
     public static func mutedEntities() -> Endpoint {
         Endpoint(method: .get, path: "/api/posts/mute")
     }
 
     /// `DELETE /api/posts/mute` — undoes a mute from Settings → Blocked users.
-    /// Route `backend/routes/posts.js:2344`.
+    /// Route `backend/routes/posts.js:2220`.
     public static func unmute(entityType: FeedMuteEntityType, entityId: String) -> Endpoint {
         Endpoint(
             method: .delete,
@@ -46,14 +47,36 @@ public enum FeedActionsEndpoints {
         )
     }
 
-    /// `POST /api/posts/mute/topic` — mutes a post type, optionally scoped
-    /// to one surface (`place` / `connections` / `personas`). Route
-    /// `backend/routes/posts.js:2328`.
+    /// `POST /api/posts/mute/topic` `{ postType, surface? }` — mutes a kind
+    /// of post, optionally on one surface (`place` / `connections` /
+    /// `personas`). Route `backend/routes/posts.js:2414`.
     public static func muteTopic(postType: String, surface: String?) -> Endpoint {
         Endpoint(
             method: .post,
             path: "/api/posts/mute/topic",
             body: FeedMuteTopicRequest(postType: postType, surface: surface)
+        )
+    }
+
+    /// `POST /api/posts/mute/topic` `{ topic, areaId? }` — mutes a Pulse
+    /// topic in one area, or everywhere without `areaId` (contract §2.9).
+    /// Route `backend/routes/posts.js:2414`.
+    public static func mutePulseTopic(_ topic: String, areaId: String?) -> Endpoint {
+        Endpoint(
+            method: .post,
+            path: "/api/posts/mute/topic",
+            body: FeedMuteTopicRequest(topic: topic, areaId: areaId)
+        )
+    }
+
+    /// `DELETE /api/posts/mute` `{ entityType: "topic", entityId, areaId? }`
+    /// — undoes one topic mute from Pulse preferences. Route
+    /// `backend/routes/posts.js:2220`.
+    public static func unmutePulseTopic(_ topic: String, areaId: String?) -> Endpoint {
+        Endpoint(
+            method: .delete,
+            path: "/api/posts/mute",
+            body: FeedUnmuteTopicRequest(topic: topic, areaId: areaId)
         )
     }
 

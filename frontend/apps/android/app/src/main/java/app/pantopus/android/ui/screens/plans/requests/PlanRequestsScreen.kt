@@ -139,8 +139,10 @@ fun PlanRequestsScreen(
             onDismissRequest = viewModel::dismissConfirm,
             title = { Text("Accepting shares your address with them") },
             text = {
+                // The first name, as on iOS ("Priya will see …").
                 Text(
-                    "${request.user?.displayName ?: "They"} will see your address, your note and who's going. " +
+                    "${request.user?.displayName?.takeIf { it.isNotBlank() }?.let(PlanFormat::firstName) ?: "They"} will see " +
+                        "your address, your note and who's going. " +
                         "You'll be asked once for this plan.",
                 )
             },

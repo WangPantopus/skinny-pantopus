@@ -187,7 +187,7 @@ struct PlanPlacePicker: View {
             parts.append(words.prefix(1).uppercased() + words.dropFirst())
         }
         if let meters = distance(to: place) {
-            parts.append(String(format: "%.1f mi", meters / 1609.34))
+            parts.append(PlanFormat.placeDistance(meters))
         }
         if parts.isEmpty, let address = place.address { parts.append(address) }
         return parts.joined(separator: " · ")

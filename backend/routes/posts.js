@@ -2025,6 +2025,8 @@ router.get('/feed/home', verifyToken, async (req, res) => {
       .eq('home_id', homeId)
       .eq('audience', audienceFilter)
       .is('archived_at', null)
+      // Held and removed posts stay out of every feed (contract §5).
+      .eq('moderation_state', 'live')
       .order('created_at', { ascending: false })
       .range(parseInt(offset), parseInt(offset) + parseInt(limit) - 1);
 
