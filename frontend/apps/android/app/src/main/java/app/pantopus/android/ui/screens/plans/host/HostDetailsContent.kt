@@ -40,7 +40,6 @@ import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.PantopusTextStyle
-import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /** H2 to H5: the details for the chosen type. */
@@ -145,10 +144,8 @@ private fun ColumnScope.PlaydateFields(
     TitleField(draft.title, vm::setTitle)
     PlanField(label = "When") {
         PlanWhenCard(start = draft.start, end = draft.end, onStart = vm::setStart, onEnd = vm::setEnd)
-        val shown =
-            draft.start?.let {
-                "“${it.format(DateTimeFormatter.ofPattern("EEEE", Locale.US))} ${dayPartWord(it.hour)}”"
-            } ?: "the part of the day"
+        // "Tomorrow morning", as neighbors will see it (and as on iOS).
+        val shown = draft.start?.let { "“${PlanFormat.dayPartPhrase(it.atZone(ui.zone))}”" } ?: "the part of the day"
         PlanScopeLine("Neighbors see $shown until you accept them.")
     }
     PlanField(label = "Where") {
@@ -533,15 +530,6 @@ private fun NoteField(
         )
     }
 }
-
-/** The part of the day neighbors see for a playdate before they're in (the API's `day_part`). */
-private fun dayPartWord(hour: Int): String =
-    when (hour) {
-        in 5..11 -> "morning"
-        in 12..16 -> "afternoon"
-        in 17..20 -> "evening"
-        else -> "night"
-    }
 
 /** Adds [value] when it's missing, removes it when it's there. */
 private fun Set<String>.toggle(value: String): Set<String> = if (value in this) this - value else this + value

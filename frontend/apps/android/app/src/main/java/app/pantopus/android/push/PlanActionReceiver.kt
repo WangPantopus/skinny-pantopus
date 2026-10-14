@@ -35,8 +35,9 @@ import javax.inject.Inject
 /**
  * Nearby Plans' notification buttons (board A3), run in the background for the person the push names and only on
  * the session that received it (the same checks as the reminder buttons). A button that works clears its
- * notification; one that doesn't replaces it with an honest line that opens the plan or its requests ("Accepting
- * shares your address", "No spots left"). Only immutable app-created PendingIntents reach this non-exported receiver.
+ * notification; one that doesn't replaces it with an honest line that opens the plan or its requests, in the words
+ * iOS shows on the plan ("Couldn't accept Priya. This plan is full."). Only immutable app-created PendingIntents reach
+ * this non-exported receiver.
  */
 @AndroidEntryPoint
 class PlanActionReceiver : BroadcastReceiver() {
@@ -73,7 +74,8 @@ class PlanActionReceiver : BroadcastReceiver() {
                     val result = perform(action, planId, intent.getStringExtra(REQUEST))
                     when (result) {
                         is NetworkResult.Success -> NotificationManagerCompat.from(context).cancel(notificationId)
-                        is NetworkResult.Failure -> explain(context, notificationId, action, planId, result.error)
+                        is NetworkResult.Failure ->
+                            explain(context, notificationId, action, planId, intent.getStringExtra(TITLE), result.error)
                     }
                     plans.changed(planId)
                 }
@@ -111,6 +113,7 @@ class PlanActionReceiver : BroadcastReceiver() {
         notificationId: Int,
         action: String,
         planId: String,
+        pushTitle: String?,
         error: NetworkError,
     ) {
         if (
@@ -120,14 +123,7 @@ class PlanActionReceiver : BroadcastReceiver() {
             return
         }
         val toRequests = action == ACCEPT || action == DECLINE
-        val (title, body) =
-            when {
-                action == ACCEPT && error.planCode in ADDRESS_CODES ->
-                    "Accepting shares your address" to "Open the request to confirm before they see where you live."
-                action == ACCEPT && error.planCode == "full" -> "No spots left" to "Make room first, or decline."
-                error is NetworkError.NotFound -> "This plan isn't available" to "It may have been cancelled."
-                else -> "That didn't go through" to error.planMessage
-            }
+        val (title, body) = failure(action, pushTitle, error)
         val link = if (toRequests) "pantopus://plans/$planId/requests" else "pantopus://plans/$planId"
         val open =
             Intent(context, MainActivity::class.java).apply {
@@ -187,6 +183,40 @@ class PlanActionReceiver : BroadcastReceiver() {
         const val TITLE = "pantopus.plan.title"
 
         private const val TIMEOUT_MS = 8_000L
+
+        /**
+         * What didn't go through and why (board A3), in the words iOS shows on the plan: "Couldn't accept Priya" and
+         * "This plan is full. They can stay on the waitlist." (the server's sentence).
+         */
+        internal fun failure(
+            action: String,
+            pushTitle: String?,
+            error: NetworkError,
+        ): Pair<String, String> {
+            val who = requesterFirst(pushTitle) ?: "this request"
+            val headline =
+                when (action) {
+                    ACCEPT -> "Couldn't accept $who"
+                    DECLINE -> "Couldn't decline $who"
+                    ON_MY_WAY -> "Couldn't send “On my way”"
+                    STILL_COMING -> "Couldn't send “Still coming”"
+                    else -> "Couldn't tell the host you can't make it"
+                }
+            val reason =
+                when {
+                    error.planCode in ADDRESS_CODES -> "Accepting shares your address. Confirm it on the request first."
+                    error is NetworkError.NotFound -> "This plan isn't available anymore."
+                    else -> error.planMessage
+                }
+            return headline to reason
+        }
+
+        /** "Priya" from a request push's title ("Priya asked to join your watch party"), else null. */
+        internal fun requesterFirst(pushTitle: String?): String? =
+            pushTitle
+                ?.substringBefore(" asked to join", missingDelimiterValue = "")
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
 
         /** The buttons a category gets (board A3), or null for none. */
         fun buttonsFor(category: String?): List<Button>? =

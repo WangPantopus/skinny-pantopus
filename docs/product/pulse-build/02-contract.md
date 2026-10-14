@@ -193,11 +193,20 @@ Both answer `404 POST_NOT_FOUND`, `403 NOT_POST_AUTHOR` (not the asker), `400 NO
 
 | Slice | Endpoints (owner) |
 |---|---|
-| S12 | `GET /api/pulse/known?area=&q=`, `GET /api/pulse/known/:id`, `POST /api/pulse/known/:id/{confirm,correct,outdated}`, `POST /api/pulse/known/ask-again` (PB data, PS drafting); `GET /api/pulse/upcoming?area=`; `GET /api/pulse/right-now`, `POST /api/pulse/right-now/:id/report` `{kind: me_too|its_back}`; `GET /api/pulse/search?q=&area=` (PB) |
+| S12 | `GET /api/pulse/known?area=&q=`, `GET /api/pulse/known/:id`, `POST /api/pulse/known/:id/{confirm,correct,outdated}`, `POST /api/pulse/known/ask-again` (PB data, PS drafting); `GET /api/pulse/upcoming?area=`; `GET /api/pulse/right-now`, `POST /api/pulse/right-now/:id/report` `{kind: me_too\|its_back}`; `GET /api/pulse/search?q=&area=` (PB) |
 | S13 | Digest content and delivery are jobs, not endpoints (PC); preferences above |
 | S14 | `GET /api/pulse/posts/:id` fills `plan`; `POST /api/pulse/posts/:id/plan` creates a Plan through the existing Plans services with `Plan.source_post_id` (PB) |
 | S15 | `GET /api/public/pulse/areas`, `GET /api/public/pulse/feed?area=`, `GET /api/public/pulse/posts/:id` (public posts only; no distance, no street, first name and label) (PC with PB) |
 | S16–S17 | Place pages, area opening, business and official identities (PB, PS) |
+| S9 (addition) | `PUT /api/pulse/posts/:id/read-scope` `{ "readScope" }`: the author only, toward narrower only, `409 CANNOT_WIDEN` (PB) |
+| S11 (addition) | `GET /api/pulse/rules` → `{ "rules": [...], "review_hours": "…", "appeals_text": "…", "law_enforcement_text": "…" }`; the text is the founder's and counsel's, PS serves it (PS) |
+| S17 (addition) | Local offers: `POST /api/businesses/:businessId/offers`; staff approve in the console; `GET /api/pulse/local-offer?area=` → the one offer to show, or null (PB, PS) |
+| S20 | `POST /api/users/code/start` `{ "email", "firstName" }` → always `{ "ok": true }` (no account enumeration); `POST /api/users/code/verify` `{ "email", "code", "deviceId" }` → the same session body as `POST /api/users/login` plus `is_new`. Codes are 6 digits, valid 10 minutes, single use, 5 tries. Errors: `CODE_INVALID`, `CODE_EXPIRED`, `TOO_MANY_ATTEMPTS`, `CHANNEL_UNAVAILABLE` (text codes, until a provider exists). The `authEndpointLimiter`, DPoP and device rules that cover login cover these (PB) |
+| S21 | The plan create body gains `repeats` (`none`, `weekly`, `biweekly`, `monthly`) and `until`; `POST /api/plans/:id/series/{pause,resume,end}`; the going call gains `scope` (`occurrence` or `series`); `POST\|DELETE /api/plans/:id/co-hosts`; all through the existing Plans services (PB) |
+| S22 | `POST /api/support-trains` accepts an optional `sourcePostId` (stored, never returned); the conversation payload's `support_train` is `{ "line": "…" }` only when the organizer chose to post the line (PB) |
+| S23 | `POST /api/admin/pulse/posts/:id/merge` `{ "intoPostId" }` and `…/unmerge`; reading a merged post returns `merged_into: { "id", "title" }` (PS console, PB reads) |
+| S24 | `PUT /api/pulse/preferences` gains `reading_home_ids`; `POST\|DELETE /api/pulse/posts/:id/pin` (Official or curator) → `PulsePost.pins: [{ "label", "url", "text", "pinned_at" }]`; `signup_source` is set by S20 and the public pages (PB) |
+| S25 (reserved) | `service_options: []` in the plan sheet's payload; nothing else until Crew Day and the Street Organizer's welcome cards exist |
 
 ## 4. Data changes
 
@@ -211,7 +220,11 @@ Both answer `404 POST_NOT_FOUND`, `403 NOT_POST_AUTHOR` (not the asker), `400 NO
 | `User` | `adult_attested_at timestamptz`; `account_type` check widened with `official` |
 | `UserFeedPreference` | `pulse_seen_nearby_at timestamptz`, `pulse_seen_following_at timestamptz` |
 | `UserNotificationPreferences` | `digest_enabled boolean`, `digest_time_local time`, `digest_channel text`, `weekly_street_digest_enabled boolean` (PC), `nudge_helper boolean default true` |
-| `Plan` | `source_post_id uuid null` (R3) |
+| `Plan` | `source_post_id uuid null` (R3); S21: `series_id uuid`, `recurrence jsonb`, `co_host_ids uuid[]`, `paused_at timestamptz` |
+| `Post` (later slices) | S23: `merged_into_post_id uuid null`; S24: pinned sources live in `post_metadata.pins` (no column) |
+| `SupportTrain` | S22: `source_post_id uuid null` |
+| `User` (later slices) | S20/S24: `signup_source text` |
+| `UserNotificationPreferences` (later slices) | S24: `reading_home_ids uuid[]` |
 | `PostCategoryTTL` | rows: `ask_local` 7, `share` 3, `offer` 7, `lost_found` 14, `alert` 2 (default), keeping existing rows (S7 added `share` and `offer`; the others already had these values) |
 
 ### 4.2 New tables awaiting founder approval
@@ -249,7 +262,7 @@ author → yes · `moderation_state` `removed` → the author only; `held` → t
 
 ## 6. Notifications (additive types)
 
-`pulse_helpful` (a reply was marked Helpful), `pulse_thanks` (private thanks), `offer_request` (instant, to the giver), `offer_chosen` / `offer_gone` (to requesters), `ask_still_open` (the day-6 reminder, once per Ask, sent in the first hour outside the asker's quiet hours on the Ask's last day: "Did a reply help?" when someone else replied, "Still need an answer?" when nobody did; `link` `/posts/<id>`, `metadata` `{ post_id, has_replies }`; its actions are section 2.12; in force since S7), `pulse_moderation_notice` (held, removed, restored, appeal decided). Existing `post_commented` and `comment_replied` stay instant. All respect quiet hours except Right now. Copy is in the build spec's appendix or written by the owning stream in plain words.
+`pulse_helpful` (a reply was marked Helpful), `pulse_thanks` (private thanks), `offer_request` (instant, to the giver), `offer_chosen` / `offer_gone` (to requesters), `ask_still_open` (the day-6 reminder, once per Ask, sent in the first hour outside the asker's quiet hours on the Ask's last day: "Did a reply help?" when someone else replied, "Still need an answer?" when nobody did; `link` `/posts/<id>`, `metadata` `{ post_id, has_replies }`; its actions are section 2.12; in force since S7), `pulse_moderation_notice` (held, removed, restored, appeal decided). Later slices add `pulse_unanswered_nudge` (the helper nudge, S13), `plan_series_confirm` (the host is asked to confirm before a series pauses, S21) and `pulse_merged` (your conversation was merged, S23). Existing `post_commented` and `comment_replied` stay instant. All respect quiet hours except Right now. Copy is in the build spec's appendix or written by the owning stream in plain words.
 
 ## 7. Routing (tabs)
 
@@ -279,6 +292,12 @@ author → yes · `moderation_state` `removed` → the author only; `held` → t
 | 400 | `NOT_AN_ASK` | Keep-open or close on a post that isn't an Ask (section 2.12) |
 | 409 | `ASK_ENDED` | Keep-open or close on an Ask already answered, closed or past its end (section 2.12) |
 | 409 | `ALREADY_KEPT_OPEN` | A second keep-open on the same Ask (section 2.12) |
+| 409 | `CANNOT_WIDEN` | A read-scope change toward wider (S9) |
+| 400 | `CODE_INVALID` | A wrong sign-up code (S20) |
+| 410 | `CODE_EXPIRED` | An expired or already used sign-up code (S20) |
+| 429 | `TOO_MANY_ATTEMPTS` | Five wrong tries, or a per-email, per-device or per-network limit (S20) |
+| 503 | `CHANNEL_UNAVAILABLE` | A text code before an SMS provider exists (S20) |
+| 409 | `ALREADY_MERGED` | Merging a merged post, or a post into itself (S23) |
 
 ## 9. Funnel events
 

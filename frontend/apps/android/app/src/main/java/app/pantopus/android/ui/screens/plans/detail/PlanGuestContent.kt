@@ -414,13 +414,9 @@ internal fun PlanNotThisTime(
     PlanPlainScaffold(onBack = onBack) {
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
             PlanHeading(plan)
-            val start = PlanFormat.instant(plan.startsAt)?.atZone(PlanFormat.zone(plan.timezone))
+            // "Sunday, Oct 18 · 1:25 PM · Sam R." (board J8), "Today · 1:25 PM · …" when it applies, as on iOS.
             Text(
-                text =
-                    listOfNotNull(
-                        start?.format(java.time.format.DateTimeFormatter.ofPattern("EEEE, MMM d · h:mm a", java.util.Locale.US)),
-                        plan.host?.displayName,
-                    ).joinToString(" · "),
+                text = listOfNotNull(PlanFormat.dayAndTime(plan), plan.host?.displayName).joinToString(" · "),
                 style = PantopusTextStyle.small,
                 color = PantopusColors.appTextSecondary,
             )
