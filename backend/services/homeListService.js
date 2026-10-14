@@ -138,9 +138,34 @@ async function bounded(items, work, limit = 4) {
   return results;
 }
 
+// The order Homes are picked in when nothing names one: shared Homes first (current occupancy, then
+// verified owner, then the rest, oldest first), then private setups, oldest first.
+function landingOrder(a, b) {
+  const rank = entry => (entry.opening.mode !== 'shared' ? 3 : entry.opening.access.occupancy ? 0
+    : entry.opening.owners.some(owner => owner.owner_status === 'verified') ? 1 : 2);
+  const since = entry => String(entry.opening.access.occupancy?.created_at || entry.card.created_at || '');
+  return rank(a) - rank(b) || since(a).localeCompare(since(b)) || a.homeId.localeCompare(b.homeId);
+}
+
+const openable = entry => entry.opening.mode === 'shared' || entry.opening.mode === 'private_setup';
+
+// The Home the person chose as their default (PUT /api/homes/default), or null. A failed read never fails
+// the list: the automatic pick applies instead.
+async function storedDefault(actorId) {
+  try {
+    const { data, error } = await db.from('UserNotificationPreferences').select('default_home_id')
+      .eq('user_id', actorId).maybeSingle();
+    if (error) throw error;
+    return uuid(data?.default_home_id) ? data.default_home_id : null;
+  } catch (err) {
+    logger.warn('Default home unavailable', causeOf(err));
+    return null;
+  }
+}
+
 async function read(actorId, { primary = false, legacy = false } = {}) {
   if (!uuid(actorId)) throw failure();
-  const ids = await candidates(actorId);
+  const [ids, chosen] = await Promise.all([candidates(actorId), primary || legacy ? null : storedDefault(actorId)]);
   // Bound fanout: candidate discovery contains IDs only, and every projected
   // card has its own opening authority. Homes load a few at a time (each is a
   // chain of database round trips), and all entries are rechecked at the end.
@@ -162,10 +187,7 @@ async function read(actorId, { primary = false, legacy = false } = {}) {
   if (primary) {
     // Preserve the oldest-current-occupancy preference, then verified owners
     // and legacy pointers. Expired candidates cannot hide a later current Home.
-    const rank = entry => entry.opening.access.occupancy ? 0 : entry.opening.owners.some(owner => owner.owner_status === 'verified') ? 1 : 2;
-    entries.sort((a, b) => rank(a) - rank(b)
-      || String(a.opening.access.occupancy?.created_at || a.card.created_at).localeCompare(String(b.opening.access.occupancy?.created_at || b.card.created_at))
-      || a.homeId.localeCompare(b.homeId));
+    entries.sort(landingOrder);
     return { home: entries[0]?.card || null };
   }
   entries.sort((a, b) => String(b.card.created_at || '').localeCompare(String(a.card.created_at || '')) || a.homeId.localeCompare(b.homeId));
@@ -173,6 +195,11 @@ async function read(actorId, { primary = false, legacy = false } = {}) {
     ownedHomes: entries.filter(entry => entry.opening.access.isOwner || entry.opening.mode === 'private_setup').map(entry => entry.card),
     occupiedHomes: entries.filter(entry => entry.opening.access.occupancy).map(entry => ({ ...entry.card, occupiedSince: entry.opening.access.occupancy.created_at })),
   };
+  // Exactly one Home the person can open is the default: the one they chose while they can still open it,
+  // else the automatic pick. Verification entries never are.
+  const choices = entries.filter(openable);
+  const pick = choices.find(entry => entry.homeId === chosen) || [...choices].sort(landingOrder)[0] || null;
+  for (const entry of entries) entry.card.is_default = entry === pick;
   return { homes: entries.map(entry => entry.card) };
 }
 // Every failed list request leaves one log line with its cause; an unexpected

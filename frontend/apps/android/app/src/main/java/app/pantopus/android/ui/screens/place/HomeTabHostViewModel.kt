@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.routing.PlacePendingStore
 import app.pantopus.android.data.api.models.homes.MyHome
 import app.pantopus.android.data.api.models.homes.MyHomesResponse
+import app.pantopus.android.data.api.models.homes.defaultHomeOf
 import app.pantopus.android.data.api.models.notifications.personalBellCount
 import app.pantopus.android.data.api.models.place.PlacePreview
 import app.pantopus.android.data.api.models.saved_places.SavePlaceBody
@@ -157,16 +158,10 @@ class HomeTabHostViewModel
         }
 
         /**
-         * The landing rule: a shared Home (the primary owner's first), else the resident's own private setup, which is
-         * their Place until a household shares it (as on the web): public readings, with the Home's records waiting on
-         * verification.
+         * Where Place lands: the person's default Home ([defaultHomeOf]; Today follows the same Home). A resident's own
+         * private setup is their Place until a household shares it (as on the web).
          */
-        private fun landingHome(openable: List<MyHome>): MyHome? {
-            val shared = openable.filter { it.hasSharedAccess }
-            return shared.firstOrNull { it.isPrimaryOwner == true }
-                ?: shared.firstOrNull()
-                ?: openable.firstOrNull { it.accessKind == PRIVATE_SETUP }
-        }
+        private fun landingHome(openable: List<MyHome>): MyHome? = defaultHomeOf(openable)
 
         /** The newest address saved as a home, else the newest one looked up. Work and other spots aren't their place. */
         private fun savedRootFor(places: List<SavedPlaceDto>): HomeLanding {
@@ -296,8 +291,6 @@ class HomeTabHostViewModel
         }
 
         private companion object {
-            const val PRIVATE_SETUP = "private_setup"
-
             /** How long a bare link with a section waits for the root to have an answer. */
             const val ROOT_WAIT_MS = 15_000L
         }
@@ -333,10 +326,6 @@ sealed interface HomeLanding {
     /** No Home entries and no saved address: the address-first screen. */
     data object FirstRun : HomeLanding
 }
-
-/** A Home the Place tab can open: shared with access, or the person's own private setup. */
-internal val MyHome.isOpenablePlace: Boolean
-    get() = hasValidListContext && (hasSharedAccess || accessKind == "private_setup")
 
 private fun NetworkError?.landingMessage(): String =
     this?.displayMessage("Couldn't load your place. Please try again.") ?: "Couldn't load your place. Please try again."

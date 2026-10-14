@@ -408,7 +408,7 @@ private extension MeViewModel {
     }
 
     static func primaryHome(in homes: [MyHome]) -> MyHome? {
-        homes.first { $0.isPrimaryOwner == true } ?? homes.first
+        homes.first { $0.isDefault == true } ?? homes.first { $0.isPrimaryOwner == true } ?? homes.first
     }
 
     /// The Home card's counts from the primary Home's dashboard. A count the person may not

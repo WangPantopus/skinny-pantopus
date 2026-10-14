@@ -7063,6 +7063,8 @@ private fun PlaceTabRoot(
                         onSwitchHome = host::switchHome,
                         onPlaceUnavailable = host::replaceUnavailable,
                         scrollToTop = scrollToTop,
+                        // A new default changes where Place lands next time, not the Home on screen now.
+                        onDefaultHomeChange = { host.switchHome(current.homeId) },
                     )
                 }
             HomeLanding.Homes -> {
@@ -7117,6 +7119,7 @@ private fun PlaceDashboardDestination(
     onSwitchHome: (String) -> Unit,
     onPlaceUnavailable: (String) -> Unit,
     scrollToTop: Flow<Unit>? = null,
+    onDefaultHomeChange: () -> Unit = {},
 ) {
     PlaceDashboardScreen(
         homeId = homeId,
@@ -7145,6 +7148,7 @@ private fun PlaceDashboardDestination(
         onOpenNotifications = { navController.navigate(ChildRoutes.NOTIFICATIONS) },
         onPlaceUnavailable = onPlaceUnavailable,
         onManageHomes = { navController.navigate(ChildRoutes.MY_HOMES) },
+        onDefaultHomeChange = onDefaultHomeChange,
         scrollToTop = scrollToTop,
     )
 }

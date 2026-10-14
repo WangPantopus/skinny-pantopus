@@ -81,6 +81,9 @@ public struct MyHome: Decodable, Sendable, Hashable, Identifiable {
     /// Current server-computed deletion eligibility, including explicit denies,
     /// private setup and minor restrictions. Rechecked by the delete endpoint.
     public let canDeleteHome: Bool?
+    /// The person's default Home: the one they chose while they can still open it,
+    /// else the server's automatic pick. Older servers don't send it (nil).
+    public let isDefault: Bool?
 
     public var id: String {
         home.id
@@ -131,6 +134,7 @@ public struct MyHome: Decodable, Sendable, Hashable, Identifiable {
         pendingClaimId = try container.decodeIfPresent(String.self, forKey: .pendingClaimId)
         location = try container.decodeIfPresent(HomeLocation.self, forKey: .location)
         canDeleteHome = try container.decodeIfPresent(Bool.self, forKey: .canDeleteHome)
+        isDefault = try container.decodeIfPresent(Bool.self, forKey: .isDefault)
     }
 
     private enum FlatKeys: String, CodingKey {
@@ -142,6 +146,7 @@ public struct MyHome: Decodable, Sendable, Hashable, Identifiable {
         case pendingClaimId = "pending_claim_id"
         case location
         case canDeleteHome = "can_delete_home"
+        case isDefault = "is_default"
     }
 }
 
@@ -153,6 +158,42 @@ public struct MyHomesResponse: Decodable, Sendable, Hashable {
     }
 
     public let message: String?
+}
+
+public extension MyHomesResponse {
+    /// The Home Place lands on and Today follows: the default the server marks
+    /// while it can still be opened, else the landing rule for servers that don't
+    /// mark one yet (the Home where the person is primary owner, else the newest
+    /// shared Home, else their private setup).
+    var defaultHomeId: String? {
+        let openable = homes.filter { $0.hasValidListContext && ($0.hasSharedAccess || $0.accessKind == "private_setup") }
+        return openable.first { $0.isDefault == true }?.id
+            ?? sharedHomes.first { $0.isPrimaryOwner == true }?.id
+            ?? sharedHomes.first?.id
+            ?? homes.first { $0.hasValidListContext && $0.accessKind == "private_setup" }?.id
+    }
+}
+
+/// `PUT /api/homes/default` body.
+public struct SetDefaultHomeRequest: Encodable, Sendable, Hashable {
+    public let homeId: String
+
+    public init(homeId: String) {
+        self.homeId = homeId
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case homeId = "home_id"
+    }
+}
+
+/// `PUT /api/homes/default` reply.
+public struct SetDefaultHomeResponse: Decodable, Sendable, Hashable {
+    public let defaultHomeId: String
+
+    private enum CodingKeys: String, CodingKey {
+        case defaultHomeId = "default_home_id"
+    }
 }
 
 /// `GET /api/homes/primary` envelope — the actor's primary Home card, or null.
