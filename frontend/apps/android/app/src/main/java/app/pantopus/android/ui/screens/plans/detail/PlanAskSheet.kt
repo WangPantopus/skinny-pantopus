@@ -89,9 +89,10 @@ internal fun PlanAskSheet(
                     modifier = Modifier.semantics { heading() },
                 )
                 Text(
-                    text = listOf(PlanFormat.shortTitle(plan), PlanFormat.rowWhen(plan) ?: PlanFormat.hiddenWhen(plan))
-                        .filter(String::isNotBlank)
-                        .joinToString(" · "),
+                    text =
+                        listOf(PlanFormat.shortTitle(plan), PlanFormat.rowWhen(plan) ?: PlanFormat.hiddenWhen(plan))
+                            .filter(String::isNotBlank)
+                            .joinToString(" · "),
                     style = PantopusTextStyle.small,
                     color = PantopusColors.appTextSecondary,
                 )

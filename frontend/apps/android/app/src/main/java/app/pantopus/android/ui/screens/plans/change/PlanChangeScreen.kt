@@ -23,8 +23,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -152,14 +150,11 @@ private fun WhereField(
     val name = ui.newPlace?.name ?: plan.place?.name ?: plan.area?.label ?: "Choose a place"
     PlanField(label = "Where") {
         PlanFormCard {
+            // One TalkBack stop that keeps the row's click: "Crown Park, Choose another place, Button" (as H2's place row).
             PlanOptionRow(
                 first = true,
                 onClick = onClick,
-                modifier =
-                    Modifier.clearAndSetSemantics {
-                        contentDescription = "Where: $name. Choose another place"
-                        role = Role.Button
-                    },
+                modifier = Modifier.semantics(mergeDescendants = true) { role = Role.Button },
             ) {
                 PlanTile(kind, size = 36.dp, glyph = 18.dp, corner = 10.dp)
                 Column(modifier = Modifier.weight(1f)) {
