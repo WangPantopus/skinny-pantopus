@@ -55,8 +55,6 @@ import app.pantopus.android.core.LaunchFeature
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.core.perf.ScreenTiming
 import app.pantopus.android.core.routing.DeepLinkRouter
-import app.pantopus.android.data.analytics.Analytics
-import app.pantopus.android.data.analytics.AnalyticsEvent
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.InviteLinks
 import app.pantopus.android.ui.components.NavigationDrawer
@@ -328,6 +326,7 @@ import app.pantopus.android.ui.screens.place.PLACE_DASHBOARD_HOME_ID_KEY
 import app.pantopus.android.ui.screens.place.PlaceDashboardScreen
 import app.pantopus.android.ui.screens.place.PlaceDashboardSkeleton
 import app.pantopus.android.ui.screens.place.PlaceRootBar
+import app.pantopus.android.ui.screens.place.PlaceRootViewed
 import app.pantopus.android.ui.screens.place.SavedPlaceRootScreen
 import app.pantopus.android.ui.screens.place.detail.PLACE_DETAIL_HOME_ID_KEY
 import app.pantopus.android.ui.screens.place.detail.PLACE_DETAIL_SLUG_KEY
@@ -7057,15 +7056,6 @@ private fun PlaceTabRoot(
                 }
         }
     }
-}
-
-/**
- * `screen.place.viewed` each time a settled root shows, as the Hub sent `screen.hub.viewed`: first shown, back from a
- * pushed screen or another tab, or replaced by another Home. Not for the skeleton or the error.
- */
-@Composable
-private fun PlaceRootViewed(root: String) {
-    LaunchedEffect(Unit) { Analytics.track(AnalyticsEvent.ScreenPlaceViewed(root)) }
 }
 
 /** Your Place for one Home, with the same doors whether it is the Place tab's root or pushed on top by a link. */
