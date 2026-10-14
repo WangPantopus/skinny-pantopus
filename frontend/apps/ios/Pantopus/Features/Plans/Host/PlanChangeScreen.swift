@@ -155,7 +155,7 @@ struct PlanChangeScreen: View {
     private func pushWords(_ card: PlanCardDTO) -> (title: String, body: String) {
         let calendar = PlanFormat.calendar(for: card.timezone)
         let host = PlanCardLines.firstName(card.host.displayName)
-        let noun = card.kind.title.lowercased()
+        let noun = PlanCardLines.noun(card)
         let now = "Now \(PlanFormat.dayPhrase(start, calendar: calendar)) at \(PlanFormat.time(start, calendar: calendar))"
         if newPlace != nil, timeMoved(card) { return ("\(host) changed the \(noun)", "\(now), at a new place. Still coming?") }
         if newPlace != nil { return ("\(host) changed the place", "It's at a new place now. Still coming?") }

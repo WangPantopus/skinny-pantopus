@@ -216,7 +216,7 @@ private fun StillComingWarning(
 private fun NotificationPreview(ui: PlanChangeUi) {
     val plan = ui.plan ?: return
     val host = PlanFormat.firstName(plan.host?.displayName)
-    val noun = plan.planKind?.noun ?: "plan"
+    val noun = PlanFormat.noun(plan)
     val start = ui.start ?: return
     val now = "Now ${PlanFormat.dayAt(start.atZone(PlanFormat.zone(plan.timezone)))}"
     // The push the server sends (board H11), word for word.

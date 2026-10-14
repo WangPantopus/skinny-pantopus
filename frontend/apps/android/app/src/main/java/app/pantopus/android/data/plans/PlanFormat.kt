@@ -164,6 +164,22 @@ object PlanFormat {
     fun happeningNow(end: ZonedDateTime?): String =
         listOfNotNull("Happening now", end?.let { "until ${it.format(clockShort)}" }).joinToString(" · ")
 
+    /** What the notices call a plan ("watch party", "coffee", "dog walk"), so H11's preview matches the push word for word. */
+    fun noun(plan: PlanDto): String =
+        when (plan.planKind) {
+            PlanKind.WATCH_PARTY -> "watch party"
+            PlanKind.PLAYDATE -> "playdate"
+            PlanKind.PICKUP_GAME -> "pickup game"
+            PlanKind.WALK_COFFEE ->
+                when (plan.details?.walkKind) {
+                    "coffee" -> "coffee"
+                    "dog_walk" -> "dog walk"
+                    "stroller_walk" -> "stroller walk"
+                    else -> "walk"
+                }
+            null -> "plan"
+        }
+
     /** "Seahawks game" for a game's watch party (boards J3, H10, A4), else the plan's title. */
     fun shortTitle(plan: PlanDto): String = plan.details?.game?.label?.let { "$it game" } ?: plan.title
 

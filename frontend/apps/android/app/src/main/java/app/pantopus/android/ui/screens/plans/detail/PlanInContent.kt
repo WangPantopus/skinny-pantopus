@@ -223,7 +223,7 @@ private fun StillComingCard(
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text(
-            text = "${plan.hostFirst} moved the ${plan.planKind?.noun ?: "plan"}",
+            text = "${plan.hostFirst} moved the ${PlanFormat.noun(plan)}",
             style = PantopusTextStyle.body.copy(fontWeight = FontWeight.SemiBold),
             color = PantopusColors.appText,
         )
