@@ -2958,7 +2958,8 @@ router.post('/:id/comments', verifyToken, validate(createCommentSchema), async (
       }
       return res.status(201).json({
         message: 'Comment added successfully',
-        comment: (await serializeCommentsForViewer([{ ...existing, attachments: [] }], post, userId, audienceAuthors))[0],
+        comment: await require('../services/pulse/conversation').addCreatedReplyFields(
+          (await serializeCommentsForViewer([{ ...existing, attachments: [] }], post, userId, audienceAuthors))[0], post, userId),
       });
     };
     if (commentId) {
@@ -3038,7 +3039,8 @@ router.post('/:id/comments', verifyToken, validate(createCommentSchema), async (
 
     res.status(201).json({
       message: 'Comment added successfully',
-      comment: (await serializeCommentsForViewer([{ ...newComment, attachments: [] }], post, userId, audienceAuthors))[0],
+      comment: await require('../services/pulse/conversation').addCreatedReplyFields(
+        (await serializeCommentsForViewer([{ ...newComment, attachments: [] }], post, userId, audienceAuthors))[0], post, userId),
     });
   } catch (err) {
     logger.error('Comment creation error', { error: err.message, postId: req.params.id });

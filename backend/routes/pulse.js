@@ -8,6 +8,7 @@ const areas = require('../services/pulse/areas');
 const pulseFeed = require('../services/pulse/feed');
 const feedSeen = require('../services/pulse/seen');
 const feedCursor = require('../services/pulse/feedCursor');
+const conversation = require('../services/pulse/conversation');
 const { isPulseTopic } = require('../services/pulse/topics');
 const {
   DAY_MS, askIdsWithReplies, windowDays, endsAt,
@@ -60,6 +61,23 @@ router.post('/feed/seen', verifyToken, async (req, res) => {
       return res.status(400).json({ error: 'Choose a view and a valid time to mark as read.' });
     }
     res.json(await feedSeen.advance(req.user.id, req.body.view, req.body.through));
+  } catch (error) { feedError(res, error); }
+});
+
+router.get('/posts/:postId', verifyToken, async (req, res) => {
+  try {
+    res.set('Cache-Control', 'private, no-store');
+    res.json(await conversation.read(req.params.postId, req.user.id));
+  } catch (error) { feedError(res, error); }
+});
+
+router.get('/posts/:postId/replies', verifyToken, async (req, res) => {
+  try {
+    if (req.query.after != null && !feedCursor.timestamp(req.query.after)) {
+      return res.status(400).json({ error: 'Choose a valid time to check for new replies.' });
+    }
+    res.set('Cache-Control', 'private, no-store');
+    res.json(await conversation.read(req.params.postId, req.user.id, { repliesOnly: true, after: req.query.after }));
   } catch (error) { feedError(res, error); }
 });
 
