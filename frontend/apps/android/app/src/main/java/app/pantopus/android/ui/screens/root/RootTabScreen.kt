@@ -117,6 +117,7 @@ import app.pantopus.android.ui.screens.explore.ExploreKind
 import app.pantopus.android.ui.screens.explore.ExploreMapFocus
 import app.pantopus.android.ui.screens.explore.ExploreMapScreen
 import app.pantopus.android.ui.screens.feed.FeedScreen
+import app.pantopus.android.ui.screens.feed.FeedTopMenu
 import app.pantopus.android.ui.screens.feed.beacons.BeaconsFeedScreen
 import app.pantopus.android.ui.screens.feed.pulse.PulseIntent
 import app.pantopus.android.ui.screens.following.FollowingScreen
@@ -314,7 +315,7 @@ import app.pantopus.android.ui.screens.membership.MembershipDetailScreen
 import app.pantopus.android.ui.screens.my_bids.MyBidsScreen
 import app.pantopus.android.ui.screens.my_posts.MyPostsScreen
 import app.pantopus.android.ui.screens.my_tasks.MyTasksScreen
-import app.pantopus.android.ui.screens.nearby.PulseQuietStateCard
+import app.pantopus.android.ui.screens.nearby.pulseQuietStateCard
 import app.pantopus.android.ui.screens.notifications.NotificationsScreen
 import app.pantopus.android.ui.screens.offers.OffersScreen
 import app.pantopus.android.ui.screens.persona_dm.FanInboxScreen
@@ -2182,10 +2183,14 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
     // Plans is a tab only while its switch is on, and the bar follows the switch while the app runs.
     val plansGate: PlansGateViewModel = hiltViewModel()
     val plansFlags by plansGate.flags.collectAsStateWithLifecycle()
+    val plansSettled by plansGate.settled.collectAsStateWithLifecycle()
     val barTabs = remember(plansFlags.plans) { PantopusRoute.barTabs(plansFlags.plans) }
-    // Standing on Plans when the switch turns off lands on Pulse.
-    LaunchedEffect(plansFlags.plans, currentRoute) {
-        if (!plansFlags.plans && currentRoute == PantopusRoute.Plans) navController.navigateToRootTab(PantopusRoute.Pulse)
+    // Standing on Plans when the switch turns off lands on Pulse. It waits for the person's answer, so a relaunch
+    // that restores the Plans tab isn't moved off it by the moment before the answer is read.
+    LaunchedEffect(plansFlags.plans, plansSettled, currentRoute) {
+        if (plansSettled && !plansFlags.plans && currentRoute == PantopusRoute.Plans) {
+            navController.navigateToRootTab(PantopusRoute.Pulse)
+        }
     }
     val resolvedInboxBadgeCount = maxOf(inboxBadgeCount, liveInboxBadgeCount)
     val badges: Map<PantopusRoute, Int> =
@@ -2702,8 +2707,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     )
                 }
                 composable(PantopusRoute.Plans.path) {
-                    // Plans (the map and list of what's on) is a tab only while the `plans` flag is on; with it off
-                    // there is nothing to show here, so a stale link or saved state lands on Pulse.
+                    // Plans (the map and list of what's on) is a tab only while the `plans` flag is on. With it off there
+                    // is nothing to show here: the switch watch above moves a person standing here to Pulse.
                     if (plansFlags.plans) {
                         PlansMapScreen(
                             actions =
@@ -2716,8 +2721,6 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                     onInvite = { appContext.shareText(InviteLinks.INVITE_MESSAGE, "Invite to Pantopus") },
                                 ),
                         )
-                    } else {
-                        LaunchedEffect(Unit) { navController.navigateToRootTab(PantopusRoute.Pulse) }
                     }
                 }
                 // Nearby is no longer a tab; its old route (saved state, a stale entry) opens Pulse.
@@ -2784,6 +2787,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     )
                 }
                 composable(PantopusRoute.Pulse.path) {
+                    // Nearby's other content lives here now: the neighborhood meter or "Set up a home" as one
+                    // quiet-state card, and Connections (Beacons too, while that launch cut is off) in the top menu.
+                    val quietStateCard = pulseQuietStateCard(onClaim = { navController.navigate(ChildRoutes.ADD_HOME) })
                     FeedScreen(
                         onOpenPost = { postId -> navController.navigate(ChildRoutes.pulsePost(postId)) },
                         onCompose = { intent -> navController.navigate(ChildRoutes.composePost(intent.key)) },
@@ -2792,10 +2798,13 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 ChildRoutes.composePost(PulseIntent.Ask.key, starter.placeholder),
                             )
                         },
-                        // Connections moved here from the Nearby tab; the neighborhood meter and "Set up a home" are
-                        // one quiet-state card at the top of the page.
-                        onOpenConnections = { navController.navigate(ChildRoutes.CONNECTIONS) },
-                        quietStateCard = { PulseQuietStateCard(onClaim = { navController.navigate(ChildRoutes.ADD_HOME) }) },
+                        topMenu =
+                            FeedTopMenu(
+                                onOpenConnections = { navController.navigate(ChildRoutes.CONNECTIONS) },
+                                // Launch cut #1 (Beacon): no Beacons entry for the first launch.
+                                onOpenBeacons = { navController.navigate(ChildRoutes.BEACONS_FEED) }.takeIf { LaunchFeatures.beacon },
+                            ),
+                        quietStateCard = quietStateCard,
                     )
                 }
                 composable(PantopusRoute.Tasks.path) {
