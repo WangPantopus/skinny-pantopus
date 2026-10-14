@@ -421,13 +421,13 @@ private fun PulsePageEffects(
     }
     // The end card on screen means the page was read to its end: tell the server, once per read.
     LaunchedEffect(query) { listState.scrollToItem(0) }
-    LaunchedEffect(content?.readAt, query, newCount, lifecycle) {
+    LaunchedEffect(content?.endKey, query, newCount, lifecycle) {
         if (content != null) {
             lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-                snapshotFlow { listState.layoutInfo.visibleItemsInfo.any { it.key == END_KEY } }.collectLatest { visible ->
+                snapshotFlow { listState.layoutInfo.visibleItemsInfo.any { it.key == content.endKey } }.collectLatest { visible ->
                     // Retry a failed acknowledgement only while this page's end remains visible.
                     while (visible) {
-                        viewModel.endShown()
+                        viewModel.endShown(content.endKey)
                         delay(NEW_POLL_MS)
                     }
                 }
@@ -636,19 +636,7 @@ private fun LazyListScope.pulseItems(
             )
         }
     }
-    item(key = END_KEY) { PulseEnd(content.end, earlier, callbacks.onShowEarlier) }
-    if (earlier is PulseEarlierState.Loaded) {
-        item(key = "group_earlier") { PulseGroupHeader(earlier.group.title) }
-        items(earlier.group.cards, key = { "earlier_${it.id}" }) { card ->
-            PulseConversationCard(
-                card = card,
-                onOpen = { callbacks.onOpenPost(card.id) },
-                onAction = { callbacks.onAction(card) },
-                onOverflow = { callbacks.onOverflow(card) },
-                modifier = Modifier.padding(horizontal = Spacing.s4),
-            )
-        }
-    }
+    item(key = content.endKey) { PulseEnd(content.end, earlier, callbacks.onShowEarlier) }
 }
 
 @Composable
@@ -708,7 +696,6 @@ private fun PulseEnd(
                     fontSize = 14.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-            is PulseEarlierState.Loaded -> Unit
             PulseEarlierState.Idle ->
                 if (end.canShowEarlier) {
                     TextButton(onClick = onShowEarlier, modifier = Modifier.heightIn(min = 48.dp).testTag("pulseShowEarlier")) {
@@ -807,7 +794,6 @@ private fun PulseSkeleton() {
     }
 }
 
-private const val END_KEY = "end"
 private const val NEW_POLL_MS = 60_000L
 private const val TOAST_MS = 2_500L
 private const val SKELETON_CARDS = 4

@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.pulse.PulseFeedCopy
+import app.pantopus.android.data.api.models.pulse.PulseFeedResponse
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.api.net.refusesStoredCopy
@@ -33,13 +34,11 @@ sealed interface PulsePageUiState {
     data class Error(val message: String) : PulsePageUiState
 }
 
-/** "Show earlier" below the end card: nothing yet, loading, the older items, or nothing older. */
+/** "Show earlier" request state; loaded rows stay in the page during later requests and failures. */
 sealed interface PulseEarlierState {
     data object Idle : PulseEarlierState
 
     data object Loading : PulseEarlierState
-
-    data class Loaded(val group: PulseGroupUi) : PulseEarlierState
 
     data object NothingEarlier : PulseEarlierState
 }
@@ -187,8 +186,13 @@ class PulsePageViewModel
             val data = stored.data
             _refreshNotice.value = if (stored.showsRefreshFailure(StoreKind.NEARBY)) RefreshNotice(stored.fetchedAt, ::refresh) else null
             when {
+                stored.failure != null && _state.value is PulsePageUiState.Loaded && !stored.failure.refusesStoredCopy -> Unit
                 data != null -> {
-                    if (stored.failure == null) _newCount.value = 0
+                    if (stored.failure == null) {
+                        _newCount.value = 0
+                        readingEarlier?.cancel()
+                        _earlier.value = PulseEarlierState.Idle
+                    }
                     show(data)
                 }
                 else -> {
@@ -253,13 +257,14 @@ class PulsePageViewModel
         }
 
         /** The end card has been on screen: advance the last-seen marker (once per read of the page, only when nothing newer was left). */
-        fun endShown() {
+        fun endShown(endKey: String) {
             val loaded = _state.value as? PulsePageUiState.Loaded ?: return
             val q = _query.value
             val through = loaded.content.readAt ?: return
             // Seen is per view, so a filtered or other-area page must not acknowledge unread home conversations.
-            if (q.topic != null || q.areaId != null || _newCount.value > 0 || markingSeen?.isActive == true) return
-            if (!loaded.content.end.caughtUp || seenFor == loaded.content.readAt) return
+            val canAcknowledge = q.topic == null && q.areaId == null && _newCount.value == 0
+            if (!canAcknowledge || markingSeen?.isActive == true) return
+            if (!loaded.content.end.caughtUp || seenFor == through || loaded.content.endKey != endKey) return
             markingSeen =
                 viewModelScope.launch {
                     val result = repository.markSeen(q.view, through = through)
@@ -267,11 +272,11 @@ class PulsePageViewModel
                 }
         }
 
-        /** "Show earlier": the next older items once, below the end card. */
+        /** Append one older batch per tap, retaining the original snapshot and the server's opaque cursor. */
         fun showEarlier() {
             val loaded = _state.value as? PulsePageUiState.Loaded ?: return
             val cursor = loaded.content.end.earlierCursor ?: return
-            if (_earlier.value is PulseEarlierState.Loading) return
+            if (!loaded.content.end.canShowEarlier || reading?.isActive == true || readingEarlier?.isActive == true) return
             _earlier.value = PulseEarlierState.Loading
             val q = _query.value
             readingEarlier =
@@ -279,14 +284,9 @@ class PulsePageViewModel
                     when (val result = repository.earlier(q, before = cursor)) {
                         is NetworkResult.Success -> {
                             if (q != _query.value) return@launch
-                            val page = result.data.toPage(readAt = loaded.content.readAt).withToggles()
-                            val currentIds = loaded.content.groups.flatMap { it.cards }.mapTo(mutableSetOf()) { it.id }
-                            val cards = page.groups.flatMap { it.cards }.filter { currentIds.add(it.id) }
-                            val group =
-                                cards.takeIf { it.isNotEmpty() }?.let {
-                                    PulseGroupUi("earlier", page.groups.firstOrNull()?.title.orEmpty(), it)
-                                }
-                            _earlier.value = if (group == null) PulseEarlierState.NothingEarlier else PulseEarlierState.Loaded(group)
+                            val current = (_state.value as? PulsePageUiState.Loaded)?.content ?: return@launch
+                            if (current.readAt != loaded.content.readAt || current.end.earlierCursor != cursor) return@launch
+                            appendEarlier(current, result.data)
                         }
                         is NetworkResult.Failure -> {
                             if (q != _query.value) return@launch
@@ -295,6 +295,32 @@ class PulsePageViewModel
                         }
                     }
                 }
+        }
+
+        private fun appendEarlier(
+            current: PulsePageContent,
+            response: PulseFeedResponse,
+        ) {
+            val page = response.toPage(readAt = current.readAt)
+            val ids = current.groups.flatMap { it.cards }.mapTo(mutableSetOf()) { it.id }
+            val additions = page.groups.flatMap { it.cards }.filter { ids.add(it.id) }
+            val groups = current.groups.toMutableList()
+            val earlierIndex = groups.indexOfFirst { it.key == EARLIER_GROUP_KEY }
+            if (additions.isNotEmpty()) {
+                if (earlierIndex >= 0) {
+                    val group = groups[earlierIndex]
+                    groups[earlierIndex] = group.copy(cards = group.cards + additions)
+                } else {
+                    groups.add(PulseGroupUi(EARLIER_GROUP_KEY, page.groups.firstOrNull()?.title.orEmpty(), additions))
+                }
+            }
+            val combined =
+                current.copy(
+                    groups = groups,
+                    end = page.end.copy(caughtUp = response.end?.caughtUp == true),
+                ).withToggles()
+            _state.value = PulsePageUiState.Loaded(combined)
+            _earlier.value = if (combined.end.canShowEarlier) PulseEarlierState.Idle else PulseEarlierState.NothingEarlier
         }
 
         /**
@@ -341,9 +367,6 @@ class PulsePageViewModel
         ) {
             (_state.value as? PulsePageUiState.Loaded)?.let { loaded ->
                 _state.value = PulsePageUiState.Loaded(loaded.content.copy(groups = loaded.content.groups.map { it.applyAction(id, edit) }))
-            }
-            (_earlier.value as? PulseEarlierState.Loaded)?.let { loaded ->
-                _earlier.value = PulseEarlierState.Loaded(loaded.group.applyAction(id, edit))
             }
         }
 
@@ -475,7 +498,7 @@ class PulsePageViewModel
                         is NetworkResult.Failure -> {
                             if (PulseRepository.refusalCode(result.error) == PulseRepository.ALREADY_KEPT_OPEN) keptOpen.add(card.id)
                             _toast.value = result.error.displayMessage("Couldn't save that. Try again.")
-                            refresh()
+                            filterCards()
                         }
                     }
                 } finally {
@@ -493,23 +516,11 @@ class PulsePageViewModel
                         ),
                     )
             }
-            (_earlier.value as? PulseEarlierState.Loaded)?.let { loaded ->
-                _earlier.value = PulseEarlierState.Loaded(loaded.group.copy(cards = loaded.group.cards.map(transform)))
-            }
         }
 
         private fun filterCards() {
             (_state.value as? PulsePageUiState.Loaded)?.let { loaded ->
                 _state.value = PulsePageUiState.Loaded(loaded.content.withToggles())
-            }
-            (_earlier.value as? PulseEarlierState.Loaded)?.let { loaded ->
-                val cards = loaded.group.cards.filter(::isVisible)
-                _earlier.value =
-                    if (cards.isEmpty()) {
-                        PulseEarlierState.NothingEarlier
-                    } else {
-                        PulseEarlierState.Loaded(loaded.group.copy(cards = cards))
-                    }
             }
         }
 
@@ -522,5 +533,6 @@ class PulsePageViewModel
             const val VIEW_KEY = "pulse.view"
             const val TOPIC_KEY = "pulse.topic"
             const val AREA_KEY = "pulse.area"
+            const val EARLIER_GROUP_KEY = "loaded_earlier"
         }
     }

@@ -91,7 +91,11 @@ data class PulsePageContent(
     val quiet: PulseQuietUi?,
     /** Server snapshot time for count/seen; absent on older cached pages. */
     val readAt: String?,
-)
+) {
+    /** Each appended page moves the end; an old visible end must never acknowledge rows inserted below it. */
+    val endKey: String
+        get() = "end:$readAt:${end.earlierCursor}:${end.caughtUp}:${groups.sumOf { it.cards.size }}"
+}
 
 private val LABEL_TEXT =
     mapOf(
