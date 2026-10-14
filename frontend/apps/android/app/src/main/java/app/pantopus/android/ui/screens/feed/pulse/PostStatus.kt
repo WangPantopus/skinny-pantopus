@@ -23,6 +23,7 @@ import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
+import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.TextStyle
@@ -53,6 +54,19 @@ data class PostStatus(
 
     companion object {
         private val ANSWERED = PostStatus(text = "Answered", spoken = "Answered", kind = Kind.Answered)
+
+        /** Legacy Asks without an explicit end still have the server's seven-day window. */
+        fun askWindowIsOpen(
+            createdAt: String,
+            expiresAt: String?,
+            now: Instant = Instant.now(),
+        ): Boolean {
+            val end =
+                runCatching {
+                    if (expiresAt != null) Instant.parse(expiresAt) else Instant.parse(createdAt).plus(Duration.ofDays(ASK_WINDOW_DAYS))
+                }.getOrNull()
+            return end?.isAfter(now) == true
+        }
 
         /**
          * The status of a post from its `resolution` (S7's columns; null while open) and, for older rows, its `state`.
@@ -112,6 +126,7 @@ data class PostStatus(
         }
 
         private const val HOURS_ON_CLOCK = 12
+        private const val ASK_WINDOW_DAYS = 7L
     }
 }
 

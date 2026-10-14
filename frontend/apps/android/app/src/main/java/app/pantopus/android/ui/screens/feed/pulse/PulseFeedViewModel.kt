@@ -1346,10 +1346,10 @@ class PulseFeedViewModel
                             },
                         muteEntityId = post.businessAuthorId ?: post.userId,
                         muteEntityName = authorName,
-                        postType = post.postType,
+                        postType = post.postType.takeUnless { intent == PulseIntent.Generic },
                         topicLabel = intent.cardChipLabel,
                         pulseTopic = PulseTopic.fromKey(post.topic),
-                        canKeepOpen = openAsk && post.id !in keptOpenIds,
+                        canKeepOpen = openAsk && post.id !in keptOpenIds && post.lifecycleMetadata?.keptOpenAt.isNullOrBlank(),
                         canCloseAsk = openAsk,
                     ),
                 status = statusFor(post),
@@ -1371,9 +1371,8 @@ class PulseFeedViewModel
             isSolved: Boolean,
         ): Boolean {
             if (post.postType != "ask_local" || isSolved) return false
-            if (post.resolution != null || post.state == "archived") return false
-            val end = post.expiresAt?.let { runCatching { Instant.parse(it) }.getOrNull() } ?: return true
-            return end.isAfter(Instant.now())
+            if (post.resolution != null || (post.state != null && post.state != "open")) return false
+            return PostStatus.askWindowIsOpen(post.createdAt, post.expiresAt)
         }
 
         private fun isOwner(post: FeedPost): Boolean {

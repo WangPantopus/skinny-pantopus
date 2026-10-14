@@ -1,6 +1,7 @@
 package app.pantopus.android.data.api.models.posts
 
 import app.pantopus.android.core.identity.MadeUpUsername
+import app.pantopus.android.data.api.models.pulse.PostLifecycleMetadata
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
@@ -129,6 +130,7 @@ data class PostDetailDto(
     val resolution: String? = null,
     /** When the post ends (S7). */
     @Json(name = "expires_at") val expiresAt: String? = null,
+    @Json(name = "post_metadata") val lifecycleMetadata: PostLifecycleMetadata? = null,
 ) {
     /** A moderator removed the post: neighbors can't see it or reply. */
     val isRemovedByModerator: Boolean get() = archiveReason == "moderation"
