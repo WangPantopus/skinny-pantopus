@@ -79,26 +79,37 @@ struct PlaceMessagesActionRow: View {
 
     var body: some View {
         Button(action: onTap) {
-            HStack(spacing: 12) {
-                PlaceIconTile(icon: icon, tone: .home, size: 38)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(title)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Theme.Color.appText)
-                    Text(subtitle)
-                        .font(.system(size: 12.5))
-                        .foregroundStyle(Theme.Color.appTextMuted)
-                        .lineLimit(1)
-                }
-                Spacer(minLength: 0)
-                PlaceChevron()
-            }
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-            .placeCard()
+            PlaceActionRowLabel(icon: icon, title: title, subtitle: subtitle)
+                .placeCard()
         }
         .buttonStyle(.plain)
+    }
+}
+
+/// The inside of a Place entry row: icon tile · title/subtitle · chevron.
+struct PlaceActionRowLabel: View {
+    let icon: PantopusIcon
+    let title: String
+    let subtitle: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            PlaceIconTile(icon: icon, tone: .home, size: 38)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Theme.Color.appText)
+                Text(subtitle)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Theme.Color.appTextMuted)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 0)
+            PlaceChevron()
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
     }
 }
 
