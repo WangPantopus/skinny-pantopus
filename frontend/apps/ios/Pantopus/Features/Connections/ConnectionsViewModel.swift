@@ -200,7 +200,8 @@ public final class ConnectionsViewModel: ListOfRowsDataSource {
     private let api: APIClient
     /// The lists as last read (Other people: fresh 5 minutes, not saved on
     /// the phone). Coming back inside the window shows them with no request;
-    /// your own changes here and on profiles mark them out of date.
+    /// your own changes here and on profiles mark them out of date, and so
+    /// does a connection request or acceptance arriving.
     private let store: ScreenStore
     private let onMessage: @MainActor (ConnectionsChatTarget) -> Void
     private let onFindPeople: @MainActor () -> Void

@@ -238,6 +238,38 @@ const supportTrainDraftJsonSchema = {
 // model always states each one and the schema has no optional parameters,
 // which the API caps at 24 per request.
 
+// ─── Pickup Schedule Reading (a hauler's flyer, for the pickup editor) ─────
+
+const pickupScheduleJsonSchema = {
+  type: 'object',
+  properties: {
+    garbage_weekday:     { type: ['string', 'null'], enum: ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU', null] },
+    recycling_frequency: { type: ['string', 'null'], enum: ['weekly', 'biweekly', 'none', null] },
+    recycling_next_date: { type: ['string', 'null'], pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
+    note:                { type: ['string', 'null'], maxLength: 300 },
+  },
+  required: ['garbage_weekday', 'recycling_frequency', 'recycling_next_date', 'note'],
+  additionalProperties: false,
+};
+
+// ─── Radon Result Reading (a lab report, for the Today radon sheet) ──────────
+
+const radonResultJsonSchema = {
+  type: 'object',
+  properties: {
+    result_value:    { type: ['number', 'null'], minimum: 0 },
+    result_unit:     { type: ['string', 'null'], enum: ['pCi/L', 'Bq/m3', null] },
+    below_limit:     { type: 'boolean' },
+    test_start_date: { type: ['string', 'null'], pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
+    test_end_date:   { type: ['string', 'null'], pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
+    test_kind:       { type: ['string', 'null'], enum: ['short_term', 'long_term', null] },
+    lab:             { type: ['string', 'null'], maxLength: 120 },
+    note:            { type: ['string', 'null'], maxLength: 300 },
+  },
+  required: ['result_value', 'result_unit', 'below_limit', 'test_start_date', 'test_end_date', 'test_kind', 'lab', 'note'],
+  additionalProperties: false,
+};
+
 const gigDraftJsonSchemaStrict = {
   ...gigDraftJsonSchema,
   required: Object.keys(gigDraftJsonSchema.properties),
@@ -266,6 +298,16 @@ const placeBriefJsonSchemaStrict = {
 const supportTrainDraftJsonSchemaStrict = {
   ...supportTrainDraftJsonSchema,
   required: Object.keys(supportTrainDraftJsonSchema.properties),
+};
+
+const pickupScheduleJsonSchemaStrict = {
+  ...pickupScheduleJsonSchema,
+  required: Object.keys(pickupScheduleJsonSchema.properties),
+};
+
+const radonResultJsonSchemaStrict = {
+  ...radonResultJsonSchema,
+  required: Object.keys(radonResultJsonSchema.properties),
 };
 
 // ─── Claude structured-output schemas ──────────────────────────────────────
@@ -331,6 +373,8 @@ const claudeSchemas = {
   mailSummary: toClaudeSchema(mailSummaryJsonSchemaStrict),
   placeBrief: toClaudeSchema(placeBriefJsonSchemaStrict),
   supportTrainDraft: toClaudeSchema(supportTrainDraftJsonSchemaStrict),
+  pickupSchedule: toClaudeSchema(pickupScheduleJsonSchemaStrict),
+  radonResult: toClaudeSchema(radonResultJsonSchemaStrict),
 };
 
 // ─── Compile validators ────────────────────────────────────────────────────
@@ -341,6 +385,8 @@ const validatePostDraft    = ajv.compile(postDraftJsonSchema);
 const validateMailSummary  = ajv.compile(mailSummaryJsonSchema);
 const validatePlaceBrief            = ajv.compile(placeBriefJsonSchema);
 const validateSupportTrainDraft    = ajv.compile(supportTrainDraftJsonSchema);
+const validatePickupSchedule       = ajv.compile(pickupScheduleJsonSchema);
+const validateRadonResult          = ajv.compile(radonResultJsonSchema);
 
 module.exports = {
   // Schemas sent to Claude as `output_config.format.schema`
@@ -360,6 +406,10 @@ module.exports = {
   placeBriefJsonSchemaStrict,
   supportTrainDraftJsonSchema,
   supportTrainDraftJsonSchemaStrict,
+  pickupScheduleJsonSchema,
+  pickupScheduleJsonSchemaStrict,
+  radonResultJsonSchema,
+  radonResultJsonSchemaStrict,
 
   // Compiled validators (for server-side validation)
   validateGigDraft,
@@ -368,4 +418,6 @@ module.exports = {
   validateMailSummary,
   validatePlaceBrief,
   validateSupportTrainDraft,
+  validatePickupSchedule,
+  validateRadonResult,
 };

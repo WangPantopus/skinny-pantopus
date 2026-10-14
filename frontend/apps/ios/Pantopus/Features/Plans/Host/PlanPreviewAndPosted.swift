@@ -23,11 +23,12 @@ struct PlanPreviewScreen: View {
                 VStack(alignment: .leading, spacing: Spacing.s4) {
                     Text.planOverline("What neighbors see")
                     neighborsCard
-                    Text.planOverline("People you accept also see").padding(.top, Spacing.s1)
+                    Text.planOverline(model.kind == .playdate ? "Families you accept also see" : "People you accept also see")
+                        .padding(.top, Spacing.s1)
                     PlanFormCard {
                         privateRow(
                             icon: model.whereKind == .home ? .home : .mapPin,
-                            text: model.whereKind == .home ? "Your address" : "The exact place"
+                            text: model.whereKind == .home ? "Your address" : "The exact spot: \(model.place?.name ?? "your place")"
                         )
                         if !model.guestNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                             Divider().overlay(Theme.Color.appBorder)

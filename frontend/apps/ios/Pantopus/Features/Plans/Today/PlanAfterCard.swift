@@ -19,10 +19,15 @@ struct PlanAfterCard: View {
         if card.viewer?.isHost == true { hostAgain } else { howWasIt }
     }
 
-    /// "Sunday's watch party with Sam": the day and the host tell two plans apart.
+    /// "Sunday's watch party with Sam", "yesterday's …" (as on Android): the day
+    /// and the host tell two plans apart.
     private var dayKind: String {
-        let day = card.startsAtDate.map { PlanFormat.dayHeading($0, calendar: PlanFormat.calendar(for: card.timezone)) } ?? "the"
-        let possessive = day == "Today" ? "today's" : day == "Tomorrow" ? "the" : day == "the" ? "the" : "\(day)'s"
+        let calendar = PlanFormat.calendar(for: card.timezone)
+        let possessive: String = card.startsAtDate.map { start in
+            if calendar.isDateInToday(start) { return "today's" }
+            if calendar.isDateInYesterday(start) { return "yesterday's" }
+            return "\(PlanFormat.dayHeading(start, calendar: calendar))'s"
+        } ?? "the"
         return "\(possessive) \(card.kind.title.lowercased()) with \(PlanCardLines.firstName(card.host.displayName))"
     }
 

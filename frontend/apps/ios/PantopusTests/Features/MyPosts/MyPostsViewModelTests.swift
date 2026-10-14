@@ -157,7 +157,7 @@ final class MyPostsViewModelTests: XCTestCase {
         XCTAssertEqual(PulseIntent.from(postType: "local_update"), .announce)
         XCTAssertEqual(PulseIntent.from(postType: "ask"), .ask)
         XCTAssertEqual(PulseIntent.from(postType: nil), .announce)
-        XCTAssertEqual(PulseIntent.from(postType: "garbage"), .announce)
+        XCTAssertEqual(PulseIntent.from(postType: "garbage"), .generic)
     }
 
     func testEngagementItemsAdaptToIntent() {

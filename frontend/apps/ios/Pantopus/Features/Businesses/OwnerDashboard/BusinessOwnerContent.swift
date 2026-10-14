@@ -153,9 +153,10 @@ public struct BusinessOwnerContent: Sendable, Hashable {
     public let publicProfile: BusinessProfileContent
     /// True when `access.role_base` ∈ `owner | admin | editor` — the same
     /// gate React Native puts on its "Post as this business" composer
-    /// (`src/app/businesses/[id]/index.tsx:67`). `POST
-    /// /api/businesses/:businessId/posts` requires `profile.edit`, so a
-    /// staff / viewer seat never sees the affordance.
+    /// (`src/app/businesses/[id]/index.tsx:67`). The dashboard no longer
+    /// offers that composer: businesses reply, they don't post to Pulse
+    /// (Pulse S1; `POST /api/businesses/:businessId/posts` answers
+    /// `BUSINESS_CANNOT_POST`).
     public let canPostAsBusiness: Bool
     /// Founding-business offer banner; `nil` renders nothing.
     public let foundingOffer: OwnerFoundingOffer?

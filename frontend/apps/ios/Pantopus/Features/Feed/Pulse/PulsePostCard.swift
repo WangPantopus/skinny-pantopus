@@ -624,12 +624,12 @@ public struct PulseIntentChip: View {
         .padding(.vertical, 2)
         .background(background)
         .clipShape(Capsule())
-        .accessibilityLabel("\(intent.label) post")
+        .accessibilityLabel(intent == .generic ? label : "\(intent.label) post")
     }
 
     private var foreground: Color {
         switch intent {
-        case .all: Theme.Color.appTextSecondary
+        case .all, .generic: Theme.Color.appTextSecondary
         case .ask: Theme.Color.warmAmber
         case .recommend: Theme.Color.success
         case .event: Theme.Color.magic
@@ -644,7 +644,7 @@ public struct PulseIntentChip: View {
 
     private var background: Color {
         switch intent {
-        case .all: Theme.Color.appSurfaceSunken
+        case .all, .generic: Theme.Color.appSurfaceSunken
         case .ask: Theme.Color.warmAmberBg
         case .recommend: Theme.Color.successLight
         case .event: Theme.Color.magicBg
