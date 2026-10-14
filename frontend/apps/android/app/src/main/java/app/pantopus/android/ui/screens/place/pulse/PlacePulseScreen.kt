@@ -36,7 +36,6 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.place.PlaceRepository
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.Shimmer
-import app.pantopus.android.ui.screens.hub.deviceGreeting
 import app.pantopus.android.ui.screens.place.detail.PlaceDetailCard
 import app.pantopus.android.ui.screens.place.detail.PlaceDetailHeader
 import app.pantopus.android.ui.screens.place.detail.PlaceDetailSectionLabel
@@ -48,9 +47,25 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.time.LocalDateTime
+import java.time.ZoneId
 import javax.inject.Inject
 
 const val PLACE_PULSE_HOME_ID_KEY = "homeId"
+
+/**
+ * A greeting by the viewer's own clock. The server can't greet: its clock isn't the viewer's, and a Home has no time
+ * zone. Today's Pulse uses it.
+ */
+internal fun deviceGreeting(): String {
+    val hour = LocalDateTime.now(ZoneId.systemDefault()).hour
+    return when (hour) {
+        in 5..11 -> "Good morning"
+        in 12..16 -> "Good afternoon"
+        in 17..21 -> "Good evening"
+        else -> "Hello"
+    }
+}
 
 @HiltViewModel
 class PlacePulseViewModel

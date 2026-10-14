@@ -24,24 +24,24 @@ from src.pipeline.humanizer import (
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _mock_openai_response(text: str):
-    """Create a mock OpenAI chat completion response."""
-    message = MagicMock()
-    message.content = text
-    choice = MagicMock()
-    choice.message = message
+def _mock_claude_response(text: str):
+    """Create a mock Claude Messages API response: one text block."""
+    block = MagicMock()
+    block.type = "text"
+    block.text = text
     response = MagicMock()
-    response.choices = [choice]
+    response.content = [block]
+    response.stop_reason = "end_turn"
     return response
 
 
 def _call_humanize(texts):
     """Call humanize with a mock that returns the given texts in sequence."""
     mock_client = MagicMock()
-    mock_client.chat.completions.create.side_effect = [_mock_openai_response(t) for t in texts]
+    mock_client.messages.create.side_effect = [_mock_claude_response(t) for t in texts]
 
-    with patch("src.pipeline.humanizer.openai") as mock_mod:
-        mock_mod.OpenAI.return_value = mock_client
+    with patch("src.pipeline.humanizer.anthropic") as mock_mod:
+        mock_mod.Anthropic.return_value = mock_client
         result = humanize(
             raw_title="New park opens in Vancouver",
             raw_body="The city announced a new park.",
@@ -49,7 +49,7 @@ def _call_humanize(texts):
             source_display_name="The Columbian",
             category="local_news",
             region="clark_county",
-            openai_api_key="test-key",
+            anthropic_api_key="test-key",
         )
     return result, mock_client
 
@@ -200,22 +200,22 @@ class TestHumanize:
         good = "The city opens the park Saturday.\nSource: City of Camas"
         (text, error), client = _call_humanize([bad, good])
         assert (text, error) == (good, None)
-        assert client.chat.completions.create.call_count == 2
+        assert client.messages.create.call_count == 2
 
     def test_repeated_non_sports_question_is_not_publishable(self):
         bad = "The city opens the park Saturday. Anyone planning to go?\nSource: City of Camas"
         (text, error), client = _call_humanize([bad, bad])
         assert text is None
         assert error == "validation_failed:engagement_question"
-        assert client.chat.completions.create.call_count == 2
+        assert client.messages.create.call_count == 2
 
     def test_retry_quality_gate_skip_is_not_publishable(self):
         bad = "The city opens the park Saturday. Anyone planning to go?\nSource: City of Camas"
         (text, error), client = _call_humanize([bad, "SKIP"])
         assert (text, error) == (None, "ai_quality_gate:skipped")
-        assert client.chat.completions.create.call_count == 2
+        assert client.messages.create.call_count == 2
 
-    def test_stale_seasonal_source_skips_before_openai_call(self):
+    def test_stale_seasonal_source_skips_before_claude_call(self):
         class FakeDate(date):
             @classmethod
             def today(cls):
@@ -223,7 +223,7 @@ class TestHumanize:
 
         with (
             patch("src.pipeline.humanizer.date", FakeDate),
-            patch("src.pipeline.humanizer.openai") as mock_mod,
+            patch("src.pipeline.humanizer.anthropic") as mock_mod,
         ):
             text, error = humanize(
                 raw_title=(
@@ -235,12 +235,12 @@ class TestHumanize:
                 source_display_name="Pantopus Seasonal",
                 category="seasonal",
                 region="clark_county",
-                openai_api_key="key",
+                anthropic_api_key="key",
             )
 
         assert text is None
         assert error == "ai_quality_gate:skipped"
-        mock_mod.OpenAI.assert_not_called()
+        mock_mod.Anthropic.assert_not_called()
 
     def test_stale_exact_source_window_skips_even_with_current_month_reference(self):
         class FakeDate(date):
@@ -250,7 +250,7 @@ class TestHumanize:
 
         with (
             patch("src.pipeline.humanizer.date", FakeDate),
-            patch("src.pipeline.humanizer.openai") as mock_mod,
+            patch("src.pipeline.humanizer.anthropic") as mock_mod,
         ):
             text, error = humanize(
                 raw_title=(
@@ -262,12 +262,12 @@ class TestHumanize:
                 source_display_name="Pantopus Seasonal",
                 category="seasonal",
                 region="clark_county",
-                openai_api_key="key",
+                anthropic_api_key="key",
             )
 
         assert text is None
         assert error == "ai_quality_gate:skipped"
-        mock_mod.OpenAI.assert_not_called()
+        mock_mod.Anthropic.assert_not_called()
 
     def test_retry_on_too_long(self):
         long_text = "x" * 501
@@ -276,7 +276,7 @@ class TestHumanize:
         text, error = result
         assert text == short_text
         assert error is None
-        assert client.chat.completions.create.call_count == 2
+        assert client.messages.create.call_count == 2
 
     def test_retry_on_exclamation(self):
         bad = "Wow! Amazing! The park opens Saturday!"
@@ -312,10 +312,10 @@ class TestHumanize:
 
     def test_api_error_returns_none(self):
         mock_client = MagicMock()
-        mock_client.chat.completions.create.side_effect = Exception("Rate limited")
+        mock_client.messages.create.side_effect = Exception("Rate limited")
 
-        with patch("src.pipeline.humanizer.openai") as mock_mod:
-            mock_mod.OpenAI.return_value = mock_client
+        with patch("src.pipeline.humanizer.anthropic") as mock_mod:
+            mock_mod.Anthropic.return_value = mock_client
             text, error = humanize(
                 raw_title="Test",
                 raw_body=None,
@@ -323,18 +323,18 @@ class TestHumanize:
                 source_display_name="Test Source",
                 category="local_news",
                 region="clark_county",
-                openai_api_key="test-key",
+                anthropic_api_key="test-key",
             )
         assert text is None
         assert error.startswith("api_error:")
 
-    def test_system_prompt_sent_as_system_message(self):
+    def test_system_prompt_sent_as_system_parameter(self):
         good = "Park opens Saturday. Source: The Columbian"
         mock_client = MagicMock()
-        mock_client.chat.completions.create.return_value = _mock_openai_response(good)
+        mock_client.messages.create.return_value = _mock_claude_response(good)
 
-        with patch("src.pipeline.humanizer.openai") as mock_mod:
-            mock_mod.OpenAI.return_value = mock_client
+        with patch("src.pipeline.humanizer.anthropic") as mock_mod:
+            mock_mod.Anthropic.return_value = mock_client
             humanize(
                 raw_title="Test",
                 raw_body=None,
@@ -342,21 +342,22 @@ class TestHumanize:
                 source_display_name="Test",
                 category="local_news",
                 region="clark_county",
-                openai_api_key="key",
+                anthropic_api_key="key",
             )
 
-        call_kwargs = mock_client.chat.completions.create.call_args
-        messages = call_kwargs.kwargs["messages"]
-        assert messages[0]["role"] == "system"
-        assert messages[0]["content"] == SYSTEM_PROMPT
+        call_kwargs = mock_client.messages.create.call_args
+        assert call_kwargs.kwargs["system"] == SYSTEM_PROMPT
+        # The system prompt is not a message; the conversation opens with the user's.
+        assert call_kwargs.kwargs["messages"][0]["role"] == "user"
+        assert all(m["role"] != "system" for m in call_kwargs.kwargs["messages"])
 
     def test_system_prompt_uses_region_display_name(self):
         good = "Park opens Saturday. Source: The Columbian"
         mock_client = MagicMock()
-        mock_client.chat.completions.create.return_value = _mock_openai_response(good)
+        mock_client.messages.create.return_value = _mock_claude_response(good)
 
-        with patch("src.pipeline.humanizer.openai") as mock_mod:
-            mock_mod.OpenAI.return_value = mock_client
+        with patch("src.pipeline.humanizer.anthropic") as mock_mod:
+            mock_mod.Anthropic.return_value = mock_client
             humanize(
                 raw_title="Test",
                 raw_body=None,
@@ -364,23 +365,22 @@ class TestHumanize:
                 source_display_name="Test",
                 category="local_news",
                 region="denver_co",
-                openai_api_key="key",
+                anthropic_api_key="key",
                 region_display_name="Denver, CO",
             )
 
-        call_kwargs = mock_client.chat.completions.create.call_args
-        messages = call_kwargs.kwargs["messages"]
-        system = messages[0]["content"]
+        call_kwargs = mock_client.messages.create.call_args
+        system = call_kwargs.kwargs["system"]
         assert "Denver, CO" in system
         assert "a local community" not in system
 
     def test_user_message_includes_required_fields(self):
         good = "Park opens Saturday. Source: The Columbian"
         mock_client = MagicMock()
-        mock_client.chat.completions.create.return_value = _mock_openai_response(good)
+        mock_client.messages.create.return_value = _mock_claude_response(good)
 
-        with patch("src.pipeline.humanizer.openai") as mock_mod:
-            mock_mod.OpenAI.return_value = mock_client
+        with patch("src.pipeline.humanizer.anthropic") as mock_mod:
+            mock_mod.Anthropic.return_value = mock_client
             humanize(
                 raw_title="New park opens",
                 raw_body="Body text here",
@@ -388,13 +388,13 @@ class TestHumanize:
                 source_display_name="The Columbian",
                 category="event",
                 region="portland_metro",
-                openai_api_key="key",
+                anthropic_api_key="key",
                 region_display_name="Portland Metro",
             )
 
-        call_kwargs = mock_client.chat.completions.create.call_args
-        # User message is the second message (after system)
-        user_msg = call_kwargs.kwargs["messages"][1]["content"]
+        call_kwargs = mock_client.messages.create.call_args
+        # The user message opens the conversation (the system prompt is separate)
+        user_msg = call_kwargs.kwargs["messages"][0]["content"]
         assert "event" in user_msg
         assert "Portland Metro" in user_msg
         assert "New park opens" in user_msg
@@ -405,39 +405,39 @@ class TestHumanize:
         """PNW regions should have seasonal context in the user message."""
         good = "Park opens Saturday. Source: The Columbian"
         mock_client = MagicMock()
-        mock_client.chat.completions.create.return_value = _mock_openai_response(good)
+        mock_client.messages.create.return_value = _mock_claude_response(good)
 
-        with patch("src.pipeline.humanizer.openai") as mock_mod:
-            mock_mod.OpenAI.return_value = mock_client
+        with patch("src.pipeline.humanizer.anthropic") as mock_mod:
+            mock_mod.Anthropic.return_value = mock_client
             humanize(
                 raw_title="Test", raw_body=None, source_url=None,
                 source_display_name="Test", category="local_news",
-                region="seattle_wa", openai_api_key="key",
+                region="seattle_wa", anthropic_api_key="key",
             )
 
-        user_msg = mock_client.chat.completions.create.call_args.kwargs["messages"][1]["content"]
+        user_msg = mock_client.messages.create.call_args.kwargs["messages"][0]["content"]
         assert "PNW season" in user_msg
 
     def test_non_pnw_region_omits_season(self):
         """Non-PNW regions should not have PNW seasonal context."""
         good = "Park opens Saturday. Source: Test"
         mock_client = MagicMock()
-        mock_client.chat.completions.create.return_value = _mock_openai_response(good)
+        mock_client.messages.create.return_value = _mock_claude_response(good)
 
-        with patch("src.pipeline.humanizer.openai") as mock_mod:
-            mock_mod.OpenAI.return_value = mock_client
+        with patch("src.pipeline.humanizer.anthropic") as mock_mod:
+            mock_mod.Anthropic.return_value = mock_client
             humanize(
                 raw_title="Test", raw_body=None, source_url=None,
                 source_display_name="Test", category="local_news",
-                region="denver_co", openai_api_key="key",
+                region="denver_co", anthropic_api_key="key",
             )
 
-        user_msg = mock_client.chat.completions.create.call_args.kwargs["messages"][1]["content"]
+        user_msg = mock_client.messages.create.call_args.kwargs["messages"][0]["content"]
         assert "PNW season" not in user_msg
 
-    def test_openai_not_installed(self):
-        """If openai module is None, humanize returns api_error."""
-        with patch("src.pipeline.humanizer.openai", None):
+    def test_anthropic_not_installed(self):
+        """If anthropic module is None, humanize returns api_error."""
+        with patch("src.pipeline.humanizer.anthropic", None):
             text, error = humanize(
                 raw_title="Test",
                 raw_body=None,
@@ -445,7 +445,7 @@ class TestHumanize:
                 source_display_name="Test",
                 category="local_news",
                 region="clark_county",
-                openai_api_key="key",
+                anthropic_api_key="key",
             )
         assert text is None
         assert "not installed" in error

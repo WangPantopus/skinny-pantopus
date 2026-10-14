@@ -16,9 +16,9 @@ sealed class PantopusRoute(
     open val icon: PantopusIcon,
 ) {
     /**
-     * Your Place — the address's page (Wedge v2 D2). Lands on the Place
-     * dashboard when a primary home exists, the Hub otherwise. Keeps the
-     * legacy `root/home` path so deep links and saved state survive.
+     * Your Place — the person's place (Wedge v2 D2): Your Place for a Home
+     * they can open, the address they saved, or the address-first screen.
+     * Keeps the legacy `root/home` path so deep links and saved state survive.
      */
     data object Place : PantopusRoute(path = "root/home", label = "Place", icon = PantopusIcon.Home)
 

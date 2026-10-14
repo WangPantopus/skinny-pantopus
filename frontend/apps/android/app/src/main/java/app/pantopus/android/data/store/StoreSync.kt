@@ -55,7 +55,10 @@ class StoreSync
                 }
             }
             scope.launch {
-                socket.eventsOf("notification:new").collect { store.markStale(StoreTopics.NOTIFICATIONS) }
+                socket.eventsOf("notification:new").collect { payload ->
+                    store.markStale(StoreTopics.NOTIFICATIONS)
+                    if (isConnectionNotice(payload.optString("type"))) store.markStale(StoreTopics.CONNECTIONS)
+                }
             }
             scope.launch {
                 socket.eventsOf("badge:update").collect { store.markStale(StoreTopics.NOTIFICATIONS) }
@@ -93,6 +96,13 @@ class StoreSync
                 StoreKind.entries.filter { it.tier == StoreTier.HOUSEHOLD || it == StoreKind.NOTIFICATIONS }.toSet()
         }
     }
+
+/**
+ * A connection request, or the viewer's request accepted (`backend/services/notificationService.js` types), from the
+ * socket's `notification:new` or a push: Connections opened from it reads its lists again instead of showing a copy
+ * from before the request.
+ */
+fun isConnectionNotice(type: String): Boolean = type == "connection_request" || type == "connection_accepted"
 
 /** The payload's topic names (`{"topics": ["home:…", "today"], "at": …}`); no content and no names ride along. */
 private fun topicsOf(payload: JSONObject): List<String> {

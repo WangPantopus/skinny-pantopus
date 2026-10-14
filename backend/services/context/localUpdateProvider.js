@@ -6,10 +6,15 @@
  */
 
 const supabaseAdmin = require('../../config/supabaseAdmin');
-const { getOpenAIClient } = require('../../config/openai');
+const { getAnthropicClient, resolveEffort, DRAFT_MODEL } = require('../../config/anthropic');
+const { complete } = require('../ai/llm');
 const logger = require('../../utils/logger');
 
-const DRAFT_MODEL = process.env.OPENAI_DRAFT_MODEL || 'gpt-4o-mini';
+const AI_EFFORT = resolveEffort(process.env.ANTHROPIC_DRAFT_EFFORT, 'low');
+// One sentence; max_tokens also covers the model's thinking.
+const AI_MAX_TOKENS = 1024;
+// The briefing waits on this call; the deterministic summary is the fallback.
+const AI_TIMEOUT_MS = 15000;
 const DEFAULT_RADIUS_METERS = 25_000;
 const LOOKBACK_HOURS = 24;
 const MAX_DB_ROWS = 16;
@@ -121,8 +126,8 @@ function validateSummary(text) {
 
 async function summarizeUpdates(items, locationLabel, briefingKind = 'morning') {
   const deterministic = deterministicSummary(items);
-  const openai = getOpenAIClient();
-  if (!openai || items.length === 0) {
+  const client = getAnthropicClient();
+  if (!client || items.length === 0) {
     return { summary: deterministic, tokens_used: 0 };
   }
 
@@ -132,27 +137,25 @@ async function summarizeUpdates(items, locationLabel, briefingKind = 'morning') 
   });
 
   try {
-    const response = await openai.chat.completions.create({
+    const response = await complete({
+      client,
       model: DRAFT_MODEL,
-      messages: [
-        {
-          role: 'system',
-          content: briefingKind === 'evening'
-            ? 'You summarize nearby local-update posts for an evening briefing. Return one sentence under 28 words. Prefer updates that help with tomorrow morning or overnight planning. Use only concrete developments. Avoid sports schedules, evergreen home-maintenance tips, trivia, and hype. If nothing is useful, return SKIP.'
-            : 'You summarize nearby local-update posts for a morning briefing. Return one sentence under 28 words. Use only concrete developments. Avoid sports schedules, evergreen home-maintenance tips, trivia, and hype. If nothing is useful, return SKIP.',
-        },
-        {
-          role: 'user',
-          content: `Area: ${locationLabel || 'nearby'}\nRecent curated updates:\n${bulletLines.join('\n')}`,
-        },
-      ],
-      // A reasoning draft model spends part of this on reasoning before it
-      // writes; too small a budget returns empty text and the template wins.
-      max_completion_tokens: 1024,
+      system: briefingKind === 'evening'
+        ? 'You summarize nearby local-update posts for an evening briefing. Return one sentence under 28 words. Prefer updates that help with tomorrow morning or overnight planning. Use only concrete developments. Avoid sports schedules, evergreen home-maintenance tips, trivia, and hype. If nothing is useful, return SKIP.'
+        : 'You summarize nearby local-update posts for a morning briefing. Return one sentence under 28 words. Use only concrete developments. Avoid sports schedules, evergreen home-maintenance tips, trivia, and hype. If nothing is useful, return SKIP.',
+      messages: [{
+        role: 'user',
+        content: `Area: ${locationLabel || 'nearby'}\nRecent curated updates:\n${bulletLines.join('\n')}`,
+      }],
+      effort: AI_EFFORT,
+      // Thinking spends part of this before the sentence is written; too small
+      // a budget returns empty text and the deterministic summary wins.
+      maxTokens: AI_MAX_TOKENS,
+      timeoutMs: AI_TIMEOUT_MS,
     });
 
-    const text = response.choices?.[0]?.message?.content?.trim();
-    const tokensUsed = (response.usage?.prompt_tokens || 0) + (response.usage?.completion_tokens || 0);
+    const text = response.text.trim();
+    const tokensUsed = response.inputTokens + response.outputTokens;
 
     if (/^skip$/i.test(text || '')) {
       return { summary: null, tokens_used: tokensUsed };

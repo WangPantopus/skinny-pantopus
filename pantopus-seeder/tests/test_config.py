@@ -303,7 +303,7 @@ class TestSeederSecrets:
             pantopus_api_base_url="https://api.pantopus.com",
             curator_email="curator@pantopus.com",
             curator_password="password",
-            openai_api_key="sk-xxx",
+            anthropic_api_key="sk-ant-xxx",
         )
         assert secrets.supabase_url == "https://example.supabase.co"
 
@@ -314,14 +314,14 @@ class TestSeederSecrets:
             pantopus_api_base_url=" https://api.pantopus.com ",
             curator_email=" curator@pantopus.com ",
             curator_password=" password ",
-            openai_api_key=" sk-xxx ",
+            anthropic_api_key=" sk-ant-xxx ",
         )
         assert secrets.supabase_url == "https://example.supabase.co"
         assert secrets.supabase_service_role_key == "key123"
         assert secrets.pantopus_api_base_url == "https://api.pantopus.com"
         assert secrets.curator_email == "curator@pantopus.com"
         assert secrets.curator_password == "password"
-        assert secrets.openai_api_key == "sk-xxx"
+        assert secrets.anthropic_api_key == "sk-ant-xxx"
 
     def test_rejects_missing_fields(self):
         with pytest.raises(ValidationError):
@@ -338,7 +338,7 @@ class TestSeederSecrets:
                 pantopus_api_base_url="https://api.pantopus.com",
                 curator_email="curator@pantopus.com",
                 curator_password="password",
-                openai_api_key="sk-xxx",
+                anthropic_api_key="sk-ant-xxx",
             )
 
     def test_rejects_invalid_supabase_url(self):
@@ -349,7 +349,7 @@ class TestSeederSecrets:
                 pantopus_api_base_url="https://api.pantopus.com",
                 curator_email="curator@pantopus.com",
                 curator_password="password",
-                openai_api_key="sk-xxx",
+                anthropic_api_key="sk-ant-xxx",
             )
 
 

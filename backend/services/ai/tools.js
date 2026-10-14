@@ -2,7 +2,7 @@
  * AI Agent Tools — function definitions that the LLM can call.
  *
  * Each tool has:
- *   definition  – Schema sent to OpenAI (function calling format)
+ *   definition  – Schema sent to Claude (name, description, input_schema)
  *   execute     – Server-side implementation that runs when the LLM calls it
  *
  * Tools are sandboxed: they only access data the user is authorised to see.
@@ -14,6 +14,7 @@ const { getAuthorizedMail } = require('./mailAccess');
 const { listEffectivelyOpenSlots } = require('../supportTrainSlotAvailability');
 const { resolveLocation } = require('../context/locationResolver');
 const { escapeIlike } = require('../../utils/escapeIlike');
+const { draftPickupSchedule } = require('./pickupDraft');
 
 const {
   validateGigDraft,
@@ -22,26 +23,31 @@ const {
   validateMailSummary,
 } = require('./schemas');
 
-// ─── Tool Definitions (sent to OpenAI) ─────────────────────────────────────
+// ─── Tool Definitions (sent to Claude) ─────────────────────────────────────
+// A draft is the answer: the person sees it as a card, and the turn ends there
+// (agentService). The note is what the assistant says under the card.
+const DRAFT_NOTE = 'One short sentence shown to the person under the draft card: the assumption that matters most, or a detail worth adding. Null when there is nothing to say.';
+
+// Not `strict`: strict tool use compiles a grammar per schema on first use and
+// caps a request at 16 union-typed (nullable) parameters, which these tools
+// exceed together. Claude follows the schemas without it, and every executor
+// below treats a missing or null argument as "not given".
 
 const toolDefinitions = [
   {
-    type: 'function',
-    name: 'get_user_context',
+    name:'get_user_context',
     description: 'Get the current user\'s homes and saved places (label, city and state only), and recent activity counts. Never returns exact addresses.',
-    parameters: {
+    input_schema: {
       type: 'object',
       properties: {},
       required: [],
       additionalProperties: false,
     },
-    strict: true,
   },
   {
-    type: 'function',
-    name: 'get_place_alerts',
+    name:'get_place_alerts',
     description: 'Get active weather alerts (NOAA) near the user\'s home or a saved place. Provide the saved place label, or "primary" for their home or main place.',
-    parameters: {
+    input_schema: {
       type: 'object',
       properties: {
         place_label: {
@@ -52,13 +58,11 @@ const toolDefinitions = [
       required: ['place_label'],
       additionalProperties: false,
     },
-    strict: true,
   },
   {
-    type: 'function',
-    name: 'get_mail_item',
+    name:'get_mail_item',
     description: 'Get the content of a specific mail item for summarization. Requires the mail item ID.',
-    parameters: {
+    input_schema: {
       type: 'object',
       properties: {
         mail_item_id: {
@@ -69,13 +73,11 @@ const toolDefinitions = [
       required: ['mail_item_id'],
       additionalProperties: false,
     },
-    strict: true,
   },
   {
-    type: 'function',
-    name: 'create_gig_draft',
+    name:'create_gig_draft',
     description: 'Create a structured gig (task) draft. Call this when you have enough information to draft a task the user needs help with.',
-    parameters: {
+    input_schema: {
       type: 'object',
       properties: {
         title:              { type: 'string', description: 'Clear task title, max 60 chars' },
@@ -88,18 +90,17 @@ const toolDefinitions = [
         pay_type:           { type: ['string', 'null'], enum: ['fixed', 'hourly', 'offers', null], description: 'Payment type' },
         estimated_duration: { type: ['number', 'null'], description: 'Estimated hours to complete' },
         special_instructions: { type: ['string', 'null'], description: 'Any special instructions' },
+        note:               { type: ['string', 'null'], description: DRAFT_NOTE },
       },
-      // strict mode requires every property to be in required; optional fields use null.
-      required: ['title', 'description', 'price', 'category', 'is_urgent', 'tags', 'schedule_type', 'pay_type', 'estimated_duration', 'special_instructions'],
+      // Every property is required and optional ones are nullable, so the model always states each one.
+      required: ['title', 'description', 'price', 'category', 'is_urgent', 'tags', 'schedule_type', 'pay_type', 'estimated_duration', 'special_instructions', 'note'],
       additionalProperties: false,
     },
-    strict: true,
   },
   {
-    type: 'function',
-    name: 'create_listing_draft',
+    name:'create_listing_draft',
     description: 'Create a structured marketplace listing draft. Call this when the user wants to sell, give away, or request an item.',
-    parameters: {
+    input_schema: {
       type: 'object',
       properties: {
         title:             { type: 'string', description: 'Clear, search-friendly title' },
@@ -112,17 +113,16 @@ const toolDefinitions = [
         listingType:       { type: 'string', enum: ['sell_item', 'free_item', 'wanted_request', 'rent_sublet', 'vehicle_sale', 'vehicle_rent', 'service_gig'] },
         deliveryAvailable: { type: 'boolean' },
         meetupPreference:  { type: ['string', 'null'], enum: ['porch_pickup', 'public_meetup', 'flexible', null] },
+        note:              { type: ['string', 'null'], description: DRAFT_NOTE },
       },
-      required: ['title', 'description', 'price', 'isFree', 'category', 'condition', 'tags', 'listingType', 'deliveryAvailable', 'meetupPreference'],
+      required: ['title', 'description', 'price', 'isFree', 'category', 'condition', 'tags', 'listingType', 'deliveryAvailable', 'meetupPreference', 'note'],
       additionalProperties: false,
     },
-    strict: true,
   },
   {
-    type: 'function',
-    name: 'create_post_draft',
+    name:'create_post_draft',
     description: 'Create a structured community post draft. Call this when the user wants to share something with their neighborhood.',
-    parameters: {
+    input_schema: {
       type: 'object',
       properties: {
         content:    { type: 'string', description: 'Post text content, max 2000 chars' },
@@ -131,17 +131,16 @@ const toolDefinitions = [
         purpose:    { type: ['string', 'null'], enum: ['ask', 'offer', 'heads_up', 'recommend', 'event', 'deal', 'story', null] },
         visibility: { type: ['string', 'null'], enum: ['neighborhood', 'public', 'followers', 'connections', null] },
         tags:       { type: ['array', 'null'], items: { type: 'string' }, description: 'Up to 3 tags' },
+        note:       { type: ['string', 'null'], description: DRAFT_NOTE },
       },
-      required: ['content', 'title', 'postType', 'purpose', 'visibility', 'tags'],
+      required: ['content', 'title', 'postType', 'purpose', 'visibility', 'tags', 'note'],
       additionalProperties: false,
     },
-    strict: true,
   },
   {
-    type: 'function',
-    name: 'summarize_mail_item',
+    name:'summarize_mail_item',
     description: 'Generate a structured summary of a mail item with recommended actions. Call this after retrieving mail content with get_mail_item.',
-    parameters: {
+    input_schema: {
       type: 'object',
       properties: {
         summary:    { type: 'string', description: '1-2 sentence summary' },
@@ -175,13 +174,11 @@ const toolDefinitions = [
       required: ['summary', 'key_facts', 'recommended_actions', 'urgency'],
       additionalProperties: false,
     },
-    strict: true,
   },
   {
-    type: 'function',
-    name: 'draft_support_train_from_story',
+    name:'draft_support_train_from_story',
     description: 'Draft a Support Train (community help coordination) from a free-text story. Returns a structured draft the user can review.',
-    parameters: {
+    input_schema: {
       type: 'object',
       properties: {
         story: {
@@ -193,17 +190,46 @@ const toolDefinitions = [
           items: { type: 'string', enum: ['meal', 'takeout', 'groceries', 'gift_funds'] },
           description: 'Optional list of support modes. If null, the AI will infer from the story.',
         },
+        note: { type: ['string', 'null'], description: DRAFT_NOTE },
       },
-      required: ['story', 'support_modes_requested'],
+      required: ['story', 'support_modes_requested', 'note'],
       additionalProperties: false,
     },
-    strict: true,
   },
   {
-    type: 'function',
-    name: 'list_user_support_trains',
+    // Offered only to apps that can show the card (agentService).
+    name:'draft_pickup_schedule',
+    description: "Draft the days their garbage and recycling are collected, from what they say or a photo of their hauler's flyer, schedule or calendar. It appears as a card they check and then save to their home; nothing is saved until they do. Fill in only what they told you or the photo shows and leave the rest null: the home's saved days are kept for anything left null.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        garbage_weekday: {
+          type: ['string', 'null'],
+          enum: ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU', null],
+          description: 'The weekday garbage is collected; garbage is always weekly. Null when they did not say.',
+        },
+        recycling_frequency: {
+          type: ['string', 'null'],
+          enum: ['weekly', 'biweekly', 'none', null],
+          description: 'weekly, biweekly (every other week), none (no recycling collection), or null when they did not say.',
+        },
+        recycling_next_date: {
+          type: ['string', 'null'],
+          description: 'With weekly or biweekly: the date of one recycling collection, YYYY-MM-DD. Any collection date works; for every other week it fixes which weeks. Null otherwise.',
+        },
+        note: {
+          type: ['string', 'null'],
+          description: `${DRAFT_NOTE} Nothing changes until they tap Save on the card: write about the draft, never as if their schedule were already set, saved or changed.`,
+        },
+      },
+      required: ['garbage_weekday', 'recycling_frequency', 'recycling_next_date', 'note'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name:'list_user_support_trains',
     description: 'List Support Trains the current user organizes or participates in.',
-    parameters: {
+    input_schema: {
       type: 'object',
       properties: {
         status: {
@@ -215,13 +241,11 @@ const toolDefinitions = [
       required: ['status'],
       additionalProperties: false,
     },
-    strict: true,
   },
   {
-    type: 'function',
-    name: 'get_support_train_summary',
+    name:'get_support_train_summary',
     description: 'Get a summary of one Support Train, including open slots, recipient summary, and restriction chips.',
-    parameters: {
+    input_schema: {
       type: 'object',
       properties: {
         support_train_id: {
@@ -232,13 +256,47 @@ const toolDefinitions = [
       required: ['support_train_id'],
       additionalProperties: false,
     },
-    strict: true,
   },
 ];
 
 // ─── Tool Executors ─────────────────────────────────────────────────────────
 
+// ─── Drafts end the turn ────────────────────────────────────────────────────
+// A draft is the answer: the person sees it as a card. When every call in a round
+// was a draft that came out valid, the chat turn ends with the drafts' notes, or
+// with this line when there is none, instead of a request to describe the card.
+const DRAFT_CLOSINGS = {
+  create_post_draft: "Here's a draft post. Change anything you like, then share it.",
+  create_gig_draft: "Here's a draft task. Change anything you like, then post it.",
+  create_listing_draft: "Here's a draft listing. Change anything you like, then post it.",
+  draft_support_train_from_story: 'I have what I need to start a Support Train. Open the card to set it up.',
+  draft_pickup_schedule: 'Here are your pickup days. Check them, then save them to your home.',
+};
+
+/**
+ * The line that ends a turn whose tool calls were all valid drafts, or null.
+ * @param {Array<{name: string, result: object}|undefined>} calls  One per tool_use in the round.
+ */
+function closingForDrafts(calls) {
+  const finished = calls.length > 0 && calls.every((call) => call && call.name in DRAFT_CLOSINGS
+    && !call.result.error && call.result.valid !== false);
+  if (!finished) return null;
+  const notes = calls.map((call) => call.result.note).filter((note) => typeof note === 'string' && note.trim());
+  if (!notes.length) return DRAFT_CLOSINGS[calls[0].name];
+  // A note can read as if the change were made ("recycling is set to none"); the
+  // pickup card changes nothing until it is saved.
+  const saveFirst = calls.some((call) => call.name === 'draft_pickup_schedule') ? ' Nothing changes until you tap Save.' : '';
+  return notes.join(' ') + saveFirst;
+}
+
 const TOOL_TIMEOUT_MS = 5000;
+
+/** The declared tool a call means. Claude occasionally gets the letter case of a name wrong; an unambiguous match is taken. */
+function canonicalToolName(name) {
+  if (toolDefinitions.some((tool) => tool.name === name)) return name;
+  const matches = toolDefinitions.filter((tool) => tool.name.toLowerCase() === String(name).toLowerCase());
+  return matches.length === 1 ? matches[0].name : name;
+}
 
 /**
  * Execute a tool call with a timeout.
@@ -248,7 +306,7 @@ async function executeTool(name, args, userId) {
   const timeout = setTimeout(() => controller.abort(), TOOL_TIMEOUT_MS);
 
   try {
-    const result = await _executeToolImpl(name, args, userId, controller.signal);
+    const result = await _executeToolImpl(canonicalToolName(name), args, userId, controller.signal);
     clearTimeout(timeout);
     return result;
   } catch (err) {
@@ -274,7 +332,8 @@ async function _executeToolImpl(name, args, userId, _signal) {
       return _getMailItem(userId, args.mail_item_id);
 
     case 'create_gig_draft': {
-      const draft = { ...args };
+      const { note, ...fields } = args;
+      const draft = { ...fields };
       // Add default location preferences
       if (!draft.location_preferences) {
         draft.location_preferences = {
@@ -289,11 +348,12 @@ async function _executeToolImpl(name, args, userId, _signal) {
       draft.clarifying_questions = draft.clarifying_questions || [];
 
       const valid = validateGigDraft(draft);
-      return { draft, valid, errors: valid ? null : validateGigDraft.errors, draftType: 'gig' };
+      return { draft, valid, errors: valid ? null : validateGigDraft.errors, draftType: 'gig', note: note || null };
     }
 
     case 'create_listing_draft': {
-      const draft = { ...args };
+      const { note, ...fields } = args;
+      const draft = { ...fields };
       if (draft.isFree === undefined) draft.isFree = false;
       if (draft.deliveryAvailable === undefined) draft.deliveryAvailable = false;
       if (!draft.meetupPreference) draft.meetupPreference = 'flexible';
@@ -301,17 +361,18 @@ async function _executeToolImpl(name, args, userId, _signal) {
       draft.clarifying_questions = draft.clarifying_questions || [];
 
       const valid = validateListingDraft(draft);
-      return { draft, valid, errors: valid ? null : validateListingDraft.errors, draftType: 'listing' };
+      return { draft, valid, errors: valid ? null : validateListingDraft.errors, draftType: 'listing', note: note || null };
     }
 
     case 'create_post_draft': {
-      const draft = { ...args };
+      const { note, ...fields } = args;
+      const draft = { ...fields };
       if (!draft.visibility) draft.visibility = 'neighborhood';
       if (!draft.tags) draft.tags = [];
       draft.clarifying_questions = draft.clarifying_questions || [];
 
       const valid = validatePostDraft(draft);
-      return { draft, valid, errors: valid ? null : validatePostDraft.errors, draftType: 'post' };
+      return { draft, valid, errors: valid ? null : validatePostDraft.errors, draftType: 'post', note: note || null };
     }
 
     case 'summarize_mail_item': {
@@ -324,19 +385,29 @@ async function _executeToolImpl(name, args, userId, _signal) {
     }
 
     case 'draft_support_train_from_story': {
-      // NOTE: We cannot call draftSupportTrain here because it makes an
-      // OpenAI API call (~5-30s) which exceeds TOOL_TIMEOUT_MS (5s).
+      // NOTE: We cannot call draftSupportTrain here because it makes a
+      // Claude call (up to 30s) which exceeds TOOL_TIMEOUT_MS (5s).
       // Instead, capture the user's intent and return a structured response
       // that the chat agent can present, prompting the user to confirm
       // and proceed via the Support Train creation flow.
+      const story = typeof args.story === 'string' ? args.story.trim() : '';
+      if (!story) return { error: 'A Support Train needs the story: who it is for and what help would make a difference.' };
+      const supportModes = Array.isArray(args.support_modes_requested) && args.support_modes_requested.length
+        ? args.support_modes_requested
+        : ['meal'];
       return {
         action: 'support_train_draft_ready',
-        story: args.story,
-        support_modes_requested: args.support_modes_requested || ['meal'],
+        // The card carries the story into Support Train setup, where the full draft is made from it.
+        draft: { story, support_modes_requested: supportModes },
+        valid: true,
         message: 'I have the details for a Support Train. The user should proceed to the Support Train creation flow where AI will generate a full structured draft from this story.',
         draftType: 'support_train',
+        note: args.note || null,
       };
     }
+
+    case 'draft_pickup_schedule':
+      return draftPickupSchedule(args, userId);
 
     case 'list_user_support_trains': {
       try {
@@ -476,7 +547,8 @@ async function _executeToolImpl(name, args, userId, _signal) {
     }
 
     default:
-      return { error: `Unknown tool: ${name}` };
+      // Name the real tools so the model can correct the call on its next round.
+      return { error: `Unknown tool: ${name}. The tools are: ${toolDefinitions.map((tool) => tool.name).join(', ')}.` };
   }
 }
 
@@ -627,4 +699,5 @@ async function _getMailItem(userId, mailItemId) {
 module.exports = {
   toolDefinitions,
   executeTool,
+  closingForDrafts,
 };

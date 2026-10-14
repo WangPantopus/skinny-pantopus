@@ -109,7 +109,7 @@ internal fun rowEnd(
         }
         plan.standing == PlanViewerStanding.REQUESTED -> PlanRowEnd.Status("Requested", PantopusIcon.Clock)
         plan.standing == PlanViewerStanding.WAITLISTED ->
-            PlanRowEnd.Status(plan.viewer?.waitlistPosition?.let { "Waitlist · ${ordinal(it)}" } ?: "On the waitlist")
+            PlanRowEnd.Status(plan.viewer?.waitlistPosition?.let { "On the waitlist · ${ordinal(it)}" } ?: "On the waitlist")
         plan.standing == PlanViewerStanding.IN -> PlanRowEnd.Status("You're in", PantopusIcon.Check, PantopusColors.success)
         mine -> PlanRowEnd.Chevron
         plan.planState == PlanState.LIVE -> PlanRowEnd.Note("${plan.goingCount} going")
@@ -380,7 +380,7 @@ internal fun PlansFailed(
         verticalArrangement = Arrangement.spacedBy(Spacing.s2),
     ) {
         Text(
-            text = "Couldn't load plans",
+            text = "Couldn't load plans near you.",
             style = PantopusTextStyle.body.copy(fontWeight = FontWeight.SemiBold),
             color = PantopusColors.appText,
         )
@@ -468,12 +468,16 @@ internal fun cardWhereLine(plan: PlanDto): String =
         PlanFormat.distance(plan.distanceBand),
     ).joinToString(" · ")
 
-/** "Hosted 3 plans · 2 mutual connections" (playdates count playdates). */
+/** "Hosted 3 plans · 2 mutual connections" (a playdate host's playdates, from `kind_hosted`, as on iOS). */
 internal fun hostCaption(plan: PlanDto): String {
     val host = plan.host ?: return ""
-    val noun = if (plan.isPlaydate) "playdate" else "plan"
     val parts = mutableListOf<String>()
-    if (host.plansHosted > 0) parts += "Hosted ${host.plansHosted} $noun${if (host.plansHosted == 1) "" else "s"}"
+    val playdates = host.kindHosted ?: 0
+    if (plan.isPlaydate && playdates > 0) {
+        parts += "Hosted $playdates playdate${if (playdates == 1) "" else "s"}"
+    } else if (host.plansHosted > 0) {
+        parts += "Hosted ${host.plansHosted} plan${if (host.plansHosted == 1) "" else "s"}"
+    }
     if (host.mutualConnections > 0) {
         parts += "${host.mutualConnections} mutual connection${if (host.mutualConnections == 1) "" else "s"}"
     }
@@ -579,7 +583,8 @@ private fun GameSuggestion(
         start?.let {
             "${it.format(DateTimeFormatter.ofPattern("EEEE", Locale.US))} at ${it.format(DateTimeFormatter.ofPattern("h:mm", Locale.US))}"
         }
-    val title = listOfNotNull(game.team ?: game.label, whenText?.let { "play $it" }).joinToString(" ")
+    // The label ("Seahawks"), never `team`, which is the list's internal id ("seahawks").
+    val title = listOfNotNull(game.label, whenText?.let { "play $it" }).joinToString(" ")
     Row(
         modifier =
             Modifier
@@ -628,7 +633,7 @@ internal fun PlansNoLocationContent(
                 color = PantopusColors.appTextSecondary,
             )
         }
-        PlanScopeLine("Hosts and guests never see where you are. They see a distance like \"about 1 mi\".")
+        PlanScopeLine("Hosts and guests never see where you are. They see a distance like “about 1 mi”.")
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2), modifier = Modifier.padding(top = Spacing.s1)) {
             PrimaryButton(title = "Use my location", onClick = onUseLocation, modifier = Modifier.height(50.dp))
             if (canUseHome) GhostButton(title = "Use my home instead", onClick = onUseHome, modifier = Modifier.height(50.dp))

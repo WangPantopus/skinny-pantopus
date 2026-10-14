@@ -100,12 +100,17 @@ struct PlanAfterCard: View {
         .accessibilityIdentifier("planHostAgainCard.\(card.id)")
     }
 
-    /// "5 people came last Tuesday. Same time next week?"
+    /// "5 people came yesterday. Same time next week?", or just the question when nobody came (as on Android).
     private var cameLine: String {
-        let weekday = card.startsAtDate.map { PlanFormat.dayHeading($0, calendar: PlanFormat.calendar(for: card.timezone)) }
-        let when = weekday.map { $0 == "Today" ? "today" : $0 == "Tomorrow" ? "" : "last \($0)" } ?? ""
+        guard card.goingCount > 0 else { return "Same time next week?" }
+        let calendar = PlanFormat.calendar(for: card.timezone)
+        let when: String? = card.startsAtDate.map { start in
+            if calendar.isDateInToday(start) { return "today" }
+            if calendar.isDateInYesterday(start) { return "yesterday" }
+            return "last \(PlanFormat.dayHeading(start, calendar: calendar))"
+        }
         let people = "\(card.goingCount) \(card.goingCount == 1 ? "person" : "people") came"
-        return when.isEmpty ? "\(people). Same time next week?" : "\(people) \(when). Same time next week?"
+        return [people, when].compactMap { $0 }.joined(separator: " ") + ". Same time next week?"
     }
 }
 

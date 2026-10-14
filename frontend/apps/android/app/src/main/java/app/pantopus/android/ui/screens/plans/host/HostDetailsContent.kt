@@ -109,7 +109,11 @@ private fun ColumnScope.WatchFields(
         onChange = { value -> vm.edit { it.copy(spots = value) } },
     )
     HowPeopleGetIn(ui, vm)
-    NoteField(draft.note, label = "Note for people who are in", placeholder = "Park on the street. The side gate is open.") { text ->
+    NoteField(
+        draft.note,
+        label = "Note for people who are in",
+        placeholder = if (draft.atHome) "Park on the street. The side gate is open." else "We'll be at the big table by the window.",
+    ) { text ->
         vm.edit { it.copy(note = text) }
     }
     PlanField(label = "About · everyone sees this") {
@@ -382,7 +386,7 @@ private fun WhereField(
     }
 }
 
-/** The chosen public place, or "Pick a place", opening H6. */
+/** The chosen public place, or "Choose a place", opening H6. */
 @Composable
 private fun PlaceRow(
     ui: HostUi,
@@ -398,7 +402,7 @@ private fun PlaceRow(
         ) {
             PlanTile(kind, size = 36.dp, glyph = 18.dp, corner = 10.dp)
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = place?.name ?: "Pick a place", style = semibold, color = PantopusColors.appText)
+                Text(text = place?.name ?: "Choose a place", style = semibold, color = PantopusColors.appText)
                 Text(
                     text = place?.let { placeCaption(it) } ?: "Parks, courts, trails, libraries, cafés",
                     style = PantopusTextStyle.small,

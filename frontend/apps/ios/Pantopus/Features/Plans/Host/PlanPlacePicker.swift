@@ -113,7 +113,7 @@ struct PlanPlacePicker: View {
             if loading, shown.isEmpty {
                 ForEach(0..<3, id: \.self) { _ in Shimmer(width: nil, height: 52, cornerRadius: Radii.lg).padding(.vertical, 6) }
             } else if shown.isEmpty {
-                Text(query.count >= 2 ? "No places found. Try another name." : "No public places found nearby. Search for one.")
+                Text(query.count >= 2 ? "No places match \u{201C}\(query)\u{201D}." : "No public places found nearby. Search for one.")
                     .planFont(.small)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .padding(.vertical, Spacing.s3)
@@ -182,9 +182,9 @@ struct PlanPlacePicker: View {
     private func subtitle(_ place: PlanPlaceOptionDTO) -> String {
         var parts: [String] = []
         if let category = place.category, !category.isEmpty {
-            parts
-                .append(category.split(separator: ",").prefix(2).map { $0.trimmingCharacters(in: .whitespaces) }.joined(separator: " · ")
-                    .capitalized)
+            // "Park · playground": only the first word capitalized (board H6).
+            let words = category.split(separator: ",").prefix(2).map { $0.trimmingCharacters(in: .whitespaces) }.joined(separator: " · ")
+            parts.append(words.prefix(1).uppercased() + words.dropFirst())
         }
         if let meters = distance(to: place) {
             parts.append(String(format: "%.1f mi", meters / 1609.34))

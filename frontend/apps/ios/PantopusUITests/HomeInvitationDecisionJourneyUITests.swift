@@ -254,7 +254,7 @@ private extension HomeInvitationDecisionJourneyUITests {
     }
 
     private func signOutThroughSettings() throws {
-        try press(element("place.menu").exists ? "place.menu" : "hubMenuButton")
+        try press("place.menu")
         try press("navDrawer.item.settings")
         let button = app.buttons["Log out"].firstMatch
         try reveal(button)

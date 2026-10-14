@@ -4,22 +4,24 @@
  * Mirrors the agentService.draftGig pattern but lives in its own file
  * to keep agentService.js untouched and the unit easily testable.
  */
-const { getOpenAIClient } = require('../../config/openai');
+const { getAnthropicClient, resolveEffort, DRAFT_MODEL } = require('../../config/anthropic');
 const supabaseAdmin = require('../../config/supabaseAdmin');
 const logger = require('../../utils/logger');
 const prompts = require('./prompts');
 const schemas = require('./schemas');
+const { AIRefusalError, complete, isTimeoutError, todayLine } = require('./llm');
+const { userTimeZone } = require('./chatContext');
 
-const DRAFT_MODEL = process.env.OPENAI_DRAFT_MODEL || 'gpt-4o-mini';
-const DRAFT_TIMEOUT_MS = parseInt(process.env.OPENAI_DRAFT_TIMEOUT_MS, 10) || 30000;
+const DRAFT_TIMEOUT_MS = parseInt(process.env.ANTHROPIC_DRAFT_TIMEOUT_MS, 10) || 30000;
+// The story names allergies and dietary restrictions, so the draft thinks a
+// little longer than the other drafts do. The organizer reviews it before it
+// goes anywhere, and a missed allergy is worse than a second of waiting.
+const DRAFT_EFFORT = resolveEffort(process.env.ANTHROPIC_SUPPORT_TRAIN_EFFORT, 'medium');
+const NUDGE_EFFORT = resolveEffort(process.env.ANTHROPIC_DRAFT_EFFORT, 'low');
+// max_tokens covers the model's thinking as well as the reply.
+const DRAFT_MAX_TOKENS = 4096;
 
 // ─── Local helpers (copied from agentService to avoid touching that file) ──
-
-function isAbortLikeError(err) {
-  if (!err) return false;
-  const msg = String(err.message || '').toLowerCase();
-  return err.name === 'AbortError' || msg.includes('aborted') || msg.includes('timeout');
-}
 
 async function logRequest({
   userId, endpoint, model, promptVersion,
@@ -51,8 +53,8 @@ async function logRequest({
 
 async function draftSupportTrain({ story, supportModesRequested, recipientReference, homeReference, userId }) {
   const startTime = Date.now();
-  const openai = getOpenAIClient();
-  if (!openai) {
+  const client = getAnthropicClient();
+  if (!client) {
     return { error: 'AI_UNAVAILABLE', fallback: true };
   }
 
@@ -72,23 +74,22 @@ async function draftSupportTrain({ story, supportModesRequested, recipientRefere
       : homeReference.home_id || JSON.stringify(homeReference);
     userContent += `\n[Home: ${homeLabel}]`;
   }
+  // "Starting Monday" or "for the next two weeks" are read against today's date.
+  userContent += `\n${todayLine(await userTimeZone(userId))}`;
 
   try {
-    const response = await openai.responses.create({
+    const response = await complete({
+      client,
       model: DRAFT_MODEL,
-      instructions: prompts.SUPPORT_TRAIN_DRAFT_SYSTEM,
-      input: [{ role: 'user', content: userContent }],
-      text: {
-        format: {
-          type: 'json_schema',
-          name: 'support_train_draft',
-          schema: schemas.supportTrainDraftJsonSchemaStrict,
-          strict: true,
-        },
-      },
-    }, { signal: AbortSignal.timeout(DRAFT_TIMEOUT_MS) });
+      system: prompts.SUPPORT_TRAIN_DRAFT_SYSTEM,
+      messages: [{ role: 'user', content: userContent }],
+      schema: schemas.claudeSchemas.supportTrainDraft,
+      effort: DRAFT_EFFORT,
+      maxTokens: DRAFT_MAX_TOKENS,
+      timeoutMs: DRAFT_TIMEOUT_MS,
+    });
 
-    const outputText = response.output_text || '';
+    const outputText = response.text;
     let draft;
     try {
       draft = JSON.parse(outputText);
@@ -108,8 +109,8 @@ async function draftSupportTrain({ story, supportModesRequested, recipientRefere
       userId, endpoint: 'draft/support_train', model: DRAFT_MODEL,
       promptVersion: prompts.VERSIONS.supportTrain, status: valid ? 'ok' : 'schema_error',
       latencyMs: Date.now() - startTime, schemaValid: valid,
-      inputTokens: response.usage?.input_tokens,
-      outputTokens: response.usage?.output_tokens,
+      inputTokens: response.inputTokens,
+      outputTokens: response.outputTokens,
     });
 
     if (!valid) {
@@ -125,10 +126,14 @@ async function draftSupportTrain({ story, supportModesRequested, recipientRefere
     logger.error('draftSupportTrain error', { userId, error: err.message });
     await logRequest({
       userId, endpoint: 'draft/support_train', model: DRAFT_MODEL,
-      promptVersion: prompts.VERSIONS.supportTrain, status: 'error',
+      promptVersion: prompts.VERSIONS.supportTrain, status: err instanceof AIRefusalError ? 'refusal' : 'error',
       latencyMs: Date.now() - startTime, errorMessage: err.message,
     });
-    if (isAbortLikeError(err)) {
+    if (err instanceof AIRefusalError) {
+      // Declined, not down: retrying won't help.
+      return { error: 'AI_DECLINED', message: "Pantopus AI can't help with this one. You can still write it yourself.", fallback: true };
+    }
+    if (isTimeoutError(err)) {
       return { error: 'AI_TIMEOUT', message: 'AI draft timed out. Please try again.', fallback: true };
     }
     return { error: 'AI_UNAVAILABLE', message: 'AI is temporarily unavailable. Please create manually.', fallback: true };
@@ -139,28 +144,32 @@ async function draftSupportTrain({ story, supportModesRequested, recipientRefere
 
 async function draftOpenSlotsNudge({ openSlotsContext, userId }) {
   const startTime = Date.now();
-  const openai = getOpenAIClient();
-  if (!openai) {
+  const client = getAnthropicClient();
+  if (!client) {
     return { error: 'AI_UNAVAILABLE', fallback: true };
   }
 
   const userContent = `${openSlotsContext.count} open ${openSlotsContext.support_modes?.join('/') || 'support'} slot${openSlotsContext.count > 1 ? 's' : ''} on ${(openSlotsContext.dates || []).join(', ')}.`;
 
   try {
-    const response = await openai.responses.create({
+    const response = await complete({
+      client,
       model: DRAFT_MODEL,
-      instructions: prompts.OPEN_SLOTS_NUDGE_SYSTEM,
-      input: [{ role: 'user', content: userContent }],
-    }, { signal: AbortSignal.timeout(DRAFT_TIMEOUT_MS) });
+      system: prompts.OPEN_SLOTS_NUDGE_SYSTEM,
+      messages: [{ role: 'user', content: userContent }],
+      effort: NUDGE_EFFORT,
+      maxTokens: DRAFT_MAX_TOKENS,
+      timeoutMs: DRAFT_TIMEOUT_MS,
+    });
 
-    const message = (response.output_text || '').trim();
+    const message = response.text.trim();
 
     await logRequest({
       userId, endpoint: 'draft/open_slots_nudge', model: DRAFT_MODEL,
       promptVersion: prompts.VERSIONS.openSlotsNudge, status: message ? 'ok' : 'empty',
       latencyMs: Date.now() - startTime,
-      inputTokens: response.usage?.input_tokens,
-      outputTokens: response.usage?.output_tokens,
+      inputTokens: response.inputTokens,
+      outputTokens: response.outputTokens,
     });
 
     if (!message) {
@@ -175,7 +184,7 @@ async function draftOpenSlotsNudge({ openSlotsContext, userId }) {
       promptVersion: prompts.VERSIONS.openSlotsNudge, status: 'error',
       latencyMs: Date.now() - startTime, errorMessage: err.message,
     });
-    if (isAbortLikeError(err)) {
+    if (isTimeoutError(err)) {
       return { error: 'AI_TIMEOUT', message: 'AI draft timed out.' };
     }
     return { error: 'AI_UNAVAILABLE', message: 'AI is temporarily unavailable.' };

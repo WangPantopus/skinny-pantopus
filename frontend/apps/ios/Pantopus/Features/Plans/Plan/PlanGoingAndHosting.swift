@@ -123,8 +123,8 @@ struct PlanGoingSection: View {
             PlanBanner(
                 tone: .warning,
                 icon: .alertTriangle,
-                title: "\(hostFirst) changed the plan",
-                message: "It's now \(PlanScreenLines.when(card)). Still coming?"
+                title: "\(hostFirst) moved the \(PlanCardLines.noun(card))",
+                message: "Now \(PlanScreenLines.when(card)). Still coming?"
             )
             HStack(spacing: 10) {
                 Button("Can't make it") { onConfirm(.notComing(host: card.host.displayName)) }

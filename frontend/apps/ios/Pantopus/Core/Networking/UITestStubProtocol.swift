@@ -94,11 +94,6 @@ final class UITestStubProtocol: URLProtocol {
             let body = env["UI_TESTS_HOMES_MYHOMES_BODY"] ?? Self.defaultMyHomesJSON
             finishWith(status: 200, body: Data(body.utf8))
 
-        case ("GET", "/api/hub"):
-            let body = env["UI_TESTS_HUB_BODY"] ?? Self.defaultHubOverviewJSON
-            let status = Int(env["UI_TESTS_HUB_STATUS"] ?? "200") ?? 200
-            finishWith(status: status, body: Data(body.utf8))
-
         case ("GET", "/api/hub/today"):
             let body = env["UI_TESTS_HUB_TODAY_BODY"] ?? Self.defaultHubTodayJSON
             let status = Int(env["UI_TESTS_HUB_TODAY_STATUS"] ?? "200") ?? 200
@@ -553,51 +548,6 @@ final class UITestStubProtocol: URLProtocol {
 
     static let defaultMailSendJSON = """
     {"message":"Letter sent","mail":{"id":"mail_demo","subject":"A note from a friend","created_at":"2026-05-15T12:00:00Z"}}
-    """
-
-    static let defaultHubOverviewJSON = """
-    {
-      "user":{
-        "id":"u_test","name":"Alice Doe","firstName":"Alice","username":"alice",
-        "avatarUrl":null,"email":"alice@example.com"
-      },
-      "context":{"activeHomeId":"home_demo","activePersona":{"type":"personal"}},
-      "availability":{"hasHome":true,"hasBusiness":false,"hasPayoutMethod":true},
-      "homes":[{
-        "id":"home_demo","name":"412 Elm St","addressShort":"412 Elm St",
-        "city":"Portland","state":"OR","latitude":45.5202,"longitude":-122.6742,
-        "isPrimary":true,"roleBase":"owner"
-      }],
-      "businesses":[],
-      "setup":{
-        "steps":[
-          {"key":"profile","done":true},
-          {"key":"home","done":true},
-          {"key":"payments","done":true}
-        ],
-        "allDone":true,
-        "profileCompleteness":{
-          "score":1.0,
-          "checks":{"firstName":true,"lastName":true,"photo":true,"bio":true,"skills":true},
-          "missingFields":[]
-        }
-      },
-      "statusItems":[],
-      "cards":{
-        "personal":{"unreadChats":0,"earnings":0,"gigsNearby":3,"rating":4.8,"reviewCount":12},
-        "home":{"newMail":0,"billsDue":[],"tasksDue":[],"memberCount":2},
-        "business":null
-      },
-      "jumpBackIn":[
-        {"title":"Finish shelf install","route":"/app/gigs/gig-shelves","icon":"hammer"},
-        {"title":"List the spare bike","route":"/app/marketplace/item-bike","icon":"shoppingBag"}
-      ],
-      "activity":[
-        {"id":"act_1","pillar":"personal","title":"Maya replied to your post",
-         "at":"2026-05-22T15:00:00Z","read":false,"route":"/app/pulse/post-demo"}
-      ],
-      "neighborDensity":{"count":42,"radiusMiles":1.5,"milestone":"active"}
-    }
     """
 
     static let defaultHubTodayJSON = """
