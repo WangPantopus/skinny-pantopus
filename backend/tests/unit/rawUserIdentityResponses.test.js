@@ -88,6 +88,7 @@ describe('raw User response audit', () => {
       user_id: 'comment-user',
       comment: 'Looks good',
       is_deleted: false,
+      moderation_state: 'live', // the column's default; held and removed replies read only for their author
       created_at: '2026-05-01T00:01:00Z',
       author: {
         id: 'comment-user',
