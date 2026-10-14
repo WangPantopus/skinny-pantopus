@@ -33,8 +33,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
@@ -129,11 +129,12 @@ private fun RowScope.TabItem(
             Modifier
                 .weight(1f)
                 .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
-                // One node for TalkBack and the UI tests: the tag, the tab role with its selected state, and the name
-                // (no layout modifier between them, or the name lands on a separate node and TalkBack reads "checked").
+                // One node for TalkBack and the UI tests: the tag, the tab role with its selected state, and one name
+                // for the tab (the label and badge inside are replaced by it, so nothing is read twice). It sits inside
+                // `selectable` so the role, the selected state and the click stay.
                 .testTag("tab.${route.path.substringAfterLast('/')}")
                 .selectable(selected = isSelected, role = Role.Tab, onClick = onClick)
-                .semantics {
+                .clearAndSetSemantics {
                     contentDescription = if (badge > 0) "${route.label}, $badge unread" else route.label
                 }
                 .padding(horizontal = 2.dp),

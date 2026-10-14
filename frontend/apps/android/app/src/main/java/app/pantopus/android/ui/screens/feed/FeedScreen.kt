@@ -1018,7 +1018,7 @@ private fun PulseMoreMenu(
             modifier =
                 Modifier
                     .size(48.dp)
-                    .clickable(onClickLabel = "Open the menu") { open = true }
+                    .clickable(onClickLabel = "Open the menu", role = Role.Button) { open = true }
                     .testTag("pulseMoreMenu")
                     .semantics { contentDescription = "More" },
             contentAlignment = Alignment.Center,
