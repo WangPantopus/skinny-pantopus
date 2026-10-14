@@ -385,7 +385,7 @@ internal data class PulseComposeContentState(
     /** True when the precheck classified this as a visitor post. */
     val isVisitorPost: Boolean = false,
     val announceAudience: PulseAnnounceAudience = PulseAnnounceAudience.Neighbors,
-    val safetyAlertKind: PulseSafetyAlertKind = PulseSafetyAlertKind.Theft,
+    val safetyAlertKind: PulseSafetyAlertKind = PulseSafetyAlertKind.Hazard,
     val askCategory: PulseAskCategory? = PulseAskCategory.Handyman,
     val recommendRating: Int = 5,
     val fields: Map<PulseComposeField, FormFieldState> = emptyMap(),

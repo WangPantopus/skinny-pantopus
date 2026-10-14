@@ -314,7 +314,7 @@ class PulseComposeViewModel
         private val _announceAudience = MutableStateFlow(PulseAnnounceAudience.Neighbors)
         val announceAudience: StateFlow<PulseAnnounceAudience> = _announceAudience.asStateFlow()
 
-        private val _safetyAlertKind = MutableStateFlow(PulseSafetyAlertKind.Theft)
+        private val _safetyAlertKind = MutableStateFlow(PulseSafetyAlertKind.Hazard)
         val safetyAlertKind: StateFlow<PulseSafetyAlertKind> = _safetyAlertKind.asStateFlow()
 
         // New Asks start on Handyman; an edited Ask posted without a category has none selected.
