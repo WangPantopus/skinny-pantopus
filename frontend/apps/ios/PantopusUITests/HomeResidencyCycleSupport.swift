@@ -53,7 +53,7 @@ extension HomeResidencyHistoryJourneyUITests {
     }
 
     func cycleMyHomes() throws {
-        let menu = app.buttons.matching(NSPredicate(format: "identifier IN %@", ["place.menu", "hubMenuButton"])).firstMatch
+        let menu = app.buttons.matching(NSPredicate(format: "identifier IN %@", ["place.menu"])).firstMatch
         try cyclePress(menu)
         try press("navDrawer.item.my-homes")
     }

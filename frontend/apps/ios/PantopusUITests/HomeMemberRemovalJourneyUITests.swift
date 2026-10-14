@@ -184,7 +184,7 @@ extension HomeInvitationSenderJourneyUITests {
     }
 
     func openGlobalRemovalRecovery() throws {
-        let menu = app.buttons.matching(NSPredicate(format: "identifier IN %@", ["place.menu", "hubMenuButton"])).firstMatch
+        let menu = app.buttons.matching(NSPredicate(format: "identifier IN %@", ["place.menu"])).firstMatch
         try reveal(menu)
         menu.tap()
         try press("navDrawer.item.my-homes")

@@ -24,6 +24,9 @@ public struct AddHomeWizardView: View {
     @Environment(\.dismiss) private var dismiss
 
     private let onOpenHomes: () -> Void
+    /// A Home was created: open it (the Place tab lands on Your Place for it).
+    /// Without it, or without the new id, `onOpenHomes` runs.
+    private let onOpenHome: ((String) -> Void)?
     /// `check-address` matched an already-claimed home and the user
     /// picked "owner" — route to the ownership-claim wizard for that
     /// existing home instead of creating a duplicate.
@@ -34,11 +37,13 @@ public struct AddHomeWizardView: View {
 
     public init(
         onOpenHomes: @escaping () -> Void,
+        onOpenHome: ((String) -> Void)? = nil,
         onOpenClaimOwnership: @escaping (String) -> Void = { _ in },
         onOpenWaitingRoom: @escaping (String) -> Void = { _ in }
     ) {
         _viewModel = State(initialValue: AddHomeWizardViewModel())
         self.onOpenHomes = onOpenHomes
+        self.onOpenHome = onOpenHome
         self.onOpenClaimOwnership = onOpenClaimOwnership
         self.onOpenWaitingRoom = onOpenWaitingRoom
     }
@@ -46,11 +51,13 @@ public struct AddHomeWizardView: View {
     init(
         viewModel: AddHomeWizardViewModel,
         onOpenHomes: @escaping () -> Void,
+        onOpenHome: ((String) -> Void)? = nil,
         onOpenClaimOwnership: @escaping (String) -> Void = { _ in },
         onOpenWaitingRoom: @escaping (String) -> Void = { _ in }
     ) {
         _viewModel = State(initialValue: viewModel)
         self.onOpenHomes = onOpenHomes
+        self.onOpenHome = onOpenHome
         self.onOpenClaimOwnership = onOpenClaimOwnership
         self.onOpenWaitingRoom = onOpenWaitingRoom
     }
@@ -157,7 +164,7 @@ public struct AddHomeWizardView: View {
         case .confirm: AddHomeConfirmStep(viewModel: viewModel)
         case .role: RoleStep(viewModel: viewModel)
         case .review: ReviewStep(viewModel: viewModel)
-        case .success: SuccessStep()
+        case .success: SuccessStep(opensYourPlace: viewModel.completionOpensYourPlace)
         }
     }
 
@@ -198,7 +205,11 @@ public struct AddHomeWizardView: View {
             dismiss()
         case .openHomes:
             storedForm = ""
-            onOpenHomes()
+            if let onOpenHome, let homeId = viewModel.createdHomeId, viewModel.completionOpensYourPlace {
+                onOpenHome(homeId)
+            } else {
+                onOpenHomes()
+            }
         case let .openClaimOwnership(homeId):
             storedForm = ""
             onOpenClaimOwnership(homeId)
@@ -478,6 +489,9 @@ private struct ReviewStep: View {
 // MARK: - Step 5: Success
 
 private struct SuccessStep: View {
+    /// Finishing opens Your Place for the new Home rather than My homes.
+    let opensYourPlace: Bool
+
     var body: some View {
         // Re-use the T3.6 Status / Waiting screen so the home-added
         // terminal shares its chrome with the claim-submitted and
@@ -488,7 +502,9 @@ private struct SuccessStep: View {
         StatusWaitingBodyView(
             content: .claimSubmitted(homeName: nil)
                 .withHeadline("Home added")
-                .withSubcopy("Open My Homes to see current setup and verification options.")
+                .withSubcopy(opensYourPlace
+                    ? "Open Your Place to see your Home and its verification options."
+                    : "Open My Homes to see current setup and verification options.")
         )
         .frame(maxWidth: .infinity, alignment: .leading)
     }
