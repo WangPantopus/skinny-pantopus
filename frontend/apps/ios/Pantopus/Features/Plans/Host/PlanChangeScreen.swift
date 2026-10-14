@@ -152,7 +152,7 @@ struct PlanChangeScreen: View {
     }
 
     /// The push the server sends, word for word (board H11; Android shows the same).
-    private func push(_ card: PlanCardDTO) -> (title: String, body: String) {
+    private func pushWords(_ card: PlanCardDTO) -> (title: String, body: String) {
         let calendar = PlanFormat.calendar(for: card.timezone)
         let host = PlanCardLines.firstName(card.host.displayName)
         let noun = card.kind.title.lowercased()
@@ -175,7 +175,7 @@ struct PlanChangeScreen: View {
     }
 
     private func preview(_ card: PlanCardDTO) -> some View {
-        let push = push(card)
+        let push = pushWords(card)
         return VStack(alignment: .leading, spacing: Spacing.s2) {
             Text.planOverline("What they'll get")
             VStack(alignment: .leading, spacing: 3) {
