@@ -289,8 +289,17 @@ class HostFlowViewModel
                 return
             }
             val zone = _ui.value.zone
-            val start = PlanFormat.instant(game.startsAt)?.atZone(zone)?.toLocalDateTime()
-            val end = PlanFormat.instant(game.endsAt)?.atZone(zone)?.toLocalDateTime() ?: start?.plusHours(3)
+            val now = LocalDateTime.now(zone)
+            val gameStart = PlanFormat.instant(game.startsAt)?.atZone(zone)?.toLocalDateTime()
+            val gameEnd = PlanFormat.instant(game.endsAt)?.atZone(zone)?.toLocalDateTime() ?: gameStart?.plusHours(3)
+            // A plan can't start in the past: a game already on starts at the next quarter hour, until the game ends.
+            val start =
+                if (gameStart != null && gameStart.isBefore(now)) {
+                    now.truncatedTo(ChronoUnit.HOURS).plusMinutes((now.minute / QUARTER_HOUR + 1) * QUARTER_HOUR)
+                } else {
+                    gameStart
+                }
+            val end = if (start != null && gameEnd != null) maxOf(gameEnd, start.plusMinutes(MIN_MINUTES)) else gameEnd
             edit { draft ->
                 draft.copy(
                     gameId = game.id,
@@ -573,6 +582,7 @@ class HostFlowViewModel
             const val EVENING_HOUR = 19
             const val MAX_DAYS_AHEAD = 14L
             const val MIN_MINUTES = 15L
+            const val QUARTER_HOUR = 15L
             const val MAX_MINUTES = 8 * 60L
             const val PLACES_ATTEMPTS = 4
             const val PLACES_RETRY_MS = 3_000L

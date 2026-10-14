@@ -247,9 +247,11 @@ struct PlanCancelSheet: View {
     }
 
     /// "We'll tell the 5 people who are in and the 2 who asked. The pin comes off the map and the chat closes."
+    /// People in count with their parties ("Chris + 1" is two), as on H9 and H11; everyone asking or waiting is told too.
     private var sentence: String {
-        let going = (viewModel.plan?.people ?? []).filter { !$0.isHost }.count
-        let asked = viewModel.card?.requestsCount ?? viewModel.hostRequests?.pending.count ?? 0
+        let going = (viewModel.plan?.people ?? []).filter { !$0.isHost }.reduce(0) { $0 + max($1.partySize, 1) }
+        let asked = viewModel.hostRequests.map { $0.pending.count + $0.waitlisted.count }
+            ?? (viewModel.card?.requestsCount ?? 0) + (viewModel.card?.waitlistCount ?? 0)
         var told: [String] = []
         if going > 0 { told.append(going == 1 ? "the 1 person who's in" : "the \(going) people who are in") }
         if asked > 0 { told.append("the \(asked) who asked") }

@@ -162,6 +162,11 @@ final class PlanComposerModel {
         if let gameStart = newGame.startsAtDate, gameStart > Date() {
             start = gameStart
             end = newGame.endsAtDate ?? gameStart.addingTimeInterval(3 * 3600 + 20 * 60)
+        } else if let gameEnd = newGame.endsAtDate, gameEnd > Date() {
+            // A plan can't start in the past: a game already on starts at the next quarter hour, until the game ends.
+            let quarter: TimeInterval = 15 * 60
+            start = Date(timeIntervalSinceReferenceDate: ((Date().timeIntervalSinceReferenceDate / quarter).rounded(.down) + 1) * quarter)
+            end = max(gameEnd, start.addingTimeInterval(quarter))
         }
     }
 
