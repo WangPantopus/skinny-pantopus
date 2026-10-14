@@ -652,14 +652,8 @@ class TodayTabViewModel
         }
     }
 
-/** The home Today shows: the primary home, else the first shared one, else the newest private setup; null for none. */
-internal fun primaryHomeId(response: MyHomesResponse): String? {
-    val homes = response.sharedHomes
-    val privateHome =
-        response.homes.filter { it.hasValidListContext && it.accessKind == "private_setup" }
-            .sortedByDescending { it.createdAt.orEmpty() }.firstOrNull()
-    return (homes.firstOrNull { it.isPrimaryOwner == true } ?: homes.firstOrNull() ?: privateHome)?.id
-}
+/** The home Today shows: the person's default Home, as Place lands on it ([MyHomesResponse.defaultHomeId]). */
+internal fun primaryHomeId(response: MyHomesResponse): String? = response.defaultHomeId
 
 /** The failure's sentence, or [fallback] when a read failed without one. */
 private fun NetworkError?.sentence(fallback: String): String = this?.displayMessage(fallback) ?: fallback

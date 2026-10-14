@@ -29,7 +29,7 @@ public struct PulsePostActions: Sendable, Hashable {
     public let isSaved: Bool
     public let isReposted: Bool
     public let shareCount: Int
-    /// `state == "solved"` — renders the inline Solved badge.
+    /// `state == "solved"`: an Ask already marked solved (no "Mark solved").
     public let isSolved: Bool
     /// Viewer authored this post.
     public let isOwner: Bool
@@ -49,6 +49,10 @@ public struct PulsePostActions: Sendable, Hashable {
     public let topicLabel: String?
     /// Taps on this card still waiting for the server.
     public let pending: Set<PulsePendingAction>
+    /// The asker's own open Ask (Pulse S7, contract §2.12): "Close" is offered.
+    public let canCloseAsk: Bool
+    /// …and "Keep open 7 more days", until it has been used once.
+    public let canKeepAskOpen: Bool
 
     public init(
         isSeeded: Bool = false,
@@ -64,7 +68,9 @@ public struct PulsePostActions: Sendable, Hashable {
         muteEntityName: String = "this author",
         postType: String? = nil,
         topicLabel: String? = nil,
-        pending: Set<PulsePendingAction> = []
+        pending: Set<PulsePendingAction> = [],
+        canCloseAsk: Bool = false,
+        canKeepAskOpen: Bool = false
     ) {
         self.isSeeded = isSeeded
         self.isSaved = isSaved
@@ -80,6 +86,8 @@ public struct PulsePostActions: Sendable, Hashable {
         self.postType = postType
         self.topicLabel = topicLabel
         self.pending = pending
+        self.canCloseAsk = canCloseAsk
+        self.canKeepAskOpen = canKeepAskOpen
     }
 
     /// Report is offered to everyone except the author (RN
@@ -133,6 +141,8 @@ public struct PulsePostCardContent: Sendable, Hashable, Identifiable {
     /// The post's Pulse topic, when it has one this build knows (Pulse S4):
     /// named on the meta line and muted by "Mute this topic".
     public let pulseTopic: PulseTopic?
+    /// How the post ended, or when a Heads-up ends (Pulse S7).
+    public let status: PulsePostStatus?
     public var isCurator: Bool {
         origin == "curator"
     }
@@ -162,7 +172,8 @@ public struct PulsePostCardContent: Sendable, Hashable, Identifiable {
         chipLabel: String? = nil,
         isVisitor: Bool = false,
         origin: String? = nil,
-        pulseTopic: PulseTopic? = nil
+        pulseTopic: PulseTopic? = nil,
+        status: PulsePostStatus? = nil
     ) {
         self.id = id
         self.authorName = authorName
@@ -183,6 +194,7 @@ public struct PulsePostCardContent: Sendable, Hashable, Identifiable {
         self.isVisitor = isVisitor
         self.origin = origin
         self.pulseTopic = pulseTopic
+        self.status = status
     }
 }
 
@@ -280,6 +292,11 @@ public struct PulsePostCard: View {
             }
             if let attendees = content.attendees {
                 attendeeStrip(attendees)
+            }
+            // On its own line, so the words are never cut short (Pulse S7).
+            if let status = content.status {
+                PulsePostStatusPill(status: status, postId: content.id)
+                    .padding(.top, Spacing.s1)
             }
             if !content.actions.isSeeded {
                 reactionStrip
@@ -397,9 +414,6 @@ public struct PulsePostCard: View {
             ForEach(content.reactions) { reaction in
                 reactionPill(reaction)
             }
-            if content.actions.isSolved {
-                solvedBadge
-            }
             Spacer()
             if let onToggleSave {
                 Button(action: onToggleSave) {
@@ -460,24 +474,6 @@ public struct PulsePostCard: View {
         .padding(.top, Spacing.s2)
     }
 
-    /// Inline "Solved" pill — RN renders the same badge once
-    /// `state === 'solved'` (`PostCard.tsx:474-479`).
-    private var solvedBadge: some View {
-        HStack(spacing: Spacing.s1) {
-            Icon(.checkCircle, size: 11, strokeWidth: 2.4, color: Theme.Color.success)
-            Text("Solved")
-                .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(Theme.Color.success)
-        }
-        .padding(.horizontal, Spacing.s2)
-        .frame(height: 22)
-        .background(Theme.Color.successLight)
-        .clipShape(Capsule())
-        .accessibilityElement()
-        .accessibilityLabel("Solved")
-        .accessibilityIdentifier("pulsePostSolvedBadge_\(content.id)")
-    }
-
     /// Cycling tint palette for the Event attendee mini-avatars (decorative;
     /// the live feed has no per-attendee identity, fixtures echo the design).
     private static let attendeeTints: [FeedAvatarTint] = [.orange, .sky, .violet, .green]
@@ -519,6 +515,7 @@ public struct PulsePostCard: View {
         if content.isCurator { parts.append("Pantopus curator") }
         if content.isVisitor { parts.append("Visitor") }
         if let topic = content.pulseTopic { parts.append(topic.label) }
+        if let status = content.status { parts.append(status.text) }
         if let title = content.title, !title.isEmpty { parts.append(title) }
         if !content.body.isEmpty { parts.append(content.body) }
         if !content.media.isEmpty {

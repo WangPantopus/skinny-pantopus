@@ -36,13 +36,10 @@ enum PlaceRootResolver {
         openableHomes(in: response).contains { $0.id == homeId }
     }
 
-    /// The landing rule: the Home where the person is primary owner, else the
-    /// newest shared Home, else their private setup. A resident's own private
-    /// setup is their Place until a household shares it (as on the web).
+    /// Where Place lands: the person's default Home (see
+    /// `MyHomesResponse.defaultHomeId`; Today follows the same Home).
     static func landingHomeId(in response: MyHomesResponse) -> String? {
-        response.sharedHomes.first { $0.isPrimaryOwner == true }?.id
-            ?? response.sharedHomes.first?.id
-            ?? response.homes.first { $0.hasValidListContext && $0.accessKind == "private_setup" }?.id
+        response.defaultHomeId
     }
 
     /// The root the home list decides, keeping the session's current Home while

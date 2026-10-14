@@ -329,6 +329,7 @@ import app.pantopus.android.ui.screens.place.HubVerificationTarget
 import app.pantopus.android.ui.screens.place.PLACE_DASHBOARD_HOME_ID_KEY
 import app.pantopus.android.ui.screens.place.PlaceDashboardScreen
 import app.pantopus.android.ui.screens.place.PlaceDashboardSkeleton
+import app.pantopus.android.ui.screens.place.PlaceHomeShortcut
 import app.pantopus.android.ui.screens.place.PlaceRootBar
 import app.pantopus.android.ui.screens.place.PlaceRootViewed
 import app.pantopus.android.ui.screens.place.SavedPlaceRootScreen
@@ -7072,6 +7073,8 @@ private fun PlaceTabRoot(
                         onSwitchHome = host::switchHome,
                         onPlaceUnavailable = host::replaceUnavailable,
                         scrollToTop = scrollToTop,
+                        // A new default changes where Place lands next time, not the Home on screen now.
+                        onDefaultHomeChange = { host.switchHome(current.homeId) },
                     )
                 }
             HomeLanding.Homes -> {
@@ -7126,6 +7129,7 @@ private fun PlaceDashboardDestination(
     onSwitchHome: (String) -> Unit,
     onPlaceUnavailable: (String) -> Unit,
     scrollToTop: Flow<Unit>? = null,
+    onDefaultHomeChange: () -> Unit = {},
 ) {
     PlaceDashboardScreen(
         homeId = homeId,
@@ -7140,10 +7144,21 @@ private fun PlaceDashboardDestination(
         onOpenMailDay = { navController.navigate(ChildRoutes.mailDay()) },
         onOpenPrivacyMirror = { navController.navigate(ChildRoutes.placePrivacyMirror(homeId)) },
         onOpenHomeTools = { navController.navigate(ChildRoutes.homeDashboard(homeId)) },
+        onOpenHomeShortcut = { shortcut ->
+            navController.navigate(
+                when (shortcut) {
+                    PlaceHomeShortcut.TASKS -> ChildRoutes.homeTasks(homeId)
+                    PlaceHomeShortcut.MEMBERS -> ChildRoutes.homeMembers(homeId)
+                    PlaceHomeShortcut.DOCUMENTS -> ChildRoutes.homeDocs(homeId)
+                    PlaceHomeShortcut.EMERGENCY -> ChildRoutes.homeEmergency(homeId)
+                },
+            )
+        },
         onOpenMenu = onOpenMenu,
         onOpenNotifications = { navController.navigate(ChildRoutes.NOTIFICATIONS) },
         onPlaceUnavailable = onPlaceUnavailable,
         onManageHomes = { navController.navigate(ChildRoutes.MY_HOMES) },
+        onDefaultHomeChange = onDefaultHomeChange,
         scrollToTop = scrollToTop,
     )
 }

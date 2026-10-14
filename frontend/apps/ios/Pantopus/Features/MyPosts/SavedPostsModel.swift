@@ -183,7 +183,8 @@ public final class SavedPostsModel {
             },
             body: MyPostsViewModel.postBody(for: dto),
             bodyEmphasis: .primary,
-            headerChips: [MyPostsViewModel.intentChip(for: intent, isArchived: false)],
+            headerChips: [MyPostsViewModel.intentChip(for: intent, isArchived: false)]
+                + [MyPostsViewModel.lifecycleChip(for: dto)].compactMap(\.self),
             timeMeta: meta,
             engagement: RowEngagement(
                 items: MyPostsViewModel.engagementItems(for: dto, intent: intent),

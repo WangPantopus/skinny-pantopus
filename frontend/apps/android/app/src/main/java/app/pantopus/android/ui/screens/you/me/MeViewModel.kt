@@ -387,7 +387,8 @@ class MeViewModel
             )
         }
 
-        private fun primaryHome(homes: List<MyHome>): MyHome? = homes.firstOrNull { it.isPrimaryOwner == true } ?: homes.firstOrNull()
+        private fun primaryHome(homes: List<MyHome>): MyHome? =
+            homes.firstOrNull { it.isDefault == true } ?: homes.firstOrNull { it.isPrimaryOwner == true } ?: homes.firstOrNull()
 
         /**
          * The primary Home's dashboard; null with no Home or when it didn't load. Owners and household roles read it
