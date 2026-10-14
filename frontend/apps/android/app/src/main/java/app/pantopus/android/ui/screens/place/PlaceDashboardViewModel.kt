@@ -9,12 +9,15 @@ import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.api.net.refusesStoredCopy
+import app.pantopus.android.data.api.net.safeApiCall
+import app.pantopus.android.data.homes.HomeDashboardAccessRepository
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.data.notifications.NotificationsRepository
 import app.pantopus.android.data.place.PlaceRepository
 import app.pantopus.android.data.store.StoreKind
 import app.pantopus.android.data.store.Stored
 import app.pantopus.android.ui.components.RefreshNotice
+import app.pantopus.android.ui.screens.homes.HomeCopyGate
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -37,6 +40,7 @@ class PlaceDashboardViewModel
         private val repo: PlaceRepository,
         private val notificationsRepo: NotificationsRepository,
         private val homesRepo: HomesRepository,
+        private val accessRepo: HomeDashboardAccessRepository,
     ) : ViewModel() {
         private val _state = MutableStateFlow<PlaceDashboardUiState>(PlaceDashboardUiState.Loading)
         val state: StateFlow<PlaceDashboardUiState> = _state.asStateFlow()
@@ -53,6 +57,12 @@ class PlaceDashboardViewModel
         /** The quiet "Couldn't refresh. Showing 3:42 PM." line when a read fails on a copy past a day old. */
         private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
         val refreshNotice: StateFlow<RefreshNotice?> = _refreshNotice.asStateFlow()
+
+        private val _homeShortcuts = MutableStateFlow<List<PlaceHomeShortcut>>(emptyList())
+
+        /** The household shortcuts under Home tools that the person's access at this Home allows ([readShortcuts]). */
+        val homeShortcuts: StateFlow<List<PlaceHomeShortcut>> = _homeShortcuts.asStateFlow()
+        private var shortcutsJob: Job? = null
 
         private var homeId: String? = null
         private var readJob: Job? = null
@@ -71,8 +81,10 @@ class PlaceDashboardViewModel
             active = true
             if (!householdViewer(homeId)) clearPrivateCopy(homeId)
             val shown = (_state.value as? PlaceDashboardUiState.Loaded)?.takeIf { this.homeId == homeId }
+            if (this.homeId != homeId) _homeShortcuts.value = emptyList()
             this.homeId = homeId
             refreshUnread()
+            readShortcuts(homeId)
             when {
                 shown != null && reloadPending -> read(homeId, force = true)
                 shown != null -> read(homeId, force = false)
@@ -91,6 +103,7 @@ class PlaceDashboardViewModel
             active = false
             readVersion++
             readJob?.cancel()
+            shortcutsJob?.cancel()
             _refreshing.value = false
             homeId?.takeUnless(::householdViewer)?.let(::clearPrivateCopy)
         }
@@ -111,6 +124,26 @@ class PlaceDashboardViewModel
             val id = homeId ?: return
             read(id, force = true)
             refreshUnread()
+            readShortcuts(id)
+        }
+
+        /**
+         * The shortcuts follow the person's access at this Home, read the way Home tools reads it
+         * (`GET /api/homes/:id/dashboard-access`) and gated on the same permissions. The access copy Home tools keeps for
+         * an owner or household member shows them at once. A refusal leaves none; a failed read keeps what shows.
+         */
+        private fun readShortcuts(id: String) {
+            shortcutsJob?.cancel()
+            if (_homeShortcuts.value.isEmpty()) {
+                accessRepo.storedAuthority(id)?.takeIf { it.homeId == id && HomeCopyGate.householdAccess(it) }?.let {
+                    _homeShortcuts.value = PlaceHomeShortcut.allowedBy(it)
+                }
+            }
+            shortcutsJob =
+                viewModelScope.launch {
+                    val authority = (safeApiCall { accessRepo.read(id) } as? NetworkResult.Success)?.data ?: return@launch
+                    if (homeId == id && authority.homeId == id) _homeShortcuts.value = PlaceHomeShortcut.allowedBy(authority)
+                }
         }
 
         /** Re-read the bell's count with every load and refresh. A failed read keeps the last count. */
