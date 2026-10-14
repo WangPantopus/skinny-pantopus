@@ -66,8 +66,8 @@ function timeText(date, tz) {
   return new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit' }).format(date);
 }
 
-/** "today 5:30 PM", "tomorrow 9:00 AM", "Sun 1:25 PM" (or "Sunday 1:25 PM" with long). */
-function whenText(startsAt, tz, { long = false, hideTime = false, dayPart = null } = {}) {
+/** "today 5:30 PM", "tomorrow 9:00 AM", "Sun 1:25 PM" (or "Sunday 1:25 PM" with long; "Sunday at 1:25 PM" with at). */
+function whenText(startsAt, tz, { long = false, hideTime = false, dayPart = null, at = false } = {}) {
   const date = new Date(startsAt);
   if (Number.isNaN(date.getTime())) return '';
   const zone = tz || rules.DEFAULT_TIMEZONE;
@@ -79,7 +79,7 @@ function whenText(startsAt, tz, { long = false, hideTime = false, dayPart = null
   else if (day === tomorrow) dayText = 'tomorrow';
   else dayText = new Intl.DateTimeFormat('en-US', { timeZone: zone, weekday: long ? 'long' : 'short' }).format(date);
   if (hideTime) return `${dayText} ${dayPart || ''}`.trim();
-  return `${dayText} ${timeText(date, zone)}`;
+  return `${dayText} ${at ? 'at ' : ''}${timeText(date, zone)}`;
 }
 
 function bandText(band) {
@@ -279,9 +279,10 @@ async function requestReceived({ plan, request, requesterUser, hostFirst, reques
     link: `/plans/${plan.post_id}/requests`,
     plan,
     recipientIsIn: true,
+    // requester_name (a first name, as in the title) lets a failed Accept/Decline button say whom it was for.
     metadata: head
-      ? { request_id: request.id, bundled: true, bundle_head_id: head.id }
-      : { request_id: request.id },
+      ? { request_id: request.id, requester_name: requesterFirst, bundled: true, bundle_head_id: head.id }
+      : { request_id: request.id, requester_name: requesterFirst },
     holdUntil: head ? new Date(new Date(head.created_at).getTime() + BUNDLE_WINDOW_MS) : null,
   });
 }
@@ -317,7 +318,8 @@ async function declined({ plan, request, hostFirst }) {
 }
 
 async function changed({ plan, request, hostFirst, timeMoved, placeChanged }) {
-  const when = whenText(plan.post.event_date, plan.timezone, { long: true });
+  // Board H11: "Now Sunday at 2:00 PM. Still coming?" (the apps preview the same words).
+  const when = whenText(plan.post.event_date, plan.timezone, { long: true, at: true });
   let title;
   let body;
   if (timeMoved && placeChanged) {
@@ -327,8 +329,9 @@ async function changed({ plan, request, hostFirst, timeMoved, placeChanged }) {
     title = `${hostFirst} moved the ${noun(plan)}`;
     body = `Now ${when}. Still coming?`;
   } else {
+    // The apps preview this push on H11 before saving; the new area's name isn't known until then.
     title = `${hostFirst} changed the place`;
-    body = `It's now ${placePhrase(plan, hostFirst)}. Still coming?`;
+    body = "It's at a new place now. Still coming?";
   }
   return notify({
     userId: request.user_id,
