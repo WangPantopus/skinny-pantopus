@@ -366,10 +366,10 @@ fun FeedScreen(
                             topCard?.let { card -> Box(modifier = Modifier.padding(Spacing.s3)) { card() } }
                             Box(modifier = if (topCard != null) Modifier else Modifier.weight(1f)) {
                                 FeedEmptyState(content = s.content) {
-                                    if (s.needsArea) {
-                                        contextBarViewModel.openSwitcher()
-                                    } else {
-                                        onEmptyCta?.invoke() ?: onCompose(activeIntent)
+                                    when {
+                                        s.needsArea -> contextBarViewModel.openSwitcher()
+                                        s.clearsTopic -> viewModel.selectTopic(null)
+                                        else -> onEmptyCta?.invoke() ?: onCompose(activeIntent)
                                     }
                                 }
                             }
@@ -514,6 +514,10 @@ fun FeedScreen(
                     viewModel.dismissOverflow()
                     viewModel.muteTopic(row.id)
                 },
+                onMuteThisTopic = {
+                    viewModel.dismissOverflow()
+                    viewModel.muteThisTopic(row.id)
+                },
                 onMarkSolved = {
                     viewModel.dismissOverflow()
                     viewModel.markSolved(row.id)
@@ -600,6 +604,7 @@ fun FeedScreen(
         FeedPreferencesSheet(
             onClose = { viewModel.dismissPreferences() },
             onPrefsChanged = { viewModel.refresh() },
+            onTopicUnmuted = viewModel::topicUnmuted,
         )
     }
 }
@@ -708,6 +713,7 @@ private fun PostOverflowSheet(
     onNotHelpful: () -> Unit,
     onMuteAuthor: () -> Unit,
     onMuteTopic: () -> Unit,
+    onMuteThisTopic: () -> Unit,
     onMarkSolved: () -> Unit,
     onReport: () -> Unit,
     onDelete: () -> Unit,
@@ -754,6 +760,13 @@ private fun PostOverflowSheet(
                     label = "Mute ${actions.muteEntityName}",
                     testTag = "pulseFeedOverflowMuteAuthor",
                     onClick = onMuteAuthor,
+                )
+            }
+            if (actions.canMuteThisTopic) {
+                OverflowAction(
+                    label = "Mute this topic",
+                    testTag = "pulseFeedOverflowMuteThisTopic",
+                    onClick = onMuteThisTopic,
                 )
             }
             val topic = actions.topicLabel
@@ -1137,7 +1150,7 @@ internal fun FeedEmptyState(
                     .clickable(onClick = onCta)
                     .padding(horizontal = 22.dp)
                     .height(44.dp)
-                    .testTag("pulseEmptyCreatePost"),
+                    .testTag(content.ctaTag),
             contentAlignment = Alignment.Center,
         ) {
             Row(

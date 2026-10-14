@@ -3,6 +3,7 @@
 package app.pantopus.android.ui.screens.feed
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -27,6 +29,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -57,9 +61,13 @@ import app.pantopus.android.ui.theme.Spacing
 fun FeedPreferencesSheet(
     onClose: () -> Unit,
     onPrefsChanged: () -> Unit = {},
+    /** A Pulse topic was unmuted here (its id): the feed shows its posts again. */
+    onTopicUnmuted: (String) -> Unit = {},
     viewModel: FeedPreferencesViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val mutedTopics by viewModel.mutedTopics.collectAsStateWithLifecycle()
+    LaunchedEffect(viewModel) { viewModel.unmutedTopics.collect { onTopicUnmuted(it) } }
     val isSaving by viewModel.isSaving.collectAsStateWithLifecycle()
     val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
     val toast by viewModel.toastMessage.collectAsStateWithLifecycle()
@@ -132,6 +140,8 @@ fun FeedPreferencesSheet(
                             viewModel.setShowPolitics(it)
                             onPrefsChanged()
                         },
+                        mutedTopics = mutedTopics,
+                        onUnmuteTopic = viewModel::unmuteTopic,
                     )
             }
             toast?.let { message ->
@@ -213,6 +223,8 @@ private fun PreferencesLoaded(
     onShowDeals: (Boolean) -> Unit,
     onShowAlerts: (Boolean) -> Unit,
     onShowPolitics: (Boolean) -> Unit,
+    mutedTopics: MutedTopicsUiState = MutedTopicsUiState.Loaded(emptyList()),
+    onUnmuteTopic: (MutedTopicUi) -> Unit = {},
 ) {
     Column(modifier = Modifier.fillMaxWidth().testTag("pulsePreferencesLoaded")) {
         SectionLabel("PLACE FEED")
@@ -243,6 +255,7 @@ private fun PreferencesLoaded(
             testTag = "pulsePreferencesShowPolitics",
             onCheckedChange = onShowPolitics,
         )
+        MutedTopicsSection(state = mutedTopics, onUnmute = onUnmuteTopic)
         Row(
             modifier = Modifier.fillMaxWidth().padding(top = Spacing.s5),
             verticalAlignment = Alignment.CenterVertically,
@@ -260,6 +273,85 @@ private fun PreferencesLoaded(
                 color = PantopusColors.appTextMuted,
             )
         }
+    }
+}
+
+/**
+ * The Pulse topics the person muted (Pulse build S4), each with "Unmute"; ids `pulsePreferencesMutedTopics`,
+ * `pulsePreferencesMutedTopic_<topic id>` and `pulsePreferencesUnmuteTopic_<topic id>`, as on iOS.
+ */
+@Composable
+private fun MutedTopicsSection(
+    state: MutedTopicsUiState,
+    onUnmute: (MutedTopicUi) -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth().testTag("pulsePreferencesMutedTopics")) {
+        SectionLabel("MUTED TOPICS")
+        when (state) {
+            MutedTopicsUiState.Loading -> Shimmer(width = 320.dp, height = 44.dp, cornerRadius = Radii.sm)
+            MutedTopicsUiState.Error ->
+                Text(text = "Couldn't load your muted topics.", fontSize = 13.sp, color = PantopusColors.appTextSecondary)
+            is MutedTopicsUiState.Loaded ->
+                if (state.items.isEmpty()) {
+                    Text(
+                        text = "No muted topics.",
+                        fontSize = 13.sp,
+                        color = PantopusColors.appTextSecondary,
+                        modifier = Modifier.padding(bottom = Spacing.s2),
+                    )
+                } else {
+                    state.items.forEach { item -> MutedTopicRow(item = item, onUnmute = { onUnmute(item) }) }
+                }
+        }
+    }
+}
+
+@Composable
+private fun MutedTopicRow(
+    item: MutedTopicUi,
+    onUnmute: () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth().testTag("pulsePreferencesMutedTopic_${item.topic.key}")) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
+        ) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = item.topic.label,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = PantopusColors.appText,
+                )
+                Text(
+                    text = if (item.areaId == null) "Everywhere" else "In one area",
+                    fontSize = 12.sp,
+                    color = PantopusColors.appTextSecondary,
+                )
+            }
+            Box(
+                modifier =
+                    Modifier
+                        .clip(RoundedCornerShape(Radii.pill))
+                        .border(1.dp, PantopusColors.appBorderStrong, RoundedCornerShape(Radii.pill))
+                        .testTag("pulsePreferencesUnmuteTopic_${item.topic.key}")
+                        .clickable(role = Role.Button, onClick = onUnmute)
+                        .clearAndSetSemantics { contentDescription = "Unmute ${item.topic.label}" }
+                        .heightIn(min = 44.dp)
+                        .padding(horizontal = Spacing.s4),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(text = "Unmute", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.primary600)
+            }
+        }
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(PantopusColors.appBorderSubtle),
+        )
     }
 }
 
