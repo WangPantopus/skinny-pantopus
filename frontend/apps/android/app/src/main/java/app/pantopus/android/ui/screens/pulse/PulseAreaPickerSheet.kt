@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -34,7 +35,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.PantopusTextField
 import app.pantopus.android.ui.components.Shimmer
-import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.Spacing
@@ -56,7 +56,7 @@ internal fun PulseAreaPickerSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = PantopusColors.appBg,
+        containerColor = MaterialTheme.colorScheme.background,
     ) {
         Column(
             modifier = Modifier.fillMaxWidth().fillMaxHeight(SHEET_HEIGHT).padding(Spacing.s4).testTag("pulseAreaPicker"),
@@ -66,7 +66,7 @@ internal fun PulseAreaPickerSheet(
                 text = if (searching) "Pick a town to look around" else "Viewing area",
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
-                color = PantopusColors.appText,
+                color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.semantics { heading() },
             )
             if (searching) {
@@ -139,13 +139,13 @@ private fun PulseAreaRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
     ) {
-        Text(choice.name, color = PantopusColors.appText, fontSize = 16.sp, modifier = Modifier.weight(1f))
+        Text(choice.name, color = MaterialTheme.colorScheme.onSurface, fontSize = 16.sp, modifier = Modifier.weight(1f))
         if (isSelected) {
             PantopusIconImage(
                 PantopusIcon.Check,
                 contentDescription = "Selected",
                 size = Spacing.s5,
-                tint = PantopusColors.primary600,
+                tint = MaterialTheme.colorScheme.primary,
             )
         }
     }

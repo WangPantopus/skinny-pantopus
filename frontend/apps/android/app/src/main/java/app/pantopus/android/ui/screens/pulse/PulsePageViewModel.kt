@@ -362,8 +362,8 @@ class PulsePageViewModel
             val author = actions.muteEntityId
             val entity = actions.muteEntityType
             if (author != null && entity != null && moderation.isMuted(entity, author)) return false
-            if (actions.isOwner) return true
-            val topic = actions.pulseTopic?.key ?: return true
+            val topic = actions.pulseTopic?.key
+            if (actions.isOwner || topic == null) return true
             return (topic to card.areaId) !in mutedTopics && (topic to null) !in mutedTopics
         }
 

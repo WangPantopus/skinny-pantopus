@@ -38,6 +38,7 @@ import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
+import app.pantopus.android.ui.theme.adaptiveColor
 
 /**
  * The Pulse topics (build spec section 4, contract section 1): a fixed list of 12, in this order. A topic filters; it
@@ -160,7 +161,7 @@ fun PulseTopicChipRow(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .background(PantopusColors.appSurface)
+                .background(adaptiveColor(PantopusColors.appSurface, PantopusColors.appSurfaceDark))
                 .horizontalScroll(rememberScrollState())
                 .padding(horizontal = Spacing.s3, vertical = 6.dp)
                 .selectableGroup()
@@ -205,10 +206,19 @@ private fun TopicChip(
         modifier =
             Modifier
                 .clip(RoundedCornerShape(Radii.pill))
-                .background(if (active) PantopusColors.primary600 else PantopusColors.appSurfaceRaised)
+                .background(
+                    if (active) {
+                        PantopusColors.primary600
+                    } else {
+                        adaptiveColor(
+                            PantopusColors.appSurfaceRaised,
+                            PantopusColors.appSurfaceRaisedDark,
+                        )
+                    },
+                )
                 .border(
                     1.dp,
-                    if (active) PantopusColors.primary600 else PantopusColors.appBorder,
+                    if (active) PantopusColors.primary600 else adaptiveColor(PantopusColors.appBorder, PantopusColors.appBorderDark),
                     RoundedCornerShape(Radii.pill),
                 ).testTag(testTag)
                 // One node per chip, read once with its state: the role and selection stay, the inner label goes.
@@ -224,14 +234,30 @@ private fun TopicChip(
                 contentDescription = null,
                 size = 14.dp,
                 strokeWidth = 2.2f,
-                tint = if (active) PantopusColors.appTextInverse else PantopusColors.appTextStrong,
+                tint =
+                    if (active) {
+                        PantopusColors.appTextInverse
+                    } else {
+                        adaptiveColor(
+                            PantopusColors.appTextStrong,
+                            PantopusColors.appTextStrongDark,
+                        )
+                    },
             )
         }
         Text(
             text = label,
             fontSize = 12.sp,
             fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
-            color = if (active) PantopusColors.appTextInverse else PantopusColors.appTextStrong,
+            color =
+                if (active) {
+                    PantopusColors.appTextInverse
+                } else {
+                    adaptiveColor(
+                        PantopusColors.appTextStrong,
+                        PantopusColors.appTextStrongDark,
+                    )
+                },
         )
     }
 }
@@ -243,8 +269,8 @@ private fun MoreTopicsChip(onClick: () -> Unit) {
         modifier =
             Modifier
                 .clip(RoundedCornerShape(Radii.pill))
-                .background(PantopusColors.appSurfaceRaised)
-                .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.pill))
+                .background(adaptiveColor(PantopusColors.appSurfaceRaised, PantopusColors.appSurfaceRaisedDark))
+                .border(1.dp, adaptiveColor(PantopusColors.appBorder, PantopusColors.appBorderDark), RoundedCornerShape(Radii.pill))
                 .testTag("pulseTopicChip_more")
                 .clickable(role = Role.Button, onClick = onClick)
                 .clearAndSetSemantics { contentDescription = "More topics" }
@@ -252,13 +278,18 @@ private fun MoreTopicsChip(onClick: () -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(text = "More", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = PantopusColors.primary600)
+        Text(
+            text = "More",
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            color = adaptiveColor(PantopusColors.primary600, PantopusColors.primary300),
+        )
         PantopusIconImage(
             icon = PantopusIcon.ChevronRight,
             contentDescription = null,
             size = 12.dp,
             strokeWidth = 2.2f,
-            tint = PantopusColors.primary600,
+            tint = adaptiveColor(PantopusColors.primary600, PantopusColors.primary300),
         )
     }
 }

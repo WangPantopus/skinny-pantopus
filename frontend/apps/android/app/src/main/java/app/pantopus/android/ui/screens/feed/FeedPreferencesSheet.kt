@@ -48,6 +48,7 @@ import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
+import app.pantopus.android.ui.theme.adaptiveColor
 
 /**
  * Pulse Preferences — the bottom sheet behind the Pulse header's
@@ -79,7 +80,7 @@ fun FeedPreferencesSheet(
     ModalBottomSheet(
         onDismissRequest = onClose,
         sheetState = sheetState,
-        containerColor = PantopusColors.appBg,
+        containerColor = adaptiveColor(PantopusColors.appBg, PantopusColors.appBgDark),
         modifier = Modifier.testTag("pulsePreferencesSheet"),
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s5)) {
@@ -91,7 +92,7 @@ fun FeedPreferencesSheet(
                     text = "Pulse Preferences",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
-                    color = PantopusColors.appText,
+                    color = adaptiveColor(PantopusColors.appText, PantopusColors.appTextDark),
                     modifier = Modifier.semantics { heading() },
                 )
                 Spacer(modifier = Modifier.weight(1f))
@@ -108,7 +109,7 @@ fun FeedPreferencesSheet(
                         icon = PantopusIcon.X,
                         contentDescription = null,
                         size = 18.dp,
-                        tint = PantopusColors.appTextSecondary,
+                        tint = adaptiveColor(PantopusColors.appTextSecondary, PantopusColors.appTextSecondaryDark),
                     )
                 }
             }
@@ -117,7 +118,7 @@ fun FeedPreferencesSheet(
                     Modifier
                         .fillMaxWidth()
                         .height(1.dp)
-                        .background(PantopusColors.appBorderSubtle),
+                        .background(adaptiveColor(PantopusColors.appBorderSubtle, PantopusColors.appBorderDark)),
             )
             refreshNotice?.let { RefreshFailedLine(it) }
             when (val s = state) {
@@ -149,7 +150,7 @@ fun FeedPreferencesSheet(
                     text = message,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
-                    color = PantopusColors.error,
+                    color = adaptiveColor(PantopusColors.error, PantopusColors.errorLight),
                     modifier = Modifier.padding(top = Spacing.s2).testTag("pulsePreferencesToast"),
                 )
             }
@@ -186,15 +187,15 @@ private fun PreferencesError(
             icon = PantopusIcon.AlertCircle,
             contentDescription = null,
             size = 32.dp,
-            tint = PantopusColors.error,
+            tint = adaptiveColor(PantopusColors.error, PantopusColors.errorLight),
         )
         Text(
             text = "Couldn't load preferences",
             fontSize = 16.sp,
             fontWeight = FontWeight.Bold,
-            color = PantopusColors.appText,
+            color = adaptiveColor(PantopusColors.appText, PantopusColors.appTextDark),
         )
-        Text(text = message, fontSize = 13.sp, color = PantopusColors.appTextSecondary)
+        Text(text = message, fontSize = 13.sp, color = adaptiveColor(PantopusColors.appTextSecondary, PantopusColors.appTextSecondaryDark))
         Box(
             modifier =
                 Modifier
@@ -265,12 +266,12 @@ private fun PreferencesLoaded(
                 icon = PantopusIcon.Info,
                 contentDescription = null,
                 size = 13.dp,
-                tint = PantopusColors.appTextMuted,
+                tint = adaptiveColor(PantopusColors.appTextMuted, PantopusColors.appTextSecondaryDark),
             )
             Text(
                 text = "These preferences sync across all your devices.",
                 fontSize = 12.sp,
-                color = PantopusColors.appTextMuted,
+                color = adaptiveColor(PantopusColors.appTextMuted, PantopusColors.appTextSecondaryDark),
             )
         }
     }
@@ -290,13 +291,17 @@ private fun MutedTopicsSection(
         when (state) {
             MutedTopicsUiState.Loading -> Shimmer(width = 320.dp, height = 44.dp, cornerRadius = Radii.sm)
             MutedTopicsUiState.Error ->
-                Text(text = "Couldn't load your muted topics.", fontSize = 13.sp, color = PantopusColors.appTextSecondary)
+                Text(
+                    text = "Couldn't load your muted topics.",
+                    fontSize = 13.sp,
+                    color = adaptiveColor(PantopusColors.appTextSecondary, PantopusColors.appTextSecondaryDark),
+                )
             is MutedTopicsUiState.Loaded ->
                 if (state.items.isEmpty()) {
                     Text(
                         text = "No muted topics.",
                         fontSize = 13.sp,
-                        color = PantopusColors.appTextSecondary,
+                        color = adaptiveColor(PantopusColors.appTextSecondary, PantopusColors.appTextSecondaryDark),
                         modifier = Modifier.padding(bottom = Spacing.s2),
                     )
                 } else {
@@ -322,19 +327,23 @@ private fun MutedTopicRow(
                     text = item.topic.label,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = PantopusColors.appText,
+                    color = adaptiveColor(PantopusColors.appText, PantopusColors.appTextDark),
                 )
                 Text(
                     text = if (item.areaId == null) "Everywhere" else "In one area",
                     fontSize = 12.sp,
-                    color = PantopusColors.appTextSecondary,
+                    color = adaptiveColor(PantopusColors.appTextSecondary, PantopusColors.appTextSecondaryDark),
                 )
             }
             Box(
                 modifier =
                     Modifier
                         .clip(RoundedCornerShape(Radii.pill))
-                        .border(1.dp, PantopusColors.appBorderStrong, RoundedCornerShape(Radii.pill))
+                        .border(
+                            1.dp,
+                            adaptiveColor(PantopusColors.appBorderStrong, PantopusColors.appBorderStrongDark),
+                            RoundedCornerShape(Radii.pill),
+                        )
                         .testTag("pulsePreferencesUnmuteTopic_${item.topic.key}")
                         .clickable(role = Role.Button, onClick = onUnmute)
                         .clearAndSetSemantics { contentDescription = "Unmute ${item.topic.label}" }
@@ -342,7 +351,12 @@ private fun MutedTopicRow(
                         .padding(horizontal = Spacing.s4),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(text = "Unmute", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.primary600)
+                Text(
+                    text = "Unmute",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = adaptiveColor(PantopusColors.primary600, PantopusColors.primary300),
+                )
             }
         }
         Box(
@@ -350,7 +364,7 @@ private fun MutedTopicRow(
                 Modifier
                     .fillMaxWidth()
                     .height(1.dp)
-                    .background(PantopusColors.appBorderSubtle),
+                    .background(adaptiveColor(PantopusColors.appBorderSubtle, PantopusColors.appBorderDark)),
         )
     }
 }
@@ -361,7 +375,7 @@ private fun SectionLabel(text: String) {
         text = text,
         fontSize = 11.sp,
         fontWeight = FontWeight.Bold,
-        color = PantopusColors.appTextMuted,
+        color = adaptiveColor(PantopusColors.appTextMuted, PantopusColors.appTextSecondaryDark),
         modifier = Modifier.padding(top = Spacing.s5, bottom = Spacing.s2),
     )
 }
@@ -386,9 +400,13 @@ private fun PreferenceRow(
                     text = title,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = PantopusColors.appText,
+                    color = adaptiveColor(PantopusColors.appText, PantopusColors.appTextDark),
                 )
-                Text(text = body, fontSize = 12.sp, color = PantopusColors.appTextSecondary)
+                Text(
+                    text = body,
+                    fontSize = 12.sp,
+                    color = adaptiveColor(PantopusColors.appTextSecondary, PantopusColors.appTextSecondaryDark),
+                )
             }
             Switch(
                 checked = checked,
@@ -410,7 +428,7 @@ private fun PreferenceRow(
                 Modifier
                     .fillMaxWidth()
                     .height(1.dp)
-                    .background(PantopusColors.appBorderSubtle),
+                    .background(adaptiveColor(PantopusColors.appBorderSubtle, PantopusColors.appBorderDark)),
         )
     }
 }

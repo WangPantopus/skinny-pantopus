@@ -17,6 +17,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.pantopus.android.ui.theme.PantopusColors
+import app.pantopus.android.ui.theme.adaptiveColor
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -45,14 +46,14 @@ fun RefreshFailedLine(
         Text(
             "Couldn't refresh. Showing $shownTime.",
             fontSize = 13.sp,
-            color = PantopusColors.appTextSecondary,
+            color = adaptiveColor(PantopusColors.appTextSecondary, PantopusColors.appTextSecondaryDark),
             modifier = Modifier.weight(1f),
         )
         Text(
             "Retry",
             fontSize = 13.sp,
             fontWeight = FontWeight.SemiBold,
-            color = PantopusColors.primary600,
+            color = adaptiveColor(PantopusColors.primary600, PantopusColors.primary300),
             modifier =
                 Modifier
                     .clip(RoundedCornerShape(8.dp))

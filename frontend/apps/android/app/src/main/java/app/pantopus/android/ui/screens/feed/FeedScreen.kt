@@ -101,6 +101,7 @@ import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
+import app.pantopus.android.ui.theme.adaptiveColor
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 
@@ -748,7 +749,7 @@ internal fun PostOverflowSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = PantopusColors.appBg,
+        containerColor = adaptiveColor(PantopusColors.appBg, PantopusColors.appBgDark),
         modifier = Modifier.testTag("pulseFeedOverflowSheet"),
     ) {
         Column(
@@ -759,7 +760,7 @@ internal fun PostOverflowSheet(
                 text = "Post options",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
-                color = PantopusColors.appText,
+                color = adaptiveColor(PantopusColors.appText, PantopusColors.appTextDark),
             )
             OverflowAction(
                 label = if (actions.isSaved) "Remove bookmark" else "Save post",
@@ -854,7 +855,15 @@ private fun OverflowAction(
     ) {
         Text(
             text = label,
-            color = if (isDestructive) PantopusColors.error else PantopusColors.appText,
+            color =
+                if (isDestructive) {
+                    adaptiveColor(
+                        PantopusColors.error,
+                        PantopusColors.errorLight,
+                    )
+                } else {
+                    adaptiveColor(PantopusColors.appText, PantopusColors.appTextDark)
+                },
             modifier = Modifier.fillMaxWidth(),
         )
     }
@@ -1075,7 +1084,7 @@ internal fun PulseMoreMenu(
                 icon = PantopusIcon.MoreVertical,
                 contentDescription = null,
                 size = 20.dp,
-                tint = PantopusColors.appText,
+                tint = adaptiveColor(PantopusColors.appText, PantopusColors.appTextDark),
             )
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
@@ -1107,8 +1116,15 @@ private fun PulseMenuItem(
     onClick: () -> Unit,
 ) {
     DropdownMenuItem(
-        text = { Text(title, color = PantopusColors.appText) },
-        leadingIcon = { PantopusIconImage(icon = icon, contentDescription = null, size = 18.dp, tint = PantopusColors.appText) },
+        text = { Text(title, color = adaptiveColor(PantopusColors.appText, PantopusColors.appTextDark)) },
+        leadingIcon = {
+            PantopusIconImage(
+                icon = icon,
+                contentDescription = null,
+                size = 18.dp,
+                tint = adaptiveColor(PantopusColors.appText, PantopusColors.appTextDark),
+            )
+        },
         onClick = onClick,
         modifier = Modifier.testTag(tag),
     )
@@ -1137,6 +1153,7 @@ internal fun FeedEmptyState(
     content: FeedEmptyContent,
     onCta: () -> Unit,
 ) {
+    val footerEmphasisColor = adaptiveColor(PantopusColors.appTextStrong, PantopusColors.appTextStrongDark)
     Column(
         modifier =
             Modifier
@@ -1166,14 +1183,14 @@ internal fun FeedEmptyState(
             text = content.headline,
             fontSize = 20.sp,
             fontWeight = FontWeight.Bold,
-            color = PantopusColors.appText,
+            color = adaptiveColor(PantopusColors.appText, PantopusColors.appTextDark),
             textAlign = TextAlign.Center,
         )
         Spacer(modifier = Modifier.size(Spacing.s2))
         Text(
             text = content.body,
             fontSize = 13.5.sp,
-            color = PantopusColors.appTextSecondary,
+            color = adaptiveColor(PantopusColors.appTextSecondary, PantopusColors.appTextSecondaryDark),
             textAlign = TextAlign.Center,
         )
         Spacer(modifier = Modifier.size(Spacing.s4))
@@ -1213,8 +1230,8 @@ internal fun FeedEmptyState(
                 modifier =
                     Modifier
                         .clip(RoundedCornerShape(Radii.md))
-                        .background(PantopusColors.appSurface)
-                        .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.md))
+                        .background(adaptiveColor(PantopusColors.appSurface, PantopusColors.appSurfaceDark))
+                        .border(1.dp, adaptiveColor(PantopusColors.appBorder, PantopusColors.appBorderDark), RoundedCornerShape(Radii.md))
                         .padding(horizontal = 14.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
@@ -1223,7 +1240,7 @@ internal fun FeedEmptyState(
                     icon = content.footerIcon,
                     contentDescription = null,
                     size = 13.dp,
-                    tint = PantopusColors.appTextMuted,
+                    tint = adaptiveColor(PantopusColors.appTextMuted, PantopusColors.appTextSecondaryDark),
                 )
                 Text(
                     text =
@@ -1232,13 +1249,13 @@ internal fun FeedEmptyState(
                             withStyle(
                                 SpanStyle(
                                     fontWeight = FontWeight.Bold,
-                                    color = PantopusColors.appTextStrong,
+                                    color = footerEmphasisColor,
                                 ),
                             ) { append(emphasis) }
                             append(content.footerTrail)
                         },
                     fontSize = 11.5.sp,
-                    color = PantopusColors.appTextSecondary,
+                    color = adaptiveColor(PantopusColors.appTextSecondary, PantopusColors.appTextSecondaryDark),
                 )
             }
         }

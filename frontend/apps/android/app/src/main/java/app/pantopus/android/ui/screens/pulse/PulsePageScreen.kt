@@ -4,8 +4,10 @@ import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -29,6 +31,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -81,6 +84,7 @@ import app.pantopus.android.ui.screens.feed.pulse.PulseTopicChipRow
 import app.pantopus.android.ui.screens.feed.pulseReportReasons
 import app.pantopus.android.ui.screens.shared.feed.FeedComposeFAB
 import app.pantopus.android.ui.theme.PantopusColors
+import app.pantopus.android.ui.theme.PantopusContentTheme
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.Radii
@@ -107,6 +111,22 @@ fun PulsePageScreen(
     onRefreshQuietStateCard: () -> Unit = {},
     viewModel: PulsePageViewModel = hiltViewModel(),
 ) {
+    PantopusContentTheme(darkTheme = isSystemInDarkTheme()) {
+        PulsePageBody(onOpenPost, onCompose, onOpenConnections, onOpenBeacons, quietStateCard, onRefreshQuietStateCard, viewModel)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PulsePageBody(
+    onOpenPost: (String) -> Unit,
+    onCompose: () -> Unit,
+    onOpenConnections: () -> Unit,
+    onOpenBeacons: (() -> Unit)?,
+    quietStateCard: @Composable () -> Unit,
+    onRefreshQuietStateCard: () -> Unit,
+    viewModel: PulsePageViewModel,
+) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val query by viewModel.query.collectAsStateWithLifecycle()
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
@@ -118,7 +138,6 @@ fun PulsePageScreen(
     var showsAreas by rememberSaveable { mutableStateOf(false) }
     ReportContentShown("pulse", state is PulsePageUiState.Loaded)
     val listState = rememberLazyListState()
-    val scope = rememberCoroutineScope()
     val content = (state as? PulsePageUiState.Loaded)?.content
     PulsePageEffects(viewModel, toast, query, content, newCount, listState)
     val callbacks =
@@ -132,7 +151,7 @@ fun PulsePageScreen(
             onRefresh = viewModel::refresh,
         )
 
-    Box(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg).testTag("pulsePage")) {
+    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).testTag("pulsePage")) {
         PullToRefreshBox(
             isRefreshing = refreshing,
             onRefresh = {
@@ -161,23 +180,7 @@ fun PulsePageScreen(
                 quietStateCard = quietStateCard,
             )
         }
-        if (newCount > 0) {
-            PulseNewPill(
-                count = newCount,
-                onClick = {
-                    viewModel.refresh()
-                    scope.launch { listState.scrollToItem(0) }
-                },
-                modifier = Modifier.align(Alignment.TopCenter).padding(top = HEADER_PILL_TOP),
-            )
-        }
-        toast?.let { message ->
-            PulsePageToast(message, Modifier.align(Alignment.BottomCenter).padding(bottom = Spacing.s16))
-        }
-        FeedComposeFAB(
-            onClick = onCompose,
-            modifier = Modifier.align(Alignment.BottomEnd).padding(end = Spacing.s4, bottom = Spacing.s4),
-        )
+        PulsePageOverlays(newCount, toast, listState, viewModel::refresh, onCompose)
     }
     PulsePageMenus(viewModel)
     if (showsAreas) {
@@ -197,6 +200,34 @@ fun PulsePageScreen(
             onTopicUnmuted = viewModel::topicUnmuted,
         )
     }
+}
+
+@Composable
+private fun BoxScope.PulsePageOverlays(
+    newCount: Int,
+    toast: String?,
+    listState: LazyListState,
+    onRefresh: () -> Unit,
+    onCompose: () -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    if (newCount > 0) {
+        PulseNewPill(
+            count = newCount,
+            onClick = {
+                onRefresh()
+                scope.launch { listState.scrollToItem(0) }
+            },
+            modifier = Modifier.align(Alignment.TopCenter).padding(top = HEADER_PILL_TOP),
+        )
+    }
+    toast?.let { message ->
+        PulsePageToast(message, Modifier.align(Alignment.BottomCenter).padding(bottom = Spacing.s16))
+    }
+    FeedComposeFAB(
+        onClick = onCompose,
+        modifier = Modifier.align(Alignment.BottomEnd).padding(end = Spacing.s4, bottom = Spacing.s4),
+    )
 }
 
 @Composable
@@ -414,12 +445,12 @@ private fun PulsePageToast(
         modifier =
             modifier
                 .clip(RoundedCornerShape(Radii.pill))
-                .background(PantopusColors.appText)
+                .background(MaterialTheme.colorScheme.inverseSurface)
                 .padding(horizontal = Spacing.s4, vertical = Spacing.s2)
                 .testTag("pulsePageToast")
                 .semantics { liveRegion = LiveRegionMode.Polite },
     ) {
-        Text(text = message, fontSize = 13.sp, color = PantopusColors.appTextInverse)
+        Text(text = message, fontSize = 13.sp, color = MaterialTheme.colorScheme.inverseOnSurface)
     }
 }
 
@@ -457,7 +488,7 @@ private fun PulseHeader(
                 text = "Pulse",
                 fontSize = 26.sp,
                 fontWeight = FontWeight.Bold,
-                color = PantopusColors.appText,
+                color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.semantics { heading() },
             )
             PulseAreaPill(name = areaName ?: "Choose an area", onClick = onAreas)
@@ -483,7 +514,7 @@ private fun PulseAreaPill(
                 Modifier
                     .heightIn(min = 36.dp)
                     .clip(RoundedCornerShape(Radii.pill))
-                    .border(1.dp, PantopusColors.appBorderStrong, RoundedCornerShape(Radii.pill))
+                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(Radii.pill))
                     .clickable(role = Role.Button, onClick = onClick)
                     .padding(horizontal = Spacing.s3)
                     .semantics { contentDescription = "Area: $name. Change area" }
@@ -491,13 +522,13 @@ private fun PulseAreaPill(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
         ) {
-            PantopusIconImage(icon = PantopusIcon.MapPin, contentDescription = null, size = 16.dp, tint = PantopusColors.primary600)
-            Text(text = name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
+            PantopusIconImage(icon = PantopusIcon.MapPin, contentDescription = null, size = 16.dp, tint = MaterialTheme.colorScheme.primary)
+            Text(text = name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
             PantopusIconImage(
                 icon = PantopusIcon.ChevronDown,
                 contentDescription = null,
                 size = 14.dp,
-                tint = PantopusColors.appTextSecondary,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
@@ -516,7 +547,7 @@ private fun PulseViews(
                 .fillMaxWidth()
                 .padding(horizontal = Spacing.s4, vertical = Spacing.s1)
                 .clip(shape)
-                .background(PantopusColors.appSurfaceSunken)
+                .background(MaterialTheme.colorScheme.surfaceVariant)
                 .padding(Spacing.s1),
         horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
     ) {
@@ -528,7 +559,7 @@ private fun PulseViews(
                         .weight(1f)
                         .heightIn(min = 44.dp)
                         .clip(RoundedCornerShape(Radii.md))
-                        .background(if (isSelected) PantopusColors.appSurface else PantopusColors.appSurfaceSunken)
+                        .background(if (isSelected) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceVariant)
                         .clickable { onSelect(view) }
                         .semantics {
                             role = Role.Tab
@@ -542,7 +573,7 @@ private fun PulseViews(
                     text = label,
                     fontSize = 15.sp,
                     fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                    color = if (isSelected) PantopusColors.appText else PantopusColors.appTextSecondary,
+                    color = if (isSelected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
@@ -627,11 +658,11 @@ private fun PulseGroupHeader(title: String) {
         fontSize = 12.sp,
         fontWeight = FontWeight.Bold,
         letterSpacing = 0.8.sp,
-        color = PantopusColors.appTextSecondary,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier =
             Modifier
                 .fillMaxWidth()
-                .background(PantopusColors.appSurfaceSunken)
+                .background(MaterialTheme.colorScheme.surfaceVariant)
                 .padding(horizontal = Spacing.s4, vertical = Spacing.s2)
                 .semantics { heading() },
     )
@@ -660,10 +691,10 @@ private fun PulseEnd(
                 text = "You're caught up",
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
-                color = PantopusColors.appText,
+                color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.semantics { heading() }.testTag("pulseCaughtUp"),
             )
-            Text(text = end.sentence, fontSize = 15.sp, color = PantopusColors.appTextSecondary, textAlign = TextAlign.Center)
+            Text(text = end.sentence, fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
         }
         when (earlier) {
             PulseEarlierState.Loading ->
@@ -671,12 +702,22 @@ private fun PulseEnd(
                     strokeWidth = 2.dp,
                     modifier = Modifier.size(24.dp).testTag("pulseEarlierLoading"),
                 )
-            PulseEarlierState.NothingEarlier -> Text(text = "Nothing earlier.", fontSize = 14.sp, color = PantopusColors.appTextSecondary)
+            PulseEarlierState.NothingEarlier ->
+                Text(
+                    text = "Nothing earlier.",
+                    fontSize = 14.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             is PulseEarlierState.Loaded -> Unit
             PulseEarlierState.Idle ->
                 if (end.canShowEarlier) {
                     TextButton(onClick = onShowEarlier, modifier = Modifier.heightIn(min = 48.dp).testTag("pulseShowEarlier")) {
-                        Text(text = "Show earlier", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.primary600)
+                        Text(
+                            text = "Show earlier",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
                     }
                 }
         }
@@ -699,7 +740,7 @@ private fun PulseQuietDay(
             text = if (following) "No new conversations" else "Quiet in $areaName today",
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
-            color = PantopusColors.appText,
+            color = MaterialTheme.colorScheme.onSurface,
             textAlign = TextAlign.Center,
         )
         Text(
@@ -710,12 +751,17 @@ private fun PulseQuietDay(
                     "When neighbors post, it shows here. Start a conversation if you'd like."
                 },
             fontSize = 15.sp,
-            color = PantopusColors.appTextSecondary,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
         if (!following) {
             TextButton(onClick = onCompose, modifier = Modifier.heightIn(min = 48.dp)) {
-                Text(text = "Start a conversation", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.primary600)
+                Text(
+                    text = "Start a conversation",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
             }
         }
     }
@@ -734,7 +780,7 @@ private fun PulseNewPill(
             modifier
                 .heightIn(min = 48.dp)
                 .clip(RoundedCornerShape(Radii.pill))
-                .background(PantopusColors.appText)
+                .background(MaterialTheme.colorScheme.inverseSurface)
                 .clickable(onClick = onClick)
                 .padding(horizontal = Spacing.s5)
                 .semantics {
@@ -744,7 +790,7 @@ private fun PulseNewPill(
                 .testTag("pulseNewPill"),
         contentAlignment = Alignment.Center,
     ) {
-        Text(text = "↑ $words", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appTextInverse)
+        Text(text = "↑ $words", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.inverseOnSurface)
     }
 }
 

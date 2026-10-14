@@ -52,7 +52,7 @@ Other Android follow-ups already requested by PB remain in the current code: the
 
 ## Known verification limitations
 
-- The application theme explicitly forces its existing light palette, including when Android night mode is on (`ui/theme/Theme.kt`). A screenshot under the system’s dark setting is not evidence of a dark palette. Preserve the working shell while completing dark treatment for new Pulse screens; the earlier status entries describe checks under the system setting.
+- The application theme explicitly forces its existing light palette, including when Android night mode is on (`ui/theme/Theme.kt`). A screenshot under the system’s dark setting is not evidence of a dark palette. The S6 draft now opts the new page into the existing dark tokens without changing the shell’s system bars. Reused fields, empty/error states, menus, topic chips and shimmer resolve their existing light/dark pairs in that scope; their default light rendering stays the same. Device verification is pending. The earlier status entries describe checks under the system setting.
 - The PA emulator exited during TalkBack setup on October 14. It has been restarted on its own port; that interrupted check is not counted as completed.
 
 ## Needs founder

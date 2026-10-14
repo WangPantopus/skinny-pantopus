@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -33,7 +34,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.pantopus.android.ui.components.StatusChipVariant
 import app.pantopus.android.ui.screens.feed.pulse.PostStatusPill
-import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.Radii
@@ -60,8 +60,8 @@ fun PulseConversationCard(
             modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(Radii.xl))
-                .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.xl))
-                .background(PantopusColors.appSurface)
+                .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(Radii.xl))
+                .background(MaterialTheme.colorScheme.surface)
                 .clickable(onClick = onOpen)
                 .padding(Spacing.s4)
                 .testTag("pulseCard_${card.id}"),
@@ -78,7 +78,7 @@ fun PulseConversationCard(
                     Text(
                         text = words,
                         fontSize = 14.sp,
-                        color = PantopusColors.appTextSecondary,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontWeight = FontWeight.Normal,
                         modifier = Modifier.semantics { contentDescription = words },
                     )
@@ -89,7 +89,7 @@ fun PulseConversationCard(
                 PantopusIconImage(
                     icon = PantopusIcon.MoreHorizontal,
                     contentDescription = "Post options",
-                    tint = PantopusColors.appTextSecondary,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
@@ -114,7 +114,7 @@ private fun PulseCardBody(card: PulseCardUi) {
                     text = card.authorName,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = PantopusColors.appText,
+                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.align(Alignment.CenterVertically),
@@ -127,7 +127,7 @@ private fun PulseCardBody(card: PulseCardUi) {
                     Text(
                         text = card.meta,
                         fontSize = 13.sp,
-                        color = PantopusColors.appTextSecondary,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.align(Alignment.CenterVertically),
                     )
                 }
@@ -137,7 +137,7 @@ private fun PulseCardBody(card: PulseCardUi) {
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
                 letterSpacing = 0.8.sp,
-                color = PantopusColors.appTextSecondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         if (card.text.isNotEmpty()) {
@@ -145,7 +145,7 @@ private fun PulseCardBody(card: PulseCardUi) {
                 text = card.text,
                 fontSize = 16.sp,
                 lineHeight = 22.sp,
-                color = PantopusColors.appText,
+                color = MaterialTheme.colorScheme.onSurface,
                 maxLines = CARD_TEXT_LINES,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -160,12 +160,18 @@ private fun PulseCardBody(card: PulseCardUi) {
                         .fillMaxWidth()
                         .heightIn(min = 120.dp, max = 180.dp)
                         .clip(RoundedCornerShape(Radii.lg))
-                        .background(PantopusColors.appSurfaceSunken)
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
                         .testTag("pulseCardPhoto_${card.id}"),
             )
         }
         card.aboutLine?.let { line ->
-            Text(text = line, fontSize = 13.sp, color = PantopusColors.appTextMuted, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(
+                text = line,
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
@@ -186,9 +192,9 @@ private fun PulseActionButton(
                 .clip(shape)
                 .then(
                     if (done) {
-                        Modifier.background(PantopusColors.primary600)
+                        Modifier.background(MaterialTheme.colorScheme.primary)
                     } else {
-                        Modifier.border(BorderStroke(1.dp, PantopusColors.appBorderStrong), shape)
+                        Modifier.border(BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), shape)
                     },
                 )
                 .clickable(onClick = onClick)
@@ -204,7 +210,7 @@ private fun PulseActionButton(
             text = if (done) "✓ $label" else label,
             fontSize = 15.sp,
             fontWeight = FontWeight.SemiBold,
-            color = if (done) PantopusColors.appTextInverse else PantopusColors.appText,
+            color = if (done) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
         )
     }
 }

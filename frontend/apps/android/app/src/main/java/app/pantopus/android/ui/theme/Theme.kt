@@ -8,6 +8,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
@@ -94,8 +95,8 @@ private val PantopusLightColorScheme: ColorScheme =
 // Dark shell neutrals mirror iOS `Neutral/*` asset-catalog dark appearances.
 private val PantopusDarkColorScheme: ColorScheme =
     darkColorScheme(
-        primary = PantopusColors.primary600,
-        onPrimary = PantopusColors.appTextInverse,
+        primary = PantopusColors.primary300,
+        onPrimary = PantopusColors.primary900,
         primaryContainer = PantopusColors.primary100,
         onPrimaryContainer = PantopusColors.primary900,
         secondary = PantopusColors.primary500,
@@ -119,8 +120,19 @@ private val PantopusDarkColorScheme: ColorScheme =
         onErrorContainer = PantopusColors.error,
         outline = PantopusColors.appBorderDark,
         outlineVariant = PantopusColors.appBorderStrongDark,
+        inverseSurface = PantopusColors.appTextDark,
+        inverseOnSurface = PantopusColors.appBgDark,
         scrim = Color.Black,
     )
+
+private val LocalDarkAppearance = staticCompositionLocalOf { false }
+
+/** Resolve an existing light/dark token pair within the current feature's theme. */
+@Composable
+internal fun adaptiveColor(
+    light: Color,
+    dark: Color,
+): Color = if (LocalDarkAppearance.current) dark else light
 
 /**
  * Root Pantopus theme. Wraps Material 3 with the Pantopus `ColorScheme`,
@@ -142,8 +154,6 @@ fun PantopusTheme(
     darkTheme: Boolean = false,
     content: @Composable () -> Unit,
 ) {
-    val colorScheme = if (darkTheme) PantopusDarkColorScheme else PantopusLightColorScheme
-
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
@@ -159,9 +169,18 @@ fun PantopusTheme(
         }
     }
 
-    CompositionLocalProvider(LocalPantopusTokens provides DefaultTokens) {
+    PantopusContentTheme(darkTheme, content)
+}
+
+/** A feature's palette without changing the shared shell's system bars. */
+@Composable
+internal fun PantopusContentTheme(
+    darkTheme: Boolean,
+    content: @Composable () -> Unit,
+) {
+    CompositionLocalProvider(LocalPantopusTokens provides DefaultTokens, LocalDarkAppearance provides darkTheme) {
         MaterialTheme(
-            colorScheme = colorScheme,
+            colorScheme = if (darkTheme) PantopusDarkColorScheme else PantopusLightColorScheme,
             typography = PantopusTypography,
             content = content,
         )

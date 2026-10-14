@@ -40,6 +40,7 @@ import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
+import app.pantopus.android.ui.theme.adaptiveColor
 
 /** Validation state for [PantopusTextField]. */
 sealed interface PantopusFieldState {
@@ -76,7 +77,7 @@ fun PantopusTextField(
     isSecure: Boolean = false,
     keyboardType: KeyboardType = KeyboardType.Text,
     fieldTestTag: String? = null,
-    containerColor: Color = PantopusColors.appSurface,
+    containerColor: Color = adaptiveColor(PantopusColors.appSurface, PantopusColors.appSurfaceDark),
     keyboardOptions: KeyboardOptions = KeyboardOptions(keyboardType = keyboardType),
     enabled: Boolean = true,
 ) {
@@ -104,13 +105,13 @@ fun PantopusTextField(
             Text(
                 text = label,
                 style = PantopusTextStyle.caption,
-                color = PantopusColors.appTextSecondary,
+                color = adaptiveColor(PantopusColors.appTextSecondary, PantopusColors.appTextSecondaryDark),
             )
             if (isRequired) {
                 Text(
                     text = "*",
                     style = PantopusTextStyle.caption,
-                    color = PantopusColors.error,
+                    color = adaptiveColor(PantopusColors.error, PantopusColors.errorLight),
                 )
             }
             if (isDirty) {
@@ -141,8 +142,8 @@ fun PantopusTextField(
                 value = value,
                 onValueChange = onValueChange,
                 enabled = enabled,
-                textStyle = PantopusTextStyle.body.copy(color = PantopusColors.appText),
-                cursorBrush = SolidColor(PantopusColors.primary600),
+                textStyle = PantopusTextStyle.body.copy(color = adaptiveColor(PantopusColors.appText, PantopusColors.appTextDark)),
+                cursorBrush = SolidColor(adaptiveColor(PantopusColors.primary600, PantopusColors.primary300)),
                 singleLine = true,
                 interactionSource = interactionSource,
                 visualTransformation =
@@ -161,7 +162,7 @@ fun PantopusTextField(
                         Text(
                             text = placeholder,
                             style = PantopusTextStyle.body,
-                            color = PantopusColors.appTextMuted,
+                            color = adaptiveColor(PantopusColors.appTextMuted, PantopusColors.appTextSecondaryDark),
                         )
                     }
                     inner()
@@ -180,7 +181,7 @@ fun PantopusTextField(
                         icon = PantopusIcon.AlertCircle,
                         contentDescription = null,
                         size = 18.dp,
-                        tint = PantopusColors.error,
+                        tint = adaptiveColor(PantopusColors.error, PantopusColors.errorLight),
                     )
                 PantopusFieldState.Default -> Unit
             }
@@ -189,21 +190,29 @@ fun PantopusTextField(
             Text(
                 text = state.message,
                 style = PantopusTextStyle.caption,
-                color = PantopusColors.error,
+                color = adaptiveColor(PantopusColors.error, PantopusColors.errorLight),
             )
         }
     }
 }
 
+@Composable
 private fun borderColor(
     state: PantopusFieldState,
     isFocused: Boolean,
 ): Color =
     when (state) {
-        is PantopusFieldState.Error -> PantopusColors.error
+        is PantopusFieldState.Error -> adaptiveColor(PantopusColors.error, PantopusColors.errorLight)
         PantopusFieldState.Valid -> PantopusColors.success
         PantopusFieldState.Default ->
-            if (isFocused) PantopusColors.primary600 else PantopusColors.appBorder
+            if (isFocused) {
+                adaptiveColor(
+                    PantopusColors.primary600,
+                    PantopusColors.primary300,
+                )
+            } else {
+                adaptiveColor(PantopusColors.appBorder, PantopusColors.appBorderDark)
+            }
     }
 
 @Preview(showBackground = true, widthDp = 360, heightDp = 320)
@@ -211,7 +220,7 @@ private fun borderColor(
 private fun PantopusTextFieldPreview() {
     Column(
         verticalArrangement = Arrangement.spacedBy(Spacing.s3),
-        modifier = Modifier.background(PantopusColors.appBg).padding(Spacing.s4),
+        modifier = Modifier.background(adaptiveColor(PantopusColors.appBg, PantopusColors.appBgDark)).padding(Spacing.s4),
     ) {
         PantopusTextField(label = "Email", value = "", onValueChange = {}, placeholder = "you@pantopus.app")
         PantopusTextField(
