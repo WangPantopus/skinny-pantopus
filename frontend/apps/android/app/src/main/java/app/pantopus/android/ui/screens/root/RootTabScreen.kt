@@ -326,6 +326,7 @@ import app.pantopus.android.ui.screens.place.PLACE_DASHBOARD_HOME_ID_KEY
 import app.pantopus.android.ui.screens.place.PlaceDashboardScreen
 import app.pantopus.android.ui.screens.place.PlaceDashboardSkeleton
 import app.pantopus.android.ui.screens.place.PlaceRootBar
+import app.pantopus.android.ui.screens.place.PlaceRootViewed
 import app.pantopus.android.ui.screens.place.SavedPlaceRootScreen
 import app.pantopus.android.ui.screens.place.detail.PLACE_DETAIL_HOME_ID_KEY
 import app.pantopus.android.ui.screens.place.detail.PLACE_DETAIL_SLUG_KEY
@@ -7005,6 +7006,7 @@ private fun PlaceTabRoot(
             // Another Home is another dashboard, with its own state.
             is HomeLanding.Home ->
                 key(current.homeId) {
+                    PlaceRootViewed("home")
                     PlaceDashboardDestination(
                         navController = navController,
                         homeId = current.homeId,
@@ -7014,7 +7016,8 @@ private fun PlaceTabRoot(
                         scrollToTop = scrollToTop,
                     )
                 }
-            HomeLanding.Homes ->
+            HomeLanding.Homes -> {
+                PlaceRootViewed("homes")
                 MyHomesListScreen(
                     onOpenHome = { homeId -> navController.navigate(ChildRoutes.homeDashboard(homeId)) },
                     onOpenTasks = { homeId -> navController.navigate(ChildRoutes.homeTasks(homeId)) },
@@ -7027,8 +7030,10 @@ private fun PlaceTabRoot(
                     unreadCount = unreadCount,
                     onOpenMenu = onOpenMenu,
                 )
+            }
             is HomeLanding.SavedPlace ->
                 key(current.place.id) {
+                    PlaceRootViewed("saved_place")
                     SavedPlaceRootScreen(
                         place = current.place,
                         unreadCount = unreadCount,
@@ -7041,6 +7046,7 @@ private fun PlaceTabRoot(
                 }
             HomeLanding.FirstRun ->
                 Box(modifier = Modifier.fillMaxSize().testTag("place.firstRun")) {
+                    PlaceRootViewed("first_run")
                     PlaceLaunchScreen(
                         onSignIn = {},
                         onCreateAccount = {},
