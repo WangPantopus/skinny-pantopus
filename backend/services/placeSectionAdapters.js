@@ -1009,8 +1009,10 @@ async function composeSeismic(home) {
       sectionId: 'seismic',
       ttlMs: 180 * DAY_MS, // hazard model updates on a multi-year cycle
       fetch: async () => {
+        // Call the current endpoint directly: the old ws/designmaps/asce7-22.json
+        // path 301s through plain http://, which would expose the point for one hop.
         const data = await fetchJson(
-          'https://earthquake.usgs.gov/ws/designmaps/asce7-22.json' +
+          'https://earthquake.usgs.gov/ws/building-codes/asce7-22/calculate' +
           `?latitude=${ll.lat}&longitude=${ll.lng}&riskCategory=II&siteClass=Default&title=pantopus`,
         );
         const d = data && data.response && data.response.data;

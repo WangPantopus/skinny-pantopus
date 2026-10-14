@@ -91,9 +91,12 @@ class PlansTodayViewModel
                     // The two soonest of each: Today stays short; the rest are in Nearby's "Your plans".
                     going = mine.going.filter(::isToday).sortedBy { p -> PlanFormat.instant(p.startsAt) ?: now }.take(TODAY_CARDS),
                     hosting = mine.hosting.filter(::isToday).sortedBy { p -> PlanFormat.instant(p.startsAt) ?: now }.take(TODAY_CARDS),
+                    // A card just answered stays to say thanks until "Done" (as on iOS), though the plan now has feedback.
                     howWasIt =
                         mine.recent.filter { p ->
-                            p.standing != PlanViewerStanding.HOSTING && p.viewer?.feedbackGiven != true && p.id !in dismissed
+                            p.standing != PlanViewerStanding.HOSTING &&
+                                (p.viewer?.feedbackGiven != true || p.id in it.answered) &&
+                                p.id !in dismissed
                         },
                     hostAgain = mine.recent.filter { p -> p.standing == PlanViewerStanding.HOSTING && p.id !in dismissed },
                 )
@@ -120,15 +123,8 @@ class PlansTodayViewModel
             plan: PlanDto,
             answer: String,
         ) {
-            act(
-                plan.id,
-                done =
-                    if (answer == "not_right") {
-                        "Thanks for telling us. Someone from Pantopus will look at it."
-                    } else {
-                        "Thanks. Glad you went."
-                    },
-            ) {
+            // The card itself says thanks ("Thanks. Glad you went."), as on iOS: no toast on top.
+            act(plan.id, done = null) {
                 repository.feedback(plan.id, answer, null).also { result ->
                     if (result is NetworkResult.Success) _ui.update { it.copy(answered = it.answered + (plan.id to answer)) }
                 }
@@ -153,7 +149,7 @@ class PlansTodayViewModel
 
         private fun act(
             id: String,
-            done: String,
+            done: String?,
             block: suspend () -> NetworkResult<Unit>,
         ) {
             if (id in _ui.value.working) return

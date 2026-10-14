@@ -310,7 +310,7 @@ public final class PulseComposeViewModel {
     public var announceAudience: PulseAnnounceAudience = .neighbors
 
     /// Heads Up alert sub-type — required when `postType == alert`.
-    public var safetyAlertKind: PulseSafetyAlertKind = .theft
+    public var safetyAlertKind: PulseSafetyAlertKind = .hazard
 
     /// Ask category chip selection. New Asks start on Handyman; an edited Ask posted without a
     /// category has none selected.

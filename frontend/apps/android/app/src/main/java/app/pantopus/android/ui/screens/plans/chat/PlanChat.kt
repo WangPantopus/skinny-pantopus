@@ -53,8 +53,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 import javax.inject.Inject
 
 /** A plan room's context: the plan, and whether the room has closed. */
@@ -109,7 +107,7 @@ fun rememberPlanChat(roomId: String?): PlanChatState {
     return state
 }
 
-/** The plan strip under a plan room's header (A4): its color, "Sun 1:25 PM · Sam's place", and a way to it. */
+/** The plan strip under a plan room's header (A4): its color, "Sun 1:25 PM · Sam's place" ("Today 5:30 PM"), and a way to it. */
 @Composable
 fun PlanChatStrip(
     state: PlanChatState,
@@ -117,8 +115,7 @@ fun PlanChatStrip(
 ) {
     val plan = state.plan ?: return
     val kind = plan.planKind ?: return
-    val zone = PlanFormat.zone(plan.timezone)
-    val start = PlanFormat.instant(plan.startsAt)?.atZone(zone)?.format(DateTimeFormatter.ofPattern("EEE h:mm a", Locale.US))
+    val start = PlanFormat.rowWhen(plan)
     val where = plan.place?.name ?: plan.area?.label
     Row(
         modifier =

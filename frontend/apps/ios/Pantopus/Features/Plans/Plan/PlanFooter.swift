@@ -195,7 +195,8 @@ enum PlanConfirmation: Identifiable, Equatable {
         case .leaveWaitlist:
             "You'll lose your place in line."
         case let .cantMakeIt(host), let .notComing(host):
-            "We'll tell \(PlanCardLines.firstName(host)), and your spot goes to the next person waiting."
+            "We'll tell \(PlanCardLines.firstName(host)), and your spot goes to the next person waiting. "
+                + "You'll lose the exact place, the note and the chat."
         case .blockHost:
             "You won't see each other's plans, requests or messages."
         case let .removeGuest(name, _, atHome):
@@ -222,10 +223,10 @@ enum PlanConfirmation: Identifiable, Equatable {
             await viewModel.withdraw() ? "Request withdrawn" : nil
         case .leaveWaitlist:
             await viewModel.withdraw() ? "You left the waitlist" : nil
-        case .cantMakeIt:
-            await viewModel.withdraw() ? "We told the host" : nil
-        case .notComing:
-            await viewModel.stillComing(false) ? "We told the host" : nil
+        case let .cantMakeIt(host):
+            await viewModel.withdraw() ? "We told \(PlanCardLines.firstName(host))" : nil
+        case let .notComing(host):
+            await viewModel.stillComing(false) ? "We told \(PlanCardLines.firstName(host))" : nil
         case .blockHost:
             await viewModel.blockHost() ? "Blocked" : nil
         case let .removeGuest(_, requestId, _):

@@ -124,7 +124,7 @@ struct PlanGoingSection: View {
                 tone: .warning,
                 icon: .alertTriangle,
                 title: "\(hostFirst) moved the \(PlanCardLines.noun(card))",
-                message: "Now \(PlanScreenLines.when(card)). Still coming?"
+                message: "Now \(movedTo). Still coming?"
             )
             HStack(spacing: 10) {
                 Button("Can't make it") { onConfirm(.notComing(host: card.host.displayName)) }
@@ -134,6 +134,13 @@ struct PlanGoingSection: View {
                     .accessibilityIdentifier("planStillComing")
             }
         }
+    }
+
+    /// "Sunday at 2:00 PM", "tomorrow at 7:30 PM" (board H11, as the push and Android say it).
+    private var movedTo: String {
+        let calendar = PlanFormat.calendar(for: card.timezone)
+        guard let start = card.startsAtDate else { return PlanScreenLines.when(card) }
+        return "\(PlanFormat.dayPhrase(start, calendar: calendar)) at \(PlanFormat.time(start, calendar: calendar))"
     }
 
     /// "You're in" slides up 8 pt and fades in (300–450 ms of the reveal).

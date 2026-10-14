@@ -73,7 +73,7 @@ struct PlansSheetContent: View {
                 }
             }
             if first.isEmpty {
-                Text("No \(viewModel.kindFilter?.title.lowercased() ?? "plans") \(windowPhrase) yet.")
+                Text("Nothing within 5 miles \(windowPhrase). Plans farther away show on the map.")
                     .planFont(.small)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .padding(.vertical, Spacing.s3)
@@ -241,8 +241,9 @@ struct PlansListSheet: View {
         var grouped: [String: [PlanCardDTO]] = [:]
         for card in viewModel.visibleCards where !mine.contains(card.id) {
             // A playdate's time is hidden until you're in; its day (`starts_on`) still heads it.
+            // A week or more out goes under "Later", as on Android.
             let title = card.state == .live ? "Today" : (card.startsAtDate ?? card.startsOnDate).map {
-                PlanFormat.dayHeading($0, calendar: PlanFormat.calendar(for: card.timezone))
+                PlanFormat.listSection($0, calendar: PlanFormat.calendar(for: card.timezone))
             } ?? "This week"
             if grouped[title] == nil { order.append(title) }
             grouped[title, default: []].append(card)

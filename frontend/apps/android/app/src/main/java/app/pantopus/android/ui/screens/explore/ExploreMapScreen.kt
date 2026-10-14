@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -198,28 +199,27 @@ fun ExploreMapScreen(
                 )
             },
         )
-        ExploreFloatingPill(
-            activeFilterCount = filters.activeCount,
-            onBack = onBack,
-            onOpenSaved = onOpenSaved,
-            onOpenFilters = { showFilters = true },
+        Column(
             modifier =
                 Modifier
                     .padding(WindowInsets.statusBars.asPaddingValues())
-                    .padding(top = Spacing.s2, start = 14.dp, end = 14.dp)
+                    .padding(top = Spacing.s2)
                     .align(Alignment.TopCenter)
                     .fillMaxWidth(),
-        )
-        ExploreTypeToggle(
-            active = activeKind,
-            onSelect = viewModel::selectKind,
-            modifier =
-                Modifier
-                    .padding(WindowInsets.statusBars.asPaddingValues())
-                    .padding(top = Spacing.s16)
-                    .align(Alignment.TopCenter)
-                    .fillMaxWidth(),
-        )
+        ) {
+            ExploreFloatingPill(
+                activeFilterCount = filters.activeCount,
+                onBack = onBack,
+                onOpenSaved = onOpenSaved,
+                onOpenFilters = { showFilters = true },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp),
+            )
+            ExploreTypeToggle(
+                active = activeKind,
+                onSelect = viewModel::selectKind,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
         ExploreBottomSheet(
             state = state,
             refreshNotice = refreshNotice,
@@ -611,11 +611,11 @@ private fun ExploreFloatingPill(
             Row(
                 modifier =
                     Modifier
-                        .height(32.dp)
+                        .heightIn(min = 32.dp)
                         .clip(RoundedCornerShape(Radii.pill))
                         .background(PantopusColors.primary50)
                         .border(1.dp, PantopusColors.primary200, RoundedCornerShape(Radii.pill))
-                        .padding(horizontal = 11.dp),
+                        .padding(horizontal = 11.dp, vertical = Spacing.s1),
                 horizontalArrangement = Arrangement.spacedBy(5.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -651,12 +651,12 @@ private fun ExploreTopActionButton(
     Row(
         modifier =
             Modifier
-                .height(32.dp)
+                .heightIn(min = 32.dp)
                 .clip(RoundedCornerShape(Radii.pill))
                 .background(PantopusColors.primary50)
                 .border(1.dp, PantopusColors.primary200, RoundedCornerShape(Radii.pill))
                 .clickable(onClick = onClick)
-                .padding(horizontal = 11.dp)
+                .padding(horizontal = 11.dp, vertical = Spacing.s1)
                 .semantics {
                     this.contentDescription = contentDescription
                     role = Role.Button
@@ -749,7 +749,7 @@ private fun ExploreTypeSegment(
     Box(
         modifier =
             Modifier
-                .width(66.dp)
+                .widthIn(min = 66.dp)
                 .heightIn(min = 48.dp)
                 .clip(RoundedCornerShape(Radii.pill))
                 .clickable { onSelect(kind) }
@@ -764,10 +764,10 @@ private fun ExploreTypeSegment(
         Row(
             modifier =
                 Modifier
-                    .height(28.dp)
+                    .heightIn(min = 28.dp)
                     .clip(RoundedCornerShape(Radii.pill))
                     .background(if (active) PantopusColors.appText else Color.Transparent)
-                    .padding(horizontal = Spacing.s2),
+                    .padding(horizontal = Spacing.s2, vertical = Spacing.s1),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
         ) {
@@ -798,6 +798,8 @@ private fun ExploreMapControls(
     onFitAll: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // The expanded list leaves no room for both controls below the map's header actions.
+    if (sheetStop == ExploreSheetStop.Expanded) return
     val density = LocalDensity.current
     val bottomOffset = with(density) { (screenHeightPx * sheetStop.heightFraction).toDp() + 14.dp }
     val animatedBottom by animateDpAsState(targetValue = bottomOffset, label = "exploreMapControlsBottom")
@@ -905,7 +907,7 @@ private fun ExploreBottomSheet(
                 .testTag("exploreSheet"),
     ) {
         ExploreDragHandle()
-        refreshNotice?.let { RefreshFailedLine(it) }
+        refreshNotice?.let { RefreshFailedLine(it, modifier = Modifier.padding(horizontal = Spacing.s4)) }
         ExploreSheetHeader(
             countLabel = exploreHeaderCountLabel(state, activeFilterCount),
             activeFilterCount = activeFilterCount,
@@ -1717,12 +1719,12 @@ private fun ExploreEntity.pendingSavePlace(): PendingSavePlace =
         longitude = longitude,
         city = city,
         state = stateName,
-        geocodePlaceId = geocodePlaceId,
+        geocodePlaceId = geocodePlaceId ?: sourceId,
         sourceId = sourceId,
     )
 
 private fun List<SavedPlaceDto>.isSaved(entity: ExploreEntity): Boolean {
-    val target = savedPlaceMatchKey(entity.geocodePlaceId, entity.latitude, entity.longitude)
+    val target = savedPlaceMatchKey(entity.geocodePlaceId ?: entity.sourceId, entity.latitude, entity.longitude)
     return any { dto -> savedPlaceMatchKey(dto.geocodePlaceId, dto.latitude, dto.longitude) == target }
 }
 
