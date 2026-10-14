@@ -4,6 +4,7 @@ const express = require('express');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const verifyToken = require('../middleware/verifyToken');
 const logger = require('../utils/logger');
+const areas = require('../services/pulse/areas');
 const {
   DAY_MS, askIdsWithReplies, windowDays, endsAt,
 } = require('../services/pulse/lifecycle');
@@ -13,6 +14,28 @@ const router = express.Router();
 // Days an Ask's author can add, once, from the day-6 reminder (build spec §4).
 const KEEP_OPEN_DAYS = 7;
 const ASK_SELECT = 'id, user_id, post_type, state, resolution, archived_at, created_at, expires_at, post_metadata';
+
+router.get('/areas/mine', verifyToken, async (req, res) => {
+  try {
+    res.json(await areas.myAreas(req.user.id));
+  } catch (err) {
+    logger.error('pulse.areas.mine.error', { error: err.message, userId: req.user.id });
+    res.status(503).json({ error: "Couldn't load your areas. Please try again." });
+  }
+});
+
+router.get('/areas/search', verifyToken, async (req, res) => {
+  const q = req.query.q ?? '';
+  if (typeof q !== 'string' || q.length > 80) {
+    return res.status(400).json({ error: 'Search for a town using up to 80 characters.' });
+  }
+  try {
+    res.json({ areas: await areas.searchTowns(q.trim()) });
+  } catch (err) {
+    logger.error('pulse.areas.search.error', { error: err.message });
+    res.status(503).json({ error: "Couldn't search areas. Please try again." });
+  }
+});
 
 /** Whole years from a date of birth to today; NaN for a date that can't be read. A date of birth
  * ('2008-10-14') reads as UTC midnight, so both sides are compared as UTC calendar dates. */
