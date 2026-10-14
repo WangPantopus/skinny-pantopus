@@ -2,7 +2,7 @@
 
 Owner: the PI session. Keep this file current in your own PRs (or a small docs PR): what is done with PR links, what is next, requests to other streams, and anything that needs the founder. Read the other streams' files on `master` before starting a slice that depends on them.
 
-## Session handoff — October 14, 2026, 16:14 PDT
+## Session handoff — October 14, 2026, 16:16 PDT
 
 The founder requested a handoff and a new-session prompt. **This section supersedes every runtime, Git and completion statement below. The lane is unfinished.** This continuation is committed locally but has not been pushed, published as new PRs, or merged. Do not confuse source implementation with a successful native build or real-app acceptance.
 
@@ -32,7 +32,7 @@ Use these local branches rather than rebuilding or flattening their changes. The
 - Fetch at handoff still shows master `b4234543c`. PB #2311 distance, #2312 feed, #2313 claims contract, #2317 conversation reads, #2319 account-deletion preservation, #2320 Helpful/Thanks, #2321 follow/narrowing contract and #2322 follows are all open, not merged. The founder said they would resume PB. Recheck live state before relying on this snapshot.
 - The private PI backend previews the unmodified #2322 chain at `7113887b2`, with its migrations applied to PI's database. This enables provisional integration only. H4 still prohibits merging clients before their implementing backend dependencies land. Claims and narrowing implementations were still absent from that inspected chain.
 - Strict SwiftLint, SwiftFormat lint, icon and overline guards pass at the final source checkpoint. No new tests were added. The last tiny deadline-copy change initially exceeded the 300-line type limit; extracting the existing polling property into the same-file extension cleared it without changing behavior.
-- The exact S6 `c70b8aa96` source build is **still running**, with four compiler jobs, in the private runtime. No success/failure result exists yet. A serialized exact-S9 `edaec3323` existing-unit-suite run waits for it. The shared Mac is severely overloaded; do not start another concurrent Xcode build or mutate the active private source directory.
+- The exact S6 `c70b8aa96` Debug source build **succeeded** at handoff; the script installed and launched it on PI's SE simulator. This is not a UI scenario check. The serialized exact-S9 `edaec3323` existing-unit-suite queue is now preparing its run; no S9 test result exists yet. The shared Mac is severely overloaded; do not start another concurrent Xcode build or mutate the active private source directory.
 - No continuation native acceptance is claimed. Final-head builds/tests, two-account scenarios, native/web round trips, relaunch, offline/refusal, old/odd data, dark mode, large text and accessibility remain pending. Historical BillsListViewModelTests Pacific-time failures are not a new result and should not be chased as Pulse work.
 - The old remote S6 and S9 heads have successful CI runs `38632497270` and `38643471649`; **those runs do not cover the new local commits**.
 - Web-only evidence: Alice's multilingual reply on the direct post page survives reload. My posts side-panel restoration showed “Post not found.” No web source changes were retained. Physical devices, hosted services, live push delivery and Release builds are unverified.
@@ -47,7 +47,7 @@ Use these local branches rather than rebuilding or flattening their changes. The
 ### Next session order / remaining work
 
 1. Fetch and inspect branch/worktree/PR/CI state, all stream statuses on master, the founder checklist/brief and required Pulse docs. Read this top handoff and the private operator handoff first; preserve existing resources and local commits.
-2. Collect S6 build and S9 existing-suite outcomes. Repair intended compile/test issues only, then build the final S5/audience/S10 stack at its committed head. No native result should be inferred from a static check or an earlier changed-during-build run.
+2. Preserve the successful exact-S6 build and collect the queued S9 existing-suite outcome. Repair intended compile/test issues only, then build the final S5/audience/S10 stack at its committed head. No real-app acceptance should be inferred from a successful build, static check or an earlier changed-during-build run.
 3. Integrate newly merged master/dependencies into the appropriate stack bases; apply migrations and restart PI's backend. Complete S6 native acceptance against merged real routes, including filtered seen, area counts, earlier-page caught-up, monotonic acknowledgments and sharing refusals.
 4. Complete S9 real-backend/native acceptance: replies/pill/branch depth, Helpful/Thanks, offer request limits/giver choose, found chat, narrowing, refused/stale/offline actions and the other account's view. PB still needs exact “I'd like it” offer copy and a rich post-attachment contract; the private link draft is not full S9.6 acceptance.
 5. Verify the S5 area picker and S10 follow controls, then push the checked branches, refresh draft #2308/#2314 descriptions, and open small stacked PRs for the remaining slices. Attach every PR. Before each merge read the current repository merge procedure in `launch-streams/status/REQUESTS.md`; green final-head CI plus real-app acceptance plus H4 are mandatory.
