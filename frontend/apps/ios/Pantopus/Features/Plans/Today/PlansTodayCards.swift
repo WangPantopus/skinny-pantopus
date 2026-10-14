@@ -153,7 +153,9 @@ struct PlansTodayCards: View {
 
     private func goingCard(_ card: PlanCardDTO) -> some View {
         let host = PlanCardLines.firstName(card.host.displayName)
-        let title = card.placeKind == .home ? "\(shortTitle(card)) at \(host)'s" : shortTitle(card)
+        let short = shortTitle(card)
+        // "Movie night at Morgan's" already says whose place it is (as on Android).
+        let title = card.placeKind == .home && !short.localizedCaseInsensitiveContains("\(host)'s") ? "\(short) at \(host)'s" : short
         return cardShell(card, overline: "Going today", title: title, line: goingLine(card)) {
             HStack(spacing: 10) {
                 Button { Task { await model.directions(card) } } label: {

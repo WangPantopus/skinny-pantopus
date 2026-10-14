@@ -196,7 +196,8 @@ struct PlanScreen: View {
             PlanGlassButton(icon: .chevronLeft, label: "Back", action: close)
                 .accessibilityIdentifier("planBack")
             Spacer()
-            if let url = card.shareUrl.flatMap(URL.init(string:)) {
+            // Nothing to share once it's cancelled or over (as on Android).
+            if card.state != .cancelled, card.state != .ended, let url = card.shareUrl.flatMap(URL.init(string:)) {
                 ShareLink(item: url, message: Text(card.title)) {
                     PlanGlassIcon(icon: .share)
                 }

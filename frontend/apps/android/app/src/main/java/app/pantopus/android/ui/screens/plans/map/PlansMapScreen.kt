@@ -512,7 +512,7 @@ private fun PlansMap(
         if (state.locationStatus == PlansLocationStatus.Ready) {
             PlansMapOverlay(
                 cameraState = camera,
-                pins = remember(state.pins, state.list, state.mine, state.postedId) { mapPins(state) },
+                pins = remember(state.pins, state.list, state.mine, state.postedId, state.selectedId) { mapPins(state) },
                 selectedId = state.selectedId,
                 onPin = { onPin(it.id) },
                 onCluster = { pins ->
