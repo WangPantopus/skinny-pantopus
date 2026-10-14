@@ -4,11 +4,12 @@
 //
 //  How a Pulse post ended, or when a Heads-up ends, in words (Pulse S7;
 //  build spec §3–4, contract §1 and §5): "✓ Answered", "Gone", "Reunited",
-//  "Happened · 14 went", "Ends Wed 4pm". Read from the post's `resolution`,
-//  `state` and `expires_at`, which older servers leave out. A post that was
-//  closed, closed unanswered or expired has left the views and gets no word;
-//  so does a resolution this build doesn't know (Pulse S2). Same words on
-//  Android (agreed with PA, `docs/product/pulse-build/status/PI.md`).
+//  "Happened · 14 went" ("Happened" when nobody went), "Ends Wed 4pm". Read
+//  from the post's `resolution`, `state` and `expires_at`, which older
+//  servers leave out. A post that was closed, closed unanswered or expired
+//  has left the views and gets no word; so does a resolution this build
+//  doesn't know (Pulse S2). Same words on Android (agreed with PA,
+//  `docs/product/pulse-build/status/PI.md`).
 //
 
 import SwiftUI
@@ -33,7 +34,7 @@ public enum PulsePostStatus: Sendable, Hashable {
         case .answered: "Answered"
         case .gone: "Gone"
         case .reunited: "Reunited"
-        case let .happened(went): "Happened · \(went) went"
+        case let .happened(went): went > 0 ? "Happened · \(went) went" : "Happened"
         case let .ends(at): "Ends \(Self.endsFormat(at))"
         }
     }
