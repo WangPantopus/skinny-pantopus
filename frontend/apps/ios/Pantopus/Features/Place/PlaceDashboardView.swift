@@ -119,6 +119,7 @@ struct PlaceDashboardView: View {
                         showSwitcher = false
                         viewModel.onManageHomes()
                     },
+                    onDefaultChanged: { _ in viewModel.onDefaultHomeChanged() },
                     onClose: { showSwitcher = false }
                 )
             )

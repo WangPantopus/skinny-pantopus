@@ -25,9 +25,10 @@ Owner: the PB session. Keep this file current in your own PRs (or a small docs P
 
 ## Next
 
+- **October 14 continuation:** the founder approved all eleven contract tables and the Census boundary download. H3 is clear once the approval record reaches master. Reuse draft PR 2278 for PulseArea, refresh its unapplied migration timestamp, add the town boundaries and verify locally before merging. Then build the area/feed/count/seen endpoints needed by the existing iOS S6 branch (`claude/pulse-pi-s6-pulse-page`, pushed without a PR at the audit) and Android draft PR 2303; neither client implementation should be rebuilt. Android topics PR 2300 and PB's contract PR 2298 are now merged; Android lifecycle is draft PR 2302, alongside iOS PR 2299. The branch audit found no unpushed PB code and no separate implementation of the missing S5/S6 endpoints.
 - Read paths: the post routes, saved, profile lists, local-profile activity, business matched posts, global pins and Today's local updates use `canReadPost` or the feeds' shared query. Next, reproduce and repair Plans' remaining moderation gap with two local accounts: `planService.POST_COLUMNS` omits `moderation_state`, and `isVisibleTo` and `planPublic.publicPlan` only check `archive_reason = moderation`. These are code findings, not a completed app check. Check the Plans session's current work before editing. Persona posts also use separate visibility helpers; audit those without enabling the launch-cut feature.
 - For S8: when `share` and `offer` become creatable, the edit route (`PATCH /api/posts/:id`) must accept them too; the apps' My posts offer Edit on every post.
-- Then, once the founder approves the tables and the boundary download: `labelFor` (built on `isVerifiedResident` in `utils/homePermissions.js`, which Plans already uses), `canReadPost`'s area scopes, and the `PulseArea` migration with the three town boundaries, ready for the table approval.
+- Then: `labelFor` (built on `isVerifiedResident` in `utils/homePermissions.js`, which Plans already uses), `canReadPost`'s area scopes, and the approved `PulseArea` migration with the three town boundaries.
 
 ## Requests (to other streams)
 
@@ -47,8 +48,7 @@ Owner: the PB session. Keep this file current in your own PRs (or a small docs P
 
 ## Needs founder
 
-- Tick **New tables** in the README before any table migration (S5) can merge.
-- Permission to fetch the three town boundaries (Camas, Washougal, Vancouver) from the US Census TIGERweb service: public domain, a few tens of KB of GeoJSON, saved to PB's scratch space, simplified and written into the `PulseArea` migration with its source.
+- **Resolved October 14:** the founder approved all eleven new tables and the public Census boundary download. Fetch the three town boundaries into PB's scratch space, simplify them and record their source in the PulseArea migration. No hosted changes or deployment are authorized.
 - Deploy note for S1: deploy the seeder no later than the backend. The backend refuses a curator public-safety alert without a source link; the updated seeder sends one, and an older backend ignores the extra field.
 - Deploy note for S4 and S7: the migration before the backend (the release workflow already migrates first). Code from before S7 runs unchanged on the S7 schema.
 - Deploy note for S11 parts 1 and 2: the migrations before the backend (the backend reads `Post.moderation_state` and `PostComment.moderation_state`; the release workflow already migrates first). Code from before them runs unchanged on the new schema.

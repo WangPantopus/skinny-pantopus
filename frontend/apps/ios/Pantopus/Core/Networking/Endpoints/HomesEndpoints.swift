@@ -23,6 +23,13 @@ public enum HomesEndpoints {
         Endpoint(method: .get, path: "/api/homes/primary")
     }
 
+    /// `PUT /api/homes/default` — the Home the person chooses as their
+    /// default; it must be one they can open. Route `backend/routes/home.js`
+    /// (`router.put('/default')`).
+    public static func setDefaultHome(homeId: String) -> Endpoint {
+        Endpoint(method: .put, path: "/api/homes/default", body: SetDefaultHomeRequest(homeId: homeId))
+    }
+
     /// `GET /api/homes/:id` — route `backend/routes/home.js:2891`.
     public static func detail(homeId: String) -> Endpoint {
         Endpoint(method: .get, path: "/api/homes/\(homeId)")
