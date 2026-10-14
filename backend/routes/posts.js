@@ -2450,6 +2450,9 @@ router.post('/mute/topic', verifyToken, async (req, res) => {
     feedService.invalidateFilterCache(userId);
     res.json({ message: `Muted ${postType}${surface ? ` on ${surface}` : ''}` });
   } catch (err) {
+    if (err.code === '23503' && err.message?.includes('PostMute_area_id_fkey')) {
+      return res.status(400).json({ error: 'That area could not be found.' });
+    }
     logger.error('Topic mute error', { error: err.message, userId: req.user.id });
     res.status(500).json({ error: 'Failed to mute topic' });
   }

@@ -1,11 +1,11 @@
 -- Backwards compatible: yes. Adds one new server-only table, "PulseArea" (the towns,
 -- neighborhoods, streets and places Pulse posts are about; docs/product/pulse-build/02-contract.md
 -- §4.2 row 1), a nullable Post.area_id that points at it, and the foreign key the existing
--- PostMute.area_id (added with S4, every value null) was waiting for. No existing row changes;
+-- PostMute.area_id (added with S4) was waiting for. No existing row changes;
 -- deployed apps never read the table (RLS on, no policies, no client grants).
 --
--- AWAITING APPROVAL. New tables need the founder's approval (docs/product/pulse-build/README.md,
--- "New tables"); this migration merges only after that box is ticked.
+-- Founder approved all eleven Pulse tables and the Census download on October 14, 2026.
+-- The approval is recorded in docs/product/pulse-build/README.md (hold point H3).
 --
 -- An area's edge is its boundary (towns: US Census place boundaries, public domain, simplified)
 -- or a labeled radius around its centroid (places and short streets). opened_at null means the
@@ -53,8 +53,11 @@ ALTER TABLE public."Post" ADD COLUMN IF NOT EXISTS area_id uuid
   REFERENCES public."PulseArea"(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS "Post_area_id_idx" ON public."Post" (area_id) WHERE area_id IS NOT NULL;
 
--- A topic mute for one area (S4) goes with that area.
+-- A topic mute for one area (S4) goes with that area. S4 accepted arbitrary area UUIDs,
+-- so do not reject or rewrite an existing mute when installing the table. NOT VALID
+-- preserves those rows while enforcing the reference on new writes; legacy mutes
+-- can still be listed and removed. Validate only after legacy references are reconciled.
 ALTER TABLE public."PostMute" ADD CONSTRAINT "PostMute_area_id_fkey"
-  FOREIGN KEY (area_id) REFERENCES public."PulseArea"(id) ON DELETE CASCADE;
+  FOREIGN KEY (area_id) REFERENCES public."PulseArea"(id) ON DELETE CASCADE NOT VALID;
 
 COMMIT;
