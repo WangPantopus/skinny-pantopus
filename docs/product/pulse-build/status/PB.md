@@ -32,7 +32,7 @@ Owner: the PB session. Keep this file current in your own PRs (or a small docs P
 
 ## Needs founder
 
-- Tick **New tables** in the README before any table migration (S5) can merge.
+- Tick **New tables** in the README before any table migration (S5) can merge. The first, `PulseArea` with `Post.area_id` and the `PostMute.area_id` foreign key, is ready to read as draft [PR 2278](https://github.com/WangPantopus/skinny-pantopus/pull/2278) and merges only after the tick; its launch rows (the three towns) follow once the boundary download below is approved.
 - Permission to fetch the three town boundaries (Camas, Washougal, Vancouver) from the US Census TIGERweb service: public domain, a few tens of KB of GeoJSON, saved to PB's scratch space, simplified and written into the `PulseArea` migration with its source.
 - Deploy note for S1: deploy the seeder no later than the backend. The backend refuses a curator public-safety alert without a source link; the updated seeder sends one, and an older backend ignores the extra field.
 - Deploy note for S4 and S7: the migration before the backend (the release workflow already migrates first). Code from before S7 runs unchanged on the S7 schema.
