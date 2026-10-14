@@ -5,8 +5,10 @@
 //  C2 — "Your homes", the sheet behind the address on Your Place. Lists
 //  every Home the person can open (shared or their private setup), then
 //  entries still waiting on verification, with Add a home and Manage
-//  homes. Fetches `/api/homes/my-homes` through the screen store; the
-//  app's sheet chrome provides the scrim.
+//  homes. With two or more Homes, one carries the Default pill and the
+//  others "Set default" (`PUT /api/homes/default`): Place lands on the
+//  default and Today follows it. Fetches `/api/homes/my-homes` through the
+//  screen store; the app's sheet chrome provides the scrim.
 //
 
 import SwiftUI
@@ -22,6 +24,19 @@ struct PlaceSwitcherRow: Identifiable, Hashable {
     let line1: String
     let subtitle: String
     let kind: Kind
+    /// The person's default Home (shown when they can open two or more).
+    var isDefault = false
+    /// Offers "Set default" (another openable Home, two or more of them).
+    var canSetDefault = false
+
+    /// This row once `homeId` is the default.
+    func withDefault(_ homeId: String) -> PlaceSwitcherRow {
+        guard isDefault || canSetDefault else { return self }
+        var row = self
+        row.isDefault = id == homeId
+        row.canSetDefault = id != homeId
+        return row
+    }
 }
 
 // MARK: - ViewModel
@@ -37,11 +52,16 @@ final class PlaceSwitcherViewModel {
 
     private(set) var state: State = .loading
     let activeHomeId: String
+    /// The Home whose "Set default" is in flight.
+    private(set) var savingDefaultId: String?
+    /// "Couldn't change your default home." after a failed change.
+    private(set) var defaultError: String?
 
     private let api: APIClient
     let onSelect: (String) -> Void
     let onAddPlace: () -> Void
     let onManageHomes: () -> Void
+    let onDefaultChanged: (String) -> Void
     let onClose: () -> Void
 
     init(
@@ -50,6 +70,7 @@ final class PlaceSwitcherViewModel {
         onSelect: @escaping (String) -> Void = { _ in },
         onAddPlace: @escaping () -> Void = {},
         onManageHomes: @escaping () -> Void = {},
+        onDefaultChanged: @escaping (String) -> Void = { _ in },
         onClose: @escaping () -> Void = {}
     ) {
         self.activeHomeId = activeHomeId
@@ -57,6 +78,7 @@ final class PlaceSwitcherViewModel {
         self.onSelect = onSelect
         self.onAddPlace = onAddPlace
         self.onManageHomes = onManageHomes
+        self.onDefaultChanged = onDefaultChanged
         self.onClose = onClose
         // The shared home list shows at once when the store has it.
         if let copy = ScreenStore.store(for: api).peek(HomesEndpoints.myHomes(), as: MyHomesResponse.self) {
@@ -75,14 +97,42 @@ final class PlaceSwitcherViewModel {
         }
     }
 
+    /// Makes `homeId` the default: the sheet updates in place and stays open,
+    /// and the lists that follow the default (homes, Today) read again. On
+    /// failure the rows stay as they were, with a line saying so.
+    func setDefault(_ homeId: String) async {
+        guard savingDefaultId == nil, case let .loaded(rows) = state else { return }
+        savingDefaultId = homeId
+        defaultError = nil
+        defer { savingDefaultId = nil }
+        do {
+            let _: SetDefaultHomeResponse = try await api.request(HomesEndpoints.setDefaultHome(homeId: homeId))
+            state = .loaded(rows.map { $0.withDefault(homeId) })
+            onDefaultChanged(homeId)
+            ScreenStore.store(for: api).markStale(topics: [ScreenTopic.homes, ScreenTopic.today])
+        } catch {
+            defaultError = "Couldn't change your default home. Try again."
+        }
+    }
+
     /// Homes the person can open, by address, then the entries still waiting
-    /// on verification. A private setup is a Home too: it is listed.
+    /// on verification. A private setup is a Home too: it is listed. With two
+    /// or more openable Homes, the default carries its pill and the others
+    /// offer "Set default".
     static func rows(for response: MyHomesResponse) -> [PlaceSwitcherRow] {
         let entries = response.homes.filter(\.hasValidListContext)
         let openable = PlaceRootResolver.openableHomes(in: response)
             .sorted { line1(for: $0).localizedStandardCompare(line1(for: $1)) == .orderedAscending }
         let pending = entries.filter { $0.accessKind == "verification" }
-        return openable.map { row(for: $0, kind: .home) } + pending.map { row(for: $0, kind: .pending) }
+        let defaultId = openable.count > 1 ? response.defaultHomeId : nil
+        return openable.map { home in
+            var row = row(for: home, kind: .home)
+            if let defaultId {
+                row.isDefault = home.id == defaultId
+                row.canSetDefault = home.id != defaultId
+            }
+            return row
+        } + pending.map { row(for: $0, kind: .pending) }
     }
 
     private static func row(for home: MyHome, kind: PlaceSwitcherRow.Kind) -> PlaceSwitcherRow {
@@ -176,12 +226,28 @@ struct PlaceSwitcherSheet: View {
             ScrollView {
                 VStack(spacing: 2) {
                     ForEach(rows) { row in
-                        PlaceSwitcherRowView(row: row, isActive: row.id == viewModel.activeHomeId) {
-                            switch row.kind {
-                            case .home: viewModel.onSelect(row.id)
-                            case .pending: viewModel.onManageHomes()
-                            }
-                        }
+                        PlaceSwitcherRowView(
+                            row: row,
+                            isActive: row.id == viewModel.activeHomeId,
+                            isSavingDefault: viewModel.savingDefaultId == row.id,
+                            onTap: {
+                                switch row.kind {
+                                case .home: viewModel.onSelect(row.id)
+                                case .pending: viewModel.onManageHomes()
+                                }
+                            },
+                            onSetDefault: { Task { await viewModel.setDefault(row.id) } }
+                        )
+                        .disabled(viewModel.savingDefaultId != nil)
+                    }
+                    if let message = viewModel.defaultError {
+                        Text(message)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(Theme.Color.error)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 14)
+                            .padding(.top, Spacing.s1)
+                            .accessibilityIdentifier("place.switcher.defaultError")
                     }
                     Rectangle()
                         .fill(Theme.Color.appBorderSubtle)
@@ -246,9 +312,63 @@ struct PlaceSwitcherSheet: View {
 struct PlaceSwitcherRowView: View {
     let row: PlaceSwitcherRow
     let isActive: Bool
+    var isSavingDefault = false
     var onTap: () -> Void
+    var onSetDefault: () -> Void = {}
+
+    private var showsDefaultLine: Bool {
+        row.isDefault || row.canSetDefault
+    }
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            selectButton
+            if row.isDefault {
+                defaultPill
+            } else if row.canSetDefault {
+                setDefaultButton
+            }
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(isActive ? Theme.Color.infoBg : Color.clear)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(isActive ? Theme.Color.primary200 : Color.clear, lineWidth: 1.5)
+        )
+    }
+
+    /// Under the address: the icon tile (40) and its gap (12) inside the row's padding (14).
+    private let detailInset: CGFloat = 66
+
+    private var defaultPill: some View {
+        Text("Default")
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(Theme.Color.primaryInk)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(Capsule().fill(Theme.Color.primary100))
+            .padding(.leading, detailInset)
+            .padding(.bottom, 12)
+            .accessibilityLabel("Default home")
+    }
+
+    private var setDefaultButton: some View {
+        Button(action: onSetDefault) {
+            Text(isSavingDefault ? "Saving…" : "Set default")
+                .font(.system(size: 13.5, weight: .semibold))
+                .foregroundStyle(Theme.Color.primaryInk)
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.leading, detailInset)
+        .accessibilityLabel("Make \(row.line1) your default home")
+        .accessibilityIdentifier("place.switcher.default.\(row.id)")
+    }
+
+    private var selectButton: some View {
         Button(action: onTap) {
             HStack(spacing: 12) {
                 ZStack {
@@ -281,16 +401,10 @@ struct PlaceSwitcherRowView: View {
                     PlaceChevron()
                 }
             }
-            .padding(.vertical, 13)
+            .padding(.top, 13)
+            .padding(.bottom, showsDefaultLine ? 4 : 13)
             .padding(.horizontal, 14)
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(isActive ? Theme.Color.infoBg : Color.clear)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(isActive ? Theme.Color.primary200 : Color.clear, lineWidth: 1.5)
-            )
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(isActive ? .isSelected : [])

@@ -74,8 +74,13 @@ data class MyHome(
     @Json(name = "has_home_access") val hasHomeAccess: Boolean? = null,
     @Json(name = "role_base") val roleBase: String? = null,
     val address2: String? = null,
+    /** The person's default Home: the one they chose while they can still open it, else the server's pick. */
+    @Json(name = "is_default") val isDefault: Boolean? = null,
 ) {
     val hasSharedAccess: Boolean get() = accessKind == "shared" && hasHomeAccess == true
+
+    /** A Home the Place tab can open: shared with access, or the person's own private setup. */
+    val isOpenablePlace: Boolean get() = hasValidListContext && (hasSharedAccess || accessKind == "private_setup")
     val hasValidListContext: Boolean get() =
         runCatching { java.util.UUID.fromString(id).toString() == id }.getOrDefault(false) &&
             accessKind in setOf("shared", "private_setup", "verification") &&
@@ -120,7 +125,34 @@ data class MyHomesResponse(
     val message: String?,
 ) {
     val sharedHomes: List<MyHome> get() = homes.filter { it.hasValidListContext && it.hasSharedAccess }
+
+    /** The Home Place lands on and Today follows (see [defaultHomeOf]); null with no Home the person can open. */
+    val defaultHomeId: String? get() = defaultHomeOf(homes.filter { it.isOpenablePlace })?.id
 }
+
+/**
+ * The default among [openable] Homes: the one the server marks, else the landing rule for servers that don't mark one
+ * yet (the primary owner's shared Home, else the first shared Home, else the newest private setup).
+ */
+fun defaultHomeOf(openable: List<MyHome>): MyHome? {
+    val shared = openable.filter { it.hasSharedAccess }
+    return openable.firstOrNull { it.isDefault == true }
+        ?: shared.firstOrNull { it.isPrimaryOwner == true }
+        ?: shared.firstOrNull()
+        ?: openable.filter { it.accessKind == "private_setup" }.maxByOrNull { it.createdAt.orEmpty() }
+}
+
+/** `PUT /api/homes/default` body. */
+@JsonClass(generateAdapter = true)
+data class SetDefaultHomeBody(
+    @Json(name = "home_id") val homeId: String,
+)
+
+/** `PUT /api/homes/default` reply. */
+@JsonClass(generateAdapter = true)
+data class SetDefaultHomeResponse(
+    @Json(name = "default_home_id") val defaultHomeId: String,
+)
 
 /** `GET /api/homes/primary` envelope — the actor's primary Home card, or null. */
 @JsonClass(generateAdapter = true)

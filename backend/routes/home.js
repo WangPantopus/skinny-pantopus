@@ -1337,6 +1337,43 @@ router.get('/primary', verifyToken, async (req, res) => {
   catch (err) { homeListService.sendError(res, err); }
 });
 
+const defaultHomeSchema = Joi.object({ home_id: Joi.string().uuid().required() });
+
+/**
+ * PUT /api/homes/default
+ * The Home the person chooses as their default (the apps' "Your homes" sheet). It must be one they can open
+ * (shared or their private setup); Place lands on it and Today follows it. GET /api/homes/primary keeps its
+ * own meaning (the oldest shared Home).
+ */
+router.put('/default', verifyToken, validate(defaultHomeSchema), async (req, res) => {
+  const userId = req.user.id;
+  const homeId = req.body.home_id;
+  try {
+    const { homes } = await homeListService.read(userId);
+    if (!homes.some(home => home.id === homeId && ['shared', 'private_setup'].includes(home.access_kind))) {
+      return res.status(404).json({ error: 'You can only make a Home you can open your default.', code: 'DEFAULT_HOME_NOT_OPENABLE' });
+    }
+    // Insert only, briefings off: choosing a default must never opt someone into briefings or overwrite
+    // their notification choices (the POST /api/saved-places pattern).
+    const { error: rowError } = await supabaseAdmin
+      .from('UserNotificationPreferences')
+      .upsert({ user_id: userId, daily_briefing_enabled: false, evening_briefing_enabled: false },
+        { onConflict: 'user_id', ignoreDuplicates: true });
+    if (rowError) throw rowError;
+    const { error } = await supabaseAdmin
+      .from('UserNotificationPreferences')
+      .update({ default_home_id: homeId })
+      .eq('user_id', userId);
+    if (error) throw error;
+    require('../services/context/providerOrchestrator').clearHubTodayCache(userId);
+    res.json({ default_home_id: homeId });
+  } catch (err) {
+    if (['HOME_LIST_UNAVAILABLE', 'HOME_LIST_ACCESS_CHANGED'].includes(err?.code)) return homeListService.sendError(res, err);
+    logger.error('Failed to set the default home', { userId, errorMessage: err?.message });
+    res.status(500).json({ error: 'Could not change your default home. Please retry.' });
+  }
+});
+
 /**
  * GET /api/homes/invitations
  * Get all pending invitations for the current user

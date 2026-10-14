@@ -1,7 +1,7 @@
 # Place root, homes sheet and default home: build brief
 
 **Date:** October 12, 2026. **Checked against:** `master` at `2f553dd89` and PR #2189 at `07553bc1e` (branch `codex/remove-place-hub`). Anchors are symbols, not line numbers; if code moved, find the same symbol before changing anything.
-**Status:** written from the founder's review of PR #2189 on October 12. The founder approved the direction. **Update, October 12 (late):** WP1, WP2 (without the default) and WP3 are built together in PR #2189 itself, with the changes in section 9; WP4 (default home) is still open. Where this brief and PR #2189 differ, section 9 wins.
+**Status:** written from the founder's review of PR #2189 on October 12. The founder approved the direction. **Update, October 12 (late):** WP1, WP2 (without the default) and WP3 are built together in PR #2189 itself, with the changes in section 9; **Update, October 14:** WP4 (default home) is built; see the end of section 9. Where this brief and the PRs differ, section 9 wins.
 **Platforms:** iOS and Android. The backend and one additive migration are in WP4 only. No web interface work: the web keeps its Hub.
 
 ---
@@ -222,5 +222,10 @@ One PR instead of three: merging the My-homes root first would have made the fir
 
 **Removed with the Hub (October 13).** Nothing in either app used these after the Hub went: the `GET /api/hub` overview models, calls and stored copies, the Hub's Discover and Today-card stored copies (Android), the "dismiss density milestone" call, the `screen.hub.viewed`, `cta.hub.action_strip_tapped` and `cta.hub.pillar_tapped` events, five UI tests that tapped Hub buttons, and the screenshot script's Hub steps. The backend routes stay for the web's Hub. Nearby Plans on Android (merged the same day) uses `HubVerificationTarget` and `hubVerificationTargetFor` for its "Verify your address" prompt, so those two stay, unchanged, in `place/HubVerificationTarget.kt`. In its place, both apps send `screen.place.viewed` each time the Place tab's root shows (added the same day at the founder's request), with `root` set to `home`, `saved_place`, `first_run` or `homes`; the pilot's funnel events (session opens, reminder and suggestion taps) never depended on the Hub.
 
-**Still open:** WP4 (default home). Until it lands, a choice in the sheet lasts for the session, a cold start uses the landing rule, and Today follows its own rule, so a multi-home person can see one home on Place and another on Today.
+**WP4, the default home (October 14).** Built as section 4 says, with these differences:
+
+1. **The pill and "Set default" show only with two or more openable Homes.** With one Home, "default" means nothing.
+2. **Setting a default keeps the Home on screen.** It becomes the session's current Home, so Your Place doesn't switch behind the sheet; the new default applies at the next launch, and Today follows it at once.
+3. **The client picks moved with #2189.** iOS: `PlaceRootResolver.landingHomeId`, `AddressTodayTabView.resolveHome` and `MeViewModel.primaryHome(in:)` use `MyHomesResponse.defaultHomeId`. Android: `HomeTabHostViewModel.landingHome`, `TodayTabViewModel`'s `primaryHomeId` and `MeViewModel.primaryHome` use `defaultHomeOf` / `MyHomesResponse.defaultHomeId` (`DeepLinkPlaceResolverViewModel` went with #2189).
+4. **Reads are tolerant.** `homeListService` reads the stored default on its own and falls back to the automatic pick if that read fails; Today's resolver reads `default_home_id` in a separate query, so a database without the column keeps every other preference.
 

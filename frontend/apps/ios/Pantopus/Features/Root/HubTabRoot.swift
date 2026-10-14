@@ -3458,6 +3458,8 @@ public struct HubTabRoot: View {
                 onSelectHome: { id in openPlaceRoot(homeId: id) },
                 onAddPlace: { path.append(.addHome) },
                 onManageHomes: { path.append(.myHomes) },
+                // A new default changes where Place lands next time, not the Home on screen now.
+                onDefaultHomeChanged: { if isRoot, currentHomeId == nil { currentHomeId = homeId } },
                 // The sheet's doors open the REAL flows (Wedge Phase 2, D3);
                 // the simulated status screen stays only for previews.
                 onStartVerify: { method, _ in
