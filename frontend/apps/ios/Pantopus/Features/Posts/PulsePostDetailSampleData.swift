@@ -166,7 +166,7 @@ public enum PulsePostDetailSampleData {
         case .ask: "ask"
         case .offer: "offer"
         case .event: "event"
-        case .share: "share"
+        case .share, .generic: "share"
         case .alert: "alert"
         }
     }

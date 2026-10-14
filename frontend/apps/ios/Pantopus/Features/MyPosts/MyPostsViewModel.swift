@@ -520,6 +520,7 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
         case .announce: "announce"
         case .neighborhoodWin: "neighborhoodWin"
         case .visitorGuide: "visitorGuide"
+        case .generic: "generic"
         }
     }
 
@@ -848,6 +849,7 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
         case .announce: "Announce"
         case .neighborhoodWin: "Wins"
         case .visitorGuide: "Guide"
+        case .generic: "Post"
         }
     }
 
@@ -861,7 +863,7 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
     /// feed pixel-for-pixel.
     private static func paletteFor(intent: PulseIntent) -> IntentPalette {
         switch intent {
-        case .all:
+        case .all, .generic:
             IntentPalette(foreground: Theme.Color.appTextSecondary, background: Theme.Color.appSurfaceSunken)
         case .ask:
             IntentPalette(foreground: Theme.Color.warning, background: Theme.Color.warningBg)
@@ -932,7 +934,7 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
                     label: "\(dto.likeCount) seen"
                 )
             ]
-        case .ask, .announce, .all, .alert, .deal, .neighborhoodWin, .visitorGuide:
+        case .ask, .announce, .all, .alert, .deal, .neighborhoodWin, .visitorGuide, .generic:
             return [replies, likes]
         }
     }

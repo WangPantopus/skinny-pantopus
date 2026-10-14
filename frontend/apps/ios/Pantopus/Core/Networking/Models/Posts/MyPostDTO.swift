@@ -101,24 +101,26 @@ public struct MyPostDTO: Decodable, Sendable, Hashable, Identifiable {
         let displayName: String?
     }
 
+    /// Tolerant (Pulse S2): only `id` and `created_at` are required; any
+    /// other field that is missing, null or of another shape reads as absent.
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(String.self, forKey: .id)
-        userId = try c.decode(String.self, forKey: .userId)
-        title = try c.decodeIfPresent(String.self, forKey: .title)
-        content = try c.decodeIfPresent(String.self, forKey: .content) ?? ""
-        postType = try c.decodeIfPresent(String.self, forKey: .postType)
+        userId = c.lenient(String.self, forKey: .userId) ?? ""
+        title = c.lenient(String.self, forKey: .title)
+        content = c.lenient(String.self, forKey: .content) ?? ""
+        postType = c.lenient(String.self, forKey: .postType)
         createdAt = try c.decode(String.self, forKey: .createdAt)
-        likeCount = try c.decodeIfPresent(Int.self, forKey: .likeCount) ?? 0
-        commentCount = try c.decodeIfPresent(Int.self, forKey: .commentCount) ?? 0
-        userHasLiked = try c.decodeIfPresent(Bool.self, forKey: .userHasLiked) ?? false
-        locationName = try c.decodeIfPresent(String.self, forKey: .locationName)
-        eventDate = try c.decodeIfPresent(String.self, forKey: .eventDate)
-        eventVenue = try c.decodeIfPresent(String.self, forKey: .eventVenue)
-        lostFoundType = try c.decodeIfPresent(String.self, forKey: .lostFoundType)
-        archivedAt = try c.decodeIfPresent(String.self, forKey: .archivedAt)
-        archiveReason = try c.decodeIfPresent(String.self, forKey: .archiveReason)
-        authorName = (try? c.decodeIfPresent(AuthorBrief.self, forKey: .author))?.displayName
+        likeCount = c.lenient(Int.self, forKey: .likeCount) ?? 0
+        commentCount = c.lenient(Int.self, forKey: .commentCount) ?? 0
+        userHasLiked = c.lenient(Bool.self, forKey: .userHasLiked) ?? false
+        locationName = c.lenient(String.self, forKey: .locationName)
+        eventDate = c.lenient(String.self, forKey: .eventDate)
+        eventVenue = c.lenient(String.self, forKey: .eventVenue)
+        lostFoundType = c.lenient(String.self, forKey: .lostFoundType)
+        archivedAt = c.lenient(String.self, forKey: .archivedAt)
+        archiveReason = c.lenient(String.self, forKey: .archiveReason)
+        authorName = c.lenient(AuthorBrief.self, forKey: .author)?.displayName
     }
 }
 
@@ -145,7 +147,8 @@ public struct SavedPostsResponse: Decodable, Sendable {
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        posts = try c.decodeIfPresent([MyPostDTO].self, forKey: .posts) ?? []
+        // A row this build can't read is left out (Pulse S2).
+        posts = c.lossyList(MyPostDTO.self, forKey: .posts)
         pagination = try? c.decodeIfPresent(Pagination.self, forKey: .pagination)
     }
 }
@@ -168,7 +171,8 @@ public struct MyPostsResponse: Decodable, Sendable {
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        posts = try c.decodeIfPresent([MyPostDTO].self, forKey: .posts) ?? []
+        // A row this build can't read is left out (Pulse S2).
+        posts = c.lossyList(MyPostDTO.self, forKey: .posts)
         pagination = try? c.decodeIfPresent(FeedPagination.self, forKey: .pagination)
     }
 }
