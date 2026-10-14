@@ -10,6 +10,14 @@ The founder requested a handoff before the remaining implementation and verifica
 - Read `AGENTS.md`, `NEXT_STEPS.md`, the mobile brief, Pulse `README.md`, `streams/PB-backend.md`, `status/PB.md`, this handoff, build spec, API contract and scenarios. Check other owners' current status and branches before adding code.
 - All eleven tables and the Census download are approved. H1 and H3 are clear; Census migrations are already merged. No hosted changes or deployment are authorized.
 
+## Git preservation audit and remaining-work estimate
+
+The founder requested a second audit of all local PB branches, not just the current checkout. All 30 local PB branches were checked against origin, master and GitHub PRs. One historical backup commit (`858522ffc`) had not been pushed. Its patch is already represented by `3e29095bf` in merged PR 2278; no missing implementation was found. The exact backup is now pushed on `claude/pulse-pb-s5-preapproval-backup` and preserved in [archival PR 2326](https://github.com/WangPantopus/skinny-pantopus/pull/2326), closed as superseded. Do not merge or apply that old migration. All active PB work remains in the eight-PR chain below; older work is merged. Local branch aliases with no matching remote contain only commits already on master.
+
+The approximate planning estimate for the **full PB backend/data lane** is **30% complete, 70% remaining**, crediting existing implementation but including its unfinished app verification in the remaining effort. This is a scope/effort estimate, not a count of PRs, an estimate for the entire app, or a claim that draft features are release-ready. Foundations are merged; distance/feed/conversation/actions/follows are at varying acceptance stages; creation, remaining actions/preferences and most later slices are still ahead.
+
+Only private local runtime material is intentionally outside Git: credentials/env files, synthetic fixtures, diagnostic probes/logs, installed devices and rebuildable dependencies/build artifacts. These remain for resuming verification, not as uncommitted product changes.
+
 ## Already on master
 
 S1 server restrictions; S4 topics/mutes; S5 shared read checks, adult attestation, Census areas and audience wall; S7 lifecycle/expiry/reminders; block-safe replies/notifications; legacy radius caps; held/removed post/reply filtering; Plans moderation. Detailed PRs and evidence remain in `status/PB.md`.
