@@ -132,6 +132,7 @@ public final class PulsePostDetailViewModel {
     var conversationRefreshNotice: String?
     var offerRequestsState: PulseOfferRequestsState = .loading
     var offerRequestStatus: String?
+    var isPreparingShare = false
 
     /// True while a comment is in flight.
     public internal(set) var isSendingComment: Bool = false
@@ -526,19 +527,6 @@ public final class PulsePostDetailViewModel {
     /// Public web URL handed to the system share sheet.
     public var shareURL: URL? {
         URL(string: "https://www.pantopus.com/posts/\(postId)")
-    }
-
-    /// Record an external share after the share sheet was used.
-    public func recordShare() async {
-        do {
-            _ = try await client.request(
-                PostsEndpoints.share(id: postId),
-                as: PostShareResponse.self
-            )
-        } catch {
-            // Count bump only — not worth surfacing to the user.
-            logger.warning("Share record failed: \(error)")
-        }
     }
 
     /// Submit the composer's current text — top-level, or as a reply

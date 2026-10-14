@@ -65,7 +65,7 @@ public struct PulsePostDTO: Decodable, Sendable, Hashable, Identifiable {
     /// The place or area the post is about.
     public let about: PulseAboutDTO?
     /// `public`, `verified_town` or `verified_area`.
-    public let readScope: String?
+    public var readScope: String?
     public var status: PulsePostStatusDTO?
     /// The type's one action and the viewer's state of it.
     public let action: PulseActionDTO?

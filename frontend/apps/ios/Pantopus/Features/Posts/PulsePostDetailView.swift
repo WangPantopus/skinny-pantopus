@@ -8,8 +8,6 @@
 
 import SwiftUI
 
-// swiftlint:disable multiple_closures_with_trailing_closure
-
 /// Pulse post detail entry point.
 @MainActor
 public struct PulsePostDetailView: View {
@@ -22,6 +20,7 @@ public struct PulsePostDetailView: View {
     @State private var replyPendingReport: PulseReplyDTO?
     @State private var isVisible = false
     @State private var showsOfferRequests = false
+    @State private var showsReadScopeConfirm = false
     @State private var privateMessage: PulsePrivateMessageDestination?
     @Environment(\.scenePhase) private var scenePhase
     private let onBack: @MainActor () -> Void
@@ -65,14 +64,19 @@ public struct PulsePostDetailView: View {
                 }
                 if viewModel.conversation != nil {
                     if viewModel.canShareConversation {
-                        Button("Share post") { showsShareSheet = true }
+                        Button("Share post", action: requestShare)
+                            .disabled(viewModel.isPreparingShare)
                     }
-                } else if !isRemovedByModerator {
+                } else if viewModel.canSharePost {
                     Button(viewModel.isReposted ? "Undo repost" : "Repost") {
                         Task { await viewModel.toggleRepost() }
                     }
                 }
                 if viewModel.isOwner {
+                    if viewModel.canNarrowToTown {
+                        Button("Who can read") { showsReadScopeConfirm = true }
+                            .accessibilityIdentifier("pulseConversationReadScope")
+                    }
                     Button("Edit post") {
                         if case let .loaded(detail) = viewModel.state {
                             onEdit(detail.post.id)
@@ -140,10 +144,7 @@ public struct PulsePostDetailView: View {
                 }
                 Button("Cancel", role: .cancel) { commentPendingDelete = nil }
             }
-            .sheet(
-                isPresented: $showsShareSheet,
-                onDismiss: { Task { await viewModel.recordShare() } }
-            ) {
+            .sheet(isPresented: $showsShareSheet) {
                 if let url = viewModel.shareURL {
                     SystemShareSheet(items: [url])
                 }
@@ -153,6 +154,12 @@ public struct PulsePostDetailView: View {
             }
             .sheet(item: $privateMessage) { destination in
                 PulsePrivateMessageSheet(destination: destination)
+            }
+            .alert("Who can read", isPresented: $showsReadScopeConfirm) {
+                Button("Verified neighbors of the town") { Task { await viewModel.narrowConversationToTown() } }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("People outside this audience will lose access. You can't widen it later.")
             }
     }
 
@@ -174,7 +181,10 @@ public struct PulsePostDetailView: View {
         .task { await viewModel.load() }
         .task { await viewModel.loadNearbyProviders() }
         .onAppear { isVisible = true }
-        .onDisappear { isVisible = false }
+        .onDisappear {
+            isVisible = false
+            showsShareSheet = false
+        }
         .task(id: isVisible && scenePhase == .active) {
             guard isVisible, scenePhase == .active else { return }
             while !Task.isCancelled {
@@ -183,6 +193,7 @@ public struct PulsePostDetailView: View {
             }
         }
         .onChange(of: viewModel.state) { _, state in
+            if !viewModel.canSharePost { showsShareSheet = false }
             switch state {
             case .loaded, .conversation: onContentLoaded()
             default: break
@@ -270,7 +281,7 @@ public struct PulsePostDetailView: View {
             replyingToName: viewModel.replyTarget?.authorName,
             selectedReactionEmoji: viewModel.selectedReactionEmoji,
             topBarAction: overflowAction,
-            topBarSecondaryAction: detail.post.isRemovedByModerator ? nil : shareAction,
+            topBarSecondaryAction: viewModel.canSharePost ? shareAction : nil,
             nearbyProviders: viewModel.nearbyProviders,
             onOpenBusiness: onOpenBusiness,
             onBack: onBack,
@@ -287,14 +298,6 @@ public struct PulsePostDetailView: View {
         )
     }
 
-    /// A moderator removed the post: only its author still sees it, so
-    /// nothing here offers to spread it.
-    private var isRemovedByModerator: Bool {
-        if let detail = viewModel.conversation { return detail.post.moderation?.state == "removed" }
-        if case let .loaded(detail) = viewModel.state { return detail.post.isRemovedByModerator }
-        return false
-    }
-
     private var overflowAction: ContentDetailTopBarAction {
         ContentDetailTopBarAction(
             icon: .moreHorizontal,
@@ -306,9 +309,19 @@ public struct PulsePostDetailView: View {
         ContentDetailTopBarAction(
             icon: .share,
             accessibilityLabel: "Share post"
-        ) { Task { @MainActor in showsShareSheet = true } }
+        ) { requestShare() }
     }
 
+    private func requestShare() {
+        Task {
+            if await viewModel.authorizeShare(), isVisible, scenePhase == .active {
+                showsShareSheet = true
+            }
+        }
+    }
+}
+
+extension PulsePostDetailView {
     /// `reportPostSchema` reasons (`backend/routes/posts.js:339`).
     private static let reportReasons: [(token: String, label: String)] = [
         ("spam", "Spam"),
