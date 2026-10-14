@@ -46,6 +46,10 @@ function getUserSocketIds(userId) {
  */
 async function computeBadgeCounts(userId) {
   const withoutBlocked = await notificationBlockFilter(userId);
+  // The audience wall also uses persona-block policy, whose lifecycle emits
+  // notifications. Resolve after module initialization to avoid that cycle.
+  const { notificationPostFilter } = require('./pulse/readAccess');
+  const readablePost = await notificationPostFilter(userId);
   const [msgResult, offersResult, notifResult] = await Promise.allSettled([
     // 1) Total unread messages: sum unread_count from ChatParticipant
     supabaseAdmin
@@ -75,11 +79,11 @@ async function computeBadgeCounts(userId) {
 
     // 3) Unread notifications (launch cuts: hidden types are not counted, nor notices from
     //    someone across a block)
-    withoutBlocked(excludeHiddenLaunchNotifications(supabaseAdmin
+    readablePost(withoutBlocked(excludeHiddenLaunchNotifications(supabaseAdmin
       .from('Notification')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', userId)
-      .eq('is_read', false))),
+      .eq('is_read', false)))),
   ]);
 
   let unreadMessages = 0;
