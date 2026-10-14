@@ -2,6 +2,9 @@ package app.pantopus.android.ui.screens.compose.pulse
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -41,7 +44,8 @@ fun PulseComposeFlowScreen(
         FormShell(title = "New post", isValid = false, isDirty = false, onClose = onBack, onCommit = {}) {
             when (val loading = draftLoad) {
                 PulseDraftLoadState.Loading -> PulseComposePrefillSkeleton()
-                is PulseDraftLoadState.Error -> PulseComposePrefillErrorView(loading.message, viewModel::openDraft)
+                is PulseDraftLoadState.Error ->
+                    PulseDraftReadError(loading.message, viewModel::openDraft) { viewModel.discardDraft(onBack) }
                 PulseDraftLoadState.Ready -> Unit
             }
         }
@@ -111,4 +115,32 @@ private fun prefillPurpose(
     val composeIntent = PulseComposeIntent.fromFeedIntent(feedIntent)
     val candidate = PulseComposePurpose.entries.firstOrNull { it.legacyIntent == composeIntent } ?: return null
     return if (PulseComposePurpose.allowedFor(target).contains(candidate)) candidate else null
+}
+
+/** An unreadable draft is kept unless the person explicitly confirms its removal. */
+@Composable
+private fun PulseDraftReadError(
+    message: String,
+    onRetry: () -> Unit,
+    onDiscard: () -> Unit,
+) {
+    var confirmDiscard by remember { mutableStateOf(false) }
+    PulseComposePrefillErrorView(message, onRetry, headline = "Couldn't open your saved draft")
+    TextButton(onClick = { confirmDiscard = true }, modifier = Modifier.testTag("pulseUnreadableDraftDiscard")) {
+        Text("Discard saved draft")
+    }
+    if (confirmDiscard) {
+        AlertDialog(
+            onDismissRequest = { confirmDiscard = false },
+            title = { Text("Discard saved draft?") },
+            text = { Text("The saved text and photos will be removed from this phone.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmDiscard = false
+                    onDiscard()
+                }) { Text("Discard") }
+            },
+            dismissButton = { TextButton(onClick = { confirmDiscard = false }) { Text("Keep draft") } },
+        )
+    }
 }

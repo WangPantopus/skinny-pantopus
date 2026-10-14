@@ -252,14 +252,7 @@ fun PulseComposeScreen(
             onClose = { viewModel.discardDraft(onBack) },
             onCommit = viewModel::submit,
         ) {
-            draftNotice?.let { message ->
-                Column(modifier = Modifier.padding(horizontal = Spacing.s4)) {
-                    Text(message, color = PantopusColors.error, fontSize = 14.sp)
-                    TextButton(onClick = viewModel::retryDraftSave) {
-                        Text(if (state is PulseComposeUiState.Success) "Retry clearing draft" else "Retry saving draft")
-                    }
-                }
-            }
+            PulseDraftNotice(draftNotice, state is PulseComposeUiState.Success, viewModel::retryDraftSave)
             if (state is PulseComposeUiState.Success) {
                 Text("Your post is saved.", modifier = Modifier.padding(Spacing.s4), fontSize = 16.sp)
                 return@FormShell
@@ -1953,6 +1946,7 @@ internal fun PulseComposePrefillSkeleton() {
 internal fun PulseComposePrefillErrorView(
     message: String,
     onRetry: () -> Unit,
+    headline: String = "Couldn't load this post",
 ) {
     Box(
         modifier =
@@ -1963,10 +1957,25 @@ internal fun PulseComposePrefillErrorView(
     ) {
         EmptyState(
             icon = PantopusIcon.AlertCircle,
-            headline = "Couldn't load this post",
+            headline = headline,
             subcopy = message,
             ctaTitle = "Try again",
             onCta = onRetry,
         )
+    }
+}
+
+@Composable
+private fun PulseDraftNotice(
+    message: String?,
+    posted: Boolean,
+    onRetry: () -> Unit,
+) {
+    if (message == null) return
+    Column(modifier = Modifier.padding(horizontal = Spacing.s4)) {
+        Text(message, color = PantopusColors.error, fontSize = 14.sp)
+        TextButton(onClick = onRetry) {
+            Text(if (posted) "Retry clearing draft" else "Retry saving draft")
+        }
     }
 }

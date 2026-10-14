@@ -28,6 +28,8 @@ import javax.inject.Singleton
  * offline task drafts and the Today cards' per-home dismissals. Sign-out clears all of it so the next
  * person on the device finds nothing of the last account, as iOS `clearLocalSession` does.
  */
+// Each existing account-owned store participates in sign-out or confirmed account deletion.
+@Suppress("LongParameterList")
 @Singleton
 class AccountDeviceData
     @Inject

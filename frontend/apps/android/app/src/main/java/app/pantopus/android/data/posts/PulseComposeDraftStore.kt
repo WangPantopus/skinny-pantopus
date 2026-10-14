@@ -170,6 +170,8 @@ class PulseComposeDraftStore
             id: String,
         ): File = File(File(root, scopeKey), "${digest(id)}.bin")
 
+        // An I/O, crypto or JSON failure belongs to this operation; keep the ordered writer alive for retries.
+        @Suppress("TooGenericExceptionCaught")
         private fun <T> enqueue(action: () -> T): Deferred<T> {
             val result = CompletableDeferred<T>()
             check(

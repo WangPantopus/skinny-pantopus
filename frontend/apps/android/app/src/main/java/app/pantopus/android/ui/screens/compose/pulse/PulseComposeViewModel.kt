@@ -420,6 +420,7 @@ class PulseComposeViewModel
         private var draftReady = false
         private var draftLoading: Job? = null
         private var draftRevision = 0L
+        private var discardingDraft = false
         var restoredDraftTarget: PulsePostingTarget? = null
             private set
 
@@ -436,6 +437,8 @@ class PulseComposeViewModel
                 return
             }
             val scope = PulseComposeDraftStore.accountScope(actor)
+            draftScope = scope
+            draftActor = actor
             _draftLoad.value = PulseDraftLoadState.Loading
             draftLoading =
                 viewModelScope.launch {
@@ -443,10 +446,9 @@ class PulseComposeViewModel
                         val draft = draftStore.read(scope)
                         check((auth.state.value as? AuthRepository.State.SignedIn)?.user?.id == actor)
                         draft?.let(::restoreDraft)
-                        draftScope = scope
-                        draftActor = actor
                         draftReady = true
                         _draftLoad.value = PulseDraftLoadState.Ready
+                        if (draft != null) checkPlaceEligibility()
                     } catch (error: CancellationException) {
                         throw error
                     } catch (_: Exception) {
@@ -489,8 +491,12 @@ class PulseComposeViewModel
                 onDiscarded()
                 return
             }
-            if (isSubmitting) return
+            if (isSubmitting || discardingDraft) return
+            if ((auth.state.value as? AuthRepository.State.SignedIn)?.user?.id != draftActor) return
+            val wasReady = draftReady
+            discardingDraft = true
             draftReady = false
+            draftRevision++
             val removal = draftStore.discard(scope)
             viewModelScope.launch {
                 try {
@@ -499,8 +505,11 @@ class PulseComposeViewModel
                 } catch (error: CancellationException) {
                     throw error
                 } catch (_: Exception) {
-                    draftReady = true
-                    _draftNotice.value = "Couldn't discard your draft. Try again."
+                    draftReady = wasReady
+                    val message = "Couldn't discard your draft. Try again."
+                    if (wasReady) _draftNotice.value = message else _draftLoad.value = PulseDraftLoadState.Error(message)
+                } finally {
+                    discardingDraft = false
                 }
             }
         }
@@ -1106,6 +1115,7 @@ class PulseComposeViewModel
         private suspend fun completeDraft(): Boolean {
             val scope = draftScope ?: return true
             draftReady = false
+            draftRevision++
             return try {
                 draftStore.discard(scope).await()
                 _draftNotice.value = null
