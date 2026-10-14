@@ -180,8 +180,8 @@ struct PlansListSheet: View {
             header
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
-                    if !viewModel.yourPlans.isEmpty {
-                        section("Your plans", cards: viewModel.yourPlans, mine: true)
+                    if !viewModel.visibleYourPlans.isEmpty {
+                        section("Your plans", cards: viewModel.visibleYourPlans, mine: true)
                     }
                     ForEach(days, id: \.title) { day in
                         section(day.title, cards: day.cards, mine: false)
@@ -227,7 +227,7 @@ struct PlansListSheet: View {
 
     private var windowName: String {
         switch viewModel.window {
-        case .now: "Now"
+        case .now: "Happening now"
         case .today: "Today"
         case .week: "This week"
         case .weekend: "This weekend"

@@ -370,20 +370,25 @@ struct PlanWaitlistSection: View {
                 Text(details).planFont(.small).foregroundStyle(Theme.Color.appTextSecondary)
             }
         }
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                (Text("Full").fontWeight(.semibold) + Text(" · \(card.goingCount) of \(card.spots) \(noun)")
-                    .foregroundColor(Theme.Color.appTextSecondary))
-                    .planFont(.small)
-                    .foregroundStyle(Theme.Color.appText)
-                Spacer()
-                if let waiting = card.waitlistCount, waiting > 0 {
-                    Text("\(waiting) waiting").planFont(.small).foregroundStyle(Theme.Color.appTextMuted)
+        if card.isFull {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    (Text("Full").fontWeight(.semibold) + Text(" · \(card.goingCount) of \(card.spots) \(noun)")
+                        .foregroundColor(Theme.Color.appTextSecondary))
+                        .planFont(.small)
+                        .foregroundStyle(Theme.Color.appText)
+                    Spacer()
+                    if let waiting = card.waitlistCount, waiting > 0 {
+                        Text("\(waiting) waiting").planFont(.small).foregroundStyle(Theme.Color.appTextMuted)
+                    }
                 }
+                PlanSlotMeter(spots: card.spots, filled: card.goingCount)
             }
-            PlanSlotMeter(spots: card.spots, filled: card.goingCount)
+            .accessibilityElement(children: .combine)
+        } else {
+            // A spot opened while you wait (the host hasn't let the next person in yet): say so, as Android does.
+            PlanSpotsBlock(card: card, trailing: (card.waitlistCount ?? 0) > 0 ? "\(card.waitlistCount ?? 0) waiting" : nil)
         }
-        .accessibilityElement(children: .combine)
         PlanCardBox {
             HStack(spacing: Spacing.s3) {
                 PlanAvatar(name: card.host.displayName, url: card.host.avatarUrl)
@@ -422,9 +427,16 @@ struct PlanClosedSection: View {
         PlanBanner(
             tone: .neutral,
             icon: card.state == .cancelled ? .calendarX : .checkCircle,
-            title: card.state == .cancelled ? "This plan was cancelled" : "This plan has ended",
+            title: title,
             message: message
         )
+        // The host's own note, as everyone was sent it (as on Android).
+        if isHost, card.state == .cancelled, let note {
+            Text("Your note: \u{201C}\(note)\u{201D}")
+                .planFont(.small)
+                .foregroundStyle(Theme.Color.appTextSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
         if showsTitle { PlanTitleBlock(card: card) }
         if let onOpenChat {
             Button(action: onOpenChat) { PlanButtonLabel(title: "Read the group chat", icon: .messageCircle, kind: .secondary) }
@@ -433,13 +445,27 @@ struct PlanClosedSection: View {
         }
     }
 
-    /// "Sam cancelled it: “Sorry, the courts are closed tonight.”"
+    private var isHost: Bool {
+        card.viewer?.isHost == true
+    }
+
+    private var note: String? {
+        let note = cancelNote?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return note.isEmpty ? nil : note
+    }
+
+    private var title: String {
+        guard card.state == .cancelled else { return "This plan has ended" }
+        return isHost ? "You cancelled this plan" : "This plan was cancelled"
+    }
+
+    /// "Sam cancelled it: “Sorry, the courts are closed tonight.”"; the host
+    /// reads who was told (as on Android).
     private var message: String? {
         guard card.state == .cancelled else { return nil }
-        let host = card.viewer?.isHost == true ? "You" : PlanCardLines.firstName(card.host.displayName)
-        if let note = cancelNote?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty {
-            return "\(host) cancelled it: \u{201C}\(note)\u{201D}"
-        }
+        if isHost { return "Everyone who was in or waiting was told. The pin is off the map." }
+        let host = PlanCardLines.firstName(card.host.displayName)
+        if let note { return "\(host) cancelled it: \u{201C}\(note)\u{201D}" }
         return "\(host) cancelled it."
     }
 }
