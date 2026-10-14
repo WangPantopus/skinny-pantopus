@@ -13,6 +13,8 @@ import SwiftUI
 
 /// One role from the Pulse type ramp.
 enum PulseTextRole {
+    /// 28/34 bold: a page's own name ("Pulse").
+    case pageTitle
     /// 20/26 bold: a card's or sheet's title.
     case title
     /// 17/22 semibold.
@@ -34,6 +36,7 @@ enum PulseTextRole {
 
     var size: CGFloat {
         switch self {
+        case .pageTitle: 28
         case .title: 20
         case .headline: 17
         case .body: 16
@@ -46,7 +49,7 @@ enum PulseTextRole {
 
     var weight: Font.Weight {
         switch self {
-        case .title: .bold
+        case .pageTitle, .title: .bold
         case .headline, .button, .overline, .smallStrong, .footnoteStrong: .semibold
         case .body, .small, .footnote: .regular
         }
@@ -55,6 +58,7 @@ enum PulseTextRole {
     /// The system style the size grows with.
     var relativeTo: Font.TextStyle {
         switch self {
+        case .pageTitle: .title
         case .title: .title3
         case .headline: .headline
         case .body: .body
