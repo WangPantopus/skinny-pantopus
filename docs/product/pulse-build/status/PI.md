@@ -2,7 +2,27 @@
 
 Owner: the PI session. Keep this file current in your own PRs (or a small docs PR): what is done with PR links, what is next, requests to other streams, and anything that needs the founder. Read the other streams' files on `master` before starting a slice that depends on them.
 
-## Session handoff — October 14, 2026, 16:16 PDT
+## Published handoff — October 14, 2026
+
+**This is the current checkpoint and supersedes the local-only publication statements below.** At the founder's request, every continuation branch has been pushed and has an open draft PR. No PR was merged. The authoritative handoff is this file on `codex/pulse-pi-s10-follow-controls` / #2325; lower branches retain older status snapshots.
+
+| PR | Branch | Review base |
+| --- | --- | --- |
+| [#2308 — S6 page](https://github.com/WangPantopus/skinny-pantopus/pull/2308) | `claude/pulse-pi-s6-pulse-page` (`c70b8aa96`) | `master` |
+| [#2314 — S9 conversation](https://github.com/WangPantopus/skinny-pantopus/pull/2314) | `claude/pulse-pi-s9-conversation` (`da6a80474`) | S6 |
+| [#2323 — S5 area picker](https://github.com/WangPantopus/skinny-pantopus/pull/2323) | `codex/pulse-pi-s5-area-controls` (`18acae69c`) | S9 |
+| [#2324 — S9 audience picker](https://github.com/WangPantopus/skinny-pantopus/pull/2324) | `codex/pulse-pi-s9-narrow-audience` (`8ae5d6058`) | S5 picker |
+| [#2325 — S10 follow controls + handoff](https://github.com/WangPantopus/skinny-pantopus/pull/2325) | `codex/pulse-pi-s10-follow-controls` (`af6dc0ab6` source plus this status update) | Audience picker |
+
+- The exact S6 Debug build passed. The earlier queued S9 existing-suite attempt failed at compile time: the synchronous top-bar share callback called a main-actor-isolated method. `da6a80474` dispatches that callback onto the main actor, and the fix is merged through all three downstream branches.
+- Strict SwiftLint, SwiftFormat lint, icon/overline guards and diff checks pass after that fix. A new existing-unit-suite run of the combined stack is in progress against pinned source `af6dc0ab6`; its private log is `publication-tests.log`. No successful final-stack build/test result or native acceptance is claimed yet. No new tests were added.
+- Publication is preservation, not acceptance: H4, current-head CI, two-account native/cross-client scenarios, relaunch/offline/odd-data checks and accessibility verification remain merge gates. All five PRs are drafts and their descriptions explain the holds.
+- All repository source and handoff work is represented in those PRs. Credentials, env files, operator tools/logs, database data and generated build artifacts intentionally remain private/local and must not be committed to the public repository.
+- Planning estimate for the **full PI lane**, excluding reserved S25: roughly **70% remains** (uncertain range 60–75%), including backend integration, real-app verification and release-readiness work. This is not a measured code-completion percentage or a whole-project estimate. Five foundational client slices are merged; S5/S6/S9/S10 have substantial but unaccepted work; S8, remaining S10, S11 and the applicable later slices remain. The current five-PR stack is much further along in implementation than the entire lane.
+
+Next: inspect the new run and CI, then follow the detailed remaining-work order below. Do not recreate the already preserved runtime or start a concurrent build. Before changing active build inputs, ensure the publication test process has finished.
+
+## Earlier session handoff — October 14, 2026, 16:16 PDT (historical publication state)
 
 The founder requested a handoff and a new-session prompt. **This section supersedes every runtime, Git and completion statement below. The lane is unfinished.** This continuation is committed locally but has not been pushed, published as new PRs, or merged. Do not confuse source implementation with a successful native build or real-app acceptance.
 
