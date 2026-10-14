@@ -113,12 +113,12 @@ final class NavigationSmokeTest: XCTestCase {
         assertReaches("todayDetail", in: app)
     }
 
-    func testTab_nearbyLanding() throws {
+    func testTab_pulseLanding() throws {
         guard let app = launchSignedIn() else {
             throw XCTSkip("Signed-in launch env not honoured.")
         }
-        tabButton("nearby", in: app).tap()
-        assertReaches("nearbyDoor", in: app)
+        tabButton("pulse", in: app).tap()
+        assertReaches("pulseFeed", in: app)
     }
 
     func testTab_mailLanding() throws {

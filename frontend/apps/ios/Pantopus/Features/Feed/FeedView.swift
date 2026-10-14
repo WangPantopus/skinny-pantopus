@@ -29,6 +29,20 @@ private struct FeedShareTarget: Identifiable {
     let url: URL
 }
 
+/// The Pulse tab's top-right menu (Pulse S3): Nearby's people entries moved
+/// here, beside the page's preferences.
+public struct FeedTopMenu {
+    /// Opens Connections (the existing screen).
+    public let onOpenConnections: @MainActor () -> Void
+    /// Opens Beacon Updates; nil while that launch cut is off.
+    public let onOpenBeacons: (@MainActor () -> Void)?
+
+    public init(onOpenConnections: @escaping @MainActor () -> Void, onOpenBeacons: (@MainActor () -> Void)? = nil) {
+        self.onOpenConnections = onOpenConnections
+        self.onOpenBeacons = onOpenBeacons
+    }
+}
+
 /// Pulse tab entry point.
 public struct FeedView: View {
     @State private var viewModel: PulseFeedViewModel
@@ -53,6 +67,11 @@ public struct FeedView: View {
     private let onEmptyCTA: (@MainActor () -> Void)?
     private let onFollowing: (@MainActor () -> Void)?
     private let onBack: (@MainActor () -> Void)?
+    /// The top-right menu; nil keeps the plain preferences button.
+    private let topMenu: FeedTopMenu?
+    /// A card above the Nearby posts (the Pulse tab's quiet-state card).
+    /// Type-erased so the slot doesn't make this shared screen generic.
+    private let topCard: AnyView?
 
     init(
         viewModel: PulseFeedViewModel? = nil,
@@ -61,7 +80,9 @@ public struct FeedView: View {
         onCompose: @escaping @MainActor (PulseIntent) -> Void = { _ in },
         onEmptyCTA: (@MainActor () -> Void)? = nil,
         onFollowing: (@MainActor () -> Void)? = nil,
-        onBack: (@MainActor () -> Void)? = nil
+        onBack: (@MainActor () -> Void)? = nil,
+        topMenu: FeedTopMenu? = nil,
+        topCard: AnyView? = nil
     ) {
         // Swift 5.10 crashes while lowering PulseFeedViewModel() in a default-argument thunk.
         let resolved = viewModel ?? PulseFeedViewModel()
@@ -76,6 +97,8 @@ public struct FeedView: View {
         self.onEmptyCTA = onEmptyCTA
         self.onFollowing = onFollowing
         self.onBack = onBack
+        self.topMenu = topMenu
+        self.topCard = topCard
     }
 
     public var body: some View {
@@ -298,16 +321,20 @@ public struct FeedView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Filter posts")
             .accessibilityIdentifier("pulseFilterButton")
-            Button {
-                viewModel.showsPreferences = true
-            } label: {
-                Icon(.slidersHorizontal, size: 18, color: Theme.Color.appText)
-                    .frame(width: 36, height: 36)
-                    .hitArea(horizontal: 4, vertical: 4)
+            if let topMenu {
+                topMenuButton(topMenu)
+            } else {
+                Button {
+                    viewModel.showsPreferences = true
+                } label: {
+                    Icon(.slidersHorizontal, size: 18, color: Theme.Color.appText)
+                        .frame(width: 36, height: 36)
+                        .hitArea(horizontal: 4, vertical: 4)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Pulse preferences")
+                .accessibilityIdentifier("pulsePreferencesButton")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Pulse preferences")
-            .accessibilityIdentifier("pulsePreferencesButton")
         }
         .padding(.horizontal, Spacing.s4)
         .padding(.vertical, Spacing.s2)
@@ -315,6 +342,35 @@ public struct FeedView: View {
         .overlay(alignment: .bottom) {
             Rectangle().fill(Theme.Color.appBorder).frame(height: 1)
         }
+    }
+
+    /// Connections (and Beacons while that launch cut is on), then the page's
+    /// preferences: the Pulse tab's top-right menu.
+    private func topMenuButton(_ menu: FeedTopMenu) -> some View {
+        Menu {
+            Button(action: menu.onOpenConnections) {
+                Label { Text("Connections") } icon: { Icon(.users) }
+            }
+            .accessibilityIdentifier("pulseMenuConnections")
+            if let onOpenBeacons = menu.onOpenBeacons {
+                Button(action: onOpenBeacons) {
+                    Label { Text("Beacons") } icon: { Icon(.radio) }
+                }
+                .accessibilityIdentifier("pulseMenuBeacons")
+            }
+            Button {
+                viewModel.showsPreferences = true
+            } label: {
+                Label { Text("Pulse preferences") } icon: { Icon(.slidersHorizontal) }
+            }
+            .accessibilityIdentifier("pulseMenuPreferences")
+        } label: {
+            Icon(.moreHorizontal, size: 20, color: Theme.Color.appText)
+                .frame(width: 36, height: 36)
+                .hitArea(horizontal: 4, vertical: 4)
+        }
+        .accessibilityLabel("More")
+        .accessibilityIdentifier("pulseMoreMenu")
     }
 
     /// Nearby / Connections surface toggle — RN
@@ -481,9 +537,34 @@ public struct FeedView: View {
         .accessibilityIdentifier("pulseFeedLoading")
     }
 
+    @ViewBuilder
     private func emptyFrame(_ content: FeedEmptyContent) -> some View {
-        VStack(spacing: Spacing.s3) {
-            Spacer()
+        if let card = nearbyTopCard {
+            // The quiet-state card sits above the empty state; together they scroll.
+            ScrollView(.vertical, showsIndicators: true) {
+                VStack(spacing: Spacing.s3) {
+                    card
+                        .padding(.bottom, Spacing.s5)
+                    emptyStack(content)
+                }
+                .padding(Spacing.s5)
+            }
+            .accessibilityIdentifier("pulseFeedEmpty")
+        } else {
+            VStack(spacing: Spacing.s3) {
+                Spacer()
+                emptyStack(content)
+                Spacer()
+            }
+            .padding(Spacing.s5)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .accessibilityIdentifier("pulseFeedEmpty")
+        }
+    }
+
+    /// The empty state's icon, words, button, scope footer and starters.
+    @ViewBuilder
+    private func emptyStack(_ content: FeedEmptyContent) -> some View {
             Icon(content.icon, size: 32, strokeWidth: 1.8, color: Theme.Color.primaryInk)
                 .frame(width: 72, height: 72)
                 .background(Theme.Color.primary50)
@@ -552,11 +633,11 @@ public struct FeedView: View {
                 }
                 .padding(.top, Spacing.s4)
             }
-            Spacer()
-        }
-        .padding(Spacing.s5)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .accessibilityIdentifier("pulseFeedEmpty")
+    }
+
+    /// The top card, on the Nearby surface only.
+    private var nearbyTopCard: AnyView? {
+        viewModel.surface == .pulse ? topCard : nil
     }
 
     private func populatedFrame(_ rows: [PulsePostCardContent]) -> some View {
@@ -627,6 +708,9 @@ public struct FeedView: View {
                     viewModel.isReadingAtTop = atTop
                 }
                 .accessibilityHidden(true)
+            if let card = nearbyTopCard {
+                card
+            }
             if rows.isEmpty, !viewModel.searchText.isEmpty {
                 Text("No posts match your search")
                     .font(.system(size: 13))
