@@ -55,14 +55,8 @@ enum class PulseComposePurpose(
                     "ask_local", "recommendation", "event", "lost_found", "alert", "deal",
                     "local_update", "neighborhood_win", "visitor_guide",
                 )
-            val businessTypes = setOf("event", "deal", "local_update")
-            val allowedPostTypes =
-                when (target) {
-                    is PulsePostingTarget.Business -> businessTypes
-                    else -> placeTypes
-                }
 
-            return entries.filter { allowedPostTypes.contains(it.postType) }
+            return entries.filter { placeTypes.contains(it.postType) }
         }
     }
 }
