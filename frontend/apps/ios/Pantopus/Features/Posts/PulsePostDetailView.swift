@@ -21,6 +21,8 @@ public struct PulsePostDetailView: View {
     @State private var replyMenu: PulseReplyDTO?
     @State private var replyPendingReport: PulseReplyDTO?
     @State private var isVisible = false
+    @State private var showsOfferRequests = false
+    @State private var privateMessage: PulsePrivateMessageDestination?
     @Environment(\.scenePhase) private var scenePhase
     private let onBack: @MainActor () -> Void
     private let onOpenProfile: @MainActor (String) -> Void
@@ -146,6 +148,12 @@ public struct PulsePostDetailView: View {
                     SystemShareSheet(items: [url])
                 }
             }
+            .sheet(isPresented: $showsOfferRequests) {
+                PulseOfferRequestsSheet(viewModel: viewModel)
+            }
+            .sheet(item: $privateMessage) { destination in
+                PulsePrivateMessageSheet(destination: destination)
+            }
     }
 
     private var baseContent: some View {
@@ -229,8 +237,16 @@ public struct PulsePostDetailView: View {
                 viewModel: viewModel,
                 content: detail,
                 onBack: onBack,
-                onOpenProfile: onOpenProfile
-            ) { replyMenu = $0 }
+                onOpenProfile: onOpenProfile,
+                onMenu: { replyMenu = $0 },
+                onOfferRequests: { showsOfferRequests = true },
+                onPrivateMessage: {
+                    Task {
+                        let destination = await viewModel.prepareLostFoundMessage()
+                        if isVisible, scenePhase == .active { privateMessage = destination }
+                    }
+                }
+            )
         case let .error(message, retryable):
             if retryable {
                 ErrorLayout(message: message, onBack: onBack) {

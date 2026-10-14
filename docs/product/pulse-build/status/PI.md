@@ -11,6 +11,7 @@ This section supersedes the earlier handoff and runtime observations below. The 
 - Recreated PI's isolated database, frozen dependencies, two synthetic accounts and new `Pulse-PI` / `Pulse-PI-SE` simulators. The private #2317 backend source copy uses only PI's database on 56100; this is provisional integration, not acceptance against merged routes. Web runs on 56101. Private tools, credentials and evidence remain outside Git.
 - S6 SwiftLint strict, SwiftFormat lint, icon and overline checks pass. An exact committed S6 source copy is building with four compiler jobs in PI's private runtime so S9 edits cannot change its inputs. Existing tests and native scenarios remain pending.
 - Web: synthetic Alice signed in, opened My posts and the detail panel, and sent a reply successfully. Reload restored the post panel as “Post not found”; the surrounding authenticated page still loads. Direct-page reload and the native round trip remain to verify. No web source changes are retained.
+- S9 continuation adds request/choose controls and a tolerant giver-list decoder for #2313. Found-item “It's mine” reuses the existing private chat composer with the post link prefilled; no message is sent on opening it and no post text/address is copied into chat. These changes are unverified in the native app and remain behind the S9 draft's H4 merge hold; a rich post-attachment wire type is not defined by the current chat API.
 
 ## Earlier handoff — October 14, 2026 (historical)
 

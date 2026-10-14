@@ -48,6 +48,16 @@ public extension PulseEndpoints {
         Endpoint(method: .post, path: "/api/pulse/posts/\(postId)/claims", body: ClaimRequest(note: note))
     }
 
+    /// `GET /api/pulse/posts/:postId/claims` — planned backend/routes/pulse.js, contract §2.8 / PR 2313.
+    static func offerRequests(postId: String) -> Endpoint {
+        Endpoint(method: .get, path: "/api/pulse/posts/\(postId)/claims")
+    }
+
+    /// `POST /api/pulse/posts/:postId/claims/:claimId/choose` — planned backend/routes/pulse.js, contract §2.8 / PR 2313.
+    static func chooseOfferRequest(postId: String, claimId: String) -> Endpoint {
+        Endpoint(method: .post, path: "/api/pulse/posts/\(postId)/claims/\(claimId)/choose")
+    }
+
     /// `PUT /api/pulse/posts/:id/read-scope` — S9 addition in §3.
     static func narrowReadScope(postId: String, readScope: String) -> Endpoint {
         Endpoint(method: .put, path: "/api/pulse/posts/\(postId)/read-scope", body: ReadScopeRequest(readScope: readScope))

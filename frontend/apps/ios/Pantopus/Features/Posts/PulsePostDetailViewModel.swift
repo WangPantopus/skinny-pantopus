@@ -130,6 +130,8 @@ public final class PulsePostDetailViewModel {
     var expandedConversationBranches: Set<String> = []
     var pendingConversationActions: Set<String> = []
     var conversationRefreshNotice: String?
+    var offerRequestsState: PulseOfferRequestsState = .loading
+    var offerRequestStatus: String?
 
     /// True while a comment is in flight.
     public internal(set) var isSendingComment: Bool = false

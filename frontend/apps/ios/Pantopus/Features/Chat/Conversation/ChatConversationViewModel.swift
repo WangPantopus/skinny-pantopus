@@ -577,6 +577,7 @@ public final class ChatConversationViewModel {
         mode: ChatThreadMode,
         counterparty: ChatCounterparty,
         currentUserId: String,
+        initialComposerText: String = "",
         scrollToMessageId: String? = nil,
         initialTopic: ChatInitialTopic? = nil,
         gigId: String? = nil,
@@ -591,6 +592,7 @@ public final class ChatConversationViewModel {
         self.mode = mode
         self.counterparty = counterparty
         self.currentUserId = currentUserId
+        composerText = initialComposerText
         self.initialTopic = initialTopic
         self.scrollToMessageId = scrollToMessageId
         self.gigId = gigId

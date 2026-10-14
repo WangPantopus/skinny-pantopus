@@ -87,7 +87,7 @@ extension PulsePostDetailViewModel {
         let revision = conversationMutationRevision
         do {
             let response: PulseRepliesResponse = try await client.request(
-                PulseEndpoints.conversationReplies(postId: postId, after: after.ISO8601Format(.iso8601(timeZone: .gmt).includingFractionalSeconds()))
+                PulseEndpoints.conversationReplies(postId: postId, after: ISO8601DateFormatter().string(from: after))
             )
             guard generation == conversationGeneration, revision == conversationMutationRevision,
                   !Task.isCancelled, var content = conversation else { return }

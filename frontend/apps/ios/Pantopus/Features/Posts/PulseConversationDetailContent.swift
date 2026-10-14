@@ -15,6 +15,8 @@ struct PulseConversationDetailContent: View {
     let onBack: () -> Void
     let onOpenProfile: (String) -> Void
     let onMenu: (PulseReplyDTO) -> Void
+    let onOfferRequests: () -> Void
+    let onPrivateMessage: () -> Void
     @State private var focusRequest = 0
 
     private var card: PulsePageCard {
@@ -125,9 +127,23 @@ struct PulseConversationDetailContent: View {
     }
 
     @ViewBuilder private var primaryAction: some View {
-        // Requesting an offer and opening its private chat are added with
-        // the S9 offer flow, once its remaining response shape is frozen.
-        if ["answer", "reply", "going", "seen_it"].contains(card.actionKind ?? "reply") {
+        if content.post.type == "offer" {
+            if viewModel.isOwner {
+                Button("Requests", action: onOfferRequests)
+                    .pulseFont(.button).frame(minHeight: 44)
+                    .accessibilityIdentifier("pulseOfferOpenRequests")
+            } else {
+                Button(viewModel.offerActionLabel) { Task { await viewModel.requestConversationOffer() } }
+                    .pulseFont(.button).frame(minHeight: 44)
+                    .disabled(!viewModel.canRequestOffer)
+                    .accessibilityIdentifier("pulseOfferRequest")
+            }
+        } else if card.actionKind == "its_mine", !viewModel.isOwner, card.authorId != nil {
+            Button("It's mine", action: onPrivateMessage)
+                .pulseFont(.button).frame(minHeight: 44)
+                .disabled(!viewModel.pendingConversationActions.isEmpty)
+                .accessibilityIdentifier("pulseLostFoundPrivateMessage")
+        } else if ["answer", "reply", "going", "seen_it"].contains(card.actionKind ?? "reply") {
             PlanFlowLayout(spacing: Spacing.s3) {
                 Button {
                     if card.actionKind == "going" || card.actionKind == "seen_it" {
