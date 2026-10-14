@@ -427,9 +427,16 @@ struct PlanClosedSection: View {
         PlanBanner(
             tone: .neutral,
             icon: card.state == .cancelled ? .calendarX : .checkCircle,
-            title: card.state == .cancelled ? "This plan was cancelled" : "This plan has ended",
+            title: title,
             message: message
         )
+        // The host's own note, as everyone was sent it (as on Android).
+        if isHost, card.state == .cancelled, let note {
+            Text("Your note: \u{201C}\(note)\u{201D}")
+                .planFont(.small)
+                .foregroundStyle(Theme.Color.appTextSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
         if showsTitle { PlanTitleBlock(card: card) }
         if let onOpenChat {
             Button(action: onOpenChat) { PlanButtonLabel(title: "Read the group chat", icon: .messageCircle, kind: .secondary) }
@@ -438,13 +445,27 @@ struct PlanClosedSection: View {
         }
     }
 
-    /// "Sam cancelled it: “Sorry, the courts are closed tonight.”"
+    private var isHost: Bool {
+        card.viewer?.isHost == true
+    }
+
+    private var note: String? {
+        let note = cancelNote?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return note.isEmpty ? nil : note
+    }
+
+    private var title: String {
+        guard card.state == .cancelled else { return "This plan has ended" }
+        return isHost ? "You cancelled this plan" : "This plan was cancelled"
+    }
+
+    /// "Sam cancelled it: “Sorry, the courts are closed tonight.”"; the host
+    /// reads who was told (as on Android).
     private var message: String? {
         guard card.state == .cancelled else { return nil }
-        let host = card.viewer?.isHost == true ? "You" : PlanCardLines.firstName(card.host.displayName)
-        if let note = cancelNote?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty {
-            return "\(host) cancelled it: \u{201C}\(note)\u{201D}"
-        }
+        if isHost { return "Everyone who was in or waiting was told. The pin is off the map." }
+        let host = PlanCardLines.firstName(card.host.displayName)
+        if let note { return "\(host) cancelled it: \u{201C}\(note)\u{201D}" }
         return "\(host) cancelled it."
     }
 }

@@ -60,7 +60,7 @@ struct PlansMapTopBar: View {
 
     private var windowLabel: String {
         switch viewModel.window {
-        case .now: "Now"
+        case .now: "Happening now"
         case .today: "Today"
         case .week: "This week"
         case .weekend: "This weekend"
@@ -167,8 +167,14 @@ struct PlansMapTopBar: View {
             .accessibilityLabel("Back to all plans")
             .accessibilityIdentifier("plansSelectedBack")
             Spacer(minLength: Spacing.s2)
-            if showsAreaChip { PlanScopeChip(text: "Area only until you're in") }
+            if showsAreaChip {
+                PlanScopeChip(text: selectedKind == .playdate ? "Neighborhood only until you're in" : "Area only until you're in")
+            }
         }
+    }
+
+    private var selectedKind: PlanKind? {
+        viewModel.selectedId.flatMap { viewModel.pin(for: $0)?.kind }
     }
 
     /// The host and people who are in see the exact place; everyone else the area.

@@ -162,16 +162,24 @@ struct PlanChangeScreen: View {
         return ("\(host) moved the \(noun)", "\(now). Still coming?")
     }
 
+    /// Board H11: one sentence beside a warning glyph (as on Android).
     private func warning(_ card: PlanCardDTO) -> some View {
         let going = goingCount(card)
-        return PlanBanner(
-            tone: .warning,
-            icon: .alertTriangle,
-            title: "\(going) \(going == 1 ? "person is" : "people are") in",
-            message: newPlace == nil
-                ? "Moving the time by more than 30 minutes asks each of them \u{201C}Still coming?\u{201D}"
-                : "Changing the place asks each of them \u{201C}Still coming?\u{201D}"
-        )
+        let asks = newPlace == nil
+            ? "Moving the time by more than 30 minutes asks each of them \u{201C}Still coming?\u{201D}"
+            : "Changing the place asks each of them \u{201C}Still coming?\u{201D}"
+        return HStack(alignment: .top, spacing: Spacing.s3) {
+            Icon(.alertTriangle, size: 22, color: Theme.Color.warning)
+            Text("\(going) \(going == 1 ? "person is" : "people are") in. \(asks)")
+                .planFont(.small)
+                .foregroundStyle(Theme.Color.appTextStrong)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, Spacing.s3)
+        .background(RoundedRectangle(cornerRadius: Radii.xl, style: .continuous).fill(Theme.Color.warningBg))
+        .accessibilityElement(children: .combine)
     }
 
     private func preview(_ card: PlanCardDTO) -> some View {

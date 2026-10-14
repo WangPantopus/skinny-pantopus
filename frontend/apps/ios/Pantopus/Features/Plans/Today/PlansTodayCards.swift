@@ -25,6 +25,8 @@ final class PlansTodayModel {
     private(set) var onTheirWay: Set<String> = []
     private(set) var working: Set<String> = []
     var error: String?
+    /// A short confirmation under the cards ("We told the group you're on the way."), as Android's toast.
+    var notice: String?
 
     func load(force: Bool = false) async {
         guard PlansFlags.shared.plans else {
@@ -87,6 +89,7 @@ final class PlansTodayModel {
             _ = try await APIClient.shared.request(PlansEndpoints.onMyWay(planId: card.id), as: EmptyResponse.self)
             onTheirWay.insert(card.id)
             error = nil
+            notice = "We told the group you're on the way."
         } catch {
             self.error = PlanErrors.sentence(for: error)
         }
@@ -127,6 +130,14 @@ struct PlansTodayCards: View {
                 }
                 if let error = model.error, !(model.hosting.isEmpty && model.going.isEmpty && model.recent.isEmpty) {
                     Text(error).planFont(.footnote).foregroundStyle(Theme.Color.error)
+                } else if let notice = model.notice {
+                    Text(notice)
+                        .planFont(.footnote)
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                        .task(id: notice) {
+                            try? await Task.sleep(nanoseconds: 3_000_000_000)
+                            model.notice = nil
+                        }
                 }
             }
         }
@@ -142,7 +153,9 @@ struct PlansTodayCards: View {
 
     private func goingCard(_ card: PlanCardDTO) -> some View {
         let host = PlanCardLines.firstName(card.host.displayName)
-        let title = card.placeKind == .home ? "\(shortTitle(card)) at \(host)'s" : shortTitle(card)
+        let short = shortTitle(card)
+        // "Movie night at Morgan's" already says whose place it is (as on Android).
+        let title = card.placeKind == .home && !short.localizedCaseInsensitiveContains("\(host)'s") ? "\(short) at \(host)'s" : short
         return cardShell(card, overline: "Going today", title: title, line: goingLine(card)) {
             HStack(spacing: 10) {
                 Button { Task { await model.directions(card) } } label: {
@@ -150,8 +163,10 @@ struct PlansTodayCards: View {
                 }
                 .planButton(.tonal, size: .small)
                 .accessibilityIdentifier("plansTodayDirections")
-                if model.onTheirWay.contains(card.id) {
-                    Button {} label: { PlanButtonLabel(title: "We told \(host)", icon: .check, kind: .secondary) }
+                // The group is told, not only the host (A4 "Alex is on the way"); the request
+                // keeps it after a relaunch. As on Android.
+                if model.onTheirWay.contains(card.id) || card.myRequest?.onMyWay == true {
+                    Button {} label: { PlanButtonLabel(title: "On the way", icon: .check, kind: .secondary) }
                         .planButton(.secondary, size: .small)
                         .disabled(true)
                 } else {
