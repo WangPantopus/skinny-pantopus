@@ -24,6 +24,7 @@ const { requireIdentityFirewallEnabled } = require('../utils/featureFlags');
 const { isSearchable, isScopedBlocked } = require('../utils/visibilityPolicy');
 const { hasBlocked } = require('../services/blockService');
 const { isPublicStorageUrl } = require('../services/s3Service');
+const { readablePosts } = require('../services/pulse/readAccess');
 
 router.use(requireIdentityFirewallEnabled);
 
@@ -75,6 +76,11 @@ const LOCAL_ACTIVITY_POST_SELECT = [
   'topic',
   'post_metadata',
   'origin',
+  // The rest of the columns the read check reads (services/pulse/readAccess.js).
+  'archive_reason',
+  'target_tier_rank',
+  'allow_external_share',
+  'radius_miles',
 ].join(', ');
 
 const LOCAL_PROFILE_PUBLIC_POST_FIELDS = [
@@ -441,10 +447,11 @@ router.get('/:handle/activity', optionalAuth, async (req, res) => {
       .limit(parseLimit(req.query.limit));
 
     if (error) return res.status(500).json({ error: 'Failed to load local activity' });
+    const shown = (posts || []).filter((post) => canShowOnLocalProfile(post, viewerContext));
+    // And never a post its own page would refuse this viewer: signed out, public posts only.
+    const readable = viewerContext.isOwner ? shown : await readablePosts(shown, req.user?.id || null);
     res.json({
-      posts: (posts || [])
-        .filter((post) => canShowOnLocalProfile(post, viewerContext))
-        .map((post) => serializeLocalProfilePostForViewer(post, profile, req.user?.id || null)),
+      posts: readable.map((post) => serializeLocalProfilePostForViewer(post, profile, req.user?.id || null)),
     });
   } catch (err) {
     logger.error('localProfiles.activity.error', { error: err.message, handle: req.params.handle });
