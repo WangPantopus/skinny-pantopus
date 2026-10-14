@@ -73,6 +73,8 @@ internal fun permitsExternalPostShare(
     visibility: String?,
     audience: String?,
     allowExternalShare: Boolean?,
+    moderationState: String?,
 ): Boolean =
     allowExternalShare != false &&
+        (moderationState == null || moderationState == "live") &&
         if (readScope != null) readScope == "public" else visibility == "public" || audience == "public"
