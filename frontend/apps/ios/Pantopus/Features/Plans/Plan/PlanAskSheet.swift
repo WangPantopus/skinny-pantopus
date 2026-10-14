@@ -141,7 +141,7 @@ struct PlanAskSheet: View {
                     Text("With you, the whole time").planFont(.small).foregroundStyle(Theme.Color.appTextSecondary)
                 }
                 Spacer()
-                PlanStepper(value: $kidsCount, range: 1...6, label: "Kids coming")
+                PlanStepper(value: $kidsCount, range: 1...8, label: "Kids coming")
             }
             VStack(alignment: .leading, spacing: Spacing.s2) {
                 Text.planOverline("Their ages")

@@ -67,7 +67,8 @@ data class AskDraft(
     val note: String = "",
     val kidsCount: Int = 1,
     val ageBands: Set<String> = emptySet(),
-    val staysWithKids: Boolean = true,
+    /** "I'll stay with my kids": the parent ticks it for a new ask (as on iOS); an edited ask kept it. */
+    val staysWithKids: Boolean = false,
     val sending: Boolean = false,
     val error: String? = null,
 )
@@ -248,6 +249,7 @@ class PlanDetailViewModel
                             note = mine?.note.orEmpty(),
                             kidsCount = mine?.kidsCount ?: 1,
                             ageBands = mine?.kidsAgeBands.orEmpty().toSet(),
+                            staysWithKids = mine != null && plan.kind == PlanKind.PLAYDATE.wire,
                         ),
                 )
             }

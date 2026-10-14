@@ -180,8 +180,8 @@ struct PlansListSheet: View {
             header
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
-                    if !viewModel.yourPlans.isEmpty {
-                        section("Your plans", cards: viewModel.yourPlans, mine: true)
+                    if !viewModel.visibleYourPlans.isEmpty {
+                        section("Your plans", cards: viewModel.visibleYourPlans, mine: true)
                     }
                     ForEach(days, id: \.title) { day in
                         section(day.title, cards: day.cards, mine: false)
