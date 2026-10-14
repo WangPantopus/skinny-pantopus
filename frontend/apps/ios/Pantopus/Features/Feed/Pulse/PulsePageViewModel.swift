@@ -164,20 +164,7 @@ public final class PulsePageViewModel {
             return
         } catch {
             guard generation == readGeneration else { return }
-            if let error = error as? APIError {
-                switch error {
-                case .unauthorized, .forbidden, .notFound:
-                    // A refusal invalidates the saved page; never leave its
-                    // posts visible behind an error toast.
-                    lastResponse = nil
-                    lastReadAt = nil
-                    newCount = 0
-                    resetEarlier()
-                    state = .error(message: error.errorDescription ?? "Couldn't load Pulse.")
-                    return
-                default: break
-                }
-            }
+            if clearRefusedPage(error) { return }
             if case .loaded = state {
                 if force { toastMessage = "Couldn't refresh Pulse." }
             } else {
@@ -270,9 +257,14 @@ public final class PulsePageViewModel {
             topic: activeTopic?.queryValue,
             after: Self.iso(content.readAt)
         )
-        guard let response = try? await api.request(endpoint, as: PulseFeedNewCountResponse.self),
-              generation == readGeneration, !Task.isCancelled else { return }
-        newCount = max(0, response.count)
+        do {
+            let response = try await api.request(endpoint, as: PulseFeedNewCountResponse.self)
+            guard generation == readGeneration, !Task.isCancelled else { return }
+            newCount = max(0, response.count)
+        } catch {
+            guard generation == readGeneration, !Task.isCancelled else { return }
+            _ = clearRefusedPage(error)
+        }
     }
 
     /// The end card has been on screen: move the last-seen marker, once per
@@ -295,6 +287,8 @@ public final class PulsePageViewModel {
             seenThrough = content.readAt
         } catch {
             // Retry when the end is shown again or on the next visible poll.
+            guard generation == readGeneration, !Task.isCancelled else { return }
+            _ = clearRefusedPage(error)
         }
     }
 
@@ -324,6 +318,7 @@ public final class PulsePageViewModel {
             rebuild()
         } catch {
             guard generation == readGeneration else { return }
+            if clearRefusedPage(error) { return }
             earlierPhase = phase
             toastMessage = "Couldn't load earlier conversations. Try again."
         }
@@ -351,6 +346,23 @@ public final class PulsePageViewModel {
     }
 
     // MARK: - Helpers
+
+    /// Losing access while polling or paging also invalidates the page,
+    /// including its saved copy. Network failures leave the copy alone.
+    private func clearRefusedPage(_ error: any Error) -> Bool {
+        guard let error = error as? APIError else { return false }
+        switch error {
+        case .unauthorized, .forbidden, .notFound:
+            store.remove(endpoint())
+            lastResponse = nil
+            lastReadAt = nil
+            newCount = 0
+            resetEarlier()
+            state = .error(message: error.errorDescription ?? "Couldn't load Pulse.")
+            return true
+        default: return false
+        }
+    }
 
     func beginMutation(_ id: String) -> Bool {
         guard pending.insert(id).inserted else { return false }
