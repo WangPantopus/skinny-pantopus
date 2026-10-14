@@ -5,7 +5,8 @@
 //  Ten-way classification for Pulse posts. Drives the chip-row filter,
 //  the per-card colored chip, the reaction-verb set, and the compose
 //  FAB's pre-fill. The `all` case is a chip-row-only sentinel; real
-//  posts always resolve to one of the other nine.
+//  posts resolve to one of the other nine, or to `generic` when their
+//  type is one this build doesn't know (Pulse S2: a plain card).
 //
 //  The chip set mirrors RN's `PLACE_POST_TYPES`
 //  (`src/constants/feed.ts:18-28`) 1:1 — `alert` / `deal` /
@@ -28,6 +29,12 @@ public enum PulseIntent: String, CaseIterable, Sendable, Hashable {
     case announce
     case neighborhoodWin
     case visitorGuide
+    /// A post whose type this build doesn't know (one added later): a plain
+    /// card with no type-specific actions. Never a filter chip.
+    case generic
+
+    /// The chips of the filter row and the filter picker: every intent but `generic`.
+    public static let filterCases: [PulseIntent] = allCases.filter { $0 != .generic }
 
     /// Chip-row display label — RN `PLACE_POST_TYPES` labels.
     public var label: String {
@@ -42,6 +49,7 @@ public enum PulseIntent: String, CaseIterable, Sendable, Hashable {
         case .announce: "Announce"
         case .neighborhoodWin: "Wins"
         case .visitorGuide: "Guide"
+        case .generic: "Post"
         }
     }
 
@@ -58,6 +66,7 @@ public enum PulseIntent: String, CaseIterable, Sendable, Hashable {
         case .announce: "Announce"
         case .neighborhoodWin: "Win"
         case .visitorGuide: "Guide"
+        case .generic: "Post"
         }
     }
 
@@ -71,7 +80,7 @@ public enum PulseIntent: String, CaseIterable, Sendable, Hashable {
     /// returns `nil` so the backend skips the filter.
     public var postType: String? {
         switch self {
-        case .all: nil
+        case .all, .generic: nil
         case .ask: "ask_local"
         case .recommend: "recommendation"
         case .event: "event"
@@ -84,9 +93,11 @@ public enum PulseIntent: String, CaseIterable, Sendable, Hashable {
         }
     }
 
-    /// Resolve a backend `post_type` string back to a UI intent. Unknown
-    /// types fall through to `.announce` — the most generic chip — so
-    /// the card still renders a meaningful intent indicator.
+    /// Resolve a backend `post_type` string back to a UI intent. The older
+    /// types with no chip of their own (`general`, a cold-start fact's
+    /// `discussion`, …) and a missing type read as `.announce`, as they
+    /// always have; a type this build doesn't know (one added later, such
+    /// as `share` or `offer`) is `.generic`, never another type's chip.
     public static func from(postType: String?) -> PulseIntent {
         switch postType ?? "" {
         case "ask_local", "ask": .ask
@@ -97,9 +108,17 @@ public enum PulseIntent: String, CaseIterable, Sendable, Hashable {
         case "deal": .deal
         case "neighborhood_win": .neighborhoodWin
         case "visitor_guide": .visitorGuide
-        case "local_update", "announcement", "heads_up": .announce
-        default: .announce
+        case "local_update", "announcement", "heads_up", "",
+             "general", "personal_update", "service_offer", "resources_howto", "progress_wins",
+             "discussion", "gig":
+            .announce
+        default: .generic
         }
+    }
+
+    /// The type is one this build knows, so its chip and actions apply.
+    public static func knows(postType: String?) -> Bool {
+        from(postType: postType) != .generic
     }
 }
 
@@ -117,6 +136,7 @@ public extension PulseIntent {
         case .announce: .megaphone
         case .neighborhoodWin: .partyPopper
         case .visitorGuide: .compass
+        case .generic: .messageSquare
         }
     }
 }
@@ -194,6 +214,9 @@ public extension PulseIntent {
                 PulseReaction(kind: .helpful, icon: .lightbulb, label: "helpful", count: helpfulCount, isInteractive: true),
                 PulseReaction(kind: .heart, icon: .heart, label: "", count: secondaryCount, isInteractive: false)
             ]
+        case .generic:
+            // A type this build doesn't know: only the plain like every post has.
+            [PulseReaction(kind: .heart, icon: .heart, label: "", count: helpfulCount, isInteractive: true)]
         }
     }
 }

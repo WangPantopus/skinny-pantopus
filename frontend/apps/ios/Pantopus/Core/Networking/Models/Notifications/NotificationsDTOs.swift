@@ -11,6 +11,18 @@ public struct NotificationsListResponse: Decodable, Sendable {
     public let notifications: [NotificationDTO]
     public let unreadCount: Int?
     public let hasMore: Bool?
+
+    private enum CodingKeys: String, CodingKey {
+        case notifications, unreadCount, hasMore
+    }
+
+    /// A notice this build can't read is left out; the rest show (Pulse S2).
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        notifications = c.lossyList(NotificationDTO.self, forKey: .notifications)
+        unreadCount = c.lenient(Int.self, forKey: .unreadCount)
+        hasMore = c.lenient(Bool.self, forKey: .hasMore)
+    }
 }
 
 public struct NotificationDTO: Decodable, Sendable, Hashable, Identifiable {
@@ -33,6 +45,29 @@ public struct NotificationDTO: Decodable, Sendable, Hashable, Identifiable {
         case userId = "user_id"
         case isRead = "is_read"
         case createdAt = "created_at"
+    }
+}
+
+public extension NotificationDTO {
+    /// Tolerant (Pulse S2): only `id` is required; a field that is missing,
+    /// null or of another shape reads as absent. An unknown `type` stays a
+    /// string and lands in the general bucket. (In an extension, so the
+    /// memberwise initializer stays.)
+    init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        try self.init(
+            id: c.decode(String.self, forKey: .id),
+            userId: c.lenient(String.self, forKey: .userId),
+            type: c.lenient(String.self, forKey: .type),
+            title: c.lenient(String.self, forKey: .title),
+            body: c.lenient(String.self, forKey: .body),
+            icon: c.lenient(String.self, forKey: .icon),
+            link: c.lenient(String.self, forKey: .link),
+            isRead: c.lenient(Bool.self, forKey: .isRead),
+            createdAt: c.lenient(String.self, forKey: .createdAt),
+            context: c.lenient(String.self, forKey: .context),
+            metadata: c.lenient(HomeTaskNotificationMetadata.self, forKey: .metadata)
+        )
     }
 }
 

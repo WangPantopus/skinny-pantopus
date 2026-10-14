@@ -54,7 +54,7 @@ public struct PulseComposeContentState: Equatable {
         lostFoundKind: PulseLostFoundKind = .lost,
         lostFoundContactPref: PulseLostFoundContactPref = .dm,
         announceAudience: PulseAnnounceAudience = .neighbors,
-        safetyAlertKind: PulseSafetyAlertKind = .theft,
+        safetyAlertKind: PulseSafetyAlertKind = .hazard,
         askCategory: PulseAskCategory? = .handyman,
         recommendRating: Int = 5,
         dealExpiresAt: Date = Date().addingTimeInterval(7 * 86400),

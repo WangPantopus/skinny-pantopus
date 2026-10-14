@@ -6,21 +6,32 @@
 //  `sync:changed` marks the copies its topics name out of date,
 //  `notification:new` marks the notification list, and a socket that comes
 //  back after a drop marks every Household, Messages and Notifications copy
-//  (signals may have been missed meanwhile). A screen on screen then re-reads
+//  (signals may have been missed meanwhile). A connection request or
+//  acceptance, from the socket or a push, also marks Connections: the server
+//  sends no topic for relationships. A screen on screen then re-reads
 //  what went stale (`refreshesOnStoreChange`); the others catch up when they
 //  next appear. Older servers send no `sync:changed`; nothing depends on it.
 //
 
 import SwiftUI
+import UserNotifications
 
 /// `sync:changed`: topic names only, never content or names.
 struct SyncChangedEvent: Decodable {
     let topics: [String]
 }
 
-/// Any payload: only the event's arrival matters.
-struct SocketSignal: Decodable {
-    init(from _: any Decoder) throws {}
+/// `notification:new`: any payload counts; only the notice's `type` is read.
+struct NotificationSignal: Decodable {
+    let type: String?
+
+    init(from decoder: any Decoder) throws {
+        type = try? decoder.container(keyedBy: CodingKeys.self).decode(String.self, forKey: .type)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case type
+    }
 }
 
 extension Notification.Name {
@@ -33,19 +44,29 @@ extension Notification.Name {
 @MainActor
 enum ScreenStoreLive {
     private static var tasks: [Task<Void, Never>] = []
+    private static var observers: [any NSObjectProtocol] = []
+    /// The store `start` listens for; pushes mark only this one. A push opened
+    /// on a cold launch comes first: there is no copy to mark yet, and making
+    /// the shared store before the session is restored would wipe its saved copy.
+    private static var liveStore: ScreenStore?
+    /// When the app went to the background.
+    private static var awaySince: Date?
 
     /// Starts listening, once: the socket keeps its subscriptions across
     /// reconnects, token refreshes and account switches.
     static func start(socket: SocketClient = .shared, store: ScreenStore = .shared) {
         guard tasks.isEmpty else { return }
+        liveStore = store
         tasks.append(Task {
             for await change in socket.events(named: "sync:changed", as: SyncChangedEvent.self) {
                 changed(topics: Set(change.topics), in: store)
             }
         })
         tasks.append(Task {
-            for await _ in socket.events(named: "notification:new", as: SocketSignal.self) {
-                changed(topics: [ScreenTopic.notifications], in: store)
+            for await notice in socket.events(named: "notification:new", as: NotificationSignal.self) {
+                var topics: Set<String> = [ScreenTopic.notifications]
+                if isConnectionNotice(notice.type) { topics.insert(ScreenTopic.connections) }
+                changed(topics: topics, in: store)
             }
         })
         tasks.append(Task {
@@ -71,6 +92,50 @@ enum ScreenStoreLive {
                 }
             }
         })
+        observePushesWhileAway()
+    }
+
+    /// A push shown while the app is open, or opened (`AppDelegate`): a
+    /// connection request or acceptance marks Connections even when the
+    /// socket missed the notice.
+    static func pushArrived(type: String?) {
+        if isConnectionNotice(type) { connectionNoticed() }
+    }
+
+    /// A connection request, or the viewer's request accepted (types from
+    /// `backend/services/notificationService.js`).
+    nonisolated static func isConnectionNotice(_ type: String?) -> Bool {
+        type == "connection_request" || type == "connection_accepted"
+    }
+
+    private static func connectionNoticed() {
+        guard let store = liveStore else { return }
+        changed(topics: [ScreenTopic.connections], in: store)
+    }
+
+    /// Pushes that arrive while the app is in the background run no code
+    /// here (alert pushes wake nothing). Coming back, those still in
+    /// Notification Center count as arrived.
+    private static func observePushesWhileAway() {
+        let center = NotificationCenter.default
+        observers.append(center.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { _ in
+            MainActor.assumeIsolated { awaySince = Date() }
+        })
+        observers.append(center.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { _ in
+            MainActor.assumeIsolated {
+                guard let since = awaySince else { return }
+                awaySince = nil
+                Task { @MainActor in
+                    if await connectionPushDelivered(since: since) { connectionNoticed() }
+                }
+            }
+        })
+    }
+
+    private nonisolated static func connectionPushDelivered(since: Date) async -> Bool {
+        await UNUserNotificationCenter.current().deliveredNotifications().contains {
+            $0.date > since && isConnectionNotice($0.request.content.userInfo["type"] as? String)
+        }
     }
 
     private static func changed(topics: Set<String>, in store: ScreenStore) {
