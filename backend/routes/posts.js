@@ -123,7 +123,7 @@ const {
   enrichFeedPosts,
   attachIdentityAuthors,
   applyPostLocationPrivacy,
-  applyPostLocationPrivacyBatch,
+  sortMatchedBusinessesByRating,
   applyCursorCondition,
   buildCursorPagination,
   FEED_POST_SELECT,
@@ -211,6 +211,7 @@ const AUDIENCE_TYPES = ['connections', 'followers', 'network', 'nearby', 'saved_
 const LOCAL_AUDIENCES = ['nearby', 'neighborhood', 'saved_place', 'target_area'];
 
 const { PULSE_TOPICS, PULSE_TOPIC_NAMES, isPulseTopic } = require('../services/pulse/topics');
+const pulseLifecycle = require('../services/pulse/lifecycle');
 // The one read check every path uses (this file keeps calling it canViewPost).
 const { canReadPost: canViewPost, readablePosts, isPubliclyShareable, POST_READ_SELECT } = require('../services/pulse/readAccess');
 
@@ -1915,12 +1916,12 @@ router.get('/saved', verifyToken, async (req, res) => {
       s.post.archived_at ? false : canViewPost(s.post, userId).catch(() => false)
     )));
     const validSaves = withPost.filter((_, i) => viewable[i] === true);
-    const privacySafePosts = applyPostLocationPrivacyBatch(
+    // The viewer's like/save/repost state, as every feed lane returns it (the cards draw it).
+    // Enrichment also applies location privacy, once, so pins match the post page.
+    const serializedPosts = await enrichFeedPosts(
       validSaves.map(s => ({ ...s.post, savedAt: s.created_at })),
       userId
     );
-    // The viewer's like/save/repost state, as every feed lane returns it (the cards draw it).
-    const serializedPosts = await enrichFeedPosts(privacySafePosts, userId);
 
     // Offsets count saves, not the posts left after the visibility check, so a short page isn't the end.
     const savesRead = (saves || []).length;
@@ -2269,7 +2270,8 @@ router.patch('/resolve/:id', verifyToken, async (req, res) => {
     const now = new Date().toISOString();
     const { data: updated, error } = await supabaseAdmin
       .from('Post')
-      .update({ resolved_at: now, state: 'solved', solved_at: now })
+      // A solved Ask is an answered one (contract §4.1: state and resolution stay in step).
+      .update({ resolved_at: now, state: 'solved', solved_at: now, resolution: 'answered' })
       .eq('id', postId)
       .select(`*, creator:user_id (${SAFE_CREATOR_SELECT})`)
       .single();
@@ -2690,7 +2692,8 @@ router.post('/:id/unarchive', verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user.id;
-    const { data: existing } = await supabaseAdmin.from('Post').select('user_id, archive_reason').eq('id', id).single();
+    const { data: existing } = await supabaseAdmin
+      .from('Post').select('user_id, archive_reason, post_type, resolution').eq('id', id).single();
     if (!existing) return res.status(404).json({ error: 'Post not found' });
     if (existing.user_id !== userId) return res.status(403).json({ error: 'You can only restore your own posts' });
     if (existing.archive_reason === 'moderation') {
@@ -2698,9 +2701,21 @@ router.post('/:id/unarchive', verifyToken, async (req, res) => {
     }
 
     const updatedAt = new Date().toISOString();
+    const restored = { archived_at: null, updated_at: updatedAt };
+    if (['expired', 'resolved'].includes(existing.archive_reason)) {
+      // A post that ended by time, or an Ask its author closed, comes back for one more of its type's
+      // windows from now, open again unless it ended its own way (contract §5); otherwise the next
+      // job run would end it.
+      const days = await pulseLifecycle.windowDays(existing.post_type);
+      restored.is_archived = false;
+      restored.expires_at = new Date(Date.now() + days * pulseLifecycle.DAY_MS).toISOString();
+      if (pulseLifecycle.TIMED_OUT_RESOLUTIONS.includes(existing.resolution)) {
+        Object.assign(restored, { state: 'open', resolution: null });
+      }
+    }
     const { error } = await supabaseAdmin
       .from('Post')
-      .update({ archived_at: null, updated_at: updatedAt })
+      .update(restored)
       .eq('id', id);
     if (error) {
       logger.error('Error unarchiving post', { error: error.message, postId: id });
@@ -2747,6 +2762,8 @@ router.get('/:id/matched-businesses', verifyToken, async (req, res) => {
     // 2. Check if caller wants fast cached response
     const useCached = req.query.cached === 'true';
     if (useCached && post.matched_businesses_cache && post.matched_businesses_cache.length > 0) {
+      // Only the author keeps the snapshot's distances (measured from the stored point).
+      applyPostLocationPrivacy(post, req.user.id);
       return res.json({ businesses: post.matched_businesses_cache, cached: true });
     }
 
@@ -2800,7 +2817,11 @@ router.get('/:id/matched-businesses', verifyToken, async (req, res) => {
         };
       });
 
-    res.json({ businesses, cached: false });
+    // The ranked IDs follow distance from the stored point, so only the author gets that order.
+    res.json({
+      businesses: post.user_id === req.user.id ? businesses : sortMatchedBusinessesByRating(businesses),
+      cached: false,
+    });
   } catch (err) {
     logger.error('Matched businesses fetch error', { error: err.message, postId: req.params.id });
     res.status(500).json({ error: 'Failed to fetch matched businesses' });
@@ -2892,10 +2913,16 @@ router.post('/:id/comments', verifyToken, validate(createCommentSchema), async (
     });
     if (!post) return;
 
+    let parent = null;
     if (parentCommentId) {
-      const { data: parent } = await supabaseAdmin.from('PostComment').select('id, post_id')
-        .eq('id', parentCommentId).eq('is_deleted', false).maybeSingle();
+      ({ data: parent } = await supabaseAdmin.from('PostComment').select('id, post_id, user_id')
+        .eq('id', parentCommentId).eq('is_deleted', false).maybeSingle());
       if (!parent || parent.post_id !== postId) return res.status(400).json({ error: 'Invalid parent comment' });
+      // Blocks hide people from each other in both directions, so nobody replies to someone across one
+      // (their comment list already hides that reply, and the reply notification would reach them).
+      if (await blockService.isBlocked(userId, parent.user_id)) {
+        return res.status(403).json({ error: "You can't reply to this comment." });
+      }
     }
 
     const normalizedComment = typeof comment === 'string' ? comment.trim() : '';
@@ -2957,9 +2984,9 @@ router.post('/:id/comments', verifyToken, validate(createCommentSchema), async (
     }
     if (!newComment) throw new Error('Comment insert returned no row');
 
-    // Notify post owner of new comment (not on own post)
+    // Notify post owner of new comment (not on own post, and never across a block)
     if (post.user_id !== userId) {
-      commenterName().then(name => {
+      blockService.isBlocked(userId, post.user_id).then(blocked => blocked ? null : commenterName().then(name => {
         notificationService.createNotification({
           userId: post.user_id,
           type: 'post_commented',
@@ -2974,30 +3001,27 @@ router.post('/:id/comments', verifyToken, validate(createCommentSchema), async (
             ...(audienceAuthors ? { persona_id: post.identity_context_id } : { user_id: userId }),
           },
         });
-      }).catch(err => {
+      })).catch(err => {
         logger.warn('Comment notification failed (non-blocking)', { error: err.message, postId });
       });
     }
 
     // Notify parent comment author of reply (if different from commenter and post owner)
-    if (parentCommentId) {
-      const { data: parentComment } = await supabaseAdmin.from('PostComment').select('user_id').eq('id', parentCommentId).single();
-      if (parentComment && parentComment.user_id !== userId && parentComment.user_id !== post.user_id) {
-        commenterName().then(name => {
-          notificationService.createNotification({
-            userId: parentComment.user_id,
-            type: 'comment_replied',
-            title: `${name} replied to your comment`,
-            body: normalizedComment.length > 100 ? normalizedComment.substring(0, 100) + '…' : normalizedComment,
-            icon: '💬',
-            ...(audienceAuthors ? { context: 'audience' } : {}),
-            link: `/posts/${postId}`,
-            metadata: { post_id: postId, comment_id: newComment.id, parent_comment_id: parentCommentId, ...(audienceAuthors ? { persona_id: post.identity_context_id } : { user_id: userId }) },
-          });
-        }).catch(err => {
-          logger.warn('Reply notification failed (non-blocking)', { error: err.message, postId });
+    if (parent && parent.user_id !== userId && parent.user_id !== post.user_id) {
+      commenterName().then(name => {
+        notificationService.createNotification({
+          userId: parent.user_id,
+          type: 'comment_replied',
+          title: `${name} replied to your comment`,
+          body: normalizedComment.length > 100 ? normalizedComment.substring(0, 100) + '…' : normalizedComment,
+          icon: '💬',
+          ...(audienceAuthors ? { context: 'audience' } : {}),
+          link: `/posts/${postId}`,
+          metadata: { post_id: postId, comment_id: newComment.id, parent_comment_id: parentCommentId, ...(audienceAuthors ? { persona_id: post.identity_context_id } : { user_id: userId }) },
         });
-      }
+      }).catch(err => {
+        logger.warn('Reply notification failed (non-blocking)', { error: err.message, postId });
+      });
     }
 
     res.status(201).json({
@@ -3592,9 +3616,10 @@ router.patch('/:id/solve', verifyToken, async (req, res) => {
 
     const { data: updated, error } = await supabaseAdmin
       .from('Post')
-      .update({ state: 'solved', solved_at: new Date().toISOString() })
+      // A solved Ask is an answered one (contract §4.1: state and resolution stay in step).
+      .update({ state: 'solved', solved_at: new Date().toISOString(), resolution: 'answered' })
       .eq('id', postId)
-      .select('id, state, solved_at')
+      .select('id, state, solved_at, resolution')
       .single();
 
     if (error) return res.status(500).json({ error: 'Failed to update post state' });

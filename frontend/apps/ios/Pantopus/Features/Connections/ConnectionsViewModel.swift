@@ -36,8 +36,9 @@
 //    - `POST /api/relationships/:id/unblock`       :522 → Unblock
 //
 //  Two GETs fire in parallel on initial load; subsequent tab switches
-//  segment over the cached payload (no extra fetch). Accept / Reject are
-//  optimistic with rollback.
+//  segment over the cached payload (no extra fetch). Accept, Ignore,
+//  Remove and Unblock wait for the server: the row stays with a busy
+//  label until it answers, and a refusal leaves the lists as they were.
 //
 
 import Foundation
@@ -195,12 +196,17 @@ public final class ConnectionsViewModel: ListOfRowsDataSource {
     /// Live search query; bound to the search bar.
     public private(set) var searchText: String = ""
 
+    /// Why a connection change didn't go through. The lists stay as they
+    /// were; the shell shows it as a toast and clears it.
+    public var refreshFailureMessage: String?
+
     // MARK: - Dependencies
 
     private let api: APIClient
     /// The lists as last read (Other people: fresh 5 minutes, not saved on
     /// the phone). Coming back inside the window shows them with no request;
-    /// your own changes here and on profiles mark them out of date.
+    /// your own changes here and on profiles mark them out of date, and so
+    /// does a connection request or acceptance arriving.
     private let store: ScreenStore
     private let onMessage: @MainActor (ConnectionsChatTarget) -> Void
     private let onFindPeople: @MainActor () -> Void
@@ -215,6 +221,12 @@ public final class ConnectionsViewModel: ListOfRowsDataSource {
     private var sent: [SentRequestDTO] = []
     private var blocked: [BlockedRelationshipDTO] = []
     private var loadedOnce: Bool = false
+    /// Rows whose change the server hasn't answered yet, with the label
+    /// their trailing slot shows meanwhile ("Accepting…").
+    private var actions: [String: String] = [:]
+    /// Counts started changes: a read that began before one can't put back
+    /// the lists it changed.
+    private var changesStarted = 0
 
     init(
         api: APIClient = .shared,
@@ -271,7 +283,11 @@ public final class ConnectionsViewModel: ListOfRowsDataSource {
     }
 
     private func read<Value: Decodable & Sendable>(_ endpoint: Endpoint, as type: Value.Type, force: Bool) async throws -> Value {
-        try await store.load(endpoint, as: type, kind: .otherPeople, topics: [ScreenTopic.connections], force: force).value
+        let started = changesStarted
+        let value = try await store.load(endpoint, as: type, kind: .otherPeople, topics: [ScreenTopic.connections], force: force).value
+        // A change started meanwhile: this reply may be from before it.
+        guard changesStarted == started else { throw CancellationError() }
+        return value
     }
 
     public func loadMoreIfNeeded() async {
@@ -289,55 +305,49 @@ public final class ConnectionsViewModel: ListOfRowsDataSource {
         rebuild()
     }
 
-    // MARK: - Accept / Reject (optimistic)
+    // MARK: - Accept / Reject (confirmed by the server)
 
-    /// Accept a pending request. Optimistically removes the request and
-    /// inserts a synthetic accepted row so the All / Neighbors counts
-    /// bump immediately. Rolls back on failure.
+    /// Accept a pending request. It stays in Pending as "Accepting…" until
+    /// the server confirms, then moves to All.
     public func accept(requestId: String) async {
         guard let request = pending.first(where: { $0.id == requestId }),
               let user = request.requester else { return }
-        let previousPending = pending
-        let previousAccepted = accepted
-        pending.removeAll { $0.id == requestId }
-        let synthetic = RelationshipDTO(
-            id: requestId,
-            status: "accepted",
-            createdAt: request.createdAt,
-            respondedAt: Self.iso8601String(from: now()),
-            acceptedAt: Self.iso8601String(from: now()),
-            blockedBy: nil,
-            direction: "received",
-            otherUser: user
-        )
-        accepted.insert(synthetic, at: 0)
-        rebuild()
-        do {
-            let _: RelationshipActionEcho = try await api.request(
-                RelationshipsEndpoints.accept(id: requestId)
+        await change(
+            requestId,
+            busy: "Accepting…",
+            failure: "Couldn't accept the request.",
+            RelationshipsEndpoints.accept(id: requestId)
+        ) {
+            let acceptedAt = Self.iso8601String(from: now())
+            pending.removeAll { $0.id == requestId }
+            accepted.removeAll { $0.id == requestId }
+            accepted.insert(
+                RelationshipDTO(
+                    id: requestId,
+                    status: "accepted",
+                    createdAt: request.createdAt,
+                    respondedAt: acceptedAt,
+                    acceptedAt: acceptedAt,
+                    blockedBy: nil,
+                    direction: "received",
+                    otherUser: user
+                ),
+                at: 0
             )
-            listsChanged()
-        } catch {
-            pending = previousPending
-            accepted = previousAccepted
-            rebuild()
         }
     }
 
-    /// Decline / ignore a pending request. Optimistically removes and
-    /// rolls back on failure.
+    /// Decline / ignore a pending request. It stays as "Ignoring…" until the
+    /// server confirms.
     public func reject(requestId: String) async {
-        let previousPending = pending
-        pending.removeAll { $0.id == requestId }
-        rebuild()
-        do {
-            let _: RelationshipActionEcho = try await api.request(
-                RelationshipsEndpoints.reject(id: requestId)
-            )
-            listsChanged()
-        } catch {
-            pending = previousPending
-            rebuild()
+        guard pending.contains(where: { $0.id == requestId }) else { return }
+        await change(
+            requestId,
+            busy: "Ignoring…",
+            failure: "Couldn't ignore the request.",
+            RelationshipsEndpoints.reject(id: requestId)
+        ) {
+            pending.removeAll { $0.id == requestId }
         }
     }
 
@@ -347,7 +357,8 @@ public final class ConnectionsViewModel: ListOfRowsDataSource {
     /// `confirmationDialog` off `pendingRemoval`; RN shows the same
     /// Cancel / Remove alert (`src/app/connections.tsx:70-77`).
     public func requestRemoval(relationshipId: String) {
-        guard let rel = accepted.first(where: { $0.id == relationshipId }) else { return }
+        guard actions[relationshipId] == nil,
+              let rel = accepted.first(where: { $0.id == relationshipId }) else { return }
         pendingRemoval = ConnectionRemovalRequest(
             id: relationshipId,
             displayName: Self.displayName(for: rel.otherUser) ?? "this connection"
@@ -359,57 +370,99 @@ public final class ConnectionsViewModel: ListOfRowsDataSource {
         pendingRemoval = nil
     }
 
-    /// Run the confirmed disconnect.
-    public func confirmRemoval() async {
-        guard let request = pendingRemoval else { return }
+    /// Run the confirmed disconnect for the request the dialog showed. The
+    /// dialog's dismissal clears `pendingRemoval` before this task runs.
+    public func confirmRemoval(_ request: ConnectionRemovalRequest) async {
         pendingRemoval = nil
         await disconnect(relationshipId: request.id)
     }
 
-    /// `DELETE /api/relationships/:id`. Optimistic — the row disappears
-    /// immediately and is restored if the call fails.
+    /// `DELETE /api/relationships/:id`. The row stays as "Removing…" until
+    /// the server confirms.
     public func disconnect(relationshipId: String) async {
-        let previous = accepted
-        accepted.removeAll { $0.id == relationshipId }
-        rebuild()
-        do {
-            let _: RelationshipActionEcho = try await api.request(
-                ConnectionsEndpoints.disconnect(id: relationshipId)
-            )
-            listsChanged()
-        } catch {
-            accepted = previous
-            rebuild()
+        guard accepted.contains(where: { $0.id == relationshipId }) else { return }
+        await change(
+            relationshipId,
+            busy: "Removing…",
+            failure: "Couldn't remove the connection.",
+            ConnectionsEndpoints.disconnect(id: relationshipId)
+        ) {
+            accepted.removeAll { $0.id == relationshipId }
         }
     }
 
-    /// `POST /api/relationships/:id/unblock`. Optimistic — the row leaves
-    /// the Blocked tab and is restored if the call fails. The backend
-    /// deletes the row outright, so nothing moves into Connections.
+    /// `POST /api/relationships/:id/unblock`. The row stays in Blocked as
+    /// "Unblocking…" until the server confirms. The backend deletes the row
+    /// outright, so nothing moves into Connections.
     public func unblock(relationshipId: String) async {
-        let previous = blocked
-        blocked.removeAll { $0.id == relationshipId }
+        guard blocked.contains(where: { $0.id == relationshipId }) else { return }
+        await change(
+            relationshipId,
+            busy: "Unblocking…",
+            failure: "Couldn't unblock the connection.",
+            ConnectionsEndpoints.unblock(id: relationshipId)
+        ) {
+            blocked.removeAll { $0.id == relationshipId }
+        }
+    }
+
+    /// Runs one connection change. The row keeps its place with `busy` in its
+    /// trailing slot, and repeat taps do nothing, until the server answers.
+    /// A confirmed change is applied; a refusal leaves the lists as they
+    /// were and says why.
+    private func change(
+        _ id: String,
+        busy: String,
+        failure: String,
+        _ endpoint: Endpoint,
+        confirmed: () -> Void
+    ) async {
+        guard actions[id] == nil else { return }
+        actions[id] = busy
+        changesStarted += 1
+        refreshFailureMessage = nil
         rebuild()
+        Self.announce(busy)
         do {
-            let _: RelationshipActionEcho = try await api.request(
-                ConnectionsEndpoints.unblock(id: relationshipId)
-            )
+            let _: RelationshipActionEcho = try await api.request(endpoint)
+            actions[id] = nil
+            confirmed()
             listsChanged()
         } catch {
-            blocked = previous
-            rebuild()
+            actions[id] = nil
+            let message = (error as? APIError)?.errorDescription ?? failure
+            refreshFailureMessage = message
+            Self.announce(message)
         }
+        rebuild()
+    }
+
+    /// The trailing label of a row whose change the server hasn't answered.
+    private func busyTrailing(_ id: String) -> RowTrailing? {
+        actions[id].map { .statusChip(text: $0, variant: .warning) }
+    }
+
+    /// VoiceOver says it in full even while the row under its cursor changes.
+    private static func announce(_ text: String) {
+        var announcement = AttributedString(text)
+        announcement.accessibilitySpeechAnnouncementPriority = .high
+        AccessibilityNotification.Announcement(announcement).post()
     }
 
     // MARK: - Fetching
 
     private func fetchAll(force: Bool) async {
+        // A change waiting for the server keeps the lists as they are.
+        guard actions.isEmpty else { return }
+        let started = changesStarted
         async let acceptedTask = fetchAccepted(force: force)
         async let pendingTask = fetchPending(force: force)
         async let sentTask = fetchSent(force: force)
         async let blockedTask = fetchBlocked(force: force)
         let (acceptedResult, pendingResult) = await (acceptedTask, pendingTask)
         let (sentResult, blockedResult) = await (sentTask, blockedTask)
+        // Replies that may be from before a change aren't shown (`read`).
+        guard changesStarted == started else { return }
         if !acceptedResult, !pendingResult, !sentResult, !blockedResult {
             // Everything failed → surface the error banner. Its Try again calls
             // load(), so nothing counts as loaded until a fetch succeeds.
@@ -606,6 +659,13 @@ public final class ConnectionsViewModel: ListOfRowsDataSource {
                 timeZone: timeZone
             ) ?? "recently"
         )
+        let busy = actions[rel.id] != nil
+        let removal = busy ? nil : RowDestructiveAction(
+            label: "Remove",
+            identifier: "connections.row.\(rel.id).remove"
+        ) { [weak self] in
+            Task { @MainActor in self?.requestRemoval(relationshipId: rel.id) }
+        }
         return RowModel(
             id: rel.id,
             title: displayName,
@@ -619,7 +679,7 @@ public final class ConnectionsViewModel: ListOfRowsDataSource {
                 // No verification in the relationship payload, so no check.
                 verified: false
             ),
-            trailing: .circularAction(
+            trailing: busyTrailing(rel.id) ?? .circularAction(
                 icon: .messageCircle,
                 accessibilityLabel: "Message \(displayName)",
                 background: Theme.Color.primary50,
@@ -627,16 +687,11 @@ public final class ConnectionsViewModel: ListOfRowsDataSource {
             ) { [weak self] in
                 MainActor.assumeIsolated { self?.onMessage(target) }
             },
-            onTap: profileTap(user?.id),
+            onTap: profileTap(user?.id, busy: busy),
             body: body,
             subtitleIcon: Self.localityText(user) == nil ? nil : .mapPin,
             bodyIcon: .userPlus,
-            destructiveAction: RowDestructiveAction(
-                label: "Remove",
-                identifier: "connections.row.\(rel.id).remove"
-            ) { [weak self] in
-                Task { @MainActor in self?.requestRemoval(relationshipId: rel.id) }
-            }
+            destructiveAction: removal
         )
     }
 
@@ -699,7 +754,7 @@ public final class ConnectionsViewModel: ListOfRowsDataSource {
                 size: .large,
                 verified: false
             ),
-            trailing: .pillButton(label: "Unblock", tone: .neutral) { [weak self] in
+            trailing: busyTrailing(rel.id) ?? .pillButton(label: "Unblock", tone: .neutral) { [weak self] in
                 Task { @MainActor in await self?.unblock(relationshipId: relationshipId) }
             },
             body: body,
@@ -721,6 +776,7 @@ public final class ConnectionsViewModel: ListOfRowsDataSource {
             ) ?? "just now"
         )
         let requestId = request.id
+        let busy = actions[requestId] != nil
         return RowModel(
             id: request.id,
             title: displayName,
@@ -733,7 +789,7 @@ public final class ConnectionsViewModel: ListOfRowsDataSource {
                 size: .large,
                 verified: false
             ),
-            trailing: .verticalActions(
+            trailing: busyTrailing(requestId) ?? .verticalActions(
                 primary: VerticalAction(label: "Accept", variant: .primary) { [weak self] in
                     Task { @MainActor in await self?.accept(requestId: requestId) }
                 },
@@ -741,7 +797,7 @@ public final class ConnectionsViewModel: ListOfRowsDataSource {
                     Task { @MainActor in await self?.reject(requestId: requestId) }
                 }
             ),
-            onTap: profileTap(user?.id),
+            onTap: profileTap(user?.id, busy: busy),
             body: body,
             subtitleIcon: Self.localityText(user) == nil ? nil : .mapPin,
             bodyIcon: .userPlus
@@ -749,9 +805,10 @@ public final class ConnectionsViewModel: ListOfRowsDataSource {
     }
 
     /// A row opens the person's public profile, as web's Connections rows do.
-    /// Blocked rows don't; a row without a user id has nothing to open.
-    private func profileTap(_ userId: String?) -> @Sendable () -> Void {
-        guard let userId, !userId.isEmpty else { return {} }
+    /// Blocked rows don't; a row without a user id has nothing to open, and
+    /// neither does one whose change the server hasn't answered yet.
+    private func profileTap(_ userId: String?, busy: Bool = false) -> @Sendable () -> Void {
+        guard let userId, !userId.isEmpty, !busy else { return {} }
         return { [weak self] in
             MainActor.assumeIsolated { self?.onOpenProfile(userId) }
         }
