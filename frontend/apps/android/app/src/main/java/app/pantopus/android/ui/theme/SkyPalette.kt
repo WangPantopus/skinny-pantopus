@@ -156,6 +156,9 @@ object SkyPalette {
     val blossom = Color(0xFFF9A8D4)
     val pine = Color(0xFF2F6B3F)
 
+    /** A pool beside the house, blended into the silhouette. */
+    val pool = Color(0xFF7DD3FC)
+
     /** Bins at the curb: garbage, recycling, yard waste. */
     val binGarbage = Color(0xFF4B5563)
     val binRecycling = Color(0xFF2563EB)

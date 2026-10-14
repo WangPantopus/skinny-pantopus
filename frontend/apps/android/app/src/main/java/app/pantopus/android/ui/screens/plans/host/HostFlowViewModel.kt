@@ -550,13 +550,13 @@ class HostFlowViewModel
             return when {
                 draft.title.isBlank() -> "Give your plan a title."
                 start == null || end == null -> "Pick when it starts and ends."
-                start.isBefore(now.minusMinutes(1)) -> "Pick a start that hasn't passed yet."
+                start.isBefore(now.minusMinutes(1)) -> "Pick a time that hasn't passed."
                 start.isAfter(now.plusDays(MAX_DAYS_AHEAD)) -> "Plans can start up to 14 days from now."
                 minutes < MIN_MINUTES -> "A plan lasts at least 15 minutes."
                 minutes > MAX_MINUTES -> "A plan lasts at most 8 hours."
                 draft.kind == PlanKind.PLAYDATE && draft.kidsAgeBands.isEmpty() -> "Pick the kids' ages."
-                draft.atHome && _ui.value.home == null -> "Add your home first, or pick a public place."
-                !draft.atHome && draft.place == null -> "Pick a place."
+                draft.atHome && _ui.value.home == null -> "Add your home to host there, or choose a public place."
+                !draft.atHome && draft.place == null -> "Choose a place."
                 else -> null
             }
         }

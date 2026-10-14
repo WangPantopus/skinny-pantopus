@@ -141,7 +141,7 @@ final class HomeResidencyHistoryJourneyUITests: XCTestCase {
         app.launch()
         if try ready(["tab.place", "loginEmailField", "placeLaunchSignIn"]).identifier == "tab.place" {
             let before = try await logoutCount()
-            let menu = app.buttons.matching(NSPredicate(format: "identifier IN %@", ["place.menu", "hubMenuButton"])).firstMatch
+            let menu = app.buttons.matching(NSPredicate(format: "identifier IN %@", ["place.menu"])).firstMatch
             try reveal(menu)
             menu.tap()
             try press("navDrawer.item.settings")

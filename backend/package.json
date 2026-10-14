@@ -13,6 +13,7 @@
     "seed:identity-firewall:two-user": "node scripts/identity-firewall-two-user-seed.js",
     "smoke:identity-firewall": "node scripts/identity-firewall-migration-smoke.js",
     "smoke:identity-firewall:preflight": "node scripts/identity-firewall-migration-smoke.js --preflight",
+    "smoke:ai": "node scripts/ai-smoke.js",
     "p0-2:send-emails": "node scripts/p0-2-send-display-name-migration-emails.js",
     "p0-2:send-emails:dry-run": "node scripts/p0-2-send-display-name-migration-emails.js --dry-run",
     "ci:check-creator-select": "node scripts/ci/check-creator-select.js",
@@ -26,6 +27,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.133.0",
     "@aws-sdk/client-s3": "^3.987.0",
     "@aws-sdk/s3-request-presigner": "^3.987.0",
     "@supabase/supabase-js": "^2.91.0",
@@ -50,7 +52,6 @@
     "ngeohash": "^0.6.3",
     "node-cron": "^4.2.1",
     "nodemailer": "^10.0.15",
-    "openai": "^4",
     "pdfkit": "^0.19.1",
     "pg": "^8.17.2",
     "pg-boss": "^12.15.0",

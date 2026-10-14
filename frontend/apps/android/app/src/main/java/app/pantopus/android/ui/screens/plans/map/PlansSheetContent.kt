@@ -633,7 +633,7 @@ internal fun PlansNoLocationContent(
                 color = PantopusColors.appTextSecondary,
             )
         }
-        PlanScopeLine("Hosts and guests never see where you are. They see a distance like \"about 1 mi\".")
+        PlanScopeLine("Hosts and guests never see where you are. They see a distance like “about 1 mi”.")
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2), modifier = Modifier.padding(top = Spacing.s1)) {
             PrimaryButton(title = "Use my location", onClick = onUseLocation, modifier = Modifier.height(50.dp))
             if (canUseHome) GhostButton(title = "Use my home instead", onClick = onUseHome, modifier = Modifier.height(50.dp))

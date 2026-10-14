@@ -42,6 +42,7 @@ const addressCalendarService = require('./addressCalendarService');
 const { getHomePrivacy } = require('./homePrivacyService');
 const { buildGoodDayTiles } = require('./goodDayEngine');
 const { getDensityBucket } = require('./place/densityReader');
+const { resolveHouse } = require('./place/houseShape');
 const { getSystemsLedger } = require('./homeSystemsService');
 const nfipPremiumService = require('./nfipPremiumService');
 const exemptionCheckService = require('./exemptionCheckService');
@@ -796,6 +797,9 @@ async function composeYourHome(home, tier) {
       value_low: profile.value_range_low ?? null,
       value_high: profile.value_range_high ?? null,
       assessed_value: profile.assessed_value ?? null,
+      // The home's outline for the Today sky: the county record's, with the
+      // kind of home the household chose over it.
+      house: resolveHouse(profile.house, home.home_type),
     },
   })];
 }
