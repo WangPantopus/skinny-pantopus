@@ -123,7 +123,7 @@ const {
   enrichFeedPosts,
   attachIdentityAuthors,
   applyPostLocationPrivacy,
-  applyPostLocationPrivacyBatch,
+  sortMatchedBusinessesByRating,
   applyCursorCondition,
   buildCursorPagination,
   FEED_POST_SELECT,
@@ -1916,12 +1916,12 @@ router.get('/saved', verifyToken, async (req, res) => {
       s.post.archived_at ? false : canViewPost(s.post, userId).catch(() => false)
     )));
     const validSaves = withPost.filter((_, i) => viewable[i] === true);
-    const privacySafePosts = applyPostLocationPrivacyBatch(
+    // The viewer's like/save/repost state, as every feed lane returns it (the cards draw it).
+    // Enrichment also applies location privacy, once, so pins match the post page.
+    const serializedPosts = await enrichFeedPosts(
       validSaves.map(s => ({ ...s.post, savedAt: s.created_at })),
       userId
     );
-    // The viewer's like/save/repost state, as every feed lane returns it (the cards draw it).
-    const serializedPosts = await enrichFeedPosts(privacySafePosts, userId);
 
     // Offsets count saves, not the posts left after the visibility check, so a short page isn't the end.
     const savesRead = (saves || []).length;
@@ -2762,6 +2762,8 @@ router.get('/:id/matched-businesses', verifyToken, async (req, res) => {
     // 2. Check if caller wants fast cached response
     const useCached = req.query.cached === 'true';
     if (useCached && post.matched_businesses_cache && post.matched_businesses_cache.length > 0) {
+      // Only the author keeps the snapshot's distances (measured from the stored point).
+      applyPostLocationPrivacy(post, req.user.id);
       return res.json({ businesses: post.matched_businesses_cache, cached: true });
     }
 
@@ -2815,7 +2817,11 @@ router.get('/:id/matched-businesses', verifyToken, async (req, res) => {
         };
       });
 
-    res.json({ businesses, cached: false });
+    // The ranked IDs follow distance from the stored point, so only the author gets that order.
+    res.json({
+      businesses: post.user_id === req.user.id ? businesses : sortMatchedBusinessesByRating(businesses),
+      cached: false,
+    });
   } catch (err) {
     logger.error('Matched businesses fetch error', { error: err.message, postId: req.params.id });
     res.status(500).json({ error: 'Failed to fetch matched businesses' });
