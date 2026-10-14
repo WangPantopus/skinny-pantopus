@@ -12,6 +12,7 @@ import app.pantopus.android.data.api.models.posts.PostDetailDto
 import app.pantopus.android.data.api.models.posts.PostReactionKind
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.posts.MatchedBusinessesRepository
@@ -158,10 +159,6 @@ class PulsePostDetailViewModel
         private val showingAllReplies = MutableStateFlow(false)
 
         private val maxInitialReplies = 3
-
-        /** Share URL for the system share sheet. */
-        val shareUrl: String
-            get() = "https://www.pantopus.com/posts/$postId"
 
         /**
          * True when the signed-in user authored the post on screen. The
@@ -443,9 +440,29 @@ class PulsePostDetailViewModel
             }
         }
 
-        /** Fire-and-forget external-share telemetry after the share sheet. */
-        fun recordShare() {
-            viewModelScope.launch { repo.share(postId, shareType = "external") }
+        private var sharingPost = false
+
+        /** Recheck permission before exposing the link; the audience may have narrowed since this page loaded. */
+        fun shareExternally(onReady: (String) -> Unit) {
+            val actor = signedInUserId ?: return
+            val post = (_state.value as? PulsePostDetailUiState.Loaded)?.content?.post ?: return
+            if (sharingPost || !post.canShareExternally) return
+            sharingPost = true
+            viewModelScope.launch {
+                try {
+                    when (val result = repo.share(postId, shareType = "external")) {
+                        is NetworkResult.Success -> {
+                            val current = (_state.value as? PulsePostDetailUiState.Loaded)?.content?.post
+                            if (signedInUserId == actor && current?.canShareExternally == true) {
+                                onReady("https://www.pantopus.com/posts/$postId")
+                            }
+                        }
+                        is NetworkResult.Failure -> _toastMessage.value = result.error.displayMessage("Couldn't share this post. Try again.")
+                    }
+                } finally {
+                    sharingPost = false
+                }
+            }
         }
 
         /** Submit the composer's current text — threaded under the reply target when set. */

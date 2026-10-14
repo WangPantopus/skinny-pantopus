@@ -60,6 +60,7 @@ data class PulsePostActions(
     val isSaved: Boolean = false,
     val isReposted: Boolean = false,
     val shareCount: Int = 0,
+    val canShareExternally: Boolean = false,
     /** `state == "solved"` — renders the inline Solved badge. */
     val isSolved: Boolean = false,
     /** Viewer authored this post. */
