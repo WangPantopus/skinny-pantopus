@@ -52,7 +52,104 @@ public struct PulsePostDetailView: View {
 
     public var body: some View {
         @Bindable var bindable = viewModel
-        return ZStack(alignment: .bottom) {
+        return replyDialogs
+            .confirmationDialog(
+                "Post options",
+                isPresented: $bindable.showsOverflowMenu,
+                titleVisibility: .hidden
+            ) {
+                Button(viewModel.isSaved ? "Remove bookmark" : "Save post") {
+                    Task { await viewModel.toggleSave() }
+                }
+                if viewModel.conversation != nil {
+                    if viewModel.canShareConversation {
+                        Button("Share post") { showsShareSheet = true }
+                    }
+                } else if !isRemovedByModerator {
+                    Button(viewModel.isReposted ? "Undo repost" : "Repost") {
+                        Task { await viewModel.toggleRepost() }
+                    }
+                }
+                if viewModel.isOwner {
+                    Button("Edit post") {
+                        if case let .loaded(detail) = viewModel.state {
+                            onEdit(detail.post.id)
+                        } else if let detail = viewModel.conversation {
+                            onEdit(detail.post.id)
+                        }
+                    }
+                    if viewModel.canKeepAskOpen {
+                        Button("Keep open 7 more days") {
+                            Task { await viewModel.keepAskOpen() }
+                        }
+                        .accessibilityIdentifier("pulseAskKeepOpen")
+                    }
+                    if viewModel.canCloseAsk {
+                        Button("Close") { viewModel.showsCloseAskConfirm = true }
+                            .accessibilityIdentifier("pulseAskClose")
+                    }
+                    Button("Delete post", role: .destructive) { showsDeleteConfirm = true }
+                } else {
+                    Button("Report post", role: .destructive) { showsReportDialog = true }
+                }
+                Button("Cancel", role: .cancel) {}
+            }
+            .confirmationDialog(
+                "Why are you reporting this post?",
+                isPresented: $showsReportDialog,
+                titleVisibility: .visible
+            ) {
+                ForEach(Self.reportReasons, id: \.token) { reason in
+                    Button(reason.label) {
+                        Task { await viewModel.reportPost(reason: reason.token) }
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            }
+            .alert("Close this question?", isPresented: $bindable.showsCloseAskConfirm) {
+                Button("Close", role: .destructive) {
+                    Task { await viewModel.closeAsk() }
+                }
+                .accessibilityIdentifier("pulseAskCloseConfirm")
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("It leaves Pulse. You can restore it from My posts.")
+            }
+            .alert("Delete this post?", isPresented: $showsDeleteConfirm) {
+                Button("Delete", role: .destructive) {
+                    Task { await viewModel.deletePost() }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This can't be undone.")
+            }
+            .alert(
+                "Delete this reply?",
+                isPresented: Binding(
+                    get: { commentPendingDelete != nil },
+                    set: { if !$0 { commentPendingDelete = nil } }
+                )
+            ) {
+                Button("Delete", role: .destructive) {
+                    if let id = commentPendingDelete {
+                        commentPendingDelete = nil
+                        Task { await viewModel.deleteComment(commentId: id) }
+                    }
+                }
+                Button("Cancel", role: .cancel) { commentPendingDelete = nil }
+            }
+            .sheet(
+                isPresented: $showsShareSheet,
+                onDismiss: { Task { await viewModel.recordShare() } }
+            ) {
+                if let url = viewModel.shareURL {
+                    SystemShareSheet(items: [url])
+                }
+            }
+    }
+
+    private var baseContent: some View {
+        ZStack(alignment: .bottom) {
             content
             if let toast = viewModel.toastMessage {
                 ToastView(message: ToastMessage(text: toast, kind: viewModel.toastKind))
@@ -86,128 +183,39 @@ public struct PulsePostDetailView: View {
         .onChange(of: viewModel.didDeletePost) { _, deleted in
             if deleted { onBack() }
         }
-        .confirmationDialog(
-            "Post options",
-            isPresented: $bindable.showsOverflowMenu,
-            titleVisibility: .hidden
-        ) {
-            Button(viewModel.isSaved ? "Remove bookmark" : "Save post") {
-                Task { await viewModel.toggleSave() }
-            }
-            if viewModel.conversation != nil {
-                if viewModel.canShareConversation {
-                    Button("Share post") { showsShareSheet = true }
-                }
-            } else if !isRemovedByModerator {
-                Button(viewModel.isReposted ? "Undo repost" : "Repost") {
-                    Task { await viewModel.toggleRepost() }
-                }
-            }
-            if viewModel.isOwner {
-                Button("Edit post") {
-                    if case let .loaded(detail) = viewModel.state {
-                        onEdit(detail.post.id)
-                    } else if let detail = viewModel.conversation {
-                        onEdit(detail.post.id)
+    }
+
+    private var replyDialogs: some View {
+        baseContent
+            .confirmationDialog(
+                "Reply options",
+                isPresented: Binding(get: { replyMenu != nil }, set: { if !$0 { replyMenu = nil } }),
+                titleVisibility: .hidden,
+                presenting: replyMenu
+            ) { reply in
+                if let id = reply.author?.id, id == viewModel.currentUserId {
+                    Button("Delete reply", role: .destructive) { commentPendingDelete = reply.id }
+                } else {
+                    Button("Report reply", role: .destructive) { replyPendingReport = reply }
+                    if let id = reply.author?.id, !id.isEmpty {
+                        Button("Mute \(reply.author?.displayName ?? "this person")") {
+                            Task { await viewModel.muteConversationAuthor(id) }
+                        }
                     }
                 }
-                if viewModel.canKeepAskOpen {
-                    Button("Keep open 7 more days") {
-                        Task { await viewModel.keepAskOpen() }
-                    }
-                    .accessibilityIdentifier("pulseAskKeepOpen")
+                Button("Cancel", role: .cancel) {}
+            }
+            .confirmationDialog(
+                "Why are you reporting this reply?",
+                isPresented: Binding(get: { replyPendingReport != nil }, set: { if !$0 { replyPendingReport = nil } }),
+                titleVisibility: .visible,
+                presenting: replyPendingReport
+            ) { reply in
+                ForEach(Self.reportReasons, id: \.token) { reason in
+                    Button(reason.label) { Task { await viewModel.reportConversationReply(reply, reason: reason.token) } }
                 }
-                if viewModel.canCloseAsk {
-                    Button("Close") { viewModel.showsCloseAskConfirm = true }
-                        .accessibilityIdentifier("pulseAskClose")
-                }
-                Button("Delete post", role: .destructive) { showsDeleteConfirm = true }
-            } else {
-                Button("Report post", role: .destructive) { showsReportDialog = true }
+                Button("Cancel", role: .cancel) {}
             }
-            Button("Cancel", role: .cancel) {}
-        }
-        .confirmationDialog(
-            "Reply options",
-            isPresented: Binding(get: { replyMenu != nil }, set: { if !$0 { replyMenu = nil } }),
-            titleVisibility: .hidden,
-            presenting: replyMenu
-        ) { reply in
-            if let id = reply.author?.id, id == viewModel.currentUserId {
-                Button("Delete reply", role: .destructive) { commentPendingDelete = reply.id }
-            } else {
-                Button("Report reply", role: .destructive) { replyPendingReport = reply }
-                if let id = reply.author?.id, !id.isEmpty {
-                    Button("Mute \(reply.author?.displayName ?? "this person")") {
-                        Task { await viewModel.muteConversationAuthor(id) }
-                    }
-                }
-            }
-            Button("Cancel", role: .cancel) {}
-        }
-        .confirmationDialog(
-            "Why are you reporting this reply?",
-            isPresented: Binding(get: { replyPendingReport != nil }, set: { if !$0 { replyPendingReport = nil } }),
-            titleVisibility: .visible,
-            presenting: replyPendingReport
-        ) { reply in
-            ForEach(Self.reportReasons, id: \.token) { reason in
-                Button(reason.label) { Task { await viewModel.reportConversationReply(reply, reason: reason.token) } }
-            }
-            Button("Cancel", role: .cancel) {}
-        }
-        .confirmationDialog(
-            "Why are you reporting this post?",
-            isPresented: $showsReportDialog,
-            titleVisibility: .visible
-        ) {
-            ForEach(Self.reportReasons, id: \.token) { reason in
-                Button(reason.label) {
-                    Task { await viewModel.reportPost(reason: reason.token) }
-                }
-            }
-            Button("Cancel", role: .cancel) {}
-        }
-        .alert("Close this question?", isPresented: $bindable.showsCloseAskConfirm) {
-            Button("Close", role: .destructive) {
-                Task { await viewModel.closeAsk() }
-            }
-            .accessibilityIdentifier("pulseAskCloseConfirm")
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("It leaves Pulse. You can restore it from My posts.")
-        }
-        .alert("Delete this post?", isPresented: $showsDeleteConfirm) {
-            Button("Delete", role: .destructive) {
-                Task { await viewModel.deletePost() }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This can't be undone.")
-        }
-        .alert(
-            "Delete this reply?",
-            isPresented: Binding(
-                get: { commentPendingDelete != nil },
-                set: { if !$0 { commentPendingDelete = nil } }
-            )
-        ) {
-            Button("Delete", role: .destructive) {
-                if let id = commentPendingDelete {
-                    commentPendingDelete = nil
-                    Task { await viewModel.deleteComment(commentId: id) }
-                }
-            }
-            Button("Cancel", role: .cancel) { commentPendingDelete = nil }
-        }
-        .sheet(
-            isPresented: $showsShareSheet,
-            onDismiss: { Task { await viewModel.recordShare() } }
-        ) {
-            if let url = viewModel.shareURL {
-                SystemShareSheet(items: [url])
-            }
-        }
     }
 
     @ViewBuilder private var content: some View {
