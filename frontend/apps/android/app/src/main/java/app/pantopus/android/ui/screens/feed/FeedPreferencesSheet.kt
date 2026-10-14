@@ -238,7 +238,7 @@ private fun PreferencesLoaded(
         )
         PreferenceRow(
             title = "Show safety alerts",
-            body = "Crime reports, hazards, and safety warnings",
+            body = "Hazards, outages and safety warnings",
             checked = !prefs.hideAlertsPlace,
             enabled = !isSaving,
             testTag = "pulsePreferencesShowAlerts",
