@@ -605,6 +605,7 @@ internal fun PlansEmptyContent(
                     onClick = { onHost(kind, null) },
                     modifier = Modifier.weight(1f),
                     leading = { PlanSwatch(kind) },
+                    spoken = "Host a ${kind.noun}",
                 )
             }
         }

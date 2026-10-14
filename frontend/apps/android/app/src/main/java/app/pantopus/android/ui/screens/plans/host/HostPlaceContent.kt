@@ -153,7 +153,7 @@ internal fun PublicPlacePicker(
             )
             PickerMap(origin = state.origin, picked = candidate, kind = kind)
             Column {
-                PlanOverline("Public places near you", modifier = Modifier.padding(bottom = 2.dp))
+                PlanOverline(if (query.length >= 2) "Results" else "Public places near you", modifier = Modifier.padding(bottom = 2.dp))
                 var first = true
                 if (onHereNow != null) {
                     val here = candidate?.name == "Where I am now"

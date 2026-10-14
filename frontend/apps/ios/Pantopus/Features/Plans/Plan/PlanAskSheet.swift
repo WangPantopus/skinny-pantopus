@@ -104,10 +104,12 @@ struct PlanAskSheet: View {
         guard let start = card.startsAtDate else {
             return "\(short) · \(PlanFormat.dayPartPhrase(card.dayPart, day: card.startsOnDate, calendar: calendar))"
         }
-        let time = PlanFormat.rowWhen(state: .upcoming, start: start, end: nil, calendar: calendar) ?? PlanFormat.time(
-            start,
+        let time = PlanFormat.rowWhen(
+            state: card.state == .live ? .live : .upcoming,
+            start: start,
+            end: card.endsAtDate,
             calendar: calendar
-        )
+        ) ?? PlanFormat.time(start, calendar: calendar)
         return "\(short) · \(time)"
     }
 
