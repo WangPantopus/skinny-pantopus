@@ -484,7 +484,8 @@ async function editPlan(user, postId, patch, { io = null } = {}) {
         await planNotify.changed({ plan: updated, request, hostFirst, timeMoved, placeChanged });
       }
       if (updated.chat_room_id) {
-        const when = planNotify.whenText(updated.post.event_date, updated.timezone, { long: true });
+        // "Sam moved the plan to Sunday at 2:00 PM", in the push's words.
+        const when = planNotify.whenText(updated.post.event_date, updated.timezone, { long: true, at: true });
         await planChat.systemLine(updated.chat_room_id, viewer.id,
           timeMoved && placeChanged ? `${hostFirst} moved the plan to ${when}, at a new place`
             : timeMoved ? `${hostFirst} moved the plan to ${when}` : `${hostFirst} changed the place`);
