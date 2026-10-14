@@ -90,7 +90,7 @@ export default async function PublicPostPage({
           </h1>
           <p className="mt-4 max-w-xl text-base leading-7 text-app-text-secondary">
             {accessRestricted
-              ? 'The link works, but this post can only be viewed by people who have access in Pantopus or by recipients of an explicit external share.'
+              ? 'The link works, but this post can only be viewed by people who have access to it in Pantopus.'
               : 'Something went wrong while loading this page. Please try again.'}
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-center">

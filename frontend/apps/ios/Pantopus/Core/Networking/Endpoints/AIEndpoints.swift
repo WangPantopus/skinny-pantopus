@@ -67,4 +67,13 @@ public enum AIEndpoints {
         // which overruns the session's 20s inactivity default.
         Endpoint(method: .post, path: "/api/ai/draft/post", body: body, timeout: 35)
     }
+
+    /// `POST /api/ai/draft/pickup-schedule` — the pickup days on a photo of
+    /// the household's hauler's flyer, for the Today pickup editor to fill
+    /// in. Nothing is saved: the editor's own Save writes the days.
+    /// Route `backend/routes/ai.js:249`.
+    public static func draftPickupSchedule(_ body: AIDraftPickupScheduleRequest) -> Endpoint {
+        // 45s like the listing vision read: the backend gives the model 30s.
+        Endpoint(method: .post, path: "/api/ai/draft/pickup-schedule", body: body, timeout: 45)
+    }
 }
