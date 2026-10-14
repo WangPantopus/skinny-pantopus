@@ -1,4 +1,5 @@
 const { personaPostVisibleToViewer, filterFollowingPosts } = require('../utils/personaPostVisibility');
+const { postScopeAccess } = require('./pulse/readAccess');
 
 // The clients display 25+ at this ceiling. It applies to permitted posts
 // within EACH Beacon, never to a shared pool across the whole follow list.
@@ -7,7 +8,7 @@ const QUERY_CONCURRENCY = 5;
 const POST_FIELDS = 'id, identity_context_id, content, title, created_at, archived_at, ' +
   'visibility, audience, distribution_targets, target_tier_rank, post_metadata';
 
-async function loadMembershipActivity(membership, db) {
+async function loadMembershipActivity(membership, db, scopeAccess) {
   const viewerRank = Math.max(
     Number(membership.tier?.rank || 0),
     membership.relationship_type === 'subscriber' ? 2 : 1,
@@ -15,7 +16,7 @@ async function loadMembershipActivity(membership, db) {
   const query = db.from('Post').select(POST_FIELDS)
     .eq('identity_context_type', 'persona')
     .eq('identity_context_id', membership.persona_id);
-  const { data, error } = await filterFollowingPosts(query, viewerRank)
+  const { data, error } = await scopeAccess.query(filterFollowingPosts(query, viewerRank))
     .order('created_at', { ascending: false })
     .order('id', { ascending: false })
     .limit(UNREAD_CAP);
@@ -46,11 +47,12 @@ async function loadMembershipActivity(membership, db) {
  * pool. All activity must be available before global sorting/pagination;
  * an error rejects the list rather than presenting partial empty updates.
  */
-async function loadFollowingActivity(memberships, { db = require('../config/supabaseAdmin') } = {}) {
+async function loadFollowingActivity(memberships, { db = require('../config/supabaseAdmin'), scopeAccess } = {}) {
+  const access = scopeAccess || await postScopeAccess(null);
   const decorated = [];
   for (let start = 0; start < memberships.length; start += QUERY_CONCURRENCY) {
     const batch = memberships.slice(start, start + QUERY_CONCURRENCY);
-    decorated.push(...await Promise.all(batch.map((membership) => loadMembershipActivity(membership, db))));
+    decorated.push(...await Promise.all(batch.map((membership) => loadMembershipActivity(membership, db, access))));
   }
   return decorated;
 }

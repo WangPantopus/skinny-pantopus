@@ -15,7 +15,7 @@ const {
   MAX_DISPLAY_OFFSET_DEGREES,
 } = require('../utils/locationPrivacy');
 const s3 = require('./s3Service');
-const { readablePosts } = require('./pulse/readAccess');
+const { readablePosts, postScopeAccess } = require('./pulse/readAccess');
 const {
   SAFE_CREATOR_SELECT,
   serializeAudienceProfileForViewer,
@@ -41,14 +41,9 @@ const FEED_SURFACES = ['place', 'connections', 'personas'];
 const LOCAL_AUTHOR_USER_SELECT = 'id, username, name, first_name, middle_name, last_name, profile_picture_url, bio, verified, review_count, gigs_completed';
 
 // ---------------------------------------------------------------------------
-// Global pins — posts that appear at the top of every feed for every user,
-// bypassing location and social-graph filters.
-// Short TTL cache so the query doesn't run on every single feed request.
+// Global pins bypass location and social-graph filters, but always use the
+// current viewer's audience grants before pagination.
 // ---------------------------------------------------------------------------
-
-let _globalPinsCache = { data: null, expires: 0 };
-const GLOBAL_PINS_TTL = 60_000; // 60 seconds
-
 // Short cache for the Sports active-events list. Shared by the feed (Sports
 // mode=event fallback + rank_bucket=3 eligibility) and the /api/sports route.
 let _activeSportsEventsCache = { data: null, expires: 0 };
@@ -83,19 +78,14 @@ async function getActiveSportsEvents({ forceRefresh = false } = {}) {
   return rows;
 }
 
-async function getGlobalPins() {
-  const now = Date.now();
-  if (_globalPinsCache.data && now < _globalPinsCache.expires) {
-    return _globalPinsCache.data;
-  }
-
-  // Rows as stored, with the columns the read check needs beyond the feed's own; each
-  // viewer's feed checks them (getListFeed step 12).
-  const { data, error } = await onlyShownPosts(supabaseAdmin
+async function getGlobalPins(scopeAccess) {
+  // Scope membership and a narrowed post take effect on the next request. Do not
+  // cache post rows across viewers or paginate pins before checking their scope.
+  const { data, error } = await scopeAccess.query(onlyShownPosts(supabaseAdmin
     .from('Post')
     .select(`${FEED_POST_SELECT}, allow_external_share, radius_miles, moderation_state`)
     .eq('is_global_pin', true)
-    .is('archived_at', null))
+    .is('archived_at', null)))
     .order('created_at', { ascending: false })
     .limit(10);
 
@@ -104,9 +94,7 @@ async function getGlobalPins() {
     return [];
   }
 
-  const pins = data || [];
-  _globalPinsCache = { data: pins, expires: now + GLOBAL_PINS_TTL };
-  return pins;
+  return data || [];
 }
 
 // P0.3: SAFE_CREATOR_SELECT only pulls audience-safe columns (no name,
@@ -117,7 +105,7 @@ async function getGlobalPins() {
 const FEED_POST_SELECT = `
   id, user_id, author_user_id, identity_context_type, identity_context_id,
   title, content, media_urls, media_types, media_thumbnails, media_live_urls, post_type, post_format,
-  visibility, visibility_scope, location_precision, tags,
+  visibility, visibility_scope, location_precision, tags, read_scope, area_id,
   like_count, comment_count, share_count, save_count, is_pinned, is_global_pin, is_edited, created_at, updated_at,
   home_id, latitude, longitude, effective_latitude, effective_longitude, location_name, location_address,
   post_as, audience, business_id, business_author_id, target_place_id,
@@ -968,7 +956,8 @@ async function getListFeed({
   // The mute/hide filters and the first page's global pins don't shape the query, so they're
   // read alongside the cursor, the author graph and the first round of posts.
   const filtersRead = settle(getMuteAndHideFilters(userId));
-  const globalPinsRead = isFirstPage ? settle(getGlobalPins()) : null;
+  const scopeAccess = await postScopeAccess(userId);
+  const globalPinsRead = isFirstPage ? settle(getGlobalPins(scopeAccess)) : null;
   const initialCursorPinned = await getCursorPinState(cursorId);
 
   // 2–4. Resolve author IDs and distribution target per surface
@@ -1032,10 +1021,10 @@ async function getListFeed({
 
   for (let round = 0; round < MAX_ROUNDS && accumulated.length < parsedLimit && !dbExhausted; round++) {
     // 5. Build base query
-    let query = onlyShownPosts(supabaseAdmin
+    let query = scopeAccess.query(onlyShownPosts(supabaseAdmin
       .from('Post')
       .select(FEED_POST_SELECT)
-      .is('archived_at', null))
+      .is('archived_at', null)))
       .order('is_pinned', { ascending: false })
       .order('created_at', { ascending: false })
       .order('id', { ascending: false })
@@ -1289,6 +1278,7 @@ async function fetchSportsCandidates({
   maxRowsPerSide = SPORTS_FETCH_MAX_ROWS_PER_SIDE,
 }) {
   const cutoffIso = new Date(Date.now() - SPORTS_MAX_AGE_MS).toISOString();
+  const scopeAccess = await postScopeAccess(userId);
   // The local query reads a widened box; a local row counts when the point it
   // shows this viewer is inside localBox.
   const localQueryBox = localBox ? widenForDisplayedPoints(localBox) : null;
@@ -1300,10 +1290,10 @@ async function fetchSportsCandidates({
     let exhausted = false;
 
     while (!exhausted && rows.length < maxRowsPerSide) {
-      let query = onlyShownPosts(supabaseAdmin
+      let query = scopeAccess.query(onlyShownPosts(supabaseAdmin
         .from('Post')
         .select(FEED_POST_SELECT)
-        .is('archived_at', null))
+        .is('archived_at', null)))
         .eq('topic', 'sports')
         .gte('created_at', cutoffIso)
         .order('created_at', { ascending: false })
@@ -1547,6 +1537,7 @@ async function loadMapPosts({
   limit = 50,
 }) {
   const normalizedSurface = FEED_SURFACES.includes(surface) ? surface : 'place';
+  const scopeAccess = await postScopeAccess(userId);
   const queryLimit = Math.max(Number(limit) || 50, 1);
   // The mute/hide filters don't shape the query, so they're read alongside it.
   const filtersRead = settle(getMuteAndHideFilters(userId));
@@ -1570,10 +1561,10 @@ async function loadMapPosts({
   // come back follows the points the viewer sees, never the stored ones.
   const box = { south, west, north, east };
   const queryBox = widenForDisplayedPoints(box);
-  let query = onlyShownPosts(supabaseAdmin
+  let query = scopeAccess.query(onlyShownPosts(supabaseAdmin
     .from('Post')
     .select(FEED_POST_SELECT)
-    .is('archived_at', null))
+    .is('archived_at', null)))
     .or(
       `and(effective_latitude.gte.${queryBox.south},effective_latitude.lte.${queryBox.north},effective_longitude.gte.${queryBox.west},effective_longitude.lte.${queryBox.east}),` +
       `and(effective_latitude.is.null,latitude.gte.${queryBox.south},latitude.lte.${queryBox.north},longitude.gte.${queryBox.west},longitude.lte.${queryBox.east})`

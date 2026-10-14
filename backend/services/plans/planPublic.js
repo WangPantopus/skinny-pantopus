@@ -39,6 +39,8 @@ async function publicPlan(postId) {
   if (!planService.isUuid(postId)) return null;
   const plan = await planService.loadPlanRow(postId);
   if (!plan || !plan.post || !canReadPostModeration(plan.post, null)) return null;
+  if (plan.post.read_scope != null
+    && (plan.post.read_scope !== 'public' || plan.post.allow_external_share === false)) return null;
   if (!(await isFeatureEnabled('plans', plan.host_user_id))) return null;
   if (plan.kind === 'playdate') {
     if (!(await isFeatureEnabled('plans_playdates', plan.host_user_id))) return null;

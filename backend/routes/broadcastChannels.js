@@ -14,6 +14,7 @@ const { requirePersonaBroadcastEnabled } = require('../utils/featureFlags');
 const { writeIdentityAuditLog } = require('../utils/identityAudit');
 const { getPersonaById, getPersonaFollow, getViewerTierRankForPersona } = require('../utils/identityProfiles');
 const { serializeAudienceProfileForViewer } = require('../serializers/identitySerializers');
+const { postScopeAccess } = require('../services/pulse/readAccess');
 
 router.use(requirePersonaBroadcastEnabled);
 
@@ -350,9 +351,10 @@ router.get('/channels/:channelId/messages', optionalAuth, async (req, res) => {
     }
 
     const requestedLimit = Number(req.query.limit) || 50;
-    let postQuery = supabaseAdmin
+    const scopeAccess = await postScopeAccess(viewerId);
+    let postQuery = scopeAccess.query(supabaseAdmin
       .from('Post')
-      .select('*')
+      .select('*'))
       .eq('broadcast_channel_id', channel.id)
       .eq('identity_context_type', 'persona')
       .eq('identity_context_id', channel.persona_id)
@@ -641,6 +643,9 @@ router.post('/messages/:messageId/read', verifyToken, async (req, res) => {
       .eq('identity_context_type', 'persona')
       .maybeSingle();
     if (postError) return res.status(500).json({ error: 'Failed to load broadcast message' });
+    if (postMessage && !await (await postScopeAccess(req.user.id)).canRead(postMessage)) {
+      return res.status(404).json({ error: 'Broadcast message not found' });
+    }
 
     let message = postMessage ? serializeBroadcastMessage(postMessage) : null;
     let source = postMessage ? 'Post' : 'BroadcastMessage';
