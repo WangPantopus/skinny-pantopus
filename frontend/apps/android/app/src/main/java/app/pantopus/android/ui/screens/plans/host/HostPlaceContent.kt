@@ -60,8 +60,6 @@ import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.google.maps.android.compose.rememberMarkerState
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 
 /** H6: choose a public place (or "You're here now" for a pickup game, or your place where it's allowed). */
 @Composable
@@ -442,11 +440,9 @@ private fun NeighborsCard(
     val whenText =
         when {
             start == null -> ""
-            kind == PlanKind.PLAYDATE ->
-                "${start.format(DateTimeFormatter.ofPattern("EEEE", Locale.US))} ${dayPartOf(start.hour)}"
-            else ->
-                "${start.format(DateTimeFormatter.ofPattern("EEE, MMM d", Locale.US))} · " +
-                    PlanFormat.timeRange(start.atZone(ui.zone), end?.atZone(ui.zone))
+            // As neighbors will see it, with Today/Tomorrow (as on iOS).
+            kind == PlanKind.PLAYDATE -> PlanFormat.dayPartPhrase(start.atZone(ui.zone))
+            else -> PlanFormat.whenLine(start.atZone(ui.zone), end?.atZone(ui.zone))
         }
     val near = ui.home?.city?.let { "Near $it" } ?: "Your area"
     val point = previewPoint(ui)
@@ -500,10 +496,3 @@ private fun previewPoint(ui: HostUi): LatLng? =
         ui.draft.place?.let { LatLng(it.latitude, it.longitude) }
     }
 
-private fun dayPartOf(hour: Int): String =
-    when (hour) {
-        in 5..11 -> "morning"
-        in 12..16 -> "afternoon"
-        in 17..20 -> "evening"
-        else -> "night"
-    }

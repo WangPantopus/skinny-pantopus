@@ -211,9 +211,44 @@ object PlanFormat {
         val end = instant(plan.endsAt)?.atZone(zone)
         if (plan.planState == PlanState.LIVE) return happeningNow(end)
         val start = instant(plan.startsAt)?.atZone(zone) ?: return hiddenWhen(plan)
-        val day = relativeDay(start.toLocalDate(), now.atZone(zone).toLocalDate()) ?: start.format(if (long) dateLong else dateShort)
+        return whenLine(start, end, long, now)
+    }
+
+    /** A start and end the host is still choosing (H7): "Tomorrow · 9:00–10:00 AM", "Wed, Oct 21 · 9:00–10:00 AM". */
+    fun whenLine(
+        start: ZonedDateTime,
+        end: ZonedDateTime?,
+        long: Boolean = false,
+        now: Instant = Instant.now(),
+    ): String {
+        val day = relativeDay(start.toLocalDate(), now.atZone(start.zone).toLocalDate()) ?: start.format(if (long) dateLong else dateShort)
         return "$day · ${timeRange(start, end)}"
     }
+
+    /**
+     * What neighbors see of a playdate's time before they're in (H3, H7, as on iOS): "This morning", "Tonight",
+     * "Tomorrow morning", "Saturday morning".
+     */
+    fun dayPartPhrase(
+        start: ZonedDateTime,
+        now: Instant = Instant.now(),
+    ): String {
+        val part = dayPartOf(start.hour)
+        return when (ChronoUnit.DAYS.between(now.atZone(start.zone).toLocalDate(), start.toLocalDate())) {
+            0L -> if (part == "night") "Tonight" else "This $part"
+            1L -> "Tomorrow $part"
+            else -> "${start.format(dayLong)} $part"
+        }
+    }
+
+    /** The part of the day a start falls in (the API's `day_part`). */
+    fun dayPartOf(hour: Int): String =
+        when (hour) {
+            in 5..11 -> "morning"
+            in 12..16 -> "afternoon"
+            in 17..20 -> "evening"
+            else -> "night"
+        }
 
     /** "Sunday, Oct 18 · 1:25 PM", "Today · 1:25 PM" (board J8); a hidden playdate time: "Saturday morning". */
     fun dayAndTime(
