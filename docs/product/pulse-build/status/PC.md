@@ -6,10 +6,11 @@ Owner: the PC session. Keep this file current in your own PRs (or a small docs P
 
 - October 13, 2026: read the briefing pipeline end to end and wrote the digest design note (below). Nothing is built; building starts when R2 begins.
 - Ran the two channel paths once on my own `pc` stack (a synthetic account, nothing real sent) to check what the kit assumed. A push with no provider credentials returns `acceptedCount: 0` and logs no payload; an email with no SMTP returns `EMAIL_UNAVAILABLE`. Neither can be seen locally today. See Findings 1 to 3.
+- October 13, 2026: the design note merged ([PR 2256](https://github.com/WangPantopus/skinny-pantopus/pull/2256)). The founder answered the decisions it raised; they are recorded under "Decided by the founder" below.
 
 ## Next
 
-- Wait for R2 to start (about week 3). First thing in R2: the noise-budget module, its one seam in `notificationService.js`, and the digest tick with only its held-push release step (quiet hours and the direct and never classes need no table; the Lambda call and the route seam come with it). PB's first Pulse push, the day-6 `ask_still_open` in S7, lands earlier than the digest, and the gate must merge before the first release cut so that push is held overnight. PB changes nothing: the gate recognizes the types in contract section 6.
+- Wait for R2 to start (about week 3). First thing in R2: the noise-budget module, its one seam in `notificationService.js`, and the digest tick with only its held-push release step (quiet hours and the direct and never classes need no table; the Lambda call and the route seam come with it). PB's first Pulse push, the day-6 `ask_still_open` in S7, lands earlier than the digest, and the gate must merge before the first release cut so that push is held overnight. PB changes nothing: the gate recognizes the types in contract section 6. The founder has approved my making the six seam edits myself, one small PR each, with PB as reviewer; none is started before R2.
 - Then S13: the migration (needs H3), the preference handlers, the digest tick with the email and push templates, unsubscribe, and the weekly street digest (quiet until a street opens). S15 after H2. S18 after the founder's provider accounts.
 
 ## Requests (to other streams)
@@ -19,7 +20,7 @@ Owner: the PC session. Keep this file current in your own PRs (or a small docs P
   2. `unansweredForHelper(viewerId, { minAgeHours, limit })` → open Asks with no replies, in topics the viewer follows.
   3. `followRecaps(viewerId, { since })` → followed conversations with `notify` of `recap` or `each` that got replies, with the new `PulseReply` rows. Also `getSeenMarker(viewerId, view)`.
 - → **PB**, notification type names: contract section 6 names none for follow alerts (`notify = each`) or for Right now. Tell me the names so the noise-budget registry lists them as budgeted and right_now.
-- → **PB**, small seams in files you own (each is a few lines; I can make each one in its own PR for you to review, say which you prefer, and see "Needs founder" 1):
+- → **PB**, small seams in files you own. The founder approved on October 13 that PC makes each one, in its own small PR with PB as reviewer, when its slice starts (each is a few lines). If you already have changes in flight in one of these files, tell me which and I will build on them:
   1. `pantopus-seeder/src/handlers/briefing.py`: after the briefing loop, one call to `POST /api/internal/briefing/digest-tick`, plus the digest counts in the run summary and metrics (about 20 lines).
   2. `backend/routes/internalBriefing.js`: `router.post('/digest-tick', verifyInternalApiKey, …)` that calls my job (about 6 lines).
   3. `backend/services/notificationService.js`: in `createNotification` and `createBulkNotifications`, ask `noiseBudget.pushDecision(...)` before `pushService.sendToUser`. Types it does not know behave exactly as today (about 12 lines).
@@ -33,11 +34,8 @@ Owner: the PC session. Keep this file current in your own PRs (or a small docs P
 
 ## Needs founder
 
-1. **Who edits the seams?** The six small edits above are in PB-owned files. Default: PC makes them in separate small PRs that PB reviews. Otherwise S13 waits for PB to do them.
-2. **Quiet hours for people who never set any.** Plans holds pushes from 9 PM to 8 AM by default; the briefing holds nothing. Default for Pulse pushes: 9 PM to 8 AM, and a person's own setting always wins.
-3. **Two existing pushes look like what the noise budget forbids:** "Neighborhood milestone reached" (`density_milestone`, sent to everyone in an area as it grows) and the monthly summary. Default: leave them alone. I register them under the budget only if you say so.
-4. **Before any real send (not needed now):** the digest's sender address and Postmark message stream, and whether SPF, DKIM and DMARC for pantopus.com already cover this kind of mail. Nothing is sent until you set it.
-5. Still open from the README: tick **New tables** (this slice adds `DigestDelivery`, H3) and confirm **moderation cover** before the public pages (H2).
+1. Still open from the README: tick **New tables** (this slice adds `DigestDelivery`, H3) and confirm **moderation cover** before the public pages (H2).
+2. **Later, before any real send** (acknowledged October 13; not needed now): the digest's sender address and Postmark message stream, and whether SPF, DKIM and DMARC for pantopus.com already cover this kind of mail. Nothing is sent until you set it.
 
 Defaults I am using where the kit was silent. Tell me to change any:
 
@@ -47,6 +45,12 @@ Defaults I am using where the kit was silent. Tell me to change any:
 - "Still unanswered" draws only from topics the person follows, once per Ask.
 - New digests default to 8:00 AM by email. The weekly street digest goes Sunday 10:00 and stays quiet until a street opens.
 - No AI text, and no open or click tracking.
+
+## Decided by the founder (October 13, 2026)
+
+1. **Seam edits.** PC makes the six small edits in PB-owned files itself, one small PR each, with PB reviewing. They start with their slices (the first ones when R2 starts), not before.
+2. **Quiet hours for people who never set any:** 9 PM to 8 AM in their own local time, for Pulse pushes. A person's own setting always wins.
+3. **Existing pushes** ("Neighborhood milestone reached", `density_milestone`, and the monthly summary): leave them alone. They are not registered under the noise budget.
 
 ## Digest design note (S13), October 13, 2026
 
@@ -138,7 +142,7 @@ The text channel is not part of the digest. S18 is street-level asks and offers 
 - **Decision.** `pushDecision({ userId, type, now })` returns `send`, `hold(until)` or `drop(reason)`. The in-app row always exists, so a dropped follow alert is still in the list, and its replies appear in the next digest's section 4.
 - **Where it is enforced.** The seam in `createNotification` and `createBulkNotifications` (before `pushService.sendToUser`), the digest sender, and a release step in the digest tick for held pushes. Held pushes use Plans' `push_deferred_until` and `push_sent_at` keys, so there is one convention. Types the module does not know are untouched, so no existing flow changes.
 - **The cap is a constraint.** A budgeted push first claims the person's slot for the local day by writing a `DigestDelivery` row with `push_budget_date`, which has a unique index on `(user_id, push_budget_date)`. The loser of a race gets a unique violation and is dropped. A push that provably did not go out releases its slot.
-- **Quiet hours.** Built on Plans' DST-safe `localParts` helper, not a fifth copy of the arithmetic. The window is the person's own `quiet_hours_start_local` and `quiet_hours_end_local`, read in their `daily_briefing_timezone`. A window past midnight wraps; start equal to end means none. Unset means 9 PM to 8 AM for Pulse pushes (Needs founder 2). Email is never held: quiet hours govern pushes.
+- **Quiet hours.** Built on Plans' DST-safe `localParts` helper, not a fifth copy of the arithmetic. The window is the person's own `quiet_hours_start_local` and `quiet_hours_end_local`, read in their `daily_briefing_timezone`. A window past midnight wraps; start equal to end means none. Unset means 9 PM to 8 AM in their local time for Pulse pushes (decided October 13). Email is never held: quiet hours govern pushes.
 - **The digest and quiet hours.** If the chosen time falls inside quiet hours, the digest push is held to the end of quiet hours and sent if that is still inside the 3-hour window; otherwise it is skipped as `quiet_hours_window_passed`. The email is unaffected.
 - **The four older copies stay as they are.** Retiring them into this module is a separate follow-up (it also fixes `internalBriefing.js` comparing time strings, which misses the exact start and end minute).
 
@@ -211,7 +215,7 @@ The standard is the founder's: no test code, every scenario run in the real surf
 | 2 | **Expo push is on unless `PUSH_EXPO_ENABLED=false`**, and the runtime script's `.env` leaves it unset. A local account with an Expo-shaped token would make the backend call Expo's servers. I set it to false in my local env. | PV |
 | 3 | **Backend email cannot reach the local inbox.** With no SMTP the result is `EMAIL_UNAVAILABLE`; `EMAIL_DELIVERY_MODE=log` logs one line and delivers nowhere. The inbox (Mailpit) receives only Supabase Auth's mail and its SMTP port is not exposed to the host. | PV |
 | 4 | **Quiet hours: four copies, and the main push path checks none.** `createNotification` and `createBulkNotifications` push at once at any hour, and the main push path has no per-person daily cap. | PB |
-| 5 | **Two existing pushes look like what the budget forbids:** `density_milestone` ("Neighborhood milestone reached", not launch-cut) and the monthly summary. | Founder (Needs 3) |
+| 5 | **Two existing pushes look like what the budget forbids:** `density_milestone` ("Neighborhood milestone reached", not launch-cut) and the monthly summary. | Founder: leave them (decided October 13) |
 | 6 | **The briefing scheduler reads every preference row with no range.** At the API's `max_rows` of 1,000 it stops silently. Not urgent at pilot size. | PB |
 | 7 | **The public post page** `frontend/apps/web/src/app/posts/[id]/page.tsx` reads the general post endpoint and shows `creator.name` first, then the location name and the creator's city and state. Every page outside `robots.ts`'s private list is crawlable in production. S15 reads PB's public endpoint only, shows first name and label, and moves `robots` to an allowlist. | PC at S15 |
 | 8 | **Unsubscribe:** only booking reminders have a one-click link; the monthly receipt sends people to signed-in Settings. | PC (section 8) |
