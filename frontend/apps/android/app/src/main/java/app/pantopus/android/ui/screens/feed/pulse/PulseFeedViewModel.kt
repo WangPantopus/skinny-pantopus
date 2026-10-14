@@ -257,6 +257,7 @@ class PulseFeedViewModel
         /** Asks kept open here (or refused as already kept open): "Keep open 7 more days" no longer shows. */
         private var keptOpenIds: Set<String> = emptySet()
         private val endingAskIds = mutableSetOf<String>()
+        private val closedAskGenerations = mutableMapOf<String, Int>()
 
         /** The post whose author is awaiting mute confirmation, if any. */
         private val _mutingPostId = MutableStateFlow<String?>(null)
@@ -571,7 +572,7 @@ class PulseFeedViewModel
                 try {
                     when (val result = pulseRepo.close(postId)) {
                         is NetworkResult.Success -> {
-                            removedPostIds = removedPostIds + postId
+                            closedAskGenerations[postId] = fetchGeneration
                             _toastMessage.value = "Question closed."
                             rebuildLoadedState()
                         }
@@ -942,6 +943,7 @@ class PulseFeedViewModel
                     ) {
                         is NetworkResult.Success -> {
                             if (generation != fetchGeneration) return@launch
+                            acceptRestoredAsks(result.data.posts, generation)
                             val known = loadedPosts.map { it.id }.toSet()
                             loadedPosts = loadedPosts + result.data.posts.filter { it.id !in known }
                             applyPagination(result.data.pagination)
@@ -971,6 +973,7 @@ class PulseFeedViewModel
         private fun visiblePosts(): List<FeedPost> =
             loadedPosts.filter { post ->
                 post.id !in removedPostIds &&
+                    post.id !in closedAskGenerations &&
                     moderation.isVisible(
                         postId = post.id,
                         userId = post.userId,
@@ -1025,7 +1028,10 @@ class PulseFeedViewModel
                     val response = stored.data
                     val failure = stored.failure
                     when {
-                        response != null -> applyFirstPage(response, area, query, inPlace = !isRefresh)
+                        response != null -> {
+                            if (failure == null && repo.feedFirstPageIsCurrent(query)) acceptRestoredAsks(response.posts, generation)
+                            applyFirstPage(response, area, query, inPlace = !isRefresh)
+                        }
                         failure.refusesStoredCopy -> {
                             loadedPosts = emptyList()
                             _state.value = PulseFeedUiState.Error(failure.displayMessageOr("Couldn't load Pulse."))
@@ -1087,6 +1093,20 @@ class PulseFeedViewModel
         /** Copy only the card the reader tapped, synchronously and within the shared store's lifetime. */
         fun seedPostForOpen(postId: String) {
             loadedPosts.firstOrNull { it.id == postId }?.let(repo::seedDetail)
+        }
+
+        /** A fresh read after Close may return an Ask restored from My posts; an older read cannot undo Close. */
+        private fun acceptRestoredAsks(
+            posts: List<FeedPost>,
+            generation: Int,
+        ) {
+            posts.forEach { post ->
+                val closedDuring = closedAskGenerations[post.id] ?: return@forEach
+                if (generation > closedDuring && isOpenAsk(post, post.state == "solved")) {
+                    closedAskGenerations.remove(post.id)
+                    loadedPosts = loadedPosts.map { if (it.id == post.id) post else it }
+                }
+            }
         }
 
         /**
