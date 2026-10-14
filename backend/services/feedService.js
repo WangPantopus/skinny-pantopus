@@ -1690,6 +1690,7 @@ module.exports = {
   isPoliticsPost,
   invalidateFilterCache,
   FEED_POST_SELECT,
+  onlyShownPosts,
   // P0.3: legacy CREATOR_SELECT removed. Importers should pull
   // SAFE_CREATOR_SELECT directly from serializers/identitySerializers.
 };

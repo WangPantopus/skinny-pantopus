@@ -73,8 +73,8 @@ async function homeAreaContext(userId) {
   return { homes, primary, areas: areas || [], matches: matches || [], verifiedAreaIds };
 }
 
-async function myAreas(userId) {
-  const context = await homeAreaContext(userId);
+async function myAreas(userId, loadedContext) {
+  const context = loadedContext || await homeAreaContext(userId);
   const inside = new Set(context.matches.filter(match => match.home_id === context.primary?.id
     && match.inside === true).map(match => match.area_id));
   const available = context.areas.filter(area => inside.has(area.id));

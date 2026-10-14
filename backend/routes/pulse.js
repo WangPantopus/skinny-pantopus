@@ -5,6 +5,10 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 const verifyToken = require('../middleware/verifyToken');
 const logger = require('../utils/logger');
 const areas = require('../services/pulse/areas');
+const pulseFeed = require('../services/pulse/feed');
+const feedSeen = require('../services/pulse/seen');
+const feedCursor = require('../services/pulse/feedCursor');
+const { isPulseTopic } = require('../services/pulse/topics');
 const {
   DAY_MS, askIdsWithReplies, windowDays, endsAt,
 } = require('../services/pulse/lifecycle');
@@ -14,6 +18,50 @@ const router = express.Router();
 // Days an Ask's author can add, once, from the day-6 reminder (build spec §4).
 const KEEP_OPEN_DAYS = 7;
 const ASK_SELECT = 'id, user_id, post_type, state, resolution, archived_at, created_at, expires_at, post_metadata';
+
+function feedOptions(query) {
+  const view = query.view ?? 'nearby';
+  if (!['nearby', 'following'].includes(view)) throw Object.assign(new Error('Choose Nearby or Following.'), { status: 400 });
+  if (query.topic != null && !isPulseTopic(query.topic)) throw Object.assign(new Error('Choose one of the Pulse topics.'), { status: 400 });
+  if (query.area_id != null && (typeof query.area_id !== 'string' || !feedCursor.UUID.test(query.area_id))) {
+    throw Object.assign(new Error('That area could not be found.'), { status: 400 });
+  }
+  if (query.limit != null && (typeof query.limit !== 'string' || !/^\d+$/.test(query.limit) || Number(query.limit) < 1)) {
+    throw Object.assign(new Error('Choose a positive page size.'), { status: 400 });
+  }
+  return { view, topic: query.topic, areaId: query.area_id, earlierBefore: query.earlier_before,
+    limit: Math.min(Number(query.limit) || 30, 40) };
+}
+
+function feedError(res, error) {
+  if (error.status) return res.status(error.status).json({ error: error.message, ...(error.code ? { code: error.code } : {}) });
+  logger.error('pulse.feed.error', { error: error.message });
+  return res.status(503).json({ error: "Couldn't load Pulse. Please try again." });
+}
+
+router.get('/feed', verifyToken, async (req, res) => {
+  try {
+    res.set('Cache-Control', 'private, no-store');
+    res.json(await pulseFeed.page(req.user.id, feedOptions(req.query)));
+  } catch (error) { feedError(res, error); }
+});
+
+router.get('/feed/new', verifyToken, async (req, res) => {
+  try {
+    if (!feedCursor.timestamp(req.query.after)) return res.status(400).json({ error: 'Choose a valid time to check for new conversations.' });
+    res.set('Cache-Control', 'private, no-store');
+    res.json(await pulseFeed.newCount(req.user.id, { ...feedOptions(req.query), after: req.query.after }));
+  } catch (error) { feedError(res, error); }
+});
+
+router.post('/feed/seen', verifyToken, async (req, res) => {
+  try {
+    if (!['nearby', 'following'].includes(req.body?.view) || !feedCursor.timestamp(req.body?.through)) {
+      return res.status(400).json({ error: 'Choose a view and a valid time to mark as read.' });
+    }
+    res.json(await feedSeen.advance(req.user.id, req.body.view, req.body.through));
+  } catch (error) { feedError(res, error); }
+});
 
 router.get('/areas/mine', verifyToken, async (req, res) => {
   try {

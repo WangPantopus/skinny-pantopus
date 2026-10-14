@@ -74,4 +74,4 @@ async function distanceFormatter(viewerId, { publicResponse = false, homes } = {
   };
 }
 
-module.exports = { distanceFormatter };
+module.exports = { distanceFormatter, displayedPoint };
