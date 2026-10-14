@@ -28,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -46,20 +47,25 @@ import app.pantopus.android.ui.theme.Spacing
 
 /**
  * C2 — "Your homes", the sheet behind the address (and the avatar) on Your Place. Lists every Home the person can
- * open, then the entries still waiting on verification, with Add a home and Manage homes. Parity twin of the iOS
- * `PlaceSwitcherSheet`.
+ * open, then the entries still waiting on verification, with Add a home and Manage homes. With two or more Homes, one
+ * carries the Default pill and the others "Set default": Place lands on the default and Today follows it. Parity twin
+ * of the iOS `PlaceSwitcherSheet`. [onDefaultChange] runs as a default change starts, so the Home on screen stays.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+@Suppress("LongMethod")
 fun PlaceSwitcherSheet(
     activeHomeId: String,
     onSelect: (String) -> Unit,
     onAddPlace: () -> Unit,
     onDismiss: () -> Unit,
     onManageHomes: () -> Unit = {},
+    onDefaultChange: () -> Unit = {},
     viewModel: PlaceSwitcherViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val savingDefaultId by viewModel.savingDefaultId.collectAsStateWithLifecycle()
+    val defaultError by viewModel.defaultError.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { viewModel.load() }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -116,12 +122,31 @@ fun PlaceSwitcherSheet(
                             PlaceSwitcherRowView(
                                 row = row,
                                 isActive = row.id == activeHomeId,
+                                isSavingDefault = savingDefaultId == row.id,
+                                enabled = savingDefaultId == null,
                                 onTap = {
                                     when (row.kind) {
                                         PlaceSwitcherRow.Kind.HOME -> onSelect(row.id)
                                         PlaceSwitcherRow.Kind.PENDING -> onManageHomes()
                                     }
                                 },
+                                onSetDefault = {
+                                    onDefaultChange()
+                                    viewModel.setDefault(row.id)
+                                },
+                            )
+                        }
+                        defaultError?.let { message ->
+                            Text(
+                                text = message,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = PantopusColors.error,
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 14.dp, vertical = Spacing.s1)
+                                        .testTag("place.switcher.defaultError"),
                             )
                         }
                         Box(
@@ -140,13 +165,20 @@ fun PlaceSwitcherSheet(
     }
 }
 
+/** Under the address: the icon tile (40) and its gap (12) inside the row's padding (14). */
+private val DefaultLineInset = 66.dp
+
 @Composable
+@Suppress("LongParameterList")
 private fun PlaceSwitcherRowView(
     row: PlaceSwitcherRow,
     isActive: Boolean,
     onTap: () -> Unit,
+    isSavingDefault: Boolean = false,
+    enabled: Boolean = true,
+    onSetDefault: () -> Unit = {},
 ) {
-    Row(
+    Column(
         modifier =
             Modifier
                 .fillMaxWidth()
@@ -156,10 +188,75 @@ private fun PlaceSwitcherRowView(
                     width = if (isActive) 1.5.dp else 0.dp,
                     color = if (isActive) PantopusColors.primary200 else PantopusColors.appSurface,
                     shape = RoundedCornerShape(14.dp),
-                )
-                .clickable(onClick = onTap)
+                ),
+    ) {
+        PlaceSwitcherSelectRow(row = row, isActive = isActive, enabled = enabled, onTap = onTap)
+        when {
+            row.isDefault -> DefaultPill()
+            row.canSetDefault -> SetDefaultButton(row = row, isSaving = isSavingDefault, enabled = enabled, onTap = onSetDefault)
+        }
+    }
+}
+
+@Composable
+private fun DefaultPill() {
+    Text(
+        text = "Default",
+        fontSize = 12.sp,
+        fontWeight = FontWeight.SemiBold,
+        color = PantopusColors.primary600,
+        modifier =
+            Modifier
+                .padding(start = DefaultLineInset, bottom = 12.dp)
+                .clip(RoundedCornerShape(999.dp))
+                .background(PantopusColors.primary100)
+                .padding(horizontal = 8.dp, vertical = 3.dp)
+                .semantics { contentDescription = "Default home" },
+    )
+}
+
+@Composable
+private fun SetDefaultButton(
+    row: PlaceSwitcherRow,
+    isSaving: Boolean,
+    enabled: Boolean,
+    onTap: () -> Unit,
+) {
+    Box(
+        modifier =
+            Modifier
+                .padding(start = DefaultLineInset - 8.dp)
+                .heightIn(min = 44.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .clickable(enabled = enabled, role = Role.Button, onClick = onTap)
+                .padding(horizontal = 8.dp)
+                .semantics { contentDescription = "Make ${row.line1} your default home" }
+                .testTag("place.switcher.default.${row.id}"),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        Text(
+            text = if (isSaving) "Saving…" else "Set default",
+            fontSize = 13.5.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = PantopusColors.primary600,
+        )
+    }
+}
+
+@Composable
+private fun PlaceSwitcherSelectRow(
+    row: PlaceSwitcherRow,
+    isActive: Boolean,
+    enabled: Boolean,
+    onTap: () -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(enabled = enabled, onClick = onTap)
                 .semantics { selected = isActive }
-                .padding(vertical = 13.dp, horizontal = 14.dp)
+                .padding(top = 13.dp, bottom = if (row.isDefault || row.canSetDefault) 4.dp else 13.dp, start = 14.dp, end = 14.dp)
                 .testTag("place.switcher.row.${row.id}"),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,

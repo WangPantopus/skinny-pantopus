@@ -114,6 +114,8 @@ fun PlaceDashboardScreen(
     onPlaceUnavailable: (homeId: String) -> Unit = {},
     /** The homes sheet's "Manage homes" and its entries still in review: My homes. */
     onManageHomes: () -> Unit = {},
+    /** The homes sheet is making another Home the default. */
+    onDefaultHomeChange: () -> Unit = {},
     /** The Place tab tapped again while this dashboard is its root: back to the top. */
     scrollToTop: Flow<Unit>? = null,
     viewModel: PlaceDashboardViewModel = hiltViewModel(key = "place-$homeId"),
@@ -222,6 +224,7 @@ fun PlaceDashboardScreen(
                 onManageHomes()
             },
             onDismiss = { showSwitcher = false },
+            onDefaultChange = onDefaultHomeChange,
         )
     }
 }

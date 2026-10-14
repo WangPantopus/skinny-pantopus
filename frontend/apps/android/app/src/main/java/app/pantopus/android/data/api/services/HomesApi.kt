@@ -54,6 +54,8 @@ import app.pantopus.android.data.api.models.homes.PropertyDetailsResponse
 import app.pantopus.android.data.api.models.homes.PropertySuggestionsRequest
 import app.pantopus.android.data.api.models.homes.PropertySuggestionsResponse
 import app.pantopus.android.data.api.models.homes.RemoveOwnerResponse
+import app.pantopus.android.data.api.models.homes.SetDefaultHomeBody
+import app.pantopus.android.data.api.models.homes.SetDefaultHomeResponse
 import app.pantopus.android.data.api.models.homes.SubmitClaimRequest
 import app.pantopus.android.data.api.models.homes.SubmitClaimResponse
 import app.pantopus.android.data.api.models.homes.TransferOwnerRequest
@@ -98,6 +100,15 @@ interface HomesApi {
     /** `GET /api/homes/primary` — the actor's primary Home card (`homeListService.read` with `primary`). */
     @GET("api/homes/primary")
     suspend fun primaryHome(): PrimaryHomeResponse
+
+    /**
+     * `PUT /api/homes/default` — the Home the person chooses as their default; it must be one they can open. Route
+     * `backend/routes/home.js` (`router.put('/default')`).
+     */
+    @PUT("api/homes/default")
+    suspend fun setDefaultHome(
+        @Body body: SetDefaultHomeBody,
+    ): SetDefaultHomeResponse
 
     /** `GET /api/homes/:id` — route `backend/routes/home.js:2891`. */
     @GET("api/homes/{id}")
