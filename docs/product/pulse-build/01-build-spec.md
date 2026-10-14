@@ -4,9 +4,13 @@ What the system does, in terms a stream can build and check. The reasoning is in
 
 ## 1. Scope
 
-**Built:** everything in the PR 625 design, in the order of [`03-delivery-plan.md`](03-delivery-plan.md).
+**Built:** everything in the PR 625 design and its five wireframes, and all of it in the launch build (founder, October 14): slices S1 to S24 of [`03-delivery-plan.md`](03-delivery-plan.md), checked row by row in [`06-coverage.md`](06-coverage.md).
 
-**Not built here:** crime or "suspicious person" posts; a politics topic; businesses posting; following people; personas; any ranking by engagement; ads or targeting from Pulse data; accounts for people under 18; street-level addressed asks (the Street Organizer's Phase 2 model, which opens with Crew Day streets); the Crew Day price path inside conversations (Crew Day software is not built); passwordless sign-up. The text channel and reply-by-email are R4 and need the founder's provider accounts.
+**The design itself excludes** (so these are never built): crime or "suspicious person" posts; a politics topic; businesses posting; following people; personas and identity switching; any ranking by engagement; ads or targeting from Pulse data; accounts for people under 18; purpose rooms, a new "Today" front screen, per-topic volume settings, flat capped threads and private clubs.
+
+**Waits for something only the founder can provide:** the text channel, reply-by-email and text-code sign-up (an SMS account and an inbound-email account, S18 and S20); moderator cover, the published rules and policies, the NCMEC and law-enforcement setup, relationships with officials, and the Anthropic key on hosted environments (the launch bar in the delivery plan lists each one with its lead time).
+
+**Waits for another product to exist (S25, reserved):** the Crew Day price option inside "Suggest a plan" and Crew Day provider pages (the Crew Day software), and street welcomes (the Street Organizer's welcome cards). The hook for each is specified (sections 9 and 14) so Pulse changes nothing when those products arrive; until then they do not appear. **Street-level addressed asks** belong to the Street Organizer's own design, not to PR 625.
 
 **The one-sentence promise:** "I can participate here without taking on another thing to manage."
 
@@ -77,7 +81,7 @@ A fixed list of 12, shown a few at a time with "More": `around_here` (Around her
 
 One box: "Ask, share, or make a plan…" (wireframe 2). Pantopus suggests the rest; each is editable with one tap. **Rows:** Type (read from the words), **About** (renamed from "Place": the place or area the post is about), Topic. **Two promises are always shown:** *Who can read* (Public: anyone can read and share it; or Verified neighbors) and *Shown to* ("Nearby readers in Camas, and people who follow Gardening"), with the line "Showing it to gardeners doesn't limit who can read it."
 
-- **Defaults:** town posts are Public; street and neighborhood posts are Verified neighbors. An author can narrow later or delete, never widen.
+- **Defaults:** town posts are Public; street and neighborhood posts are Verified neighbors. An author can narrow later (from the post's "…", section 6) or delete, never widen.
 - **First post:** a short audience review ("Your first post: here's who can read it."), then one line to confirm. A first-time poster also confirms "I'm 18 or older" once (stored; posting is adults-only at launch).
 - **Posting as:** the label the post will wear ("Posting as Dana [New here]").
 - **Checks before posting** (service owned by PS; every check is fail-open except the two that must not post as written):
@@ -87,7 +91,8 @@ One box: "Ask, share, or make a plan…" (wireframe 2). Pantopus suggests the re
   - *Tone:* a heated draft gets one suggestion. **Never blocks.**
   - *National politics:* no topic exists; the composer says so.
 - **Private notes are signed** (review fix 8) with first name and street. A home not on Pantopus gets the city form only in this build (no printed mail).
-- **Drafts** survive switching apps, scrolling, opening another branch and sign-up. No code-only sign-up in this build.
+- **Drafts** survive switching apps, scrolling, opening another branch and sign-up.
+- **Sign-up at the moment of posting (S20).** A signed-out person reads public town conversation (S15). When they tap Reply or Post, a sheet asks for **a first name and an email address** and sends a six-digit code; entering it creates the account with no password, photo or interests, and the draft posts at once, labeled by where they stand (Visitor, Nearby or New here). They confirm "I'm 18 or older" once (section 10). A person who already has an account is signed in to it by the code ("Welcome back, {Name}"); before the code the sheet and its reply are identical for known and unknown emails. Text codes use the same sheet once the founder's SMS provider exists; until then the phone option is absent. Password sign-in, Apple and Google sign-in stay as they are, and a code account can set a password later from settings. Codes: six digits, single use, valid 10 minutes, five wrong tries then a new code, rate-limited per email, per device and per network, never written to logs; the session is minted and device-bound exactly as for a password sign-in. To post in a street or neighborhood they still verify their home with the postcard code.
 
 ## 6. Conversations
 
@@ -100,7 +105,9 @@ The post and its replies in a stable order, two levels deep (wireframe 3).
 - **Slowed exchanges.** When two people's back-and-forth turns heated, their replies to each other drop to one an hour in that conversation. Everyone else carries on. They are told plainly.
 - **Offers, Going, Seen it** as in section 4. **Report** and **Mute** sit in each reply's "…".
 - **Labels on every reply** ("Robin · Resident · 1.8 mi"). Businesses reply under their label only where someone asked about their kind of service, with a weekly cap (R4). Officials reply under their name.
-- **Local government threads** (R4) get a "Residents only" view and a pinned, labeled summary of positions.
+- **Narrow who can read (S9).** The author's "…" offers "Who can read": Public → Verified neighbors of the town → their street or neighborhood, only toward narrower, never wider (`CANNOT_WIDEN`). Anyone who could read the post and no longer can loses it from every path at once; replies and follows stay with the post; a share link stops working.
+- **Local government and Getting around threads** (R4) get a "Residents only" view (only verified residents' replies), and Local government threads also get a pinned, labeled summary of positions written by staff or an Official.
+- **Pinned sources (S24).** An Official or the curator can pin a source (a link or an update, with its label and time) at the top of a conversation about their area. A pin is labeled, never replaces residents' replies and follows the post's held and removed rules.
 - **Drafts stay put** when scrolling or opening another branch.
 - **Follow** is in the header ("Follow"/"Following"); its sheet is in section 7.
 
@@ -111,16 +118,26 @@ The post and its replies in a stable order, two levels deep (wireframe 3).
 - **Controls on every post's "…":** Why am I seeing this? · Follow this conversation · See more of this topic · Mute this topic in this area · Mute this person · Report a problem. "Why" cites only the person's own choices ("You're viewing Camas, all topics, newest first.") and never what others follow or mute. One **preferences page** lists every follow, mute and alert, each with an undo. After a few days of use one line offers: "Seeing too much? Mute what you don't care about."
 - **Noise budget.** Instant: replies to you, a request on your offer, a decision a plan needs from you. Their choice: the daily digest at a time they pick, the weekly street digest (only where streets are open), alerts on follows. Never: "someone posted near you", trending alerts, unread counts meant to pull people back, re-engagement nudges. At most one push a day for anything not directly about you. **Quiet hours** (existing setting) hold every push overnight except Right now.
 - **Daily digest** (R3): email or push at the chosen time; what's new by distance, the home's own items (pickup days, alerts), what plans need, "Still unanswered"; it ends the way the page ends ("You're caught up").
+- **Helper nudge (S13).** A person who answered an Ask in a topic before, or follows that topic in their area, gets one quiet nudge when an Ask in it has had no reply for 24 hours: a line in their daily digest, or at most one push a day when they have no digest. Never inside quiet hours, for a muted topic, or to the asker; one nudge per question per person; wording like "Neighbors are waiting for an answer about {topic}", never "someone posted near you". One tap turns it off (`nudge_helper`, on by default). It counts toward the one-push-a-day limit.
 
 ## 8. Known, Upcoming, Right now
 
 - **Known** (R3): short, sourced answers to recurring questions (trash and recycling days, plumbers neighbors recommend, keys, library passes, burn rules). Each shows its sources (the conversations and official links) and **last confirmed**. Asking something Known covers shows the entry first; asking anyway and getting answers refreshes it. Recommendations list who recommended whom and when, newest first; **no star ratings; businesses cannot pay to appear or edit**. **No staff bottleneck** (review): official-sourced and neighbor-sourced entries look different; residents **Confirm**, **Suggest a correction** or flag **Outdated**; two matching confirmations publish a refresh; staff handle disputes. Pantopus (the curator) drafts entries from resolved Asks and official sources, labeled with their sources.
+- **Known and the walls.** Known is built only from **public** posts and official sources. A street or neighborhood post, a held or removed post, and a post whose author narrowed it never feeds an entry, a quote, a count or "and N others"; a recommender appears with the first name and label the public post showed; deleting the post or the account removes the quote and its share of the count. Known may cite public property facts the Place tab already shows (school zone, flood zone) and never a valuation or ownership detail.
 - **Upcoming** (R3): events posted in Pulse, official events and plans open to the area, in date order; "Going" is the only RSVP.
-- **Right now** (R3): appears at the top of Pulse only while something affects many homes (outage, smoke, closure, storm, boil notice). Official information first, with its source and time; neighbors add **Me too** or **It's back**, never free text. It can start from several nearby homes reporting the same thing, labeled "Reported by neighbors" until an official source confirms. It ends when the official source clears it or reports stop. **Never for crime.**
+- **Right now** (R3): appears at the top of Pulse only while something affects many homes (outage, smoke, closure, storm, boil notice). Official information first, with its source and time; neighbors add **Me too** or **It's back**, never free text. It can start from several nearby homes reporting the same thing, labeled "Reported by neighbors" until an official source confirms. It ends when the official source clears it or reports stop. **Never for crime.** A Heads-up posted while an event is active for the area, and tagged to it, ends when the event ends and its card reads "Ends when power returns" (wireframe 4); a Heads-up with its own end time keeps it.
 
 ## 9. From conversation to plan
 
-"Suggest a plan" in a conversation's "…" opens the Plans host flow prefilled from the post (wireframe 5), creates a plan through the **existing Plans API and tables** (no second plans model), links it to the conversation (`Plan.source_post_id`), and posts the invitation back into the conversation. Only **Going** counts, and it lands in **Your plans** (Plans tab) and on Today. Kinds offered from a conversation: walk & coffee, pickup game, watch party (never playdates). For an "All of {town}" audience the plan uses the existing auto-accept rules (verified neighbors; anyone nearby for walks and pickup games; never plans at home). The toast reads "Added to your plans · Thu 6:00pm · View". Recurring plans, co-hosts (review) and the Crew Day option are later; the Crew Day option needs Crew Day software.
+"Suggest a plan" in a conversation's "…" opens the Plans host flow prefilled from the post (wireframe 5), creates a plan through the **existing Plans API and tables** (no second plans model), links it to the conversation (`Plan.source_post_id`), and posts the invitation back into the conversation. Only **Going** counts, and it lands in **Your plans** (Plans tab) and on Today. Kinds offered from a conversation: walk & coffee, pickup game, watch party (never playdates). For an "All of {town}" audience the plan uses the existing auto-accept rules (verified neighbors; anyone nearby for walks and pickup games; never plans at home). The toast reads "Added to your plans · Thu 6:00pm · View". An Event conversation offers "Suggest a plan" in its "…" too, prefilled from the event. "Who can join" offers **Conversation**, **{Neighborhood}** (when open), **All of {Town}** and the design's fourth audience, **People I invite**: the host picks participants of the conversation, only they and the host can see and join the plan, and the conversation gets no invitation card. PB checks the Plans service first and extends it in place if it cannot do invite-only today (no new table).
+
+**Going on replies (wireframe 5).** A reply by someone who tapped Going carries a `Going` chip (text, not color alone). Under a first-level reply that only expresses interest ("Sounds nice! Maybe next week.") from someone who has not tapped Going, the card shows "Not counted as going". PS provides the phrase check (`interestInReply`, deterministic, with a short written eval); when it is unsure, nothing shows.
+
+**Recurring plans and co-hosts (S21; wireframe 5's "Repeats").** The sheet's **Repeats** row is optional: `Doesn't repeat` · `Every week` · `Every two weeks` · `Monthly` (same weekday), with an end date or "until I stop it". A series has one host, one place and one audience; the next 8 occurrences exist ahead of time. People tap **Going** for an occurrence, **Going every time** to join the series, or **Not this time** to skip one; the card reads "7 going · 2 can't make it this week". The host can pause, resume, end, edit or cancel one occurrence (people going are told). After two occurrences the host did not confirm, the host is asked first and the series then pauses by itself; it ends if the host's account is deleted. Up to two **co-hosts**, invited by the host and accepted by them, can edit and cancel occurrences and approve requests ("Hosted by Priya and Sam"). Every existing plan rule applies to every occurrence: from a conversation only walk & coffee, pickup game and watch party are offered; never playdates; a plan at a home needs the host's approval by hand each time.
+
+**Support Train from a conversation (S22).** A verified resident who took part in a conversation can choose "Start a Support Train" in its "…", which opens the existing Support Train flow. Nothing from the conversation is copied into the train, the train's details and sign-ups stay private to the train, and the organizer chooses whether to post one line back ("A Support Train was started. Ask to join."), default none. The entry appears only where Support Trains are on.
+
+**Crew Day option (S25, reserved).** When a participant chooses "Suggest a plan" and a Crew Day crew serves the area, the sheet gains "A service", which hands the request to Crew Day; each household approves its own price and terms; Pulse never inserts a promotion. Pulse's side is one optional `service_options` list in the plan sheet's payload, empty until Crew Day exists.
 
 ## 10. Identity, labels and permissions
 
@@ -145,6 +162,7 @@ Every post and reply shows the writer's relationship to the **area it is in**:
 | Read and post in a street or neighborhood | No | No | No | No | Their own areas |
 
 - **Distance** is relative to the **reader's** home, rounded, shown to verified readers only, and **never on the public web**; where few homes are close it reads "nearby". A house number appears only inside the street area, and anyone can hide theirs.
+- **Two homes (S24).** One primary home for posting, limits and the label; a second verified home can be added for **reading** its areas only (the area pill lists both towns). `canReadPost` takes the viewer's set of verified homes from the start (S5); removing the second home removes the access at once.
 - One account per adult, linked to their home. A ban applies to the person, not the household. After a move, areas switch with the verified home; old areas fade over a month with a goodbye line; posts stay.
 - Public town posts show a first name and a label ("Dana · New here"). Full names and photos are optional.
 - Deleting an account turns its replies into "Reply removed" (the thread keeps its shape) and removes its posts.
@@ -176,22 +194,30 @@ Prevent most harm in the composer, handle the rest with paid human moderators, a
 
 **Ladder** (times are targets): Suggestion → **Held for review** ("Awaiting review, usually within 2 hours" on the author's own post; a likely rule break, a new account's link, several reports, a sale post) → **Removed** (the rule, the reason, an appeal button) → **Slow mode** (one post and three replies a day for 30 days) → **Ban** (plain reason, human appeal; applies to the person). Held and removed states, notices and appeals are the S11 baseline; reports exist for replies as well as posts.
 
+**Rules screen (S11).** The seven rules in plain words on one screen (apps and web), reachable from every notice, the first-post review and the Pulse menu. It also states the review hours (the founder sets them: "Held posts are usually reviewed within 2 hours, {hours}"), how an appeal works and the law-enforcement policy, in text the founder and counsel approve. Sessions build the screen and its endpoint; the words are the founder's.
+
+**Merging duplicates (S23).** A moderator can merge a duplicate conversation into another: the duplicate becomes a stub, "Merged into {title}", that opens the survivor; replies, follows and Helpful marks carry over without duplicates; both authors are told; the move can be undone for 7 days and is final after.
+
+**Emergencies (S23).** While a Right now event is active for an area, a post that states a cause for it or blames a person or group is held for review with a plain reason. Official updates, "Me too" reports and ordinary posts are unaffected. The rule has a written eval and a false-positive rate in PS's status file.
+
 **Guardrails.** No crime topic and no "suspicious person" post. A post suggesting self-harm is held, the writer sees crisis resources, and trained staff follow up. Threats go to law enforcement under the published policy; child sexual abuse material is reported to NCMEC as US law requires (**founder-owned setup**, see README). Moderators are paid staff; a quarterly public report lists posts held, removed and restored.
 
 ## 13. Businesses, officials, the curator
 
-Businesses reply under their label only where someone asked about their kind of service (weekly cap, R4), cannot start posts, follow or message people first, or edit Known, and appear in Known only when residents recommended them. Offers from verified local businesses appear only in one labeled "Local offers" spot (R4), never in the conversation list. Officials post Heads-ups, Events and Right now updates under verified names; they cannot remove residents' replies to them. The labeled curator ("Pantopus · Camas") seeds sourced road closures, meeting agendas, events and Known entries, never invents neighbors, never posts opinions, and shrinks as residents take over.
+Businesses reply under their label only where someone asked about their kind of service (weekly cap, R4), cannot start posts, follow or message people first, or edit Known, and appear in Known only when residents recommended them. Offers from verified local businesses appear only in one labeled "Local offers" spot (R4, S17), never in the conversation list. A verified business submits an offer (title, terms, dates, link) from its existing business page, staff approve it in the console, and the spot shows one at a time, the same to everyone in the town. Payment for a sponsored spot is not built here: the founder arranges any payment outside the app, and any billing is a separate decision. Build on the existing Business module; marketplace offers, Earn and every cut feature stay unreachable. Officials post Heads-ups, Events and Right now updates under verified names; they cannot remove residents' replies to them. The labeled curator ("Pantopus · Camas") seeds sourced road closures, meeting agendas, events and Known entries, never invents neighbors, never posts opinions, and shrinks as residents take over.
 
 ## 14. Areas, places and streets
 
 - **Launch areas:** the towns of the pilot (Camas, Washougal, Vancouver WA) as boundary polygons. Pulse opens in each as one public town space.
 - **Street and neighborhood areas are data-gated, not flagged:** an area has `opened_at`; a street opens when it completes a Crew Day (or by staff once it would show a few new conversations a week without the curator). Neighborhoods use city-recognized boundaries where they exist, otherwise a labeled radius. Closed areas have no group, no picker entry and no street-level posting.
-- **Place pages (R4):** buildings, HOAs and school zones first, then parks, trails and lakes. A place page shows conversations about the place, Upcoming events there, sourced facts, official updates under their names, and dated visitor observations. Following is optional and grants nothing. Restricted places (a building, an HOA) show conversation only to verified homes inside.
-- **Apartment buildings:** the building is the street area; unit numbers are never shown. **Rural roads:** areas by drive time, distances read "nearby".
+- **Place pages (R4, S16):** buildings, HOAs and school zones first, then parks, trails, lakes, libraries and council districts. A place page shows conversations about the place, Upcoming events there, sourced facts, official updates under their names, and dated visitor observations. Following is optional and grants nothing. Restricted places (a building, an HOA) show conversation only to verified homes inside.
+- **Apartment buildings:** the building is the street area; unit numbers are never shown. **Rural roads:** areas by drive time, distances read "nearby". A drive-time area is a polygon made once from a routing source and stored as a boundary (`source` says so), never computed per request; where none exists the area is a labeled radius and says it is a radius. **New towns are rows:** adding a town, and opening a street or place, needs no app build.
 
 ## 15. Metrics
 
-Events are added with the slice that creates the behavior (names are suggestions; PB owns `funnelEvents.js`): `pulse_open`, `pulse_caught_up`, `pulse_post_created`, `pulse_reply_created`, `pulse_helpful_marked`, `pulse_follow`, `pulse_topic_muted`, `pulse_seeing_too_much_tap`, `pulse_composer_redirect` (call-out or private-detail sheet choice), `pulse_known_viewed`, `pulse_plan_suggested`, plus the report and hold rates from the moderation tables. **Never goals:** time in the app, daily opens, reply counts, posts per person, notification open rates.
+Events are added with the slice that creates the behavior (names are suggestions; PB owns `funnelEvents.js`): `pulse_open`, `pulse_caught_up`, `pulse_post_created`, `pulse_reply_created`, `pulse_helpful_marked`, `pulse_follow`, `pulse_topic_muted`, `pulse_seeing_too_much_tap`, `pulse_composer_redirect` (call-out or private-detail sheet choice), `pulse_known_viewed`, `pulse_plan_suggested`, plus the report and hold rates from the moderation tables. **Derived from existing rows, no new events (S19):** asks marked Helpful within 24 hours; median time to a first Helpful reply; posts that resolve on time; readers who post or reply at least once a month; distinct helpers per town per week; mutes per topic and "Seeing too much?" taps; reports per 1,000 posts, review time and appeals granted; sessions that reach "You're caught up". **Added (S24):** `signup_source` on accounts made by code or from a public page (`pulse_share`, `pulse_town_page`, `direct`), so "visitors from shared links or town pages who verify a home" is a count of verified homes by source, with no tracking of anonymous visitors. **Moderation cost:** the console records time to decision; dollars are the founder's arithmetic from staff hours.
+
+**Never goals:** time in the app, daily opens, reply counts, posts per person, notification open rates.
 
 ## 16. Acceptance: first-time users, unaided
 
@@ -223,7 +249,7 @@ Each round uses 8 to 10 people in the first town on the real app; any task fewer
 | For-sale rule | Offers are free or loans; sale posts are held |
 | Neighborhood boundaries | City-recognized, else a labeled radius |
 | Cap business replies | Weekly cap (R4) |
-| Co-hosts for recurring plans | Later |
+| Co-hosts for recurring plans | Built (S21, section 9) |
 | Quiet hours and accessibility | Quiet hours in section 7; accessibility below |
 
 **Accessibility (every screen):** works with large type (iOS has fixed type sizes today: every **new** Pulse screen uses scalable type; do not copy the fixed sizes), VoiceOver and TalkBack name every control (labels, states, "N new" pills), dark mode, and no information carried by color alone (labels are text).
@@ -242,4 +268,13 @@ Strings below are from the wireframes and are used verbatim on both platforms; s
 - Known: `Known · {Town}` · `From {n} conversations · last confirmed {date}` · `Listed by most recent recommendation. Businesses can't pay to appear here or edit this page.` · `Ask again to refresh` `Suggest a correction` · `Sources: …`
 - Plan: `Suggest a plan` · `What` `When` `Where` `Repeats` `Who can join` `Conversation` `{Neighborhood}` `All of {Town}` · `Only people who tap Going are counted. A reply like "sounds nice" doesn't sign anyone up.` · `Post the invitation` · `PLAN · HOSTED BY {NAME}` · `Going` `Not this time` · `{n} going · {n} can't make it this week` · `Added to your plans · {when}` `View` · `Not counted as going`
 - Labels: `Resident` `New here` `Nearby` `Visitor` `Official` `Business` `Pantopus`
+- Sign-up at posting (S20): `Join the conversation` · `Your first name` `Your email` · `We'll send you a 6-digit code. No password needed.` · `Send code` · `Enter the code we sent to {email}` · `Send a new code` · `Welcome back, {Name}` · `I'm 18 or older` · `That code isn't right. {n} tries left.` `That code has expired. We sent you a new one.` `Too many tries. Try again in {minutes} minutes.`
+- Plans, repeating (S21): `Doesn't repeat` `Every week` `Every two weeks` `Monthly` · `Going every time` `Not this time` · `Hosted by {A} and {B}` `Invite a co-host` · `Pause` `Resume` `End series` · `Going` chip on a reply · `Not counted as going`
+- Support Train (S22): `Start a Support Train` · `A Support Train was started. Ask to join.`
+- Rules (S11): `The rules` · `Held posts are usually reviewed within 2 hours, {hours}.` · the seven rules exactly as in section 12 · `How appeals work` · `Law enforcement requests`
+- Merged conversation (S23): `Merged into {title}` · `This conversation was merged with another about the same thing.`
+- Neighbors-only link (S15): `Only verified neighbors can read this` · `Sign in or verify your address to see it.`
+- Helper nudge (S13): `Neighbors are waiting for an answer about {topic}.`
+- Local offers (S17): `Local offers` · `From {Business}, a local business`
+- Pins (S24) and second home (S24): `Pinned by {Name}` · `Also read around {Town}`
 - Tab bar: `Place` `Today` `Pulse` `Plans` `Messages`

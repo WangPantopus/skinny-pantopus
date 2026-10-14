@@ -363,7 +363,10 @@ Decided October 13 (section 0). The [build kit](docs/product/pulse-build/README.
 - [ ] R2 (about weeks 3–6): composer and checks, conversations, following and controls, moderation baseline.
 - [ ] R3 (about weeks 6–10): Known, Upcoming, Right now, search, digests, the plans bridge.
 - [ ] R4 (about weeks 10–15): public web and guest browsing (after the moderation baseline and your confirmation of moderator cover), place pages and streets, business and official accounts, text channel and reply-by-email (after your provider accounts), transparency.
-- [ ] You, when the time comes: confirm moderator cover; the Anthropic key on hosted environments for the composer checks; outage-data and SMS accounts; legal review and NCMEC reporting setup; deploys; first-town acceptance rounds with 8 to 10 people.
+- [ ] R5 (about weeks 11–18): what the design requires that the first plan missed: sign-up by emailed code at the moment of posting, recurring plans and co-hosts (wireframe 5's "Repeats"), Support Train from a conversation, merging duplicate conversations and the emergency hold, a second home for reading, pinned sources, the extra metric.
+- [x] October 14: finish everything in the design and have all of it in the app at launch ([coverage check](docs/product/pulse-build/06-coverage.md), [launch bar](docs/product/pulse-build/03-delivery-plan.md#the-launch-bar)). Two parts need other products and are reserved (S25): the Crew Day option and provider pages, and street welcomes. Decide before launch: build those products, or ship without them.
+- [ ] Decide when the pilot builds ship relative to the Pulse launch (L4 proposed pinning a pre-Pulse commit). Until you answer, the pilot's build source is unchanged.
+- [ ] You, when the time comes: confirm moderator cover; the published rules and law-enforcement policy, read by counsel; the Anthropic key on hosted environments for the composer checks; outage-data, SMS and inbound-email accounts (texting registration can take weeks, so start early); legal review and NCMEC reporting setup; officials invited and verified; approval of the seeded Known content; store listing updates for user-generated content; deploys; first-town acceptance rounds with 8 to 10 people.
 
 ## Background backlog
 
