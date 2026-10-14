@@ -457,7 +457,8 @@ class PulsePostDetailViewModel
                                 onReady("https://www.pantopus.com/posts/$postId")
                             }
                         }
-                        is NetworkResult.Failure -> _toastMessage.value = result.error.displayMessage("Couldn't share this post. Try again.")
+                        is NetworkResult.Failure ->
+                            _toastMessage.value = result.error.displayMessage("Couldn't share this post. Try again.")
                     }
                 } finally {
                     sharingPost = false

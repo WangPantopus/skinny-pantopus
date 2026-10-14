@@ -133,6 +133,6 @@ data class PostDetailDto(
 
     val canShareExternally: Boolean
         get() =
-            !isRemovedByModerator && moderationState !in listOf("held", "removed") &&
-                permitsExternalPostShare(readScope, visibility, audience, allowExternalShare)
+            !isRemovedByModerator &&
+                permitsExternalPostShare(readScope, visibility, audience, allowExternalShare, moderationState)
 }
