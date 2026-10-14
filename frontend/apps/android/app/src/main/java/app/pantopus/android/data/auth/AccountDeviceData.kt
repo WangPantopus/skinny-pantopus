@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.edit
 import app.pantopus.android.data.chats.ChatBadgeCoordinator
 import app.pantopus.android.data.chats.ChatConversationPreferences
 import app.pantopus.android.data.gigs.GigDraftQueue
+import app.pantopus.android.data.posts.PulseComposeDraftStore
 import app.pantopus.android.data.store.ScreenStore
 import app.pantopus.android.data.support_trains.SupportTrainReservationsStore
 import app.pantopus.android.data.widget.TodayWidgetStore
@@ -40,7 +41,14 @@ class AccountDeviceData
         private val broadcastSeeds: BroadcastDetailSeedCache,
         private val gigDrafts: GigDraftQueue,
         private val screenStore: ScreenStore,
+        private val pulseDrafts: PulseComposeDraftStore,
     ) {
+        /** Pulse drafts survive normal sign-out; confirmed account deletion removes that account's draft. */
+        suspend fun clearRetainedPulseDraft(actorId: String) {
+            runCatching { pulseDrafts.discard(PulseComposeDraftStore.accountScope(actorId)).await() }
+                .onFailure { Timber.w(it, "Could not clear the deleted account's Pulse draft") }
+        }
+
         /** Never throws: a part that fails is logged and the rest is still cleared. */
         @OptIn(ExperimentalCoilApi::class)
         suspend fun clear() {

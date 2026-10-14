@@ -91,6 +91,8 @@ class PulseComposeViewModelTest {
             savedState,
             businessPosts,
             precheckRepo,
+            mockk(relaxed = true),
+            mockk(relaxed = true),
         )
     }
 
@@ -544,6 +546,8 @@ class PulseComposeViewModelTest {
             savedState,
             businessPosts,
             precheckRepo,
+            mockk(relaxed = true),
+            mockk(relaxed = true),
         )
     }
 

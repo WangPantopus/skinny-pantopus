@@ -32,6 +32,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -116,6 +117,7 @@ fun PulseComposeScreen(
      */
     businessAuthorId: String? = null,
 ) {
+    val draftNotice by viewModel.draftNotice.collectAsStateWithLifecycle()
     val state by viewModel.state.collectAsStateWithLifecycle()
     val activeIntent by viewModel.activeIntent.collectAsStateWithLifecycle()
     val identity by viewModel.identity.collectAsStateWithLifecycle()
@@ -244,12 +246,24 @@ fun PulseComposeScreen(
         FormShell(
             title = viewModel.displayTitle,
             rightActionLabel = viewModel.ctaLabel,
-            isValid = viewModel.isValid,
-            isDirty = viewModel.isDirty,
+            isValid = state !is PulseComposeUiState.Success && viewModel.isValid,
+            isDirty = state !is PulseComposeUiState.Success && viewModel.isDirty,
             isSaving = viewModel.isSubmitting,
-            onClose = onBack,
+            onClose = { viewModel.discardDraft(onBack) },
             onCommit = viewModel::submit,
         ) {
+            draftNotice?.let { message ->
+                Column(modifier = Modifier.padding(horizontal = Spacing.s4)) {
+                    Text(message, color = PantopusColors.error, fontSize = 14.sp)
+                    TextButton(onClick = viewModel::retryDraftSave) {
+                        Text(if (state is PulseComposeUiState.Success) "Retry clearing draft" else "Retry saving draft")
+                    }
+                }
+            }
+            if (state is PulseComposeUiState.Success) {
+                Text("Your post is saved.", modifier = Modifier.padding(Spacing.s4), fontSize = 16.sp)
+                return@FormShell
+            }
             when (val prefill = prefillState) {
                 PulseComposePrefillState.Loading -> PulseComposePrefillSkeleton()
                 is PulseComposePrefillState.Error ->
@@ -1909,7 +1923,7 @@ private fun ChipRow(
  * Mirrors the loaded geometry so layout doesn't jump on resolve.
  */
 @Composable
-private fun PulseComposePrefillSkeleton() {
+internal fun PulseComposePrefillSkeleton() {
     Column(
         modifier =
             Modifier
@@ -1936,7 +1950,7 @@ private fun PulseComposePrefillSkeleton() {
  * message with a retry CTA wired back to `loadForEdit`.
  */
 @Composable
-private fun PulseComposePrefillErrorView(
+internal fun PulseComposePrefillErrorView(
     message: String,
     onRetry: () -> Unit,
 ) {
