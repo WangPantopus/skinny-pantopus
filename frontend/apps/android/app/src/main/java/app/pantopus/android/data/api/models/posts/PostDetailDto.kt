@@ -118,7 +118,6 @@ data class PostDetailDto(
     @Json(name = "allow_external_share") val allowExternalShare: Boolean? = null,
     @Json(name = "moderation_state") val moderationState: String? = null,
     val audience: String? = null,
-
     @Json(name = "event_date") val eventDate: String? = null,
     @Json(name = "event_venue") val eventVenue: String? = null,
     @Json(name = "lost_found_type") val lostFoundType: String? = null,
@@ -133,6 +132,7 @@ data class PostDetailDto(
     val isRemovedByModerator: Boolean get() = archiveReason == "moderation"
 
     val canShareExternally: Boolean
-        get() = !isRemovedByModerator && moderationState !in listOf("held", "removed") &&
-            permitsExternalPostShare(readScope, visibility, audience, allowExternalShare)
+        get() =
+            !isRemovedByModerator && moderationState !in listOf("held", "removed") &&
+                permitsExternalPostShare(readScope, visibility, audience, allowExternalShare)
 }

@@ -56,8 +56,9 @@ data class FeedPost(
     val audience: String? = null,
 ) {
     val canShareExternally: Boolean
-        get() = !isSeeded && moderationState !in listOf("held", "removed") &&
-            permitsExternalPostShare(readScope, visibility, audience, allowExternalShare)
+        get() =
+            !isSeeded && moderationState !in listOf("held", "removed") &&
+                permitsExternalPostShare(readScope, visibility, audience, allowExternalShare)
 }
 
 /**

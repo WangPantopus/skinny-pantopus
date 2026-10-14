@@ -648,7 +648,10 @@ class PulseFeedViewModel
         private val sharingPosts = mutableSetOf<String>()
 
         /** Authorize on the server before handing a link to another app, including from an older saved feed. */
-        fun shareExternally(postId: String, onReady: (String) -> Unit) {
+        fun shareExternally(
+            postId: String,
+            onReady: (String) -> Unit,
+        ) {
             val actor = viewerId ?: return
             if (loadedPosts.firstOrNull { it.id == postId }?.canShareExternally != true || !sharingPosts.add(postId)) return
             viewModelScope.launch {
