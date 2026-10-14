@@ -601,6 +601,7 @@ async function composeMorningBriefing(userId, location) {
 
   if (!baselineRankedOutput.signals.some((signal) => primarySignalKinds.has(signal.kind))) {
     localUpdates = await getLocalUpdateContext({
+      userId,
       latitude,
       longitude,
       locationLabel: location.label,

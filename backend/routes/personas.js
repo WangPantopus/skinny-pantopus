@@ -12,6 +12,7 @@ const { isFeatureEnabled } = require('../services/featureFlagService');
 const { requirePersonaEnabled } = require('../utils/featureFlags');
 const requireFeatureFlag = require('../middleware/requireFeatureFlag');
 const { loadFollowingActivity } = require('../services/followingActivityService');
+const { postScopeAccess } = require('../services/pulse/readAccess');
 const { personaPostVisibleToViewer } = require('../utils/personaPostVisibility');
 const { writeIdentityAuditLog } = require('../utils/identityAudit');
 const {
@@ -453,7 +454,7 @@ router.get('/me/following', verifyToken, async (req, res) => {
     const visibleRows = rows.filter((m) => m.persona && m.persona.status !== 'suspended' && !blockedIds.has(m.persona_id));
     let decorated;
     try {
-      decorated = await loadFollowingActivity(visibleRows);
+      decorated = await loadFollowingActivity(visibleRows, { scopeAccess: await postScopeAccess(userId) });
     } catch (error) {
       logger.error('personas.me.following.posts_error', { error: error.message, userId });
       return res.status(503).json({ error: 'Beacon updates are temporarily unavailable' });
@@ -1023,9 +1024,9 @@ router.get('/:handle/posts', optionalAuth, async (req, res) => {
     if (follow?.status === 'active' && viewerRank < 1) viewerRank = 1;
     if (follow?.relationship_type === 'subscriber' && viewerRank < 2) viewerRank = 2;
 
-    const { data: posts, error } = await supabaseAdmin
+    const { data: posts, error } = await (await postScopeAccess(viewerId)).query(supabaseAdmin
       .from('Post')
-      .select('*')
+      .select('*'))
       .eq('identity_context_type', 'persona')
       .eq('identity_context_id', persona.id)
       .order('created_at', { ascending: false })
