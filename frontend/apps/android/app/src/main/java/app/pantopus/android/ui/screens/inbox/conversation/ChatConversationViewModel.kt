@@ -244,6 +244,13 @@ class ChatConversationViewModel
         // In-flight direct-room resolution, shared so concurrent sends make
         // a single `POST /api/chat/direct`.
         private var directRoomDeferred: Deferred<String?>? = null
+        private var historyGeneration = 0L
+        private var historyRefusal: String? = null
+        private var historyCopyContext: HistoryReadContext? = null
+        private var updateHistoryCopy: ((ChatMessagesResponse) -> Unit)? = null
+
+        /** The newest server page behind the copy; the copy keeps its room list so an unchanged reopen can get a 304. */
+        private var historyPage: ChatMessagesResponse? = null
 
         // Send inputs captured per optimistic row, keyed by its bare-UUID
         // `clientMessageId`. Survives refetches so retry resends the same
@@ -296,6 +303,7 @@ class ChatConversationViewModel
         // 30s fallback refresh while the socket is down — started by the
         // connectionState collector, cancelled on connect / teardown.
         private var fallbackPollJob: Job? = null
+        private var catchUpJob: Job? = null
 
         // The attachment download in flight; a second tap waits for it.
         private var openAttachmentJob: Job? = null
@@ -354,6 +362,7 @@ class ChatConversationViewModel
                     publishViewedRooms()
                     subscribeToSockets()
                 }
+                fetch(initial = true, quiet = true)
                 return
             }
             // Seed AI continuity: a new VM instance for the AI thread keeps
@@ -534,8 +543,10 @@ class ChatConversationViewModel
          * flash, no lost scroll); only an error or an empty first load starts over.
          */
         fun refresh() {
+            // An access refusal tears listeners down. Retry must restore live updates as well as the first page.
+            if (connectionJob == null) subscribeToSockets()
             loadTopicsIfNeeded()
-            fetch(initial = true, quiet = _state.value is ChatConversationUiState.Loaded)
+            fetch(initial = true, quiet = _state.value is ChatConversationUiState.Loaded, force = true)
         }
 
         fun selectTopic(topicId: String?) {
@@ -1490,6 +1501,7 @@ class ChatConversationViewModel
             presenceOfflineJob?.cancel()
             reactionRefetchJob?.cancel()
             fallbackPollJob?.cancel()
+            catchUpJob?.cancel()
             typingUserJob?.cancel()
             typingStoppedJob?.cancel()
             typingClearJob?.cancel()
@@ -1504,6 +1516,7 @@ class ChatConversationViewModel
             presenceOfflineJob = null
             reactionRefetchJob = null
             fallbackPollJob = null
+            catchUpJob = null
             typingUserJob = null
             typingStoppedJob = null
             typingClearJob = null
@@ -1517,6 +1530,15 @@ class ChatConversationViewModel
 
         // MARK: - Fetch
 
+        private data class HistoryReadContext(
+            val generation: Long,
+            val mode: ChatThreadMode,
+            val user: String?,
+            val topicId: String?,
+        )
+
+        private fun historyContext() = HistoryReadContext(historyGeneration, mode, currentUserId, _selectedTopicId.value)
+
         /**
          * [quiet]: refetch the newest page under the messages on screen instead of clearing them first. The page
          * replaces what it covers; older pages the reader loaded and rows newer than the page (a send that landed
@@ -1526,9 +1548,14 @@ class ChatConversationViewModel
             initial: Boolean,
             before: String? = null,
             quiet: Boolean = false,
+            force: Boolean = false,
         ) {
+            val context = historyContext()
+            if (initial || context != historyCopyContext) followHistoryCopy(context)
+            val copied = initial && !quiet && showHistoryCopy()
+            val keepMessages = quiet || copied
             viewModelScope.launch {
-                if (initial && !quiet) {
+                if (initial && !keepMessages) {
                     _state.value = ChatConversationUiState.Loading
                     messages = mutableListOf()
                     // Pending / failed optimistic rows survive refetches —
@@ -1541,45 +1568,100 @@ class ChatConversationViewModel
                 }
                 if (mode is ChatThreadMode.Ai) {
                     // The assistant's transcript lives in this view model; a quiet read leaves it alone.
-                    if (!quiet) _state.value = ChatConversationUiState.Empty
+                    if (!keepMessages) _state.value = ChatConversationUiState.Empty
                     return@launch
                 }
-                val requestedTopicId = _selectedTopicId.value
                 val response =
-                    when (val target = mode) {
-                        is ChatThreadMode.Room -> repo.roomMessages(target.id, before)
-                        is ChatThreadMode.Person -> repo.conversationMessages(target.otherUserId, before, topicId = requestedTopicId)
+                    when (val target = context.mode) {
+                        is ChatThreadMode.Room -> repo.roomMessages(target.id, before, force = force)
+                        is ChatThreadMode.Person ->
+                            repo.conversationMessages(target.otherUserId, before, topicId = context.topicId, force = force)
                         ChatThreadMode.Ai -> return@launch
                     }
                 // The topic changed while this page was in flight (the opening topic
                 // resolves alongside the first fetch); the fetch for it owns the thread.
-                if (requestedTopicId != _selectedTopicId.value) return@launch
-                when (response) {
-                    is NetworkResult.Success -> {
-                        val keptOlder = placePage(response.data.messages, quiet)
-                        retireConfirmedSends(response.data.messages)
-                        updateActiveRooms(response.data)
-                        // Older pages kept under a quiet read keep their own cursor.
-                        if (!keptOlder) {
-                            hasMore = response.data.hasMore ?: false
-                            oldestCursor =
-                                response.data.nextCursor
-                                    ?: paginationCursor(messages.firstOrNull())
-                        }
-                        rebuild()
-                        joinActiveRoomsIfPossible()
-                        scheduleMarkRead()
-                        if (initial) prefetchDirectRoomIfNeeded()
+                if (context != historyContext()) return@launch
+                publishHistoryPage(response, keepMessages, initial, firstPage = before == null)
+            }
+        }
+
+        /** A first-page read (or a new thread or topic): the copy writer follows the read's context. */
+        private fun followHistoryCopy(context: HistoryReadContext) {
+            if (context != historyCopyContext) historyPage = null
+            historyCopyContext = context
+            updateHistoryCopy =
+                when (val target = context.mode) {
+                    is ChatThreadMode.Room -> repo.roomHistoryUpdater(target.id)
+                    is ChatThreadMode.Person -> repo.conversationHistoryUpdater(target.otherUserId, context.topicId)
+                    ChatThreadMode.Ai -> null
+                }
+        }
+
+        private fun publishHistoryPage(
+            response: NetworkResult<ChatMessagesResponse>,
+            keepMessages: Boolean,
+            initial: Boolean,
+            firstPage: Boolean,
+        ) {
+            when (response) {
+                is NetworkResult.Success -> {
+                    historyRefusal = null
+                    if (firstPage) historyPage = response.data
+                    val keptOlder = placePage(response.data.messages, keepMessages)
+                    retireConfirmedSends(response.data.messages)
+                    updateActiveRooms(response.data)
+                    // Older pages kept under a quiet read keep their own cursor.
+                    if (!keptOlder) {
+                        hasMore = response.data.hasMore ?: false
+                        oldestCursor =
+                            response.data.nextCursor
+                                ?: paginationCursor(messages.firstOrNull())
                     }
-                    is NetworkResult.Failure -> {
-                        if (initial && !quiet) {
-                            _state.value = ChatConversationUiState.Error(response.error.message)
-                        } else {
-                            Timber.w("chat refresh or pagination failed: ${response.error.message}")
-                        }
+                    rebuild()
+                    joinActiveRoomsIfPossible()
+                    scheduleMarkRead()
+                    if (initial) prefetchDirectRoomIfNeeded()
+                }
+                is NetworkResult.Failure -> {
+                    if (historyAccessEnded(response.error)) {
+                        refuseHistory(response.error)
+                    } else if (initial && !keepMessages) {
+                        _state.value = ChatConversationUiState.Error(response.error.message)
+                    } else {
+                        Timber.w("chat refresh or pagination failed: ${response.error.message}")
                     }
                 }
             }
+        }
+
+        private fun refuseHistory(error: NetworkError) {
+            historyGeneration++
+            historyRefusal = error.message
+            historyPage = null
+            messages.clear()
+            activeRoomIds = emptySet()
+            directRoomDeferred?.cancel()
+            directRoomDeferred = null
+            directRoomId = null
+            teardown()
+            _state.value = ChatConversationUiState.Error(error.message)
+        }
+
+        /** The newest hundred server messages, held only in the account-scoped memory store. */
+        private fun showHistoryCopy(): Boolean {
+            val copy =
+                when (val target = mode) {
+                    is ChatThreadMode.Room -> repo.roomMessagesCopy(target.id)
+                    is ChatThreadMode.Person -> repo.conversationMessagesCopy(target.otherUserId, _selectedTopicId.value)
+                    ChatThreadMode.Ai -> null
+                } ?: return false
+            historyPage = copy
+            messages = copy.messages.toMutableList()
+            hasMore = copy.hasMore ?: false
+            oldestCursor = copy.nextCursor ?: paginationCursor(messages.firstOrNull())
+            updateActiveRooms(copy)
+            rebuild()
+            return true
         }
 
         /** Puts a fetched [page] into [messages]; true when a quiet read kept older pages (they keep their cursor). */
@@ -1632,6 +1714,8 @@ class ChatConversationViewModel
             }
 
         private suspend fun resolveDirectRoom(otherUserId: String): String? {
+            val generation = historyGeneration
+            val userId = currentUserId
             val deferred =
                 directRoomDeferred ?: viewModelScope.async {
                     when (val result = repo.createDirectChat(otherUserId)) {
@@ -1644,6 +1728,7 @@ class ChatConversationViewModel
                     }
                 }.also { directRoomDeferred = it }
             val roomId = deferred.await()
+            if (generation != historyGeneration || userId != currentUserId || historyRefusal != null) return null
             if (directRoomDeferred === deferred) directRoomDeferred = null
             if (roomId != null && directRoomId == null) {
                 directRoomId = roomId
@@ -1754,8 +1839,11 @@ class ChatConversationViewModel
             if (connectionJob == null) {
                 connectionJob =
                     viewModelScope.launch {
+                        var connectedBefore = false
                         socket.connectionState.collect { state ->
                             if (state == SocketManager.ConnectionState.Connected) {
+                                if (connectedBefore) catchUpMessages()
+                                connectedBefore = true
                                 stopFallbackPolling()
                                 joinedRoomIds.clear()
                                 joinActiveRoomsIfPossible()
@@ -1908,6 +1996,43 @@ class ChatConversationViewModel
             _isCounterpartyTyping.value = false
         }
 
+        /** Reconnect fills the gap after the newest held message, without replacing the reading position. */
+        private fun catchUpMessages() {
+            val after = messages.maxByOrNull { it.createdAt }?.createdAt ?: return
+            if (catchUpJob?.isActive == true || mode is ChatThreadMode.Ai) return
+            val context = historyContext()
+            val target = context.mode
+            val topic = context.topicId
+            catchUpJob =
+                viewModelScope.launch {
+                    var before: String? = null
+                    do {
+                        val result =
+                            when (target) {
+                                is ChatThreadMode.Room -> repo.roomMessages(target.id, before = before, after = after)
+                                is ChatThreadMode.Person ->
+                                    repo.conversationMessages(target.otherUserId, before = before, after = after, topicId = topic)
+                                ChatThreadMode.Ai -> return@launch
+                            }
+                        if (context != historyContext()) return@launch
+                        when (result) {
+                            is NetworkResult.Success -> {
+                                mergeBackfill(result.data.messages)
+                                val cursor = result.data.nextCursor
+                                before = cursor.takeIf { result.data.hasMore == true && it != before && result.data.messages.isNotEmpty() }
+                            }
+                            is NetworkResult.Failure -> {
+                                if (historyAccessEnded(result.error)) refuseHistory(result.error)
+                                before = null
+                            }
+                        }
+                    } while (before != null)
+                }
+        }
+
+        private fun historyAccessEnded(error: NetworkError): Boolean =
+            error is NetworkError.Forbidden || error == NetworkError.NotFound || error == NetworkError.Unauthorized
+
         private fun joinActiveRoomsIfPossible() {
             if (socket.connectionState.value != SocketManager.ConnectionState.Connected) return
             val pending = activeRoomIds - joinedRoomIds
@@ -1915,7 +2040,7 @@ class ChatConversationViewModel
                 joinedRoomIds.add(roomId)
                 viewModelScope.launch {
                     val ack = socket.emitWithAck("room:join", JSONObject().put("roomId", roomId))
-                    if (ack?.optBoolean("success") != true) return@launch
+                    if (ack?.optBoolean("success") != true || roomId !in activeRoomIds) return@launch
                     val backfill = parseMessages(ack.optJSONArray("messages"))
                     if (backfill.isNotEmpty()) mergeBackfill(backfill)
                 }
@@ -2005,7 +2130,7 @@ class ChatConversationViewModel
             reactionRefetchJob =
                 viewModelScope.launch {
                     delay(REACTION_REFETCH_DEBOUNCE_MS)
-                    fetch(initial = true, quiet = true)
+                    fetch(initial = true, quiet = true, force = true)
                 }
         }
 
@@ -2043,7 +2168,7 @@ class ChatConversationViewModel
                 if (decoded != null) {
                     if (matchesTopicFilter(decoded)) insertIncoming(decoded) else rebuild()
                 } else {
-                    fetch(initial = true, quiet = true)
+                    fetch(initial = true, quiet = true, force = true)
                 }
                 return
             }
@@ -2057,7 +2182,7 @@ class ChatConversationViewModel
                 // so the incremental merge must too.
                 if (matchesTopicFilter(decoded)) insertIncoming(decoded)
             } else {
-                fetch(initial = true, quiet = true)
+                fetch(initial = true, quiet = true, force = true)
             }
         }
 
@@ -2102,7 +2227,7 @@ class ChatConversationViewModel
             if (decoded != null) {
                 applyUpdatedMessage(decoded)
             } else {
-                fetch(initial = true, quiet = true)
+                fetch(initial = true, quiet = true, force = true)
             }
         }
 
@@ -2173,6 +2298,22 @@ class ChatConversationViewModel
         // MARK: - Projection
 
         private fun rebuild() {
+            historyRefusal?.let {
+                _state.value = ChatConversationUiState.Error(it)
+                return
+            }
+            if (historyCopyContext == historyContext()) {
+                // In the server's shape (no cursor without older messages, its room list), so unchanged is equal.
+                val page = historyPage
+                updateHistoryCopy?.invoke(
+                    ChatMessagesResponse(
+                        messages = messages.toList(),
+                        hasMore = hasMore,
+                        nextCursor = oldestCursor.takeIf { hasMore },
+                        roomIds = if (page != null) page.roomIds else activeRoomIds.toList(),
+                    ),
+                )
+            }
             val combined = messages + pendingByClientId.values
             if (combined.isEmpty()) {
                 _state.value = ChatConversationUiState.Empty

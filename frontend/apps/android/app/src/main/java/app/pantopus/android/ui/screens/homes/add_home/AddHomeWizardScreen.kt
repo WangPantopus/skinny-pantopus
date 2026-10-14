@@ -100,13 +100,17 @@ const val ADD_HOME_SCREEN_TAG = "addHomeWizard"
 @Composable
 fun AddHomeWizardScreen(
     onDismiss: () -> Unit,
-    onOpenHomes: () -> Unit,
+    /** The wizard is done; the Home it created or asked to join, when the outcome named one. */
+    onOpenHomes: (homeId: String?) -> Unit,
     viewModel: AddHomeWizardViewModel = hiltViewModel(),
     onOpenClaimOwnership: (String) -> Unit = {},
     onOpenWaitingRoom: (String) -> Unit = {},
+    /** Opened from the Place tab: finishing with a new Home opens Your Place for it, and the copy says so. */
+    completionOpensPlace: Boolean = false,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val pendingEvent by viewModel.pendingEvent.collectAsStateWithLifecycle()
+    LaunchedEffect(completionOpensPlace) { viewModel.setCompletionOpensPlace(completionOpensPlace) }
 
     ObserveHomeCreationLifecycle(viewModel)
 
@@ -116,9 +120,9 @@ fun AddHomeWizardScreen(
                 viewModel.acknowledgeEvent()
                 onDismiss()
             }
-            AddHomeOutboundEvent.OpenHomes -> {
+            is AddHomeOutboundEvent.OpenHomes -> {
                 viewModel.acknowledgeEvent()
-                onOpenHomes()
+                onOpenHomes(event.homeId)
             }
             is AddHomeOutboundEvent.OpenClaimOwnership -> {
                 viewModel.acknowledgeEvent()
@@ -169,7 +173,7 @@ fun AddHomeWizardScreen(
                     )
                 AddHomeStep.Role -> RoleStep(state, viewModel)
                 AddHomeStep.Review -> ReviewStep(state)
-                AddHomeStep.Success -> SuccessStep()
+                AddHomeStep.Success -> SuccessStep(opensYourPlace = state.completionOpensYourPlace)
             }
         }
     }
@@ -788,15 +792,21 @@ private class AddHomePreviewWizardModel(
 // MARK: - Step 5
 
 @Composable
-private fun SuccessStep() {
+private fun SuccessStep(opensYourPlace: Boolean) {
     // Reuse the T3.6 Status / Waiting body. The headline + subcopy
     // are the Add-Home variants of the success frame; everything
     // else (illustration, action cards, explainer bullets) is shared.
+    // The subcopy names where the primary button goes.
     StatusWaitingBody(
         content =
             StatusWaitingContent.claimSubmitted().copy(
                 headline = "Home added",
-                subcopy = "We'll email you when verification completes.",
+                subcopy =
+                    if (opensYourPlace) {
+                        "Open Your Place to see your Home and its verification options."
+                    } else {
+                        "We'll email you when verification completes."
+                    },
             ),
     )
 }

@@ -1,19 +1,19 @@
 /**
  * Support Train Draft — LLM evaluation tests.
  *
- * These tests call the real OpenAI API and validate that the AI draft service
+ * These tests call the real Claude API and validate that the AI draft service
  * produces structurally valid, semantically correct drafts from free-text
  * stories. They are a regression guard, not deterministic unit tests.
  *
- * Skip automatically when OPENAI_API_KEY is not set (CI-safe).
+ * Skip automatically when ANTHROPIC_API_KEY is not set (CI-safe).
  *
  * Run manually:
- *   OPENAI_API_KEY=sk-... npx jest backend/tests/ai/supportTrainDraft.eval.test.js --testTimeout=60000
+ *   ANTHROPIC_API_KEY=sk-ant-... npx jest backend/tests/ai/supportTrainDraft.eval.test.js --testTimeout=60000
  */
 
 const fixtures = require('./fixtures/supportTrainStories.json');
 
-const HAS_API_KEY = !!process.env.OPENAI_API_KEY;
+const HAS_API_KEY = !!process.env.ANTHROPIC_API_KEY;
 
 // Conditionally load to avoid import errors when mocks interfere
 let draftSupportTrain;
@@ -24,7 +24,7 @@ if (HAS_API_KEY) {
   jest.unmock('../../config/supabaseAdmin');
   jest.unmock('../../utils/logger');
 
-  // We need the real OpenAI client but can stub Supabase for logging
+  // We need the real Claude client but can stub Supabase for logging
   const realSchemas = jest.requireActual('../../services/ai/schemas');
   validateSupportTrainDraft = realSchemas.validateSupportTrainDraft;
 }
@@ -35,7 +35,7 @@ describeIfKey('Support Train Draft — LLM Eval', () => {
   const results = [];
 
   beforeAll(() => {
-    // Load the real service (needs OPENAI_API_KEY in env)
+    // Load the real service (needs ANTHROPIC_API_KEY in env)
     // We require it here so the top-level skip works correctly
     const service = jest.requireActual('../../services/ai/supportTrainDraftService');
     draftSupportTrain = service.draftSupportTrain;

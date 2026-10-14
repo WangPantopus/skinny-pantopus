@@ -21,8 +21,10 @@ PRs, screenshots and chat. Preserve unrelated local work.
   is missing.
 - Keep working screens' layouts, styling and navigation. Improve the experience
   inside the existing design language; don't redesign a working screen
-  wholesale or change the four tabs (Place · Today · Nearby · Mail) without the
-  founder's approval.
+  wholesale or change the tabs without the founder's approval. The founder
+  approved the five-tab bar (Place · Today · Pulse · Plans · Messages) on
+  October 13 for the Pulse build; see
+  [docs/product/pulse-build](docs/product/pulse-build/README.md).
 - Keep privacy and functional repairs separate from presentation changes. Never
   restore private fields to reproduce an old screenshot.
 - Migrations are additive and backward compatible. Never edit an applied

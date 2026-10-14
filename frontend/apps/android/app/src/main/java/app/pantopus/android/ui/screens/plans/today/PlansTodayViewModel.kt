@@ -122,7 +122,12 @@ class PlansTodayViewModel
         ) {
             act(
                 plan.id,
-                done = if (answer == "not_right") "Thanks for telling us. Pantopus will look into it." else "Thanks for telling us.",
+                done =
+                    if (answer == "not_right") {
+                        "Thanks for telling us. Someone from Pantopus will look at it."
+                    } else {
+                        "Thanks. Glad you went."
+                    },
             ) {
                 repository.feedback(plan.id, answer, null).also { result ->
                     if (result is NetworkResult.Success) _ui.update { it.copy(answered = it.answered + (plan.id to answer)) }

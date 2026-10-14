@@ -25,7 +25,7 @@ import java.io.File
  * ```
  *
  * The Composables under test are mounted directly so screenshots don't
- * need a live backend. See `MockHubScreen`, `MockMailboxScreen`, etc. —
+ * need a live backend. See `MockMailboxScreen` etc. —
  * those will land in a follow-up that lifts every screen's preview-data
  * fixture into a screenshot-friendly variant.
  *

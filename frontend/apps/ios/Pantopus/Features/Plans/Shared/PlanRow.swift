@@ -4,7 +4,9 @@
 //
 //  Board P2 "Plan row": the 44 pt kind tile, a one-line title (16/21
 //  semibold), a second line with when, where and the distance band, and
-//  one thing at the end: a status, spots, going, or a chevron.
+//  one thing at the end: a status, spots, going, or a chevron. When the
+//  words wouldn't fit beside a status, the status goes under them instead
+//  of cutting the title or the distance off.
 //
 
 import SwiftUI
@@ -111,8 +113,9 @@ struct PlanRowModel: Identifiable, Equatable {
         let lows = bands.compactMap { ranges[$0]?.0 }
         let highs = bands.compactMap { ranges[$0]?.1 }
         guard let low = lows.min(), let high = highs.max() else { return nil }
-        if low == 0 { return "under \(high + 1)" }
-        return "ages \(low)–\(high)"
+        // Non-breaking spaces: "ages 2–5" never splits across lines.
+        if low == 0 { return "under\u{00A0}\(high + 1)" }
+        return "ages\u{00A0}\(low)–\(high)"
     }
 
     private static func spotsTrailing(_ card: PlanCardDTO) -> PlanRowTrailing {
@@ -153,20 +156,28 @@ struct PlanRow: View {
                 if showsDivider { Divider().overlay(Theme.Color.appBorder) }
                 HStack(spacing: Spacing.s3) {
                     PlanTile(kind: model.kind)
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text(model.title)
-                            .planFont(.rowTitle)
-                            .foregroundStyle(Theme.Color.appText)
-                            .lineLimit(lines)
-                        Text(model.subtitle)
-                            .planFont(.footnote)
-                            .foregroundStyle(Theme.Color.appTextSecondary)
-                            .lineLimit(lines)
+                    if typeSize.isAccessibilitySize {
                         // At the largest text sizes the status goes under the words, which keep the width.
-                        if typeSize.isAccessibilitySize { trailing.padding(.top, Spacing.s1) }
+                        stacked(lines: 4)
+                    } else {
+                        // One line each with the status at the end when they fit (board P2);
+                        // otherwise a status goes under the words and they may take two lines.
+                        ViewThatFits(in: .horizontal) {
+                            HStack(spacing: Spacing.s3) {
+                                words(lines: 1).fixedSize(horizontal: true, vertical: false)
+                                Spacer(minLength: 0)
+                                trailing
+                            }
+                            if case .status = model.trailing {
+                                stacked(lines: 2)
+                            } else {
+                                HStack(spacing: Spacing.s3) {
+                                    words(lines: 2).frame(maxWidth: .infinity, alignment: .leading)
+                                    trailing
+                                }
+                            }
+                        }
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    if !typeSize.isAccessibilitySize { trailing }
                 }
                 .padding(.vertical, 11)
             }
@@ -178,9 +189,26 @@ struct PlanRow: View {
         .accessibilityIdentifier("planRow.\(model.id)")
     }
 
-    /// One line each (board P2); at the largest text sizes they wrap instead of cutting off.
-    private var lines: Int {
-        typeSize.isAccessibilitySize ? 4 : 1
+    private func words(lines: Int) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(model.title)
+                .planFont(.rowTitle)
+                .foregroundStyle(Theme.Color.appText)
+                .lineLimit(lines)
+            Text(model.subtitle)
+                .planFont(.footnote)
+                .foregroundStyle(Theme.Color.appTextSecondary)
+                .lineLimit(lines)
+        }
+    }
+
+    /// The words, with the status under them.
+    private func stacked(lines: Int) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            words(lines: lines)
+            trailing.padding(.top, Spacing.s1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder private var trailing: some View {

@@ -309,7 +309,8 @@ class AddHomeWizardViewModelTest {
                 assertNull(awaitItem())
                 vm.onPrimary()
                 val event = awaitItem()
-                assertEquals(AddHomeOutboundEvent.OpenHomes, event)
+                // Not opened from the Place tab: My homes, with no Home for Your Place to land on.
+                assertEquals(AddHomeOutboundEvent.OpenHomes(homeId = null), event)
                 assertNull(creationFixture.saved)
                 cancelAndConsumeRemainingEvents()
             }

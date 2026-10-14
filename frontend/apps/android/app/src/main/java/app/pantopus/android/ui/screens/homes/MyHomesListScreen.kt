@@ -4,6 +4,9 @@ package app.pantopus.android.ui.screens.homes
 
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -34,8 +37,10 @@ import app.pantopus.android.ui.screens.shared.list_of_rows.FabAction
 import app.pantopus.android.ui.screens.shared.list_of_rows.FabTint
 import app.pantopus.android.ui.screens.shared.list_of_rows.FabVariant
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsScreen
+import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsUiState
 import app.pantopus.android.ui.screens.shared.list_of_rows.TopBarAction
 import app.pantopus.android.ui.theme.PantopusIcon
+import app.pantopus.android.ui.theme.PantopusIconImage
 
 /** Test tag on the My homes list root container. */
 const val MY_HOMES_LIST_TAG = "myHomesList"
@@ -67,6 +72,9 @@ fun MyHomesListScreen(
     onVerifyResidency: ((String) -> Unit)? = null,
     /** Status of an ownership claim already filed for the Home. */
     onOpenWaitingRoom: ((String) -> Unit)? = null,
+    onOpenNotifications: (() -> Unit)? = null,
+    unreadCount: Int = 0,
+    onOpenMenu: (() -> Unit)? = null,
     viewModel: MyHomesListViewModel = hiltViewModel(),
 ) {
     RefreshOnStoreChange(viewModel::recheck)
@@ -114,7 +122,7 @@ fun MyHomesListScreen(
         }
     }
     LaunchedEffect(state) {
-        if (state !is app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsUiState.Loaded) deleteTarget = null
+        if (state !is ListOfRowsUiState.Loaded) deleteTarget = null
     }
 
     LaunchedEffect(pendingEvent) {
@@ -144,6 +152,24 @@ fun MyHomesListScreen(
                         onClick = it,
                     )
                 },
+            extraTopBarAction = {
+                onOpenNotifications?.let { open ->
+                    IconButton(onClick = open, modifier = Modifier.testTag("place.notifications")) {
+                        BadgedBox(badge = { if (unreadCount > 0) Badge() }) {
+                            PantopusIconImage(
+                                icon = PantopusIcon.Bell,
+                                contentDescription = if (unreadCount > 0) "Notifications, $unreadCount unread" else "Notifications",
+                            )
+                        }
+                    }
+                }
+                onOpenMenu?.let { open ->
+                    IconButton(onClick = open, modifier = Modifier.testTag("place.menu")) {
+                        PantopusIconImage(icon = PantopusIcon.Menu, contentDescription = "Menu")
+                    }
+                }
+            },
+            // One add control: with no rows, the empty state's button is the add action.
             fab =
                 FabAction(
                     icon = PantopusIcon.PlusCircle,
@@ -151,7 +177,7 @@ fun MyHomesListScreen(
                     variant = FabVariant.SecondaryCreate,
                     tint = FabTint.Home,
                     onClick = onAddHome,
-                ),
+                ).takeIf { (state as? ListOfRowsUiState.Loaded)?.sections?.any { it.rows.isNotEmpty() } == true },
             onBack = onBack,
             banner = banner,
             refreshing = refreshing,

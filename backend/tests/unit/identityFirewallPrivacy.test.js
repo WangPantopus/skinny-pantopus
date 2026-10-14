@@ -588,14 +588,14 @@ describe('Identity Firewall two-user privacy contract', () => {
       expect.objectContaining({ post_id: postId, user_id: USER_B, comment: 'Looks useful' }),
     ]));
 
+    // A followers-only post has no link that works outside the app, so a follower's Share records nothing.
     const shareRes = await request(app)
       .post(`/api/posts/${postId}/share`)
       .set('x-test-user-id', USER_B)
       .send({ shareType: 'external' });
-    expect(shareRes.status).toBe(200);
-    expect(getTable('PostShare')).toEqual(expect.arrayContaining([
-      expect.objectContaining({ post_id: postId, user_id: USER_B, share_type: 'external' }),
-    ]));
+    expect(shareRes.status).toBe(403);
+    expect(shareRes.body.code).toBe('SHARE_NOT_ALLOWED');
+    expect(getTable('PostShare')).toHaveLength(0);
 
     const reportRes = await request(app)
       .post(`/api/posts/${postId}/report`)

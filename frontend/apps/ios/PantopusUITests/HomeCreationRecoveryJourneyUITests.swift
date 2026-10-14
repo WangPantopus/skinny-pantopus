@@ -171,8 +171,9 @@ final class HomeCreationRecoveryJourneyUITests: XCTestCase {
             XCTAssertFalse(frame.isEmpty)
             app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: frame.midX, dy: frame.midY)).tap()
         }
-        if !element("hubAvatarButton").waitForExistence(timeout: 2) { try press(element("place.back")) }
-        try press(element("hubAvatarButton"))
+        if !element("place.menu").waitForExistence(timeout: 2) { try press(element("place.back")) }
+        try press(element("place.menu"))
+        try press(element("navDrawer.contextPill.profile"))
         try press(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "My homes")).firstMatch)
         try press(app.buttons["Add a home"].firstMatch)
     }
@@ -186,6 +187,9 @@ final class HomeCreationRecoveryJourneyUITests: XCTestCase {
     }
 
     private func requirePrivateHome(_ home: [String: Any]) throws {
+        // Add Home ends on Your Place for the new Home; its row is in My homes.
+        try press(element("place.menu"))
+        try press(element("navDrawer.item.my-homes"))
         XCTAssertTrue(element("myHomesList").waitForExistence(timeout: 20))
         let id = try XCTUnwrap(home["id"] as? String)
         let destination = app.buttons["myHomes.row_" + id + ".continue"]

@@ -277,10 +277,10 @@ class ConnectionsViewModelTest {
             assertEquals("req1", loaded.sections.first().rows.first().id)
         }
 
-    // MARK: - Accept (optimistic)
+    // MARK: - Accept (confirmed)
 
     @Test
-    fun accept_optimistically_removes_pending_and_bumps_all() =
+    fun accept_confirmation_removes_pending_and_bumps_all() =
         runTest {
             coEvery { repo.list(any(), any(), any(), any()) } returns NetworkResult.Success(acceptedTwo)
             coEvery { repo.pendingRequests(any()) } returns NetworkResult.Success(pendingOne)
@@ -295,7 +295,7 @@ class ConnectionsViewModelTest {
         }
 
     @Test
-    fun accept_rolls_back_on_failure() =
+    fun accept_failure_keeps_pending() =
         runTest {
             coEvery { repo.list(any(), any(), any(), any()) } returns NetworkResult.Success(acceptedTwo)
             coEvery { repo.pendingRequests(any()) } returns NetworkResult.Success(pendingOne)
@@ -308,10 +308,10 @@ class ConnectionsViewModelTest {
             assertEquals(1, vm.tabs.value[2].count)
         }
 
-    // MARK: - Reject (optimistic)
+    // MARK: - Reject (confirmed)
 
     @Test
-    fun reject_optimistically_removes_pending() =
+    fun reject_confirmation_removes_pending() =
         runTest {
             coEvery { repo.list(any(), any(), any(), any()) } returns NetworkResult.Success(acceptedTwo)
             coEvery { repo.pendingRequests(any()) } returns NetworkResult.Success(pendingOne)
@@ -325,7 +325,7 @@ class ConnectionsViewModelTest {
         }
 
     @Test
-    fun reject_rolls_back_on_failure() =
+    fun reject_failure_keeps_pending() =
         runTest {
             coEvery { repo.list(any(), any(), any(), any()) } returns NetworkResult.Success(acceptedTwo)
             coEvery { repo.pendingRequests(any()) } returns NetworkResult.Success(pendingOne)

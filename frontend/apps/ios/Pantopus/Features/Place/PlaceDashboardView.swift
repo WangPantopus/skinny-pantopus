@@ -2,13 +2,12 @@
 //  PlaceDashboardView.swift
 //  Pantopus
 //
-//  C1 / C1a — the assembled Place dashboard. Ported from the design kit
-//  `place-dashboard.jsx` + `place-dashboard-claimed.jsx`. The app keeps
-//  its existing 5-tab bar, so the designed in-screen PlaceTabBar is
-//  intentionally omitted; this surface lives inside the Home tab.
-//  Verified (T4) shows the green avatar; claimed (T3) shows the slate
-//  "Claimed" avatar + a verify-nudge banner + a "Locked until you
-//  verify" group.
+//  C1 / C1a — the assembled Place dashboard, the Place tab's root for a
+//  Home the person can open. Ported from the design kit
+//  `place-dashboard.jsx` + `place-dashboard-claimed.jsx`. A chip beside
+//  the title says where the person stands (Verified, Claimed or Private
+//  setup); before verification a verify banner and a "Locked until you
+//  verify" group lead to it. The address opens the person's homes.
 //
 
 import SwiftUI
@@ -23,10 +22,23 @@ struct PlaceDashboardView: View {
     @State private var ballotGovernments: BallotGovernmentsSheet?
 
     private let isActive: Bool
+    /// The Place tab's root has nothing to go back to: its loading and error
+    /// states show the bell instead of Back.
+    private let isRoot: Bool
+    /// Changes when the Place tab is tapped again on this dashboard: back to the top.
+    private let scrollToTop: UUID?
     private let onOpenMenu: () -> Void
 
-    init(viewModel: PlaceDashboardViewModel, isActive: Bool = true, onOpenMenu: @escaping () -> Void = {}) {
+    init(
+        viewModel: PlaceDashboardViewModel,
+        isActive: Bool = true,
+        isRoot: Bool = false,
+        scrollToTop: UUID? = nil,
+        onOpenMenu: @escaping () -> Void = {}
+    ) {
         self.isActive = isActive
+        self.isRoot = isRoot
+        self.scrollToTop = scrollToTop
         self.onOpenMenu = onOpenMenu
         _viewModel = State(initialValue: viewModel)
     }
@@ -63,9 +75,14 @@ struct PlaceDashboardView: View {
                 Color.clear.frame(height: 0).background(Theme.Color.appBg.ignoresSafeArea(edges: .top))
             } else {
                 HStack {
-                    Button { dismiss() } label: { Label("Back", systemImage: "chevron.left") }
-                        .frame(minHeight: 44).accessibilityIdentifier("place.back")
-                    Spacer()
+                    if isRoot {
+                        Spacer()
+                        PlaceBellButton(unreadCount: viewModel.unreadCount, action: viewModel.onOpenNotifications)
+                    } else {
+                        Button { dismiss() } label: { Label("Back", systemImage: "chevron.left") }
+                            .frame(minHeight: 44).accessibilityIdentifier("place.back")
+                        Spacer()
+                    }
                     Button(action: onOpenMenu) { Label("Menu", systemImage: "line.3.horizontal") }
                         .frame(minHeight: 44).accessibilityIdentifier("place.menu")
                 }
@@ -97,6 +114,10 @@ struct PlaceDashboardView: View {
                     onAddPlace: {
                         showSwitcher = false
                         viewModel.onAddPlace()
+                    },
+                    onManageHomes: {
+                        showSwitcher = false
+                        viewModel.onManageHomes()
                     },
                     onClose: { showSwitcher = false }
                 )
@@ -131,139 +152,174 @@ struct PlaceDashboardView: View {
 
     private func loaded(_ intel: PlaceIntelligence) -> some View {
         let isVerified = intel.tier == .t4
-        // Guests and service providers aren't residents, so they get no verify prompts.
-        let isClaimed = intel.tier == .t3 && intel.verifyAvailable != false
+        // Verifying is the next step for a claimed resident and for a private
+        // setup (by mail). Guests and service providers can't verify, so they
+        // get no verify prompts; older servers don't say, and claimed decides.
+        let showsVerify = !isVerified && (intel.verifyAvailable ?? (intel.tier == .t3))
         let pulse = PlacePresentation.derivePulse(intel)
-        return ScrollView {
-            VStack(spacing: 0) {
-                header(intel: intel, isVerified: isVerified)
-                    .padding(.horizontal, 18)
-                    .padding(.top, Spacing.s2)
+        return ScrollViewReader { proxy in
+            ScrollView {
+                VStack(spacing: 0) {
+                    header(intel: intel)
+                        .padding(.horizontal, 18)
+                        .padding(.top, Spacing.s2)
+                        .id(Self.topAnchor)
 
-                // One order on both apps: verify (the claimed resident's next step), Home tools,
-                // movers, Today's Pulse, then the privacy line.
-                if isClaimed {
-                    PlaceVerifyBanner { showVerify = true }
-                        .padding(.horizontal, 16)
-                        .padding(.top, Spacing.s3)
+                    // One order on both apps: verify (the resident's next step), Home tools,
+                    // movers, Today's Pulse, then the privacy line.
+                    if showsVerify {
+                        PlaceVerifyBanner { showVerify = true }
+                            .padding(.horizontal, 16)
+                            .padding(.top, Spacing.s3)
+                    }
+
+                    PlaceMessagesActionRow(
+                        icon: .house,
+                        title: "Home tools",
+                        subtitle: "Tasks and tools for your household."
+                    ) {
+                        viewModel.reloadOnReturn()
+                        viewModel.onOpenHubHome()
+                    }
+                    .padding(.horizontal, Spacing.s4)
+                    .padding(.top, Spacing.s3)
+                    .accessibilityIdentifier("place.homeTools")
+
+                    // Movers first (Wedge v2 D5): the first-week card leads for a recent move-in.
+                    JustMovedCard(
+                        homeId: viewModel.homeId,
+                        moveInDate: viewModel.moveInDate,
+                        needsPickupDay: intel.groups.flatMap(\.sections).compactMap(\.addressCalendar).first?.needsPickupDay,
+                        onOpenDetail: viewModel.onOpenDetail,
+                        onOpenMailDay: viewModel.onOpenMailDay
+                    )
+                    // Its ticks and dismissal are per Home: another Home starts fresh.
+                    .id(viewModel.homeId)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 14)
+
+                    PlaceHeroCard(
+                        variant: pulse.variant,
+                        chip: pulse.chip,
+                        heroIcon: pulse.heroIcon,
+                        headline: pulse.title,
+                        nudgeIcon: pulse.nudgeIcon,
+                        nudgeText: pulse.nudgeText ?? "",
+                        // Both labelled: an unlabelled trailing closure fills only `onTap`, which left the nudge row's
+                        // own button with no action (Android opens Pulse from either).
+                        onNudgeTap: { viewModel.onOpenPulse() },
+                        onTap: { viewModel.onOpenPulse() }
+                    )
+                    .padding(.horizontal, 16)
+                    .padding(.top, showsVerify ? 12 : 14)
+
+                    VStack(spacing: 24) {
+                        // The privacy mirror (Wedge v2 §2): one tap to see yourself as a neighbor does.
+                        privacyMirrorRow
+                        if isVerified {
+                            messagesEntry(address: intel.place.label)
+                        }
+                        // Ballot P0 (ballot_p0): the "Your ballot" card leads under
+                        // "This season" and leaves the civic group.
+                        if let ballot = Self.ballot(in: intel) {
+                            seasonBlock(ballot.card, asOf: ballot.asOf)
+                        }
+                        ForEach(Self.groups(intel), id: \.group) { group in
+                            groupBlock(
+                                group,
+                                canVerify: !(intel.tier == .t3 && intel.verifyAvailable == false),
+                                verifiesFirst: intel.verifiesFirst
+                            )
+                        }
+                        identityEntry
+                        if showsVerify {
+                            verifyLockedGroup
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 20)
+                    .padding(.bottom, Spacing.s10)
                 }
-
-                PlaceMessagesActionRow(
-                    icon: .house,
-                    title: "Home tools",
-                    subtitle: "Tasks and tools for your household."
-                ) {
-                    viewModel.reloadOnReturn()
-                    viewModel.onOpenHubHome()
-                }
-                .padding(.horizontal, Spacing.s4)
-                .padding(.top, Spacing.s3)
-                .accessibilityIdentifier("place.homeTools")
-
-                // Movers first (Wedge v2 D5): the first-week card leads for a recent move-in.
-                JustMovedCard(
-                    homeId: viewModel.homeId,
-                    moveInDate: viewModel.moveInDate,
-                    needsPickupDay: intel.groups.flatMap(\.sections).compactMap(\.addressCalendar).first?.needsPickupDay,
-                    onOpenDetail: viewModel.onOpenDetail,
-                    onOpenMailDay: viewModel.onOpenMailDay
-                )
-                // Its ticks and dismissal are per Home: another Home starts fresh.
-                .id(viewModel.homeId)
-                .padding(.horizontal, 16)
-                .padding(.top, 14)
-
-                PlaceHeroCard(
-                    variant: pulse.variant,
-                    chip: pulse.chip,
-                    heroIcon: pulse.heroIcon,
-                    headline: pulse.title,
-                    nudgeIcon: pulse.nudgeIcon,
-                    nudgeText: pulse.nudgeText ?? "",
-                    // Both labelled: an unlabelled trailing closure fills only `onTap`, which left the nudge row's
-                    // own button with no action (Android opens Pulse from either).
-                    onNudgeTap: { viewModel.onOpenPulse() },
-                    onTap: { viewModel.onOpenPulse() }
-                )
-                .padding(.horizontal, 16)
-                .padding(.top, isClaimed ? 12 : 14)
-
-                VStack(spacing: 24) {
-                    // The privacy mirror (Wedge v2 §2): one tap to see yourself as a neighbor does.
-                    privacyMirrorRow
-                    if isVerified {
-                        messagesEntry(address: intel.place.label)
-                    }
-                    // Ballot P0 (ballot_p0): the "Your ballot" card leads under
-                    // "This season" and leaves the civic group.
-                    if let ballot = Self.ballot(in: intel) {
-                        seasonBlock(ballot.card, asOf: ballot.asOf)
-                    }
-                    ForEach(Self.groups(intel), id: \.group) { group in
-                        groupBlock(
-                            group,
-                            canVerify: !(intel.tier == .t3 && intel.verifyAvailable == false),
-                            verifiesFirst: intel.verifiesFirst
-                        )
-                    }
-                    identityEntry
-                    if isClaimed {
-                        verifyLockedGroup
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.top, 20)
-                .padding(.bottom, Spacing.s10)
+            }
+            .onChange(of: scrollToTop) { _, _ in
+                withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo(Self.topAnchor, anchor: .top) }
             }
         }
     }
 
+    private static let topAnchor = "place.top"
+
     // MARK: - Header
 
-    private func header(intel: PlaceIntelligence, isVerified: Bool) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 5) {
+    /// "Your Place", where the person stands at this Home, the bell and the
+    /// menu; under them the address, which opens their homes.
+    private func header(intel: PlaceIntelligence) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .center, spacing: 8) {
                 Text("Your Place")
                     .font(.system(size: 28, weight: .bold))
                     .kerning(-0.56)
                     .foregroundStyle(Theme.Color.appText)
-                HStack(spacing: 5) {
-                    Icon(.mapPin, size: 14, strokeWidth: 2, color: Theme.Color.appTextMuted)
-                    Text(intel.place.label)
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(Theme.Color.appTextSecondary)
-                        .lineLimit(1)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .layoutPriority(1)
+                    .accessibilityAddTraits(.isHeader)
+                if let status = Self.status(intel) {
+                    PlaceChip(model: status)
+                        .accessibilityIdentifier("place.status")
                 }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            Button { showSwitcher = true } label: {
-                Group {
-                    if isVerified {
-                        PlaceVerifiedAvatar(initials: initials(intel.place.label), size: 40)
-                    } else {
-                        PlaceClaimedAvatar(initials: initials(intel.place.label), size: 40)
+                Spacer(minLength: 0)
+                // Bell + menu sit together; the dot shows anything unread.
+                HStack(spacing: 0) {
+                    PlaceBellButton(unreadCount: viewModel.unreadCount, action: viewModel.onOpenNotifications)
+                    Button(action: onOpenMenu) {
+                        Icon(.menu, size: 20, color: Theme.Color.appText)
+                            .frame(width: Spacing.s12, height: Spacing.s12)
+                            .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Menu")
+                    .accessibilityIdentifier("place.menu")
                 }
-                .frame(minWidth: 44, minHeight: 44)
-                .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Switch place")
-
-            // Bell + menu sit together, as on the Hub; the dot is the Hub bell's.
-            HStack(spacing: 0) {
-                PlaceBellButton(unreadCount: viewModel.unreadCount, action: viewModel.onOpenNotifications)
-                Button(action: onOpenMenu) {
-                    Icon(.menu, size: 20, color: Theme.Color.appText)
-                        .frame(width: Spacing.s12, height: Spacing.s12)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Menu")
-                .accessibilityIdentifier("place.menu")
-            }
+            addressButton(intel.place.label)
         }
+    }
+
+    /// Where the person stands at this Home. Guests and service providers
+    /// aren't residents: no status.
+    static func status(_ intel: PlaceIntelligence) -> PlaceChipModel? {
+        guard intel.viewer?.role != "nonresident" else { return nil }
+        return switch intel.tier {
+        case .t4: PlaceChipModel(tone: .success, text: "Verified", icon: .shieldCheck)
+        case .t3: PlaceChipModel(tone: .warning, text: "Claimed", icon: .home)
+        default: PlaceChipModel(tone: .neutral, text: "Private setup", icon: .home)
+        }
+    }
+
+    /// The address is the way to your homes: switch, add or manage them.
+    private func addressButton(_ label: String) -> some View {
+        Button { showSwitcher = true } label: {
+            HStack(spacing: 5) {
+                Icon(.mapPin, size: 14, strokeWidth: 2, color: Theme.Color.appTextSecondary)
+                Text(label)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(Theme.Color.appText)
+                    .lineLimit(1)
+                Icon(.chevronDown, size: 14, strokeWidth: 2.25, color: Theme.Color.appTextSecondary)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(Theme.Color.appSurfaceSunken)
+            .clipShape(Capsule())
+            .overlay(Capsule().strokeBorder(Theme.Color.appBorder, lineWidth: 1))
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Your homes, \(label)")
+        .accessibilityHint("Switch home or add a home")
+        .accessibilityIdentifier("place.addressSwitcher")
     }
 
     // MARK: - This season (Ballot P0)
@@ -397,14 +453,6 @@ struct PlaceDashboardView: View {
             }
         }
     }
-
-    private func initials(_ label: String) -> String {
-        // Derive a 2-char monogram from the address's street name words.
-        let words = label.split { $0 == " " || $0 == "," }
-            .filter { $0.first?.isLetter ?? false }
-        let letters = words.prefix(2).compactMap(\.first).map(String.init)
-        return letters.isEmpty ? "PL" : letters.joined().uppercased()
-    }
 }
 
 /// The governments view's payload, identified so `.sheet(item:)` keeps its
@@ -416,54 +464,7 @@ private struct BallotGovernmentsSheet: Identifiable {
     }
 }
 
-// MARK: - Claimed avatar (slate disc + amber "Claimed" pill)
-
-struct PlaceClaimedAvatar: View {
-    var initials: String = "RC"
-    var size: CGFloat = 40
-
-    var body: some View {
-        VStack(spacing: 6) {
-            ZStack(alignment: .bottomTrailing) {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [Theme.Color.slate, Theme.Color.appTextSecondary],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: size, height: size)
-                    .overlay(
-                        Text(initials)
-                            .font(.system(size: size * 0.34, weight: .bold))
-                            .kerning(0.2)
-                            .foregroundStyle(Theme.Color.appTextInverse)
-                    )
-                Circle()
-                    .fill(Theme.Color.warningSolid)
-                    .frame(width: size * 0.42, height: size * 0.42)
-                    .overlay(
-                        Icon(.home, size: size * 0.22, strokeWidth: 2.75, color: Theme.Color.appTextInverse)
-                    )
-                    .overlay(Circle().strokeBorder(Theme.Color.appSurface, lineWidth: 2))
-                    .offset(x: 2, y: 2)
-            }
-            Text("CLAIMED")
-                .font(.system(size: 10, weight: .bold))
-                .kerning(0.4)
-                .foregroundStyle(Theme.Color.warning)
-                .padding(.horizontal, 7)
-                .padding(.vertical, 2)
-                .background(Theme.Color.warningBg)
-                .clipShape(Capsule())
-                .overlay(Capsule().strokeBorder(Theme.Color.warningLight, lineWidth: 1))
-        }
-        .accessibilityLabel("Claimed place")
-    }
-}
-
-// MARK: - Verify banner (sky-tinted nudge, claimed only)
+// MARK: - Verify banner (sky-tinted nudge, before verification)
 
 struct PlaceVerifyBanner: View {
     var onTap: () -> Void
