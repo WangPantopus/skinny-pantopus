@@ -94,7 +94,7 @@ class PulseRepository
         suspend fun newCount(
             query: PulseFeedQuery,
             after: String?,
-        ): NetworkResult<PulseNewCountResponse> = safeApiCall { api.newCount(view = query.view, topic = query.topic, after = after) }
+        ): NetworkResult<PulseNewCountResponse> = safeApiCall { api.newCount(view = query.view, topic = query.topic, after = after, areaId = query.areaId) }
 
         /** The end card has been on screen: advance the last-seen marker for [view] through [through]. */
         suspend fun markSeen(

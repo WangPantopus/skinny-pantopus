@@ -57,6 +57,7 @@ interface PulseApi {
         @Query("view") view: String? = null,
         @Query("topic") topic: String? = null,
         @Query("after") after: String? = null,
+        @Query("area_id") areaId: String? = null,
     ): PulseNewCountResponse
 
     /** `POST /api/pulse/feed/seen` (contract 2.3): advance the last-seen marker once the end card was on screen. */

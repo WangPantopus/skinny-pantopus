@@ -210,7 +210,9 @@ class PulsePageViewModel
                 savedPosts.remove(id)
                 completedActions.remove(id)
             }
-            val page = copy.response.toPage(readAt = copy.readAt)
+            // Action completion uses the local request clock above; count/seen use only the server boundary.
+            val snapshot = copy.response.readAt?.let { runCatching { Instant.parse(it).toString() }.getOrNull() }
+            val page = copy.response.toPage(readAt = snapshot)
             _state.value = PulsePageUiState.Loaded(page.withToggles())
         }
 
@@ -238,11 +240,11 @@ class PulsePageViewModel
         fun pollNew() {
             val loaded = _state.value as? PulsePageUiState.Loaded ?: return
             val q = _query.value
-            // The published count endpoint has no area parameter. Never show the home town's count in another area.
-            if (q.areaId != null || polling?.isActive == true) return
+            val after = loaded.content.readAt ?: return
+            if (polling?.isActive == true) return
             polling =
                 viewModelScope.launch {
-                    val result = repository.newCount(q, after = loaded.content.readAt)
+                    val result = repository.newCount(q, after = after)
                     val current = _state.value as? PulsePageUiState.Loaded
                     if (result is NetworkResult.Success && q == _query.value && current?.content?.readAt == loaded.content.readAt) {
                         _newCount.value = (result.data.count ?: 0).coerceAtLeast(0)
@@ -254,13 +256,15 @@ class PulsePageViewModel
         fun endShown() {
             val loaded = _state.value as? PulsePageUiState.Loaded ?: return
             val q = _query.value
+            val through = loaded.content.readAt ?: return
+            // Seen is per view, so a filtered or other-area page must not acknowledge unread home conversations.
             if (q.topic != null || q.areaId != null) return
             if (_newCount.value > 0 || markingSeen?.isActive == true) return
             if (!loaded.content.end.caughtUp || seenFor == loaded.content.readAt) return
             markingSeen =
                 viewModelScope.launch {
-                    val result = repository.markSeen(q.view, through = loaded.content.readAt)
-                    if (result is NetworkResult.Success && q == _query.value) seenFor = loaded.content.readAt
+                    val result = repository.markSeen(q.view, through = through)
+                    if (result is NetworkResult.Success && result.data.ok == true && q == _query.value) seenFor = through
                 }
         }
 

@@ -18,6 +18,8 @@ data class PulseFeedCopy(
 @JsonClass(generateAdapter = true)
 data class PulseFeedResponse(
     val view: String? = null,
+    /** Server snapshot boundary; never substitute the device clock when acknowledging a page. */
+    @Json(name = "read_at") val readAt: String? = null,
     val area: PulseAreaDto? = null,
     /** The area pill's choices; streets and neighborhoods appear only when they are open. */
     @Json(name = "areas_available") val areasAvailable: List<PulseAreaOptionDto>? = null,
@@ -194,6 +196,7 @@ data class PulseViewerDto(
     @Json(name = "can_mark_helpful") val canMarkHelpful: Boolean? = null,
     val saved: Boolean? = null,
     @Json(name = "can_keep_open") val canKeepOpen: Boolean? = null,
+    @Json(name = "can_share") val canShare: Boolean? = null,
 )
 
 @JsonClass(generateAdapter = true)
@@ -219,4 +222,6 @@ data class PulseSeenRequest(
 @JsonClass(generateAdapter = true)
 data class PulseAckResponse(
     val ok: Boolean? = null,
+    /** The server-accepted monotonic seen marker, when acknowledging a page. */
+    val through: String? = null,
 )

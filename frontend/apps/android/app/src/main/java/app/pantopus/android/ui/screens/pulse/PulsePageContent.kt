@@ -89,8 +89,8 @@ data class PulsePageContent(
     val groups: List<PulseGroupUi>,
     val end: PulseEndUi,
     val quiet: PulseQuietUi?,
-    /** When this read was made (the `after` of the "↑ N new conversations" poll), as an ISO time. */
-    val readAt: String,
+    /** Server snapshot time for count/seen; absent on older cached pages. */
+    val readAt: String?,
 )
 
 private val LABEL_TEXT =
@@ -241,7 +241,7 @@ internal fun PulsePostDto.toCard(
         isCurator = author?.isCurator == true || author?.label == "pantopus",
         actions = overflowActions(),
         areaId = this.about?.areaId,
-        canShare = readScope == "public",
+        canShare = readScope == "public" && viewer?.canShare == true,
         description =
             listOfNotNull(
                 listOfNotNull(name, label?.first, meta.ifEmpty { null }).joinToString(", "),
@@ -276,7 +276,7 @@ private fun PulsePostDto.overflowActions(): PulsePostActions {
 
 /** The response as the page: groups with headers only as the response has them, the end card and the quiet-state card. */
 internal fun PulseFeedResponse.toPage(
-    readAt: String,
+    readAt: String?,
     now: Instant = Instant.now(),
     zone: ZoneId = ZoneId.systemDefault(),
 ): PulsePageContent {
