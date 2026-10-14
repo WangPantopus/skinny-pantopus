@@ -250,7 +250,8 @@ private fun GoingSection(
             )
         }
         guests.forEachIndexed { index, person ->
-            GuestRow(person, first = index == 0, atHome = plan.isAtHome, busy = busy, onRemove = onRemove)
+            // Nobody can be removed from a plan that's over (as on iOS, which drops the list there).
+            GuestRow(person, first = index == 0, atHome = plan.isAtHome, busy = busy, onRemove = onRemove.takeUnless { closed })
         }
     }
 }
@@ -261,7 +262,7 @@ private fun GuestRow(
     first: Boolean,
     atHome: Boolean,
     busy: Boolean,
-    onRemove: (PlanPersonDto) -> Unit,
+    onRemove: ((PlanPersonDto) -> Unit)?,
 ) {
     var menu by remember { mutableStateOf(false) }
     var confirm by remember { mutableStateOf(false) }
@@ -302,7 +303,7 @@ private fun GuestRow(
                 )
                 Text(text = subtitle, style = PantopusTextStyle.small.copy(fontSize = 13.sp), color = PantopusColors.appTextSecondary)
             }
-            if (person.requestId != null) {
+            if (person.requestId != null && onRemove != null) {
                 Box {
                     PlanRoundButton(
                         icon = PantopusIcon.MoreHorizontal,
@@ -339,7 +340,7 @@ private fun GuestRow(
             confirmButton = {
                 TextButton(onClick = {
                     confirm = false
-                    onRemove(person)
+                    onRemove?.invoke(person)
                 }) { Text("Remove", color = PantopusColors.error) }
             },
             dismissButton = { TextButton(onClick = { confirm = false }) { Text("Not now") } },
