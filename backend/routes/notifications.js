@@ -18,6 +18,7 @@ const logger = require('../utils/logger');
 const { NOTIFICATION_LIST } = require('../utils/columns');
 const pushService = require('../services/pushService');
 const badgeService = require('../services/badgeService');
+const { notificationBlockFilter } = require('../services/blockService');
 const { excludeHiddenLaunchNotifications, isLaunchFeatureEnabled } = require('../utils/featureFlags');
 
 const FIREWALL_VALUES = ['personal', 'audience', 'platform'];
@@ -161,6 +162,9 @@ router.get('/', verifyToken, async (req, res) => {
     query = applyNotificationFilters(query, { contextType, contextId, contexts });
     // Launch cuts: notifications that only a hidden feature produces are left out.
     query = excludeHiddenLaunchNotifications(query);
+    // So are notices from someone across a block, in either direction.
+    const withoutBlocked = await notificationBlockFilter(userId);
+    query = withoutBlocked(query);
 
     // Get unread count (always, for the badge), read alongside the page
     let countQuery = supabaseAdmin
@@ -170,7 +174,7 @@ router.get('/', verifyToken, async (req, res) => {
       .eq('is_read', false);
 
     countQuery = applyNotificationFilters(countQuery, { contextType, contextId, contexts });
-    countQuery = excludeHiddenLaunchNotifications(countQuery);
+    countQuery = withoutBlocked(excludeHiddenLaunchNotifications(countQuery));
 
     const [{ data: notifications, error }, { count: unreadCount, error: countErr }] = await Promise.all([query, countQuery]);
 
@@ -206,12 +210,14 @@ router.get('/unread-count', verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
 
-    // Launch cuts: hidden notification types stay out of the badge counts.
-    const baseFilter = (q) => excludeHiddenLaunchNotifications(q
+    // Launch cuts: hidden notification types stay out of the badge counts, and so do notices from
+    // someone across a block.
+    const withoutBlocked = await notificationBlockFilter(userId);
+    const baseFilter = (q) => withoutBlocked(excludeHiddenLaunchNotifications(q
       .from('Notification')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', userId)
-      .eq('is_read', false));
+      .eq('is_read', false)));
 
     const [totalRes, personalRes, audienceRes, platformRes] = await Promise.all([
       baseFilter(supabaseAdmin),
