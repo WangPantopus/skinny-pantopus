@@ -7,6 +7,13 @@ import com.squareup.moshi.JsonClass
 // until PB's routes are on master (hold point H4), and every enum-like value is a plain string: the screens map the
 // values they know and fall back to a generic reading for the rest, so a newer backend never breaks an older build.
 
+/** Local saved page, including the request's start time. Reopening a copy never advances its read boundary. */
+@JsonClass(generateAdapter = true)
+data class PulseFeedCopy(
+    val response: PulseFeedResponse,
+    val readAt: String,
+)
+
 /** `GET /api/pulse/feed` (contract 2.3). */
 @JsonClass(generateAdapter = true)
 data class PulseFeedResponse(
@@ -169,6 +176,8 @@ data class PulseViewerDto(
     @Json(name = "is_author") val isAuthor: Boolean? = null,
     val following: Boolean? = null,
     @Json(name = "can_mark_helpful") val canMarkHelpful: Boolean? = null,
+    val saved: Boolean? = null,
+    @Json(name = "can_keep_open") val canKeepOpen: Boolean? = null,
 )
 
 @JsonClass(generateAdapter = true)

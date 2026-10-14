@@ -2,7 +2,7 @@ package app.pantopus.android.ui.screens.pulse
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import app.pantopus.android.data.api.models.pulse.PulseFeedResponse
+import app.pantopus.android.data.api.models.pulse.PulseFeedCopy
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.api.net.refusesStoredCopy
@@ -78,10 +78,16 @@ class PulsePageViewModel
         val toast: StateFlow<String?> = _toast.asStateFlow()
 
         /** Posts the viewer toggled before the server answers: id to the action's new done state. */
-        private val toggled = mutableMapOf<String, Boolean>()
+        private data class ActionOverride(val done: Boolean, val goingCount: Int?)
+
+        private val toggled = mutableMapOf<String, ActionOverride>()
+        private val completedActions = mutableMapOf<String, Instant>()
+        private val pendingActions = mutableSetOf<String>()
         private var reading: Job? = null
+        private var readingEarlier: Job? = null
+        private var polling: Job? = null
+        private var markingSeen: Job? = null
         private var seenFor: String? = null
-        private var lastResponse: PulseFeedResponse? = null
 
         /** Tab entry and every return: what is on screen stays, a first entry shows the saved copy at once, and the page reads again once it is out of date. */
         fun load() {
@@ -96,6 +102,8 @@ class PulsePageViewModel
 
         /** Pull to refresh, Retry and the new-conversations pill: read now. */
         fun refresh() {
+            readingEarlier?.cancel()
+            _earlier.value = PulseEarlierState.Idle
             if (_state.value !is PulsePageUiState.Loaded) _state.value = PulsePageUiState.Loading
             read(force = true)
         }
@@ -118,11 +126,16 @@ class PulsePageViewModel
         }
 
         private fun switchTo(next: PulseFeedQuery) {
+            reading?.cancel()
+            reading = null
+            readingEarlier?.cancel()
+            polling?.cancel()
+            markingSeen?.cancel()
             _query.value = next
             _newCount.value = 0
             _earlier.value = PulseEarlierState.Idle
             seenFor = null
-            lastResponse = null
+            _refreshNotice.value = null
             val copy = repository.feedCopy(next)
             if (copy != null) show(copy) else _state.value = PulsePageUiState.Loading
             read(force = false)
@@ -139,12 +152,12 @@ class PulsePageViewModel
                         if (q != _query.value) return@launch
                         apply(stored)
                     } finally {
-                        _refreshing.value = false
+                        if (q == _query.value) _refreshing.value = false
                     }
                 }
         }
 
-        private fun apply(stored: Stored<PulseFeedResponse>) {
+        private fun apply(stored: Stored<PulseFeedCopy>) {
             val data = stored.data
             _refreshNotice.value = if (stored.showsRefreshFailure(StoreKind.NEARBY)) RefreshNotice(stored.fetchedAt, ::refresh) else null
             when {
@@ -164,10 +177,13 @@ class PulsePageViewModel
             }
         }
 
-        private fun show(response: PulseFeedResponse) {
-            lastResponse = response
-            val now = Instant.now()
-            val page = response.toPage(readAt = now.toString(), now = now)
+        private fun show(copy: PulseFeedCopy) {
+            val through = runCatching { Instant.parse(copy.readAt) }.getOrNull()
+            completedActions.filterValues { through != null && !it.isAfter(through) }.keys.toList().forEach { id ->
+                toggled.remove(id)
+                completedActions.remove(id)
+            }
+            val page = copy.response.toPage(readAt = copy.readAt)
             _state.value = PulsePageUiState.Loaded(page.withToggles())
         }
 
@@ -180,7 +196,7 @@ class PulsePageViewModel
                         group.copy(
                             cards =
                                 group.cards.map { card ->
-                                    toggled[card.id]?.let { done -> card.copy(actionDone = done) } ?: card
+                                    toggled[card.id]?.let { card.withAction(it) } ?: card
                                 },
                         )
                     },
@@ -191,18 +207,29 @@ class PulsePageViewModel
         fun pollNew() {
             val loaded = _state.value as? PulsePageUiState.Loaded ?: return
             val q = _query.value
-            viewModelScope.launch {
-                val result = repository.newCount(q, after = loaded.content.readAt)
-                if (result is NetworkResult.Success && q == _query.value) _newCount.value = result.data.count ?: 0
-            }
+            // The published count endpoint has no area parameter. Never show the home town's count in another area.
+            if (q.areaId != null || polling?.isActive == true) return
+            polling =
+                viewModelScope.launch {
+                    val result = repository.newCount(q, after = loaded.content.readAt)
+                    val current = _state.value as? PulsePageUiState.Loaded
+                    if (result is NetworkResult.Success && q == _query.value && current?.content?.readAt == loaded.content.readAt) {
+                        _newCount.value = (result.data.count ?: 0).coerceAtLeast(0)
+                    }
+                }
         }
 
         /** The end card has been on screen: advance the last-seen marker (once per read of the page, only when nothing newer was left). */
         fun endShown() {
             val loaded = _state.value as? PulsePageUiState.Loaded ?: return
+            val q = _query.value
+            if (q.topic != null || q.areaId != null || _newCount.value > 0 || markingSeen?.isActive == true) return
             if (!loaded.content.end.caughtUp || seenFor == loaded.content.readAt) return
-            seenFor = loaded.content.readAt
-            viewModelScope.launch { repository.markSeen(_query.value.view, through = loaded.content.readAt) }
+            markingSeen =
+                viewModelScope.launch {
+                    val result = repository.markSeen(q.view, through = loaded.content.readAt)
+                    if (result is NetworkResult.Success && q == _query.value) seenFor = loaded.content.readAt
+                }
         }
 
         /** "Show earlier": the next older items once, below the end card. */
@@ -212,20 +239,22 @@ class PulsePageViewModel
             if (_earlier.value is PulseEarlierState.Loading) return
             _earlier.value = PulseEarlierState.Loading
             val q = _query.value
-            viewModelScope.launch {
-                when (val result = repository.earlier(q, before = cursor)) {
-                    is NetworkResult.Success -> {
-                        if (q != _query.value) return@launch
-                        val page = result.data.toPage(readAt = loaded.content.readAt)
-                        val group = page.groups.firstOrNull()
-                        _earlier.value = if (group == null) PulseEarlierState.NothingEarlier else PulseEarlierState.Loaded(group)
-                    }
-                    is NetworkResult.Failure -> {
-                        _earlier.value = PulseEarlierState.Idle
-                        _toast.value = "Couldn't load earlier conversations. Try again."
+            readingEarlier =
+                viewModelScope.launch {
+                    when (val result = repository.earlier(q, before = cursor)) {
+                        is NetworkResult.Success -> {
+                            if (q != _query.value) return@launch
+                            val page = result.data.toPage(readAt = loaded.content.readAt)
+                            val group = page.groups.firstOrNull()
+                            _earlier.value = if (group == null) PulseEarlierState.NothingEarlier else PulseEarlierState.Loaded(group)
+                        }
+                        is NetworkResult.Failure -> {
+                            if (q != _query.value) return@launch
+                            _earlier.value = PulseEarlierState.Idle
+                            _toast.value = "Couldn't load earlier conversations. Try again."
+                        }
                     }
                 }
-            }
         }
 
         /**
@@ -234,33 +263,60 @@ class PulsePageViewModel
          */
         fun toggleAction(card: PulseCardUi): Boolean {
             if (card.actionKind != "going" && card.actionKind != "seen_it") return false
-            val done = !(toggled[card.id] ?: card.actionDone)
-            toggled[card.id] = done
-            (_state.value as? PulsePageUiState.Loaded)?.let { _state.value = PulsePageUiState.Loaded(it.content.applyToggle(card.id, done)) }
+            if (!pendingActions.add(card.id)) return true
+            val done = !(toggled[card.id]?.done ?: card.actionDone)
+            val going = card.goingCount?.let { (it + if (done) 1 else -1).coerceAtLeast(0) }
+            val edit = ActionOverride(done, going)
+            toggled[card.id] = edit
+            applyAction(card.id, edit)
             viewModelScope.launch {
-                when (posts.toggleLike(card.id, done)) {
-                    is NetworkResult.Success -> Unit
-                    is NetworkResult.Failure -> {
-                        toggled[card.id] = !done
-                        (_state.value as? PulsePageUiState.Loaded)?.let {
-                            _state.value = PulsePageUiState.Loaded(it.content.applyToggle(card.id, !done))
+                try {
+                    when (val result = posts.toggleLike(card.id, done)) {
+                        is NetworkResult.Success -> {
+                            val confirmed =
+                                ActionOverride(
+                                    result.data.liked,
+                                    result.data.likeCount.coerceAtLeast(0).takeIf { card.actionKind == "going" },
+                                )
+                            toggled[card.id] = confirmed
+                            completedActions[card.id] = Instant.now()
+                            applyAction(card.id, confirmed)
                         }
-                        _toast.value = "Couldn't save that. Try again."
+                        is NetworkResult.Failure -> {
+                            toggled.remove(card.id)
+                            applyAction(card.id, ActionOverride(card.actionDone, card.goingCount))
+                            _toast.value = result.error.displayMessage("Couldn't save that. Try again.")
+                        }
                     }
+                } finally {
+                    pendingActions.remove(card.id)
                 }
             }
             return true
         }
 
-        private fun PulsePageContent.applyToggle(
+        private fun applyAction(
             id: String,
-            done: Boolean,
-        ): PulsePageContent =
+            edit: ActionOverride,
+        ) {
+            (_state.value as? PulsePageUiState.Loaded)?.let { loaded ->
+                _state.value = PulsePageUiState.Loaded(loaded.content.copy(groups = loaded.content.groups.map { it.applyAction(id, edit) }))
+            }
+            (_earlier.value as? PulseEarlierState.Loaded)?.let { loaded ->
+                _earlier.value = PulseEarlierState.Loaded(loaded.group.applyAction(id, edit))
+            }
+        }
+
+        private fun PulseGroupUi.applyAction(
+            id: String,
+            edit: ActionOverride,
+        ): PulseGroupUi = copy(cards = cards.map { if (it.id == id) it.withAction(edit) else it })
+
+        private fun PulseCardUi.withAction(edit: ActionOverride): PulseCardUi =
             copy(
-                groups =
-                    groups.map { group ->
-                        group.copy(cards = group.cards.map { if (it.id == id) it.copy(actionDone = done) else it })
-                    },
+                actionDone = edit.done,
+                goingCount = edit.goingCount,
+                goingText = edit.goingCount?.let { "$it going" },
             )
 
         fun dismissToast() {

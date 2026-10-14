@@ -1051,7 +1051,7 @@ data class FeedTopMenu(
 
 /** Connections (and Beacons while that launch cut is off), then the page's preferences. */
 @Composable
-private fun PulseMoreMenu(
+internal fun PulseMoreMenu(
     menu: FeedTopMenu,
     onPreferences: (() -> Unit)?,
 ) {

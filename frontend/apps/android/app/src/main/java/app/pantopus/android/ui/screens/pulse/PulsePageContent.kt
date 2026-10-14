@@ -3,45 +3,18 @@ package app.pantopus.android.ui.screens.pulse
 import androidx.compose.runtime.Immutable
 import app.pantopus.android.data.api.models.pulse.PulseFeedResponse
 import app.pantopus.android.data.api.models.pulse.PulsePostDto
+import app.pantopus.android.ui.screens.feed.pulse.PostStatus
+import app.pantopus.android.ui.screens.feed.pulse.PulseTopic
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
-import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
 
 // What the Pulse page shows, mapped from the contract's shapes (docs/product/pulse-build/02-contract.md). Copy is the
 // build spec's appendix. An enum value this build doesn't know reads as a generic card or no word at all, never a crash.
-
-/** One of the 12 topics (build spec section 4): the id the API speaks and the words people read. */
-@Immutable
-data class PulseTopic(
-    val id: String,
-    val label: String,
-)
-
-object PulseTopics {
-    val all: List<PulseTopic> =
-        listOf(
-            PulseTopic("around_here", "Around here"),
-            PulseTopic("outdoors", "Outdoors"),
-            PulseTopic("gardening", "Gardening"),
-            PulseTopic("home_repairs", "Home and repairs"),
-            PulseTopic("food", "Food"),
-            PulseTopic("kids_schools", "Kids and schools"),
-            PulseTopic("pets", "Pets"),
-            PulseTopic("arts_culture", "Arts and culture"),
-            PulseTopic("sports", "Sports and fitness"),
-            PulseTopic("getting_around", "Getting around"),
-            PulseTopic("local_government", "Local government"),
-            PulseTopic("volunteering", "Volunteering"),
-        )
-
-    /** The words for a topic id; null for no topic or one this build doesn't know. */
-    fun label(id: String?): String? = all.firstOrNull { it.id == id }?.label
-}
 
 /** How a label chip is tinted. The chip always carries the label as words: color never says it alone. */
 enum class PulseLabelTone { Resident, NewHere, Nearby, Visitor, Official, Business, Pantopus }
@@ -70,8 +43,9 @@ data class PulseCardUi(
     val repliesText: String?,
     /** "14 going" on an event. */
     val goingText: String?,
+    val goingCount: Int?,
     /** "✓ Answered", "Gone", "Reunited", "Happened · 14 went", or null while the post is open. */
-    val statusText: String?,
+    val status: PostStatus?,
     val isCurator: Boolean,
     /** The whole card for TalkBack. */
     val description: String,
@@ -106,6 +80,7 @@ data class PulseQuietUi(
 @Immutable
 data class PulsePageContent(
     val areaName: String,
+    val areaChoices: List<PulseAreaChoice>,
     val groups: List<PulseGroupUi>,
     val end: PulseEndUi,
     val quiet: PulseQuietUi?,
@@ -178,19 +153,6 @@ internal fun relativeTime(
     }
 }
 
-/** "Wed 4pm": a time the way the page writes it, in the viewer's time zone. */
-internal fun dayAndHour(
-    iso: String?,
-    zone: ZoneId = ZoneId.systemDefault(),
-): String? {
-    val at = runCatching { ZonedDateTime.ofInstant(Instant.parse(iso), zone) }.getOrNull() ?: return null
-    val day = at.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault())
-    val hour = at.hour % HOURS_ON_CLOCK
-    val clockHour = if (hour == 0) HOURS_ON_CLOCK else hour
-    val minute = if (at.minute == 0) "" else ":%02d".format(at.minute)
-    return "$day $clockHour$minute${if (at.hour < HOURS_ON_CLOCK) "am" else "pm"}"
-}
-
 /** "This morning", "yesterday", "Tuesday": how long the page has had nothing newer, in the viewer's time zone. */
 internal fun sinceWords(
     iso: String?,
@@ -209,19 +171,6 @@ internal fun sinceWords(
     }
 }
 
-/** The status on a resolved post ("✓ Answered"), or null while it is open or for a resolution this build doesn't know. */
-internal fun statusWords(post: PulsePostDto): String? {
-    val resolution = post.status?.resolution ?: return null
-    return when (resolution) {
-        "answered" -> "✓ Answered"
-        "closed", "closed_unanswered" -> "Closed"
-        "claimed" -> "Gone"
-        "reunited" -> "Reunited"
-        "happened" -> post.counts?.going?.let { "Happened · $it went" } ?: "Happened"
-        else -> null
-    }
-}
-
 /** A feed item as one card; null for an item with nothing to show (no id, or held or removed ones that never reach others). */
 internal fun PulsePostDto.toCard(
     now: Instant = Instant.now(),
@@ -229,9 +178,8 @@ internal fun PulsePostDto.toCard(
 ): PulseCardUi {
     val name = author?.displayName?.takeIf { it.isNotBlank() } ?: "A neighbor"
     val label = labelFor(author?.label)
-    val topic = PulseTopics.label(topic)
-    val ends = if (type == "alert") dayAndHour(status?.endsAt, zone)?.let { "Ends $it" } else null
-    val about = listOfNotNull(about?.label?.takeIf { it.isNotBlank() }, topic, ends).joinToString(" · ").ifEmpty { null }
+    val topic = PulseTopic.fromKey(topic)?.label
+    val about = listOfNotNull(about?.label?.takeIf { it.isNotBlank() }, topic).joinToString(" · ").ifEmpty { null }
     val time = relativeTime(createdAt, now, zone)
     val meta = listOfNotNull(author?.distanceText?.takeIf { it.isNotBlank() }, time.takeIf { it.isNotEmpty() }).joinToString(" · ")
     val kind = action?.kind
@@ -244,7 +192,16 @@ internal fun PulsePostDto.toCard(
             else -> null
         }
     val going = counts?.going?.takeIf { type == "event" }?.let { "$it going" }
-    val status = statusWords(this)
+    val status =
+        PostStatus.of(
+            postType = type,
+            state = status?.state,
+            resolution = status?.resolution,
+            expiresAt = status?.endsAt,
+            goingCount = counts?.going?.coerceAtLeast(0) ?: 0,
+            now = now,
+            zone = zone,
+        )
     val body = text.orEmpty().ifBlank { title.orEmpty() }
     val typeName = typeNameFor(this)
     val photos = media.filter { it.type == "image" && !it.url.isNullOrBlank() }
@@ -264,7 +221,8 @@ internal fun PulsePostDto.toCard(
         actionDone = action?.done == true,
         repliesText = repliesText,
         goingText = going,
-        statusText = status,
+        goingCount = counts?.going?.coerceAtLeast(0)?.takeIf { type == "event" },
+        status = status,
         isCurator = author?.isCurator == true || author?.label == "pantopus",
         description =
             listOfNotNull(
@@ -272,10 +230,6 @@ internal fun PulsePostDto.toCard(
                 typeName.lowercase().replaceFirstChar { it.uppercase() },
                 body,
                 about,
-                actionLabel?.let { if (action?.done == true) "$it, done" else it },
-                repliesText,
-                going,
-                status,
             ).joinToString(". "),
     )
 }
@@ -287,17 +241,27 @@ internal fun PulseFeedResponse.toPage(
     zone: ZoneId = ZoneId.systemDefault(),
 ): PulsePageContent {
     val town = area?.name?.takeIf { it.isNotBlank() } ?: "your area"
+    val seenIds = mutableSetOf<String>()
     val groups =
-        groups.orEmpty().mapNotNull { group ->
-            val cards = group.items.map { it.toCard(now, zone) }
-            if (cards.isEmpty()) null else PulseGroupUi(key = group.key.orEmpty(), title = group.title.orEmpty(), cards = cards)
+        groups.orEmpty().mapIndexedNotNull { index, group ->
+            val cards =
+                group.items.filter { it.id.isNotBlank() && it.moderation?.state !in listOf("held", "removed") && seenIds.add(it.id) }
+                    .map { it.toCard(now, zone) }
+            if (cards.isEmpty()) null else PulseGroupUi(key = "${group.key.orEmpty()}:$index", title = group.title.orEmpty(), cards = cards)
         }
+    val homeTown = areasAvailable.orEmpty().firstOrNull { it.kind == "town" }?.id
+    val choices =
+        areasAvailable.orEmpty().mapNotNull { area ->
+            val name = area.title?.takeIf(String::isNotBlank) ?: area.name?.takeIf(String::isNotBlank)
+            if (name == null || area.id.isNullOrBlank()) null else PulseAreaChoice(area.id.takeUnless { it == homeTown }, name)
+        }.distinctBy { it.id }
     return PulsePageContent(
         areaName = town,
+        areaChoices = choices,
         groups = groups,
         end =
             PulseEndUi(
-                caughtUp = end?.caughtUp != false,
+                caughtUp = groups.isNotEmpty() && end?.caughtUp == true,
                 sentence = "That's everything new around $town since ${sinceWords(end?.since, now, zone)}.",
                 canShowEarlier = end?.canShowEarlier == true && !end?.earlierCursor.isNullOrBlank(),
                 earlierCursor = end?.earlierCursor,
@@ -310,5 +274,4 @@ internal fun PulseFeedResponse.toPage(
 private const val MINUTES_PER_HOUR = 60L
 private const val MINUTES_PER_DAY = 24 * 60L
 private const val DAYS_PER_WEEK = 7
-private const val HOURS_ON_CLOCK = 12
 private const val NOON = 12

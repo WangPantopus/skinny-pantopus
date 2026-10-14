@@ -6,9 +6,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -34,12 +36,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -62,6 +64,11 @@ import app.pantopus.android.data.pulse.PulseFeedQuery
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.RefreshFailedLine
 import app.pantopus.android.ui.components.RefreshOnStoreChange
+import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.screens.feed.FeedPreferencesSheet
+import app.pantopus.android.ui.screens.feed.FeedTopMenu
+import app.pantopus.android.ui.screens.feed.PulseMoreMenu
+import app.pantopus.android.ui.screens.feed.pulse.PulseTopic
 import app.pantopus.android.ui.screens.shared.feed.FeedComposeFAB
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -86,7 +93,9 @@ fun PulsePageScreen(
     onOpenPost: (String) -> Unit,
     onCompose: () -> Unit,
     onOpenConnections: () -> Unit,
+    onOpenBeacons: (() -> Unit)? = null,
     quietStateCard: @Composable () -> Unit,
+    onRefreshQuietStateCard: () -> Unit = {},
     viewModel: PulsePageViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -96,12 +105,14 @@ fun PulsePageScreen(
     val newCount by viewModel.newCount.collectAsStateWithLifecycle()
     val earlier by viewModel.earlier.collectAsStateWithLifecycle()
     val toast by viewModel.toast.collectAsStateWithLifecycle()
+    var showsPreferences by rememberSaveable { mutableStateOf(false) }
     ReportContentShown("pulse", state is PulsePageUiState.Loaded)
     LifecycleResumeEffect(Unit) {
         viewModel.load()
         onPauseOrDispose { }
     }
-    RefreshOnStoreChange(viewModel::load)
+    // While reading, new posts wait behind the pill. A later tab entry can read the marked copy again.
+    RefreshOnStoreChange(viewModel::pollNew)
     // Once a minute while the page is on screen: how many conversations arrived since it was read.
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(viewModel, lifecycle) {
@@ -122,7 +133,8 @@ fun PulsePageScreen(
     val scope = rememberCoroutineScope()
     val content = (state as? PulsePageUiState.Loaded)?.content
     // The end card on screen means the page was read to its end: tell the server, once per read.
-    LaunchedEffect(content?.readAt) {
+    LaunchedEffect(query) { listState.scrollToItem(0) }
+    LaunchedEffect(content?.readAt, query, newCount) {
         if (content != null) {
             snapshotFlow { listState.layoutInfo.visibleItemsInfo.any { it.key == END_KEY } }.filter { it }.first()
             viewModel.endShown()
@@ -130,25 +142,47 @@ fun PulsePageScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg).testTag("pulsePage")) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            PulseHeader(
-                areaName = content?.areaName,
-                areas = emptyList(),
-                onOpenConnections = onOpenConnections,
-                onPickArea = viewModel::selectArea,
-            )
-            PulseViews(selected = query.view, onSelect = viewModel::selectView)
-            PulseTopicChips(selected = query.topic, onSelect = viewModel::selectTopic)
-            refreshNotice?.let { RefreshFailedLine(it, modifier = Modifier.padding(horizontal = Spacing.s4, vertical = Spacing.s1)) }
-            PullToRefreshBox(isRefreshing = refreshing, onRefresh = viewModel::refresh, modifier = Modifier.weight(1f)) {
+        PullToRefreshBox(
+            isRefreshing = refreshing,
+            onRefresh = {
+                onRefreshQuietStateCard()
+                viewModel.refresh()
+            },
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize().testTag("pulseList"),
+                contentPadding = PaddingValues(bottom = BOTTOM_ROOM),
+                verticalArrangement = Arrangement.spacedBy(Spacing.s2),
+            ) {
+                item(key = "header") {
+                    PulseHeader(
+                        areaName = content?.areaName,
+                        areas = content?.areaChoices.orEmpty(),
+                        menu = FeedTopMenu(onOpenConnections, onOpenBeacons),
+                        onPreferences = { showsPreferences = true },
+                        onPickArea = viewModel::selectArea,
+                    )
+                    PulseViews(selected = query.view, onSelect = viewModel::selectView)
+                    PulseTopicChips(selected = query.topic, onSelect = viewModel::selectTopic)
+                    refreshNotice?.let {
+                        RefreshFailedLine(
+                            it,
+                            modifier = Modifier.padding(horizontal = Spacing.s4, vertical = Spacing.s1),
+                        )
+                    }
+                }
                 when (val s = state) {
-                    PulsePageUiState.Loading -> PulseSkeleton()
-                    is PulsePageUiState.Error -> ErrorState(headline = "Couldn't load Pulse", message = s.message, onRetry = viewModel::refresh)
+                    PulsePageUiState.Loading -> item(key = "loading") { PulseSkeleton() }
+                    is PulsePageUiState.Error ->
+                        item(key = "error") {
+                            ErrorState(headline = "Couldn't load Pulse", message = s.message, onRetry = viewModel::refresh)
+                        }
                     is PulsePageUiState.Loaded ->
-                        PulseList(
+                        pulseItems(
                             content = s.content,
                             earlier = earlier,
-                            listState = listState,
                             view = query.view,
                             onOpenPost = onOpenPost,
                             onAction = { card -> if (!viewModel.toggleAction(card)) onOpenPost(card.id) },
@@ -188,55 +222,46 @@ fun PulsePageScreen(
             modifier = Modifier.align(Alignment.BottomEnd).padding(end = Spacing.s4, bottom = Spacing.s4),
         )
     }
+    if (showsPreferences) {
+        FeedPreferencesSheet(
+            onClose = { showsPreferences = false },
+            onPrefsChanged = viewModel::refresh,
+            onTopicUnmuted = { viewModel.refresh() },
+        )
+    }
 }
 
 // ─── Header, views, topics ─────────────────────────────────────────────────────
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun PulseHeader(
     areaName: String?,
     areas: List<PulseAreaChoice>,
-    onOpenConnections: () -> Unit,
+    menu: FeedTopMenu,
+    onPreferences: () -> Unit,
     onPickArea: (String?) -> Unit,
 ) {
-    var menuOpen by remember { mutableStateOf(false) }
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s4, vertical = Spacing.s2),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
+        verticalAlignment = Alignment.Top,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
     ) {
-        Text(
-            text = "Pulse",
-            fontSize = 26.sp,
-            fontWeight = FontWeight.Bold,
-            color = PantopusColors.appText,
-            modifier = Modifier.semantics { heading() },
-        )
-        areaName?.let { name -> PulseAreaPill(name = name, choices = areas, onPick = onPickArea) }
-        Spacer(modifier = Modifier.weight(1f))
-        Box {
-            Box(
-                modifier =
-                    Modifier
-                        .size(48.dp)
-                        .clickable { menuOpen = true }
-                        .testTag("pulseMoreButton")
-                        .semantics { contentDescription = "More" },
-                contentAlignment = Alignment.Center,
-            ) {
-                PantopusIconImage(icon = PantopusIcon.MoreVertical, contentDescription = null, size = 20.dp, tint = PantopusColors.appText)
-            }
-            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                DropdownMenuItem(
-                    text = { Text("Connections") },
-                    onClick = {
-                        menuOpen = false
-                        onOpenConnections()
-                    },
-                    modifier = Modifier.testTag("pulseMenuConnections"),
-                )
-            }
+        FlowRow(
+            modifier = Modifier.weight(1f),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
+            verticalArrangement = Arrangement.spacedBy(Spacing.s2),
+        ) {
+            Text(
+                text = "Pulse",
+                fontSize = 26.sp,
+                fontWeight = FontWeight.Bold,
+                color = PantopusColors.appText,
+                modifier = Modifier.semantics { heading() },
+            )
+            areaName?.let { name -> PulseAreaPill(name = name, choices = areas, onPick = onPickArea) }
         }
+        PulseMoreMenu(menu = menu, onPreferences = onPreferences)
     }
 }
 
@@ -270,7 +295,14 @@ private fun PulseAreaPill(
         ) {
             PantopusIconImage(icon = PantopusIcon.MapPin, contentDescription = null, size = 16.dp, tint = PantopusColors.primary600)
             Text(text = name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
-            if (more) PantopusIconImage(icon = PantopusIcon.ChevronDown, contentDescription = null, size = 14.dp, tint = PantopusColors.appTextSecondary)
+            if (more) {
+                PantopusIconImage(
+                    icon = PantopusIcon.ChevronDown,
+                    contentDescription = null,
+                    size = 14.dp,
+                    tint = PantopusColors.appTextSecondary,
+                )
+            }
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             choices.forEach { choice ->
@@ -338,14 +370,14 @@ private fun PulseTopicChips(
     selected: String?,
     onSelect: (String?) -> Unit,
 ) {
-    val chips = remember { listOf<PulseTopic?>(null) + PulseTopics.all }
+    val chips = remember { listOf<PulseTopic?>(null) + PulseTopic.entries }
     LazyRow(
         modifier = Modifier.fillMaxWidth().testTag("pulseTopicChips"),
         contentPadding = PaddingValues(horizontal = Spacing.s4, vertical = Spacing.s2),
         horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
     ) {
-        items(chips, key = { it?.id ?: "all" }) { topic ->
-            val isSelected = topic?.id == selected
+        items(chips, key = { it?.key ?: "all" }) { topic ->
+            val isSelected = topic?.key == selected
             val label = topic?.label ?: "All"
             Box(
                 modifier =
@@ -353,15 +385,19 @@ private fun PulseTopicChips(
                         .heightIn(min = 40.dp)
                         .clip(RoundedCornerShape(Radii.pill))
                         .background(if (isSelected) PantopusColors.primary600 else PantopusColors.appSurface)
-                        .border(1.dp, if (isSelected) PantopusColors.primary600 else PantopusColors.appBorderStrong, RoundedCornerShape(Radii.pill))
-                        .clickable { onSelect(topic?.id) }
+                        .border(
+                            1.dp,
+                            if (isSelected) PantopusColors.primary600 else PantopusColors.appBorderStrong,
+                            RoundedCornerShape(Radii.pill),
+                        )
+                        .clickable { onSelect(topic?.key) }
                         .padding(horizontal = Spacing.s4)
                         .semantics {
                             role = Role.Button
                             this.selected = isSelected
                             contentDescription = if (isSelected) "$label, selected" else label
                         }
-                        .testTag("pulseTopic_${topic?.id ?: "all"}"),
+                        .testTag("pulseTopic_${topic?.key ?: "all"}"),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
@@ -377,11 +413,9 @@ private fun PulseTopicChips(
 
 // ─── The list ──────────────────────────────────────────────────────────────────
 
-@Composable
-private fun PulseList(
+private fun LazyListScope.pulseItems(
     content: PulsePageContent,
     earlier: PulseEarlierState,
-    listState: androidx.compose.foundation.lazy.LazyListState,
     view: String,
     onOpenPost: (String) -> Unit,
     onAction: (PulseCardUi) -> Unit,
@@ -389,40 +423,35 @@ private fun PulseList(
     onCompose: () -> Unit,
     quietStateCard: @Composable () -> Unit,
 ) {
-    LazyColumn(
-        state = listState,
-        modifier = Modifier.fillMaxSize().testTag("pulseList"),
-        contentPadding = PaddingValues(bottom = BOTTOM_ROOM),
-        verticalArrangement = Arrangement.spacedBy(Spacing.s2),
-    ) {
-        if (content.quiet?.card != null) {
-            item(key = "quiet") { Box(modifier = Modifier.padding(horizontal = Spacing.s4)) { quietStateCard() } }
+    if (content.quiet?.card != null) {
+        item(key = "quiet") { Box(modifier = Modifier.padding(horizontal = Spacing.s4)) { quietStateCard() } }
+    }
+    if (content.groups.isEmpty()) {
+        item(
+            key = "empty",
+        ) { PulseQuietDay(areaName = content.areaName, following = view == PulseFeedQuery.VIEW_FOLLOWING, onCompose = onCompose) }
+    }
+    content.groups.forEach { group ->
+        item(key = "group_${group.key}") { PulseGroupHeader(group.title) }
+        items(group.cards, key = { it.id }) { card ->
+            PulseConversationCard(
+                card = card,
+                onOpen = { onOpenPost(card.id) },
+                onAction = { onAction(card) },
+                modifier = Modifier.padding(horizontal = Spacing.s4),
+            )
         }
-        if (content.groups.isEmpty()) {
-            item(key = "empty") { PulseQuietDay(areaName = content.areaName, following = view == PulseFeedQuery.VIEW_FOLLOWING, onCompose = onCompose) }
-        }
-        content.groups.forEach { group ->
-            item(key = "group_${group.key}") { PulseGroupHeader(group.title) }
-            items(group.cards, key = { it.id }) { card ->
-                PulseConversationCard(
-                    card = card,
-                    onOpen = { onOpenPost(card.id) },
-                    onAction = { onAction(card) },
-                    modifier = Modifier.padding(horizontal = Spacing.s4),
-                )
-            }
-        }
-        item(key = END_KEY) { PulseEnd(content.end, earlier, onShowEarlier) }
-        if (earlier is PulseEarlierState.Loaded) {
-            item(key = "group_earlier") { PulseGroupHeader(earlier.group.title) }
-            items(earlier.group.cards, key = { "earlier_${it.id}" }) { card ->
-                PulseConversationCard(
-                    card = card,
-                    onOpen = { onOpenPost(card.id) },
-                    onAction = { onAction(card) },
-                    modifier = Modifier.padding(horizontal = Spacing.s4),
-                )
-            }
+    }
+    item(key = END_KEY) { PulseEnd(content.end, earlier, onShowEarlier) }
+    if (earlier is PulseEarlierState.Loaded) {
+        item(key = "group_earlier") { PulseGroupHeader(earlier.group.title) }
+        items(earlier.group.cards, key = { "earlier_${it.id}" }) { card ->
+            PulseConversationCard(
+                card = card,
+                onOpen = { onOpenPost(card.id) },
+                onAction = { onAction(card) },
+                modifier = Modifier.padding(horizontal = Spacing.s4),
+            )
         }
     }
 }
@@ -473,7 +502,11 @@ private fun PulseEnd(
             Text(text = end.sentence, fontSize = 15.sp, color = PantopusColors.appTextSecondary, textAlign = TextAlign.Center)
         }
         when (earlier) {
-            PulseEarlierState.Loading -> CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(24.dp).testTag("pulseEarlierLoading"))
+            PulseEarlierState.Loading ->
+                CircularProgressIndicator(
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.size(24.dp).testTag("pulseEarlierLoading"),
+                )
             PulseEarlierState.NothingEarlier -> Text(text = "Nothing earlier.", fontSize = 14.sp, color = PantopusColors.appTextSecondary)
             is PulseEarlierState.Loaded -> Unit
             PulseEarlierState.Idle ->
@@ -554,16 +587,12 @@ private fun PulseNewPill(
 /** Mirrors the loaded geometry: a header band and cards. */
 @Composable
 private fun PulseSkeleton() {
-    Column(modifier = Modifier.fillMaxSize().padding(Spacing.s4).testTag("pulseSkeleton"), verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(Spacing.s4).testTag("pulseSkeleton"),
+        verticalArrangement = Arrangement.spacedBy(Spacing.s3),
+    ) {
         repeat(SKELETON_CARDS) {
-            Box(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .height(120.dp)
-                        .clip(RoundedCornerShape(Radii.xl))
-                        .background(PantopusColors.appSurfaceSunken),
-            )
+            Shimmer(height = 120.dp, cornerRadius = Radii.xl, modifier = Modifier.fillMaxWidth())
         }
     }
 }
@@ -573,4 +602,4 @@ private const val NEW_POLL_MS = 60_000L
 private const val TOAST_MS = 2_500L
 private const val SKELETON_CARDS = 4
 private val BOTTOM_ROOM = 96.dp
-private val HEADER_PILL_TOP = 196.dp
+private val HEADER_PILL_TOP = Spacing.s2

@@ -7,8 +7,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -31,6 +31,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.pantopus.android.ui.components.StatusChipVariant
+import app.pantopus.android.ui.screens.feed.pulse.PostStatusPill
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
@@ -82,7 +83,10 @@ fun PulseConversationCard(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.align(Alignment.CenterVertically),
                     )
-                    card.labelText?.let { text -> PulseLabelChip(text = text, tone = card.labelTone, modifier = Modifier.align(Alignment.CenterVertically)) }
+                    card.labelText?.let {
+                            text ->
+                        PulseLabelChip(text = text, tone = card.labelTone, modifier = Modifier.align(Alignment.CenterVertically))
+                    }
                     if (card.meta.isNotEmpty()) {
                         Text(
                             text = card.meta,
@@ -133,16 +137,17 @@ fun PulseConversationCard(
                 PulseActionButton(label = label, done = card.actionDone, onClick = onAction, cardId = card.id)
             }
             Column(modifier = Modifier.weight(1f)) {
-                val words = listOfNotNull(card.repliesText, card.goingText, card.statusText).joinToString("  ·  ")
+                val words = listOfNotNull(card.repliesText, card.goingText).joinToString("  ·  ")
                 if (words.isNotEmpty()) {
                     Text(
                         text = words,
                         fontSize = 14.sp,
-                        color = if (card.statusText != null) PantopusColors.success else PantopusColors.appTextSecondary,
-                        fontWeight = if (card.statusText != null) FontWeight.SemiBold else FontWeight.Normal,
+                        color = PantopusColors.appTextSecondary,
+                        fontWeight = FontWeight.Normal,
                         modifier = Modifier.semantics { contentDescription = words },
                     )
                 }
+                card.status?.let { PostStatusPill(status = it, postId = card.id) }
             }
         }
     }

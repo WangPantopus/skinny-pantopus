@@ -119,7 +119,6 @@ import app.pantopus.android.ui.screens.explore.ExploreKind
 import app.pantopus.android.ui.screens.explore.ExploreMapFocus
 import app.pantopus.android.ui.screens.explore.ExploreMapScreen
 import app.pantopus.android.ui.screens.feed.FeedScreen
-import app.pantopus.android.ui.screens.feed.FeedTopMenu
 import app.pantopus.android.ui.screens.feed.beacons.BeaconsFeedScreen
 import app.pantopus.android.ui.screens.feed.pulse.PulseIntent
 import app.pantopus.android.ui.screens.following.FollowingScreen
@@ -319,7 +318,6 @@ import app.pantopus.android.ui.screens.my_posts.MyPostsScreen
 import app.pantopus.android.ui.screens.my_tasks.MyTasksScreen
 import app.pantopus.android.ui.screens.nearby.NearbyViewModel
 import app.pantopus.android.ui.screens.nearby.pulseQuietStateCard
-import app.pantopus.android.ui.screens.pulse.PulsePageScreen
 import app.pantopus.android.ui.screens.notifications.NotificationsScreen
 import app.pantopus.android.ui.screens.offers.OffersScreen
 import app.pantopus.android.ui.screens.persona_dm.FanInboxScreen
@@ -369,6 +367,7 @@ import app.pantopus.android.ui.screens.profile.EditProfileScreen
 import app.pantopus.android.ui.screens.profile.PUBLIC_PROFILE_USER_ID_KEY
 import app.pantopus.android.ui.screens.profile.PublicProfileScreen
 import app.pantopus.android.ui.screens.profile.professional.ProfessionalProfileScreen
+import app.pantopus.android.ui.screens.pulse.PulsePageScreen
 import app.pantopus.android.ui.screens.review_claims.ReviewClaimDetailScreen
 import app.pantopus.android.ui.screens.review_claims.ReviewClaimsScreen
 import app.pantopus.android.ui.screens.review_signups.ReviewSignupsScreen
@@ -2825,7 +2824,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onOpenPost = { postId -> navController.navigate(ChildRoutes.pulsePost(postId)) },
                         onCompose = { navController.navigate(ChildRoutes.composePost(PulseIntent.Ask.key)) },
                         onOpenConnections = { navController.navigate(ChildRoutes.CONNECTIONS) },
+                        onOpenBeacons = { navController.navigate(ChildRoutes.BEACONS_FEED) }.takeIf { LaunchFeatures.beacon },
                         quietStateCard = { quietStateCard?.invoke() },
+                        onRefreshQuietStateCard = quietMeter::refresh,
                     )
                 }
                 composable(PantopusRoute.Tasks.path) {

@@ -1,6 +1,7 @@
 package app.pantopus.android.data.pulse
 
 import app.pantopus.android.data.api.models.pulse.PulseAckResponse
+import app.pantopus.android.data.api.models.pulse.PulseFeedCopy
 import app.pantopus.android.data.api.models.pulse.PulseFeedResponse
 import app.pantopus.android.data.api.models.pulse.PulseNewCountResponse
 import app.pantopus.android.data.api.models.pulse.PulsePostStatusResponse
@@ -8,12 +9,14 @@ import app.pantopus.android.data.api.models.pulse.PulseSeenRequest
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.conditionalApiCall
+import app.pantopus.android.data.api.net.mapFresh
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.PulseApi
 import app.pantopus.android.data.store.ScreenStore
 import app.pantopus.android.data.store.StoreKeys
 import app.pantopus.android.data.store.StoreTopics
 import app.pantopus.android.data.store.Stored
+import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -44,8 +47,9 @@ class PulseRepository
         suspend fun feedStored(
             query: PulseFeedQuery,
             force: Boolean = false,
-        ): Stored<PulseFeedResponse> =
+        ): Stored<PulseFeedCopy> =
             store.read(StoreKeys.pulseFeed(query), force) { etag ->
+                val readAt = Instant.now().toString()
                 conditionalApiCall {
                     api.feedConditional(
                         view = query.view,
@@ -54,11 +58,11 @@ class PulseRepository
                         limit = PulseFeedQuery.PAGE_SIZE,
                         etag = etag,
                     )
-                }
+                }.mapFresh { PulseFeedCopy(response = it, readAt = readAt) }
             }
 
         /** The stored first page as it is now (a first frame), without a request. */
-        fun feedCopy(query: PulseFeedQuery): PulseFeedResponse? = store.peek(StoreKeys.pulseFeed(query)).data
+        fun feedCopy(query: PulseFeedQuery): PulseFeedCopy? = store.peek(StoreKeys.pulseFeed(query)).data
 
         /** True while [query]'s first page is fresh and unmarked: coming back reads nothing. */
         fun feedIsCurrent(query: PulseFeedQuery): Boolean = store.isCurrent(StoreKeys.pulseFeed(query))
@@ -88,7 +92,10 @@ class PulseRepository
         suspend fun markSeen(
             view: String,
             through: String,
-        ): NetworkResult<PulseAckResponse> = safeApiCall { api.seen(PulseSeenRequest(view = view, through = through)) }
+        ): NetworkResult<PulseAckResponse> =
+            safeApiCall { api.seen(PulseSeenRequest(view = view, through = through)) }.also {
+                if (it is NetworkResult.Success) store.markEdited("pulse:seen:$view")
+            }
 
         /** "Keep open 7 more days" on the asker's own open Ask (contract 2.12). */
         suspend fun keepOpen(postId: String): NetworkResult<PulsePostStatusResponse> = safeApiCall { api.keepOpen(postId) }.postsChanged()
