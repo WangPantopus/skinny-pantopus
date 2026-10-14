@@ -30,29 +30,41 @@ extension PulsePostDetailViewModel {
         }
     }
 
-    var canNarrowToTown: Bool {
-        isOwner && conversation?.post.readScope == "public"
+    var canNarrowAudience: Bool {
+        isOwner && ["public", "verified_town"].contains(conversation?.post.readScope ?? "")
     }
 
-    func narrowConversationToTown() async {
-        guard canNarrowToTown, !isPreparingShare, beginConversationAction("readScope") else { return }
+    func narrowConversation(readScope: String, areaId: String? = nil) async -> Bool {
+        let current = conversation?.post.readScope
+        let validTown = current == "public" && readScope == "verified_town" && areaId == nil
+        let validArea = current == "verified_town" && readScope == "verified_area" && areaId.flatMap(UUID.init(uuidString:)) != nil
+        guard canNarrowAudience, validTown || validArea, !isPreparingShare,
+              beginConversationAction("readScope") else { return false }
+        toastMessage = nil
         defer { finishConversationAction("readScope") }
         do {
-            _ = try await client.request(
-                PulseEndpoints.narrowReadScope(postId: postId, readScope: "verified_town"),
-                as: PostActionAckResponse.self
+            let response: PulseConversationResponse = try await client.request(
+                PulseEndpoints.narrowReadScope(postId: postId, readScope: readScope, areaId: areaId)
             )
             store.remove(conversationEndpoint)
             store.remove(PostsEndpoints.detail(id: postId))
+            guard let post = response.post, post.id == postId, post.readScope == readScope,
+                  areaId == nil || post.about?.areaId == areaId else {
+                state = .error(message: "Couldn't confirm who can read this post. Refresh to check.", retryable: true)
+                PulsePostsRefresh.notifyPostsDidChange()
+                return false
+            }
             if var content = conversation {
-                content.post.readScope = "verified_town"
+                content.post = post
                 state = .conversation(content)
             }
             await refreshConversationAfterMutation()
             PulsePostsRefresh.notifyPostsDidChange()
+            return true
         } catch {
             _ = clearRefusedConversation(error)
             showToast(Self.refusal(in: error) ?? "Couldn't change who can read this post. Try again.")
+            return false
         }
     }
 }
