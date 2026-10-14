@@ -2,27 +2,22 @@
 //  PulseSafetyAlertKind.swift
 //  Pantopus
 //
-//  Alert sub-types for Heads Up posts — mirrors mobile `SAFETY_KINDS`.
+//  Alert sub-types for Heads Up posts. Crime and suspicion kinds (theft,
+//  vandalism, suspicious, scam) can't be created any more (Pulse S1; the
+//  server refuses them with `ALERT_KIND_NOT_ALLOWED`); old posts of those
+//  kinds still read fine, since the feed and post page never decode this enum.
 //
 
 import Foundation
 
-/// Backend `safetyAlertKind` values accepted by `createPostSchema`.
+/// Backend `safetyAlertKind` values a resident may create (contract §1).
 public enum PulseSafetyAlertKind: String, CaseIterable, Sendable, Hashable {
-    case theft
-    case vandalism
-    case suspicious
     case hazard
-    case scam
     case other
 
     public var label: String {
         switch self {
-        case .theft: "Theft"
-        case .vandalism: "Vandalism"
-        case .suspicious: "Suspicious"
         case .hazard: "Hazard"
-        case .scam: "Scam"
         case .other: "Other"
         }
     }

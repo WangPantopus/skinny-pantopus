@@ -656,7 +656,7 @@ class PulsePostDetailViewModel
                 userReacted = comment.userHasLiked ?: false,
                 indentLevel = indent,
                 authorUserId = comment.author?.id?.takeIf { it.isNotBlank() },
-                isOwn = comment.userId == signedInUserId,
+                isOwn = comment.userId != null && comment.userId == signedInUserId,
             )
 
         private fun formatTimeAndLocality(

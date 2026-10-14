@@ -249,6 +249,9 @@ class ChatConversationViewModel
         private var historyCopyContext: HistoryReadContext? = null
         private var updateHistoryCopy: ((ChatMessagesResponse) -> Unit)? = null
 
+        /** The newest server page behind the copy; the copy keeps its room list so an unchanged reopen can get a 304. */
+        private var historyPage: ChatMessagesResponse? = null
+
         // Send inputs captured per optimistic row, keyed by its bare-UUID
         // `clientMessageId`. Survives refetches so retry resends the same
         // payload under the same idempotency key.
@@ -1527,11 +1530,6 @@ class ChatConversationViewModel
 
         // MARK: - Fetch
 
-        /**
-         * [quiet]: refetch the newest page under the messages on screen instead of clearing them first. The page
-         * replaces what it covers; older pages the reader loaded and rows newer than the page (a send that landed
-         * meanwhile) stay. A failed quiet read keeps the thread as it is.
-         */
         private data class HistoryReadContext(
             val generation: Long,
             val mode: ChatThreadMode,
@@ -1541,6 +1539,11 @@ class ChatConversationViewModel
 
         private fun historyContext() = HistoryReadContext(historyGeneration, mode, currentUserId, _selectedTopicId.value)
 
+        /**
+         * [quiet]: refetch the newest page under the messages on screen instead of clearing them first. The page
+         * replaces what it covers; older pages the reader loaded and rows newer than the page (a send that landed
+         * meanwhile) stay. A failed quiet read keeps the thread as it is.
+         */
         private fun fetch(
             initial: Boolean,
             before: String? = null,
@@ -1548,15 +1551,7 @@ class ChatConversationViewModel
             force: Boolean = false,
         ) {
             val context = historyContext()
-            if (initial || context != historyCopyContext) {
-                historyCopyContext = context
-                updateHistoryCopy =
-                    when (val target = context.mode) {
-                        is ChatThreadMode.Room -> repo.roomHistoryUpdater(target.id)
-                        is ChatThreadMode.Person -> repo.conversationHistoryUpdater(target.otherUserId, context.topicId)
-                        ChatThreadMode.Ai -> null
-                    }
-            }
+            if (initial || context != historyCopyContext) followHistoryCopy(context)
             val copied = initial && !quiet && showHistoryCopy()
             val keepMessages = quiet || copied
             viewModelScope.launch {
@@ -1586,18 +1581,32 @@ class ChatConversationViewModel
                 // The topic changed while this page was in flight (the opening topic
                 // resolves alongside the first fetch); the fetch for it owns the thread.
                 if (context != historyContext()) return@launch
-                publishHistoryPage(response, keepMessages, initial)
+                publishHistoryPage(response, keepMessages, initial, firstPage = before == null)
             }
+        }
+
+        /** A first-page read (or a new thread or topic): the copy writer follows the read's context. */
+        private fun followHistoryCopy(context: HistoryReadContext) {
+            if (context != historyCopyContext) historyPage = null
+            historyCopyContext = context
+            updateHistoryCopy =
+                when (val target = context.mode) {
+                    is ChatThreadMode.Room -> repo.roomHistoryUpdater(target.id)
+                    is ChatThreadMode.Person -> repo.conversationHistoryUpdater(target.otherUserId, context.topicId)
+                    ChatThreadMode.Ai -> null
+                }
         }
 
         private fun publishHistoryPage(
             response: NetworkResult<ChatMessagesResponse>,
             keepMessages: Boolean,
             initial: Boolean,
+            firstPage: Boolean,
         ) {
             when (response) {
                 is NetworkResult.Success -> {
                     historyRefusal = null
+                    if (firstPage) historyPage = response.data
                     val keptOlder = placePage(response.data.messages, keepMessages)
                     retireConfirmedSends(response.data.messages)
                     updateActiveRooms(response.data)
@@ -1628,6 +1637,7 @@ class ChatConversationViewModel
         private fun refuseHistory(error: NetworkError) {
             historyGeneration++
             historyRefusal = error.message
+            historyPage = null
             messages.clear()
             activeRoomIds = emptySet()
             directRoomDeferred?.cancel()
@@ -1645,6 +1655,7 @@ class ChatConversationViewModel
                     is ChatThreadMode.Person -> repo.conversationMessagesCopy(target.otherUserId, _selectedTopicId.value)
                     ChatThreadMode.Ai -> null
                 } ?: return false
+            historyPage = copy
             messages = copy.messages.toMutableList()
             hasMore = copy.hasMore ?: false
             oldestCursor = copy.nextCursor ?: paginationCursor(messages.firstOrNull())
@@ -2292,12 +2303,14 @@ class ChatConversationViewModel
                 return
             }
             if (historyCopyContext == historyContext()) {
+                // In the server's shape (no cursor without older messages, its room list), so unchanged is equal.
+                val page = historyPage
                 updateHistoryCopy?.invoke(
                     ChatMessagesResponse(
                         messages = messages.toList(),
                         hasMore = hasMore,
-                        nextCursor = oldestCursor,
-                        roomIds = activeRoomIds.toList(),
+                        nextCursor = oldestCursor.takeIf { hasMore },
+                        roomIds = if (page != null) page.roomIds else activeRoomIds.toList(),
                     ),
                 )
             }

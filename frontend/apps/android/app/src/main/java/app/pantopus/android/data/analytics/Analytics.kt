@@ -13,6 +13,17 @@ sealed class AnalyticsEvent(
 ) {
     open val properties: Map<String, String> get() = emptyMap()
 
+    /**
+     * The Place tab's root shows. [root] is `home` (Your Place for a Home), `saved_place` (the address they saved),
+     * `first_run` (the address-first screen) or `homes` (My homes, while every entry waits on verification). Sent each
+     * time the root appears, as the Hub's `screen.hub.viewed` was.
+     */
+    data class ScreenPlaceViewed(
+        val root: String,
+    ) : AnalyticsEvent("screen.place.viewed") {
+        override val properties = mapOf("root" to root)
+    }
+
     data object ScreenMailboxRootViewed : AnalyticsEvent("screen.mailbox_root.viewed")
 
     data object ScreenMyHomesViewed : AnalyticsEvent("screen.my_homes.viewed")

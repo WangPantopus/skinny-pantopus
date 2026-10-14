@@ -2,7 +2,13 @@ package app.pantopus.android.di
 
 import app.pantopus.android.BuildConfig
 import app.pantopus.android.data.api.ApiService
+import app.pantopus.android.data.api.models.common.TolerantJsonAdapterFactory
+import app.pantopus.android.data.api.models.feed.FeedPost
 import app.pantopus.android.data.api.models.homes.UploadEvidenceRequestJsonAdapter
+import app.pantopus.android.data.api.models.notifications.NotificationDto
+import app.pantopus.android.data.api.models.posts.MyPostDto
+import app.pantopus.android.data.api.models.posts.PostCommentDto
+import app.pantopus.android.data.api.models.posts.PostDetailDto
 import app.pantopus.android.data.api.net.RetryInterceptor
 import app.pantopus.android.data.api.net.SafeHttpLoggingInterceptor
 import app.pantopus.android.data.api.net.UtcTimestampInterceptor
@@ -183,6 +189,19 @@ object NetworkModule {
             // display vocabularies decode unknown values to UNKNOWN.
             .add(app.pantopus.android.data.api.models.place.PlaceSectionEnvelopeAdapterFactory())
             .add(app.pantopus.android.data.api.models.place.PlaceEnumAdapterFactory)
+            // Pulse build S2: a newer backend may add post types, enum values and fields, or send null for a field.
+            // Posts, one post, comments and notifications read around that instead of failing the whole reply.
+            .add(
+                TolerantJsonAdapterFactory(
+                    setOf(
+                        FeedPost::class.java,
+                        MyPostDto::class.java,
+                        PostCommentDto::class.java,
+                        PostDetailDto::class.java,
+                        NotificationDto::class.java,
+                    ),
+                ),
+            )
             .add(Instant::class.java, Rfc3339DateJsonAdapter().nullSafe())
             .addLast(KotlinJsonAdapterFactory())
             .build()

@@ -579,7 +579,7 @@ public final class PulseFeedViewModel {
     /// surface and strips matching rows straight away.
     public func muteTopic(postId: String) async {
         guard let item = loadedItems.first(where: { $0.id == postId }),
-              let postType = item.postType, !postType.isEmpty else { return }
+              let postType = item.postType, !postType.isEmpty, PulseIntent.knows(postType: postType) else { return }
         let label = PulseIntent.from(postType: postType).cardChipLabel
         mutedPostTypes.insert(postType)
         rebuildLoadedState()
@@ -1013,7 +1013,8 @@ public final class PulseFeedViewModel {
                 muteEntityType: post.businessAuthorId != nil ? .business : (post.userId != nil ? .user : nil),
                 muteEntityId: post.businessAuthorId ?? post.userId,
                 muteEntityName: post.creator?.displayName ?? "this author",
-                postType: post.postType,
+                // A type this build doesn't know has no chip to name, so no type mute.
+                postType: intent == .generic ? nil : post.postType,
                 topicLabel: intent.cardChipLabel,
                 pending: pendingActions[post.id] ?? []
             ),

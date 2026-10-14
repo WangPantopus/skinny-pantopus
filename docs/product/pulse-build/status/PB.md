@@ -1,0 +1,34 @@
+# PB status: Backend and data
+
+Owner: the PB session. Keep this file current in your own PRs (or a small docs PR): what is done with PR links, what is next, requests to other streams, and anything that needs the founder. Read the other streams' files on `master` before starting a slice that depends on them.
+
+## Done
+
+- **S1 rule cleanups** (server half): [PR 2259](https://github.com/WangPantopus/skinny-pantopus/pull/2259), merged, verified on web, iOS and Android. Heads-ups about crime and suspicion (`theft`, `vandalism`, `suspicious`, `scam`, `crime_incident`) are refused at creation with `400 ALERT_KIND_NOT_ALLOWED`; `official_notice` and `public_safety` only from Official or curator accounts, each with `sourceUrl` (stored as `post_metadata.source_url`); an edit can't switch a post to a refused kind; businesses can't post to the Place feed (`403 BUSINESS_CANNOT_POST`, also from `POST /api/businesses/:id/posts`). Old posts of those kinds stay readable and editable. The seeder now sends each alert's source. Contract §1, §2.5 and §8 updated.
+- **S4 topics** (server half): [PR 2264](https://github.com/WangPantopus/skinny-pantopus/pull/2264), merged, verified on web, iOS and Android: the twelve topics in `Post_topic_check`, `?topic=` on the legacy Place feed, topic mutes with `areaId` (listed in `GET /api/posts/mute` as `topic_mutes`, undone by area), `PostMute.area_id`. Contract §2.9 and §4.1 updated.
+- **One read check (S5, part 1):** [PR 2268](https://github.com/WangPantopus/skinny-pantopus/pull/2268), merged, verified on web, iOS and Android. `canReadPost` (the post page's rule) lives in `backend/services/pulse/readAccess.js` with `readablePosts` and `POST_READ_SELECT`; other people's profile post lists and the business Mentions list use it (both showed posts their readers couldn't open). Local-profile activity uses it too: [PR 2270](https://github.com/WangPantopus/skinny-pantopus/pull/2270), merged (signed out, it listed neighborhood posts the post page refuses).
+- **Adult attestation (S5.6, server):** [PR 2269](https://github.com/WangPantopus/skinny-pantopus/pull/2269), merged: `POST /api/pulse/adult-attestation`, `User.adult_attested_at`, `403 AGE_NOT_ELIGIBLE` for an under-18 date of birth. New `backend/routes/pulse.js`, mounted at `/api/pulse`.
+- **S7 lifecycle, part 1 (columns):** [PR 2273](https://github.com/WangPantopus/skinny-pantopus/pull/2273). `Post.expires_at`, `Post.resolution`, `Post.claim_mode` (default `choose`); `share` and `offer` are valid in `Post_post_type_check` (nothing creates them until S8); `PostCategoryTTL` gains Share 3 days and Offer 7. Legacy post rows carry the three fields, and marking an Ask solved now also sets `resolution: answered`. Contract §4.1 updated.
+
+## Next
+
+- **S7 lifecycle, part 2:** the archive job ends each type with its `resolution`, `state` kept in step (Ask `closed` or `closed_unanswered`, Share and Offer `expired`, Heads-up at its `expires_at` or after 48 hours, Event `happened`, Lost and found `closed`), and Asks solved before part 1 get `answered`.
+- **S7 lifecycle, part 3:** the day-6 `ask_still_open` reminder and its keep-open or close action (a contract addition first).
+- The remaining read paths that check access their own way, one small privacy PR each.
+- Then, once the founder approves the tables and the boundary download: `labelFor` (built on `isVerifiedResident` in `utils/homePermissions.js`, which Plans already uses), `canReadPost`'s area scopes, and the `PulseArea` migration with the three town boundaries, ready for the table approval.
+
+## Requests (to other streams)
+
+- → PI, PA (S1 client half): remove Theft, Vandalism, Suspicious and Scam from the Heads-up kinds, and default the kind to Hazard (both composers default to Theft today, which the server now refuses). Residents may create `road_hazard`, `power_outage`, `weather_damage`, `hazard`, `other`, `missing_pet`. Remove the business owner dashboard's compose button: `POST /api/businesses/:id/posts` now always answers `403 BUSINESS_CANNOT_POST` with a readable sentence.
+- → PI, PA (S4 client half): topic chips use `GET /api/posts/feed?topic=` today and `GET /api/pulse/feed?topic=` from S6; "Mute this topic in this area" uses `POST /api/posts/mute/topic` `{ topic, areaId }` (areas from S5; without `areaId` it mutes everywhere); the preferences list reads `topic_mutes` from `GET /api/posts/mute` and undoes with `DELETE /api/posts/mute` `{ entityType: 'topic', entityId, areaId? }`.
+- → PS (or whoever the founder names for the general web app): the web composer's alert types (`frontend/apps/web/src/components/feed/composer/SafetyAlertFields.tsx`) still list theft, vandalism, suspicious and scam. The server refuses them with a clear toast and keeps the draft; dropping the four buttons is a small web fix.
+- → PI, PA (S7 client half): card statuses can read `resolution` on the legacy rows now (`/api/posts/feed`, saved, profile lists, `GET /api/posts/:id`; null while open, `answered` once the asker marks an Ask solved), and `status.resolution` on `PulsePost` from S6. `claim_mode` is stored on every row but means something only on an offer. Map markers don't carry these fields. On the web, a `share` or `offer` row shows as a plain "Post" card and opens normally.
+- → PA (your legacy-replies question, S9): `GET /api/posts/:id/comments` keeps leaving out deleted replies, as it does today (`is_deleted = false`). When S9 makes account deletion keep a soft-deleted reply, that row is `is_deleted = true`, so the legacy endpoint omits it and never sends a reply without `user_id`. Only the Pulse endpoint shows it, as `removed: true` ("Reply removed"). Your anonymous-reply fallback is a safe default.
+- → PV: `scripts/pulse/accounts.cjs` creates `@example.invalid` emails, which the backend's sign-in validation rejects ("Please enter a valid email address."), so the accounts can't sign in to the web or the apps. `@example.com` (also reserved) works; PB moved its own local accounts.
+
+## Needs founder
+
+- Tick **New tables** in the README before any table migration (S5) can merge.
+- Permission to fetch the three town boundaries (Camas, Washougal, Vancouver) from the US Census TIGERweb service: public domain, a few tens of KB of GeoJSON, saved to PB's scratch space, simplified and written into the `PulseArea` migration with its source.
+- Deploy note for S1: deploy the seeder no later than the backend. The backend refuses a curator public-safety alert without a source link; the updated seeder sends one, and an older backend ignores the extra field.
+- Deploy note for S4 and S7: the migration before the backend (the release workflow already migrates first). Code from before S7 runs unchanged on the S7 schema.
