@@ -5,7 +5,8 @@
 //  Board H6 "Where?": search, a small map of the chosen place, public
 //  places near the host (parks, playgrounds, libraries, courts, trails,
 //  cafés, bars and restaurants), and "Use Crown Park". Playdates meet in
-//  public places only.
+//  public places only. A pickup game also offers "You're here now" (board
+//  H4): the public place the host is at, never their own point.
 //
 
 import MapKit
@@ -13,12 +14,22 @@ import SwiftUI
 
 struct PlanPlacePicker: View {
     @Bindable var model: PlanComposerModel
+    /// "You're here now" above the places (pickup games in the host flow, as on Android).
+    var offersHereNow = false
     let onClose: () -> Void
+
+    /// What "You're here now" says while it looks, or after it found nothing.
+    private enum HereNow {
+        case idle, locating, noPlace, noLocation
+    }
 
     @State private var query = ""
     @State private var nearby: [PlanPlaceOptionDTO] = []
     @State private var results: [PlanPlaceOptionDTO] = []
     @State private var chosen: PlanPlaceOptionDTO?
+    /// The chosen place came from "You're here now".
+    @State private var chosenHereNow = false
+    @State private var hereNow = HereNow.idle
     @State private var center: UserCoordinate?
     @State private var loading = true
     @State private var camera: MapCameraPosition = .automatic
@@ -110,6 +121,7 @@ struct PlanPlacePicker: View {
         let shown = PlanPlaceFit.ordered(query.trimmingCharacters(in: .whitespaces).count >= 2 ? results : nearby, for: model.kind)
         VStack(alignment: .leading, spacing: 0) {
             Text.planOverline(query.count >= 2 ? "Results" : "Public places near you").padding(.bottom, 2)
+            if offersHereNow { hereNowRow }
             if loading, shown.isEmpty {
                 ForEach(0..<3, id: \.self) { _ in Shimmer(width: nil, height: 52, cornerRadius: Radii.lg).padding(.vertical, 6) }
             } else if shown.isEmpty {
@@ -119,7 +131,7 @@ struct PlanPlacePicker: View {
                     .padding(.vertical, Spacing.s3)
             }
             ForEach(Array(shown.enumerated()), id: \.element.id) { index, place in
-                row(place, divider: index > 0)
+                row(place, divider: index > 0 || offersHereNow)
             }
             if model.kind == .playdate {
                 VStack(spacing: 0) {
@@ -203,6 +215,7 @@ struct PlanPlacePicker: View {
     private var footer: some View {
         Button(chosen.map { "Use \($0.name)" } ?? "Choose a place") {
             model.place = chosen
+            model.placeIsHereNow = chosenHereNow
             onClose()
         }
         .planButton(.primary)
@@ -216,8 +229,9 @@ struct PlanPlacePicker: View {
 
     // MARK: - Reading
 
-    private func choose(_ place: PlanPlaceOptionDTO) {
+    private func choose(_ place: PlanPlaceOptionDTO, hereNow: Bool = false) {
         chosen = place
+        chosenHereNow = hereNow
         camera = .region(MKCoordinateRegion(
             center: CLLocationCoordinate2D(latitude: place.latitude, longitude: place.longitude),
             latitudinalMeters: 900,
@@ -227,7 +241,7 @@ struct PlanPlacePicker: View {
 
     private func loadNearby() async {
         chosen = model.place
-        if let chosen { choose(chosen) }
+        if let chosen { choose(chosen, hereNow: model.placeIsHereNow) }
         let location = DeviceLocationProvider.shared
         if location.canLocateWithoutAsking, let fix = await location.requestCurrent(timeoutSeconds: 4) {
             center = fix
@@ -285,6 +299,77 @@ struct PlanPlacePicker: View {
     }
 }
 
+// MARK: - You're here now
+
+private extension PlanPlacePicker {
+    /// "You're here now": once it found the place, the row names it, as board H4 does ("City courts / You're here now").
+    var hereNowRow: some View {
+        let found = chosenHereNow ? chosen : nil
+        return Button { Task { await useHereNow() } } label: {
+            HStack(spacing: Spacing.s3) {
+                RoundedRectangle(cornerRadius: 13, style: .continuous)
+                    .fill(Theme.Color.primary100)
+                    .frame(width: 44, height: 44)
+                    .overlay(Icon(.navigation, size: 22, color: Theme.Color.primary700))
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(found?.name ?? "You're here now").planFont(.rowTitle).foregroundStyle(Theme.Color.appText).lineLimit(2)
+                    Text(found == nil ? hereNowLine : "You're here now").planFont(.footnote)
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                if found != nil { Icon(.check, size: 22, strokeWidth: 2.6, color: Theme.Color.primary600) }
+            }
+            .padding(.vertical, 11)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(hereNow == .locating)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(found != nil ? [.isButton, .isSelected] : .isButton)
+        .accessibilityIdentifier("planPlaceHereNow")
+    }
+
+    var hereNowLine: String {
+        switch hereNow {
+        case .idle: "Use the park or court you're at"
+        case .locating: "Finding where you are…"
+        case .noPlace: "No public place right here. Pick one below."
+        case .noLocation: "Turn on location to use where you are."
+        }
+    }
+
+    /// "You're here now": a fresh fix, then the nearest named public place within about 150 m of it (never the fix
+    /// itself, decision D2), skipping any right at one of the host's homes, which the server refuses.
+    func useHereNow() async {
+        hereNow = .locating
+        guard let fix = await DeviceLocationProvider.shared.requestCurrent(timeoutSeconds: 6) else {
+            hereNow = .noLocation
+            return
+        }
+        var around: [PlanPlaceOptionDTO] = []
+        // A first ask for an area can answer "loading" while the server gathers its places (as in loadNearby).
+        for attempt in 0..<4 {
+            if attempt > 0 {
+                try? await Task.sleep(for: .seconds(3))
+                if Task.isCancelled { return }
+            }
+            guard let reply: PlanPlacesResponse = try? await APIClient.shared.request(
+                PlansEndpoints.nearbyPlaces(latitude: fix.latitude, longitude: fix.longitude)
+            ) else { break }
+            around = reply.places
+            attribution = reply.attribution ?? attribution
+            if !reply.loading { break }
+        }
+        guard let spot = PlanHereNow.spot(in: around, around: fix, homes: model.homePoints) else {
+            hereNow = .noPlace
+            return
+        }
+        hereNow = .idle
+        choose(spot, hereNow: true)
+    }
+}
+
 /// Which public places suit a plan: the kind's own places first (courts and
 /// parks for a pickup game, playgrounds for a playdate, trails for a walk,
 /// bars and restaurants for a watch party), nearest first within each, the
@@ -313,5 +398,31 @@ enum PlanPlaceFit {
         case .pickupGame: ["court", "park", "playground", "community_center"]
         case .walkCoffee: ["trail", "park", "cafe"]
         }
+    }
+}
+
+/// "You're here now" (board H4) picks the nearest named public place within
+/// about a block of a fresh fix. A place right at one of the host's own homes
+/// doesn't count: the server refuses a public place that close to a home
+/// (`HOME_GUARD_METERS` in backend/services/plans/planRules.js).
+enum PlanHereNow {
+    static let reachMeters: CLLocationDistance = 150
+    static let homeGuardMeters: CLLocationDistance = 50
+
+    static func spot(
+        in places: [PlanPlaceOptionDTO],
+        around fix: UserCoordinate,
+        homes: [(latitude: Double, longitude: Double)]
+    ) -> PlanPlaceOptionDTO? {
+        let here = CLLocation(latitude: fix.latitude, longitude: fix.longitude)
+        let homeSpots = homes.map { CLLocation(latitude: $0.latitude, longitude: $0.longitude) }
+        func meters(_ place: PlanPlaceOptionDTO) -> CLLocationDistance {
+            place.distanceMeters ?? here.distance(from: CLLocation(latitude: place.latitude, longitude: place.longitude))
+        }
+        func atHome(_ place: PlanPlaceOptionDTO) -> Bool {
+            let spot = CLLocation(latitude: place.latitude, longitude: place.longitude)
+            return homeSpots.contains { $0.distance(from: spot) <= homeGuardMeters }
+        }
+        return places.filter { meters($0) <= reachMeters && !atHome($0) }.min { meters($0) < meters($1) }
     }
 }

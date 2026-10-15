@@ -40,6 +40,8 @@ function reminderFor(ask, hasReplies) {
 }
 
 async function askStillOpenReminders() {
+  // Direct reply-action pushes held overnight share this existing hourly tick.
+  await require('../services/pulse/notices').releaseDue();
   const now = Date.now();
   const nowIso = new Date(now).toISOString();
   const days = await windowDays('ask_local');

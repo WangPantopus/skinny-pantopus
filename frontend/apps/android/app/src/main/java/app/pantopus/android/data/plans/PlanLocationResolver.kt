@@ -92,6 +92,13 @@ class PlanLocationResolver
             return PlanGpsFix(coordinate.latitude, coordinate.longitude, Instant.now())
         }
 
+        /** A new fix for "You're here now" (as iOS asks for one): a cached one can be from before the host walked over. */
+        suspend fun newFix(): PlanGpsFix? {
+            if (!hasLocationPermission()) return null
+            val coordinate = gps.requestCurrent(FIX_TIMEOUT_MS) ?: gps.cachedCoordinate() ?: return null
+            return PlanGpsFix(coordinate.latitude, coordinate.longitude, Instant.now())
+        }
+
         private suspend fun fromGps(): PlanLocation? {
             val coordinate = gps.cachedCoordinate() ?: gps.requestCurrent(FIX_TIMEOUT_MS) ?: return null
             val payload = viewing.currentCopy() ?: (viewing.current() as? NetworkResult.Success)?.data

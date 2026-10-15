@@ -5,6 +5,15 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 const verifyToken = require('../middleware/verifyToken');
 const logger = require('../utils/logger');
 const areas = require('../services/pulse/areas');
+const pulseFeed = require('../services/pulse/feed');
+const feedSeen = require('../services/pulse/seen');
+const feedCursor = require('../services/pulse/feedCursor');
+const conversation = require('../services/pulse/conversation');
+const replyActions = require('../services/pulse/replyActions');
+const follows = require('../services/pulse/follows');
+const claims = require('../services/pulse/claims');
+const readScope = require('../services/pulse/readScope');
+const { isPulseTopic } = require('../services/pulse/topics');
 const {
   DAY_MS, askIdsWithReplies, windowDays, endsAt,
 } = require('../services/pulse/lifecycle');
@@ -14,6 +23,141 @@ const router = express.Router();
 // Days an Ask's author can add, once, from the day-6 reminder (build spec §4).
 const KEEP_OPEN_DAYS = 7;
 const ASK_SELECT = 'id, user_id, post_type, state, resolution, archived_at, created_at, expires_at, post_metadata';
+
+function feedOptions(query) {
+  const view = query.view ?? 'nearby';
+  if (!['nearby', 'following'].includes(view)) throw Object.assign(new Error('Choose Nearby or Following.'), { status: 400 });
+  if (query.topic != null && !isPulseTopic(query.topic)) throw Object.assign(new Error('Choose one of the Pulse topics.'), { status: 400 });
+  if (query.area_id != null && (typeof query.area_id !== 'string' || !feedCursor.UUID.test(query.area_id))) {
+    throw Object.assign(new Error('That area could not be found.'), { status: 400 });
+  }
+  if (query.limit != null && (typeof query.limit !== 'string' || !/^\d+$/.test(query.limit) || Number(query.limit) < 1)) {
+    throw Object.assign(new Error('Choose a positive page size.'), { status: 400 });
+  }
+  return { view, topic: query.topic, areaId: query.area_id, earlierBefore: query.earlier_before,
+    limit: Math.min(Number(query.limit) || 30, 40) };
+}
+
+function feedError(res, error) {
+  if (error.status) {
+    return res.status(error.status).json({ error: error.message, ...(error.code ? { code: error.code } : {}), ...(error.body || {}) });
+  }
+  logger.error('pulse.feed.error', { error: error.message });
+  return res.status(503).json({ error: "Couldn't load Pulse. Please try again." });
+}
+
+router.get('/feed', verifyToken, async (req, res) => {
+  try {
+    res.set('Cache-Control', 'private, no-store');
+    res.json(await pulseFeed.page(req.user.id, feedOptions(req.query)));
+  } catch (error) { feedError(res, error); }
+});
+
+router.get('/feed/new', verifyToken, async (req, res) => {
+  try {
+    if (!feedCursor.timestamp(req.query.after)) return res.status(400).json({ error: 'Choose a valid time to check for new conversations.' });
+    res.set('Cache-Control', 'private, no-store');
+    res.json(await pulseFeed.newCount(req.user.id, { ...feedOptions(req.query), after: req.query.after }));
+  } catch (error) { feedError(res, error); }
+});
+
+router.post('/feed/seen', verifyToken, async (req, res) => {
+  try {
+    if (!['nearby', 'following'].includes(req.body?.view) || !feedCursor.timestamp(req.body?.through)) {
+      return res.status(400).json({ error: 'Choose a view and a valid time to mark as read.' });
+    }
+    res.json(await feedSeen.advance(req.user.id, req.body.view, req.body.through));
+  } catch (error) { feedError(res, error); }
+});
+
+router.get('/posts/:postId', verifyToken, async (req, res) => {
+  try {
+    res.set('Cache-Control', 'private, no-store');
+    res.json(await conversation.read(req.params.postId, req.user.id));
+  } catch (error) { feedError(res, error); }
+});
+
+router.get('/posts/:postId/replies', verifyToken, async (req, res) => {
+  try {
+    if (req.query.after != null && !feedCursor.timestamp(req.query.after)) {
+      return res.status(400).json({ error: 'Choose a valid time to check for new replies.' });
+    }
+    res.set('Cache-Control', 'private, no-store');
+    res.json(await conversation.read(req.params.postId, req.user.id, { repliesOnly: true, after: req.query.after }));
+  } catch (error) { feedError(res, error); }
+});
+
+router.post('/posts/:postId/replies/:replyId/helpful', verifyToken, async (req, res) => {
+  try {
+    if (typeof req.body?.helpful !== 'boolean') return res.status(400).json({ error: 'Choose whether this reply was Helpful.' });
+    res.json(await replyActions.act(req.params.postId, req.params.replyId, req.user.id, 'helpful', req.body.helpful));
+  } catch (error) { feedError(res, error); }
+});
+
+router.post('/posts/:postId/replies/:replyId/thanks', verifyToken, async (req, res) => {
+  try {
+    res.json(await replyActions.act(req.params.postId, req.params.replyId, req.user.id, 'thanks'));
+  } catch (error) { feedError(res, error); }
+});
+
+router.post('/posts/:postId/replies/:replyId/report', verifyToken, async (req, res) => {
+  try {
+    res.json(await replyActions.report(req.params.postId, req.params.replyId, req.user.id, req.body || {}));
+  } catch (error) { feedError(res, error); }
+});
+
+router.post('/posts/:postId/claims', verifyToken, async (req, res) => {
+  try { res.json(await claims.request(req.params.postId, req.user.id, req.body || {})); }
+  catch (error) { feedError(res, error); }
+});
+
+router.get('/posts/:postId/claims', verifyToken, async (req, res) => {
+  try {
+    res.set('Cache-Control', 'private, no-store');
+    res.json(await claims.list(req.params.postId, req.user.id));
+  } catch (error) { feedError(res, error); }
+});
+
+router.post('/posts/:postId/claims/:claimId/choose', verifyToken, async (req, res) => {
+  try { res.json(await claims.choose(req.params.postId, req.params.claimId, req.user.id)); }
+  catch (error) { feedError(res, error); }
+});
+
+router.put('/posts/:postId/read-scope', verifyToken, async (req, res) => {
+  try { res.json(await readScope.narrow(req.params.postId, req.user.id, req.body || {})); }
+  catch (error) { feedError(res, error); }
+});
+
+router.get('/follows', verifyToken, async (req, res) => {
+  try {
+    res.set('Cache-Control', 'private, no-store');
+    res.json(await follows.list(req.user.id));
+  } catch (error) { feedError(res, error); }
+});
+
+router.put('/follows', verifyToken, async (req, res) => {
+  try { res.json(await follows.put(req.user.id, req.body)); }
+  catch (error) { feedError(res, error); }
+});
+
+router.delete('/follows', verifyToken, async (req, res) => {
+  try { res.json(await follows.remove(req.user.id, req.query)); }
+  catch (error) { feedError(res, error); }
+});
+
+router.get('/preferences/summary', verifyToken, async (req, res) => {
+  try {
+    res.set('Cache-Control', 'private, no-store');
+    res.json(await follows.summary(req.user.id));
+  } catch (error) { feedError(res, error); }
+});
+
+router.get('/posts/:postId/why', verifyToken, async (req, res) => {
+  try {
+    res.set('Cache-Control', 'private, no-store');
+    res.json(await follows.why(req.user.id, req.params.postId, feedOptions(req.query)));
+  } catch (error) { feedError(res, error); }
+});
 
 router.get('/areas/mine', verifyToken, async (req, res) => {
   try {
