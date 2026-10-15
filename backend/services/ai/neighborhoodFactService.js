@@ -399,10 +399,8 @@ function generateSeasonalFacts(geohash, seasonalCtx, neighborhoodPreview, week, 
   const facts = [];
 
   // Primary seasonal tip
-  const seasonLabel = seasonalCtx.active_seasons
-    .map((s) => s.replace(/_/g, ' '))
-    .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
-    [0] || 'the current season';
+  const seasonLabel = (seasonalCtx.primary_season || 'the current season')
+    .replace(/_/g, ' ').replace(/^./, letter => letter.toUpperCase());
 
   if (seasonalCtx.seasonal_tip) {
     facts.push({
@@ -410,7 +408,7 @@ function generateSeasonalFacts(geohash, seasonalCtx, neighborhoodPreview, week, 
       type: 'seasonal_tip',
       title: `${seasonLabel} Tip`,
       body: seasonalCtx.seasonal_tip,
-      source: 'PNW Seasonal',
+      source: seasonalCtx.region_label ? `${seasonalCtx.region_label} seasonal guidance` : 'Seasonal guidance',
       post_type: 'discussion',
     });
   }
@@ -422,7 +420,7 @@ function generateSeasonalFacts(geohash, seasonalCtx, neighborhoodPreview, week, 
       type: 'seasonal_tip',
       title: 'Home Care Tip',
       body: seasonalCtx.home_specific_tip,
-      source: 'PNW Seasonal',
+      source: seasonalCtx.region_label ? `${seasonalCtx.region_label} seasonal guidance` : 'Seasonal guidance',
       post_type: 'recommendation',
       cta: 'Post a gig for this',
     });
@@ -441,7 +439,7 @@ function generateSeasonalFacts(geohash, seasonalCtx, neighborhoodPreview, week, 
       type: 'seasonal_tip',
       title: `Peak ${topCategory} Season`,
       body: `This is peak ${topCategory.toLowerCase()} season.${neighborClause}`,
-      source: 'PNW Seasonal',
+      source: seasonalCtx.region_label ? `${seasonalCtx.region_label} seasonal guidance` : 'Seasonal guidance',
       post_type: 'gig',
       cta: `Find ${topCategory.toLowerCase()} help`,
     });

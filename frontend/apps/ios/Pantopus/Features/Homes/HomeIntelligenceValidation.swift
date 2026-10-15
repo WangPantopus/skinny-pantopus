@@ -20,7 +20,9 @@ enum HomeIntelligenceValidation {
 
     static func checklist(_ value: SeasonalChecklistDTO, homeId: String) -> Bool {
         guard nonblank(value.season.key), nonblank(value.season.label) else { return false }
-        guard value.items.allSatisfy({ item($0, homeId: homeId) && $0.seasonKey == value.season.key }) else { return false }
+        // A regional campaign may reuse an existing task from another season.
+        // Its persisted season and completion history stay attached to that id.
+        guard value.items.allSatisfy({ item($0, homeId: homeId) }) else { return false }
         if let carryover = value.carryover {
             guard nonblank(carryover.season.key), nonblank(carryover.season.label) else { return false }
             guard carryover.items

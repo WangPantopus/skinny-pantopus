@@ -55,7 +55,9 @@ internal object HomeIntelligenceValidation {
         homeId: String,
     ): Boolean {
         if (value.season.key.isBlank() || value.season.label.isBlank()) return false
-        if (!value.items.all { item(it, homeId) && it.seasonKey == value.season.key }) return false
+        // Regional campaigns can reuse a task while retaining its original
+        // persisted season and completion history. Home ownership still matches.
+        if (!value.items.all { item(it, homeId) }) return false
         val carryover = value.carryover
         if (carryover != null) {
             return carryover.season.key.isNotBlank() && carryover.season.label.isNotBlank() &&

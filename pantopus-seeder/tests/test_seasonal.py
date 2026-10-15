@@ -29,6 +29,9 @@ def _make_config(**overrides) -> dict:
         "category": "seasonal",
         "display_name": "Pantopus Seasonal",
         "region": "clark_county",
+        "state": "WA",
+        "region_lat": 45.6387,
+        "region_lng": -122.6615,
     }
     base.update(overrides)
     return base
@@ -45,47 +48,47 @@ def _mock_now(month: int, day: int):
 
 class TestSeasonDetection:
     def test_january_15_is_winter_ice(self):
-        seasons = get_active_seasons(1, 15)
+        seasons = get_active_seasons(1, 15, "pacific_northwest")
         names = [s["name"] for s in seasons]
         assert "winter_ice" in names
         assert len(names) == 1
 
     def test_march_20_is_spring_cleanup(self):
-        seasons = get_active_seasons(3, 20)
+        seasons = get_active_seasons(3, 20, "pacific_northwest")
         names = [s["name"] for s in seasons]
         assert "spring_cleanup" in names
         assert len(names) == 1
 
     def test_july_20_is_summer_dry_and_smoke(self):
-        seasons = get_active_seasons(7, 20)
+        seasons = get_active_seasons(7, 20, "pacific_northwest")
         names = [s["name"] for s in seasons]
         assert "summer_dry" in names
         assert "smoke_season" in names
         assert len(names) == 2
 
     def test_october_15_is_fall_prep(self):
-        seasons = get_active_seasons(10, 15)
+        seasons = get_active_seasons(10, 15, "pacific_northwest")
         names = [s["name"] for s in seasons]
         assert "fall_prep" in names
         assert len(names) == 1
 
     def test_november_20_is_fall_prep_and_holiday(self):
-        seasons = get_active_seasons(11, 20)
+        seasons = get_active_seasons(11, 20, "pacific_northwest")
         names = [s["name"] for s in seasons]
         assert "fall_prep" in names
         assert "holiday_season" in names
         assert len(names) == 2
 
     def test_december_20_is_winter_ice_and_holiday(self):
-        seasons = get_active_seasons(12, 20)
+        seasons = get_active_seasons(12, 20, "pacific_northwest")
         names = [s["name"] for s in seasons]
         assert "winter_ice" in names
         assert "holiday_season" in names
         assert len(names) == 2
 
-    def test_may_15_has_no_season(self):
-        """May is the gap month — no active seasons."""
-        seasons = get_active_seasons(5, 15)
+    def test_desert_october_has_no_season(self):
+        """An inactive regional calendar does not fall back to a PNW season."""
+        seasons = get_active_seasons(10, 15, "southwest")
         assert seasons == []
 
 
@@ -120,11 +123,11 @@ class TestSeasonalSourceFetch:
         assert len(items) == 2
 
     @patch("src.sources.seasonal.datetime")
-    def test_returns_empty_in_may(self, mock_dt):
-        mock_dt.now.return_value = _mock_now(5, 15)
+    def test_returns_empty_for_inactive_desert_season(self, mock_dt):
+        mock_dt.now.return_value = _mock_now(10, 15)
         mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
 
-        src = SeasonalSource(_make_config())
+        src = SeasonalSource(_make_config(state="AZ", region="phoenix_az", region_lat=33.4484, region_lng=-112.0740))
         items = src.fetch()
 
         assert items == []
@@ -167,12 +170,8 @@ class TestSeasonalSourceFetch:
         mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
 
         spring = next(s for s in SEASONAL_CALENDAR if s["name"] == "spring_cleanup")
-        stale_tip = next(t for t in spring["tips"] if "early March" in t)
-        used = [
-            _tip_hash(t)
-            for t in spring["tips"]
-            if t != stale_tip and is_tip_active(t, 4, 20)
-        ]
+        # Exhaust the shared catalog: even repeated tips remain valid in April.
+        used = [_tip_hash(t) for t in spring["tips"]]
 
         src = SeasonalSource(_make_config(), recently_used_tip_hashes=used)
         items = src.fetch()
@@ -181,19 +180,19 @@ class TestSeasonalSourceFetch:
         assert "early March" not in items[0].title
 
     @patch("src.sources.seasonal.datetime")
-    def test_can_publish_early_march_tip_during_early_march(self, mock_dt):
+    def test_can_publish_current_spring_tip_during_early_march(self, mock_dt):
         mock_dt.now.return_value = _mock_now(3, 5)
         mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
 
         spring = next(s for s in SEASONAL_CALENDAR if s["name"] == "spring_cleanup")
-        stale_tip = next(t for t in spring["tips"] if "early March" in t)
-        used = [_tip_hash(t) for t in spring["tips"] if t != stale_tip]
+        current_tip = spring["tips"][0]
+        used = [_tip_hash(t) for t in spring["tips"] if t != current_tip]
 
         src = SeasonalSource(_make_config(), recently_used_tip_hashes=used)
         items = src.fetch()
 
         assert len(items) == 1
-        assert items[0].title == stale_tip
+        assert items[0].title == current_tip
 
 
 # ---------------------------------------------------------------------------
@@ -221,15 +220,12 @@ class TestTipQuality:
 # ---------------------------------------------------------------------------
 
 class TestCalendarCoverage:
-    def test_every_month_except_may_has_a_season(self):
-        """Every date except May maps to at least one season."""
+    def test_regional_calendar_does_not_invent_seasons_for_unknown_geography(self):
+        """The PNW's calendar is no longer an implicit nationwide default."""
         for month in range(1, 13):
-            if month == 5:
-                # May is the intentional gap
-                assert get_active_seasons(5, 15) == []
-                continue
-            seasons = get_active_seasons(month, 15)
-            assert len(seasons) >= 1, f"No season for month {month}"
+            assert get_active_seasons(month, 15) == []
+            seasons = get_active_seasons(month, 15, "pacific_northwest")
+            assert len(seasons) >= 1, f"No PNW season for month {month}"
 
 
 # ---------------------------------------------------------------------------

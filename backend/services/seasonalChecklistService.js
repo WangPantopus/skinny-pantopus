@@ -9,7 +9,7 @@
  */
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
-const { getSeasonalContext } = require('./ai/seasonalEngine');
+const { getSeasonalContext, OVERLAYS } = require('./ai/seasonalEngine');
 const { invalidateHealthScoreCache } = require('./homeHealthService');
 
 // ── Checklist definitions per season ─────────────────────────────────────────
@@ -19,13 +19,13 @@ const { invalidateHealthScoreCache } = require('./homeHealthService');
 const SEASON_CHECKLISTS = {
   spring_cleanup: [
     { item_key: 'gutter_cleaning', title: 'Clean gutters and downspouts', description: 'Remove debris from winter. Check for damage.', gig_category: 'Cleaning', gig_title: 'Gutter cleaning needed', sort: 1 },
-    { item_key: 'moss_removal', title: 'Remove roof and walkway moss', description: 'Moss damages roofing. Treat early.', gig_category: 'Cleaning', gig_title: 'Roof moss removal', sort: 2, condition: (home) => home.home_type === 'house' },
+    { item_key: 'moss_removal', title: 'Remove roof and walkway moss', description: 'Moss damages roofing. Treat early.', gig_category: 'Cleaning', gig_title: 'Roof moss removal', sort: 2, condition: (home) => home.home_type === 'house' && ['WA', 'OR'].includes(home.state) && home.longitude != null && home.longitude < -120.5 },
     { item_key: 'pressure_washing', title: 'Pressure wash siding and driveway', description: 'Winter grime buildup.', gig_category: 'Cleaning', gig_title: 'Pressure washing needed', sort: 3 },
     { item_key: 'hvac_filter', title: 'Replace HVAC filter', description: 'Change to spring/summer filter.', gig_category: 'Handyman', gig_title: 'HVAC filter replacement', sort: 4 },
   ],
 
   fall_prep: [
-    { item_key: 'gutter_cleaning', title: 'Clean gutters before rain season', gig_category: 'Cleaning', gig_title: 'Gutter cleaning needed', sort: 1 },
+    { item_key: 'gutter_cleaning', title: 'Clear leaves from gutters and downspouts', gig_category: 'Cleaning', gig_title: 'Gutter cleaning needed', sort: 1 },
     { item_key: 'furnace_inspection', title: 'Inspect and service furnace', gig_category: 'Handyman', gig_title: 'Furnace inspection and service', sort: 2 },
     { item_key: 'weatherstripping', title: 'Check and replace weatherstripping', gig_category: 'Handyman', gig_title: 'Weatherstripping replacement', sort: 3 },
     { item_key: 'leaf_removal', title: 'Clear yard of fallen leaves', gig_category: 'Gardening', gig_title: 'Leaf removal and yard cleanup', sort: 4, condition: (home) => home.home_type === 'house' },
@@ -63,39 +63,60 @@ const SEASON_CHECKLISTS = {
   ],
 };
 
+// Regional campaigns reuse stable item keys so a changed selection can retain
+// the household's existing completion or hired task instead of cloning it.
+const emergency = SEASON_CHECKLISTS.winter_ice.find(item => item.item_key === 'emergency_kit');
+const ac = SEASON_CHECKLISTS.summer_dry.find(item => item.item_key === 'ac_service');
+SEASON_CHECKLISTS.freeze_season = [
+  SEASON_CHECKLISTS.winter_ice[0],
+  { item_key: 'furnace_inspection', title: 'Check heating before deep freezes', sort: 2 },
+  { item_key: 'co_alarm', title: 'Test carbon monoxide alarms', sort: 3 }, emergency,
+];
+SEASON_CHECKLISTS.blizzard_season = SEASON_CHECKLISTS.winter_ice;
+SEASON_CHECKLISTS.winter_storm_season = [
+  { item_key: 'gutter_cleaning', title: 'Clear gutters and drainage paths', sort: 1 }, emergency,
+];
+SEASON_CHECKLISTS.hurricane_season = [
+  { item_key: 'storm_plan', title: 'Review local storm and evacuation guidance', description: 'Check local emergency management instructions for your address.', sort: 1 },
+  { item_key: 'secure_outdoors', title: 'Plan how to secure loose outdoor items', sort: 2 }, emergency,
+];
+SEASON_CHECKLISTS.tornado_season = [
+  { item_key: 'storm_shelter', title: 'Identify a safe shelter and enable weather alerts', sort: 1 }, emergency,
+];
+SEASON_CHECKLISTS.heat_season = [ac,
+  { item_key: 'cooling_plan', title: 'Plan a cool place to go during extreme heat', sort: 2 },
+];
+SEASON_CHECKLISTS.monsoon_season = [
+  { item_key: 'gutter_cleaning', title: 'Clear roof drains and drainage paths', sort: 1 },
+  { item_key: 'flood_plan', title: 'Review flash flood alerts and safe routes', sort: 2 }, emergency,
+];
+SEASON_CHECKLISTS.wildfire_season = [...SEASON_CHECKLISTS.smoke_season,
+  { item_key: 'clear_dry_debris', title: 'Clear dry debris immediately around the home', sort: 4 },
+];
+SEASON_CHECKLISTS.pollen_season = [
+  { item_key: 'hvac_filter', title: 'Check HVAC filters during pollen season', sort: 1 },
+  { item_key: 'pollen_forecast', title: 'Check local pollen forecasts', sort: 2 },
+];
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /**
  * Fetch home characteristics needed for condition filtering.
- * Tries PropertyIntelligenceCache first, falls back to Home table.
+ * Geography always comes from Home; cached property facts may enrich type and age.
  */
 async function getHomeContext(homeId) {
-  // Try cache first for richer data
-  const { data: cached, error: cacheError } = await supabaseAdmin
-    .from('PropertyIntelligenceCache')
-    .select('profile')
-    .eq('home_id', homeId)
-    .maybeSingle();
-
-  if (cacheError) throw new Error('Current home characteristics could not be loaded.');
-  if (cached?.profile) {
-    return {
-      home_type: cached.profile.property_type || null,
-      year_built: cached.profile.year_built || null,
-    };
-  }
-
-  // Fall back to Home table
-  const { data: home, error: homeError } = await supabaseAdmin
-    .from('Home')
-    .select('home_type, year_built')
-    .eq('id', homeId)
-    .maybeSingle();
-
-  if (homeError || !home) throw new Error('Current home characteristics could not be loaded.');
+  const [cache, homeResult] = await Promise.all([
+    supabaseAdmin.from('PropertyIntelligenceCache').select('profile').eq('home_id', homeId).maybeSingle(),
+    supabaseAdmin.from('Home').select('home_type, year_built, state, map_center_lat, map_center_lng').eq('id', homeId).maybeSingle(),
+  ]);
+  if (homeResult.error || !homeResult.data) throw new Error('Current home geography could not be loaded.');
+  const home = homeResult.data;
+  const profile = cache.data?.profile;
   return {
-    home_type: home?.home_type || null,
-    year_built: home?.year_built || null,
+    ...home,
+    latitude: home.map_center_lat, longitude: home.map_center_lng,
+    home_type: profile?.property_type || home.home_type || null,
+    year_built: profile?.year_built || home.year_built || null,
   };
 }
 
@@ -137,7 +158,7 @@ const PREVIOUS_SEASON = {
 /**
  * Resolve the previous season key and year for carryover lookup.
  */
-function getPreviousSeason(seasonKey, year) {
+function getPreviousSeason(seasonKey, year, month) {
   const prev = PREVIOUS_SEASON[seasonKey];
   if (!prev) return null;
   let prevYear = year + (prev.yearOffset || 0);
@@ -151,7 +172,6 @@ function getPreviousSeason(seasonKey, year) {
   }
   if (seasonKey === 'winter_ice') {
     // holiday_season is Nov-Dec, same year if month=Dec, prior year if Jan/Feb
-    const month = new Date().getMonth();
     if (month <= 1) prevYear = year - 1;
     return { key: prev.key, years: [prevYear] };
   }
@@ -173,88 +193,58 @@ function getPreviousSeason(seasonKey, year) {
  * @returns {Promise<{ items: Array, carryover?: Array }>}
  */
 async function getOrCreateChecklist(homeId, seasonKey, year, options = {}) {
-  // 1. Check for existing items
+  const homeContext = await getHomeContext(homeId);
+  const context = getSeasonalContext({ ...homeContext, date: options.date });
+  seasonKey = context.checklist_season;
+  year = context.year;
+  if (!seasonKey) return options.includePrevious ? { items: [], carryover: [] } : [];
+  const applicable = filterItems(SEASON_CHECKLISTS[seasonKey] || [], { ...homeContext, region: context.region });
   const { data: existing, error: fetchError } = await supabaseAdmin
-    .from('HomeSeasonalChecklistItem')
-    .select('*')
-    .eq('home_id', homeId)
-    .eq('season_key', seasonKey)
-    .eq('year', year)
+    .from('HomeSeasonalChecklistItem').select('*').eq('home_id', homeId).eq('year', year)
     .order('sort_order', { ascending: true });
+  if (fetchError || !Array.isArray(existing)) throw new Error('Current seasonal checklist could not be loaded.');
 
-  if (fetchError || !Array.isArray(existing)) {
-    logger.error('Failed to fetch seasonal checklist', { homeId, seasonKey, year, error: fetchError?.message || 'Missing checklist rows' });
-    throw new Error('Current seasonal checklist could not be loaded.');
+  const reusable = definition => existing.find(item => item.item_key === definition.item_key && item.season_key === seasonKey)
+    || existing.find(item => item.item_key === definition.item_key && (
+      ['pending', 'hired'].includes(item.status) || context.active_seasons.includes(item.season_key)
+      // Regional campaigns can replace a base campaign without asking for the same work twice.
+      || (OVERLAYS[seasonKey] || OVERLAYS[item.season_key])
+    ));
+  const retained = applicable.map(reusable).filter(Boolean);
+  const missing = applicable.filter(item => !reusable(item));
+  let inserted = [];
+  if (missing.length) {
+    const rows = missing.map(item => ({ home_id: homeId, season_key: seasonKey, year,
+      item_key: item.item_key, title: item.title, description: item.description || null,
+      gig_category: item.gig_category || null, gig_title_suggestion: item.gig_title || null,
+      sort_order: item.sort, status: 'pending' }));
+    // Existing unique key handles concurrent readers; ignoreDuplicates never
+    // rewrites completed_at, status, gig links, or the history of an old row.
+    const { error } = await supabaseAdmin.from('HomeSeasonalChecklistItem')
+      .upsert(rows, { onConflict: 'home_id,season_key,year,item_key', ignoreDuplicates: true });
+    if (error) throw new Error('The seasonal checklist could not be created.');
+    const result = await supabaseAdmin.from('HomeSeasonalChecklistItem').select('*')
+      .eq('home_id', homeId).eq('season_key', seasonKey).eq('year', year).in('item_key', missing.map(item => item.item_key));
+    if (result.error || !Array.isArray(result.data) || result.data.length !== missing.length) throw new Error('The seasonal checklist creation could not be confirmed.');
+    inserted = result.data;
   }
-
-  let items;
-
-  if (existing && existing.length > 0) {
-    items = existing;
-  } else {
-    // 2. No items yet — generate from definitions
-    const definitions = SEASON_CHECKLISTS[seasonKey];
-    if (!definitions) {
-      logger.warn('No checklist definitions for season', { seasonKey });
-      items = [];
-    } else {
-      const homeContext = await getHomeContext(homeId);
-      const applicable = filterItems(definitions, homeContext);
-
-      if (applicable.length === 0) {
-        items = [];
-      } else {
-        const rows = applicable.map(item => ({
-          home_id: homeId,
-          season_key: seasonKey,
-          year,
-          item_key: item.item_key,
-          title: item.title,
-          description: item.description || null,
-          gig_category: item.gig_category || null,
-          gig_title_suggestion: item.gig_title || null,
-          sort_order: item.sort,
-          status: 'pending',
-        }));
-
-        const { data: inserted, error: insertError } = await supabaseAdmin
-          .from('HomeSeasonalChecklistItem')
-          .insert(rows)
-          .select('*');
-
-        if (insertError) {
-          // Handle race condition: another request may have inserted concurrently
-          if (insertError.code === '23505') {
-            logger.info('Seasonal checklist race — fetching existing', { homeId, seasonKey, year });
-            const { data: reFetched, error: retryError } = await supabaseAdmin
-              .from('HomeSeasonalChecklistItem')
-              .select('*')
-              .eq('home_id', homeId)
-              .eq('season_key', seasonKey)
-              .eq('year', year)
-              .order('sort_order', { ascending: true });
-            if (retryError || !Array.isArray(reFetched) || reFetched.length === 0) throw new Error('Current seasonal checklist could not be loaded after concurrent creation.');
-            items = reFetched || [];
-          } else {
-            logger.error('Failed to insert seasonal checklist', { homeId, seasonKey, year, error: insertError.message });
-            throw new Error('The seasonal checklist could not be created.');
-          }
-        } else {
-          // Sort before returning (insert may not preserve order)
-          if (!Array.isArray(inserted) || inserted.length === 0) throw new Error('The seasonal checklist creation could not be confirmed.');
-          items = inserted.sort((a, b) => a.sort_order - b.sort_order);
-        }
-      }
-    }
-  }
+  // Apply current geographic definitions before presenting persisted rows.
+  // Inapplicable rows remain available unchanged in checklist history.
+  let items = [...retained, ...inserted].sort((a, b) => a.sort_order - b.sort_order);
 
   assertChecklistMetadata(items);
   items = await releaseClosedHires(homeId, items);
+  // Present current regional wording without rewriting historical rows,
+  // completion timestamps, or linked work.
+  items = items.map(item => {
+    const definition = applicable.find(candidate => candidate.item_key === item.item_key);
+    return { ...item, title: definition.title, description: definition.description || null, sort_order: definition.sort };
+  }).sort((a, b) => a.sort_order - b.sort_order);
 
   // 3. Optionally fetch incomplete items from the previous season
   if (!options.includePrevious) return items;
 
-  const prev = getPreviousSeason(seasonKey, year);
+  const prev = getPreviousSeason(seasonKey, year, context.month - 1);
   if (!prev) return { items, carryover: [] };
 
   const { data: prevItems, error: prevError } = await supabaseAdmin
@@ -272,7 +262,9 @@ async function getOrCreateChecklist(homeId, seasonKey, year, options = {}) {
   }
 
   assertChecklistMetadata(prevItems);
-  return { items, carryover: prevItems || [] };
+  const currentKeys = new Set(items.map(item => item.item_key));
+  const applicableKeys = new Set(applicable.map(item => item.item_key));
+  return { items, carryover: prevItems.filter(item => applicableKeys.has(item.item_key) && !currentKeys.has(item.item_key)) };
 }
 
 /**
@@ -463,7 +455,7 @@ async function getChecklistHistory(homeId) {
       return aPri - bPri;
     })
     .map(group => {
-      const seasonDef = SEASONS[group.seasonKey] || {};
+      const seasonDef = SEASONS[group.seasonKey] || OVERLAYS[group.seasonKey] || {};
       const completed = group.items.filter(i =>
         i.status === 'completed' || i.status === 'skipped' || i.status === 'hired'
       ).length;
