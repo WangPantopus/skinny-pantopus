@@ -23,7 +23,10 @@ PRs, screenshots and chat. Preserve unrelated local work.
   inside the existing design language; don't redesign a working screen
   wholesale or change the tabs without the founder's approval. The founder
   approved the five-tab bar (Place · Today · Pulse · Plans · Messages) on
-  October 13 for the Pulse build; see
+  October 13 for the Pulse build, then paused that build on October 15: the
+  redesign, five tabs included, is behind the launch-cut key `pulse_redesign`,
+  and the apps keep the October 13 bar (Place · Today · Nearby · Messages) and
+  the October 13 Pulse; see
   [docs/product/pulse-build](docs/product/pulse-build/README.md).
 - Keep privacy and functional repairs separate from presentation changes. Never
   restore private fields to reproduce an old screenshot.

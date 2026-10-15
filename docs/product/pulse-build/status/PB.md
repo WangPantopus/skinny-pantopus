@@ -2,6 +2,61 @@
 
 Owner: the PB session. Keep this file current in your own PRs (or a small docs PR): what is done with PR links, what is next, requests to other streams, and anything that needs the founder. Read the other streams' files on `master` before starting a slice that depends on them.
 
+## Paused (October 15, founder decision)
+
+The Pulse redesign is behind the launch-cut key `pulse_redesign`, which is off for launch; the apps ship the October 13 Pulse. See the [README's paused note](../README.md) and cut 11 in [`docs/launch-scope-flags-2026-10-01.md`](../../../launch-scope-flags-2026-10-01.md).
+
+### The server gate (branch `claude/pulse-redesign-switch`)
+
+While the key is off:
+- every `/api/pulse` route and a Pulse-mode post (`readScope` on `POST /api/posts`) answer 403 `PULSE_REDESIGN_UNAVAILABLE`;
+- follow alerts, Helpful, thanks and offer notices and the Ask reminder are not created, and are left out of lists, counts and badges;
+- the Ask reminder job is skipped, together with the held-push release it carries.
+
+Unchanged:
+- everything the October 13 Pulse uses;
+- the S1 rules: crime and suspicion Heads-ups refused, businesses don't start feed posts;
+- the privacy fixes.
+
+It merges after PI's and PA's switch PRs.
+
+### Parked as drafts
+
+| Slice | Drafts |
+|---|---|
+| S12 | contract #2346, Known #2347, search and Upcoming #2349, Right now #2350 |
+| S14 | contract #2351, plan bridge #2352 |
+| S16 and S17 | contract #2353 |
+| S16 | places, unfinished and unverified, on branch `claude/pulse-pb-s16-places` (commit `23381028c`, no PR) |
+
+Their state and merge order are in the late October 15 handoff on that branch:
+
+```
+git show origin/claude/pulse-pb-s16-places:docs/product/pulse-build/status/PB-handoff-2026-10-15-late.md
+```
+
+### To resume
+
+1. Restart the local backend with the key:
+   ```
+   LAUNCH_FEATURES=pulse_redesign ~/.config/pantopus/pulse-pb-runtime/restart-backend.sh
+   ```
+   Use `PB_WORKTREE=<your worktree>` to run your own worktree.
+2. Rebase the drafts onto master, and rename their migrations to sort after master's newest.
+3. Gate what each slice adds that only the redesign uses:
+   - notification types such as S12's `pulse_right_now`, in the map in `backend/utils/featureFlags.js`;
+   - new jobs, with `skipForLaunchCut('pulse_redesign', …)`;
+   - routes under `/api/pulse` are already gated.
+
+### Runtime
+
+The runtime is kept, not wiped:
+- the Supabase stack `pantopus-pulse-pb`, with its data;
+- `~/.config/pantopus/pulse-pb-runtime`;
+- the iOS simulator `Pulse-PB` and the Android AVD `pulse-pb`.
+
+The handoff above has the ports and restart commands.
+
 ## Current handoff (October 15, 06:20 UTC)
 
 [PB handoff, October 15](PB-handoff-2026-10-15.md): what merged today (#2322 with its seven parents; #2339 with #2337 and #2338), the open S8 PRs (#2340 contract, #2341 implementation, both green), the next PB work in order (S8 merge, PC's content helpers and follow alerts, S12, S14, S15–S17, S20, S21–S24) and the live runtime the next session reuses.
