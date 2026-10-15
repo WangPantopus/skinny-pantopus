@@ -91,6 +91,22 @@ public struct FeedMapRegion: Sendable, Hashable {
             || abs(latitudeDelta - other.latitudeDelta) > latThreshold
             || abs(longitudeDelta - other.longitudeDelta) > lonThreshold
     }
+
+    /// MapKit fits a requested region to the map's shape: the centre and one
+    /// side of the span stay, the other side widens. True when this settled
+    /// viewport is `requested` fitted that way (within the same 10% jitter),
+    /// so nobody moved the map.
+    public func isMapFit(of requested: FeedMapRegion) -> Bool {
+        let latThreshold = max(requested.latitudeDelta * 0.1, 0.0005)
+        let lonThreshold = max(requested.longitudeDelta * 0.1, 0.0005)
+        let keepsLatitude = abs(latitudeDelta - requested.latitudeDelta) <= latThreshold
+        let keepsLongitude = abs(longitudeDelta - requested.longitudeDelta) <= lonThreshold
+        return abs(latitude - requested.latitude) <= latThreshold
+            && abs(longitude - requested.longitude) <= lonThreshold
+            && latitudeDelta >= requested.latitudeDelta - latThreshold
+            && longitudeDelta >= requested.longitudeDelta - lonThreshold
+            && (keepsLatitude || keepsLongitude)
+    }
 }
 
 /// The two request dimensions the map mode re-fetches on: which feed
@@ -305,9 +321,15 @@ public final class FeedMapViewModel {
     /// Camera settled on a new viewport. Marks the viewport dirty (so the
     /// "Search this area" pill appears) and debounces the follow-up
     /// region commit — the refetch itself waits for the explicit tap,
-    /// matching RN.
+    /// matching RN. With nothing pending, settling on `region` as MapKit
+    /// fitted it to the map's shape (opening the map, Recenter, a new area)
+    /// isn't a move.
     public func cameraDidSettle(on next: FeedMapRegion) {
-        guard next.changedSignificantly(from: pendingRegion ?? region) else { return }
+        if let pendingRegion {
+            guard next.changedSignificantly(from: pendingRegion) else { return }
+        } else if next.isMapFit(of: region) {
+            return
+        }
         pendingRegion = next
         viewportDirty = true
         clearSelection()
