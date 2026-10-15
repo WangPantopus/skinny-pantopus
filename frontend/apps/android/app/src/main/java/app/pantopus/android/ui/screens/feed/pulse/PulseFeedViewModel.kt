@@ -28,6 +28,7 @@ import app.pantopus.android.data.location.ViewingLocationRepository
 import app.pantopus.android.data.posts.FeedQuery
 import app.pantopus.android.data.posts.PostsRepository
 import app.pantopus.android.data.posts.PulsePostsRefreshNotifier
+import app.pantopus.android.data.pulse.PulseRepository
 import app.pantopus.android.data.sports.SportsRepository
 import app.pantopus.android.data.store.StoreKeys
 import app.pantopus.android.ui.screens.feed.FeedEmptyContent
@@ -107,6 +108,8 @@ class PulseFeedViewModel
         private val moderation: FeedModerationStore,
         /** `GET /api/location` — the area chosen in the Nearby context bar. */
         private val viewingLocation: ViewingLocationRepository,
+        /** Pulse's own routes: the asker's keep-open and close (S7). */
+        private val pulseRepo: PulseRepository,
     ) : ViewModel() {
         private val _state = MutableStateFlow<PulseFeedUiState>(PulseFeedUiState.Loading)
         val state: StateFlow<PulseFeedUiState> = _state.asStateFlow()
@@ -247,6 +250,23 @@ class PulseFeedViewModel
         private val _deletingPostId = MutableStateFlow<String?>(null)
         val deletingPostId: StateFlow<String?> = _deletingPostId.asStateFlow()
 
+        /** The Ask whose "Close" waits for its confirmation (S7). */
+        private val _closingAskId = MutableStateFlow<String?>(null)
+        val closingAskId: StateFlow<String?> = _closingAskId.asStateFlow()
+
+        /** Asks kept open here (or refused as already kept open): "Keep open 7 more days" no longer shows. */
+        private var keptOpenIds: Set<String> = emptySet()
+        private val endingAskIds = mutableSetOf<String>()
+
+        /**
+         * Posts that ended while this list showed them (an Ask closed here or on its page, a post deleted, archived or
+         * found gone elsewhere), with the read generation then: hidden until restored or a newer read returns them open.
+         */
+        private val endedPostGenerations = mutableMapOf<String, Int>()
+
+        /** The last ended-or-restored change from other screens this list has applied. */
+        private var postEventsSeen = 0L
+
         /** The post whose author is awaiting mute confirmation, if any. */
         private val _mutingPostId = MutableStateFlow<String?>(null)
         val mutingPostId: StateFlow<String?> = _mutingPostId.asStateFlow()
@@ -350,6 +370,7 @@ class PulseFeedViewModel
          * of date (Nearby: 2 minutes, or an own post).
          */
         fun load() {
+            applyPostEventsFromElsewhere()
             if (_state.value is PulseFeedUiState.Loaded) {
                 val query = lastQuery
                 if (query == null || !repo.feedFirstPageIsCurrent(query)) fetch(quiet = true)
@@ -509,6 +530,73 @@ class PulseFeedViewModel
 
         fun cancelDelete() {
             _deletingPostId.value = null
+        }
+
+        /**
+         * "Keep open 7 more days" on the asker's own open Ask (S7, contract 2.12): once per Ask. A refusal shows the
+         * server's sentence; "already kept open" also hides the entry.
+         */
+        fun keepOpen(postId: String) {
+            if (!endingAskIds.add(postId)) return
+            _overflowPostId.value = null
+            viewModelScope.launch {
+                try {
+                    when (val result = pulseRepo.keepOpen(postId)) {
+                        is NetworkResult.Success -> {
+                            keptOpenIds = keptOpenIds + postId
+                            _toastMessage.value = "Kept open for 7 more days."
+                            rebuildLoadedState()
+                        }
+                        is NetworkResult.Failure -> {
+                            if (PulseRepository.refusalCode(result.error) == PulseRepository.ALREADY_KEPT_OPEN) {
+                                keptOpenIds = keptOpenIds + postId
+                                rebuildLoadedState()
+                            }
+                            _toastMessage.value = result.error.displayMessage("Couldn't keep it open. Try again.")
+                            refresh()
+                        }
+                    }
+                } finally {
+                    endingAskIds.remove(postId)
+                    rebuildLoadedState()
+                }
+            }
+        }
+
+        /** "Close" on the asker's own open Ask asks first (S7). */
+        fun beginCloseAsk(postId: String) {
+            _overflowPostId.value = null
+            _closingAskId.value = postId
+        }
+
+        fun cancelCloseAsk() {
+            _closingAskId.value = null
+        }
+
+        /** The confirmed "Close": the Ask ends (`closed` or `closed_unanswered`) and leaves the list (contract 2.12). */
+        fun closeAsk(postId: String) {
+            if (!endingAskIds.add(postId)) return
+            _closingAskId.value = null
+            viewModelScope.launch {
+                try {
+                    when (val result = pulseRepo.close(postId)) {
+                        is NetworkResult.Success -> {
+                            endedPostGenerations[postId] = fetchGeneration
+                            // Other lists (My posts, another feed) hide it too.
+                            postsRefresh.notifyPostEnded(postId)
+                            _toastMessage.value = "Question closed."
+                            rebuildLoadedState()
+                        }
+                        is NetworkResult.Failure -> {
+                            _toastMessage.value = result.error.displayMessage("Couldn't close it. Try again.")
+                            refresh()
+                        }
+                    }
+                } finally {
+                    endingAskIds.remove(postId)
+                    rebuildLoadedState()
+                }
+            }
         }
 
         fun beginMuteAuthor(postId: String) {
@@ -742,6 +830,7 @@ class PulseFeedViewModel
         fun muteAuthor(postId: String) {
             _mutingPostId.value = null
             val post = loadedPosts.firstOrNull { it.id == postId } ?: return
+            if (isOwner(post) || post.isSeeded) return
             val businessId = post.businessAuthorId
             val entityType = if (businessId != null) FeedMuteEntityType.Business else FeedMuteEntityType.User
             val entityId = businessId ?: post.userId ?: return
@@ -768,6 +857,7 @@ class PulseFeedViewModel
          */
         fun muteTopic(postId: String) {
             val post = loadedPosts.firstOrNull { it.id == postId } ?: return
+            if (isOwner(post) || post.isSeeded) return
             val postType = post.postType?.takeIf { it.isNotEmpty() } ?: return
             val label = PulseIntent.fromPostType(postType).cardChipLabel
             mutedPostTypes = mutedPostTypes + postType
@@ -792,6 +882,7 @@ class PulseFeedViewModel
          */
         fun muteThisTopic(postId: String) {
             val post = loadedPosts.firstOrNull { it.id == postId } ?: return
+            if (isOwner(post) || post.isSeeded) return
             val topic = PulseTopic.fromKey(post.topic) ?: return
             mutedTopicKeys = mutedTopicKeys + topic.key
             if (_activeTopic.value == topic) selectTopic(null) else rebuildLoadedState()
@@ -878,6 +969,7 @@ class PulseFeedViewModel
                     ) {
                         is NetworkResult.Success -> {
                             if (generation != fetchGeneration) return@launch
+                            acceptRestoredAsks(result.data.posts, generation)
                             val known = loadedPosts.map { it.id }.toSet()
                             loadedPosts = loadedPosts + result.data.posts.filter { it.id !in known }
                             applyPagination(result.data.pagination)
@@ -907,6 +999,7 @@ class PulseFeedViewModel
         private fun visiblePosts(): List<FeedPost> =
             loadedPosts.filter { post ->
                 post.id !in removedPostIds &&
+                    post.id !in endedPostGenerations &&
                     moderation.isVisible(
                         postId = post.id,
                         userId = post.userId,
@@ -961,7 +1054,10 @@ class PulseFeedViewModel
                     val response = stored.data
                     val failure = stored.failure
                     when {
-                        response != null -> applyFirstPage(response, area, query, inPlace = !isRefresh)
+                        response != null -> {
+                            if (failure == null && repo.feedFirstPageIsCurrent(query)) acceptRestoredAsks(response.posts, generation)
+                            applyFirstPage(response, area, query, inPlace = !isRefresh)
+                        }
                         failure.refusesStoredCopy -> {
                             loadedPosts = emptyList()
                             _state.value = PulseFeedUiState.Error(failure.displayMessageOr("Couldn't load Pulse."))
@@ -1023,6 +1119,35 @@ class PulseFeedViewModel
         /** Copy only the card the reader tapped, synchronously and within the shared store's lifetime. */
         fun seedPostForOpen(postId: String) {
             loadedPosts.firstOrNull { it.id == postId }?.let(repo::seedDetail)
+        }
+
+        /** A fresh read after Close may return an Ask restored elsewhere (web, another phone); an older read cannot undo Close. */
+        private fun acceptRestoredAsks(
+            posts: List<FeedPost>,
+            generation: Int,
+        ) {
+            posts.forEach { post ->
+                val endedDuring = endedPostGenerations[post.id] ?: return@forEach
+                if (generation > endedDuring && isOpenAsk(post, post.state == "solved")) {
+                    endedPostGenerations.remove(post.id)
+                    loadedPosts = loadedPosts.map { if (it.id == post.id) post else it }
+                }
+            }
+        }
+
+        /**
+         * Own posts closed, deleted, archived or found gone on another screen leave this list at once, and come back when
+         * restored from My posts: a quiet read keeps the rows on screen, so it would not drop them by itself.
+         */
+        private fun applyPostEventsFromElsewhere() {
+            val (latest, events) = postsRefresh.postEventsAfter(postEventsSeen)
+            postEventsSeen = latest
+            if (events.isEmpty()) return
+            events.forEach { event ->
+                if (event.ended) endedPostGenerations[event.postId] = fetchGeneration else endedPostGenerations.remove(event.postId)
+            }
+            // Only the current query's rows are redrawn; a read still running or failed shows its own state.
+            if (postsLoaded) rebuildLoadedState()
         }
 
         /**
@@ -1224,6 +1349,7 @@ class PulseFeedViewModel
             val likeCount = effectiveLikeCount(post)
             val isOwner = isOwner(post)
             val isSolved = effectiveIsSolved(post)
+            val openAsk = isOwner && isOpenAsk(post, isSolved)
             return PulsePostCardContent(
                 id = post.id,
                 likePending = post.id in liking,
@@ -1285,11 +1411,36 @@ class PulseFeedViewModel
                             },
                         muteEntityId = post.businessAuthorId ?: post.userId,
                         muteEntityName = authorName,
-                        postType = post.postType,
+                        postType = post.postType.takeUnless { intent == PulseIntent.Generic },
                         topicLabel = intent.cardChipLabel,
                         pulseTopic = PulseTopic.fromKey(post.topic),
+                        canKeepOpen = openAsk && hasNotBeenKeptOpen(post),
+                        canCloseAsk = openAsk,
                     ),
+                status = statusFor(post),
             )
+        }
+
+        private fun hasNotBeenKeptOpen(post: FeedPost): Boolean =
+            post.id !in keptOpenIds && post.lifecycleMetadata?.keptOpenAt.isNullOrBlank()
+
+        private fun statusFor(post: FeedPost): PostStatus? =
+            PostStatus.of(
+                postType = post.postType,
+                state = if (effectiveIsSolved(post)) "solved" else post.state,
+                resolution = post.resolution,
+                expiresAt = post.expiresAt,
+                goingCount = effectiveLikeCount(post),
+            )
+
+        /** An Ask that hasn't ended: no resolution, not solved or archived, and not past its end. */
+        private fun isOpenAsk(
+            post: FeedPost,
+            isSolved: Boolean,
+        ): Boolean {
+            if (post.postType != "ask_local" || isSolved) return false
+            if (post.resolution != null || (post.state != null && post.state != "open")) return false
+            return PostStatus.askWindowIsOpen(post.createdAt, post.expiresAt)
         }
 
         private fun isOwner(post: FeedPost): Boolean {

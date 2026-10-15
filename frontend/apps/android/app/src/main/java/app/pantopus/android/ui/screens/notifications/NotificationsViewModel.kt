@@ -1063,6 +1063,8 @@ class NotificationsViewModel
             ): RowModel {
                 val unread = dto.isRead != true
                 val category = NotificationCategory.fromRaw(dto.type)
+                // The day-6 Ask reminder (S7) stays a System notice, drawn as a question.
+                val icon = if (dto.type == "ask_still_open") PantopusIcon.HelpCircle else category.icon
                 val destructive =
                     onDelete?.let { handler ->
                         RowDestructiveAction(
@@ -1077,7 +1079,7 @@ class NotificationsViewModel
                     template = RowTemplate.StatusChip,
                     leading =
                         RowLeading.TypeIcon(
-                            icon = category.icon,
+                            icon = icon,
                             background = category.tileBackground,
                             foreground = category.tileForeground,
                         ),
@@ -1088,7 +1090,7 @@ class NotificationsViewModel
                         listOf(
                             RowChip(
                                 text = category.label,
-                                icon = category.icon,
+                                icon = icon,
                                 tint = RowChip.Tint.Status(category.chipVariant),
                             ),
                         ),

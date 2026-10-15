@@ -154,6 +154,7 @@ fun FeedScreen(
     val overflowPostId by viewModel.overflowPostId.collectAsStateWithLifecycle()
     val reportingPostId by viewModel.reportingPostId.collectAsStateWithLifecycle()
     val deletingPostId by viewModel.deletingPostId.collectAsStateWithLifecycle()
+    val closingAskId by viewModel.closingAskId.collectAsStateWithLifecycle()
     val mutingPostId by viewModel.mutingPostId.collectAsStateWithLifecycle()
     val showsPreferences by viewModel.showsPreferences.collectAsStateWithLifecycle()
     val activeTopic by viewModel.activeTopic.collectAsStateWithLifecycle()
@@ -321,7 +322,7 @@ fun FeedScreen(
                 }
             } else {
                 FeedChipRow(
-                    chips = PulseIntent.entries.map { FeedChipItem(id = it.key, label = it.label) },
+                    chips = PulseIntent.filterEntries.map { FeedChipItem(id = it.key, label = it.label) },
                     activeId = activeIntent.key,
                     onSelect = { id -> viewModel.selectIntent(PulseIntent.fromKey(id)) },
                     skeleton = state is PulseFeedUiState.Loading,
@@ -434,7 +435,7 @@ fun FeedScreen(
                 title = { Text("Filter by intent") },
                 text = {
                     Column {
-                        PulseIntent.entries.forEach { intent ->
+                        PulseIntent.filterEntries.forEach { intent ->
                             TextButton(
                                 onClick = {
                                     showsIntentPicker = false
@@ -524,10 +525,31 @@ fun FeedScreen(
                     viewModel.dismissOverflow()
                     viewModel.markSolved(row.id)
                 },
+                onKeepOpen = { viewModel.keepOpen(row.id) },
+                onCloseAsk = { viewModel.beginCloseAsk(row.id) },
                 onReport = { viewModel.beginReport(row.id) },
                 onDelete = { viewModel.beginDelete(row.id) },
             )
         }
+    }
+
+    closingAskId?.let { id ->
+        AlertDialog(
+            onDismissRequest = { viewModel.cancelCloseAsk() },
+            title = { Text("Close this question?") },
+            text = { Text("It leaves Pulse. You can restore it from My posts.") },
+            confirmButton = {
+                TextButton(
+                    onClick = { viewModel.closeAsk(id) },
+                    modifier = Modifier.testTag("pulseAskCloseConfirm"),
+                ) {
+                    Text("Close", color = PantopusColors.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.cancelCloseAsk() }) { Text("Cancel") }
+            },
+        )
     }
 
     reportingPostId?.let { id ->
@@ -717,6 +739,8 @@ private fun PostOverflowSheet(
     onMuteTopic: () -> Unit,
     onMuteThisTopic: () -> Unit,
     onMarkSolved: () -> Unit,
+    onKeepOpen: () -> Unit,
+    onCloseAsk: () -> Unit,
     onReport: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -729,7 +753,7 @@ private fun PostOverflowSheet(
         modifier = Modifier.testTag("pulseFeedOverflowSheet"),
     ) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(Spacing.s4),
+            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(Spacing.s4),
             verticalArrangement = Arrangement.spacedBy(Spacing.s1),
         ) {
             Text(
@@ -787,6 +811,12 @@ private fun PostOverflowSheet(
                     testTag = "pulseFeedOverflowMarkSolved",
                     onClick = onMarkSolved,
                 )
+            }
+            if (actions.canKeepOpen) {
+                OverflowAction(label = "Keep open 7 more days", testTag = "pulseAskKeepOpen", onClick = onKeepOpen)
+            }
+            if (actions.canCloseAsk) {
+                OverflowAction(label = "Close", testTag = "pulseAskClose", onClick = onCloseAsk)
             }
             if (actions.canReport) {
                 OverflowAction(
