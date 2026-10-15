@@ -325,7 +325,7 @@ Known lists short, sourced answers for a town. The curator and staff write entri
 ```
 
 - Events follow the feed's reader rules (walls, moderation, blocks, mutes, hides) in the town or `area_id`. An event stays until its `ends_at`, or for 3 hours after `starts_at` when it has no end.
-- Plans are those `GET /api/plans` would list for the reader within the town's reach (its own rules: kinds, playdates, holds), and only while the `plans` switch is on for the reader.
+- Plans are those `GET /api/plans` lists for the reader around the town's center in its `week` window (the next 7 days, with its own rules: kinds, playdates, holds), and only while the `plans` switch is on for the reader.
 - "Going" is the only RSVP: the event card's `action` (`going`) and the plan's own request flow. Interest alone counts nobody.
 
 ### 2.16 Right now (S12)
