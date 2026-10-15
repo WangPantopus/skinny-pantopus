@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -12,12 +12,12 @@ from src.pipeline.humanizer import (
     SYSTEM_PROMPT,
     _build_sports_system_prompt,
     _build_system_prompt,
-    _is_pnw_region,
     _validate_humanized_text,
     _validate_output,
     _validate_seasonal_timing,
     humanize,
 )
+from src.sources.seasonal import climate_region
 
 
 # ---------------------------------------------------------------------------
@@ -216,13 +216,13 @@ class TestHumanize:
         assert client.messages.create.call_count == 2
 
     def test_stale_seasonal_source_skips_before_claude_call(self):
-        class FakeDate(date):
+        class FakeDateTime(datetime):
             @classmethod
-            def today(cls):
-                return cls(2026, 4, 20)
+            def now(cls, tz=None):
+                return cls(2026, 4, 20, 12, tzinfo=tz)
 
         with (
-            patch("src.pipeline.humanizer.date", FakeDate),
+            patch("src.pipeline.humanizer.datetime", FakeDateTime),
             patch("src.pipeline.humanizer.anthropic") as mock_mod,
         ):
             text, error = humanize(
@@ -243,13 +243,13 @@ class TestHumanize:
         mock_mod.Anthropic.assert_not_called()
 
     def test_stale_exact_source_window_skips_even_with_current_month_reference(self):
-        class FakeDate(date):
+        class FakeDateTime(datetime):
             @classmethod
-            def today(cls):
-                return cls(2026, 11, 2)
+            def now(cls, tz=None):
+                return cls(2026, 11, 2, 12, tzinfo=tz)
 
         with (
-            patch("src.pipeline.humanizer.date", FakeDate),
+            patch("src.pipeline.humanizer.datetime", FakeDateTime),
             patch("src.pipeline.humanizer.anthropic") as mock_mod,
         ):
             text, error = humanize(
@@ -413,13 +413,14 @@ class TestHumanize:
                 raw_title="Test", raw_body=None, source_url=None,
                 source_display_name="Test", category="local_news",
                 region="seattle_wa", anthropic_api_key="key",
+                region_lat=47.6062, region_lng=-122.3321,
             )
 
         user_msg = mock_client.messages.create.call_args.kwargs["messages"][0]["content"]
-        assert "PNW season" in user_msg
+        assert "Current regional seasons:" in user_msg
 
-    def test_non_pnw_region_omits_season(self):
-        """Non-PNW regions should not have PNW seasonal context."""
+    def test_non_pnw_region_uses_its_own_season(self):
+        """Publishing coordinates determine seasonal context outside the PNW too."""
         good = "Park opens Saturday. Source: Test"
         mock_client = MagicMock()
         mock_client.messages.create.return_value = _mock_claude_response(good)
@@ -430,9 +431,11 @@ class TestHumanize:
                 raw_title="Test", raw_body=None, source_url=None,
                 source_display_name="Test", category="local_news",
                 region="denver_co", anthropic_api_key="key",
+                region_lat=39.7392, region_lng=-104.9903,
             )
 
         user_msg = mock_client.messages.create.call_args.kwargs["messages"][0]["content"]
+        assert "Current regional seasons:" in user_msg
         assert "PNW season" not in user_msg
 
     def test_anthropic_not_installed(self):
@@ -490,26 +493,24 @@ class TestBuildSystemPrompt:
 
 
 # ---------------------------------------------------------------------------
-# _is_pnw_region
+# Climate selection uses actual coordinates, never a region-name substring.
 # ---------------------------------------------------------------------------
 
-class TestIsPnwRegion:
+class TestClimateRegion:
     def test_portland_metro(self):
-        assert _is_pnw_region("portland_metro") is True
+        assert climate_region({"region_lat": 45.5152, "region_lng": -122.6784}) == "pacific_northwest"
 
     def test_seattle_wa(self):
-        assert _is_pnw_region("seattle_wa") is True
+        assert climate_region({"region_lat": 47.6062, "region_lng": -122.3321}) == "pacific_northwest"
 
     def test_clark_county(self):
-        # clark_county doesn't have PNW keywords, but that's fine —
-        # it will fall through to no season, which is acceptable
-        assert _is_pnw_region("clark_county") is False
+        assert climate_region({"state": "WA", "region_lat": 45.6387, "region_lng": -122.6615}) == "pacific_northwest"
 
     def test_denver_co(self):
-        assert _is_pnw_region("denver_co") is False
+        assert climate_region({"region_lat": 39.7392, "region_lng": -104.9903}) == "mountain"
 
     def test_bend_or(self):
-        assert _is_pnw_region("bend_or") is True
+        assert climate_region({"region_lat": 44.0582, "region_lng": -121.3153}) == "pacific_northwest"
 
     def test_eugene_or(self):
-        assert _is_pnw_region("eugene_or") is True
+        assert climate_region({"region_lat": 44.0521, "region_lng": -123.0868}) == "pacific_northwest"

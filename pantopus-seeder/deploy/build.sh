@@ -16,6 +16,8 @@ mkdir -p "$BUILD_DIR"
 
 echo "==> Copying source code..."
 cp -r "$PROJECT_DIR/src" "$BUILD_DIR/src"
+# One public climate catalog for backend checklists and publishing tips.
+cp "$PROJECT_DIR/../backend/services/ai/seasonalClimate.json" "$BUILD_DIR/src/config/seasonalClimate.json"
 
 # SAM needs requirements.txt in the CodeUri directory to install deps
 cp "$PROJECT_DIR/requirements-lambda.txt" "$BUILD_DIR/requirements.txt"

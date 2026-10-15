@@ -10,6 +10,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
 import { setNotificationPreferences, useNotificationPreferences } from '@/lib/me';
@@ -537,6 +538,15 @@ function BriefingOptIn() {
 export default function TodayDetail({ intelligence, homeId = null }: { intelligence: PlaceIntelligence; homeId?: string | null }) {
   const calendar = findPlaceSection(intelligence, 'address_calendar');
   const calendarReady = calendar && (calendar.status === 'ready' || calendar.status === 'stale' || calendar.status === 'partial') && calendar.data;
+  // A municipality without defaults still has an editable household calendar.
+  // Read through the authorized endpoint; never infer access from public data.
+  const fallbackCalendar = useQuery({
+    queryKey: ['household-calendar', homeId],
+    queryFn: () => api.getAddressCalendar(homeId!),
+    enabled: Boolean(homeId && !calendarReady),
+    staleTime: 0,
+  });
+  const calendarData = calendarReady ? calendar!.data as PlaceAddressCalendarData : fallbackCalendar.data?.calendar;
   const weather = findPlaceSection(intelligence, 'weather');
   const aqi = findPlaceSection(intelligence, 'air_quality');
   const alerts = findPlaceSection(intelligence, 'alerts');
@@ -601,8 +611,8 @@ export default function TodayDetail({ intelligence, homeId = null }: { intellige
 
         {/* The address calendar (Wedge Phase 2, D6): what recurs at THIS address. */}
         <DetailSectionLabel>At this address</DetailSectionLabel>
-        {calendarReady ? (
-          <AddressCalendarCard homeId={homeId} data={calendar!.data as PlaceAddressCalendarData} />
+        {calendarData ? (
+          <AddressCalendarCard homeId={homeId} data={calendarData} />
         ) : (
           <SectionCard icon={Trash2} title="Pickup days, tax dates, hearings" state={calendar ? statusToState(calendar.status) : 'unavailable'} caption={calendar?.unavailable_reason ?? 'No calendar for this address yet.'} onRetry={() => window.location.reload()} />
         )}

@@ -5031,7 +5031,7 @@ router.get('/:id/activity', verifyToken, async (req, res) => {
 
 const { computeHealthScore, getHealthScore, invalidateHealthScoreCache, canReadHealthScore } = require('../services/homeHealthService');
 const { getOrCreateChecklist, updateChecklistItem, linkGigToChecklist, getChecklistHistory } = require('../services/seasonalChecklistService');
-const { getSeasonalContext, SEASONS } = require('../services/ai/seasonalEngine');
+const { getSeasonalContext, SEASONS, OVERLAYS } = require('../services/ai/seasonalEngine');
 const { getProfile: getPropertyProfile } = require('../services/ai/propertyIntelligenceService');
 const intelligenceAuthority = require('../services/homeDashboardService');
 
@@ -5073,25 +5073,14 @@ router.get('/:id/seasonal-checklist', verifyToken, async (req, res) => {
     const userId = req.user.id;
 
     const result = await intelligenceAuthority.withCurrentAccess({ homeId, actorId: userId }, async () => {
-      // Pass the home's coordinates so the engine can tell whether its
-      // region-specific copy applies. Calling without them satisfied the old
-      // `!hasCoords ||` gate, which served Portland-specific tips to every
-      // home in the country. The season itself is month-based and resolves
-      // nationally, so the checklist below works either way.
       const { data: seasonHome, error: seasonError } = await supabaseAdmin
-        .from('Home')
-        .select('map_center_lat, map_center_lng')
-        .eq('id', homeId)
-        .maybeSingle();
+        .from('Home').select('state, map_center_lat, map_center_lng').eq('id', homeId).maybeSingle();
       if (seasonError || !seasonHome) throw new Error('Current Home season could not be loaded.');
-      const seasonalCtx = getSeasonalContext(
-        seasonHome && seasonHome.map_center_lat != null && seasonHome.map_center_lng != null
-          ? { latitude: Number(seasonHome.map_center_lat), longitude: Number(seasonHome.map_center_lng) }
-          : {},
-      );
-      const seasonKey = seasonalCtx.primary_season;
-      const year = new Date().getFullYear();
-      const seasonDef = SEASONS[seasonKey] || {};
+      const seasonalCtx = getSeasonalContext({ state: seasonHome.state,
+        latitude: seasonHome.map_center_lat, longitude: seasonHome.map_center_lng });
+      const seasonKey = seasonalCtx.checklist_season;
+      const year = seasonalCtx.year;
+      const seasonDef = SEASONS[seasonKey] || OVERLAYS[seasonKey] || {};
 
       const result = await getOrCreateChecklist(homeId, seasonKey, year, { includePrevious: true });
       const items = result.items || result; // backward compat if includePrevious wasn't used
@@ -5099,7 +5088,7 @@ router.get('/:id/seasonal-checklist', verifyToken, async (req, res) => {
       const completed = items.filter(i => i.status === 'completed' || i.status === 'skipped' || i.status === 'hired').length;
 
       const response = {
-        season: { key: seasonKey, label: seasonDef.label || seasonKey },
+        season: { key: seasonKey || 'none', label: seasonDef.label || 'Home care' },
         items,
         progress: {
           total: items.length,

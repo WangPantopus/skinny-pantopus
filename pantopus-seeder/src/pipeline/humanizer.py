@@ -6,14 +6,17 @@ import calendar
 import logging
 import os
 import re
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 try:
     import anthropic
 except ImportError:
     anthropic = None  # type: ignore[assignment]
 
-from src.config.constants import MAX_HUMANIZED_LENGTH
+from src.config.constants import MAX_HUMANIZED_LENGTH, REGIONS
+from src.discovery.timezone import timezone_from_coords, valid_timezone
+from src.utils.coordinates import parse_valid_coordinates
 
 HUMANIZER_MODEL = os.environ.get("ANTHROPIC_HUMANIZER_MODEL") or "claude-sonnet-5-5"
 # max_tokens covers Claude's thinking as well as the post (~500 characters), so
@@ -23,7 +26,7 @@ HUMANIZER_MAX_TOKENS = 2048
 HUMANIZER_EFFORT = "low"
 # Per request; the SDK retries 429s, 5xx and dropped connections twice on its own.
 HUMANIZER_TIMEOUT_SECONDS = 30.0
-from src.sources.seasonal import get_active_seasons, is_tip_active
+from src.sources.seasonal import climate_region, get_active_seasons
 
 log = logging.getLogger("seeder.pipeline.humanizer")
 
@@ -144,23 +147,6 @@ _NEIGHBOR_VOICE_PATTERN = re.compile(
     r"|\bwe\s+(?:locals|residents|neighbou?rs)\b",
     re.IGNORECASE,
 )
-
-
-_PNW_KEYWORDS = {"portland", "vancouver", "seattle", "tacoma", "eugene", "salem",
-                  "olympia", "bend", "spokane", "boise", "clark_county",
-                  "portland_metro", "wa", "or", "id"}
-
-
-def _is_pnw_region(region: str) -> bool:
-    """Check if a region slug likely refers to a Pacific Northwest area."""
-    parts = set(region.lower().replace("-", "_").split("_"))
-    return bool(parts & _PNW_KEYWORDS)
-
-
-def _get_current_seasons() -> list[str]:
-    """Return names of currently active PNW seasons."""
-    today = date.today()
-    return [s["name"] for s in get_active_seasons(today.month, today.day)]
 
 
 _NO_CONTENT_PATTERNS = re.compile(
@@ -318,6 +304,10 @@ def humanize(
     anthropic_api_key: str,
     region_display_name: str = "",
     scope: str = "local",
+    region_lat: float | None = None,
+    region_lng: float | None = None,
+    region_timezone: str | None = None,
+    region_state: str | None = None,
 ) -> tuple[str | None, str | None]:
     """Rewrite raw content into a 2-4 sentence community update post.
 
@@ -327,12 +317,20 @@ def humanize(
     For category='sports', a conversation-first prompt is used; `scope` can be
     'national' or 'local' (default 'local') and controls the prompt flavor.
     """
-    if anthropic is None:
-        return None, "api_error:anthropic package not installed"
-
-    today = date.today()
+    known = REGIONS.get(region, {})
+    latitude = region_lat if region_lat is not None else known.get("lat")
+    longitude = region_lng if region_lng is not None else known.get("lng")
+    coordinates = parse_valid_coordinates(latitude, longitude)
+    zone = valid_timezone(region_timezone) or timezone_from_coords(latitude, longitude, "UTC")
+    today = datetime.now(ZoneInfo(zone)).date()
+    climate = climate_region({"state": region_state, "region_lat": latitude, "region_lng": longitude})
+    seasons = get_active_seasons(today.month, today.day, climate, coordinates)
     if category == "seasonal":
-        if not is_tip_active(raw_title, today.month, today.day):
+        # SeasonalSource emits canonical catalog titles. Recheck before any
+        # paid call, including old queued tips selected under an earlier region
+        # or season. An LLM is never responsible for removing local advice.
+        allowed_tips = {tip for season in seasons for tip in season["tips"]}
+        if raw_title.strip() not in allowed_tips:
             log.info(
                 "Seasonal source window gate rejected: %s",
                 raw_title[:60],
@@ -353,12 +351,8 @@ def humanize(
 
     today_str = today.isoformat()
 
-    # Include seasonal context only for PNW regions
-    season_line = ""
-    if _is_pnw_region(region):
-        seasons = _get_current_seasons()
-        season_str = ", ".join(seasons) if seasons else "none"
-        season_line = f"Current PNW season: {season_str}\n"
+    season_str = ", ".join(season["name"] for season in seasons) or "none"
+    season_line = f"Current regional seasons: {season_str}\n" if climate else ""
 
     display = region_display_name or region
     user_message = (
@@ -377,6 +371,9 @@ def humanize(
     else:
         system_prompt = _build_system_prompt(region_display_name)
 
+    if anthropic is None:
+        return None, "api_error:anthropic package not installed"
+
     try:
         client = anthropic.Anthropic(api_key=anthropic_api_key, timeout=HUMANIZER_TIMEOUT_SECONDS)
     except Exception as exc:
@@ -394,7 +391,7 @@ def humanize(
         log.info("AI quality gate rejected: %s", raw_title[:60])
         return None, "ai_quality_gate:skipped"
 
-    reason = _validate_humanized_text(text, category)
+    reason = _validate_humanized_text(text, category, today=today)
     if reason is None:
         return text, None
 
@@ -416,7 +413,7 @@ def humanize(
     if text2 and text2.strip().upper() == "SKIP":
         return None, "ai_quality_gate:skipped"
 
-    reason2 = _validate_humanized_text(text2, category)
+    reason2 = _validate_humanized_text(text2, category, today=today)
     if reason2 is None:
         return text2, None
 

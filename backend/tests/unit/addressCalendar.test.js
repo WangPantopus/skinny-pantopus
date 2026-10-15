@@ -124,7 +124,11 @@ describe('composeForHome', () => {
     seedCamas();
     await svc.setPickupDay(home, { userId: USER, weekday: 'TH', now: NOW });
     const cal = await svc.composeForHome(home, { now: NOW });
-    expect(cal.pickup_schedule).toEqual({ weekday: 'TH', recycling_frequency: 'not_set', recycling_next_date: null });
+    expect(cal.pickup_schedule).toEqual({
+      weekday: 'TH', recycling_frequency: 'not_set', recycling_next_date: null,
+      collections: [{ kind: 'garbage', frequency: 'weekly', interval: 1, weekdays: ['TH'],
+        anchor_date: '2026-09-03', monthly_mode: 'day_of_month', until_date: null }],
+    });
     expect(cal.upcoming.some((e) => e.kind === 'recycling')).toBe(false);
     expect(cal.needs_pickup_day).toBe(false);
   });

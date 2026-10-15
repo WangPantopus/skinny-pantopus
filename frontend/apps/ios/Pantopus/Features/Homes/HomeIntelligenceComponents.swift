@@ -246,7 +246,7 @@ struct SeasonalChecklistCard: View {
                 errorBody(message: message)
             case let .loaded(checklist):
                 if checklist.items.isEmpty {
-                    emptyBody
+                    emptyBody(noCampaign: checklist.season.key == "none")
                 } else {
                     loadedBody(checklist)
                 }
@@ -291,32 +291,35 @@ struct SeasonalChecklistCard: View {
         .padding(.vertical, Spacing.s2)
     }
 
-    private var emptyBody: some View {
+    private func emptyBody(noCampaign: Bool) -> some View {
         VStack(spacing: Spacing.s2) {
             Icon(.leaf, size: 28, color: Theme.Color.primaryInk)
-            Text("Your seasonal checklist is ready")
+            Text(noCampaign ? "No seasonal tasks right now" : "Your seasonal checklist is ready")
                 .pantopusTextStyle(.small)
                 .fontWeight(.semibold)
                 .foregroundStyle(Theme.Color.appText)
-            Text("Get personalized seasonal tasks for your home")
+            Text(noCampaign ? "There is no active seasonal campaign for your home’s region." :
+                "Get personalized seasonal tasks for your home")
                 .pantopusTextStyle(.caption)
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .multilineTextAlignment(.center)
-            Button(action: onGenerate) {
-                HStack(spacing: Spacing.s2) {
-                    Icon(.sparkles, size: 14, color: Theme.Color.appTextInverse)
-                    Text("Generate checklist")
-                        .pantopusTextStyle(.small)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(Theme.Color.appTextInverse)
+            if !noCampaign {
+                Button(action: onGenerate) {
+                    HStack(spacing: Spacing.s2) {
+                        Icon(.sparkles, size: 14, color: Theme.Color.appTextInverse)
+                        Text("Generate checklist")
+                            .pantopusTextStyle(.small)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(Theme.Color.appTextInverse)
+                    }
+                    .padding(.horizontal, Spacing.s4)
+                    .frame(minHeight: 44)
+                    .background(Theme.Color.primarySolid)
+                    .clipShape(Capsule())
                 }
-                .padding(.horizontal, Spacing.s4)
-                .frame(minHeight: 44)
-                .background(Theme.Color.primarySolid)
-                .clipShape(Capsule())
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("homeDashboard_seasonalGenerateCTA")
             }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("homeDashboard_seasonalGenerateCTA")
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, Spacing.s3)

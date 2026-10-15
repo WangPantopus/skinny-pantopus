@@ -15,7 +15,13 @@ jest.mock('@/components/archetypes/place', () => ({ IconTile: () => null }));
 const initial: PlaceAddressCalendarData = { today: '2026-09-03', upcoming: [], next: null, needs_pickup_day: true, window_days: 14, rule_count: 0 };
 const saved: PlaceAddressCalendarData = {
   ...initial, needs_pickup_day: false,
-  pickup_schedule: { weekday: 'TH', recycling_frequency: 'biweekly', recycling_next_date: '2026-09-11' },
+  pickup_schedule: {
+    weekday: 'TH', recycling_frequency: 'biweekly', recycling_next_date: '2026-09-11',
+    collections: [
+      { kind: 'garbage', frequency: 'weekly', interval: 1, weekdays: ['TH'], anchor_date: '2026-09-03', monthly_mode: 'day_of_month' },
+      { kind: 'recycling', frequency: 'weekly', interval: 2, weekdays: ['FR'], anchor_date: '2026-09-11', monthly_mode: 'day_of_month' },
+    ],
+  },
   upcoming: [{ rule_id: 'home-garbage', kind: 'garbage', title: 'Garbage day', detail: null, date: '2026-09-03', days_until: 0, all_day: true, lead_days: 1, scope: 'home', source: 'Set by your household', source_url: null, confidence: 'official' }],
 };
 function show(data = initial, homeId: string | null = 'home-1') {
@@ -30,35 +36,43 @@ beforeEach(() => {
 
 it('requires explicit save and does not invent recycling when unknown', async () => {
   show();
-  fireEvent.click(screen.getByRole('button', { name: 'Thu' }));
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Garbage' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Garbage Thu' }));
+  fireEvent.change(screen.getByLabelText('Garbage collection date'), { target: { value: '2026-09-03' } });
   expect(setPickupDay).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Save schedule' }));
   await screen.findByText('Garbage day');
-  expect(setPickupDay).toHaveBeenCalledWith('home-1', { weekday: 'TH', recycling_frequency: 'not_set' });
+  expect(setPickupDay).toHaveBeenCalledWith('home-1', { collections: [
+    { kind: 'garbage', frequency: 'weekly', interval: 1, weekdays: ['TH'], anchor_date: '2026-09-03', monthly_mode: 'day_of_month' },
+  ] });
 });
 
 it('requires the actual next recycling date and supports a different weekday', async () => {
   show();
-  fireEvent.click(screen.getByRole('button', { name: 'Thu' }));
-  fireEvent.change(screen.getByLabelText('Recycling'), { target: { value: 'biweekly' } });
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Garbage' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Garbage Thu' }));
+  fireEvent.change(screen.getByLabelText('Garbage collection date'), { target: { value: '2026-09-03' } });
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Recycling' }));
+  fireEvent.change(screen.getByLabelText('Recycling repeats'), { target: { value: 'weekly-2' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Recycling Fri' }));
   expect(screen.getByRole('button', { name: 'Save schedule' })).toBeDisabled();
-  fireEvent.change(screen.getByLabelText('Next recycling pickup'), { target: { value: '2026-09-11' } });
+  fireEvent.change(screen.getByLabelText('Recycling collection date'), { target: { value: '2026-09-11' } });
   fireEvent.click(screen.getByRole('button', { name: 'Save schedule' }));
   await screen.findByText('Garbage day');
-  expect(setPickupDay).toHaveBeenCalledWith('home-1', { weekday: 'TH', recycling_frequency: 'biweekly', recycling_next_date: '2026-09-11' });
+  expect(setPickupDay).toHaveBeenCalledWith('home-1', { collections: saved.pickup_schedule!.collections });
 });
 
 it('retains the saved calendar and selections after a failed save, then retries', async () => {
   setPickupDay.mockRejectedValueOnce(new Error('Could not save your pickup schedule'));
   show(saved);
   fireEvent.click(screen.getByRole('button', { name: 'Pickup schedule' }));
-  expect(screen.getByLabelText('Next recycling pickup')).toHaveValue('2026-09-11');
-  fireEvent.click(screen.getByRole('button', { name: 'Mon' }));
+  expect(screen.getByLabelText('Recycling collection date')).toHaveValue('2026-09-11');
+  fireEvent.click(screen.getByRole('button', { name: 'Garbage Mon' }));
   fireEvent.click(screen.getByRole('button', { name: 'Save schedule' }));
   await screen.findByRole('alert');
   expect(screen.getByText('Garbage day')).toBeInTheDocument();
-  expect(screen.getByLabelText('Next recycling pickup')).toHaveValue('2026-09-11');
-  expect(screen.getByRole('button', { name: 'Mon ✓' })).toHaveAttribute('aria-pressed', 'true');
+  expect(screen.getByLabelText('Recycling collection date')).toHaveValue('2026-09-11');
+  expect(screen.getByRole('button', { name: 'Garbage Mon' })).toHaveAttribute('aria-pressed', 'true');
   fireEvent.click(screen.getByRole('button', { name: 'Save schedule' }));
   await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
   expect(setPickupDay).toHaveBeenCalledTimes(2);
@@ -77,13 +91,13 @@ it('clears the household schedule only after server confirmation', async () => {
   expect(clearPickupDay).toHaveBeenCalledWith('home-1', undefined);
 });
 
-it('limits weekly selection to seven home-calendar dates and resets a stale biweekly choice', () => {
+it('retains the original recurrence anchor when changing the weekly interval', () => {
   show(saved);
   fireEvent.click(screen.getByRole('button', { name: 'Pickup schedule' }));
-  fireEvent.change(screen.getByLabelText('Recycling'), { target: { value: 'weekly' } });
-  const select = screen.getByLabelText('Next recycling pickup') as HTMLSelectElement;
-  expect(select).toHaveValue('');
-  expect(Array.from(select.options).map((o) => o.value)).toEqual(['', '2026-09-03', '2026-09-04', '2026-09-05', '2026-09-06', '2026-09-07', '2026-09-08', '2026-09-09']);
+  fireEvent.change(screen.getByLabelText('Recycling repeats'), { target: { value: 'weekly-1' } });
+  expect(screen.getByLabelText('Recycling collection date')).toHaveValue('2026-09-11');
+  expect(screen.getByRole('button', { name: 'Recycling Fri' })).toHaveAttribute('aria-pressed', 'true');
+  expect(screen.getByLabelText('Recycling repeats')).toHaveValue('weekly-1');
 });
 
 it('does not offer household editing on a public preview', () => {

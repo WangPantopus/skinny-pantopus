@@ -233,6 +233,7 @@ export type {
   PlaceGoodDayTile,
   PlaceGoodDayData,
   PlaceAddressCalendarData,
+  PickupCollection,
   PlaceCalendarEvent,
   PlaceCalendarKind,
   PlaceSectionDataMap,

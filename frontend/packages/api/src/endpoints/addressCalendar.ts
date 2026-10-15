@@ -11,7 +11,7 @@
 // ============================================================
 
 import { get, put, del } from '../client';
-import type { PlaceAddressCalendarData } from '@pantopus/types';
+import type { PlaceAddressCalendarData, PickupCollection } from '@pantopus/types';
 
 export type PickupWeekday = 'MO' | 'TU' | 'WE' | 'TH' | 'FR' | 'SA' | 'SU';
 export interface SetPickupDayRequest {
@@ -36,7 +36,7 @@ export async function getAddressCalendar(homeId: string): Promise<AddressCalenda
 
 export async function setPickupDay(
   homeId: string,
-  data: SetPickupDayRequest,
+  data: SetPickupDayRequest | { collections: PickupCollection[]; expected_version?: string },
 ): Promise<SetPickupDayResponse> {
   return put(`/api/homes/${homeId}/calendar/pickup-day`, data);
 }

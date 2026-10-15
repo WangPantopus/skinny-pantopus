@@ -382,7 +382,7 @@ fun SeasonalChecklistCard(
                 )
             is HomeIntelligenceCardState.Loaded ->
                 if (state.value.items.isEmpty()) {
-                    SeasonalEmpty(onGenerate = onGenerate)
+                    SeasonalEmpty(noCampaign = state.value.season.key == "none", onGenerate = onGenerate)
                 } else {
                     SeasonalLoaded(
                         checklist = state.value,
@@ -400,7 +400,10 @@ fun SeasonalChecklistCard(
 }
 
 @Composable
-private fun SeasonalEmpty(onGenerate: () -> Unit) {
+private fun SeasonalEmpty(
+    noCampaign: Boolean,
+    onGenerate: () -> Unit,
+) {
     Column(
         modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.s3),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -413,45 +416,52 @@ private fun SeasonalEmpty(onGenerate: () -> Unit) {
             tint = PantopusColors.primary600,
         )
         Text(
-            text = "Your seasonal checklist is ready",
+            text = if (noCampaign) "No seasonal tasks right now" else "Your seasonal checklist is ready",
             style = PantopusTextStyle.small,
             fontWeight = FontWeight.SemiBold,
             color = PantopusColors.appText,
         )
         Text(
-            text = "Get personalized seasonal tasks for your home",
+            text =
+                if (noCampaign) {
+                    "There is no active seasonal campaign for your home’s region."
+                } else {
+                    "Get personalized seasonal tasks for your home"
+                },
             style = PantopusTextStyle.caption,
             color = PantopusColors.appTextSecondary,
             textAlign = TextAlign.Center,
         )
-        Row(
-            modifier =
-                Modifier
-                    .heightIn(min = 48.dp)
-                    .clip(RoundedCornerShape(Radii.pill))
-                    .background(PantopusColors.primary600)
-                    .clickable(onClick = onGenerate)
-                    .padding(horizontal = Spacing.s4)
-                    .testTag("homeDashboard_seasonalGenerateCTA")
-                    .semantics {
-                        role = Role.Button
-                        contentDescription = "Generate checklist"
-                    },
-            horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            PantopusIconImage(
-                icon = PantopusIcon.Sparkles,
-                contentDescription = null,
-                size = 14.dp,
-                tint = PantopusColors.appTextInverse,
-            )
-            Text(
-                text = "Generate checklist",
-                style = PantopusTextStyle.small,
-                fontWeight = FontWeight.SemiBold,
-                color = PantopusColors.appTextInverse,
-            )
+        if (!noCampaign) {
+            Row(
+                modifier =
+                    Modifier
+                        .heightIn(min = 48.dp)
+                        .clip(RoundedCornerShape(Radii.pill))
+                        .background(PantopusColors.primary600)
+                        .clickable(onClick = onGenerate)
+                        .padding(horizontal = Spacing.s4)
+                        .testTag("homeDashboard_seasonalGenerateCTA")
+                        .semantics {
+                            role = Role.Button
+                            contentDescription = "Generate checklist"
+                        },
+                horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                PantopusIconImage(
+                    icon = PantopusIcon.Sparkles,
+                    contentDescription = null,
+                    size = 14.dp,
+                    tint = PantopusColors.appTextInverse,
+                )
+                Text(
+                    text = "Generate checklist",
+                    style = PantopusTextStyle.small,
+                    fontWeight = FontWeight.SemiBold,
+                    color = PantopusColors.appTextInverse,
+                )
+            }
         }
     }
 }

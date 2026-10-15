@@ -274,6 +274,16 @@ export interface PlaceCalendarEvent {
  * recycling still come from a city default rather than the household's
  * own pickup day.
  */
+export interface PickupCollection {
+  kind: 'garbage' | 'recycling' | 'yard_waste' | 'bulk_pickup';
+  frequency: 'weekly' | 'monthly' | 'once';
+  interval: number;
+  weekdays: ('MO' | 'TU' | 'WE' | 'TH' | 'FR' | 'SA' | 'SU')[];
+  anchor_date: string;
+  monthly_mode?: 'day_of_month' | 'weekday';
+  until_date?: string | null;
+}
+
 export interface PlaceAddressCalendarData {
   upcoming: PlaceCalendarEvent[];
   next: PlaceCalendarEvent | null;
@@ -287,6 +297,7 @@ export interface PlaceAddressCalendarData {
     weekday: 'MO' | 'TU' | 'WE' | 'TH' | 'FR' | 'SA' | 'SU' | null;
     recycling_frequency: 'not_set' | 'weekly' | 'biweekly';
     recycling_next_date: string | null;
+    collections?: PickupCollection[];
   } | null;
   /**
    * The household schedule shown here. Send it back as `expected_version` when

@@ -18,15 +18,15 @@
 // ============================================================
 
 const crypto = require('crypto');
-const { RRule, RRuleSet } = require('rrule');
+const { RRule } = require('rrule');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 const { resolveHomeTimezone } = require('../utils/timezone');
 
 const WINDOW_DAYS = 14;
 const SCOPE_RANK = { home: 0, city: 1, county: 2, state: 3 };
-const PICKUP_KINDS = new Set(['garbage', 'recycling', 'yard_waste']);
-const HOLIDAY_PICKUP_KINDS = new Set([...PICKUP_KINDS, 'bulk_pickup']);
+const PICKUP_KINDS = new Set(['garbage', 'recycling', 'yard_waste', 'bulk_pickup']);
+const HOLIDAY_PICKUP_KINDS = PICKUP_KINDS;
 const WEEKDAYS = { MO: RRule.MO, TU: RRule.TU, WE: RRule.WE, TH: RRule.TH, FR: RRule.FR, SA: RRule.SA, SU: RRule.SU };
 
 function isoDate(d) {
@@ -94,49 +94,40 @@ function expandRule(rule, fromDay, toDay, { holidays = [], moved = new Map() } =
   }
   const dtstart = noonUtc(String(rule.dtstart).slice(0, 10));
   const rr = new RRule({ ...options, dtstart, until: rule.until ? noonUtc(String(rule.until).slice(0, 10)) : options.until });
-  const dates = new RRuleSet();
-  dates.rrule(rr);
-  const removed = new Map();
-  const shiftedDays = new Set();
+  // Resolve each ORIGINAL occurrence once. Overlapping holiday rows cannot
+  // create two shifted dates, and an incoming shifted date survives even when
+  // a regular occurrence on that date moves again.
+  const applicable = [];
   if (HOLIDAY_PICKUP_KINDS.has(rule.kind)) {
     for (const holiday of holidays) {
       const params = holiday.params;
-      // An unconfirmed holiday is information, never authority to move the
-      // household's confirmed day. Data rows require manual provider review.
       if (holiday.scope_type !== 'city' || holiday.confidence !== 'official'
         || !params || !Array.isArray(params.kinds) || !params.kinds.includes(rule.kind)
         || typeof params.holiday !== 'string' || !params.holiday.trim()
-        || !Number.isSafeInteger(params.shift_days) || params.shift_days <= 0) continue;
-      const lookback = new Date(noonUtc(fromDay).getTime() - (params.shift_days + 6) * 86400000);
-      if (!Number.isFinite(lookback.getTime())) continue;
-      for (const holidayDay of expandRule(holiday, isoDate(lookback), toDay)) {
-        const start = noonUtc(holidayDay);
-        // Most providers run every pickup from the holiday through Saturday
-        // late; some (the City of Camas) move only the holiday's own pickups
-        // (`params.through = 'holiday'`).
-        const last = params.through === 'holiday'
-          ? start
-          : new Date(start.getTime() + (6 - start.getUTCDay()) * 86400000);
-        for (const original of rr.between(start, last, true)) {
-          const shifted = new Date(original.getTime() + params.shift_days * 86400000);
-          if (!Number.isFinite(shifted.getTime())) continue;
-          removed.set(isoDate(original), original);
-          dates.rdate(shifted);
-          shiftedDays.add(isoDate(shifted));
-          moved.set(isoDate(shifted), { moved_from: isoDate(original), holiday: params.holiday, shift_days: params.shift_days });
-        }
+        || !Number.isSafeInteger(params.shift_days) || params.shift_days < 1 || params.shift_days > 7) continue;
+      const lookback = isoDate(new Date(noonUtc(fromDay).getTime() - 13 * 86400000));
+      for (const day of expandRule(holiday, lookback, toDay)) {
+        const start = noonUtc(day);
+        const end = params.through === 'holiday' ? start : new Date(start.getTime() + (6 - start.getUTCDay()) * 86400000);
+        applicable.push({ start, end, params, id: String(holiday.id) });
       }
     }
   }
-  // RRuleSet exclusions also exclude rdates. A moved Thursday may land on a
-  // Saturday that itself moves: retain the incoming Thursday on that date.
-  for (const [day, original] of removed) {
-    if (!shiftedDays.has(day)) dates.exdate(original);
-  }
-  // Occurrences from the window start (inclusive) to its end (inclusive).
+  // Most recent applicable holiday wins; ties have stable precedence.
+  applicable.sort((a, b) => b.start - a.start || a.id.localeCompare(b.id));
   const from = noonUtc(fromDay);
   const to = noonUtc(toDay);
-  return dates.between(from, to, true).map(isoDate);
+  const lookback = new Date(from.getTime() - 7 * 86400000);
+  const days = new Set();
+  for (const original of rr.between(lookback, to, true)) {
+    const holiday = applicable.find(h => original >= h.start && original <= h.end);
+    const actual = holiday ? new Date(original.getTime() + holiday.params.shift_days * 86400000) : original;
+    if (actual < from || actual > to) continue;
+    const day = isoDate(actual);
+    days.add(day);
+    if (holiday) moved.set(day, { moved_from: isoDate(original), holiday: holiday.params.holiday, shift_days: holiday.params.shift_days });
+  }
+  return [...days].sort();
 }
 
 function daysBetween(fromDay, toDay) {
@@ -163,7 +154,7 @@ async function composeForHome(home, { now = new Date(), windowDays = WINDOW_DAYS
   const today = localToday(home, now);
   const end = isoDate(new Date(noonUtc(today).getTime() + windowDays * 86400000));
   const loaded = suppliedRules || await loadRules(home);
-  const hasHouseholdPickup = loaded.some((r) => r.scope_type === 'home' && r.kind === 'garbage');
+  const hasHouseholdPickup = loaded.some((r) => r.scope_type === 'home' && PICKUP_KINDS.has(r.kind));
   // Once the household sets its schedule, unknown pickup kinds must not
   // silently fall back to a guessed city week (including briefing signals).
   const rules = applyPrecedence(loaded.filter((r) =>
@@ -206,19 +197,21 @@ async function composeForHome(home, { now = new Date(), windowDays = WINDOW_DAYS
 
   const garbage = rules.find((r) => r.scope_type === 'home' && r.kind === 'garbage');
   const recycling = rules.find((r) => r.scope_type === 'home' && r.kind === 'recycling');
-  const pickupSchedule = garbage ? {
-    weekday: /BYDAY=([A-Z]{2})/.exec(garbage.rrule)?.[1] || null,
+  const collections = rules.filter(r => r.scope_type === 'home' && PICKUP_KINDS.has(r.kind)).map(collectionFromRule);
+  const pickupSchedule = collections.length ? {
+    weekday: /BYDAY=([A-Z]{2})/.exec(garbage?.rrule || '')?.[1] || null,
     recycling_frequency: recycling ? (/INTERVAL=2(?:;|$)/.test(recycling.rrule) ? 'biweekly' : 'weekly') : 'not_set',
     // The editor saves a recurring weekday/week, not a holiday exception.
     // Only upcoming moves; feeding its shifted date back would move every week.
     recycling_next_date: recycling ? expandRule(recycling, today, end)[0] || null : null,
+    collections,
   } : null;
 
   return {
     homeId: home.id || null,
     upcoming,
     next: upcoming[0] || null,
-    needs_pickup_day: !garbage,
+    needs_pickup_day: !hasHouseholdPickup,
     pickup_schedule: pickupSchedule,
     pickup_version: pickupScheduleVersion(loaded, home.id),
     window_days: windowDays,
@@ -245,6 +238,73 @@ function invalidPickup(message) {
   return Object.assign(new Error(message), { code: 'INVALID_PICKUP' });
 }
 
+const COLLECTION_TITLES = { garbage: 'Garbage day', recycling: 'Recycling day', yard_waste: 'Yard waste collection', bulk_pickup: 'Bulk collection' };
+const DAY_CODES = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
+
+// One existing row per collection kind; BYDAY holds multiple weekly days.
+// The stored DTSTART is the recurrence anchor, never a holiday-shifted date.
+function collectionFromRule(rule) {
+  const options = RRule.parseString(rule.rrule);
+  return {
+    kind: rule.kind,
+    frequency: options.count === 1 ? 'once' : options.freq === RRule.MONTHLY ? 'monthly' : 'weekly',
+    interval: options.interval || 1,
+    weekdays: (rule.rrule.match(/(?:^|;)BYDAY=([^;]+)/)?.[1] || '').split(',').filter(day => WEEKDAYS[day]),
+    anchor_date: String(rule.dtstart).slice(0, 10),
+    monthly_mode: options.freq === RRule.MONTHLY && options.byweekday ? 'weekday' : 'day_of_month',
+    until_date: rule.until ? String(rule.until).slice(0, 10) : null,
+  };
+}
+
+function validDay(value) {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
+    && Number.isFinite(noonUtc(value).getTime()) && isoDate(noonUtc(value)) === value;
+}
+
+async function setPickupSchedule(home, { collections, userId, expectedVersion = null }) {
+  if (!Array.isArray(collections) || collections.length < 1 || collections.length > 4) {
+    throw invalidPickup('Choose at least one collection type, or clear the household schedule.');
+  }
+  const seen = new Set();
+  const rows = collections.map(collection => {
+    const { kind, frequency, anchor_date: anchor, until_date: until = null, monthly_mode: mode = 'day_of_month', interval = 1 } = collection;
+    if (!PICKUP_KINDS.has(kind) || seen.has(kind)) throw invalidPickup('Choose each collection type only once.');
+    seen.add(kind);
+    if (!validDay(anchor) || (until != null && (!validDay(until) || until < anchor))) {
+      throw invalidPickup('Use valid collection dates. The end date cannot precede the start date.');
+    }
+    if (!Number.isInteger(interval) || interval < 1 || interval > (frequency === 'monthly' ? 12 : 4)) {
+      throw invalidPickup('Choose a weekly interval from 1 to 4 or a monthly interval from 1 to 12.');
+    }
+    const date = noonUtc(anchor);
+    let rrule;
+    if (frequency === 'weekly') {
+      const days = collection.weekdays;
+      if (!Array.isArray(days) || !days.length || days.length > 7 || days.some(day => !WEEKDAYS[day])
+        || new Set(days).size !== days.length || !days.includes(DAY_CODES[date.getUTCDay()])) {
+        throw invalidPickup('Choose collection days and a start date on one of those days.');
+      }
+      const ordered = Object.keys(WEEKDAYS).filter(day => days.includes(day));
+      rrule = `FREQ=WEEKLY;INTERVAL=${interval};WKST=MO;BYDAY=${ordered.join(',')}`;
+    } else if (frequency === 'monthly') {
+      if (!['day_of_month', 'weekday'].includes(mode)) throw invalidPickup('Choose a monthly collection pattern.');
+      // A fifth weekday is represented as the last weekday, so every month has an occurrence.
+      const ordinal = Math.ceil(date.getUTCDate() / 7);
+      const pattern = mode === 'weekday' ? `BYDAY=${ordinal === 5 ? -1 : ordinal}${DAY_CODES[date.getUTCDay()]}` : `BYMONTHDAY=${date.getUTCDate()}`;
+      rrule = `FREQ=MONTHLY;INTERVAL=${interval};${pattern}`;
+    } else if (frequency === 'once' && interval === 1) {
+      rrule = 'FREQ=DAILY;COUNT=1';
+    } else throw invalidPickup('Choose weekly, monthly, or one-time collection.');
+    return {
+      kind, title: COLLECTION_TITLES[kind], detail: 'On the schedule your household set. Check your provider for holiday changes.',
+      rrule, dtstart: anchor, until, all_day: true, lead_days: 1,
+      source: 'Set by your household', source_url: null, confidence: 'official', created_by: userId,
+    };
+  });
+  await pickupMutation(home.id, userId, rows, expectedVersion);
+  return { rules: rows.length };
+}
+
 async function setPickupDay(home, { weekday, recyclingFrequency = 'not_set', recyclingNextDate = null, userId = null, expectedVersion = null, now = new Date() }) {
   const wd = String(weekday || '').toUpperCase();
   if (!WEEKDAYS[wd]) throw invalidPickup('weekday must be one of MO TU WE TH FR SA SU');
@@ -267,6 +327,13 @@ async function setPickupDay(home, { weekday, recyclingFrequency = 'not_set', rec
   // would silently remove that pickup when the household saves the editor.
   const { rules: currentRules } = await getPickupContext(home.id, userId);
   const householdRules = currentRules.filter(rule => rule.scope_type === 'home' && String(rule.scope_key) === String(home.id));
+  // Older clients cannot represent these schedules. Refuse a lossy replacement.
+  if (householdRules.some(rule => PICKUP_KINDS.has(rule.kind) && (
+    ['yard_waste', 'bulk_pickup'].includes(rule.kind) || !/^FREQ=WEEKLY(?:;|$)/.test(rule.rrule)
+    || (rule.rrule.match(/BYDAY=([^;]+)/)?.[1] || '').includes(',') || rule.until
+    || ![1, 2].includes(RRule.parseString(rule.rrule).interval || 1)
+    || (rule.kind === 'garbage' && (RRule.parseString(rule.rrule).interval || 1) !== 1)
+  ))) throw invalidPickup('This schedule has additional collection settings. Open the pickup schedule editor in an updated app.');
   const currentGarbage = householdRules.find(rule => rule.kind === 'garbage');
   const currentRecycling = householdRules.find(rule => rule.kind === 'recycling');
   const unchangedGarbage = /BYDAY=([A-Z]{2})/.exec(currentGarbage?.rrule || '')?.[1] === wd;
@@ -356,6 +423,7 @@ module.exports = {
   getPickupContext,
   composeForHomeId,
   setPickupDay,
+  setPickupSchedule,
   clearPickupDay,
   // Exported for unit tests.
   applyPrecedence,

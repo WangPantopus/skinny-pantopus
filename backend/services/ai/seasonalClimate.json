@@ -1,0 +1,735 @@
+{
+  "states": {
+    "WA": "pacific_northwest",
+    "OR": "pacific_northwest",
+    "ID": "pacific_northwest",
+    "CA": "california",
+    "AZ": "southwest",
+    "NM": "southwest",
+    "NV": "southwest",
+    "UT": "southwest",
+    "CO": "mountain",
+    "MT": "mountain",
+    "WY": "mountain",
+    "ND": "northern_plains",
+    "SD": "northern_plains",
+    "NE": "northern_plains",
+    "KS": "northern_plains",
+    "MN": "upper_midwest",
+    "WI": "upper_midwest",
+    "MI": "upper_midwest",
+    "IA": "upper_midwest",
+    "IL": "ohio_valley",
+    "IN": "ohio_valley",
+    "OH": "ohio_valley",
+    "KY": "ohio_valley",
+    "WV": "ohio_valley",
+    "MO": "ohio_valley",
+    "TN": "ohio_valley",
+    "NY": "northeast",
+    "NJ": "northeast",
+    "PA": "northeast",
+    "CT": "northeast",
+    "RI": "northeast",
+    "MA": "northeast",
+    "VT": "northeast",
+    "NH": "northeast",
+    "ME": "northeast",
+    "MD": "northeast",
+    "DE": "northeast",
+    "DC": "northeast",
+    "VA": "southeast",
+    "NC": "southeast",
+    "SC": "southeast",
+    "GA": "southeast",
+    "FL": "florida",
+    "AL": "southeast",
+    "TX": "south_central",
+    "OK": "south_central",
+    "AR": "south_central",
+    "LA": "south_central",
+    "MS": "south_central",
+    "AK": "alaska",
+    "HI": "hawaii"
+  },
+  "regions": {
+    "pacific_northwest": {
+      "label": "Pacific Northwest",
+      "exclude": [],
+      "overlays": {}
+    },
+    "california": {
+      "label": "California",
+      "exclude": [
+        "smoke_season",
+        "winter_ice"
+      ],
+      "overlays": {
+        "wildfire_season": [
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "heat_season": [
+          5,
+          6,
+          7,
+          8
+        ],
+        "winter_storm_season": [
+          10,
+          11,
+          0,
+          1,
+          2
+        ]
+      }
+    },
+    "southwest": {
+      "label": "Southwest",
+      "exclude": [
+        "winter_ice",
+        "smoke_season",
+        "fall_prep"
+      ],
+      "overlays": {
+        "heat_season": [
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "monsoon_season": [
+          5,
+          6,
+          7,
+          8
+        ],
+        "wildfire_season": [
+          4,
+          5
+        ]
+      }
+    },
+    "mountain": {
+      "label": "Mountain West",
+      "exclude": [
+        "smoke_season"
+      ],
+      "overlays": {
+        "wildfire_season": [
+          5,
+          6,
+          7,
+          8
+        ],
+        "blizzard_season": [
+          10,
+          11,
+          0,
+          1,
+          2
+        ]
+      }
+    },
+    "northern_plains": {
+      "label": "Northern Plains",
+      "exclude": [
+        "smoke_season"
+      ],
+      "overlays": {
+        "tornado_season": [
+          3,
+          4,
+          5,
+          6
+        ],
+        "blizzard_season": [
+          10,
+          11,
+          0,
+          1,
+          2
+        ]
+      }
+    },
+    "upper_midwest": {
+      "label": "Upper Midwest",
+      "exclude": [
+        "smoke_season"
+      ],
+      "overlays": {
+        "tornado_season": [
+          3,
+          4,
+          5,
+          6
+        ],
+        "blizzard_season": [
+          10,
+          11,
+          0,
+          1,
+          2
+        ]
+      }
+    },
+    "ohio_valley": {
+      "label": "Ohio Valley",
+      "exclude": [
+        "smoke_season"
+      ],
+      "overlays": {
+        "tornado_season": [
+          2,
+          3,
+          4,
+          5
+        ],
+        "heat_season": [
+          5,
+          6,
+          7
+        ]
+      }
+    },
+    "northeast": {
+      "label": "Northeast",
+      "exclude": [
+        "smoke_season"
+      ],
+      "overlays": {
+        "hurricane_season": [
+          7,
+          8,
+          9
+        ],
+        "winter_storm_season": [
+          10,
+          11,
+          0,
+          1,
+          2
+        ]
+      }
+    },
+    "southeast": {
+      "label": "Southeast",
+      "exclude": [
+        "smoke_season"
+      ],
+      "overlays": {
+        "hurricane_season": [
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "heat_season": [
+          5,
+          6,
+          7,
+          8
+        ],
+        "pollen_season": [
+          2,
+          3,
+          4
+        ],
+        "tornado_season": [
+          2,
+          3,
+          4
+        ]
+      }
+    },
+    "south_central": {
+      "label": "South Central",
+      "exclude": [
+        "smoke_season"
+      ],
+      "overlays": {
+        "tornado_season": [
+          2,
+          3,
+          4,
+          5
+        ],
+        "hurricane_season": [
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "heat_season": [
+          5,
+          6,
+          7,
+          8
+        ],
+        "pollen_season": [
+          2,
+          3
+        ]
+      }
+    },
+    "alaska": {
+      "label": "Alaska",
+      "exclude": [
+        "smoke_season",
+        "summer_dry",
+        "spring_cleanup",
+        "fall_prep"
+      ],
+      "overlays": {
+        "freeze_season": [
+          9,
+          10,
+          11,
+          0,
+          1,
+          2,
+          3
+        ],
+        "wildfire_season": [
+          5,
+          6,
+          7
+        ]
+      }
+    },
+    "hawaii": {
+      "label": "Hawaii",
+      "exclude": [
+        "winter_ice",
+        "spring_cleanup",
+        "early_summer",
+        "summer_dry",
+        "smoke_season",
+        "fall_prep"
+      ],
+      "overlays": {
+        "hurricane_season": [
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ]
+      }
+    },
+    "florida": {
+      "label": "Florida",
+      "exclude": [
+        "winter_ice",
+        "fall_prep",
+        "smoke_season"
+      ],
+      "overlays": {
+        "hurricane_season": [
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "heat_season": [
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "pollen_season": [
+          1,
+          2,
+          3
+        ]
+      }
+    }
+  },
+  "seasons": {
+    "winter_ice": {
+      "months": [
+        11,
+        0,
+        1
+      ],
+      "label": "Winter Ice Season",
+      "urgency": "high"
+    },
+    "spring_cleanup": {
+      "months": [
+        2,
+        3
+      ],
+      "label": "Spring Cleanup",
+      "urgency": "moderate"
+    },
+    "early_summer": {
+      "months": [
+        4,
+        5
+      ],
+      "label": "Early Summer",
+      "urgency": "low"
+    },
+    "summer_dry": {
+      "months": [
+        6,
+        7
+      ],
+      "label": "Summer & Smoke Season",
+      "urgency": "moderate"
+    },
+    "smoke_season": {
+      "months": [
+        6,
+        7,
+        8
+      ],
+      "label": "Smoke Season",
+      "urgency": "high"
+    },
+    "fall_prep": {
+      "months": [
+        8,
+        9,
+        10
+      ],
+      "label": "Fall Prep & Gutter Season",
+      "urgency": "moderate"
+    },
+    "holiday_season": {
+      "months": [
+        10,
+        11
+      ],
+      "label": "Holiday Season",
+      "urgency": "low"
+    }
+  },
+  "tips": {
+    "winter_ice": [
+      "Freeze season. Protect outdoor faucets and exposed pipes, and keep de-icing supplies handy.",
+      "Keep a flashlight, spare batteries, and a charged phone power bank easy to reach in case winter weather interrupts power.",
+      "Check your heating system and replace its filter according to the manufacturer's instructions. Arrange service if it is not working properly."
+    ],
+    "spring_cleanup": [
+      "Spring cleanup season: gutters, pressure washing, and yard cleanup are the top residential jobs right now.",
+      "Check your own waste provider's yard-debris collection dates and accepted materials before setting branches or bags at the curb.",
+      "Inspect gutters and downspouts from the ground for debris or visible damage. Arrange help for work that requires roof access."
+    ],
+    "early_summer": [
+      "Early summer is the window for outdoor projects: decks, paint, and landscaping before the heat peaks.",
+      "Inspect decks, fences, and exterior trim for loose fasteners or damage before starting outdoor projects.",
+      "Check the local forecast and product instructions before exterior painting or staining; suitable temperatures and drying time matter."
+    ],
+    "summer_dry": [
+      "Peak summer: water early in the morning, watch for local watering restrictions, and keep AC filters fresh.",
+      "Check irrigation lines and outdoor faucets for leaks, and adjust watering to local restrictions and your plants' needs.",
+      "Before traveling, arrange care for pets and plants and decide how mail and deliveries will be handled."
+    ],
+    "smoke_season": [
+      "Wildfire smoke can reach far from any fire. Check the AQI on hazy days and run HVAC on recirculate with a good filter.",
+      "Check local air-quality alerts before scheduling outdoor maintenance. Follow local guidance when smoke affects your area.",
+      "Inspect door and window seals for gaps and check that replacement HVAC filters are compatible with your system."
+    ],
+    "fall_prep": [
+      "Fall home care: clear fallen leaves from gutters and downspouts, and have the heating system checked before colder weather.",
+      "Check weatherstripping around doors and windows for damage or gaps as the weather cools.",
+      "Turn on your heating system before you need it regularly, so there is time to address maintenance or repair needs."
+    ],
+    "holiday_season": [
+      "Package theft peaks in December. Consider coordinating with neighbors for delivery watching.",
+      "Before holiday travel, arrange for mail and packages to be collected and leave a way for a trusted contact to reach you.",
+      "Inspect seasonal decorations for damaged cords and follow the manufacturer's indoor or outdoor use and electrical load instructions."
+    ]
+  },
+  "overlays": {
+    "hurricane_season": {
+      "label": "Hurricane Season",
+      "tips": [
+        "Atlantic hurricane season runs June 1 to November 30 and peaks in September. Know your evacuation zone, keep a week of water and medication, and photograph your home for insurance before a storm is named."
+      ]
+    },
+    "tornado_season": {
+      "label": "Tornado Season",
+      "tips": [
+        "Tornado season peaks in spring. Know your safe room \u2014 the lowest interior room with no windows \u2014 and keep weather alerts on overnight."
+      ]
+    },
+    "monsoon_season": {
+      "label": "Monsoon Season",
+      "tips": [
+        "The Southwest monsoon runs June 15 to September 30: flash floods and dust storms arrive fast. Never drive through a flooded wash, and clear roof drains before the first storms."
+      ]
+    },
+    "heat_season": {
+      "label": "Extreme Heat Season",
+      "tips": [
+        "Extreme heat is the deadliest weather in the United States. Check on older neighbors, keep AC filters fresh, and know the nearest cooling center."
+      ]
+    },
+    "wildfire_season": {
+      "label": "Wildfire Season",
+      "tips": [
+        "Wildfire season: keep the first five feet around the house free of dry vegetation, clear needles from the roof and gutters, and check the AQI on smoke days."
+      ]
+    },
+    "winter_storm_season": {
+      "label": "Winter Storm Season",
+      "tips": [
+        "Winter storm season: clear gutters before the rains, know where your water shutoff is, and keep a flashlight and a charged battery pack by the door."
+      ]
+    },
+    "blizzard_season": {
+      "label": "Blizzard Season",
+      "tips": [
+        "Blizzard season: insulate exposed pipes, keep the furnace filter fresh, and have sand or salt ready before the first storm."
+      ]
+    },
+    "freeze_season": {
+      "label": "Deep-Freeze Season",
+      "tips": [
+        "Deep-freeze season: heat tape on exposed lines, engine block heaters plugged in, and a carbon monoxide alarm tested."
+      ]
+    },
+    "pollen_season": {
+      "label": "Pollen Season",
+      "tips": [
+        "Pollen season: change HVAC filters monthly, keep windows closed on high-count mornings, and check the daily pollen forecast."
+      ]
+    }
+  },
+  "regional_tips": {
+    "hawaii": {
+      "hurricane_season": [
+        "Central Pacific hurricane season runs June through November. Review local emergency guidance, prepare essential supplies, and secure loose outdoor items before a storm."
+      ]
+    }
+  },
+  "coordinate_regions": [
+    {
+      "region": "florida",
+      "lat": [
+        24,
+        30.5
+      ],
+      "lng": [
+        -87.7,
+        -80
+      ]
+    },
+    {
+      "region": "hawaii",
+      "lat": [
+        18,
+        23
+      ],
+      "lng": [
+        -161,
+        -154
+      ]
+    },
+    {
+      "region": "alaska",
+      "lat": [
+        51,
+        72
+      ],
+      "lng": [
+        -180,
+        -129
+      ]
+    },
+    {
+      "region": "alaska",
+      "lat": [
+        51,
+        72
+      ],
+      "lng": [
+        170,
+        180
+      ]
+    },
+    {
+      "region": "pacific_northwest",
+      "lat": [
+        42,
+        50
+      ],
+      "lng": [
+        -125,
+        -114
+      ]
+    },
+    {
+      "region": "california",
+      "lat": [
+        24,
+        42
+      ],
+      "lng": [
+        -125,
+        -114
+      ]
+    },
+    {
+      "region": "mountain",
+      "lat": [
+        37,
+        50
+      ],
+      "lng": [
+        -114,
+        -102
+      ]
+    },
+    {
+      "region": "southwest",
+      "lat": [
+        24,
+        37
+      ],
+      "lng": [
+        -114,
+        -102
+      ]
+    },
+    {
+      "region": "northern_plains",
+      "lat": [
+        37,
+        50
+      ],
+      "lng": [
+        -102,
+        -94
+      ]
+    },
+    {
+      "region": "south_central",
+      "lat": [
+        24,
+        37
+      ],
+      "lng": [
+        -102,
+        -94
+      ]
+    },
+    {
+      "region": "upper_midwest",
+      "lat": [
+        41.5,
+        50
+      ],
+      "lng": [
+        -94,
+        -84
+      ]
+    },
+    {
+      "region": "ohio_valley",
+      "lat": [
+        36.5,
+        41.5
+      ],
+      "lng": [
+        -94,
+        -84
+      ]
+    },
+    {
+      "region": "south_central",
+      "lat": [
+        24,
+        36.5
+      ],
+      "lng": [
+        -94,
+        -88
+      ]
+    },
+    {
+      "region": "southeast",
+      "lat": [
+        24,
+        36.5
+      ],
+      "lng": [
+        -88,
+        -84
+      ]
+    },
+    {
+      "region": "northeast",
+      "lat": [
+        39.5,
+        50
+      ],
+      "lng": [
+        -84,
+        -66
+      ]
+    },
+    {
+      "region": "southeast",
+      "lat": [
+        24,
+        39.5
+      ],
+      "lng": [
+        -84,
+        -66
+      ]
+    }
+  ],
+  "overlay_regions": {
+    "hurricane_season": [
+      {
+        "lat": [
+          18,
+          23
+        ],
+        "lng": [
+          -161,
+          -154
+        ]
+      },
+      {
+        "lat": [
+          24,
+          31.5
+        ],
+        "lng": [
+          -98,
+          -80
+        ]
+      },
+      {
+        "lat": [
+          31.5,
+          42.5
+        ],
+        "lng": [
+          -84,
+          -66
+        ]
+      }
+    ]
+  }
+}

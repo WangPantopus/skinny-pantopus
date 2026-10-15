@@ -80,6 +80,7 @@ def get_sources(region: str) -> list[ContentSource]:
     get_sources_from_db() with SourceConfig objects from region_registry.
     """
     from src.config.sources_config import get_sources_for_region
+    from src.config.constants import REGIONS
 
     configs = get_sources_for_region(region)
     sources: list[ContentSource] = []
@@ -91,7 +92,9 @@ def get_sources(region: str) -> list[ContentSource]:
             log.warning("Unknown source_type '%s', skipping %s", source_type, config.get("source_id"))
             continue
 
-        config_with_region = {**config, "region": region}
+        known = REGIONS.get(region, {})
+        config_with_region = {**config, "region": region,
+                              "region_lat": known.get("lat"), "region_lng": known.get("lng")}
         sources.append(cls(config_with_region))
 
     return sources
