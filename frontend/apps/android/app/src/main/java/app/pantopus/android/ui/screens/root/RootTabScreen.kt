@@ -2715,6 +2715,14 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 }
                 // ── Pulse build S3: Place · Today · Pulse · Plans · Mail ──────────
                 composable(PantopusRoute.Today.path) {
+                    // Today's plan cards open in the Plans tab, as on iOS: the tab comes back on its map with [routes] on
+                    // top, so Back lands on the map. Other Plans pages left open there give way; a plan being composed
+                    // stays under them, so its draft isn't lost.
+                    fun openInPlansTab(vararg routes: String) {
+                        navController.navigateToRootTab(PantopusRoute.Plans)
+                        if (!navController.isOnBackStack(PlansRoutes.HOST)) navController.popToTabRoot(PantopusRoute.Plans)
+                        routes.forEach { navController.navigate(it) }
+                    }
                     TodayTabScreen(
                         onClaim = { navController.navigate(ChildRoutes.ADD_HOME) },
                         onOpenPlace = { homeId ->
@@ -2723,13 +2731,19 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         },
                         plans =
                             PlansTodayActions(
-                                onOpenPlan = { id -> navController.navigate(PlansRoutes.plan(id)) },
-                                onOpenChat = { roomId, title, _ ->
-                                    navController.navigate(
+                                onOpenPlan = { id -> openInPlansTab(PlansRoutes.plan(id)) },
+                                // "Message guests": the plan's chat over the plan, so Back goes to the plan, then the map.
+                                onOpenChat = { roomId, title, planId ->
+                                    openInPlansTab(
+                                        PlansRoutes.plan(planId),
                                         ChildRoutes.chatConversationRoom(roomId, title, title.trim().take(1).uppercase(), verified = false),
                                     )
                                 },
-                                onHostAgain = { kind, planId -> navController.navigate(PlansRoutes.host(kind = kind, again = planId)) },
+                                // "Host again" opens over whatever the Plans tab shows, as iOS's composer does.
+                                onHostAgain = { kind, planId ->
+                                    navController.navigateToRootTab(PantopusRoute.Plans)
+                                    navController.navigate(PlansRoutes.host(kind = kind, again = planId))
+                                },
                             ),
                     )
                 }

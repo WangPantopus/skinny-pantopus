@@ -46,6 +46,9 @@ const FUNNEL_EVENT_TYPES = Object.freeze([
   'plan_attended',
   'plan_hosted_again',
   'plan_share_opened',
+  // Recorded atomically by pulse_record_helpful_mark, not by a client event.
+  'pulse_helpful_marked',
+  'pulse_follow',
 ]);
 
 // Only these pilot events are accepted from an authenticated app. Delivery

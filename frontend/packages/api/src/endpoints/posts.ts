@@ -135,6 +135,7 @@ export interface MapMarker {
   latitude: number;
   longitude: number;
   // Post fields
+  title?: string;
   post_type?: PostType;
   post_as?: PostAs;
   audience?: Audience | PersonaPostAudience;
@@ -147,13 +148,9 @@ export interface MapMarker {
   userHasSaved?: boolean;
   created_at?: string;
   creator?: { id: string; username: string; name?: string; profile_picture_url?: string };
-  // Task/Offer fields
-  title?: string;
-  description?: string;
-  status?: string;
-  category?: string;
   // Business fields
   business_name?: string;
+  category?: string;
   logo_url?: string;
   is_verified?: boolean;
   address?: string;
@@ -186,7 +183,7 @@ export async function getMapMarkers(params: {
   surface?: FeedSurface;
   postType?: PostType;
   limit?: number;
-  layers?: string; // comma-separated: posts,tasks,offers,businesses,homes
+  layers?: string; // comma-separated: posts,businesses,homes,plans
 }): Promise<{ markers: MapMarker[]; nearest_activity_center?: { latitude: number; longitude: number } | null }> {
   return get('/api/posts/map', params);
 }
