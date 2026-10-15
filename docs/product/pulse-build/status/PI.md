@@ -2,6 +2,22 @@
 
 Owner: the PI session. Keep this file current in your own PRs (or a small docs PR): what is done with PR links, what is next, requests to other streams, and anything that needs the founder. Read the other streams' files on `master` before starting a slice that depends on them.
 
+## Handoff — October 15, 2026, 06:20 UTC (the next session starts here)
+
+**H4 is now clear for most of the stack:** PB's whole chain (#2311, #2312, #2313, #2317, #2319, #2320, #2321, #2322) and the read-scope PR #2339 are merged; `master` is `f21db7287` and includes PB's offer-claims migration and routes. Nothing of PI's is merged yet, and none of PI's branches contains this `master`.
+
+PI's local runtime already runs `master`, so no setup is needed: PI's database has `master`'s migration history (the seven renamed PB migrations were byte-identical to what it had applied and were re-recorded under their new versions; the three new ones were applied), the backend on 56100 is an archive of `master` `f21db7287`, and the web app on 56101 serves `master`. Both servers are detached and survive a session change.
+
+Next, in order:
+
+1. Merge `origin/master` into `claude/pulse-pi-s6-pulse-page`, then merge each branch into the next one up (S9 → `codex/pulse-pi-s5-area-controls` → `codex/pulse-pi-s9-narrow-audience` → `codex/pulse-pi-s10-follow-controls` → `claude/pulse-pi-s10-card-controls`). No merge commits are pushed until they build.
+2. Sync the top branch into the private build path, build, install on `Pulse-PI`, run the existing suite (expect only the five Pacific-time `BillsListViewModelTests` failures).
+3. Recheck against `master`'s backend: S6 (feed, new count, seen); S9 offers now end to end (request, the giver's list, choose, "Someone else got this one.", "Enough requests already"; the claims response adds `offer.viewer_claim`); S9.11 narrowing now end to end; S10 follows and Why. Use Bob on a second device if `Pulse-PI-SE` access is granted to the simulator tool, otherwise through the API and the web app.
+4. Merge bottom-up through the shared queue (read `launch-streams/status/REQUESTS.md`, post HOLD, merge once the previous `master` run is in progress, post RELEASE): #2308, then retarget #2314 to `master` and merge, then #2323, #2324, #2325, #2342. Each needs green CI at its exact head and its recheck recorded in the PR.
+5. Then continue S10 (preferences summary page with undo, the "Seeing too much?" line), S5 labels/adult confirmation, S8, S11 and later slices.
+
+Still open with PB: the card's offer label is "Ask for it" on `master` (spec: "I'd like it"); `pulse_seeing_too_much_tap` isn't app-postable yet.
+
 ## Continuation checkpoint — October 15, 2026 (UTC)
 
 **Current checkpoint; supersedes the sections below. The authoritative copy is this file on the top branch, `claude/pulse-pi-s10-card-controls` (#2342).** Nothing is merged: every PI PR waits on PB's implementing PRs (H4). The work now lives in the worktree `pulse-pi-ios-continuation-47830f` (the old `pulse-pi-ios-build-2ae310` worktree is left on a detached HEAD at `1ac2b709a`; no branch or file there changed).
