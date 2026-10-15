@@ -13,6 +13,7 @@ const replyActions = require('../services/pulse/replyActions');
 const follows = require('../services/pulse/follows');
 const claims = require('../services/pulse/claims');
 const readScope = require('../services/pulse/readScope');
+const known = require('../services/pulse/known');
 const { isPulseTopic } = require('../services/pulse/topics');
 const {
   DAY_MS, askIdsWithReplies, windowDays, endsAt,
@@ -158,6 +159,31 @@ router.get('/posts/:postId/why', verifyToken, async (req, res) => {
     res.json(await follows.why(req.user.id, req.params.postId, feedOptions(req.query)));
   } catch (error) { feedError(res, error); }
 });
+
+// Known (contract §2.14): the town's sourced answers and residents' responses.
+router.get('/known', verifyToken, async (req, res) => {
+  try {
+    if (req.query.area_id != null && (typeof req.query.area_id !== 'string' || !feedCursor.UUID.test(req.query.area_id))) {
+      return res.status(400).json({ error: 'That area could not be found.' });
+    }
+    res.set('Cache-Control', 'private, no-store');
+    res.json(await known.list(req.user.id, { areaId: req.query.area_id, q: req.query.q, topic: req.query.topic }));
+  } catch (error) { feedError(res, error); }
+});
+
+router.get('/known/:id', verifyToken, async (req, res) => {
+  try {
+    res.set('Cache-Control', 'private, no-store');
+    res.json(await known.read(req.user.id, req.params.id));
+  } catch (error) { feedError(res, error); }
+});
+
+for (const kind of ['confirm', 'correct', 'outdated']) {
+  router.post(`/known/:id/${kind}`, verifyToken, async (req, res) => {
+    try { res.json(await known.respond(req.user.id, req.params.id, kind, req.body?.note)); }
+    catch (error) { feedError(res, error); }
+  });
+}
 
 router.get('/areas/mine', verifyToken, async (req, res) => {
   try {
