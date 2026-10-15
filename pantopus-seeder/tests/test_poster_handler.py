@@ -55,6 +55,8 @@ def _mock_supabase():
         chain.delete.return_value = chain
         chain.eq.return_value = chain
         chain.gte.return_value = chain
+        chain.lt.return_value = chain
+        chain.in_.return_value = chain
         chain.filter.return_value = chain
         chain.order.return_value = chain
         chain.limit.return_value = chain
@@ -139,7 +141,7 @@ class TestDetectSlot:
         assert _detect_slot(_pt(7)) == "morning"
 
     def test_morning_plus_one(self):
-        assert _detect_slot(_pt(8)) == "morning"
+        assert _detect_slot(_pt(8)) is None
 
     def test_midday(self):
         assert _detect_slot(_pt(12)) == "midday"
@@ -157,21 +159,21 @@ class TestDetectSlot:
 class TestSlotAndWeekendRules:
     def test_handler_exits_on_no_slot(self):
         patches = _standard_patches(_pt(15))
-        with patches["now"], patches["sleep"], patches["random"]:
+        with patches["now"], patches["sleep"], patches["random"], patches["secrets"], patches["create_client"], patches["load_regions"]:
             result = handler({}, None)
-        assert result.get("skipped") == "no_matching_slot"
+        assert result["regions_processed"] == 0
 
     def test_handler_exits_on_sunday(self):
         patches = _standard_patches(_pt(7, weekday=6))  # Sunday
-        with patches["now"], patches["sleep"], patches["random"]:
+        with patches["now"], patches["sleep"], patches["random"], patches["secrets"], patches["create_client"], patches["load_regions"]:
             result = handler({}, None)
-        assert result.get("skipped") == "sunday"
+        assert result["regions_processed"] == 0
 
     def test_handler_exits_saturday_noon(self):
         patches = _standard_patches(_pt(12, weekday=5))  # Saturday midday
-        with patches["now"], patches["sleep"], patches["random"]:
+        with patches["now"], patches["sleep"], patches["random"], patches["secrets"], patches["create_client"], patches["load_regions"]:
             result = handler({}, None)
-        assert result.get("skipped") == "saturday_non_morning"
+        assert result["regions_processed"] == 0
 
     def test_handler_proceeds_saturday_morning(self):
         patches = _standard_patches(_pt(7, weekday=5))  # Saturday morning

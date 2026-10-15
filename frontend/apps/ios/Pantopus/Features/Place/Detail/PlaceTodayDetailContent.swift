@@ -148,6 +148,12 @@ struct PlaceTodayDetailContent: View {
         }
     }
 
+    private var skyCalendar: Calendar {
+        var calendar = Calendar.autoupdatingCurrent
+        if let name = intel.timeZone, let zone = TimeZone(identifier: name) { calendar.timeZone = zone }
+        return calendar
+    }
+
     /// The air reading for the sky: smoke veils it, and bad air leads the card.
     private var skyAir: SkyAir? {
         guard let section = vm.section(.airQuality, in: intel), section.status == .ready || section.status == .stale,
@@ -182,7 +188,7 @@ struct PlaceTodayDetailContent: View {
                         sun: vm.section(.sunriseSunset, in: intel)?.sunriseSunset,
                         air: skyAir,
                         city: intel.place.city,
-                        date: .now
+                        date: .now, calendar: skyCalendar
                     ))
                     .padding(.trailing, 4)
                 }
@@ -194,7 +200,8 @@ struct PlaceTodayDetailContent: View {
                     pickups: calendarEvents,
                     air: skyAir,
                     home: skyHome,
-                    streetLights: SkyStreet.lights(vm.section(.blockDensity, in: intel)?.blockDensity?.bucket.rawValue)
+                    streetLights: SkyStreet.lights(vm.section(.blockDensity, in: intel)?.blockDensity?.bucket.rawValue),
+                    calendar: skyCalendar
                 ) { withAnimation { proxy.scrollTo("todayAddressCalendar", anchor: .top) } }
                 PlaceSourceNote(name: weather.source ?? "Source unavailable", asOf: PlacePresentation.fmtTime(weather.asOf))
             } else {
@@ -259,7 +266,7 @@ struct PlaceTodayDetailContent: View {
         if let sun = vm.section(.sunriseSunset, in: intel) {
             PlaceDetailSectionLabel(text: "Sun")
             if let data = sun.sunriseSunset {
-                TodaySunArcCard(data: data)
+                TodaySunArcCard(data: data, calendar: skyCalendar)
                 PlaceSourceNote(name: "Your location", asOf: PlacePresentation.fmtSunDay(data.sunrise))
             } else {
                 vm.fallbackCard(sun)

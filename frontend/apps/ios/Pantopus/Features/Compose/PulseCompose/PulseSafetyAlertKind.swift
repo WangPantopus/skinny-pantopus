@@ -19,6 +19,12 @@ public enum PulseSafetyAlertKind: String, CaseIterable, Sendable, Hashable {
     case missingPet = "missing_pet"
     case other
 
+    /// The kinds a composer offers: all of them with the Pulse redesign on
+    /// (S8); Hazard and Other while it's off, as on October 13 (cut #11).
+    public static var offered: [PulseSafetyAlertKind] {
+        LaunchFeatures.pulseRedesign ? allCases : [.hazard, .other]
+    }
+
     public var label: String {
         switch self {
         case .hazard: "Hazard"

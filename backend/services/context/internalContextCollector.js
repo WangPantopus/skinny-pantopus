@@ -1,3 +1,5 @@
+const { DateTime } = require('luxon');
+const { validTimezone } = require('../../utils/timezone');
 /**
  * Internal Context Collector
  *
@@ -52,16 +54,13 @@ async function resolveHomeIds(userId, homeId) {
  * @param {string|null} [homeId=null] - Specific home to scope to, or null for all active homes
  * @returns {Promise<InternalContext>}
  */
-async function collectInternalContext(userId, homeId = null) {
+async function collectInternalContext(userId, homeId = null, timezone = 'UTC') {
   const now = new Date();
-  const threeDaysOut = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
   const twoDaysOut = new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000);
 
-  // Start of today and end of tomorrow in ISO
-  const startOfToday = new Date(now);
-  startOfToday.setHours(0, 0, 0, 0);
-  const endOfTomorrow = new Date(startOfToday);
-  endOfTomorrow.setDate(endOfTomorrow.getDate() + 2);
+  const localToday = DateTime.fromJSDate(now, { zone: validTimezone(timezone) || 'UTC' }).startOf('day');
+  const startOfToday = localToday.toJSDate();
+  const endOfTomorrow = localToday.plus({ days: 2 }).toJSDate();
 
   const homeIds = await resolveHomeIds(userId, homeId);
   const hasHomes = homeIds.length > 0;
@@ -86,8 +85,8 @@ async function collectInternalContext(userId, homeId = null) {
           .select('id, provider_name, amount, currency, due_date, status')
           .in('home_id', financeHomeIds)
           .neq('status', 'paid')
-          .gte('due_date', now.toISOString())
-          .lte('due_date', threeDaysOut.toISOString())
+          .gte('due_date', localToday.toISODate())
+          .lte('due_date', localToday.plus({ days: 3 }).toISODate())
           .order('due_date', { ascending: true })
           .limit(10)
       : Promise.resolve({ data: [] }),

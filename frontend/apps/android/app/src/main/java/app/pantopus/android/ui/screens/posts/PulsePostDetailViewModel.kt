@@ -194,6 +194,8 @@ class PulsePostDetailViewModel
         /** The asker's own Ask that hasn't ended (S7): no resolution, not solved or archived, not past its end. */
         private val isOwnOpenAsk: Boolean
             get() {
+                // Keep open and Close came with the Pulse redesign; the October 13 page has neither.
+                if (!LaunchFeatures.pulseRedesign) return false
                 val post = (_state.value as? PulsePostDetailUiState.Loaded)?.content?.post ?: return false
                 if (!isOwner || post.postType != "ask_local" || post.resolution != null) return false
                 if (post.archivedAt != null || (post.state != null && post.state != "open")) return false
@@ -682,14 +684,16 @@ class PulsePostDetailViewModel
                     ),
                 comments = rows,
                 hiddenReplyCount = hidden,
+                // No status word on the October 13 page (the Pulse redesign off).
                 status =
-                    PostStatus.of(
-                        postType = post.postType,
-                        state = post.state,
-                        resolution = post.resolution,
-                        expiresAt = post.expiresAt.takeIf { post.archivedAt == null },
-                        goingCount = post.likeCount,
-                    ),
+                    PostStatus
+                        .of(
+                            postType = post.postType,
+                            state = post.state,
+                            resolution = post.resolution,
+                            expiresAt = post.expiresAt.takeIf { post.archivedAt == null },
+                            goingCount = post.likeCount,
+                        )?.takeIf { LaunchFeatures.pulseRedesign },
             )
         }
 

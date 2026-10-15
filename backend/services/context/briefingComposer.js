@@ -101,7 +101,7 @@ function buildWeatherIntro(weather, options = {}) {
 
 // ── Greetings ───────────────────────────────────────────────────────
 
-function getLocalHour(timezone = 'America/Los_Angeles', now = new Date()) {
+function getLocalHour(timezone = 'UTC', now = new Date()) {
   try {
     const parts = new Intl.DateTimeFormat('en-US', {
       timeZone: timezone,
@@ -110,14 +110,14 @@ function getLocalHour(timezone = 'America/Los_Angeles', now = new Date()) {
     }).formatToParts(now);
     const hourPart = parts.find((part) => part.type === 'hour');
     const hour = Number(hourPart?.value);
-    if (Number.isFinite(hour)) return hour;
+    if (Number.isFinite(hour)) return hour % 24;
   } catch {
     // Fall through to server-local time.
   }
   return now.getHours();
 }
 
-function getGreeting(timezone = 'America/Los_Angeles', now = new Date()) {
+function getGreeting(timezone = 'UTC', now = new Date()) {
   const hour = getLocalHour(timezone, now);
   if (hour < 12) return 'Good morning.';
   if (hour < 17) return 'Good afternoon.';
@@ -140,7 +140,7 @@ function composeTemplate(rankedOutput, options = {}) {
     weather = null,
     leadIntro = null,
     includeWeatherTemperature = true,
-    timezone = 'America/Los_Angeles',
+    timezone = 'UTC',
     now = new Date(),
   } = options;
   const signals = rankedOutput.signals || [];
@@ -335,7 +335,7 @@ async function composeBriefing(rankedOutput, options = {}) {
     maxWords = 45,
     greeting = true,
     targetUse = 'push',
-    timezone = 'America/Los_Angeles',
+    timezone = 'UTC',
     now = new Date(),
   } = options;
 

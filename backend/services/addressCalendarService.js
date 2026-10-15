@@ -21,6 +21,7 @@ const crypto = require('crypto');
 const { RRule, RRuleSet } = require('rrule');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
+const { resolveHomeTimezone } = require('../utils/timezone');
 
 const WINDOW_DAYS = 14;
 const SCOPE_RANK = { home: 0, city: 1, county: 2, state: 3 };
@@ -36,10 +37,9 @@ function noonUtc(isoDay) {
   return new Date(`${isoDay}T12:00:00.000Z`);
 }
 
-// The home's "today" as a calendar date. Homes carry no timezone column
-// yet; Pacific is the launch geography and the safe default.
+// Use the shared geographic timezone resolver; calendar dates remain date-only.
 function localToday(home, now = new Date()) {
-  const tz = (home && home.timezone) || 'America/Los_Angeles';
+  const tz = resolveHomeTimezone(home);
   try {
     const parts = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
     return parts; // en-CA yields YYYY-MM-DD

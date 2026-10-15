@@ -82,15 +82,24 @@ enum SkyScrub {
         return SkyWind.chip(picked.hour.windMph)
     }
 
+    private static func hourLabel(_ date: Date, calendar: Calendar) -> String {
+        let format = DateFormatter()
+        format.locale = .autoupdatingCurrent
+        format.calendar = calendar
+        format.timeZone = calendar.timeZone
+        format.setLocalizedDateFormatFromTemplate("j")
+        return format.string(from: date)
+    }
+
     /// "3 PM", or "TOMORROW 6 AM" past midnight: takes the place of "NOW".
     static func kicker(_ picked: SkyScrubHour, now: Date, calendar: Calendar = .autoupdatingCurrent) -> String {
-        let time = picked.date.formatted(.dateTime.hour())
+        let time = hourLabel(picked.date, calendar: calendar)
         return (calendar.isDate(picked.date, inSameDayAs: now) ? time : "Tomorrow \(time)").uppercased()
     }
 
     /// "3 PM: 68°, Partly cloudy, 40% chance of rain, wind 22 miles per hour."
     static func spoken(_ picked: SkyScrubHour, now: Date, calendar: Calendar = .autoupdatingCurrent) -> String {
-        let time = picked.date.formatted(.dateTime.hour())
+        let time = hourLabel(picked.date, calendar: calendar)
         var parts = ["\(calendar.isDate(picked.date, inSameDayAs: now) ? time : "Tomorrow \(time)"): \(Int(picked.hour.tempF.rounded()))°"]
         let label = label(picked.hour.conditionCode)
         if !label.isEmpty { parts.append(label) }

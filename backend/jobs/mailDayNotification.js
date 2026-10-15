@@ -50,7 +50,9 @@ const SEND_BEFORE_LOCAL_HOUR = 20;
 // allows a 10am push after a 5pm push the previous evening.
 const RENOTIFY_COOLDOWN_HOURS = 20;
 
-const DEFAULT_TIMEZONE = 'America/Los_Angeles';
+const DEFAULT_TIMEZONE = 'UTC';
+const { validTimezone } = require('../utils/timezone');
+const { resolveNotificationTimezone } = require('../services/context/locationResolver');
 
 // Kinds that carry an action the resident is the only one who can take.
 // Everything else is triage-at-leisure and never drives the "needs you".
@@ -127,7 +129,8 @@ function inQuietHours(hour, startStr, endStr) {
 
 /** Whether this user may be interrupted right now. */
 function isSendableNow(prefs, now = new Date(), deliveryTime = '08:00') {
-  const timezone = prefs?.daily_briefing_timezone || DEFAULT_TIMEZONE;
+  const timezone = validTimezone(prefs?.daily_briefing_timezone);
+  if (!timezone) return false;
   const minute = localMinute(timezone, now);
   const hour = Math.floor(minute / 60);
   const notBefore = deliveryMinute(deliveryTime);
@@ -334,7 +337,8 @@ async function mailDayNotification() {
 
       // Outside the local window — leave it for a later run today rather
       // than dropping it, so a 4pm scan still gets its push at 4pm.
-      if (!isSendableNow(prefs, new Date(), settings?.delivery_time ?? '08:00')) {
+      const timezone = await resolveNotificationTimezone(userId, prefs);
+      if (!isSendableNow({ ...prefs, daily_briefing_timezone: timezone }, new Date(), settings?.delivery_time ?? '08:00')) {
         deferred++;
         continue;
       }

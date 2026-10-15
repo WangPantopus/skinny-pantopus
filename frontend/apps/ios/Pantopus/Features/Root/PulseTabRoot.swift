@@ -11,14 +11,19 @@
 //  still present as sheets from here when a link asks for them
 //  (`NeighborhoodDoorStore`).
 //
+//  While the Pulse redesign is off (launch cut #11) this is the October 13
+//  Pulse instead: a sheet from Nearby's door (`NeighborhoodTabRoot`) showing
+//  the feed (`FeedView`), and Nearby presents Tasks and Marketplace itself.
+//
 
 import SwiftUI
 
 /// Typed routes within the Pulse tab's NavigationStack.
 public enum PulseRoute: Hashable {
     case post(postId: String)
-    /// The one-box composer (Pulse S8); posts in Pulse mode.
-    case compose
+    /// New post: the one-box composer (Pulse S8, Pulse mode) while the
+    /// redesign is on, else the October 13 composer for this intent.
+    case compose(intent: String)
     case editPost(postId: String)
     case publicProfile(userId: String)
 }
@@ -38,9 +43,13 @@ public struct PulseTabRoot: View {
 
     /// Starts adding a home (the quiet card's "Set up a home"), in the Place tab.
     private let onAddHome: @MainActor () -> Void
+    /// Closes the sheet this surface is presented in (Nearby's door, while
+    /// the Pulse redesign is off).
+    private let onClose: (@MainActor () -> Void)?
 
-    public init(onAddHome: @escaping @MainActor () -> Void = {}) {
+    public init(onAddHome: @escaping @MainActor () -> Void = {}, onClose: (@MainActor () -> Void)? = nil) {
         self.onAddHome = onAddHome
+        self.onClose = onClose
     }
 
     private var currentUserId: String {
@@ -50,22 +59,37 @@ public struct PulseTabRoot: View {
 
     public var body: some View {
         NavigationStack(path: navigationPathBinding) {
-            // The Pulse page (Pulse S6) reads `GET /api/pulse/feed`.
-            PulsePageView(
-                onOpenPost: { postId in
-                    path.append(.post(postId: postId))
-                },
-                onCompose: {
-                    path.append(.compose)
-                },
-                onEdit: { postId in
-                    path.append(.editPost(postId: postId))
-                },
-                topMenu: topMenu,
-                quietCard: quietCard,
-                onRefresh: refreshQuietCard,
-                isActive: path.isEmpty && rootTabs.selected == .pulse && presentedSurface == nil
-            )
+            Group {
+                if LaunchFeatures.pulseRedesign {
+                    // The Pulse page (Pulse S6) reads `GET /api/pulse/feed`.
+                    PulsePageView(
+                        onOpenPost: { postId in
+                            path.append(.post(postId: postId))
+                        },
+                        onCompose: {
+                            path.append(.compose(intent: PulseIntent.all.rawValue))
+                        },
+                        onEdit: { postId in
+                            path.append(.editPost(postId: postId))
+                        },
+                        topMenu: topMenu,
+                        quietCard: quietCard,
+                        onRefresh: refreshQuietCard,
+                        isActive: path.isEmpty && rootTabs.selected == .pulse && presentedSurface == nil
+                    )
+                } else {
+                    // Launch cut #11 off: the October 13 feed, `GET /api/posts/feed`.
+                    FeedView(
+                        onOpenPost: { postId in
+                            path.append(.post(postId: postId))
+                        },
+                        onCompose: { intent in
+                            path.append(.compose(intent: intent.rawValue))
+                        },
+                        onBack: onClose
+                    )
+                }
+            }
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: PulseRoute.self) { route in
                 destination(for: route)
@@ -129,7 +153,8 @@ public struct PulseTabRoot: View {
     }
 
     private func consumeDeepLinkIfNeeded(pending: DeepLinkRouter.Destination?) {
-        guard navigationReady, rootTabs.selected == .pulse, let pending, pending == router.pending else { return }
+        // Nearby, while this is Nearby's Pulse sheet (launch cut #11 off).
+        guard navigationReady, rootTabs.selected == RootTab.pulseHome, let pending, pending == router.pending else { return }
         switch pending {
         case .feed, .pulse:
             path.replaceNavigationPath(NavigationPath())
@@ -196,11 +221,19 @@ public struct PulseTabRoot: View {
             // a new identity gives the new post its own view model and load.
             .id(postId)
             .onDisappear { router.completePostArrival(id: postId) }
-        case .compose:
-            PulseComposerView(
-                onCancel: { pop() },
-                onPosted: { _ in pop() }
-            )
+        case let .compose(intent):
+            if LaunchFeatures.pulseRedesign {
+                PulseComposerView(
+                    onCancel: { pop() },
+                    onPosted: { _ in pop() }
+                )
+            } else {
+                PulseComposeFlowView(
+                    prefillFeedIntent: PulseIntent(rawValue: intent),
+                    onCancel: { pop() },
+                    onPosted: { _ in pop() }
+                )
+            }
         case let .editPost(postId):
             PulseComposeFlowView(
                 editingPostId: postId,

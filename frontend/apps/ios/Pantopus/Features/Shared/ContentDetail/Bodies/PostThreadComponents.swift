@@ -29,17 +29,7 @@ struct CommentComposer: View {
                 ringProgress: 1,
                 size: 28
             )
-            TextField(placeholder, text: $text, axis: .vertical)
-                .pulseFont(.small)
-                .lineLimit(1...4)
-                .focused($composerFocused)
-                .onChange(of: focusRequest) { _, _ in composerFocused = true }
-                .foregroundStyle(Theme.Color.appText)
-                .submitLabel(.send)
-                .onSubmit { if canSend { onSend() } }
-                .padding(.horizontal, Spacing.s3)
-                .padding(.vertical, Spacing.s2)
-                .frame(minHeight: 44)
+            field
                 .background(Theme.Color.appSurface)
                 .overlay {
                     RoundedRectangle(cornerRadius: Radii.pill, style: .continuous)
@@ -69,15 +59,45 @@ struct CommentComposer: View {
                         )
                     }
                 }
-                .frame(width: 44, height: 44)
+                .frame(width: sendSize, height: sendSize)
                 .background(canSend || isFocusedPresentation ? Theme.Color.primarySolid : Theme.Color.appSurfaceSunken)
                 .clipShape(Circle())
             }
             .buttonStyle(.plain)
             .disabled(!canSend)
             .accessibilityIdentifier("pulsePostDetail-sendComment")
-            .accessibilityLabel("Send reply")
+            .accessibilityLabel(LaunchFeatures.pulseRedesign ? "Send reply" : "Send comment")
         }
+    }
+
+    /// The reply box grows to four lines (Pulse S9); while the Pulse redesign
+    /// is off (launch cut #11) it is October 13's one-line box.
+    @ViewBuilder private var field: some View {
+        if LaunchFeatures.pulseRedesign {
+            TextField(placeholder, text: $text, axis: .vertical)
+                .pulseFont(.small)
+                .lineLimit(1...4)
+                .focused($composerFocused)
+                .onChange(of: focusRequest) { _, _ in composerFocused = true }
+                .foregroundStyle(Theme.Color.appText)
+                .submitLabel(.send)
+                .onSubmit { if canSend { onSend() } }
+                .padding(.horizontal, Spacing.s3)
+                .padding(.vertical, Spacing.s2)
+                .frame(minHeight: 44)
+        } else {
+            TextField(placeholder, text: $text)
+                .font(.system(size: PantopusTextStyle.small.size))
+                .foregroundStyle(Theme.Color.appText)
+                .submitLabel(.send)
+                .onSubmit { if canSend { onSend() } }
+                .padding(.horizontal, Spacing.s3)
+                .frame(height: 40)
+        }
+    }
+
+    private var sendSize: CGFloat {
+        LaunchFeatures.pulseRedesign ? 44 : 40
     }
 
     private var canSend: Bool {

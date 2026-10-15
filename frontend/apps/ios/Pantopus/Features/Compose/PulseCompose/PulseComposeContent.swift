@@ -755,7 +755,7 @@ public struct PulseComposeContent: View {
                 .foregroundStyle(Theme.Color.appTextSecondary)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: Spacing.s2) {
-                    ForEach(PulseSafetyAlertKind.allCases, id: \.rawValue) { kind in
+                    ForEach(PulseSafetyAlertKind.offered, id: \.rawValue) { kind in
                         chipPill(
                             label: kind.label,
                             isActive: state.safetyAlertKind == kind,

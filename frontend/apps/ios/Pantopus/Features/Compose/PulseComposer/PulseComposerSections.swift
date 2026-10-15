@@ -111,7 +111,7 @@ struct PulseComposerTypeDetails: View {
                     Text("Kind").pulseFont(.body).foregroundStyle(Theme.Color.appText)
                     Spacer(minLength: Spacing.s2)
                     Picker("Kind", selection: $model.draft.headsUpKind) {
-                        ForEach(PulseSafetyAlertKind.allCases, id: \.rawValue) { Text($0.label).tag($0.rawValue) }
+                        ForEach(PulseSafetyAlertKind.offered, id: \.rawValue) { Text($0.label).tag($0.rawValue) }
                     }
                     .pickerStyle(.menu)
                     .accessibilityIdentifier("pulseComposerHeadsUpKind")

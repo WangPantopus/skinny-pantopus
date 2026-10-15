@@ -29,7 +29,8 @@ public struct PulsePostActions: Sendable, Hashable {
     public let isSaved: Bool
     public let isReposted: Bool
     public let shareCount: Int
-    /// `state == "solved"`: an Ask already marked solved (no "Mark solved").
+    /// `state == "solved"`: an Ask already marked solved (no "Mark solved");
+    /// the Solved badge while the Pulse redesign is off (launch cut #11).
     public let isSolved: Bool
     /// Viewer authored this post.
     public let isOwner: Bool
@@ -414,6 +415,11 @@ public struct PulsePostCard: View {
             ForEach(content.reactions) { reaction in
                 reactionPill(reaction)
             }
+            // October 13's badge while the Pulse redesign, whose status words
+            // replace it, is off (launch cut #11).
+            if !LaunchFeatures.pulseRedesign, content.actions.isSolved {
+                solvedBadge
+            }
             Spacer()
             if let onToggleSave {
                 Button(action: onToggleSave) {
@@ -556,6 +562,24 @@ private extension PulsePostCard {
     var curatorChip: some View {
         PulseCuratorChip()
             .accessibilityIdentifier("pulsePostCurator_\(content.id)")
+    }
+
+    /// Inline "Solved" pill — RN renders the same badge once
+    /// `state === 'solved'` (`PostCard.tsx:474-479`).
+    var solvedBadge: some View {
+        HStack(spacing: Spacing.s1) {
+            Icon(.checkCircle, size: 11, strokeWidth: 2.4, color: Theme.Color.success)
+            Text("Solved")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(Theme.Color.success)
+        }
+        .padding(.horizontal, Spacing.s2)
+        .frame(height: 22)
+        .background(Theme.Color.successLight)
+        .clipShape(Capsule())
+        .accessibilityElement()
+        .accessibilityLabel("Solved")
+        .accessibilityIdentifier("pulsePostSolvedBadge_\(content.id)")
     }
 
     /// The card's controls as VoiceOver actions, named as their buttons are.

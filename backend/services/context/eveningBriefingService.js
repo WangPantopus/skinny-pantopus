@@ -6,6 +6,7 @@
  */
 
 function getLocalDateKey(value, timeZone) {
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
   const date = value instanceof Date ? value : new Date(value);
   try {
     const parts = new Intl.DateTimeFormat('en-CA', {
@@ -34,7 +35,7 @@ function getLocalHour(value, timeZone) {
     }).formatToParts(date);
     const hourPart = parts.find((part) => part.type === 'hour');
     const hour = Number(hourPart?.value);
-    if (Number.isFinite(hour)) return hour;
+    if (Number.isFinite(hour)) return hour % 24;
   } catch {
     // Fall back below.
   }

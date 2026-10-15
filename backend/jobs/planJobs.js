@@ -198,18 +198,18 @@ async function closeAskingAndEnd() {
 
 async function sendReminders() {
   const now = Date.now();
-  // A plan starting within 15 hours may already be in its reminder window (7 PM the evening before).
+  // A plan starting within 16 hours (including a fall-back DST night) may already be in its reminder window (7 PM the evening before).
   const { data: upcoming, error } = await supabaseAdmin
     .from('Plan')
     .select(planService.PLAN_SELECT)
     .eq('status', 'open')
     .gt('post.event_date', new Date(now).toISOString())
-    .lte('post.event_date', new Date(now + 15 * 60 * 60 * 1000).toISOString())
+    .lte('post.event_date', new Date(now + 16 * 60 * 60 * 1000).toISOString())
     .limit(300);
   if (error) throw new Error(`Failed to read upcoming plans: ${error.message}`);
   let sent = 0;
   for (const plan of upcoming || []) {
-    const remindAt = rules.reminderAt(plan.post.event_date, plan.timezone);
+    const remindAt = rules.reminderAt(plan.post.event_date, rules.timezoneForPlan(plan));
     if (remindAt.getTime() > now) continue;
     const requests = await activeRequests(plan.post_id);
     const accepted = requests.filter((r) => r.status === 'accepted' && !r.reminded_at);
@@ -242,7 +242,7 @@ async function sendHostSummaries() {
   if (error) throw new Error(`Failed to read today's plans: ${error.message}`);
   let sent = 0;
   for (const plan of today || []) {
-    const tz = plan.timezone || rules.DEFAULT_TIMEZONE;
+    const tz = rules.timezoneForPlan(plan);
     const local = rules.localParts(new Date(now), tz);
     if (rules.localParts(new Date(plan.post.event_date), tz).date !== local.date || local.hour < 8) continue;
     // A plan posted after 8 AM on its day gets no summary: the host just made it.

@@ -1063,8 +1063,9 @@ class NotificationsViewModel
             ): RowModel {
                 val unread = dto.isRead != true
                 val category = NotificationCategory.fromRaw(dto.type)
-                // The day-6 Ask reminder (S7) stays a System notice, drawn as a question.
-                val icon = if (dto.type == "ask_still_open") PantopusIcon.HelpCircle else category.icon
+                // The day-6 Ask reminder (S7) stays a System notice, drawn as a question (a plain one with the Pulse
+                // redesign off).
+                val icon = if (LaunchFeatures.pulseRedesign && dto.type == "ask_still_open") PantopusIcon.HelpCircle else category.icon
                 val destructive =
                     onDelete?.let { handler ->
                         RowDestructiveAction(
