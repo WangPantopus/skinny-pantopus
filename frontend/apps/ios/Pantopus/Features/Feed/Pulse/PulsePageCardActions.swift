@@ -4,8 +4,9 @@
 //
 //  The Pulse page's card "…" entries (Pulse S6; build spec §3, "everything
 //  else is in '…'"), agreed with PA: Save post / Remove bookmark, Mute this
-//  topic in this area, Hide post, Mute {name} and Report post on someone
-//  else's post;
+//  topic in this area, Hide post, Mute this person and Report a problem on
+//  someone else's post, with Why am I seeing this?, Follow this
+//  conversation and See more of this topic (Pulse S10, build spec §7);
 //  Keep open 7 more days and Close on the asker's open Ask (Pulse S7), Edit
 //  and Delete on your own. All on existing endpoints; each change shows at
 //  once and comes back if the server refuses.
@@ -91,6 +92,48 @@ public extension PulsePageViewModel {
             moderation.removeTopicMute(topic.rawValue, areaId: areaId)
             rebuild()
             toastMessage = "Couldn't mute \(topic.label)."
+        }
+    }
+
+    /// "Follow this conversation" (build spec §7): one tap follows with
+    /// notifications off until it ends; the conversation's Following sheet
+    /// changes the rest. Only a confirmed follow turns the entry off.
+    func followConversation(cardId: String) async {
+        guard let card = card(cardId), !card.following, !card.isAuthor, beginMutation(cardId) else { return }
+        defer { finishMutation(cardId) }
+        do {
+            let response: PulseFollowResponse = try await api.request(PulseEndpoints.followPost(postId: cardId))
+            guard let follow = response.follow, follow.targetType == "post", follow.targetId == cardId else {
+                toastMessage = "Couldn't confirm Following. Refresh to check."
+                return
+            }
+            followingOverrides[cardId] = true
+            rebuild()
+            showToast("Saved to Following. Notifications are off.", kind: .success)
+        } catch {
+            toastMessage = (error as? APIError)?.errorDescription ?? "Couldn't update Following. Try again."
+        }
+    }
+
+    /// "See more of this topic" (build spec §7, S10.2): follows the topic in
+    /// the card's area, so its new posts show in Following; notifications
+    /// stay off. A card without an area doesn't offer it.
+    func followTopic(cardId: String) async {
+        guard let card = card(cardId), let topic = card.topic, let areaId = card.areaId,
+              beginMutation(cardId) else { return }
+        defer { finishMutation(cardId) }
+        do {
+            let response: PulseFollowResponse = try await api.request(
+                PulseEndpoints.followTopic(topic.rawValue, areaId: areaId)
+            )
+            guard let follow = response.follow, follow.targetType == "topic", follow.targetId == topic.rawValue,
+                  follow.areaId == areaId else {
+                toastMessage = "Couldn't confirm Following. Refresh to check."
+                return
+            }
+            showToast("Saved to Following. Notifications are off.", kind: .success)
+        } catch {
+            toastMessage = (error as? APIError)?.errorDescription ?? "Couldn't follow \(topic.label). Try again."
         }
     }
 
