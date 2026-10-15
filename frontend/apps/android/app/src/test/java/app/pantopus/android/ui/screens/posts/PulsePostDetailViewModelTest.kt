@@ -69,6 +69,7 @@ class PulsePostDetailViewModelTest {
             postsRefresh = PulsePostsRefreshNotifier(),
             matchedBusinessesRepo = matchedBusinessesRepo,
             savedStateHandle = SavedStateHandle(mapOf(PULSE_POST_DETAIL_ID_KEY to "p1")),
+            pulseRepo = mockk(relaxed = true),
         )
 
     private fun creator(

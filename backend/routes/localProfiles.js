@@ -24,7 +24,7 @@ const { requireIdentityFirewallEnabled } = require('../utils/featureFlags');
 const { isSearchable, isScopedBlocked } = require('../utils/visibilityPolicy');
 const { hasBlocked } = require('../services/blockService');
 const { isPublicStorageUrl } = require('../services/s3Service');
-const { readablePosts } = require('../services/pulse/readAccess');
+const { readablePosts, postScopeAccess } = require('../services/pulse/readAccess');
 
 router.use(requireIdentityFirewallEnabled);
 
@@ -82,6 +82,8 @@ const LOCAL_ACTIVITY_POST_SELECT = [
   'allow_external_share',
   'radius_miles',
   'moderation_state',
+  'read_scope',
+  'area_id',
 ].join(', ');
 
 const LOCAL_PROFILE_PUBLIC_POST_FIELDS = [
@@ -438,9 +440,10 @@ router.get('/:handle/activity', optionalAuth, async (req, res) => {
     const { profile, viewerContext, errorStatus, error: resolveError } = await resolveViewableLocalProfile(req.params.handle, req.user?.id || null);
     if (errorStatus) return res.status(errorStatus).json({ error: resolveError });
 
-    const { data: posts, error } = await supabaseAdmin
+    const scopeAccess = await postScopeAccess(req.user?.id || null);
+    const { data: posts, error } = await scopeAccess.query(supabaseAdmin
       .from('Post')
-      .select(LOCAL_ACTIVITY_POST_SELECT)
+      .select(LOCAL_ACTIVITY_POST_SELECT))
       .eq('user_id', profile.user_id)
       .eq('show_on_profile', true)
       .not('profile_visibility_scope', 'eq', 'hidden')

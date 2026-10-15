@@ -44,7 +44,7 @@ describe('Following activity against PostgreSQL 17 / PostgREST 14', {
         id uuid PRIMARY KEY, identity_context_type text NOT NULL,
         identity_context_id uuid NOT NULL, title text, content text NOT NULL,
         created_at timestamptz NOT NULL, archived_at timestamptz,
-        visibility text, audience post_audience, distribution_targets text[],
+        visibility text, audience post_audience, distribution_targets text[], read_scope text,
         target_tier_rank integer CHECK (target_tier_rank BETWEEN 1 AND 4), post_metadata jsonb
       );
       CREATE INDEX ON "Post" (identity_context_id, target_tier_rank, created_at DESC)

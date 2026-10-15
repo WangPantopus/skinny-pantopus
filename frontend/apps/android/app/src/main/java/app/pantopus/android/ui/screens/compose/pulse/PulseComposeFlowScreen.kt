@@ -111,7 +111,7 @@ private fun prefillPurpose(
     target: PulsePostingTarget,
     feedIntent: PulseIntent?,
 ): PulseComposePurpose? {
-    if (feedIntent == null || feedIntent == PulseIntent.All) return null
+    if (feedIntent == null || feedIntent == PulseIntent.All || feedIntent == PulseIntent.Generic) return null
     val composeIntent = PulseComposeIntent.fromFeedIntent(feedIntent)
     val candidate = PulseComposePurpose.entries.firstOrNull { it.legacyIntent == composeIntent } ?: return null
     return if (PulseComposePurpose.allowedFor(target).contains(candidate)) candidate else null

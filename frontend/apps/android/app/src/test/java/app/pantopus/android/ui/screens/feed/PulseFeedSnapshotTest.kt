@@ -56,7 +56,7 @@ class PulseFeedSnapshotTest {
         paparazzi.snapshot {
             Frame {
                 FeedChipRow(
-                    chips = PulseIntent.entries.map { FeedChipItem(id = it.key, label = it.label) },
+                    chips = PulseIntent.filterEntries.map { FeedChipItem(id = it.key, label = it.label) },
                     activeId = PulseIntent.All.key,
                     onSelect = {},
                 )

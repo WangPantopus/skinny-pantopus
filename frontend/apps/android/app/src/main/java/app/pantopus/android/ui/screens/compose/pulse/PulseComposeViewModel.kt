@@ -86,7 +86,7 @@ enum class PulseComposeIntent(
          */
         fun fromFeedIntent(feed: PulseIntent): PulseComposeIntent =
             when (feed) {
-                PulseIntent.All, PulseIntent.Ask -> Ask
+                PulseIntent.All, PulseIntent.Generic, PulseIntent.Ask -> Ask
                 PulseIntent.Recommend, PulseIntent.VisitorGuide -> Recommend
                 PulseIntent.Event -> Event
                 PulseIntent.Lost -> Lost
