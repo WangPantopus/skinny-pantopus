@@ -121,7 +121,9 @@ async function canSubmitResidencyClaim(homeId, userId) {
     errors: existingActive ? [...errors, 'You already have an active residency claim for this home'] : errors,
     blockCode: existingActive ? 'EXISTING_RESIDENCY_CLAIM' : null,
     existingClaimId: existingActive ? existingActive.id : null,
-    routingClassification: 'residency_claim',
+    // Stored in HomeOwnershipClaim.routing_classification, whose enum has no
+    // residency value; a residency claim never contests ownership.
+    routingClassification: 'standalone_claim',
     flags: householdClaimConfig.flags,
   };
 }
