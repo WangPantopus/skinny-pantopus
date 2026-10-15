@@ -29,7 +29,9 @@ extension PulsePostDetailViewModel {
         conversationGeneration += 1
         let generation = conversationGeneration
         let revision = conversationMutationRevision
-        let startedAt = Date()
+        // Coming back to a conversation keeps what is on screen; only a pull
+        // to refresh shows other people's new replies in place.
+        let holdNewReplies = !force && conversation != nil
         do {
             try await store.show(
                 conversationEndpoint,
@@ -39,12 +41,18 @@ extension PulsePostDetailViewModel {
                 force: force
             ) { snapshot in
                 guard generation == conversationGeneration, revision == conversationMutationRevision else { return }
-                applyConversation(snapshot, startedAt: startedAt)
+                applyConversation(snapshot, holdNewReplies: holdNewReplies)
             }
         } catch is CancellationError {
             return
         } catch {
             guard generation == conversationGeneration else { return }
+            if conversation == nil, case .notFound = error as? APIError {
+                // Not a Pulse conversation (a household, home or persona post,
+                // or an older server): the post page reads it.
+                usesPostPage = true
+                return
+            }
             if clearRefusedConversation(error) { return }
             if conversation != nil {
                 if let copy = store.peek(conversationEndpoint, as: PulseConversationResponse.self) {
@@ -60,22 +68,43 @@ extension PulsePostDetailViewModel {
         }
     }
 
-    func applyConversation(_ snapshot: ScreenSnapshot<PulseConversationResponse>, startedAt: Date) {
+    func applyConversation(_ snapshot: ScreenSnapshot<PulseConversationResponse>, holdNewReplies: Bool) {
         guard let post = snapshot.value.post, !post.id.isEmpty else {
             store.remove(conversationEndpoint)
             state = .error(message: "This conversation is no longer available.", retryable: false)
             return
         }
-        if conversationReadAt != snapshot.fetchedAt {
-            conversationWaitingReplies = []
-            // Overlap the request, rather than starting after its completion,
-            // so a reply arriving during that request is not skipped.
-            conversationPollAfter = min(snapshot.fetchedAt, startedAt)
-        }
-        conversationReadAt = snapshot.fetchedAt
         conversationRefreshNotice = snapshot.refreshNotice(afterEveryFailure: true)
+        if holdNewReplies, let previous = conversation {
+            // The saved copy is no newer than the screen; a fresh read updates
+            // the rows already shown and puts new ones behind the pill.
+            guard snapshot.isFresh, conversationReadAt != snapshot.fetchedAt else { return }
+            conversationReadAt = snapshot.fetchedAt
+            isSaved = post.viewer?.saved ?? false
+            let shown = Set(previous.replies.map(\.id))
+            var ids = Set<String>()
+            let rows = snapshot.value.replies.filter { !$0.id.isEmpty && ids.insert($0.id).inserted }
+            conversationWaitingReplies = rows.filter { !shown.contains($0.id) }
+            state = .conversation(PulseConversationContent(post: post, replies: rows.filter { shown.contains($0.id) }))
+            return
+        }
+        if conversationReadAt != snapshot.fetchedAt { conversationWaitingReplies = [] }
+        conversationReadAt = snapshot.fetchedAt
         isSaved = post.viewer?.saved ?? false
         state = .conversation(PulseConversationContent(post: post, replies: snapshot.value.replies))
+    }
+
+    /// Where the "↓ N new replies" poll starts: the server's newest reply
+    /// time (or the post's) less a margin, never the phone's clock, so a
+    /// phone that runs fast still sees every reply. IDs deduplicate the
+    /// overlap.
+    var conversationPollAfter: String? {
+        guard let content = conversation else { return nil }
+        let times = (content.replies + conversationWaitingReplies).compactMap { PulsePageWords.parseDate($0.createdAt) }
+        guard let newest = times.max() ?? PulsePageWords.parseDate(content.post.createdAt) else { return nil }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.string(from: newest.addingTimeInterval(-30))
     }
 
     /// Called by the visible screen's one-minute loop. Re-reading from the
@@ -87,7 +116,7 @@ extension PulsePostDetailViewModel {
         let revision = conversationMutationRevision
         do {
             let response: PulseRepliesResponse = try await client.request(
-                PulseEndpoints.conversationReplies(postId: postId, after: ISO8601DateFormatter().string(from: after))
+                PulseEndpoints.conversationReplies(postId: postId, after: after)
             )
             guard generation == conversationGeneration, revision == conversationMutationRevision,
                   !Task.isCancelled, var content = conversation else { return }
@@ -156,7 +185,6 @@ extension PulsePostDetailViewModel {
             conversationGeneration += 1
             conversationWaitingReplies = []
             conversationReadAt = nil
-            conversationPollAfter = nil
             conversationRefreshNotice = nil
             offerRequestsState = .error("This conversation is no longer available.")
             offerRequestStatus = nil

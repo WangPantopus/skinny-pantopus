@@ -78,6 +78,9 @@ public struct PulsePageCard: Sendable, Hashable, Identifiable {
     public var canKeepOpen: Bool
     /// The reader saved it; nil when the server doesn't say (no Save entry).
     public var saved: Bool?
+    /// The area the card is shown in (its group's), for "Mute this topic in
+    /// this area"; nil offers no topic mute.
+    public var areaId: String?
 
     /// "14 going", on an event.
     public var goingText: String? {
@@ -299,7 +302,11 @@ public extension PulseFeedResponse {
         let town = area?.name.flatMap { $0.isEmpty ? nil : $0 } ?? "your area"
         var ids = Set<String>()
         let pageGroups = groups.enumerated().compactMap { index, group -> PulsePageGroup? in
-            let cards = group.items.filter { ids.insert($0.id).inserted }.map { $0.pageCard(now: now, timeZone: timeZone) }
+            let cards = group.items.filter { ids.insert($0.id).inserted }.map { post in
+                var card = post.pageCard(now: now, timeZone: timeZone)
+                card.areaId = group.areaId ?? post.about?.areaId
+                return card
+            }
             guard !cards.isEmpty else { return nil }
             return PulsePageGroup(key: group.key ?? "group-\(index)", title: group.title ?? "", cards: cards)
         }

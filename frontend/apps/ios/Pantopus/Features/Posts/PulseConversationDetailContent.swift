@@ -165,12 +165,25 @@ struct PulseConversationDetailContent: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(Theme.Color.primaryInk)
                 .disabled(!viewModel.pendingConversationActions.isEmpty)
+                // Same words as the card: VoiceOver hears whether it is on.
+                .accessibilityLabel(primaryActionAccessibilityLabel)
                 .accessibilityIdentifier("pulseConversationPrimaryAction")
                 if let count = card.goingText {
                     Text(count).pulseFont(.small).foregroundStyle(Theme.Color.appTextSecondary)
                 }
             }
         }
+    }
+
+    private var primaryActionAccessibilityLabel: String {
+        let label = card.actionLabel ?? "Reply"
+        return card.actionDone ? "\(label), done" : label
+    }
+
+    /// "Reply to {Name}…" (appendix): the person being answered, else the author.
+    private var composerPlaceholder: String {
+        let name = viewModel.replyTarget?.authorName ?? card.authorName
+        return "Reply to \(name == "A neighbor" ? "a neighbor" : name)…"
     }
 
     private var replies: some View {
@@ -208,7 +221,7 @@ struct PulseConversationDetailContent: View {
                     avatarName: "You",
                     avatarURL: nil,
                     text: $viewModel.composerText,
-                    placeholder: "Write a reply…",
+                    placeholder: composerPlaceholder,
                     isFocusedPresentation: false,
                     isSending: viewModel.isSendingComment,
                     onSend: { Task { await viewModel.sendComment() } },

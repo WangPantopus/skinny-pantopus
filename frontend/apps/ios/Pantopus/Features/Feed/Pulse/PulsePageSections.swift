@@ -216,21 +216,28 @@ struct PulsePageQuietDay: View {
         topic.map(FeedSurface.quietTopicContent)
     }
 
+    /// Same words as Android: Following says what will show up there.
+    private var bodyText: String {
+        if let topic, following {
+            return "New conversations about \(topic.label.lowercased()) that you follow will show here."
+        }
+        if let topicContent { return topicContent.body }
+        return following
+            ? "New activity in conversations you follow will show here."
+            : "When neighbors post, it shows here. Start a conversation if you'd like."
+    }
+
     var body: some View {
         VStack(spacing: Spacing.s2) {
-            Text(topicContent?.headline ?? (following ? "Nothing followed yet" : "Quiet in \(areaName) today"))
+            Text(topicContent?.headline ?? (following ? "No new conversations" : "Quiet in \(areaName) today"))
                 .pulseFont(.headline)
                 .foregroundStyle(Theme.Color.appText)
                 .multilineTextAlignment(.center)
-            Text(
-                topicContent?.body ?? (following
-                    ? "Follow a conversation to keep up with it here."
-                    : "When neighbors post, it shows here. Start a conversation if you'd like.")
-            )
-            .pulseFont(.body)
-            .foregroundStyle(Theme.Color.appTextSecondary)
-            .multilineTextAlignment(.center)
-            .fixedSize(horizontal: false, vertical: true)
+            Text(bodyText)
+                .pulseFont(.body)
+                .foregroundStyle(Theme.Color.appTextSecondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
             if topic != nil {
                 Button(action: onShowAllTopics) {
                     Text("Show all topics")
