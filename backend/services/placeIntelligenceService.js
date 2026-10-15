@@ -751,6 +751,23 @@ async function composeDensity(home) {
   }
 }
 
+// Where the your_home facts came from, said plainly: the household's own
+// entries are never labeled as county records. Profiles cached before
+// `county_record` existed keep the default label.
+function yourHomeProvenance(profile) {
+  if (profile.source === 'fallback') return { source: 'Details you entered', coverage: 'partial' };
+  const ownFacts = Array.isArray(profile.household_fields) && profile.household_fields.length > 0;
+  if (profile.county_record === false) {
+    // ATTOM answered with a value model or the ZIP trend only.
+    return {
+      source: ownFacts ? 'Details you entered · value estimate from ATTOM' : 'Value estimate · ATTOM',
+      coverage: 'partial',
+    };
+  }
+  if (ownFacts) return { source: 'County records · ATTOM, with details you entered', coverage: 'partial' };
+  return {};
+}
+
 async function composeYourHome(home, tier) {
   const access = bandAccess('B', tier);
   if (access === 'locked') {
@@ -760,11 +777,12 @@ async function composeYourHome(home, tier) {
     })];
   }
   // Band B is ATTOM-paid — without a key there is no exact data (area teaser only).
+  // The gap is ours, not the area's, so the copy doesn't blame the area.
   if (!process.env.ATTOM_API_KEY) {
     return [serializePlaceSection('your_home', {
       access,
       status: 'unavailable',
-      unavailableReason: "Exact property details aren't available for your area yet.",
+      unavailableReason: "We can't read county property records yet, so exact details and value aren't shown here.",
     })];
   }
 
@@ -786,6 +804,7 @@ async function composeYourHome(home, tier) {
     // 'cache_stale' = ATTOM was unreachable and an expired row served
     // instead (database-first resilience) — surfaced as a stale envelope.
     status: result.source === 'cache_stale' ? 'stale' : 'ready',
+    ...yourHomeProvenance(profile),
     data: {
       year_built: profile.year_built ?? null,
       sqft: profile.sqft ?? null,
