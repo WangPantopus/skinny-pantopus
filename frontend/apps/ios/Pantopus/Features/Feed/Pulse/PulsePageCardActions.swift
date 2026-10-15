@@ -4,7 +4,8 @@
 //
 //  The Pulse page's card "…" entries (Pulse S6; build spec §3, "everything
 //  else is in '…'"), agreed with PA: Save post / Remove bookmark, Mute this
-//  topic, Hide post, Mute {name} and Report post on someone else's post;
+//  topic in this area, Hide post, Mute {name} and Report post on someone
+//  else's post;
 //  Keep open 7 more days and Close on the asker's open Ask (Pulse S7), Edit
 //  and Delete on your own. All on existing endpoints; each change shows at
 //  once and comes back if the server refuses.
@@ -71,21 +72,23 @@ public extension PulsePageViewModel {
         }
     }
 
-    /// "Mute this topic", everywhere until S5 brings area ids (Pulse S4).
+    /// "Mute this topic in this area" (build spec §7): the card's area goes
+    /// with it. Without an area there is no entry, so an area mute never
+    /// silently becomes an everywhere mute (same rule as Android).
     func muteTopic(cardId: String) async {
-        guard let card = card(cardId), let topic = card.topic else { return }
-        moderation.addTopicMute(topic.rawValue)
+        guard let card = card(cardId), let topic = card.topic, let areaId = card.areaId else { return }
+        moderation.addTopicMute(topic.rawValue, areaId: areaId)
         rebuild()
         do {
             _ = try await api.request(
-                FeedActionsEndpoints.mutePulseTopic(topic.rawValue, areaId: nil),
+                FeedActionsEndpoints.mutePulseTopic(topic.rawValue, areaId: areaId),
                 as: PostActionAckResponse.self
             )
-            showToast("\(topic.label) muted.", kind: .success)
+            showToast("Topic muted in this area.", kind: .success)
             // Saved pages still hold the topic's posts; they read again when next opened.
             store.markStale(topics: [ScreenTopic.posts])
         } catch {
-            moderation.removeTopicMute(topic.rawValue)
+            moderation.removeTopicMute(topic.rawValue, areaId: areaId)
             rebuild()
             toastMessage = "Couldn't mute \(topic.label)."
         }

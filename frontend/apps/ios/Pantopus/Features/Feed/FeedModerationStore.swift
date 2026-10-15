@@ -18,6 +18,8 @@
 //
 //  Pulse topics muted from a post's menu (Pulse S4) live here too, so their
 //  posts leave every surface at once, as the server's everywhere mute does.
+//  A topic muted in one area (Pulse S6, "Mute this topic in this area")
+//  hides only that area's posts of the topic, as the server's area mute does.
 //
 //  Session-scoped by design: RN's context state is memory-only too, and the
 //  server owns the durable mute list. `clear()` runs on sign-out.
@@ -51,6 +53,8 @@ public final class FeedModerationStore {
     public private(set) var hiddenPostIds: Set<String> = []
     /// Pulse topics muted this session (`POST /api/posts/mute/topic`).
     public private(set) var mutedTopics: Set<String> = []
+    /// Pulse topics muted in one area this session, as `[topic, area id]`.
+    public private(set) var mutedTopicAreas: Set<[String]> = []
 
     public init() {}
 
@@ -67,10 +71,18 @@ public final class FeedModerationStore {
     /// Whether a feed row survives the mute/hide layer. Business authorship
     /// wins when both ids are present — that is the identity the mute call
     /// sends. `topic` is the post's Pulse topic, nil for the viewer's own
-    /// posts (a topic mute never hides them).
-    public func isVisible(postId: String, userId: String?, businessAuthorId: String?, topic: String? = nil) -> Bool {
+    /// posts (a topic mute never hides them); `areaId` is the area the post
+    /// is shown in, for a topic muted in one area.
+    public func isVisible(
+        postId: String,
+        userId: String?,
+        businessAuthorId: String?,
+        topic: String? = nil,
+        areaId: String? = nil
+    ) -> Bool {
         if hiddenPostIds.contains(postId) { return false }
         if let topic, mutedTopics.contains(topic) { return false }
+        if let topic, let areaId, mutedTopicAreas.contains([topic, areaId]) { return false }
         if let businessAuthorId, isMuted(entityType: .business, entityId: businessAuthorId) {
             return false
         }
@@ -100,8 +112,19 @@ public final class FeedModerationStore {
         mutedTopics.insert(topic)
     }
 
+    public func addTopicMute(_ topic: String, areaId: String) {
+        mutedTopicAreas.insert([topic, areaId])
+    }
+
+    public func removeTopicMute(_ topic: String, areaId: String) {
+        mutedTopicAreas.remove([topic, areaId])
+    }
+
+    /// Unmuting a topic from Pulse preferences: its posts come back at once
+    /// everywhere; the server's list stays the record of what is muted.
     public func removeTopicMute(_ topic: String) {
         mutedTopics.remove(topic)
+        mutedTopicAreas = mutedTopicAreas.filter { $0.first != topic }
     }
 
     /// Drop everything — called on sign-out so one account's mutes never
@@ -110,5 +133,6 @@ public final class FeedModerationStore {
         mutedEntities = []
         hiddenPostIds = []
         mutedTopics = []
+        mutedTopicAreas = []
     }
 }
