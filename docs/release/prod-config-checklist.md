@@ -16,12 +16,149 @@ commands, and **check**: how to see that it worked.
 
 Staging, GitHub release gates and Lambda schedules rechecked: 2026-10-11 by L4. Other rows retain their recorded checks.
 
+## Current verification and founder handoff — October 13, 2026
+
+This read-only pass used the founder's signed-in Chrome dashboards, GitHub,
+AWS metadata and the existing public hosted checks. No hosted configuration,
+database, credential, billing, notification schedule or store submission was
+changed. The dated sections below remain procedural references; the observations
+here supersede their earlier status snapshots, not founder decisions.
+
+### Completed independent checks
+
+- [x] Checked the clean worktree, remote branches and open PRs before work.
+  Remote `master` was `e4bb30e90`; `dev` was still `132e45a5f`.
+  CI for the current master was pending when inspected. A previous successful
+  Deploy Backend workflow is **not** a production release: in
+  [run 38516417130](https://github.com/WangPantopus/skinny-pantopus/actions/runs/38516417130),
+  preflight succeeded and **Release backend was skipped**.
+- [x] Re-ran `scripts/staging/check-hosted.cjs` on both environments.
+  Staging passes 9/10; the missing native Android association is the only
+  failure. Production passes 3/10: the home page, HTTPS origin and production
+  robots policy. API health and both realtime paths return 502; API forwarding
+  returns 502; web security headers and both native app associations fail.
+  A passing anonymous check does not complete S10 or the production journey.
+- [x] Checked GitHub environment metadata, without reading secret values.
+  Production still has `BACKEND_DEPLOY_ENABLED=false` and
+  `DB_MIGRATIONS_ENABLED=true`, with nine secret names present. Both
+  `ios-release` and `android-release` have **zero environment secrets**;
+  `android-release` also lacks `PANTOPUS_ALLOW_TEST_PAYMENTS`. Neither beta
+  workflow has a run in its current workflow history.
+- [x] Verified Vercel's `pantopus-web` production deployment is still the
+  June 11 build (`5f76594`, source branch `main`); the project's current
+  production branch is `master`. The signed-in production team is on Hobby.
+  Existing draft [PR 2019](https://github.com/WangPantopus/skinny-pantopus/pull/2019)
+  prepares the web cutover and is green for its recorded checks. Do not duplicate
+  it or merge it before its production API prerequisite and browser checks.
+- [x] Verified `pantopus-production` is healthy in Oregon, in a Free
+  organization, with **No backups** shown. Storage lists only
+  `home-documents` at 25 MB. The saved Auth Site URL and all four redirect URLs
+  match P3. Custom SMTP is enabled at `smtp.postmarkapp.com`, port 587, and
+  email confirmation is on. Auth limits match S3: sign-ups/sign-ins 300,
+  refreshes 1500 and verifications 300 per five minutes. Both **Apple and
+  Google Auth providers are disabled**. This pass did not replay migrations, export users or verify
+  SMTP delivery, OAuth sign-in, Storage policies or the server's private env file.
+- [x] Verified Apple's native App IDs already exist. The main app has
+  Sign In with Apple, Push Notifications, Associated Domains and App Groups
+  enabled. Both the app and widget have `group.app.pantopus.ios` assigned.
+  App Store Connect already has **Pantopus Home**, bundle `app.pantopus.ios`,
+  version 1.0 **Prepare for Submission**; TestFlight has **No Builds**.
+  Do not create duplicate App IDs, an App Group or an iOS listing.
+- [x] Verified Google Cloud project `pantopus-prod` already has Address
+  Validation, Places API (New), Maps SDK for Android and the Google Play
+  Android Developer API enabled. Its existing Web OAuth client allows the
+  staging and April Supabase callbacks, **but not the new production callback**.
+  Existing API keys were listed by name only; their values were not revealed.
+  Play Console's selected developer account lists only the April
+  `com.pantopus.app`; the new native Android listing is still needed.
+- [x] Verified both `pantopus.app` and `www.pantopus.app` still fail DNS
+  resolution. The repository's iOS association is already current for
+  team `6UYZBA546R` (`tools/gen-association-files.mjs --check` passes).
+  Native Android association generation still needs the actual signing
+  certificate fingerprints; do not insert a debug or invented certificate.
+- [x] Verified all 14 production EventBridge rules remain disabled. Only
+  staging has the two Pacific-time EventBridge Scheduler reminders and the
+  six job-failure alarms; all six alarms are OK. The production Lambda stack
+  was last updated in May and its seeder secret last changed in April.
+  Secret metadata does not verify secret contents. All **29** Pantopus Lambda
+  log groups still have no retention policy. No raw logs or device tokens
+  were retrieved.
+- [x] Ran the existing migration policy check (passes; it does not replay a
+  database) and parsed both native iOS privacy manifests successfully.
+  Confirmed release source uses the production API and APNs environment;
+  Android targets API 36 and removes broad media-read permissions. Store text,
+  screenshots and privacy-answer drafts already exist in the paths below.
+  These source checks do not establish a signed release or physical delivery.
+- [x] Opened the staging deletion page in Chrome: it renders the deletion
+  instructions. The production URL still serves the old app shell, so the
+  production deletion-page gate stays open until P9.
+
+### What needs the founder, in dependency order
+
+1. **Finish the production backend prerequisites (P1–P6).** Review the server
+   address/nginx, current migration dry run, production `.env.prod`, provider
+   deferral and GitHub production values before enabling the release gate.
+   Only then set `BACKEND_DEPLOY_ENABLED=true` and run the first release.
+   Wait for the database and backend jobs to actually run and health to become
+   healthy. A green skipped workflow is insufficient. Keep April schedules
+   paused. No server-private settings were validated in this pass.
+2. **Resolve production Auth and storage (P2A/P3).** Add
+   `https://falmvysvndmwtfxsrxek.supabase.co/auth/v1/callback` to the existing
+   Google Web OAuth client's allowed redirect URIs, retaining the two current
+   callbacks. Configure and enable the production Google and Apple providers;
+   verify Postmark delivery, password rules and rate limits, then perform
+   sign-in with founder accounts.
+   Choose when to upgrade Supabase for managed backups and the two 100 MB
+   buckets. The recorded Free-plan deferral remains in force. April Auth
+   transfer still requires the private export and isolated rehearsal in
+   [its runbook](production-auth-transfer.md); there is no approved import
+   command yet. The founder's later cutover-before-transfer decision is
+   recorded in PR 2019; its users' login limitation must remain explicit.
+3. **Supply provider credentials (Appendix A and P7).** Enter keys privately
+   in the designated backend/GitHub/AWS destinations. Review Census, AirNow,
+   Anthropic, Mapbox, SMTP and Stripe test configuration and webhooks. Google
+   API enablement alone does not configure the backend. Lob/Smarty/address
+   setup stays deferred until ready; enable live postcards only with the real
+   return address and live webhook settings. Do not paste any secret into chat.
+4. **Release the web and link domains (P9/P10).** Once the API is healthy,
+   complete the existing PR 2019 cutover with its owning session, verify the
+   Vercel production variables and billing choice, and deploy. Configure DNS
+   and Vercel for both `.app` hosts without redirects. After signing is ready,
+   L4 can regenerate Android associations and re-run the hosted checks.
+5. **Finish store signing (section 4).** iOS identifiers, capabilities, App
+   Group and listing are already done. Still configure App Store Connect API
+   access, the private match repo/password, App Store profiles for both targets
+   and the eight listed `ios-release` secrets. Create the native Android Play
+   listing, set up Play App Signing/upload key and release service-account
+   access, configure release Firebase and the ten listed `android-release`
+   secrets, and set `PANTOPUS_ALLOW_TEST_PAYMENTS=true` while D4 applies.
+   Supply an approved Maps SDK key and actual signing fingerprints. The
+   founder initiates the beta uploads and approves privacy/review-account
+   entries; nothing has been submitted by this pass.
+6. **Replace the April jobs (P8), then verify delivery.** Populate the reviewed
+   production seeder secret privately and deploy the current stack before
+   re-enabling schedules. Configure/confirm the alarm email subscription.
+   Have the founder's iPhone and physical Android phone receive scheduled
+   reminders and check tap-through. Complete S10 and the production journey,
+   including persistence and the household's second-person view. These cannot
+   be completed by anonymous checks or without signed-in test accounts/devices.
+7. **Finish operational gates (section 5).** Founder sets the 30-day Lambda
+   log policy using the existing command below (it expires older logs),
+   configures the uptime alert recipient and completes the private production
+   database-plus-files backup. Confirm rollback readiness; retire the old site
+   and April apps only at the documented transition point. Pilot recruitment
+   and real-user invitations remain founder actions.
+
+The logged-in sessions made inspection possible; AGENTS.md still reserves
+hosted writes, credentials, spending, real-person sends and store submissions
+to the founder. No unchecked hosted or physical-device gate is claimed complete.
+
 ## 0. What's running today
 
 | Piece | State on October 7, 2026 (19:15Z) |
 |---|---|
 | Website `pantopus.com` | Up, on Vercel. The deployment is about four months old (June). Its JavaScript calls `https://api.pantopus.com`. |
-| Production API `api.pantopus.com` | Doesn't answer. The DNS record is proxied by Cloudflare to the server's old public address; the server's address changed when it restarted in September. |
+| Production API `api.pantopus.com` | Checked October 14 at 17:00 Pacific (L4): the name resolves straight to the server (DNS only, the same address as `staging-api.pantopus.com`) and serves a Let's Encrypt certificate issued October 9. nginx answers 502 because no production backend runs yet. P1 looks done; the health check waits for P6. |
 | Staging | `https://staging-api.pantopus.com` runs the API and worker; `https://staging.pantopus.com` is the Vercel project `pantopus-staging`, with production branch `dev`. Both services released `dev 132e45a5f` on October 10: the API and worker deployment completed at 10:24 UTC ([run 38044657594](https://github.com/WangPantopus/skinny-pantopus/actions/runs/38044657594)); Vercel released the web at 09:52 UTC (deployment 6979118646). The backend database and deployment steps ran successfully, rather than skipping. Checked October 11 at 17:36 Pacific: API healthy, hosted checks 9/10 (Android app links await P10). The October 10 Lambda check found no observed errors in active/daily staging jobs and six alarms OK. S10 below distinguishes completed checks from the remaining web and physical-Android checks. |
 | `pantopus.app` | The zone is on Cloudflare with no records, so `pantopus.app`, `api.pantopus.app` and `staging.api.pantopus.app` don't resolve. |
 | April store apps | App Store "Pantopus" (`com.pantopus.app`, version 1.5.0 from May 12) and Google Play `com.pantopus.app`: the Expo app from the older repository. The live website links to both. Their API host was set in Expo's build settings (the old guides used `https://api.pantopus.com`); it can't be read from here. |
@@ -427,6 +564,10 @@ production one and switches the schedules back on.
 **Check:** `curl -sI https://api.pantopus.com/` shows a valid certificate
 (after P6 the health check answers).
 
+**Checked October 14 at 17:00 Pacific (L4):** the certificate is valid (Let's Encrypt, issued
+October 9) and nginx answers 502 until P6 starts the backend, so this step looks
+done.
+
 ### P2A. Production database: new project (founder)
 
 1. The founder created `pantopus-production` (`falmvysvndmwtfxsrxek`) in
@@ -668,6 +809,10 @@ app-link files, robots.txt).
 
 ### iOS (TestFlight, then App Store)
 
+- [x] Already registered (found October 13; see the verification section at the
+  top): the App Group `group.app.pantopus.ios`, both App IDs with the
+  capabilities below and the App Store Connect record **Pantopus Home**. Don't
+  create them again; the rest of the next step is still open.
 - [ ] Founder: in Certificates, Identifiers & Profiles register the App Group
   `group.app.pantopus.ios` and two App IDs: `app.pantopus.ios` with **Sign in
   with Apple**, **Push Notifications**, **Associated Domains** (app links and

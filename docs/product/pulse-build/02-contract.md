@@ -62,7 +62,7 @@ Heads-up kinds a resident may create: `road_hazard`, `power_outage`, `weather_da
   "counts": { "replies": 6, "going": null },                             // going only for events
   "event": null,                  // { starts_at, ends_at, venue } for events
   "lost_found": null,             // { kind: "lost" | "found" }
-  "offer": null,                  // { claim_mode, requests_open, gone } for offers
+  "offer": null,                  // { claim_mode, requests_open, gone, viewer_claim } for offers (2.8)
   "viewer": {
     "is_author": false, "following": false, "can_mark_helpful": false,
     "saved": false,               // the viewer saved it; POST /api/posts/:id/save toggles it, as on today's cards
@@ -113,6 +113,7 @@ Query: `view` = `nearby` (default) | `following`; `topic` (enum, optional); `are
 }
 ```
 
+- `quiet` is `no_home` (card `set_up_home`) on any page for a reader without a home. Otherwise only the unfiltered first page has one: on Nearby, `empty` when the area has no open conversation and `sparse` (card `meter`) when it has fewer than five, because the meter describes the town; on Following, only `empty` (no card) when nothing followed is open. A short Following list is not quiet.
 - `read_at` is the server time captured before the query; only items created at or before it enter the response. `end.since` is the lower bound of the new-items window, for the end card's wording; it is not a seen acknowledgment. Clients read `read_at` optionally until this backend ships and then use it instead of their device clock for polling and acknowledgments.
 - The first response holds items **newer than the viewer's last-seen marker** for that view (at least the last 24 hours if the marker is older), capped at `limit`. `caught_up` is true when nothing newer remains beyond the cap.
 - `earlier_cursor` is an opaque string: clients pass it back unchanged. It contains the time/id tie-breaker and the original new-items window, so equal timestamps cannot skip posts and later pages preserve the snapshot. The server also accepts an ISO `earlier_before` for older callers.
@@ -124,7 +125,7 @@ Query: `view` = `nearby` (default) | `following`; `topic` (enum, optional); `are
 
 ### 2.4 Conversation
 
-`GET /api/pulse/posts/:id` → `{ "post": PulsePost, "replies": [PulseReply], "plan": null }` (`plan` in R3). `GET /api/pulse/posts/:id/replies?after=<iso>` → `{ "replies": [...] }` for the "↓ 2 new replies" pill. Writing a reply uses the existing `POST /api/posts/:id/comments` (`comment`, `parentCommentId`, `clientRequestId`); its response is a `PulseReply`-compatible object plus the legacy fields.
+`GET /api/pulse/posts/:id` → `{ "post": PulsePost, "replies": [PulseReply], "plan": null }` (`plan` in R3). `GET /api/pulse/posts/:id/replies?after=<iso>` → `{ "replies": [...] }` for the "↓ 2 new replies" pill. Writing a reply uses the existing `POST /api/posts/:id/comments` (`comment`, `parentCommentId`, `clientRequestId`); its response keeps the existing `{ "message": "Comment added successfully", "comment": ... }` envelope. `comment` gains the `PulseReply` fields alongside its legacy fields; `author` retains its existing identity fields while adding `display_name`, `label`, `distance_text`, `avatar_url` and `is_curator`. Existing `comment`, `user_id`, `is_edited`, attachments and author identity fields are not renamed or removed. An idempotent retry returns the same reply id in that envelope.
 
 ### 2.5 Creating a post (Pulse mode)
 
@@ -165,10 +166,34 @@ Private note to a home (signed): `POST /api/pulse/notes` `{ "toHomeId"? | "toPos
 - `POST /api/pulse/posts/:postId/replies/:replyId/helpful` `{ "helpful": true }` (the Ask's author only) → `{ "reply": PulseReply, "post_status": { "state": "resolved", "resolution": "answered" } }`. Unmarking the last Helpful reopens the Ask if it has not closed.
 - `POST /api/pulse/posts/:postId/replies/:replyId/thanks` → `{ "thanked": true }` (idempotent; one per person per reply; not for your own reply). The helper gets a private notification.
 - `POST /api/pulse/posts/:postId/replies/:replyId/report` `{ "reason", "details" }` (reasons as today's post report) → `{ "ok": true }`.
+  - `reason` is one of `spam`, `harassment`, `inappropriate`, `misinformation`, `safety`, `other`; `details` is optional, at most 1,000 characters. One report per person per reply: a retry or a second report answers the same `{ "ok": true }` and never overwrites the first. The reply must be one the reporter can read (`404 REPLY_NOT_FOUND` otherwise, including a removed reply or one across a block); a person cannot report their own reply (`400 OWN_REPLY`). The report is stored in the existing `PostReport` queue with `comment_id` set (section 4.1), so the moderator console lists it under its post until PS shows the reply itself.
 
 ### 2.8 Offers
 
-`POST /api/pulse/posts/:postId/claims` `{ "note"? }` → `{ "claim": { "id", "status": "requested" | "enough_requests" | "gone" } }` · `GET /api/pulse/posts/:postId/claims` (giver) → requests with each requester's `author` · `POST /api/pulse/posts/:postId/claims/:claimId/choose` → claimed; the others become `gone` and are told.
+`POST /api/pulse/posts/:postId/claims` `{ "note"? }` → `{ "claim": { "id", "status": "requested" | "chosen" | "enough_requests" | "gone" } }` · `GET /api/pulse/posts/:postId/claims` (giver) → requests with each requester's `author` · `POST /api/pulse/posts/:postId/claims/:claimId/choose` → claimed; the others become `gone` and are told.
+
+The claims-list response is frozen for the giver's screen:
+
+```jsonc
+{
+  "claims": [{
+    "id": "uuid", "status": "requested", // requested | chosen | declined | gone
+    "note": null,                        // nullable, at most 500 characters
+    "created_at": "<iso>",
+    "author": { /* the PulsePost author shape, relative to the giver */ }
+  }],
+  "offer": { "claim_mode": "choose", "requests_open": true, "gone": false }
+}
+```
+
+- Only the post's author can list requests or choose; other readers get `403 NOT_POST_AUTHOR`. Rows are oldest first, with id as the tie-breaker, and include the giver's prior decision. The list exposes no home or address fields. Blocked people are omitted and cannot be chosen.
+- Creation is idempotent per person and offer: retrying returns the same claim. `choose` returns `claim.status: requested`; `first` atomically gives the first requester `chosen`. A successful choice (including a winning `first` request) adds `post_status: { state: "resolved", resolution: "claimed" }`.
+- `POST /claims/:claimId/choose` returns `{ "claim": { "id": "uuid", "status": "chosen" }, "post_status": { "state": "resolved", "resolution": "claimed" } }`; choosing that winner again returns the same success. Choosing another after that returns `409 OFFER_GONE`.
+- `PulsePost.offer` (2.1) is `{ "claim_mode", "requests_open", "gone", "viewer_claim" }` on an offer and null otherwise. `requests_open` is true while the offer is open and can take another request (in `choose`, fewer than five open requests; in `first`, nobody has it yet). `gone` is true once it is `claimed`. `viewer_claim` is the reader's own request, `{ "id", "status" }` with the statuses above, or null; it lets a client say "Requested", "It's yours" or "Someone else got this one." after a relaunch, and it never describes anyone else's request. `action.done` on an offer is true while the reader's request is `requested` or `chosen`.
+- `note` is optional, at most 500 characters. The giver cannot ask for their own offer (`400 OWN_OFFER`); another type answers `400 NOT_AN_OFFER`. Choosing a request that does not exist on that offer, or from someone across a block, answers `404 CLAIM_NOT_FOUND`.
+- Notifications (section 6): each new request sends the giver `offer_request` ("Someone asked for your offer"; in `first` mode, "Your offer was claimed"); a choice sends the winner `offer_chosen` ("It's yours") and every other open requester `offer_gone` ("Someone else got this one."). They carry `metadata` `{ post_id, claim_id, user_id }` (the actor) and follow the post's read check, blocks and quiet hours like the reply notices.
+- A sixth distinct request returns `429 ENOUGH_REQUESTS`; an offer that has ended returns `409 OFFER_GONE`. These error bodies retain the normal `error` and `code`, with `claim: { id: null, status: "enough_requests" | "gone" }` for clients using the status descriptor. No request is inserted on either refusal. Requests and choices always recheck post access and current offer state; a stale screen grants nothing.
+
 
 ### 2.9 Follow, preferences, why, mutes
 
@@ -178,6 +203,36 @@ Private note to a home (signed): `POST /api/pulse/notes` `{ "toHomeId"? | "toPos
 - `GET /api/pulse/posts/:id/why` → `{ "reasons": [{ "kind": "area" | "topic" | "follow" | "time", "text": "You're viewing Camas, all topics, newest first." }] }`. Only the reader's own choices.
 - Mutes (in force since S4): `POST /api/posts/mute/topic` accepts `{ "topic", "areaId"? }` → `{ "message", "mute": { "topic", "area_id" } }`; without `areaId` the topic is muted everywhere; an unknown topic or a malformed or nonexistent `areaId` is a 400; muting twice keeps one mute. The legacy `{ "postType", "surface"? }` still works. `GET /api/posts/mute` → `{ "muted": [ …people and businesses, unchanged ], "topic_mutes": [{ "topic", "area_id", "muted_at" }] }`. `DELETE /api/posts/mute` `{ "entityType": "topic", "entityId": "<topic>", "areaId"? }` (body or query string) removes that one mute (without `areaId`, the everywhere mute). A topic muted in an area hides that topic's posts in the area and posts that have no area (every post until `Post.area_id` arrives with S5). User mutes as today.
 - Topic filter (in force since S4): `GET /api/posts/feed?surface=place&topic=<topic>` returns only that topic's posts, for any of the 12; `sports` keeps its Sports lane.
+
+#### S10 follow envelopes and duration rules
+
+`targetType` is `post`, `topic` or `place`; a person is never a follow target. `targetId` is a post UUID, one of the twelve topic ids, or a place-area UUID respectively. A topic requires `areaId`; post and place targets omit it. All targets must be currently readable and their area open. A follow never grants reading access. Businesses cannot follow.
+
+`notify` is `off` (default), `recap` or `each`. `ends` is `on_resolve` (default for a post), `week` or `keep`; topic/place targets default to `keep` and reject `on_resolve`. Following a post that already ended is allowed only with `week` or `keep`. Repeating the same PUT updates the existing follow, never duplicates it or restarts a running week; switching to `week` starts seven days from the server time. After a week has expired, following again starts a new week. `on_resolve` ends permanently when that conversation ends, even if it is later restored. A retained `keep` follow remains in preferences after the post ends, but the ended post stays out of the Following feed.
+
+`PUT /follows` returns `{ "follow": PulseFollow }`; `GET /follows` returns `{ "follows": [PulseFollow] }` in creation order, oldest first. `DELETE /follows` returns `{ "ok": true }` even when already absent. A `PulseFollow` is:
+
+```jsonc
+{
+  "id": "uuid", "target_type": "post", "target_id": "uuid-or-topic",
+  "area_id": null, "notify": "off", "ends": "on_resolve",
+  "until_at": null, "created_at": "<iso>", "updated_at": "<iso>"
+}
+```
+
+The list contains only active follows whose targets the viewer can still read; no target text, author or home fields are included. Nearby and Following use the same area/topic/time, moderation, block, mute and hide rules. Following additionally requires an active matching post follow, a matching topic-and-area follow, or a matching place follow, before pagination and new-count calculation. A follow does not subscribe to older topic/place posts: those targets match posts created at or after that follow's `created_at`. A post follow can show that conversation regardless of its creation time. `PulsePost.viewer.following` means an active **conversation** follow; a topic follow does not turn that header toggle on.
+
+`GET /preferences/summary` returns `{ "follows": [PulseFollow], "mutes": [...], "alerts": [...] }`. Each list item adds `undo: { method, path, body? }`: follow undo is the DELETE query above, mute undo is the existing `DELETE /api/posts/mute` body, and a follow alert's undo is PUT with its existing target/duration and `notify: off`. Quiet-hours and digest settings remain in `/preferences`; the summary does not expose another person's choices. Muted or unreadable targets never gain visibility because they are followed.
+
+`GET /posts/:id/why` accepts optional `view`, `topic` and `area_id` with the same validation as the feed. It checks current post access first and explains only the viewer's selected area, topic, explicit matching follow and newest-first order. It never asserts a follow the viewer does not have.
+
+### 2.13 Narrower conversation audiences (S9)
+
+`PUT /api/pulse/posts/:id/read-scope` accepts `{ "readScope": "public" | "verified_town" | "verified_area", "areaId"?: "uuid" }` and returns `{ "post": PulsePost }`. Only the author can change it. A repeated request for the current scope and area succeeds; any widening or lateral move returns `409 CANNOT_WIDEN`.
+
+Public can narrow to the post's town, then to an open street/neighborhood inside that town where the author's primary home is currently verified. `areaId` selects that street/neighborhood for `verified_area`; it is required when changing from a town reference, and may be omitted when the existing reference already names the desired street/neighborhood. Town narrowing keeps the post's existing area reference, whose town ancestry supplies the wall. Changing between two street/neighborhood areas is refused even if both contain the author's home: it would admit a different set of readers. No device coordinates are accepted. A closed area or missing primary-home verification returns `403 NEEDS_VERIFIED_ADDRESS`.
+
+Legacy rows with null `read_scope` can narrow only when their existing audience is public; other legacy audience sets are not assumed to contain every verified town resident. The server derives their town from the author's primary home and requires an open town. If no safe town can be derived, it refuses without changing the row. A successful narrowing turns off external sharing. The shared wall immediately revokes direct reads, feeds, replies, notification quotes and share links for readers outside the new audience; stored replies and follows stay.
 
 ### 2.10 Areas and eligibility
 
@@ -209,7 +264,7 @@ Both answer `404 POST_NOT_FOUND`, `403 NOT_POST_AUTHOR` (not the asker), `400 NO
 | S14 | `GET /api/pulse/posts/:id` fills `plan`; `POST /api/pulse/posts/:id/plan` creates a Plan through the existing Plans services with `Plan.source_post_id` (PB) |
 | S15 | `GET /api/public/pulse/areas`, `GET /api/public/pulse/feed?area=`, `GET /api/public/pulse/posts/:id` (public posts only; no distance, no street, first name and label) (PC with PB) |
 | S16–S17 | Place pages, area opening, business and official identities (PB, PS) |
-| S9 (addition) | `PUT /api/pulse/posts/:id/read-scope` `{ "readScope" }`: the author only, toward narrower only, `409 CANNOT_WIDEN` (PB) |
+| S9 (addition) | Narrower audiences are frozen in §2.13 (PB); the endpoint is not live until its implementation merges |
 | S11 (addition) | `GET /api/pulse/rules` → `{ "rules": [...], "review_hours": "…", "appeals_text": "…", "law_enforcement_text": "…" }`; the text is the founder's and counsel's, PS serves it (PS) |
 | S17 (addition) | Local offers: `POST /api/businesses/:businessId/offers`; staff approve in the console; `GET /api/pulse/local-offer?area=` → the one offer to show, or null (PB, PS) |
 | S20 | `POST /api/users/code/start` `{ "email", "firstName" }` → always `{ "ok": true }` (no account enumeration); `POST /api/users/code/verify` `{ "email", "code", "deviceId" }` → the same session body as `POST /api/users/login` plus `is_new`. Codes are 6 digits, valid 10 minutes, single use, 5 tries. Errors: `CODE_INVALID`, `CODE_EXPIRED`, `TOO_MANY_ATTEMPTS`, `CHANNEL_UNAVAILABLE` (text codes, until a provider exists). The `authEndpointLimiter`, DPoP and device rules that cover login cover these (PB) |
@@ -227,6 +282,7 @@ Both answer `404 POST_NOT_FOUND`, `403 NOT_POST_AUTHOR` (not the asker), `400 NO
 |---|---|
 | `Post` | `read_scope text` (check: `public`, `verified_town`, `verified_area`), `area_id uuid` (FK `PulseArea`, after approval), `expires_at timestamptz`, `resolution text` (check, section 1), `claim_mode text default 'choose'`, `moderation_state text not null default 'live'`, `moderation_rule text`, `moderation_note text`, `moderated_at timestamptz`, `search_tsv tsvector` generated + GIN (R3). Widen `Post_post_type_check` with `share`, `offer`; widen `Post_topic_check` to the 12 topics (plus legacy `sports`); keep `state` in sync (`open` → `solved` when `answered`, `archived` otherwise) so older clients still read it. `expires_at`, `resolution`, `claim_mode` and the two new types are in `20261014070000_pulse_post_lifecycle.sql` (S7); legacy post rows (`/api/posts/feed`, saved, profile lists, `GET /api/posts/:id`) return the three columns as stored (`claim_mode` is on every row and means something only on an offer), and marking an Ask solved (`PATCH /api/posts/:id/solve`, `PATCH /api/posts/resolve/:id`) sets `resolution: answered` with `state: solved`. `moderation_state` (default `live`, check `live`/`held`/`removed`), `moderation_rule`, `moderation_note` and `moderated_at` are in `20261014090000_pulse_post_moderation_state.sql` (S11, PB's half); nothing writes `held` or `removed` until PS's moderation actions (S11) and S8's held sale posts |
 | `PostComment` | `helpful_at timestamptz`, `helpful_by uuid`, `moderation_state text not null default 'live'`, `moderation_rule text`. Account deletion must leave a "Reply removed" row instead of cascading (change `user_id` to nullable with `ON DELETE SET NULL`, and soft-delete the text). `moderation_state` (check `live`/`held`/`removed`) and `moderation_rule` are in `20261014091000_pulse_comment_moderation_state.sql` (S11, PB's half, part 2) |
+| `PostReport` | `comment_id uuid null` (foreign key to `PostComment`, deleted with it): a report about one reply of the post (S9, 2.7). Post reports leave it null |
 | `PostMute` | `area_id uuid null` (the `topic` entity type already exists); its unique index includes `area_id`. Added with `Post_topic_check`'s widening in `20261014031000_pulse_topics.sql` (S4); the foreign key to `PulseArea` comes with that table |
 | `User` | `adult_attested_at timestamptz`; `account_type` check widened with `official` |
 | `UserFeedPreference` | `pulse_nearby_seen_at timestamptz`, `pulse_following_seen_at timestamptz` (server-only storage finalized before S6; clients use `/feed/seen`, never these columns) |
@@ -306,7 +362,7 @@ Labels use the author's **primary** home, as posting and limits do. A second ver
 | 422 | `COMPOSER_BLOCKED` | A call-out or private detail; body carries `blocks` |
 | 429 | `DAILY_LIMIT_REACHED` | `{ limit, resets_at, scope }` |
 | 429 | `SHARE_WEEKLY_CAP` | The third Share in a rolling week |
-| 409 | `OFFER_GONE` | Claiming or choosing on an offer already claimed |
+| 409 | `OFFER_GONE` | Claiming or choosing on an offer already claimed or ended |
 | 429 | `ENOUGH_REQUESTS` | The sixth request on an offer |
 | 404 | `POST_NOT_FOUND` | The post doesn't exist (section 2.12) |
 | 403 | `NOT_POST_AUTHOR` | Someone other than the asker keeps open or closes an Ask (section 2.12) |
@@ -319,6 +375,11 @@ Labels use the author's **primary** home, as posting and limits do. A second ver
 | 429 | `TOO_MANY_ATTEMPTS` | Five wrong tries, or a per-email, per-device or per-network limit (S20) |
 | 503 | `CHANNEL_UNAVAILABLE` | A text code before an SMS provider exists (S20) |
 | 409 | `ALREADY_MERGED` | Merging a merged post, or a post into itself (S23) |
+| 400 | `NOT_AN_OFFER` | A claim or choice on a post that isn't an Offer (2.8) |
+| 400 | `OWN_OFFER` | The giver asking for their own offer (2.8) |
+| 404 | `CLAIM_NOT_FOUND` | Choosing a request that isn't on the offer, or one across a block (2.8) |
+| 404 | `REPLY_NOT_FOUND` | A reply action (Helpful, Thanks, report) on a reply the person can't read (2.7) |
+| 400 | `OWN_REPLY` | Thanking or reporting your own reply (2.7) |
 
 ## 9. Funnel events
 

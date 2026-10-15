@@ -467,6 +467,39 @@ async function ensurePostMute({ userId, entityType, entityId, surface = null, ar
   return Array.isArray(data) ? data[0] : data;
 }
 
+// Old clients omit deleted rows and render a tree from parent_comment_id. Keep
+// their surviving replies reachable without changing the stored Pulse topology.
+// Read only ancestry/deletion state, never the missing parent's identity or text.
+async function legacyReplyParents(comments, postId) {
+  const known = new Map(comments.map(row => [row.id, row]));
+  let missing = [...new Set(comments.map(row => row.parent_comment_id).filter(id => id && !known.has(id)))];
+  while (missing.length) {
+    const next = new Set();
+    for (let start = 0; start < missing.length; start += 100) {
+      const ids = missing.slice(start, start + 100);
+      const { data, error } = await supabaseAdmin.from('PostComment')
+        .select('id, parent_comment_id, is_deleted').eq('post_id', postId).in('id', ids);
+      if (error) throw error;
+      for (const id of ids) known.set(id, null);
+      for (const row of data || []) known.set(row.id, row);
+      for (const row of data || []) {
+        if (row.is_deleted && row.parent_comment_id && !known.has(row.parent_comment_id)) next.add(row.parent_comment_id);
+      }
+    }
+    missing = [...next].filter(id => !known.has(id));
+  }
+  return comments.map(row => {
+    let parent = row.parent_comment_id;
+    const visited = new Set([row.id]);
+    while (parent && known.get(parent)?.is_deleted) {
+      if (visited.has(parent)) { parent = null; break; }
+      visited.add(parent);
+      parent = known.get(parent).parent_comment_id;
+    }
+    return parent === row.parent_comment_id ? row : { ...row, parent_comment_id: parent };
+  });
+}
+
 async function attachFilesToComments(comments) {
   if (!Array.isArray(comments) || comments.length === 0) return [];
 
@@ -1695,74 +1728,6 @@ router.get('/map', verifyToken, async (req, res) => {
       }
     }
 
-    // ── Tasks layer (Gig table) ──
-    if (enabledLayers.includes('tasks')) {
-      const { data: gigs, error: gigErr } = await supabaseAdmin
-        .from('Gig')
-        .select('id, title, description, status, latitude, longitude, location_name, category, created_at, poster_id, user_id, accepted_by, location_precision, reveal_policy, poster:poster_id (id, username, name, profile_picture_url)')
-        .gte('latitude', s).lte('latitude', n)
-        .gte('longitude', w).lte('longitude', e)
-        .in('status', ['open', 'assigned', 'in_progress'])
-        .limit(lim);
-      if (gigErr) {
-        logger.error('Error fetching map tasks', { error: gigErr.message });
-      } else {
-        const { resolveGigPrecision: _resolveTask, applyLocationPrecision: _applyTask } = require('../utils/locationPrivacy');
-        (gigs || []).forEach(g => {
-          const { precision, isOwner, locationUnlocked } = _resolveTask(g, userId);
-          _applyTask(g, precision, isOwner);
-          results.push({
-            layer_type: 'task',
-            id: g.id,
-            latitude: g.latitude,
-            longitude: g.longitude,
-            title: g.title,
-            description: g.description,
-            status: g.status,
-            category: g.category,
-            location_name: g.location_name,
-            created_at: g.created_at,
-            locationUnlocked,
-            creator: g.poster ? { id: g.poster.id, username: g.poster.username, name: g.poster.name, profile_picture_url: g.poster.profile_picture_url } : null,
-          });
-        });
-      }
-    }
-
-    // ── Offers layer (Gig offers/services) ──
-    if (enabledLayers.includes('offers')) {
-      const { data: offers, error: offerErr } = await supabaseAdmin
-        .from('Gig')
-        .select('id, title, description, latitude, longitude, location_name, category, created_at, poster_id, user_id, accepted_by, location_precision, reveal_policy, poster:poster_id (id, username, name, profile_picture_url)')
-        .eq('gig_type', 'offer')
-        .gte('latitude', s).lte('latitude', n)
-        .gte('longitude', w).lte('longitude', e)
-        .in('status', ['open'])
-        .limit(lim);
-      if (offerErr) {
-        logger.error('Error fetching map offers', { error: offerErr.message });
-      } else {
-        const { resolveGigPrecision: _resolveOffer, applyLocationPrecision: _applyOffer } = require('../utils/locationPrivacy');
-        (offers || []).forEach(o => {
-          const { precision, isOwner, locationUnlocked } = _resolveOffer(o, userId);
-          _applyOffer(o, precision, isOwner);
-          results.push({
-            layer_type: 'offer',
-            id: o.id,
-            latitude: o.latitude,
-            longitude: o.longitude,
-            title: o.title,
-            description: o.description,
-            category: o.category,
-            location_name: o.location_name,
-            created_at: o.created_at,
-            locationUnlocked,
-            creator: o.poster ? { id: o.poster.id, username: o.poster.username, name: o.poster.name, profile_picture_url: o.poster.profile_picture_url } : null,
-          });
-        });
-      }
-    }
-
     // ── Businesses layer ──
     if (enabledLayers.includes('businesses')) {
       const { data: biz, error: bizErr } = await supabaseAdmin
@@ -2486,7 +2451,8 @@ router.get('/:id', optionalAuth, async (req, res) => {
       .eq('post_id', id).eq('is_deleted', false), userId)
       .order('created_at', { ascending: true });
 
-    const commentRows = await serializeCommentsForViewer(await attachFilesToComments(comments || []), post, userId);
+    const commentRows = await legacyReplyParents(
+      await serializeCommentsForViewer(await attachFilesToComments(comments || []), post, userId), id);
 
     let userLike = null;
     let userSave = null;
@@ -2958,7 +2924,8 @@ router.post('/:id/comments', verifyToken, validate(createCommentSchema), async (
       }
       return res.status(201).json({
         message: 'Comment added successfully',
-        comment: (await serializeCommentsForViewer([{ ...existing, attachments: [] }], post, userId, audienceAuthors))[0],
+        comment: await require('../services/pulse/conversation').addCreatedReplyFields(
+          (await serializeCommentsForViewer([{ ...existing, attachments: [] }], post, userId, audienceAuthors))[0], post, userId),
       });
     };
     if (commentId) {
@@ -3038,7 +3005,8 @@ router.post('/:id/comments', verifyToken, validate(createCommentSchema), async (
 
     res.status(201).json({
       message: 'Comment added successfully',
-      comment: (await serializeCommentsForViewer([{ ...newComment, attachments: [] }], post, userId, audienceAuthors))[0],
+      comment: await require('../services/pulse/conversation').addCreatedReplyFields(
+        (await serializeCommentsForViewer([{ ...newComment, attachments: [] }], post, userId, audienceAuthors))[0], post, userId),
     });
   } catch (err) {
     logger.error('Comment creation error', { error: err.message, postId: req.params.id });
@@ -3074,7 +3042,8 @@ router.get('/:id/comments', verifyToken, async (req, res) => {
     }
 
     const enrichedComments = await attachFilesToComments(comments || []);
-    const projectedComments = await serializeCommentsForViewer(enrichedComments, post, userId);
+    const projectedComments = await legacyReplyParents(
+      await serializeCommentsForViewer(enrichedComments, post, userId), postId);
     const commentsWithLikes = projectedComments.map(c => ({
       ...c,
       userHasLiked: userLikedSet.has(c.id),

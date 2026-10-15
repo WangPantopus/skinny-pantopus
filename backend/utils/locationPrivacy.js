@@ -36,6 +36,14 @@ const JITTER_KEY = process.env.LOCATION_JITTER_SECRET
 const APPROX_AREA_CELLS_PER_DEGREE = 200;
 
 /**
+ * The 0.01° cell neighborhood_only rounds a coordinate into: cell i holds the values that
+ * round to i / 100. Each one is two approximate-area cells (2i - 1 and 2i).
+ */
+function neighborhoodCell(value) {
+  return Math.round(value * 100);
+}
+
+/**
  * Two independent, stable pseudo-random values in [0, 1) for a grid cell.
  * @returns {[number, number]}
  */
@@ -120,8 +128,8 @@ function applyLocationPrecision(obj, precision, isOwner = false, opts = {}) {
 
     case 'neighborhood_only': {
       // Round to 2 decimal places (~1.1km precision)
-      if (lat != null) obj[latField] = Math.round(lat * 100) / 100;
-      if (lng != null) obj[lngField] = Math.round(lng * 100) / 100;
+      if (lat != null) obj[latField] = neighborhoodCell(lat) / 100;
+      if (lng != null) obj[lngField] = neighborhoodCell(lng) / 100;
       if (stripAddress) {
         obj.location_address = null;
         obj.exact_address = null;
@@ -156,6 +164,54 @@ function applyLocationPrecision(obj, precision, isOwner = false, opts = {}) {
  * viewer's box or radius never tests the stored point.
  */
 const MAX_DISPLAY_OFFSET_DEGREES = 0.01;
+
+// The bit pattern of one double, to step to the double next to it.
+const adjacentScratch = new Float64Array(1);
+const adjacentBits = new BigUint64Array(adjacentScratch.buffer);
+
+// The double next to `value`, upward when `step` is 1 and downward when it is -1.
+function adjacentDouble(value, step) {
+  if (!Number.isFinite(value)) return value;
+  if (value === 0) return step * Number.MIN_VALUE;
+  adjacentScratch[0] = value;
+  adjacentBits[0] += (value > 0) === (step > 0) ? 1n : -1n;
+  return adjacentScratch[0];
+}
+
+// The smallest double neighborhoodCell puts in `cell`. It is next to (cell - 0.5) / 100, on
+// whichever side the rounding puts that edge.
+function firstInNeighborhoodCell(cell) {
+  let value = (cell - 0.5) / 100;
+  while (neighborhoodCell(value) >= cell) value = adjacentDouble(value, -1);
+  while (neighborhoodCell(value) < cell) value = adjacentDouble(value, 1);
+  return value;
+}
+
+/**
+ * The smallest box of whole neighborhood cells that holds `box`, edges included.
+ *
+ * An area query reads the stored points inside a box, keeps only so many rows, and the viewer
+ * picks the box. If an edge could stop anywhere, the rows a query reads (and with them the
+ * next-page flag and the rows that fill a page) would change exactly where the edge crossed one
+ * stored point, and a viewer moving it in small steps would find that point. On whole cells,
+ * the rows depend only on which cells stored points are in: for a neighborhood_only point,
+ * what its displayed point already shows; for an approx_area point, at most its
+ * approximate-area cell. Each edge is the first or last double the rounding puts in its cell,
+ * so a stored point on a cell line counts in the cell its displayed point comes from.
+ *
+ * @param {{south: number, west: number, north: number, east: number}} box
+ * @returns {{south: number, west: number, north: number, east: number}}
+ */
+function snapToNeighborhoodCells({ south, west, north, east }) {
+  // The cell an edge is in, clamped to the coordinates a stored point can have.
+  const cell = (value, limit) => neighborhoodCell(Math.min(Math.max(value, -limit), limit));
+  return {
+    south: firstInNeighborhoodCell(cell(south, 90)),
+    west: firstInNeighborhoodCell(cell(west, 180)),
+    north: adjacentDouble(firstInNeighborhoodCell(cell(north, 90) + 1), -1),
+    east: adjacentDouble(firstInNeighborhoodCell(cell(east, 180) + 1), -1),
+  };
+}
 
 /**
  * Determine effective precision for a gig based on viewer relationship.
@@ -213,6 +269,7 @@ function leastPrecise(a, b) {
 module.exports = {
   applyLocationPrecision,
   MAX_DISPLAY_OFFSET_DEGREES,
+  snapToNeighborhoodCells,
   resolveGigPrecision,
   precisionRank,
   leastPrecise,
