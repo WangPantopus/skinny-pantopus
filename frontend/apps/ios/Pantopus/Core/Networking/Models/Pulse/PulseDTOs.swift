@@ -65,8 +65,8 @@ public struct PulsePostDTO: Decodable, Sendable, Hashable, Identifiable {
     /// The place or area the post is about.
     public let about: PulseAboutDTO?
     /// `public`, `verified_town` or `verified_area`.
-    public let readScope: String?
-    public let status: PulsePostStatusDTO?
+    public var readScope: String?
+    public var status: PulsePostStatusDTO?
     /// The type's one action and the viewer's state of it.
     public let action: PulseActionDTO?
     public let counts: PulseCountsDTO?
@@ -252,11 +252,15 @@ public struct PulseOfferDTO: Decodable, Sendable, Hashable {
     public let claimMode: String?
     public let requestsOpen: Bool?
     public let gone: Bool
+    /// The reader's own request, `{ id, status }` (contract §2.8): nil when
+    /// they have none or the server doesn't say. Never anyone else's.
+    public let viewerClaim: PulseOfferClaimDTO?
 
     private enum CodingKeys: String, CodingKey {
         case gone
         case claimMode = "claim_mode"
         case requestsOpen = "requests_open"
+        case viewerClaim = "viewer_claim"
     }
 
     public init(from decoder: any Decoder) throws {
@@ -264,6 +268,7 @@ public struct PulseOfferDTO: Decodable, Sendable, Hashable {
         claimMode = c.lenient(String.self, forKey: .claimMode)
         requestsOpen = c.lenient(Bool.self, forKey: .requestsOpen)
         gone = c.lenient(Bool.self, forKey: .gone) ?? false
+        viewerClaim = c.lenient(PulseOfferClaimDTO.self, forKey: .viewerClaim).flatMap { $0.id.isEmpty ? nil : $0 }
     }
 }
 
@@ -272,19 +277,19 @@ public struct PulseViewerDTO: Decodable, Sendable, Hashable {
     public let isAuthor: Bool
     public let following: Bool
     public let canMarkHelpful: Bool
+    public let canShare: Bool?
     /// The reader saved it (contract PR 2298); nil from a server without it.
     public let saved: Bool?
     /// True exactly when keep-open would succeed: the reader's own open,
     /// unanswered Ask, inside its window, not kept open yet (PR 2298).
     public let canKeepOpen: Bool
-    public let canShare: Bool?
 
     private enum CodingKeys: String, CodingKey {
         case following, saved
         case isAuthor = "is_author"
         case canMarkHelpful = "can_mark_helpful"
-        case canKeepOpen = "can_keep_open"
         case canShare = "can_share"
+        case canKeepOpen = "can_keep_open"
     }
 
     public init(from decoder: any Decoder) throws {
@@ -292,9 +297,9 @@ public struct PulseViewerDTO: Decodable, Sendable, Hashable {
         isAuthor = c.lenient(Bool.self, forKey: .isAuthor) ?? false
         following = c.lenient(Bool.self, forKey: .following) ?? false
         canMarkHelpful = c.lenient(Bool.self, forKey: .canMarkHelpful) ?? false
+        canShare = c.lenient(Bool.self, forKey: .canShare)
         saved = c.lenient(Bool.self, forKey: .saved)
         canKeepOpen = c.lenient(Bool.self, forKey: .canKeepOpen) ?? false
-        canShare = c.lenient(Bool.self, forKey: .canShare)
     }
 }
 

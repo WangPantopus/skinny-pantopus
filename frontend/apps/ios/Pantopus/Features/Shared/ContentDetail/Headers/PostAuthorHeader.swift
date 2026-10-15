@@ -104,6 +104,7 @@ public struct PostAuthorHeader: View {
     private let timeAndLocality: String
     private let intent: PostIntent
     private let onAvatarTap: (@MainActor () -> Void)?
+    private let pulseCard: PulsePageCard?
 
     public init(
         displayName: String,
@@ -112,7 +113,8 @@ public struct PostAuthorHeader: View {
         identity: IdentityPillar,
         timeAndLocality: String,
         intent: PostIntent,
-        onAvatarTap: (@MainActor () -> Void)? = nil
+        onAvatarTap: (@MainActor () -> Void)? = nil,
+        pulseCard: PulsePageCard? = nil
     ) {
         self.displayName = displayName
         self.avatarURL = avatarURL
@@ -121,9 +123,36 @@ public struct PostAuthorHeader: View {
         self.timeAndLocality = timeAndLocality
         self.intent = intent
         self.onAvatarTap = onAvatarTap
+        self.pulseCard = pulseCard
     }
 
     public var body: some View {
+        if let pulseCard { pulseHeader(pulseCard) } else { legacyHeader }
+    }
+
+    private func pulseHeader(_ card: PulsePageCard) -> some View {
+        HStack(alignment: .top, spacing: Spacing.s3) {
+            avatarTile
+            VStack(alignment: .leading, spacing: Spacing.s2) {
+                PlanFlowLayout(spacing: Spacing.s2) {
+                    Text(displayName).pulseFont(.button)
+                    if let label = card.label { PulseAuthorLabelChip(label: label) }
+                    Text(card.typeName).pulseFont(.overline)
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                }
+                if !timeAndLocality.isEmpty {
+                    Text(timeAndLocality).pulseFont(.footnote)
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .foregroundStyle(Theme.Color.appText)
+        .padding(.horizontal, Spacing.s4)
+        .accessibilityElement(children: .contain)
+    }
+
+    private var legacyHeader: some View {
         HStack(alignment: .top, spacing: Spacing.s3) {
             avatarTile
             VStack(alignment: .leading, spacing: 2) {

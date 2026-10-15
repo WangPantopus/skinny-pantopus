@@ -13,11 +13,13 @@ import SwiftUI
 public struct ContentDetailTopBarAction: Sendable {
     public let icon: PantopusIcon
     public let accessibilityLabel: String
+    public let text: String?
     public let handler: @Sendable () -> Void
 
-    public init(icon: PantopusIcon, accessibilityLabel: String, handler: @escaping @Sendable () -> Void) {
+    public init(icon: PantopusIcon, accessibilityLabel: String, text: String? = nil, handler: @escaping @Sendable () -> Void) {
         self.icon = icon
         self.accessibilityLabel = accessibilityLabel
+        self.text = text
         self.handler = handler
     }
 }
@@ -35,6 +37,8 @@ public struct ContentDetailShell<HeaderView: View, BodyView: View, CTAView: View
     private let topBarAction: ContentDetailTopBarAction?
     private let topBarSecondaryAction: ContentDetailTopBarAction?
     private let onRefresh: (@Sendable () async -> Void)?
+    private let scalesType: Bool
+    private let scrollOverlay: AnyView?
     private let headerContent: HeaderView
     private let bodyContent: BodyView
     private let ctaContent: CTAView
@@ -45,6 +49,8 @@ public struct ContentDetailShell<HeaderView: View, BodyView: View, CTAView: View
         topBarAction: ContentDetailTopBarAction? = nil,
         topBarSecondaryAction: ContentDetailTopBarAction? = nil,
         onRefresh: (@Sendable () async -> Void)? = nil,
+        scalesType: Bool = false,
+        scrollOverlay: AnyView? = nil,
         @ViewBuilder header: () -> HeaderView,
         @ViewBuilder body: () -> BodyView,
         @ViewBuilder cta: () -> CTAView = { EmptyView() }
@@ -54,6 +60,8 @@ public struct ContentDetailShell<HeaderView: View, BodyView: View, CTAView: View
         self.topBarAction = topBarAction
         self.topBarSecondaryAction = topBarSecondaryAction
         self.onRefresh = onRefresh
+        self.scalesType = scalesType
+        self.scrollOverlay = scrollOverlay
         headerContent = header()
         bodyContent = body()
         ctaContent = cta()
@@ -66,10 +74,14 @@ public struct ContentDetailShell<HeaderView: View, BodyView: View, CTAView: View
                     title: title,
                     onBack: onBack,
                     action: topBarAction,
-                    secondaryAction: topBarSecondaryAction
+                    secondaryAction: topBarSecondaryAction,
+                    scalesType: scalesType
                 )
                 scroll
                     .background(Theme.Color.appBg)
+                    .overlay(alignment: .top) {
+                        scrollOverlay?.padding(Spacing.s3)
+                    }
             }
             ctaContent
                 .padding(Spacing.s4)
@@ -104,20 +116,27 @@ public struct ContentDetailTopBar: View {
     let onBack: (() -> Void)?
     let action: ContentDetailTopBarAction?
     var secondaryAction: ContentDetailTopBarAction?
+    var scalesType: Bool
 
     public init(
         title: String?,
         onBack: (() -> Void)?,
         action: ContentDetailTopBarAction?,
-        secondaryAction: ContentDetailTopBarAction? = nil
+        secondaryAction: ContentDetailTopBarAction? = nil,
+        scalesType: Bool = false
     ) {
         self.title = title
         self.onBack = onBack
         self.action = action
         self.secondaryAction = secondaryAction
+        self.scalesType = scalesType
     }
 
     public var body: some View {
+        if scalesType { scalableBar } else { standardBar }
+    }
+
+    private var standardBar: some View {
         HStack(spacing: Spacing.s2) {
             if let onBack {
                 Button(action: onBack) {
@@ -170,5 +189,70 @@ public struct ContentDetailTopBar: View {
         .overlay(alignment: .bottom) {
             Rectangle().fill(Theme.Color.appBorderSubtle).frame(height: 1)
         }
+    }
+
+    private var scalableBar: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: Spacing.s2) {
+                backControl
+                if let title {
+                    Text(title)
+                        .pulseFont(.headline)
+                        .fixedSize()
+                        .accessibilityAddTraits(.isHeader)
+                }
+                Spacer(minLength: 0)
+                if let secondaryAction { scalableAction(secondaryAction).fixedSize() }
+                if let action { scalableAction(action) }
+            }
+            VStack(alignment: .trailing, spacing: 0) {
+                HStack(spacing: Spacing.s2) {
+                    backControl
+                    if let title {
+                        // At the largest sizes a one-word title shrinks to
+                        // fit rather than breaking mid-word.
+                        Text(title).pulseFont(.headline)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.5)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .accessibilityAddTraits(.isHeader)
+                    }
+                    if let action { scalableAction(action) }
+                }
+                if let secondaryAction { scalableAction(secondaryAction) }
+            }
+        }
+        .foregroundStyle(Theme.Color.appText)
+        .padding(.horizontal, Spacing.s2)
+        .frame(minHeight: 44)
+        .background(Theme.Color.appSurface)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(Theme.Color.appBorderSubtle).frame(height: 1)
+        }
+    }
+
+    private var backControl: some View {
+        Button { onBack?() } label: {
+            Icon(.chevronLeft, size: 22, color: Theme.Color.appText)
+                .frame(width: 44, height: 44)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Back")
+        .disabled(onBack == nil)
+    }
+
+    private func scalableAction(_ action: ContentDetailTopBarAction) -> some View {
+        Button(action: action.handler) {
+            if let text = action.text {
+                Text(text).pulseFont(.button)
+                    .padding(.horizontal, Spacing.s2)
+                    .frame(minHeight: 44)
+            } else {
+                Icon(action.icon, size: 22, color: Theme.Color.appText)
+                    .frame(width: 44, height: 44)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(action.accessibilityLabel)
     }
 }

@@ -2,8 +2,8 @@
 //  PulsePostDetailViewModelTests.swift
 //  PantopusTests
 //
-//  Covers happy-path load, optimistic reaction toggle (success + rollback),
-//  comment send, and the safety-guard on non-wired reaction kinds.
+//  Existing post-detail checks updated for the Pulse conversation contract:
+//  load, Helpful success/failure, reply send and read refusal.
 //
 
 import XCTest
@@ -27,81 +27,21 @@ final class PulsePostDetailViewModelTests: XCTestCase {
     private static let postJSON = """
     {
       "post": {
-        "id": "p1",
-        "user_id": "u1",
-        "title": null,
-        "content": "Anyone know a good handyman?",
-        "post_type": "ask",
-        "post_format": "standard",
-        "purpose": "ask",
-        "media_urls": [],
-        "media_live_urls": [],
-        "media_types": [],
-        "created_at": "2026-04-30T12:00:00.000Z",
-        "updated_at": null,
-        "is_edited": false,
-        "like_count": 3,
-        "comment_count": 2,
-        "share_count": 0,
-        "view_count": 12,
-        "userHasLiked": false,
-        "userHasSaved": false,
-        "userHasReposted": false,
-        "creator": {
-          "id": "u1",
-          "username": "alex",
-          "name": "Alex Rivera",
-          "first_name": "Alex",
-          "last_name": "Rivera",
-          "profile_picture_url": null,
-          "city": "Cambridge",
-          "state": "MA",
-          "account_type": "personal"
-        },
-        "home": null,
-        "comments": [
-          {
-            "id": "c1",
-            "post_id": "p1",
-            "user_id": "u2",
-            "parent_comment_id": null,
-            "comment": "Try Westside Plumbing",
-            "created_at": "2026-04-30T12:05:00.000Z",
-            "is_deleted": false,
-            "author": {
-              "id": "u2",
-              "username": "maria",
-              "name": "Maria Chen",
-              "first_name": "Maria",
-              "last_name": "Chen",
-              "profile_picture_url": null,
-              "city": null,
-              "state": null,
-              "account_type": "personal"
-            }
-          },
-          {
-            "id": "c2",
-            "post_id": "p1",
-            "user_id": "u3",
-            "parent_comment_id": "c1",
-            "comment": "+1 Mike's great",
-            "created_at": "2026-04-30T12:06:00.000Z",
-            "is_deleted": false,
-            "author": {
-              "id": "u3",
-              "username": "sam",
-              "name": "Sam Lee",
-              "first_name": null,
-              "last_name": null,
-              "profile_picture_url": null,
-              "city": null,
-              "state": null,
-              "account_type": "personal"
-            }
-          }
-        ]
-      }
+        "id": "p1", "type": "ask_local", "text": "Anyone know a good handyman?",
+        "created_at": "2026-04-30T12:00:00.000Z", "media": [],
+        "author": { "id": "u1", "display_name": "Alex", "label": "resident" },
+        "about": { "label": "Cambridge" },
+        "status": { "state": "open", "resolution": null },
+        "action": { "kind": "answer", "label": "Answer", "done": false },
+        "counts": { "replies": 2 },
+        "viewer": { "is_author": true, "can_mark_helpful": true }
+      },
+      "replies": [
+        { "id": "c1", "post_id": "p1", "branch_id": "c1", "parent_comment_id": null,
+          "text": "Try Westside Plumbing", "author": { "id": "u2", "display_name": "Maria", "label": "resident" } },
+        { "id": "c2", "post_id": "p1", "branch_id": "c1", "parent_comment_id": "c1",
+          "text": "+1 Mike's great", "author": { "id": "u3", "display_name": "Sam", "label": "resident" } }
+      ]
     }
     """
 
@@ -111,18 +51,17 @@ final class PulsePostDetailViewModelTests: XCTestCase {
         SequencedURLProtocol.sequence = [.status(200, body: Self.postJSON)]
         let vm = PulsePostDetailViewModel(postId: "p1", client: makeAPI())
         await vm.load()
-        guard case let .loaded(content) = vm.state else {
-            XCTFail("Expected .loaded")
+        guard case let .conversation(content) = vm.state else {
+            XCTFail("Expected .conversation")
             return
         }
-        XCTAssertEqual(content.authorDisplayName, "Alex Rivera")
-        XCTAssertEqual(content.reactions.helpful, 3)
-        XCTAssertNil(content.reactions.userReaction)
-        XCTAssertEqual(content.intent, .ask)
-        XCTAssertEqual(content.comments.count, 2)
-        XCTAssertEqual(content.comments[0].indentLevel, 0)
-        XCTAssertEqual(content.comments[1].indentLevel, 1)
-        XCTAssertTrue(content.timeAndLocality.contains("Cambridge, MA"))
+        XCTAssertEqual(content.post.author?.displayName, "Alex")
+        XCTAssertEqual(content.post.type, "ask_local")
+        XCTAssertEqual(content.replies.count, 2)
+        XCTAssertEqual(content.branches.count, 1)
+        XCTAssertEqual(content.branches.first?.root?.id, "c1")
+        XCTAssertEqual(content.branches.first?.descendants.first?.id, "c2")
+        XCTAssertEqual(content.post.about?.label, "Cambridge")
     }
 
     func testLostFoundPurposeMapsToLostFoundIntent() {
@@ -131,44 +70,47 @@ final class PulsePostDetailViewModelTests: XCTestCase {
 
     // MARK: - Reactions
 
-    func testHelpfulOptimisticToggleAndReconcile() async {
+    func testHelpfulMarkReconcilesReplyAndPost() async {
         SequencedURLProtocol.sequence = [
             .status(200, body: Self.postJSON),
-            .status(200, body: "{\"liked\":true,\"likeCount\":4}")
+            .status(200, body: """
+            {"reply":{"id":"c1","branch_id":"c1","helpful":true,"helpful_to":"Alex"},
+             "post_status":{"state":"resolved","resolution":"answered"}}
+            """)
         ]
         let vm = PulsePostDetailViewModel(postId: "p1", client: makeAPI())
         await vm.load()
-        await vm.tapReaction(.helpful)
-        guard case let .loaded(content) = vm.state else {
-            XCTFail("Expected .loaded")
+        guard let reply = vm.conversation?.replies.first else { return XCTFail("Missing reply") }
+        await vm.markConversationReplyHelpful(reply)
+        guard case let .conversation(content) = vm.state else {
+            XCTFail("Expected .conversation")
             return
         }
-        XCTAssertEqual(content.reactions.helpful, 4)
-        XCTAssertEqual(content.reactions.userReaction, .helpful)
+        XCTAssertTrue(content.replies[0].helpful)
+        XCTAssertEqual(content.replies[0].helpfulTo, "Alex")
+        XCTAssertEqual(content.post.status?.resolution, "answered")
     }
 
-    func testHelpfulRollbackOnFailure() async {
+    func testHelpfulFailureKeepsReplyUnchanged() async {
         SequencedURLProtocol.sequence = [
             .status(200, body: Self.postJSON),
             .status(500, body: "{\"error\":\"boom\"}")
         ]
         let vm = PulsePostDetailViewModel(postId: "p1", client: makeAPI())
         await vm.load()
-        await vm.tapReaction(.helpful)
-        guard case let .loaded(content) = vm.state else {
-            XCTFail("Expected .loaded")
+        guard let reply = vm.conversation?.replies.first else { return XCTFail("Missing reply") }
+        await vm.markConversationReplyHelpful(reply)
+        guard case let .conversation(content) = vm.state else {
+            XCTFail("Expected .conversation")
             return
         }
-        XCTAssertEqual(content.reactions.helpful, 3, "Optimistic increment should roll back")
-        XCTAssertNil(content.reactions.userReaction)
+        XCTAssertFalse(content.replies[0].helpful)
+        XCTAssertNil(content.post.status?.resolution)
         XCTAssertNotNil(vm.toastMessage)
     }
 
     func testHeartReactionIsDisplayOnly() async {
-        // The view renders Heart and Going as non-tappable display chips,
-        // so tapReaction should only ever be invoked for `.helpful`. The
-        // safety guard in the VM returns silently for the others — no
-        // toast, no state change.
+        // The conversation has no public heart score; an old caller cannot add one.
         SequencedURLProtocol.sequence = [.status(200, body: Self.postJSON)]
         let vm = PulsePostDetailViewModel(postId: "p1", client: makeAPI())
         await vm.load()
@@ -236,7 +178,11 @@ final class PulsePostDetailViewModelTests: XCTestCase {
     // MARK: - Errors
 
     func testNotFoundProducesFriendlyError() async {
-        SequencedURLProtocol.sequence = [.status(404, body: "{\"error\":\"missing\"}")]
+        // The Pulse conversation route, then the post page it falls back to.
+        SequencedURLProtocol.sequence = [
+            .status(404, body: "{\"error\":\"missing\"}"),
+            .status(404, body: "{\"error\":\"missing\"}")
+        ]
         let vm = PulsePostDetailViewModel(postId: "missing", client: makeAPI())
         await vm.load()
         guard case let .error(message, retryable) = vm.state else {

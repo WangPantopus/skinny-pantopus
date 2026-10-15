@@ -18,6 +18,7 @@ import Observation
 public enum PulsePostDetailState: Sendable, Equatable {
     case loading
     case loaded(PulsePostDetailContent)
+    case conversation(PulseConversationContent)
     /// `retryable` is false when the post is gone or hidden: Try again can't help.
     case error(message: String, retryable: Bool)
 }
@@ -108,7 +109,7 @@ public struct PulsePostDetailContent: Sendable, Equatable, Hashable {
 @Observable
 public final class PulsePostDetailViewModel {
     /// Render-state.
-    public private(set) var state: PulsePostDetailState = .loading
+    public internal(set) var state: PulsePostDetailState = .loading
 
     /// Inline composer's draft text. Bound from the view.
     public var composerText: String = "" {
@@ -118,11 +119,26 @@ public final class PulsePostDetailViewModel {
         }
     }
 
-    private var composerRevision: UInt = 0
-    private var pendingComment: PostCommentRequest?
+    var composerRevision: UInt = 0
+    var pendingComment: PostCommentRequest?
+
+    var conversationReadAt: Date?
+    /// The Pulse conversation route doesn't serve this post (a household,
+    /// home or persona post, or an older server): the existing post page
+    /// shows it instead, as before Pulse.
+    var usesPostPage = false
+    var conversationGeneration = 0
+    var conversationMutationRevision = 0
+    var conversationWaitingReplies: [PulseReplyDTO] = []
+    var expandedConversationBranches: Set<String> = []
+    var pendingConversationActions: Set<String> = []
+    var conversationRefreshNotice: String?
+    var offerRequestsState: PulseOfferRequestsState = .loading
+    var offerRequestStatus: String?
+    var isPreparingShare = false
 
     /// True while a comment is in flight.
-    public private(set) var isSendingComment: Bool = false
+    public internal(set) var isSendingComment: Bool = false
 
     /// Transient error string surfaced in the toast overlay.
     public var toastMessage: String? {
@@ -145,7 +161,7 @@ public final class PulsePostDetailViewModel {
     public var showsOverflowMenu: Bool = false
 
     /// Comment the composer is replying to; nil sends a top-level comment.
-    public private(set) var replyTarget: ReplyTarget? {
+    public internal(set) var replyTarget: ReplyTarget? {
         didSet { composerRevision &+= 1 }
     }
 
@@ -159,7 +175,7 @@ public final class PulsePostDetailViewModel {
     public private(set) var nearbyProviders: [NearbyProviderRow] = []
 
     /// Viewer's bookmark state (`POST /:id/save` toggle).
-    public private(set) var isSaved: Bool = false
+    public internal(set) var isSaved: Bool = false
 
     /// Viewer's repost state (`POST /:id/share` with `shareType: repost`).
     public private(set) var isReposted: Bool = false
@@ -178,12 +194,12 @@ public final class PulsePostDetailViewModel {
         public let authorName: String
     }
 
-    private let postId: String
-    private let currentUserId: String?
-    private let client: APIClient
+    let postId: String
+    let currentUserId: String?
+    let client: APIClient
     /// The screen store (Instant Screens): a post and its comments stay
     /// fresh for a minute; opened from the feed, the feed's card shows first.
-    private let store: ScreenStore
+    let store: ScreenStore
     private let logger = Logger(label: "app.pantopus.ios.PulsePostDetail")
     private let maxInitialReplies = 3
     /// The post on screen is the feed card's copy: its comments are still
@@ -196,13 +212,8 @@ public final class PulsePostDetailViewModel {
         self.currentUserId = currentUserId
         self.client = client
         store = ScreenStore.store(for: client)
-        // The first frame: the store's copy of the post, else the feed card's
-        // copy while the post and its comments load.
-        if let copy = store.peek(endpoint, as: PostDetailResponse.self) {
-            apply(copy.value.post)
-        } else if let card = store.seeded(endpoint, as: FeedPostDTO.self), let post = PostDetailDTO(feedPost: card) {
-            apply(post)
-            commentsPending = true
+        if let copy = store.peek(conversationEndpoint, as: PulseConversationResponse.self) {
+            applyConversation(copy, holdNewReplies: false)
         }
     }
 
@@ -218,12 +229,16 @@ public final class PulsePostDetailViewModel {
     /// view uses this to gate the Edit overflow action.
     public var isOwner: Bool {
         guard let currentUserId, !currentUserId.isEmpty else { return false }
+        if let conversation {
+            return conversation.post.viewer?.isAuthor == true && conversation.post.author?.id == currentUserId
+        }
         guard case let .loaded(content) = state else { return false }
         return content.post.userId == currentUserId
     }
 
     /// The asker's own open Ask (contract §2.12): "Close" is offered.
     public var canCloseAsk: Bool {
+        if let conversation { return isOwner && conversation.post.pageCard().isOpenAsk }
         guard isOwner, case let .loaded(content) = state else { return false }
         let post = content.post
         return PulsePostStatus.askIsOpen(
@@ -237,12 +252,16 @@ public final class PulsePostDetailViewModel {
 
     /// …and "Keep open 7 more days", once per Ask.
     public var canKeepAskOpen: Bool {
+        if let conversation { return canCloseAsk && conversation.post.viewer?.canKeepOpen == true }
         guard canCloseAsk, case let .loaded(content) = state else { return false }
         return content.post.keptOpenAt == nil
     }
 
     /// "Keep open 7 more days": the Ask stays up 7 more days, once.
     public func keepAskOpen() async {
+        let isConversation = conversation != nil
+        if isConversation, !beginConversationAction("keepOpen") { return }
+        defer { if isConversation { finishConversationAction("keepOpen") } }
         do {
             _ = try await client.request(PulseEndpoints.keepAskOpen(postId: postId), as: PulseAskActionResponse.self)
             showToast("Kept open for 7 more days.", kind: .success)
@@ -251,12 +270,19 @@ public final class PulsePostDetailViewModel {
             showToast((error as? APIError)?.errorDescription ?? "Couldn't keep it open.")
         }
         // The post's end and its keep-open mark come back with it (and a refusal's reason).
-        await refresh()
+        if isConversation {
+            await refreshConversationAfterMutation()
+        } else {
+            await refresh()
+        }
     }
 
     /// "Close", after "Close this question?": the Ask ends and leaves Pulse;
     /// the asker still sees it here and can restore it from My posts.
     public func closeAsk() async {
+        let isConversation = conversation != nil
+        if isConversation, !beginConversationAction("close") { return }
+        defer { if isConversation { finishConversationAction("close") } }
         do {
             _ = try await client.request(PulseEndpoints.closeAsk(postId: postId), as: PulseAskActionResponse.self)
             showToast("Question closed.", kind: .success)
@@ -264,10 +290,14 @@ public final class PulsePostDetailViewModel {
         } catch {
             showToast((error as? APIError)?.errorDescription ?? "Couldn't close it.")
         }
-        await refresh()
+        if isConversation {
+            await refreshConversationAfterMutation()
+        } else {
+            await refresh()
+        }
     }
 
-    private func showToast(_ text: String, kind: ToastKind = .error) {
+    func showToast(_ text: String, kind: ToastKind = .error) {
         toastMessage = text
         toastKind = kind
     }
@@ -275,12 +305,21 @@ public final class PulsePostDetailViewModel {
     /// Opening the post: what's on screen stays (the store's or the feed's
     /// copy); the post is read when that copy is over a minute old.
     public func load() async {
+        if !usesPostPage {
+            if conversation == nil { state = .loading }
+            await fetchConversation(force: false)
+            guard usesPostPage else { return }
+        }
         if case .loaded = state {} else { state = .loading }
         await fetch(force: false)
     }
 
     /// Pull-to-refresh: always asks the server.
     public func refresh() async {
+        if !usesPostPage {
+            await fetchConversation(force: true)
+            guard usesPostPage else { return }
+        }
         await fetch(force: true)
     }
 
@@ -392,13 +431,20 @@ public final class PulsePostDetailViewModel {
 
     /// Author-only comment delete; re-fetches so counts stay in sync.
     public func deleteComment(commentId: String) async {
+        let isConversation = conversation != nil
+        if isConversation, !beginConversationAction("deleteReply") { return }
+        defer { if isConversation { finishConversationAction("deleteReply") } }
         do {
             _ = try await client.request(
                 PostsEndpoints.deleteComment(postId: postId, commentId: commentId),
                 as: PostActionAckResponse.self
             )
             if replyTarget?.commentId == commentId { replyTarget = nil }
-            await fetch(force: true)
+            if conversation != nil {
+                await refreshConversationAfterMutation()
+            } else {
+                await fetch(force: true)
+            }
             // Feed and My posts refetch so their comment counts match.
             PulsePostsRefresh.notifyPostsDidChange()
         } catch {
@@ -416,6 +462,7 @@ public final class PulsePostDetailViewModel {
             )
             didDeletePost = true
             store.remove(endpoint)
+            store.remove(conversationEndpoint)
             // The feed and My posts still list the post until they refetch.
             PulsePostsRefresh.notifyPostsDidChange()
         } catch {
@@ -450,6 +497,9 @@ public final class PulsePostDetailViewModel {
 
     /// Bookmark toggle — optimistic, reconciled with `{saved}`.
     public func toggleSave() async {
+        let isConversation = conversation != nil
+        if isConversation, !beginConversationAction("save") { return }
+        defer { if isConversation { finishConversationAction("save") } }
         let original = isSaved
         isSaved.toggle()
         do {
@@ -491,24 +541,15 @@ public final class PulsePostDetailViewModel {
         URL(string: "https://www.pantopus.com/posts/\(postId)")
     }
 
-    /// Record an external share after the share sheet was used.
-    public func recordShare() async {
-        do {
-            _ = try await client.request(
-                PostsEndpoints.share(id: postId),
-                as: PostShareResponse.self
-            )
-        } catch {
-            // Count bump only — not worth surfacing to the user.
-            logger.warning("Share record failed: \(error)")
-        }
-    }
-
     /// Submit the composer's current text — top-level, or as a reply
     /// when `replyTarget` is armed. On success we re-fetch the post so
     /// the comment list, count, and any backend-side mutations
     /// (rate-limit windows, derived fields) stay in sync.
     public func sendComment() async {
+        if conversation != nil {
+            await sendConversationReply()
+            return
+        }
         let body = composerText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !body.isEmpty, case .loaded = state, !isSendingComment else { return }
         let submittedRevision = composerRevision
@@ -540,7 +581,7 @@ public final class PulsePostDetailViewModel {
 
     /// The server's sentence for a refused request (403 or another 4xx);
     /// nil for a failure that isn't a refusal (offline, 5xx).
-    private static func refusal(in error: any Error) -> String? {
+    static func refusal(in error: any Error) -> String? {
         switch error as? APIError {
         case let .forbidden(message): message
         case let .clientError(_, message): APIError.friendlyClientMessage(message)
