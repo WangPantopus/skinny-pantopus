@@ -9,7 +9,6 @@ import app.pantopus.android.data.api.models.plans.UpdatePlanBody
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.plans.PlanAutoRule
 import app.pantopus.android.data.plans.PlansRepository
-import app.pantopus.android.data.plans.isAtHome
 import app.pantopus.android.data.plans.planCode
 import app.pantopus.android.data.plans.planMessage
 import app.pantopus.android.ui.screens.plans.PlansRoutes
@@ -73,14 +72,11 @@ class PlanRequestsViewModel
             }
         }
 
-        fun accept(request: PlanRequestViewDto) {
-            val plan = _ui.value.plan
-            if (plan?.isAtHome == true && !sharedAddressOk) {
-                _ui.update { it.copy(confirmAccept = request) }
-                return
-            }
-            answer(request.id, accept = true)
-        }
+        /**
+         * The server asks for H10's "Accepting shares your address" only before a home plan's first yes (409
+         * `confirm_shares_address`), so the host is asked once for the plan, not again on every visit.
+         */
+        fun accept(request: PlanRequestViewDto) = answer(request.id, accept = true)
 
         /** The host said yes to sharing their address (H10's sentence); accept goes ahead. */
         fun confirmSharingAddress() {
@@ -115,6 +111,7 @@ class PlanRequestsViewModel
                             current.copy(
                                 working = current.working - requestId,
                                 pending = current.pending.filterNot { it.id == requestId },
+                                waitlisted = current.waitlisted.filterNot { it.id == requestId },
                                 notice = if (accept) "Accepted. They're in." else "Declined. They won't see who said no.",
                             )
                         is NetworkResult.Failure ->
@@ -122,7 +119,7 @@ class PlanRequestsViewModel
                                 // At home the first yes shows H10's sentence first (409 from the server).
                                 current.copy(
                                     working = current.working - requestId,
-                                    confirmAccept = current.pending.firstOrNull { it.id == requestId },
+                                    confirmAccept = (current.pending + current.waitlisted).firstOrNull { it.id == requestId },
                                 )
                             } else {
                                 current.copy(

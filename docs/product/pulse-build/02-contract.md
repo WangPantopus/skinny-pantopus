@@ -63,7 +63,12 @@ Heads-up kinds a resident may create: `road_hazard`, `power_outage`, `weather_da
   "event": null,                  // { starts_at, ends_at, venue } for events
   "lost_found": null,             // { kind: "lost" | "found" }
   "offer": null,                  // { claim_mode, requests_open, gone } for offers
-  "viewer": { "is_author": false, "following": false, "can_mark_helpful": false },
+  "viewer": {
+    "is_author": false, "following": false, "can_mark_helpful": false,
+    "saved": false,               // the viewer saved it; POST /api/posts/:id/save toggles it, as on today's cards
+    "can_share": false,           // true only when isPubliclyShareable permits an external link; check before opening a share sheet
+    "can_keep_open": false        // the asker's own open Ask, not yet kept open (2.12); false for everyone else
+  },
   "moderation": { "state": "live" }   // "held" / "removed" only ever reaches the author
 }
 ```
@@ -91,11 +96,12 @@ Replies are returned oldest first, flat. Clients show first-level replies and on
 
 ### 2.3 `GET /api/pulse/feed`
 
-Query: `view` = `nearby` (default) | `following`; `topic` (enum, optional); `area_id` (optional, default the viewer's town); `earlier_before` (ISO, for "Show earlier"); `limit` (default 30, max 40).
+Query: `view` = `nearby` (default) | `following`; `topic` (enum, optional); `area_id` (optional, default the viewer's town); `earlier_before` (the opaque `earlier_cursor`, or an ISO timestamp for compatibility, for "Show earlier"); `limit` (default 30, max 40).
 
 ```jsonc
 {
   "view": "nearby",
+  "read_at": "2026-10-14T18:00:00Z", // server snapshot boundary; use for /new after and /seen through
   "area": { "id": "uuid", "kind": "town", "name": "Camas", "state": "WA" },
   "areas_available": [{ "id": "uuid", "kind": "town", "name": "Camas", "title": "Camas" }],   // area pill; streets and neighborhoods only when opened
   "quiet": null,   // or { "reason": "sparse" | "no_home" | "empty", "card": "meter" | "set_up_home" | null }
@@ -103,14 +109,17 @@ Query: `view` = `nearby` (default) | `following`; `topic` (enum, optional); `are
   "groups": [
     { "key": "town", "title": "AROUND CAMAS", "area_id": "uuid", "items": [ /* PulsePost */ ] }
   ],                                       // order: street, neighborhood, town; only open areas; newest first inside a group
-  "end": { "caught_up": true, "since": "2026-10-14T15:00:00Z", "can_show_earlier": true, "earlier_cursor": "2026-10-13T20:11:00Z" }
+  "end": { "caught_up": true, "since": "2026-10-14T15:00:00Z", "can_show_earlier": true, "earlier_cursor": "<opaque cursor>" }
 }
 ```
 
+- `read_at` is the server time captured before the query; only items created at or before it enter the response. `end.since` is the lower bound of the new-items window, for the end card's wording; it is not a seen acknowledgment. Clients read `read_at` optionally until this backend ships and then use it instead of their device clock for polling and acknowledgments.
 - The first response holds items **newer than the viewer's last-seen marker** for that view (at least the last 24 hours if the marker is older), capped at `limit`. `caught_up` is true when nothing newer remains beyond the cap.
-- `earlier_before` returns the next older items in one flat group `{ "key": "earlier", "title": "EARLIER", … }` (the client appends it below the end card); nothing loads by itself.
-- `GET /api/pulse/feed/new?view=&topic=&after=<iso>` → `{ "count": 3 }` for the "↑ 3 new conversations" pill (poll about once a minute while the screen is visible, or on a socket event).
-- `POST /api/pulse/feed/seen` `{ "view": "nearby", "through": "<iso>" }` advances the marker. The client calls it when the end card has been on screen, never earlier.
+- `earlier_cursor` is an opaque string: clients pass it back unchanged. It contains the time/id tie-breaker and the original new-items window, so equal timestamps cannot skip posts and later pages preserve the snapshot. The server also accepts an ISO `earlier_before` for older callers.
+- `earlier_before` returns the next older items in one flat group `{ "key": "earlier", "title": "EARLIER", … }` (the client appends it below the end card); nothing loads by itself. If the first page was capped (`caught_up: false`), an earlier page sets `caught_up: true` once all remaining new items have been delivered. The client then updates the end card and can acknowledge the original `read_at` after that end is visible; it must not acknowledge an older page's device time.
+- `GET /api/pulse/feed/new?view=&topic=&area_id=&after=<iso>` → `{ "count": 3 }` for the "↑ 3 new conversations" pill (poll about once a minute while the screen is visible, or on a socket event). `area_id` is optional and uses the same area as `/feed`; a client browsing another area passes it to both routes.
+- `POST /api/pulse/feed/seen` `{ "view": "nearby", "through": "<iso>" }` advances the marker and returns `{ "ok": true, "through": "<iso>" }`. The stored marker never moves backward, including concurrent taps; a future `through` is capped at the server time. The client calls it when the unfiltered end card has been on screen and `caught_up` is true, never earlier.
+- The marker belongs to the view, not to a topic, and there is no per-topic marker. With a `topic` chosen, the page reads from the same marker, and the client does not call `/feed/seen` from it: a topic page shows only part of the view, so moving the view's marker would put the other topics' unseen posts behind "Show earlier". Only the unfiltered page (no `topic`) moves the marker.
 - Reader checks (section 5) apply to every item; hidden, muted, blocked and held items never appear. The legacy `/api/posts/feed` keeps its shape for the web.
 
 ### 2.4 Conversation
@@ -167,12 +176,14 @@ Private note to a home (signed): `POST /api/pulse/notes` `{ "toHomeId"? | "toPos
 - `GET|PUT /api/pulse/preferences` → `{ "digest": { "enabled", "time_local", "timezone", "channel": "email"|"push"|"both" }, "weekly_street_digest": false, "quiet_hours": { "start_local", "end_local" } (existing fields), "nudge_helper": true }`.
 - `GET /api/pulse/preferences/summary` → every follow, mute and alert with an `undo` descriptor, for the preferences page.
 - `GET /api/pulse/posts/:id/why` → `{ "reasons": [{ "kind": "area" | "topic" | "follow" | "time", "text": "You're viewing Camas, all topics, newest first." }] }`. Only the reader's own choices.
-- Mutes (in force since S4): `POST /api/posts/mute/topic` accepts `{ "topic", "areaId"? }` → `{ "message", "mute": { "topic", "area_id" } }`; without `areaId` the topic is muted everywhere; an unknown topic or a malformed `areaId` is a 400; muting twice keeps one mute. The legacy `{ "postType", "surface"? }` still works. `GET /api/posts/mute` → `{ "muted": [ …people and businesses, unchanged ], "topic_mutes": [{ "topic", "area_id", "muted_at" }] }`. `DELETE /api/posts/mute` `{ "entityType": "topic", "entityId": "<topic>", "areaId"? }` (body or query string) removes that one mute (without `areaId`, the everywhere mute). A topic muted in an area hides that topic's posts in the area and posts that have no area (every post until `Post.area_id` arrives with S5). User mutes as today.
+- Mutes (in force since S4): `POST /api/posts/mute/topic` accepts `{ "topic", "areaId"? }` → `{ "message", "mute": { "topic", "area_id" } }`; without `areaId` the topic is muted everywhere; an unknown topic or a malformed or nonexistent `areaId` is a 400; muting twice keeps one mute. The legacy `{ "postType", "surface"? }` still works. `GET /api/posts/mute` → `{ "muted": [ …people and businesses, unchanged ], "topic_mutes": [{ "topic", "area_id", "muted_at" }] }`. `DELETE /api/posts/mute` `{ "entityType": "topic", "entityId": "<topic>", "areaId"? }` (body or query string) removes that one mute (without `areaId`, the everywhere mute). A topic muted in an area hides that topic's posts in the area and posts that have no area (every post until `Post.area_id` arrives with S5). User mutes as today.
 - Topic filter (in force since S4): `GET /api/posts/feed?surface=place&topic=<topic>` returns only that topic's posts, for any of the 12; `sports` keeps its Sports lane.
 
 ### 2.10 Areas and eligibility
 
-`GET /api/pulse/areas/mine` → `{ "town": {...}|null, "neighborhood": {...}|null, "street": {...}|null, "home_verified": true }` (only areas that are open) · `GET /api/pulse/areas/search?q=` → towns for "another place" · `POST /api/pulse/adult-attestation` → `{ "attested_at" }`.
+`GET /api/pulse/areas/mine` → `{ "town": Area|null, "neighborhood": Area|null, "street": Area|null, "home_verified": boolean }`. `Area` is `{ "id": "uuid", "kind": "town|neighborhood|street|place", "name": "Camas", "state": "WA", "title": "Camas" }` (the same area metadata as the feed pill). Only areas whose `opened_at` has arrived appear. The primary home's town is the default; street and neighborhood require address verification for that home. Without a current home, all three areas are null and `home_verified` is false. Reading permissions still use the set of all current verified homes (S24), independently of this default.
+
+`GET /api/pulse/areas/search?q=` → `{ "areas": [Area] }`, open towns only, name order, at most 20; `q` is a literal substring (empty lists available towns), up to 80 characters. Both area endpoints require sign-in. Neither accepts device coordinates nor returns home ids, points, polygons or measured distances. Lookup failure is 503 with a plain `error` sentence; it never invents a home or verification state. `POST /api/pulse/adult-attestation` → `{ "attested_at" }`.
 
 `POST /api/pulse/adult-attestation` (in force since S5's first PR): no body; stores `User.adult_attested_at` once and returns it, the first time again on every later call (a double tap answers the same); `403 AGE_NOT_ELIGIBLE` when the date of birth on file says the person is under 18.
 
@@ -180,15 +191,33 @@ Private note to a home (signed): `POST /api/pulse/notes` `{ "toHomeId"? | "toPos
 
 `GET /api/pulse/notices` → the author's own held and removed items `{ id, target_type, target_id, state, rule_code, reason_text, created_at, can_appeal }` · `POST /api/pulse/appeals` `{ "noticeId", "message" }` → `{ "appeal": {...} }`. The moderator console uses the existing `backend/routes/adminReports.js` and web `app/admin/reports`, extended.
 
+### 2.12 Ending an Ask (S7)
+
+The asker's two actions on an open Ask, offered by the day-6 reminder (`ask_still_open`, section 6) and on the Ask itself when `viewer.is_author`:
+
+- `POST /api/pulse/posts/:postId/keep-open`, no body → `{ "post_status": { "state": "open", "resolution": null, "ends_at": "<iso>" } }`. Moves the end 7 days past where it was, once per Ask (stored as `post_metadata.kept_open_at`); a second time answers `409 ALREADY_KEPT_OPEN`. On a `PulsePost`, `viewer.can_keep_open` is true exactly when this call would succeed, so clients offer "Keep open 7 more days" only then.
+- `POST /api/pulse/posts/:postId/close`, no body → `{ "post_status": { "state": "resolved", "resolution": "closed" | "closed_unanswered" } }`. `closed` when someone other than the asker replied, `closed_unanswered` when nobody did. The Ask leaves the views like any ended post; restoring it from My posts reopens it for another window (section 5).
+
+Both answer `404 POST_NOT_FOUND`, `403 NOT_POST_AUTHOR` (not the asker), `400 NOT_AN_ASK` (another type), and `409 ASK_ENDED` when the Ask is already answered, closed or past its end.
+
 ## 3. Outlined (shapes are published by the owner before the first client PR)
 
 | Slice | Endpoints (owner) |
 |---|---|
-| S12 | `GET /api/pulse/known?area=&q=`, `GET /api/pulse/known/:id`, `POST /api/pulse/known/:id/{confirm,correct,outdated}`, `POST /api/pulse/known/ask-again` (PB data, PS drafting); `GET /api/pulse/upcoming?area=`; `GET /api/pulse/right-now`, `POST /api/pulse/right-now/:id/report` `{kind: me_too|its_back}`; `GET /api/pulse/search?q=&area=` (PB) |
+| S12 | `GET /api/pulse/known?area=&q=`, `GET /api/pulse/known/:id`, `POST /api/pulse/known/:id/{confirm,correct,outdated}`, `POST /api/pulse/known/ask-again` (PB data, PS drafting); `GET /api/pulse/upcoming?area=`; `GET /api/pulse/right-now`, `POST /api/pulse/right-now/:id/report` `{kind: me_too\|its_back}`; `GET /api/pulse/search?q=&area=` (PB) |
 | S13 | Digest content and delivery are jobs, not endpoints (PC); preferences above |
 | S14 | `GET /api/pulse/posts/:id` fills `plan`; `POST /api/pulse/posts/:id/plan` creates a Plan through the existing Plans services with `Plan.source_post_id` (PB) |
 | S15 | `GET /api/public/pulse/areas`, `GET /api/public/pulse/feed?area=`, `GET /api/public/pulse/posts/:id` (public posts only; no distance, no street, first name and label) (PC with PB) |
 | S16–S17 | Place pages, area opening, business and official identities (PB, PS) |
+| S9 (addition) | `PUT /api/pulse/posts/:id/read-scope` `{ "readScope" }`: the author only, toward narrower only, `409 CANNOT_WIDEN` (PB) |
+| S11 (addition) | `GET /api/pulse/rules` → `{ "rules": [...], "review_hours": "…", "appeals_text": "…", "law_enforcement_text": "…" }`; the text is the founder's and counsel's, PS serves it (PS) |
+| S17 (addition) | Local offers: `POST /api/businesses/:businessId/offers`; staff approve in the console; `GET /api/pulse/local-offer?area=` → the one offer to show, or null (PB, PS) |
+| S20 | `POST /api/users/code/start` `{ "email", "firstName" }` → always `{ "ok": true }` (no account enumeration); `POST /api/users/code/verify` `{ "email", "code", "deviceId" }` → the same session body as `POST /api/users/login` plus `is_new`. Codes are 6 digits, valid 10 minutes, single use, 5 tries. Errors: `CODE_INVALID`, `CODE_EXPIRED`, `TOO_MANY_ATTEMPTS`, `CHANNEL_UNAVAILABLE` (text codes, until a provider exists). The `authEndpointLimiter`, DPoP and device rules that cover login cover these (PB) |
+| S21 | The plan create body gains `repeats` (`none`, `weekly`, `biweekly`, `monthly`) and `until`; `POST /api/plans/:id/series/{pause,resume,end}`; the going call gains `scope` (`occurrence` or `series`); `POST\|DELETE /api/plans/:id/co-hosts`; all through the existing Plans services (PB) |
+| S22 | `POST /api/support-trains` accepts an optional `sourcePostId` (stored, never returned); the conversation payload's `support_train` is `{ "line": "…" }` only when the organizer chose to post the line (PB) |
+| S23 | `POST /api/admin/pulse/posts/:id/merge` `{ "intoPostId" }` and `…/unmerge`; reading a merged post returns `merged_into: { "id", "title" }` (PS console, PB reads) |
+| S24 | `PUT /api/pulse/preferences` gains `reading_home_ids`; `POST\|DELETE /api/pulse/posts/:id/pin` (Official or curator) → `PulsePost.pins: [{ "label", "url", "text", "pinned_at" }]`; `signup_source` is set by S20 and the public pages (PB) |
+| S25 (reserved) | `service_options: []` in the plan sheet's payload; nothing else until Crew Day and the Street Organizer's welcome cards exist |
 
 ## 4. Data changes
 
@@ -196,22 +225,26 @@ Private note to a home (signed): `POST /api/pulse/notes` `{ "toHomeId"? | "toPos
 
 | Table | Change |
 |---|---|
-| `Post` | `read_scope text` (check: `public`, `verified_town`, `verified_area`), `area_id uuid` (FK `PulseArea`, after approval), `expires_at timestamptz`, `resolution text` (check, section 1), `claim_mode text default 'choose'`, `moderation_state text not null default 'live'`, `moderation_rule text`, `moderation_note text`, `moderated_at timestamptz`, `search_tsv tsvector` generated + GIN (R3). Widen `Post_post_type_check` with `share`, `offer`; widen `Post_topic_check` to the 12 topics (plus legacy `sports`); keep `state` in sync (`open` → `solved` when `answered`, `archived` otherwise) so older clients still read it |
-| `PostComment` | `helpful_at timestamptz`, `helpful_by uuid`, `moderation_state text not null default 'live'`, `moderation_rule text`. Account deletion must leave a "Reply removed" row instead of cascading (change `user_id` to nullable with `ON DELETE SET NULL`, and soft-delete the text) |
+| `Post` | `read_scope text` (check: `public`, `verified_town`, `verified_area`), `area_id uuid` (FK `PulseArea`, after approval), `expires_at timestamptz`, `resolution text` (check, section 1), `claim_mode text default 'choose'`, `moderation_state text not null default 'live'`, `moderation_rule text`, `moderation_note text`, `moderated_at timestamptz`, `search_tsv tsvector` generated + GIN (R3). Widen `Post_post_type_check` with `share`, `offer`; widen `Post_topic_check` to the 12 topics (plus legacy `sports`); keep `state` in sync (`open` → `solved` when `answered`, `archived` otherwise) so older clients still read it. `expires_at`, `resolution`, `claim_mode` and the two new types are in `20261014070000_pulse_post_lifecycle.sql` (S7); legacy post rows (`/api/posts/feed`, saved, profile lists, `GET /api/posts/:id`) return the three columns as stored (`claim_mode` is on every row and means something only on an offer), and marking an Ask solved (`PATCH /api/posts/:id/solve`, `PATCH /api/posts/resolve/:id`) sets `resolution: answered` with `state: solved`. `moderation_state` (default `live`, check `live`/`held`/`removed`), `moderation_rule`, `moderation_note` and `moderated_at` are in `20261014090000_pulse_post_moderation_state.sql` (S11, PB's half); nothing writes `held` or `removed` until PS's moderation actions (S11) and S8's held sale posts |
+| `PostComment` | `helpful_at timestamptz`, `helpful_by uuid`, `moderation_state text not null default 'live'`, `moderation_rule text`. Account deletion must leave a "Reply removed" row instead of cascading (change `user_id` to nullable with `ON DELETE SET NULL`, and soft-delete the text). `moderation_state` (check `live`/`held`/`removed`) and `moderation_rule` are in `20261014091000_pulse_comment_moderation_state.sql` (S11, PB's half, part 2) |
 | `PostMute` | `area_id uuid null` (the `topic` entity type already exists); its unique index includes `area_id`. Added with `Post_topic_check`'s widening in `20261014031000_pulse_topics.sql` (S4); the foreign key to `PulseArea` comes with that table |
 | `User` | `adult_attested_at timestamptz`; `account_type` check widened with `official` |
-| `UserFeedPreference` | `pulse_seen_nearby_at timestamptz`, `pulse_seen_following_at timestamptz` |
+| `UserFeedPreference` | `pulse_nearby_seen_at timestamptz`, `pulse_following_seen_at timestamptz` (server-only storage finalized before S6; clients use `/feed/seen`, never these columns) |
 | `UserNotificationPreferences` | `digest_enabled boolean`, `digest_time_local time`, `digest_channel text`, `weekly_street_digest_enabled boolean` (PC), `nudge_helper boolean default true` |
-| `Plan` | `source_post_id uuid null` (R3) |
-| `PostCategoryTTL` | rows: `ask_local` 7, `share` 3, `offer` 7, `lost_found` 14, `alert` 2 (default), keeping existing rows |
+| `Plan` | `source_post_id uuid null` (R3); S21: `series_id uuid`, `recurrence jsonb`, `co_host_ids uuid[]`, `paused_at timestamptz` |
+| `Post` (later slices) | S23: `merged_into_post_id uuid null`; S24: pinned sources live in `post_metadata.pins` (no column) |
+| `SupportTrain` | S22: `source_post_id uuid null` |
+| `User` (later slices) | S20/S24: `signup_source text` |
+| `UserNotificationPreferences` (later slices) | S24: `reading_home_ids uuid[]` |
+| `PostCategoryTTL` | rows: `ask_local` 7, `share` 3, `offer` 7, `lost_found` 14, `alert` 2 (default), keeping existing rows (S7 added `share` and `offer`; the others already had these values) |
 
 ### 4.2 New tables awaiting founder approval
 
-**Nothing here merges until the founder ticks "New tables" in the README (hold point H3).** Server-only like the other private tables: RLS on, no client grants. Column lists are sketches for the owner to finalize in the migration PR.
+**Approved by the founder on October 14, 2026; "New tables" is ticked in the README (hold point H3).** The public Census boundary download is approved too. Server-only like the other private tables: RLS on, no client grants. Column lists are sketches for the owner to finalize in the migration PR.
 
 | # | Table | Owner | Purpose and key columns |
 |---|---|---|---|
-| 1 | `PulseArea` | PB | `id`, `kind` (`town`, `neighborhood`, `street`, `place`), `name`, `slug` unique, `parent_id`, `state`, `boundary geography(MultiPolygon,4326)` with a GiST index, `centroid`, `radius_m` (labeled-radius areas), `opened_at` (null = closed), `source`, `source_url`. Launch rows: the towns of Camas, Washougal and Vancouver WA from US Census place boundaries (public domain), simplified |
+| 1 | `PulseArea` | PB | `id`, `kind` (`town`, `neighborhood`, `street`, `place`), `name`, `slug` unique, `parent_id`, `state`, `boundary geography(MultiPolygon,4326)` with a GiST index, `centroid`, `radius_m` (labeled-radius areas), `opened_at` (null = closed), `source`, `source_url`. Launch rows: the towns of Camas, Washougal and Vancouver WA from US Census place boundaries (public domain), simplified. Created in `20261014195500_pulse_areas.sql` (with nullable `Post.area_id` and the `PostMute.area_id` foreign key). The mute FK enforces new writes without rewriting pre-S5 area UUIDs, which remain removable. `20261014195600_pulse_launch_towns.sql` seeds the three approved towns from January 1, 2026 Census boundaries, simplified at 5 metres |
 | 2 | `PulseFollow` | PB | `user_id`, `target_type`, `target_id text`, `area_id`, `notify`, `ends_on_resolve`, `until_at`; unique per user, target and area |
 | 3 | `CommentThanks` | PB | `comment_id`, `from_user_id`, `to_user_id`; unique per comment and thanker |
 | 4 | `OfferClaim` | PB | `post_id`, `claimer_id`, `status` (`requested`, `chosen`, `declined`, `gone`), `note`; unique per post and claimer |
@@ -227,18 +260,30 @@ Slices that need no new table can start now: rule cleanups, tolerant decoding, t
 
 ## 5. Rules the server enforces
 
-**Who can read a post** (`canReadPost(post, viewer)` in `backend/services/pulse/readAccess.js`, with `readablePosts(posts, viewer)` for lists and `POST_READ_SELECT`, the columns it reads; one function, used everywhere; today it is the post page's rule, and the scopes below arrive with S5):
-author → yes · `moderation_state` `removed` → the author only; `held` → the author and staff · signed out → only a post that is public with `allow_external_share` not false · `read_scope = public` → yes · `verified_town` → the viewer has a verified address home inside the post's town area · `verified_area` → inside that street or neighborhood area · `read_scope` null (older posts) → today's `canViewPost` rules, unchanged. Feeds apply the same predicate in the query, never after paging. A client can no longer choose coordinates to read restricted posts.
+**Who can read a post** (`canReadPost(post, viewer)` in `backend/services/pulse/readAccess.js`, with `readablePosts(posts, viewer)` for lists and `POST_READ_SELECT`, the columns it reads; one shared policy, used by direct reads and the query predicates below):
+author → yes · `moderation_state` `removed` → the author only; `held` → the author and staff · signed out → only a post that is public with `allow_external_share` not false · `read_scope = public` → yes · `verified_town` → the viewer has a verified address home inside the post's town area · `verified_area` → inside that street or neighborhood area · `read_scope` null (older posts) → today's `canViewPost` rules, unchanged. Feeds apply the same predicate in the query, never after paging. A client can no longer choose coordinates to read restricted posts. Staff are the admin accounts (`User.role = 'admin'`, as for the report console). The moderation rules are in place (S11, PB's half): the feeds, the map, global pins, the household feed and Today's local updates show `live` posts only, for everyone including the author, who still reads a held or removed post on its page and in their own list. Plans uses the same moderation predicate before its existing private venue and guest rules: discovery/map/nearest counts select live posts; held or removed detail and My plans rows remain readable to their author (held detail also to staff), and public previews refuse both. Whoever writes a hold (S8, S11) also holds back that post's notifications until it is live. Replies follow the same rule (`canReadReply`, `onlyShownReplies` in `readAccess.js`): a held or removed reply reads only for its author. The post page and `GET /api/posts/:id/comments` leave it out for everyone else, nobody else can reply to it (`400`) or like it (`404`), and it doesn't count as a reply when an Ask ends (`closed_unanswered`). An answer written before its parent was held or removed stays live; the web lists it, and the apps, which thread replies under their parent, leave it out until S9's conversation shows "Reply removed" in the parent's place.
+
+**How far a Place read reaches** (`feedService`): `GET /api/posts/feed` (the Place surface and its Sports lane) and `GET /api/posts/feed/saved-place/:placeId` read at most 100 miles around their point, the apps' default radius. A larger `radiusMiles` (the apps' 1,000-mile and Global choices) reads 100 miles; a zero, negative or non-numeric one reads the default. `GET /api/posts/map` reads Place posts only in the part of its box within 100 miles of the box's center, north–south and east–west (the connections map is not limited), and returns at most 200 markers per layer. The empty-map hint (`nearest_activity_center`) still searches everywhere; it returns one displayed point, never a post. The stored viewing radius (`PUT /api/location/radius`) keeps accepting every choice; the limit applies when posts are read. This bounds what one request reads; stopping a client from reading somewhere else is the job of the read scopes above.
 
 **Label** (`labelFor(author, area)`, computed at read time, never stored on the post): `pantopus` if `origin = 'curator'` · `official` if `account_type = 'official'` · `business` for a business reply identity · `resident` if the author has a verified address occupancy (postcard, document, landlord or admin; **not** a household invite) for a home whose point is inside the area · `new_here` if a postcard for a home in the area is pending · `nearby` if verified within 15 miles of the area's edge · else `visitor`.
+
+Labels use the author's **primary** home, as posting and limits do. A second verified home adds reading access only; it cannot change the author's label.
+
+**Scope enforcement (S5):** `postScopeAccess(viewer)` derives the viewer's current verified-home set once per request; its query predicate runs before limits, pages and counts on legacy feeds/maps/Sports/global pins, saved and profile lists, household feeds, business/persona/channel post reads, Today local updates and Plans. A second verified home grants reading only; moving it or ending occupancy removes that grant on the next request. Closed/future or missing areas grant no restricted access. Global pin rows are no longer cached across viewers. `read_scope` is nullable (`20261014203000_pulse_read_scopes.sql`); existing null rows retain their legacy rules, and creation does not write new scopes until S8. Failed residency lookups fail closed. New public scopes still require external sharing enabled for signed-out reads.
+
+`notificationPostFilter` applies the same scope predicate to the current referenced post/reply before inbox pagination, unread counts, live badges and a mark-read response. The service-only computed projection contains no home information and is never selected into a client response. Missing posts and deleted replies cannot keep quoting content; held/removed replies are visible only to their author. Socket, desktop and push delivery recheck this predicate before emitting a post-linked notice. An older stored notice is re-evaluated when read; narrowing or moving revokes it immediately. PC's new digest/search paths must call the shared policy before selecting or quoting posts.
 
 **Distance text:** from the reader's verified home to the author's displayed (grid-snapped) point, using the helpers in `backend/utils/locationPrivacy.js` (PRs 2199, 2201, 2203 and 2204 are changing them; build on `master`, not on the old behavior). Round to 0.1 mi under 1 mi, 0.5 mi under 10 mi, whole miles beyond; `"nearby"` when closer than the grid or when fewer than five verified homes fall in the band; `null` for readers without a verified home and on every public or signed-out response.
 
 **Limits** (constants in one file): Visitor: Asks only, 1 a day · New here: 2 town posts a day · Share: 2 per person per rolling 7 days · offer requests: 5 per offer · replies: 5 a minute per post (today's) · heated pair: 1 reply an hour to each other in that conversation (PS) · business replies: weekly cap (R4).
 
+**Blocks** (`blockService`) hide two people from each other in both directions: neither reads the other's posts (`canReadPost`), comments or likes; neither can reply to the other's comment (`403`, "You can't reply to this comment."); and the notification list and every unread count (`GET /api/notifications`, `GET /api/notifications/unread-count`, the live badge) leave out notices whose actor (`metadata.user_id`) is across a block, including ones from before it. Unblocking brings those notices back.
+
+**How posts end** (S7, `backend/jobs/autoArchivePosts.js`, hourly): a post with `expires_at` ends at that time, whatever its audience. Older posts (no `expires_at`) end as before, local audiences only: by `PostCategoryTTL` days from `created_at`; events 24 hours after `event_end_date`, or after `event_date` when there is no end; deals by `deal_expires_at`; stories by `story_expires_at`. Ending archives the post and, unless it already has a resolution, sets `resolution` with `state: archived`: an Ask someone other than the asker replied to `closed`, one nobody did `closed_unanswered`; Lost and found `closed`; an Event `happened`; anything else `expired`. An answered Ask keeps `answered` and `state: solved`. The views (`/api/posts/feed`, `/api/posts/map`, the Sports lane and global pins, and `/api/pulse/feed` from S6) leave out a post whose `expires_at` has passed at once, before the job runs. Restoring a post that ended by time, or an Ask its author closed (`POST /api/posts/:id/unarchive`), gives it one more of its type's windows from now and reopens it (`state: open`, `resolution: null`) unless it ended its own way.
+
 ## 6. Notifications (additive types)
 
-`pulse_helpful` (a reply was marked Helpful), `pulse_thanks` (private thanks), `offer_request` (instant, to the giver), `offer_chosen` / `offer_gone` (to requesters), `ask_still_open` (the day-6 reminder: "Did a reply help?" or "Still need an answer?"), `pulse_moderation_notice` (held, removed, restored, appeal decided). Existing `post_commented` and `comment_replied` stay instant. All respect quiet hours except Right now. Copy is in the build spec's appendix or written by the owning stream in plain words.
+`pulse_helpful` (a reply was marked Helpful), `pulse_thanks` (private thanks), `offer_request` (instant, to the giver), `offer_chosen` / `offer_gone` (to requesters), `ask_still_open` (the day-6 reminder, once per Ask, sent in the first hour outside the asker's quiet hours on the Ask's last day: "Did a reply help?" when someone else replied, "Still need an answer?" when nobody did; `link` `/posts/<id>`, `metadata` `{ post_id, has_replies }`; its actions are section 2.12; in force since S7), `pulse_moderation_notice` (held, removed, restored, appeal decided). Later slices add `pulse_unanswered_nudge` (the helper nudge, S13), `plan_series_confirm` (the host is asked to confirm before a series pauses, S21) and `pulse_merged` (your conversation was merged, S23). Existing `post_commented` and `comment_replied` stay instant. All respect quiet hours except Right now. Copy is in the build spec's appendix or written by the owning stream in plain words.
 
 ## 7. Routing (tabs)
 
@@ -263,6 +308,17 @@ author → yes · `moderation_state` `removed` → the author only; `held` → t
 | 429 | `SHARE_WEEKLY_CAP` | The third Share in a rolling week |
 | 409 | `OFFER_GONE` | Claiming or choosing on an offer already claimed |
 | 429 | `ENOUGH_REQUESTS` | The sixth request on an offer |
+| 404 | `POST_NOT_FOUND` | The post doesn't exist (section 2.12) |
+| 403 | `NOT_POST_AUTHOR` | Someone other than the asker keeps open or closes an Ask (section 2.12) |
+| 400 | `NOT_AN_ASK` | Keep-open or close on a post that isn't an Ask (section 2.12) |
+| 409 | `ASK_ENDED` | Keep-open or close on an Ask already answered, closed or past its end (section 2.12) |
+| 409 | `ALREADY_KEPT_OPEN` | A second keep-open on the same Ask (section 2.12) |
+| 409 | `CANNOT_WIDEN` | A read-scope change toward wider (S9) |
+| 400 | `CODE_INVALID` | A wrong sign-up code (S20) |
+| 410 | `CODE_EXPIRED` | An expired or already used sign-up code (S20) |
+| 429 | `TOO_MANY_ATTEMPTS` | Five wrong tries, or a per-email, per-device or per-network limit (S20) |
+| 503 | `CHANNEL_UNAVAILABLE` | A text code before an SMS provider exists (S20) |
+| 409 | `ALREADY_MERGED` | Merging a merged post, or a post into itself (S23) |
 
 ## 9. Funnel events
 

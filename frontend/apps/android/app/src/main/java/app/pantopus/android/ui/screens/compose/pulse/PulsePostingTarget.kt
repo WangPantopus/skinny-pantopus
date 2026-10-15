@@ -2,7 +2,8 @@ package app.pantopus.android.ui.screens.compose.pulse
 
 /**
  * Destination chosen in step 1 of the Pulse compose flow.
- * Mirrors iOS `PulsePostingTarget` / RN `PostTargetPicker`.
+ * Mirrors iOS `PulsePostingTarget` / RN `PostTargetPicker`. There is no business destination: businesses reply in
+ * Pulse; they don't post to the Place feed (Pulse S1, `BUSINESS_CANNOT_POST`).
  */
 sealed class PulsePostingTarget {
     abstract val displayLabel: String
@@ -15,13 +16,6 @@ sealed class PulsePostingTarget {
 
     data class Home(
         val homeId: String,
-        val lat: Double,
-        val lng: Double,
-        override val displayLabel: String,
-    ) : PulsePostingTarget()
-
-    data class Business(
-        val businessId: String,
         val lat: Double,
         val lng: Double,
         override val displayLabel: String,
@@ -41,7 +35,6 @@ sealed class PulsePostingTarget {
         get() =
             when (this) {
                 is Home -> PulseComposeIdentity.Home.key
-                is Business -> PulseComposeIdentity.Business.key
                 else -> PulseComposeIdentity.Personal.key
             }
 
@@ -50,7 +43,6 @@ sealed class PulsePostingTarget {
             when (this) {
                 is CurrentLocation -> lat
                 is Home -> lat
-                is Business -> lat
                 Connections -> null
             }
 
@@ -59,13 +51,9 @@ sealed class PulsePostingTarget {
             when (this) {
                 is CurrentLocation -> lng
                 is Home -> lng
-                is Business -> lng
                 Connections -> null
             }
 
     val targetHomeId: String?
         get() = (this as? Home)?.let { it.homeId }
-
-    val targetBusinessId: String?
-        get() = (this as? Business)?.let { it.businessId }
 }

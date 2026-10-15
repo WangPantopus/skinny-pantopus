@@ -18,6 +18,7 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 const { closedGigRoomIds } = require('./chatGigRoomAccess');
 const logger = require('../utils/logger');
 const { excludeHiddenLaunchNotifications, isLaunchFeatureEnabled } = require('../utils/featureFlags');
+const { notificationBlockFilter } = require('./blockService');
 
 // References set once during init
 let _io = null;
@@ -44,6 +45,11 @@ function getUserSocketIds(userId) {
  * Runs three lightweight queries in parallel.
  */
 async function computeBadgeCounts(userId) {
+  const withoutBlocked = await notificationBlockFilter(userId);
+  // The audience wall also uses persona-block policy, whose lifecycle emits
+  // notifications. Resolve after module initialization to avoid that cycle.
+  const { notificationPostFilter } = require('./pulse/readAccess');
+  const readablePost = await notificationPostFilter(userId);
   const [msgResult, offersResult, notifResult] = await Promise.allSettled([
     // 1) Total unread messages: sum unread_count from ChatParticipant
     supabaseAdmin
@@ -71,12 +77,13 @@ async function computeBadgeCounts(userId) {
       return { count: count ?? 0 };
     })(),
 
-    // 3) Unread notifications (launch cuts: hidden types are not counted)
-    excludeHiddenLaunchNotifications(supabaseAdmin
+    // 3) Unread notifications (launch cuts: hidden types are not counted, nor notices from
+    //    someone across a block)
+    readablePost(withoutBlocked(excludeHiddenLaunchNotifications(supabaseAdmin
       .from('Notification')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', userId)
-      .eq('is_read', false)),
+      .eq('is_read', false)))),
   ]);
 
   let unreadMessages = 0;

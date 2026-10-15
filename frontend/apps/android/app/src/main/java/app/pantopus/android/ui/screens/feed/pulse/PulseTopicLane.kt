@@ -12,16 +12,23 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.selected
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -33,24 +40,35 @@ import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
 
 /**
- * The Nearby feed's topic lane. RN ships exactly one topic — Sports —
- * which replaces the post-type chip row with its own For You / Local /
- * Event / Watch mode chips, floats an active-event module above the
- * list, and offers starter prompts in the empty state.
- *
- * Constants mirror `src/constants/feed.ts:31-70`; the feed query params
- * (`topic`, `sportsMode`, `eventKey`) are validated at
- * `backend/routes/posts.js:1478-1489`.
+ * The Pulse topics (build spec section 4, contract section 1): a fixed list of 12, in this order. A topic filters; it
+ * joins nothing. Picking one asks the Place feed for that topic (`?topic=`, `backend/routes/posts.js`, the 12 in
+ * `backend/services/pulse/topics.js`). Sports keeps the lane RN shipped: For You / Local / Event / Watch mode chips in
+ * place of the post-type row, an active-event module above the list, and starter prompts in the empty state
+ * (constants mirror `src/constants/feed.ts:31-70`).
  */
 enum class PulseTopic(
     val key: String,
     val label: String,
     val icon: PantopusIcon,
 ) {
-    Sports("sports", "Sports", PantopusIcon.Activity),
+    AroundHere("around_here", "Around here", PantopusIcon.MapPin),
+    Outdoors("outdoors", "Outdoors", PantopusIcon.Trees),
+    Gardening("gardening", "Gardening", PantopusIcon.Flower2),
+    HomeRepairs("home_repairs", "Home and repairs", PantopusIcon.Hammer),
+    Food("food", "Food", PantopusIcon.Utensils),
+    KidsSchools("kids_schools", "Kids and schools", PantopusIcon.GraduationCap),
+    Pets("pets", "Pets", PantopusIcon.PawPrint),
+    ArtsCulture("arts_culture", "Arts and culture", PantopusIcon.Palette),
+    Sports("sports", "Sports and fitness", PantopusIcon.Activity),
+    GettingAround("getting_around", "Getting around", PantopusIcon.Bus),
+    LocalGovernment("local_government", "Local government", PantopusIcon.Landmark),
+    Volunteering("volunteering", "Volunteering", PantopusIcon.Hand),
     ;
 
     companion object {
+        /** Chips shown before "More" (build spec section 4: a few at a time). */
+        const val SHOWN_BEFORE_MORE = 5
+
         fun fromKey(key: String?): PulseTopic? = entries.firstOrNull { it.key == key }
     }
 }
@@ -117,8 +135,11 @@ data class PulseSportsStarter(
 }
 
 /**
- * Row of topic chips under the surface toggle. Tapping an active chip
- * exits the lane (RN `TopicChipRow.tsx:38`).
+ * The topic chips under the surface toggle (Pulse build S4): All, then the topics a few at a time with "More", which
+ * shows the rest in the same row. Picking a topic replaces the one chosen; All, or tapping the chosen chip again,
+ * clears it. A chosen topic always shows, and nothing is remembered across a relaunch. TalkBack reads one name per
+ * chip ("All topics", "Gardening topic", "More topics"); ids `pulseTopicChip_all`, `pulseTopicChip_<topic id>` and
+ * `pulseTopicChip_more`, as on iOS.
  */
 @Composable
 fun PulseTopicChipRow(
@@ -127,6 +148,14 @@ fun PulseTopicChipRow(
     onSelect: (PulseTopic?) -> Unit,
 ) {
     if (topics.isEmpty()) return
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    val first = topics.take(PulseTopic.SHOWN_BEFORE_MORE)
+    val shown =
+        when {
+            expanded -> topics
+            activeTopic != null && activeTopic !in first -> first + activeTopic
+            else -> first
+        }
     Row(
         modifier =
             Modifier
@@ -134,43 +163,103 @@ fun PulseTopicChipRow(
                 .background(PantopusColors.appSurface)
                 .horizontalScroll(rememberScrollState())
                 .padding(horizontal = Spacing.s3, vertical = 6.dp)
+                .selectableGroup()
                 .testTag("pulseTopicChipRow"),
         horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        topics.forEach { topic ->
-            val active = activeTopic == topic
-            Row(
-                modifier =
-                    Modifier
-                        .clip(RoundedCornerShape(Radii.pill))
-                        .background(if (active) PantopusColors.primary600 else PantopusColors.appSurfaceRaised)
-                        .border(
-                            1.dp,
-                            if (active) PantopusColors.primary600 else PantopusColors.appBorder,
-                            RoundedCornerShape(Radii.pill),
-                        ).clickable { onSelect(if (active) null else topic) }
-                        .padding(horizontal = Spacing.s3, vertical = 6.dp)
-                        .semantics { selected = active }
-                        .testTag("pulseTopicChip_${topic.key}"),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                PantopusIconImage(
-                    icon = topic.icon,
-                    contentDescription = null,
-                    size = 14.dp,
-                    strokeWidth = 2.2f,
-                    tint = if (active) PantopusColors.appTextInverse else PantopusColors.appTextStrong,
-                )
-                Text(
-                    text = topic.label,
-                    fontSize = 12.sp,
-                    fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
-                    color = if (active) PantopusColors.appTextInverse else PantopusColors.appTextStrong,
-                )
-            }
+        TopicChip(
+            label = "All",
+            icon = null,
+            spokenName = "All topics",
+            active = activeTopic == null,
+            testTag = "pulseTopicChip_all",
+            onClick = { onSelect(null) },
+        )
+        shown.forEach { topic ->
+            TopicChip(
+                label = topic.label,
+                icon = topic.icon,
+                spokenName = "${topic.label} topic",
+                active = activeTopic == topic,
+                testTag = "pulseTopicChip_${topic.key}",
+                onClick = { onSelect(if (activeTopic == topic) null else topic) },
+            )
         }
+        if (shown.size < topics.size) {
+            MoreTopicsChip(onClick = { expanded = true })
+        }
+    }
+}
+
+@Composable
+private fun TopicChip(
+    label: String,
+    icon: PantopusIcon?,
+    spokenName: String,
+    active: Boolean,
+    testTag: String,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .clip(RoundedCornerShape(Radii.pill))
+                .background(if (active) PantopusColors.primary600 else PantopusColors.appSurfaceRaised)
+                .border(
+                    1.dp,
+                    if (active) PantopusColors.primary600 else PantopusColors.appBorder,
+                    RoundedCornerShape(Radii.pill),
+                ).testTag(testTag)
+                // One node per chip, read once with its state: the role and selection stay, the inner label goes.
+                .selectable(selected = active, role = Role.RadioButton, onClick = onClick)
+                .clearAndSetSemantics { contentDescription = spokenName }
+                .padding(horizontal = Spacing.s3, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        icon?.let {
+            PantopusIconImage(
+                icon = it,
+                contentDescription = null,
+                size = 14.dp,
+                strokeWidth = 2.2f,
+                tint = if (active) PantopusColors.appTextInverse else PantopusColors.appTextStrong,
+            )
+        }
+        Text(
+            text = label,
+            fontSize = 12.sp,
+            fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+            color = if (active) PantopusColors.appTextInverse else PantopusColors.appTextStrong,
+        )
+    }
+}
+
+/** "More": shows the rest of the topics in the same row (no "Less"). */
+@Composable
+private fun MoreTopicsChip(onClick: () -> Unit) {
+    Row(
+        modifier =
+            Modifier
+                .clip(RoundedCornerShape(Radii.pill))
+                .background(PantopusColors.appSurfaceRaised)
+                .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.pill))
+                .testTag("pulseTopicChip_more")
+                .clickable(role = Role.Button, onClick = onClick)
+                .clearAndSetSemantics { contentDescription = "More topics" }
+                .padding(horizontal = Spacing.s3, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text = "More", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = PantopusColors.primary600)
+        PantopusIconImage(
+            icon = PantopusIcon.ChevronRight,
+            contentDescription = null,
+            size = 12.dp,
+            strokeWidth = 2.2f,
+            tint = PantopusColors.primary600,
+        )
     }
 }
 

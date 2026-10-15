@@ -105,13 +105,24 @@ fun PlaceMessagesActionRow(
     onTap: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    PlaceActionRowLabel(
+        icon = icon,
+        title = title,
+        subtitle = subtitle,
+        modifier = modifier.fillMaxWidth().placeCard().clickable(onClick = onTap),
+    )
+}
+
+/** The inside of a Place entry row: icon tile · title/subtitle · chevron. */
+@Composable
+fun PlaceActionRowLabel(
+    icon: PantopusIcon,
+    title: String,
+    subtitle: String,
+    modifier: Modifier = Modifier,
+) {
     Row(
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .placeCard()
-                .clickable(onClick = onTap)
-                .padding(14.dp),
+        modifier = modifier.fillMaxWidth().padding(14.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

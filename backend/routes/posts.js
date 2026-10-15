@@ -123,7 +123,7 @@ const {
   enrichFeedPosts,
   attachIdentityAuthors,
   applyPostLocationPrivacy,
-  applyPostLocationPrivacyBatch,
+  sortMatchedBusinessesByRating,
   applyCursorCondition,
   buildCursorPagination,
   FEED_POST_SELECT,
@@ -211,8 +211,11 @@ const AUDIENCE_TYPES = ['connections', 'followers', 'network', 'nearby', 'saved_
 const LOCAL_AUDIENCES = ['nearby', 'neighborhood', 'saved_place', 'target_area'];
 
 const { PULSE_TOPICS, PULSE_TOPIC_NAMES, isPulseTopic } = require('../services/pulse/topics');
+const pulseLifecycle = require('../services/pulse/lifecycle');
 // The one read check every path uses (this file keeps calling it canViewPost).
-const { canReadPost: canViewPost, readablePosts, isPubliclyShareable, POST_READ_SELECT } = require('../services/pulse/readAccess');
+const {
+  canReadPost: canViewPost, readablePosts, postScopeAccess, isPubliclyShareable, POST_READ_SELECT, canReadReply, onlyShownReplies,
+} = require('../services/pulse/readAccess');
 
 const TOPIC_VALUES = PULSE_TOPICS;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -1422,7 +1425,7 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
  *   - limit                  — items per page (default 20)
  *   - postType               — filter by post type
  *   - latitude, longitude    — for Place surface (viewing location)
- *   - radiusMiles            — proximity radius (default 10)
+ *   - radiusMiles            — proximity radius (default and at most 100, feedService.placeRadiusMeters)
  *   - tags                   — comma-separated tag filter
  *
  * Returns: { posts, pagination: { nextCursor: { createdAt, id } | null, hasMore } }
@@ -1636,7 +1639,8 @@ router.get('/map', verifyToken, async (req, res) => {
     const w = parseFloat(west);
     const n = parseFloat(north);
     const e = parseFloat(east);
-    const lim = parseInt(limit);
+    // Markers per layer: the apps ask for 200, and no request reads more.
+    const lim = Math.min(Math.max(parseInt(limit, 10) || 50, 1), 200);
 
     const boundsArea = Math.abs((n - s) * (e - w));
     const zoomLevel = req.query.zoom ? parseFloat(req.query.zoom) : null;
@@ -1688,74 +1692,6 @@ router.get('/map', verifyToken, async (req, res) => {
       } catch (error) {
         logger.error('Error fetching map posts', { error: error.message, userId, surface });
         if (enabledLayers.filter(Boolean).every(layer => layer === 'posts')) throw error;
-      }
-    }
-
-    // ── Tasks layer (Gig table) ──
-    if (enabledLayers.includes('tasks')) {
-      const { data: gigs, error: gigErr } = await supabaseAdmin
-        .from('Gig')
-        .select('id, title, description, status, latitude, longitude, location_name, category, created_at, poster_id, user_id, accepted_by, location_precision, reveal_policy, poster:poster_id (id, username, name, profile_picture_url)')
-        .gte('latitude', s).lte('latitude', n)
-        .gte('longitude', w).lte('longitude', e)
-        .in('status', ['open', 'assigned', 'in_progress'])
-        .limit(lim);
-      if (gigErr) {
-        logger.error('Error fetching map tasks', { error: gigErr.message });
-      } else {
-        const { resolveGigPrecision: _resolveTask, applyLocationPrecision: _applyTask } = require('../utils/locationPrivacy');
-        (gigs || []).forEach(g => {
-          const { precision, isOwner, locationUnlocked } = _resolveTask(g, userId);
-          _applyTask(g, precision, isOwner);
-          results.push({
-            layer_type: 'task',
-            id: g.id,
-            latitude: g.latitude,
-            longitude: g.longitude,
-            title: g.title,
-            description: g.description,
-            status: g.status,
-            category: g.category,
-            location_name: g.location_name,
-            created_at: g.created_at,
-            locationUnlocked,
-            creator: g.poster ? { id: g.poster.id, username: g.poster.username, name: g.poster.name, profile_picture_url: g.poster.profile_picture_url } : null,
-          });
-        });
-      }
-    }
-
-    // ── Offers layer (Gig offers/services) ──
-    if (enabledLayers.includes('offers')) {
-      const { data: offers, error: offerErr } = await supabaseAdmin
-        .from('Gig')
-        .select('id, title, description, latitude, longitude, location_name, category, created_at, poster_id, user_id, accepted_by, location_precision, reveal_policy, poster:poster_id (id, username, name, profile_picture_url)')
-        .eq('gig_type', 'offer')
-        .gte('latitude', s).lte('latitude', n)
-        .gte('longitude', w).lte('longitude', e)
-        .in('status', ['open'])
-        .limit(lim);
-      if (offerErr) {
-        logger.error('Error fetching map offers', { error: offerErr.message });
-      } else {
-        const { resolveGigPrecision: _resolveOffer, applyLocationPrecision: _applyOffer } = require('../utils/locationPrivacy');
-        (offers || []).forEach(o => {
-          const { precision, isOwner, locationUnlocked } = _resolveOffer(o, userId);
-          _applyOffer(o, precision, isOwner);
-          results.push({
-            layer_type: 'offer',
-            id: o.id,
-            latitude: o.latitude,
-            longitude: o.longitude,
-            title: o.title,
-            description: o.description,
-            category: o.category,
-            location_name: o.location_name,
-            created_at: o.created_at,
-            locationUnlocked,
-            creator: o.poster ? { id: o.poster.id, username: o.poster.username, name: o.poster.name, profile_picture_url: o.poster.profile_picture_url } : null,
-          });
-        });
       }
     }
 
@@ -1889,15 +1825,15 @@ router.get('/saved', verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const { limit = 50, offset = 0 } = req.query;
-
-    const { data: saves, error } = await supabaseAdmin
+    const scopeAccess = await postScopeAccess(userId);
+    const { data: saves, error } = await scopeAccess.query(supabaseAdmin
       .from('PostSave')
       .select(`
         id, created_at,
-        post:post_id (
+        post:post_id!inner (
           *, creator:user_id (${SAFE_CREATOR_SELECT}), home:home_id (id, address, city)
         )
-      `)
+      `), 'post')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .range(parseInt(offset), parseInt(offset) + parseInt(limit) - 1);
@@ -1915,12 +1851,12 @@ router.get('/saved', verifyToken, async (req, res) => {
       s.post.archived_at ? false : canViewPost(s.post, userId).catch(() => false)
     )));
     const validSaves = withPost.filter((_, i) => viewable[i] === true);
-    const privacySafePosts = applyPostLocationPrivacyBatch(
+    // The viewer's like/save/repost state, as every feed lane returns it (the cards draw it).
+    // Enrichment also applies location privacy, once, so pins match the post page.
+    const serializedPosts = await enrichFeedPosts(
       validSaves.map(s => ({ ...s.post, savedAt: s.created_at })),
       userId
     );
-    // The viewer's like/save/repost state, as every feed lane returns it (the cards draw it).
-    const serializedPosts = await enrichFeedPosts(privacySafePosts, userId);
 
     // Offsets count saves, not the posts left after the visibility check, so a short page isn't the end.
     const savesRead = (saves || []).length;
@@ -2016,13 +1952,15 @@ router.get('/feed/home', verifyToken, async (req, res) => {
     }
 
     const audienceFilter = subTab === 'neighborhood' ? 'neighborhood' : 'household';
-
-    let query = supabaseAdmin
+    const scopeAccess = await postScopeAccess(userId);
+    let query = scopeAccess.query(supabaseAdmin
       .from('Post')
-      .select(FEED_POST_SELECT)
+      .select(FEED_POST_SELECT))
       .eq('home_id', homeId)
       .eq('audience', audienceFilter)
       .is('archived_at', null)
+      // Held and removed posts stay out of every feed (contract §5).
+      .eq('moderation_state', 'live')
       .order('created_at', { ascending: false })
       .range(parseInt(offset), parseInt(offset) + parseInt(limit) - 1);
 
@@ -2081,7 +2019,7 @@ router.get('/feed/saved-place/:placeId', verifyToken, async (req, res) => {
       latitude: place.latitude,
       longitude: place.longitude,
       radiusMeters,
-      limit: parseInt(limit),
+      limit: Math.min(parseInt(limit) || 20, 50),
       postType: postType || null,
     });
 
@@ -2269,7 +2207,8 @@ router.patch('/resolve/:id', verifyToken, async (req, res) => {
     const now = new Date().toISOString();
     const { data: updated, error } = await supabaseAdmin
       .from('Post')
-      .update({ resolved_at: now, state: 'solved', solved_at: now })
+      // A solved Ask is an answered one (contract §4.1: state and resolution stay in step).
+      .update({ resolved_at: now, state: 'solved', solved_at: now, resolution: 'answered' })
       .eq('id', postId)
       .select(`*, creator:user_id (${SAFE_CREATOR_SELECT})`)
       .single();
@@ -2443,6 +2382,9 @@ router.post('/mute/topic', verifyToken, async (req, res) => {
     feedService.invalidateFilterCache(userId);
     res.json({ message: `Muted ${postType}${surface ? ` on ${surface}` : ''}` });
   } catch (err) {
+    if (err.code === '23503' && err.message?.includes('PostMute_area_id_fkey')) {
+      return res.status(400).json({ error: 'That area could not be found.' });
+    }
     logger.error('Topic mute error', { error: err.message, userId: req.user.id });
     res.status(500).json({ error: 'Failed to mute topic' });
   }
@@ -2470,10 +2412,11 @@ router.get('/:id', optionalAuth, async (req, res) => {
     const hasAccess = await canViewPost(post, userId);
     if (!hasAccess) return res.status(403).json({ error: 'You do not have access to this post' });
 
-    const { data: comments } = await supabaseAdmin
+    const { data: comments } = await onlyShownReplies(supabaseAdmin
       .from('PostComment')
       .select(`*, author:user_id (id, username, name, first_name, last_name, profile_picture_url)`)
-      .eq('post_id', id).eq('is_deleted', false).order('created_at', { ascending: true });
+      .eq('post_id', id).eq('is_deleted', false), userId)
+      .order('created_at', { ascending: true });
 
     const commentRows = await serializeCommentsForViewer(await attachFilesToComments(comments || []), post, userId);
 
@@ -2690,7 +2633,8 @@ router.post('/:id/unarchive', verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user.id;
-    const { data: existing } = await supabaseAdmin.from('Post').select('user_id, archive_reason').eq('id', id).single();
+    const { data: existing } = await supabaseAdmin
+      .from('Post').select('user_id, archive_reason, post_type, resolution').eq('id', id).single();
     if (!existing) return res.status(404).json({ error: 'Post not found' });
     if (existing.user_id !== userId) return res.status(403).json({ error: 'You can only restore your own posts' });
     if (existing.archive_reason === 'moderation') {
@@ -2698,9 +2642,21 @@ router.post('/:id/unarchive', verifyToken, async (req, res) => {
     }
 
     const updatedAt = new Date().toISOString();
+    const restored = { archived_at: null, updated_at: updatedAt };
+    if (['expired', 'resolved'].includes(existing.archive_reason)) {
+      // A post that ended by time, or an Ask its author closed, comes back for one more of its type's
+      // windows from now, open again unless it ended its own way (contract §5); otherwise the next
+      // job run would end it.
+      const days = await pulseLifecycle.windowDays(existing.post_type);
+      restored.is_archived = false;
+      restored.expires_at = new Date(Date.now() + days * pulseLifecycle.DAY_MS).toISOString();
+      if (pulseLifecycle.TIMED_OUT_RESOLUTIONS.includes(existing.resolution)) {
+        Object.assign(restored, { state: 'open', resolution: null });
+      }
+    }
     const { error } = await supabaseAdmin
       .from('Post')
-      .update({ archived_at: null, updated_at: updatedAt })
+      .update(restored)
       .eq('id', id);
     if (error) {
       logger.error('Error unarchiving post', { error: error.message, postId: id });
@@ -2747,6 +2703,8 @@ router.get('/:id/matched-businesses', verifyToken, async (req, res) => {
     // 2. Check if caller wants fast cached response
     const useCached = req.query.cached === 'true';
     if (useCached && post.matched_businesses_cache && post.matched_businesses_cache.length > 0) {
+      // Only the author keeps the snapshot's distances (measured from the stored point).
+      applyPostLocationPrivacy(post, req.user.id);
       return res.json({ businesses: post.matched_businesses_cache, cached: true });
     }
 
@@ -2800,7 +2758,11 @@ router.get('/:id/matched-businesses', verifyToken, async (req, res) => {
         };
       });
 
-    res.json({ businesses, cached: false });
+    // The ranked IDs follow distance from the stored point, so only the author gets that order.
+    res.json({
+      businesses: post.user_id === req.user.id ? businesses : sortMatchedBusinessesByRating(businesses),
+      cached: false,
+    });
   } catch (err) {
     logger.error('Matched businesses fetch error', { error: err.message, postId: req.params.id });
     res.status(500).json({ error: 'Failed to fetch matched businesses' });
@@ -2892,10 +2854,19 @@ router.post('/:id/comments', verifyToken, validate(createCommentSchema), async (
     });
     if (!post) return;
 
+    let parent = null;
     if (parentCommentId) {
-      const { data: parent } = await supabaseAdmin.from('PostComment').select('id, post_id')
-        .eq('id', parentCommentId).eq('is_deleted', false).maybeSingle();
-      if (!parent || parent.post_id !== postId) return res.status(400).json({ error: 'Invalid parent comment' });
+      ({ data: parent } = await supabaseAdmin.from('PostComment').select('id, post_id, user_id, moderation_state')
+        .eq('id', parentCommentId).eq('is_deleted', false).maybeSingle());
+      // A held or removed reply is missing for everyone but its author, so nobody else can answer it.
+      if (!parent || parent.post_id !== postId || !canReadReply(parent, userId)) {
+        return res.status(400).json({ error: 'Invalid parent comment' });
+      }
+      // Blocks hide people from each other in both directions, so nobody replies to someone across one
+      // (their comment list already hides that reply, and the reply notification would reach them).
+      if (await blockService.isBlocked(userId, parent.user_id)) {
+        return res.status(403).json({ error: "You can't reply to this comment." });
+      }
     }
 
     const normalizedComment = typeof comment === 'string' ? comment.trim() : '';
@@ -2957,9 +2928,9 @@ router.post('/:id/comments', verifyToken, validate(createCommentSchema), async (
     }
     if (!newComment) throw new Error('Comment insert returned no row');
 
-    // Notify post owner of new comment (not on own post)
+    // Notify post owner of new comment (not on own post, and never across a block)
     if (post.user_id !== userId) {
-      commenterName().then(name => {
+      blockService.isBlocked(userId, post.user_id).then(blocked => blocked ? null : commenterName().then(name => {
         notificationService.createNotification({
           userId: post.user_id,
           type: 'post_commented',
@@ -2974,30 +2945,27 @@ router.post('/:id/comments', verifyToken, validate(createCommentSchema), async (
             ...(audienceAuthors ? { persona_id: post.identity_context_id } : { user_id: userId }),
           },
         });
-      }).catch(err => {
+      })).catch(err => {
         logger.warn('Comment notification failed (non-blocking)', { error: err.message, postId });
       });
     }
 
     // Notify parent comment author of reply (if different from commenter and post owner)
-    if (parentCommentId) {
-      const { data: parentComment } = await supabaseAdmin.from('PostComment').select('user_id').eq('id', parentCommentId).single();
-      if (parentComment && parentComment.user_id !== userId && parentComment.user_id !== post.user_id) {
-        commenterName().then(name => {
-          notificationService.createNotification({
-            userId: parentComment.user_id,
-            type: 'comment_replied',
-            title: `${name} replied to your comment`,
-            body: normalizedComment.length > 100 ? normalizedComment.substring(0, 100) + '…' : normalizedComment,
-            icon: '💬',
-            ...(audienceAuthors ? { context: 'audience' } : {}),
-            link: `/posts/${postId}`,
-            metadata: { post_id: postId, comment_id: newComment.id, parent_comment_id: parentCommentId, ...(audienceAuthors ? { persona_id: post.identity_context_id } : { user_id: userId }) },
-          });
-        }).catch(err => {
-          logger.warn('Reply notification failed (non-blocking)', { error: err.message, postId });
+    if (parent && parent.user_id !== userId && parent.user_id !== post.user_id) {
+      commenterName().then(name => {
+        notificationService.createNotification({
+          userId: parent.user_id,
+          type: 'comment_replied',
+          title: `${name} replied to your comment`,
+          body: normalizedComment.length > 100 ? normalizedComment.substring(0, 100) + '…' : normalizedComment,
+          icon: '💬',
+          ...(audienceAuthors ? { context: 'audience' } : {}),
+          link: `/posts/${postId}`,
+          metadata: { post_id: postId, comment_id: newComment.id, parent_comment_id: parentCommentId, ...(audienceAuthors ? { persona_id: post.identity_context_id } : { user_id: userId }) },
         });
-      }
+      }).catch(err => {
+        logger.warn('Reply notification failed (non-blocking)', { error: err.message, postId });
+      });
     }
 
     res.status(201).json({
@@ -3018,9 +2986,10 @@ router.get('/:id/comments', verifyToken, async (req, res) => {
     const post = await requireVisiblePost({ postId, userId, res });
     if (!post) return;
 
-    const { data: comments, error } = await supabaseAdmin.from('PostComment')
+    const { data: comments, error } = await onlyShownReplies(supabaseAdmin.from('PostComment')
       .select(`*, author:user_id (id, username, name, first_name, last_name, profile_picture_url)`)
-      .eq('post_id', postId).eq('is_deleted', false).order('created_at', { ascending: true })
+      .eq('post_id', postId).eq('is_deleted', false), userId)
+      .order('created_at', { ascending: true })
       .range(parseInt(offset), parseInt(offset) + parseInt(limit) - 1);
     if (error) { logger.error('Error fetching comments', { error: error.message, postId }); return res.status(500).json({ error: 'Failed to fetch comments' }); }
 
@@ -3287,7 +3256,7 @@ router.post('/:postId/comments/:commentId/like', verifyToken, async (req, res) =
     // Verify comment exists and belongs to this post
     const { data: comment, error: commentErr } = await supabaseAdmin
       .from('PostComment')
-      .select('id, post_id, user_id, like_count')
+      .select('id, post_id, user_id, like_count, moderation_state')
       .eq('id', commentId)
       .eq('post_id', postId)
       .eq('is_deleted', false)
@@ -3297,7 +3266,7 @@ router.post('/:postId/comments/:commentId/like', verifyToken, async (req, res) =
       logger.error('Comment like lookup error', { error: commentErr.message, commentId, postId });
       return res.status(500).json({ error: 'Failed to toggle comment like' });
     }
-    if (!comment) return res.status(404).json({ error: 'Comment not found' });
+    if (!comment || !canReadReply(comment, userId)) return res.status(404).json({ error: 'Comment not found' });
 
     // The like state the client wants: a repeated request changes nothing. Without it, the toggle below.
     if (typeof req.body?.liked === 'boolean') {
@@ -3413,6 +3382,8 @@ router.get('/user/:userId', verifyToken, async (req, res) => {
       .order('created_at', { ascending: false })
       .order('id', { ascending: false })
       .limit(parsedLimit);
+
+    query = (await postScopeAccess(requestingUserId)).query(query);
 
     // Archived posts are left out of every list except the owner's own My posts,
     // which asks for them to fill its Archived tab (and to restore them).
@@ -3592,9 +3563,10 @@ router.patch('/:id/solve', verifyToken, async (req, res) => {
 
     const { data: updated, error } = await supabaseAdmin
       .from('Post')
-      .update({ state: 'solved', solved_at: new Date().toISOString() })
+      // A solved Ask is an answered one (contract §4.1: state and resolution stay in step).
+      .update({ state: 'solved', solved_at: new Date().toISOString(), resolution: 'answered' })
       .eq('id', postId)
-      .select('id, state, solved_at')
+      .select('id, state, solved_at, resolution')
       .single();
 
     if (error) return res.status(500).json({ error: 'Failed to update post state' });

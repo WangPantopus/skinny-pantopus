@@ -2,14 +2,20 @@
 
 package app.pantopus.android.ui.screens.plans.host
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
@@ -20,7 +26,7 @@ import app.pantopus.android.data.plans.KidsAgeBand
 import app.pantopus.android.data.plans.PlanAutoRule
 import app.pantopus.android.data.plans.PlanFormat
 import app.pantopus.android.data.plans.PlanKind
-import app.pantopus.android.ui.components.PantopusCheckbox
+import app.pantopus.android.ui.screens.plans.colors
 import app.pantopus.android.ui.screens.plans.components.PlanChoice
 import app.pantopus.android.ui.screens.plans.components.PlanChoiceGroup
 import app.pantopus.android.ui.screens.plans.components.PlanField
@@ -40,7 +46,7 @@ import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.PantopusTextStyle
-import java.time.format.DateTimeFormatter
+import app.pantopus.android.ui.theme.Radii
 import java.util.Locale
 
 /** H2 to H5: the details for the chosen type. */
@@ -145,10 +151,8 @@ private fun ColumnScope.PlaydateFields(
     TitleField(draft.title, vm::setTitle)
     PlanField(label = "When") {
         PlanWhenCard(start = draft.start, end = draft.end, onStart = vm::setStart, onEnd = vm::setEnd)
-        val shown =
-            draft.start?.let {
-                "“${it.format(DateTimeFormatter.ofPattern("EEEE", Locale.US))} ${dayPartWord(it.hour)}”"
-            } ?: "the part of the day"
+        // "Tomorrow morning", as neighbors will see it (and as on iOS).
+        val shown = draft.start?.let { "“${PlanFormat.dayPartPhrase(it.atZone(ui.zone))}”" } ?: "the part of the day"
         PlanScopeLine("Neighbors see $shown until you accept them.")
     }
     PlanField(label = "Where") {
@@ -400,7 +404,12 @@ private fun PlaceRow(
             onClick = onClick,
             modifier = Modifier.semantics(mergeDescendants = true) { role = Role.Button },
         ) {
-            PlanTile(kind, size = 36.dp, glyph = 18.dp, corner = 10.dp)
+            if (place?.hereNow == true) {
+                // Board H4: the place "You're here now" found wears the location arrow.
+                PlanIconTile(PantopusIcon.Navigation, kind.colors.tint, kind.colors.accent, size = 36.dp, glyph = 18.dp, corner = 10.dp)
+            } else {
+                PlanTile(kind, size = 36.dp, glyph = 18.dp, corner = 10.dp)
+            }
             Column(modifier = Modifier.weight(1f)) {
                 Text(text = place?.name ?: "Choose a place", style = semibold, color = PantopusColors.appText)
                 Text(
@@ -414,8 +423,41 @@ private fun PlaceRow(
     }
 }
 
-/** "Park · public place · 0.4 mi" (the host's own distance to a public place). */
+/** "Also let in people I've hosted" with its second line under it, as board H2 draws the row (and iOS). */
+@Composable
+private fun HostedBeforeRow(
+    checked: Boolean,
+    onChange: (Boolean) -> Unit,
+) {
+    val box = RoundedCornerShape(Radii.sm)
+    PlanOptionRow(modifier = Modifier.toggleable(value = checked, role = Role.Checkbox, onValueChange = onChange)) {
+        Box(
+            modifier =
+                Modifier
+                    .size(22.dp)
+                    .clip(box)
+                    .background(if (checked) PantopusColors.primary600 else PantopusColors.appSurface)
+                    .border(1.5.dp, if (checked) PantopusColors.primary600 else PantopusColors.appBorderStrong, box),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (checked) {
+                PantopusIconImage(icon = PantopusIcon.Check, contentDescription = null, size = 14.dp, tint = PantopusColors.appTextInverse)
+            }
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = "Also let in people I've hosted", style = semibold, color = PantopusColors.appText)
+            Text(
+                text = "They get in right away, until the spots fill",
+                style = PantopusTextStyle.small,
+                color = PantopusColors.appTextSecondary,
+            )
+        }
+    }
+}
+
+/** "Park · public place · 0.4 mi" (the host's own distance to a public place); "You're here now" (board H4). */
 internal fun placeCaption(place: PickedPlace): String {
+    if (place.hereNow) return "You're here now"
     val distance = place.distanceMeters?.let { metersToMiles(it) }
     return listOfNotNull(place.category?.replaceFirstChar { it.titlecase() }, "public place", distance).joinToString(" · ")
 }
@@ -475,12 +517,9 @@ private fun HowPeopleGetIn(
                     vm.edit { it.copy(approveEach = true, autoRule = null) }
                 }
             }
-            PlanOptionRow {
-                PantopusCheckbox(
-                    isChecked = draft.hostedBefore,
-                    onCheckedChange = { on -> vm.edit { it.copy(hostedBefore = on) } },
-                    label = "Also let in people I've hosted",
-                )
+            // Not for a pickup game (board H4 has no such row).
+            if (kind != PlanKind.PICKUP_GAME) {
+                HostedBeforeRow(checked = draft.hostedBefore) { on -> vm.edit { it.copy(hostedBefore = on) } }
             }
         }
     }
@@ -533,15 +572,6 @@ private fun NoteField(
         )
     }
 }
-
-/** The part of the day neighbors see for a playdate before they're in (the API's `day_part`). */
-private fun dayPartWord(hour: Int): String =
-    when (hour) {
-        in 5..11 -> "morning"
-        in 12..16 -> "afternoon"
-        in 17..20 -> "evening"
-        else -> "night"
-    }
 
 /** Adds [value] when it's missing, removes it when it's there. */
 private fun Set<String>.toggle(value: String): Set<String> = if (value in this) this - value else this + value

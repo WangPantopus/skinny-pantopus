@@ -18,8 +18,9 @@ const logger = require('../../utils/logger');
 const { verifiedUserIds } = require('./planViewer');
 const { localDisplayNames } = require('../../utils/identityProfiles');
 const rules = require('./planRules');
+const { canReadPostModeration, postScopeAccess } = require('../pulse/readAccess');
 
-const POST_COLUMNS = 'id, title, content, event_date, event_end_date, latitude, longitude, location_precision, archived_at, archive_reason, created_at';
+const POST_COLUMNS = 'id, user_id, title, content, event_date, event_end_date, latitude, longitude, location_precision, archived_at, archive_reason, moderation_state, created_at, read_scope, area_id, pulse_post_town_id, allow_external_share';
 const PLAN_COLUMNS = [
   'post_id', 'host_user_id', 'kind', 'spots', 'auto_rules', 'join_requirement', 'place_kind',
   'area_label', 'city', 'details', 'guest_note', 'place_name', 'place_address', 'place_latitude',
@@ -29,7 +30,7 @@ const PLAN_COLUMNS = [
 const PLAN_SELECT = `${PLAN_COLUMNS}, post:Post!inner(${POST_COLUMNS})`;
 const REQUEST_COLUMNS = [
   'id', 'post_id', 'user_id', 'status', 'party_size', 'note', 'kids_count', 'kids_age_bands',
-  'stays_with_kids', 'decided_by', 'reconfirm_requested_at', 'reconfirmed', 'on_my_way_at',
+  'stays_with_kids', 'decided_by', 'reconfirm_requested_at', 'reconfirmed', 'reconfirm_reason', 'on_my_way_at',
   'ask_count', 'distance_band', 'queued_at', 'reminded_at', 'feedback', 'feedback_note', 'feedback_at',
   'created_at', 'decided_at', 'updated_at',
 ].join(', ');
@@ -110,9 +111,11 @@ function exactPoint(plan) {
  */
 function isVisibleTo(plan, viewer) {
   if (!plan || !plan.post) return false;
+  if (!canReadPostModeration(plan.post, viewer.id, viewer.role === 'admin')) return false;
+  const reviewingHeld = plan.post.moderation_state === 'held' && viewer.role === 'admin';
+  if (!reviewingHeld && plan.post.read_scope != null && !viewer.scopeAccess?.allows(plan.post)) return false;
   const hostId = String(plan.host_user_id);
   if (hostId === viewer.id) return true;
-  if (plan.post.archive_reason === 'moderation') return false;
   if (plan.kind === 'playdate' && !viewer.seesPlaydates) return false;
   if (viewer.blockedUserIds.has(hostId)) return false;
   if (viewer.mutedUserIds.has(hostId)) return false;
@@ -396,6 +399,7 @@ function askEligibility(plan, viewer, ctx, { myRequest, spotsLeft, state }) {
 
 function myRequestView(plan, request, { waitlistPosition = null } = {}) {
   if (!request) return null;
+  const reconfirmNeeded = Boolean(request.reconfirm_requested_at) && request.reconfirmed == null && request.status === 'accepted';
   return {
     id: request.id,
     status: request.status,
@@ -403,7 +407,9 @@ function myRequestView(plan, request, { waitlistPosition = null } = {}) {
     note: request.note || null,
     kids_count: plan.kind === 'playdate' ? request.kids_count ?? null : null,
     kids_age_bands: plan.kind === 'playdate' ? request.kids_age_bands || [] : null,
-    reconfirm_needed: Boolean(request.reconfirm_requested_at) && request.reconfirmed == null && request.status === 'accepted',
+    reconfirm_needed: reconfirmNeeded,
+    // What the host's change asked about ('time', 'place' or 'both'), so the card says what the push said.
+    reconfirm_reason: reconfirmNeeded ? request.reconfirm_reason || null : null,
     on_my_way: Boolean(request.on_my_way_at),
     waitlist_position: waitlistPosition,
     decided_by: request.decided_by || null,
@@ -630,12 +636,13 @@ function boundingBox(point, radiusMeters) {
 }
 
 /** Open plans whose public area point is inside the box. */
-async function queryOpenPlansInBox(box, { kinds } = {}) {
+async function queryOpenPlansInBox(box, { kinds, scopeAccess } = {}) {
   let query = supabaseAdmin
     .from('Plan')
     .select(PLAN_SELECT)
     .eq('status', 'open')
     .is('post.archived_at', null)
+    .eq('post.moderation_state', 'live')
     .gt('post.event_end_date', new Date().toISOString())
     .gte('post.latitude', box.south)
     .lte('post.latitude', box.north)
@@ -643,6 +650,7 @@ async function queryOpenPlansInBox(box, { kinds } = {}) {
     .lte('post.longitude', box.east)
     .limit(500);
   if (kinds && kinds.length > 0) query = query.in('kind', kinds);
+  query = (scopeAccess || await postScopeAccess(null)).query(query, 'post');
   const { data, error } = await query;
   if (error) throw new Error(`Failed to load nearby plans: ${error.message}`);
   return data || [];
@@ -671,7 +679,7 @@ function soonestFirst(a, b) {
 /** GET /api/plans: the list under the map, soonest first, within 5 miles of the point. */
 async function listNearby(viewer, { point, window = 'week', kinds = [], cursor = null }) {
   const box = boundingBox(point, rules.LIST_RADIUS_METERS);
-  const rows = await queryOpenPlansInBox(box, { kinds });
+  const rows = await queryOpenPlansInBox(box, { kinds, scopeAccess: viewer.scopeAccess });
   const after = decodeCursor(cursor);
   const matching = rows
     .filter((plan) => isVisibleTo(plan, viewer))
@@ -703,7 +711,7 @@ async function listNearby(viewer, { point, window = 'week', kinds = [], cursor =
 /** For the empty list (F4): the closest town with plans within 15 miles, as a count and a band. */
 async function findNearestElsewhere(viewer, point, { window, kinds }) {
   try {
-    const rows = await queryOpenPlansInBox(boundingBox(point, 15 * rules.MILE_METERS), { kinds });
+    const rows = await queryOpenPlansInBox(boundingBox(point, 15 * rules.MILE_METERS), { kinds, scopeAccess: viewer.scopeAccess });
     const byCity = new Map();
     for (const plan of rows) {
       if (!isVisibleTo(plan, viewer) || !windowMatches(plan, window)) continue;

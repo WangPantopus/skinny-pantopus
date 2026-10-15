@@ -18,6 +18,8 @@ const logger = require('../utils/logger');
 const { NOTIFICATION_LIST } = require('../utils/columns');
 const pushService = require('../services/pushService');
 const badgeService = require('../services/badgeService');
+const { notificationBlockFilter } = require('../services/blockService');
+const { notificationPostFilter } = require('../services/pulse/readAccess');
 const { excludeHiddenLaunchNotifications, isLaunchFeatureEnabled } = require('../utils/featureFlags');
 
 const FIREWALL_VALUES = ['personal', 'audience', 'platform'];
@@ -161,6 +163,10 @@ router.get('/', verifyToken, async (req, res) => {
     query = applyNotificationFilters(query, { contextType, contextId, contexts });
     // Launch cuts: notifications that only a hidden feature produces are left out.
     query = excludeHiddenLaunchNotifications(query);
+    // So are notices from someone across a block, in either direction.
+    const withoutBlocked = await notificationBlockFilter(userId);
+    const readablePost = await notificationPostFilter(userId);
+    query = readablePost(withoutBlocked(query));
 
     // Get unread count (always, for the badge), read alongside the page
     let countQuery = supabaseAdmin
@@ -170,7 +176,7 @@ router.get('/', verifyToken, async (req, res) => {
       .eq('is_read', false);
 
     countQuery = applyNotificationFilters(countQuery, { contextType, contextId, contexts });
-    countQuery = excludeHiddenLaunchNotifications(countQuery);
+    countQuery = readablePost(withoutBlocked(excludeHiddenLaunchNotifications(countQuery)));
 
     const [{ data: notifications, error }, { count: unreadCount, error: countErr }] = await Promise.all([query, countQuery]);
 
@@ -206,12 +212,15 @@ router.get('/unread-count', verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
 
-    // Launch cuts: hidden notification types stay out of the badge counts.
-    const baseFilter = (q) => excludeHiddenLaunchNotifications(q
+    // Launch cuts: hidden notification types stay out of the badge counts, and so do notices from
+    // someone across a block.
+    const withoutBlocked = await notificationBlockFilter(userId);
+    const readablePost = await notificationPostFilter(userId);
+    const baseFilter = (q) => readablePost(withoutBlocked(excludeHiddenLaunchNotifications(q
       .from('Notification')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', userId)
-      .eq('is_read', false));
+      .eq('is_read', false))));
 
     const [totalRes, personalRes, audienceRes, platformRes] = await Promise.all([
       baseFilter(supabaseAdmin),
@@ -445,9 +454,11 @@ router.patch('/:id/read', verifyToken, async (req, res) => {
     const { id } = req.params;
     const userId = req.user.id;
 
-    const { data, error } = await supabaseAdmin
+    const readablePost = await notificationPostFilter(userId);
+    const withoutBlocked = await notificationBlockFilter(userId);
+    const { data, error } = await readablePost(withoutBlocked(supabaseAdmin
       .from('Notification')
-      .update({ is_read: true })
+      .update({ is_read: true })))
       .eq('id', id)
       .eq('user_id', userId)
       .select()

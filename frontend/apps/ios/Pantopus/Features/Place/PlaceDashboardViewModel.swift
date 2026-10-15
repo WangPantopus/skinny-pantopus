@@ -37,6 +37,9 @@ final class PlaceDashboardViewModel {
     /// Unread personal notifications, the Hub bell's count; the header
     /// bell shows a dot while it is above zero.
     private(set) var unreadCount = 0
+    /// The household shortcuts under Home tools that the person's access at
+    /// this Home allows (`refreshHomeShortcuts`).
+    private(set) var homeShortcuts: [PlaceHomeShortcut] = []
 
     private let api: APIClient
     private var reloadPending = false
@@ -50,6 +53,8 @@ final class PlaceDashboardViewModel {
     let onAddPlace: () -> Void
     /// The full Home list (the homes sheet's "Manage homes" and pending rows).
     let onManageHomes: () -> Void
+    /// The homes sheet made another Home the default.
+    let onDefaultHomeChanged: () -> Void
     /// Begin verification with the chosen method + address (pushes B2).
     let onStartVerify: (PlaceVerifyMethod, String) -> Void
     /// W7 — compose a verified-neighbor heads-up (carries the address for
@@ -62,6 +67,8 @@ final class PlaceDashboardViewModel {
     /// Movers first (Wedge v2 D5): "Send back the previous resident's mail" opens Mail Day.
     let onOpenMailDay: () -> Void
     let onOpenHubHome: () -> Void
+    /// A household shortcut under Home tools opens its screen.
+    let onOpenHomeShortcut: (PlaceHomeShortcut) -> Void
     /// The header bell opens the notifications list.
     let onOpenNotifications: () -> Void
 
@@ -73,12 +80,14 @@ final class PlaceDashboardViewModel {
         onSelectHome: @escaping (String) -> Void = { _ in },
         onAddPlace: @escaping () -> Void = {},
         onManageHomes: @escaping () -> Void = {},
+        onDefaultHomeChanged: @escaping () -> Void = {},
         onStartVerify: @escaping (PlaceVerifyMethod, String) -> Void = { _, _ in },
         onComposeMessage: @escaping (String) -> Void = { _ in },
         onOpenInbox: @escaping () -> Void = {},
         onOpenPrivacyMirror: @escaping () -> Void = {},
         onOpenMailDay: @escaping () -> Void = {},
         onOpenHubHome: @escaping () -> Void = {},
+        onOpenHomeShortcut: @escaping (PlaceHomeShortcut) -> Void = { _ in },
         onOpenNotifications: @escaping () -> Void = {}
     ) {
         self.homeId = homeId
@@ -88,12 +97,14 @@ final class PlaceDashboardViewModel {
         self.onSelectHome = onSelectHome
         self.onAddPlace = onAddPlace
         self.onManageHomes = onManageHomes
+        self.onDefaultHomeChanged = onDefaultHomeChanged
         self.onStartVerify = onStartVerify
         self.onComposeMessage = onComposeMessage
         self.onOpenInbox = onOpenInbox
         self.onOpenPrivacyMirror = onOpenPrivacyMirror
         self.onOpenMailDay = onOpenMailDay
         self.onOpenHubHome = onOpenHubHome
+        self.onOpenHomeShortcut = onOpenHomeShortcut
         self.onOpenNotifications = onOpenNotifications
     }
 
@@ -105,7 +116,9 @@ final class PlaceDashboardViewModel {
         }
         let force = reloadPending
         reloadPending = false
+        async let shortcuts: Void = refreshHomeShortcuts()
         await fetch(force: force)
+        await shortcuts
     }
 
     /// Home tools can change the privacy projection while this view is
@@ -118,8 +131,27 @@ final class PlaceDashboardViewModel {
         isRefreshing = true
         defer { isRefreshing = false }
         async let unread: Void = refreshUnread()
+        async let shortcuts: Void = refreshHomeShortcuts()
         await fetch(force: true)
         await unread
+        await shortcuts
+    }
+
+    /// The shortcuts follow the person's access at this Home, read the way
+    /// Home tools reads it (`GET /api/homes/:id/dashboard-access`) and gated
+    /// on the same permissions. The access copy Home tools keeps for an owner
+    /// or household member shows them at once. A refusal leaves none; a
+    /// failed read keeps what shows.
+    private func refreshHomeShortcuts() async {
+        if homeShortcuts.isEmpty, let copy = ScreenStore.store(for: api).peek(
+            HomeDashboardAccess.endpoint(homeId: homeId),
+            as: HomeAccessDTO.self
+        ) {
+            homeShortcuts = PlaceHomeShortcut.allowed(by: copy.value)
+        }
+        guard let snapshot = try? await HomeDashboardAccess(homeId: homeId, api: api).read(),
+              !Task.isCancelled else { return }
+        homeShortcuts = PlaceHomeShortcut.allowed(by: snapshot.access)
     }
 
     /// Re-read the bell's count whenever the dashboard shows again (for

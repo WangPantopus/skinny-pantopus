@@ -155,17 +155,29 @@ public struct ListOfRowsView<DataSource: ListOfRowsDataSource, Header: View>: Vi
             )
             .onAppear { hasShownContent = true }
         case let .empty(content):
-            EmptyState(
-                icon: content.icon,
-                headline: content.headline,
-                subcopy: content.subcopy,
-                cta: content.ctaTitle.flatMap { title in
-                    guard let handler = content.onCTA else { return nil }
-                    return EmptyState.CTA(title: title) { await MainActor.run { handler() } }
-                },
-                tint: content.tint ?? Theme.Color.personalBg,
-                accent: content.accent ?? Theme.Color.primary600
-            )
+            // Scrollable and at least the full height it had, so a pull
+            // refreshes an empty list too (an emptied My posts tab never
+            // reloaded) and a large text size scrolls instead of clipping.
+            GeometryReader { proxy in
+                ScrollView(.vertical) {
+                    EmptyState(
+                        icon: content.icon,
+                        headline: content.headline,
+                        subcopy: content.subcopy,
+                        cta: content.ctaTitle.flatMap { title in
+                            guard let handler = content.onCTA else { return nil }
+                            return EmptyState.CTA(title: title) { await MainActor.run { handler() } }
+                        },
+                        tint: content.tint ?? Theme.Color.personalBg,
+                        accent: content.accent ?? Theme.Color.primary600
+                    )
+                    .frame(minHeight: proxy.size.height)
+                }
+                .refreshable { await dataSource.refresh() }
+            }
+            // The empty state's own background stops at the scroll view;
+            // this one reaches under the tab bar, as it did before.
+            .background(Theme.Color.appBg)
             .onAppear { hasShownContent = true }
         case let .error(message):
             ListOfRowsErrorBanner(message: message) {

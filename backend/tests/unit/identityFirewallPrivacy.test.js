@@ -212,6 +212,7 @@ function seedIdentityFixture({ follow = true, bridge = { show_persona_on_local: 
       location_address: '1 Private Way',
       location_precision: 'exact_place',
       archived_at: null,
+      moderation_state: 'live',
       created_at: '2026-05-04T12:00:00Z',
       creator: {
         id: USER_A,
@@ -235,6 +236,7 @@ function seedIdentityFixture({ follow = true, bridge = { show_persona_on_local: 
       media_urls: [],
       media_types: [],
       archived_at: null,
+      moderation_state: 'live',
       created_at: '2026-05-04T13:00:00Z',
     },
     {
@@ -258,6 +260,7 @@ function seedIdentityFixture({ follow = true, bridge = { show_persona_on_local: 
       location_address: '1 Private Way',
       home_id: HOME_A,
       archived_at: null,
+      moderation_state: 'live',
       created_at: '2026-05-04T14:00:00Z',
     },
     {
@@ -275,6 +278,7 @@ function seedIdentityFixture({ follow = true, bridge = { show_persona_on_local: 
       content: 'Local follower-only note',
       post_type: 'local_update',
       archived_at: null,
+      moderation_state: 'live',
       created_at: '2026-05-04T15:00:00Z',
     },
     {
@@ -294,6 +298,7 @@ function seedIdentityFixture({ follow = true, bridge = { show_persona_on_local: 
       post_type: 'local_update',
       location_address: '1 Private Way',
       archived_at: null,
+      moderation_state: 'live',
       created_at: '2026-05-04T16:00:00Z',
     },
   ]);

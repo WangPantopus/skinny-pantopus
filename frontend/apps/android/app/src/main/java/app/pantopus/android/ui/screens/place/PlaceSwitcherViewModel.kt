@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.homes.MyHome
 import app.pantopus.android.data.api.models.homes.MyHomesResponse
+import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.homes.HomesRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -19,9 +20,17 @@ data class PlaceSwitcherRow(
     val line1: String,
     val subtitle: String,
     val kind: Kind,
+    /** The person's default Home (shown when they can open two or more). */
+    val isDefault: Boolean = false,
+    /** Offers "Set default" (another openable Home, two or more of them). */
+    val canSetDefault: Boolean = false,
 ) {
     /** [HOME] opens Your Place for it; [PENDING] (a claim or residency request in review) opens My homes. */
     enum class Kind { HOME, PENDING }
+
+    /** This row once [homeId] is the default. */
+    fun withDefault(homeId: String): PlaceSwitcherRow =
+        if (isDefault || canSetDefault) copy(isDefault = id == homeId, canSetDefault = id != homeId) else this
 }
 
 sealed interface PlaceSwitcherUiState {
@@ -44,6 +53,14 @@ class PlaceSwitcherViewModel
     ) : ViewModel() {
         private val _state = MutableStateFlow<PlaceSwitcherUiState>(PlaceSwitcherUiState.Loading)
         val state: StateFlow<PlaceSwitcherUiState> = _state.asStateFlow()
+        private val _savingDefaultId = MutableStateFlow<String?>(null)
+
+        /** The Home whose "Set default" is in flight. */
+        val savingDefaultId: StateFlow<String?> = _savingDefaultId.asStateFlow()
+        private val _defaultError = MutableStateFlow<String?>(null)
+
+        /** "Couldn't change your default home." after a failed change. */
+        val defaultError: StateFlow<String?> = _defaultError.asStateFlow()
 
         /**
          * Shows the shared My Homes copy at once (Instant Screens) and reads it again when it is out of date, so a
@@ -65,18 +82,50 @@ class PlaceSwitcherViewModel
             }
         }
 
+        /**
+         * Makes [homeId] the default (`PUT /api/homes/default`): the sheet updates in place and stays open, and the
+         * lists that follow the default (homes, Today) read again. On failure the rows stay as they were, with a line
+         * saying so.
+         */
+        fun setDefault(homeId: String) {
+            val loaded = _state.value as? PlaceSwitcherUiState.Loaded ?: return
+            if (_savingDefaultId.value != null) return
+            _savingDefaultId.value = homeId
+            _defaultError.value = null
+            viewModelScope.launch {
+                when (homesRepository.setDefaultHome(homeId)) {
+                    is NetworkResult.Success -> _state.value = PlaceSwitcherUiState.Loaded(loaded.rows.map { it.withDefault(homeId) })
+                    is NetworkResult.Failure -> _defaultError.value = DEFAULT_FAILED
+                }
+                _savingDefaultId.value = null
+            }
+        }
+
         private companion object {
             const val LOAD_FAILED = "Couldn't load your homes."
+            const val DEFAULT_FAILED = "Couldn't change your default home. Try again."
         }
     }
 
-/** Homes the person can open, by address, then the entries still waiting on verification. */
+/**
+ * Homes the person can open, by address, then the entries still waiting on verification. With two or more openable
+ * Homes, the default carries its pill and the others offer "Set default".
+ */
 internal fun placeSwitcherRows(response: MyHomesResponse): List<PlaceSwitcherRow> {
+    val homes = response.homes.filter { it.isOpenablePlace }
+    val defaultId = if (homes.size > 1) response.defaultHomeId else null
     val openable =
-        response.homes
-            .filter { it.isOpenablePlace }
-            .map { PlaceSwitcherRow(it.id, line1For(it), subtitleFor(it), PlaceSwitcherRow.Kind.HOME) }
-            .sortedWith { a, b -> compareAddresses(a.line1, b.line1) }
+        homes
+            .map {
+                PlaceSwitcherRow(
+                    id = it.id,
+                    line1 = line1For(it),
+                    subtitle = subtitleFor(it),
+                    kind = PlaceSwitcherRow.Kind.HOME,
+                    isDefault = defaultId != null && it.id == defaultId,
+                    canSetDefault = defaultId != null && it.id != defaultId,
+                )
+            }.sortedWith { a, b -> compareAddresses(a.line1, b.line1) }
     val pending =
         response.homes
             .filter { it.hasValidListContext && it.accessKind == "verification" }

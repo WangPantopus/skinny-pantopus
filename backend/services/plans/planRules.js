@@ -31,6 +31,12 @@ const PLAYDATE_ASK_RADIUS_METERS = 5000;
 const LIST_RADIUS_METERS = 5 * MILE_METERS;
 // A GPS fix proves where someone is for 5 minutes.
 const GPS_MAX_AGE_MS = 5 * 60 * 1000;
+// A "public" place this close to one of the host's homes is the home (decision D2, board H4).
+// A phone's fix taken anywhere in the house or yard lands within it (indoors, usually 10–30 m
+// off, plus a few meters between the address point and the house). Most parks beside a home
+// sit farther out, since a park's point is its middle; a wider radius would also refuse the
+// corner café or the park across the street.
+const HOME_GUARD_METERS = 50;
 
 const LIMITS = Object.freeze({
   upcomingPlansPerHost: 3,
@@ -183,6 +189,7 @@ module.exports = {
   PLAYDATE_ASK_RADIUS_METERS,
   LIST_RADIUS_METERS,
   GPS_MAX_AGE_MS,
+  HOME_GUARD_METERS,
   DEFAULT_TIMEZONE,
   distanceBandFromMeters,
   distanceMeters,

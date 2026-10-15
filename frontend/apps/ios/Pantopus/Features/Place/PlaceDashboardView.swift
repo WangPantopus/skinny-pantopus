@@ -119,6 +119,7 @@ struct PlaceDashboardView: View {
                         showSwitcher = false
                         viewModel.onManageHomes()
                     },
+                    onDefaultChanged: { _ in viewModel.onDefaultHomeChanged() },
                     onClose: { showSwitcher = false }
                 )
             )
@@ -173,17 +174,19 @@ struct PlaceDashboardView: View {
                             .padding(.top, Spacing.s3)
                     }
 
-                    PlaceMessagesActionRow(
-                        icon: .house,
-                        title: "Home tools",
-                        subtitle: "Tasks and tools for your household."
-                    ) {
-                        viewModel.reloadOnReturn()
-                        viewModel.onOpenHubHome()
-                    }
+                    PlaceHomeToolsCard(
+                        shortcuts: viewModel.homeShortcuts,
+                        onOpen: {
+                            viewModel.reloadOnReturn()
+                            viewModel.onOpenHubHome()
+                        },
+                        onShortcut: { shortcut in
+                            viewModel.reloadOnReturn()
+                            viewModel.onOpenHomeShortcut(shortcut)
+                        }
+                    )
                     .padding(.horizontal, Spacing.s4)
                     .padding(.top, Spacing.s3)
-                    .accessibilityIdentifier("place.homeTools")
 
                     // Movers first (Wedge v2 D5): the first-week card leads for a recent move-in.
                     JustMovedCard(

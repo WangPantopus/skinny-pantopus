@@ -6,6 +6,7 @@
  */
 
 const supabaseAdmin = require('../../config/supabaseAdmin');
+const { postScopeAccess } = require('../pulse/readAccess');
 const { getAnthropicClient, resolveEffort, DRAFT_MODEL } = require('../../config/anthropic');
 const { complete } = require('../ai/llm');
 const logger = require('../../utils/logger');
@@ -204,14 +205,18 @@ async function getLocalUpdateContext(options = {}) {
   const box = boundingBoxFromCenter(Number(latitude), Number(longitude), radiusMeters);
 
   try {
-    const { data, error } = await supabaseAdmin
+    // Briefings carry quoted post text, so their candidate query uses the same
+    // home-derived wall as Pulse before limiting or summarizing.
+    const scopeAccess = await postScopeAccess(options.userId || null);
+    const { data, error } = await scopeAccess.query(supabaseAdmin
       .from('Post')
-      .select('id, user_id, title, content, created_at, post_type, purpose, tags, utility_score, latitude, longitude, effective_latitude, effective_longitude, distribution_targets')
+      .select('id, user_id, title, content, created_at, post_type, purpose, tags, utility_score, latitude, longitude, effective_latitude, effective_longitude, distribution_targets'))
       .in('user_id', curatorIds)
       .eq('post_type', 'local_update')
       .eq('purpose', 'local_update')
       .contains('distribution_targets', ['place'])
       .is('archived_at', null)
+      .eq('moderation_state', 'live')
       .gte('created_at', sinceIso)
       .or(
         `and(effective_latitude.gte.${box.south},effective_latitude.lte.${box.north},effective_longitude.gte.${box.west},effective_longitude.lte.${box.east}),` +

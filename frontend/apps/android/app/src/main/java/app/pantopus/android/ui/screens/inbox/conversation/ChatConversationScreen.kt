@@ -373,6 +373,8 @@ fun ChatConversationScreen(
                     onOpenDetails = { showDetailsSheet = true },
                     onOpenProfile = profileTapFor(args.mode, conversationMode, onOpenProfile),
                     onNewAiChat = viewModel::startNewAiConversation,
+                    // Nearby Plans (A4): a plan room counts everyone in, parties too ("7 people", as on iOS).
+                    planPeople = planChat.plan?.people?.takeIf { it.isNotEmpty() }?.sumOf { it.partySize.coerceAtLeast(1) },
                 )
             }
             gigContext?.let { strip ->
@@ -494,7 +496,7 @@ fun ChatConversationScreen(
                 )
             }
             if (planChat.closed) {
-                PlanChatClosedBar()
+                PlanChatClosedBar(planChat)
             } else if (isSelectionMode) {
                 SelectionDeleteBar(
                     enabled = selectedMessageIds.isNotEmpty(),
@@ -894,6 +896,8 @@ internal fun ChatHeader(
     onOpenProfile: (() -> Unit)? = null,
     // The assistant's "New chat" (AI thread only).
     onNewAiChat: () -> Unit = {},
+    // A plan room's people (Nearby Plans, board A4): the second line reads "7 people" instead.
+    planPeople: Int? = null,
 ) {
     val isAi = conversationMode == ChatConversationMode.AiAssistant || counterparty is ChatCounterparty.Ai
     val isFanThread = conversationMode == ChatConversationMode.FanThread
@@ -956,6 +960,7 @@ internal fun ChatHeader(
                 }
                 val presence =
                     when {
+                        planPeople != null -> false to (if (planPeople == 1) "1 person" else "$planPeople people")
                         isFanThread -> presenceFor(counterparty, isFanThread = true)
                         // Drops the sub-line entirely when the membership
                         // detail isn't known rather than inventing one.

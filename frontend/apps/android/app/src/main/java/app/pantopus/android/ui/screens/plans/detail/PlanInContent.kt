@@ -108,6 +108,7 @@ internal fun ColumnScope.PlanInBody(
             icon = PantopusIcon.Calendar,
             onClick = { context.addToCalendar(plan) },
             modifier = Modifier.weight(1f),
+            spoken = "Add to calendar",
         )
         if (plan.chatRoomId != null) {
             PlanStackButton(title = "Group chat", icon = PantopusIcon.MessageCircle, onClick = onOpenChat, modifier = Modifier.weight(1f))
@@ -130,11 +131,9 @@ private fun InBanner(
         progress.animateTo(1f, tween(150))
     }
     val mine = plan.myRequest
-    val subtitle =
-        when (mine?.decidedBy) {
-            "rule" -> "You got in right away"
-            else -> listOfNotNull("${plan.hostFirst} said yes", PlanFormat.ago(mine?.decidedAt)).joinToString(" · ")
-        }
+    // "Sam said yes · just now" (board J7), "· 12 min ago" later; a rule's yes gets its time too, as on iOS.
+    val said = if (mine?.decidedBy == "rule") "You got in right away" else "${plan.hostFirst} said yes"
+    val subtitle = listOfNotNull(said, PlanFormat.ago(mine?.decidedAt)).joinToString(" · ")
     PlanBanner(
         title = "You're in",
         subtitle = subtitle,
@@ -169,7 +168,7 @@ private fun HostNote(
     }
 }
 
-/** "Sam (host), you + 1, Alex, Jordan and 2 more", with their initials. */
+/** "Sam (host), you + 1, Alex + 1, Jordan and 2 more", with their initials: parties and up to 4 names, as on iOS. */
 @Composable
 private fun PeopleLine(
     plan: PlanDto,
@@ -177,20 +176,28 @@ private fun PeopleLine(
 ) {
     val people = plan.people.orEmpty()
     if (people.isEmpty()) return
-    val host = people.firstOrNull { it.isHost }
-    val others = people.filter { !it.isHost && it.userId != viewerId }
     val myParty = plan.myRequest?.partySize ?: 1
-    val names = mutableListOf<String>()
-    host?.displayName?.let { names += "${PlanFormat.firstName(it)} (host)" }
-    names += if (plan.isPlaydate || myParty <= 1) "you" else "you + ${myParty - 1}"
-    val shown = others.take(2)
-    shown.forEach { names += PlanFormat.firstName(it.displayName) }
-    val rest = others.size - shown.size
+    val you = if (plan.isPlaydate || myParty <= 1) "you" else "you + ${myParty - 1}"
+    val names =
+        people
+            .map { person ->
+                val first = PlanFormat.firstName(person.displayName)
+                when {
+                    viewerId != null && person.userId == viewerId -> you
+                    person.isHost -> "$first (host)"
+                    person.partySize > 1 -> "$first + ${person.partySize - 1}"
+                    else -> first
+                }
+            }.toMutableList()
+    // The server lists everyone in; if this phone's account isn't among them yet, "you" still goes after the host.
+    if (you !in names) names.add(if (people.firstOrNull()?.isHost == true) 1 else 0, you)
+    val shown = names.take(4)
+    val rest = names.size - shown.size
     val line =
         when {
-            rest > 0 -> names.joinToString(", ") + " and $rest more"
-            names.size > 1 -> names.dropLast(1).joinToString(", ") + " and " + names.last()
-            else -> names.joinToString()
+            rest > 0 -> shown.joinToString(", ") + " and $rest more"
+            shown.size > 1 -> shown.dropLast(1).joinToString(", ") + " and " + shown.last()
+            else -> shown.joinToString()
         }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s3)) {
         PlanAvatarStack(names = people.take(4).map { it.displayName to it.userId })
@@ -198,7 +205,7 @@ private fun PeopleLine(
     }
 }
 
-/** "Sam moved the watch party. Still coming?" with its two answers (the in-app side of the H11 push). */
+/** "Sam moved the watch party. Still coming?" with its two answers (the in-app side of the H11 push, in its words). */
 @Composable
 private fun StillComingCard(
     plan: PlanDto,
@@ -214,13 +221,21 @@ private fun StillComingCard(
                 .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
+        val host = plan.hostFirst
+        val noun = PlanFormat.noun(plan)
+        val (title, message) =
+            when (plan.myRequest?.reconfirmReason) {
+                "place" -> "$host changed the place" to "It's at a new place now. Still coming?"
+                "both" -> "$host changed the $noun" to "Now ${PlanFormat.dayAt(plan)}, at a new place. Still coming?"
+                else -> "$host moved the $noun" to "Now ${PlanFormat.dayAt(plan)}. Still coming?"
+            }
         Text(
-            text = "${plan.hostFirst} moved the ${plan.planKind?.noun ?: "plan"}",
+            text = title,
             style = PantopusTextStyle.body.copy(fontWeight = FontWeight.SemiBold),
             color = PantopusColors.appText,
         )
         Text(
-            text = "Now ${PlanFormat.dayAt(plan)}. Still coming?",
+            text = message,
             style = PantopusTextStyle.small,
             color = PantopusColors.appTextStrong,
         )

@@ -457,11 +457,11 @@ class PulseComposeViewModelTest {
         )
         vm.update(PulseComposeField.Title, "Hello")
         vm.update(PulseComposeField.Body, "What's up")
-        vm.selectSafetyAlertKind(PulseSafetyAlertKind.Suspicious)
+        vm.selectSafetyAlertKind(PulseSafetyAlertKind.PowerOutage)
         val request = vm.buildRequest()
         assertEquals("alert", request.postType)
         assertEquals("heads_up", request.purpose)
-        assertEquals("suspicious", request.safetyAlertKind)
+        assertEquals("power_outage", request.safetyAlertKind)
     }
 
     // MARK: - Submit pipeline

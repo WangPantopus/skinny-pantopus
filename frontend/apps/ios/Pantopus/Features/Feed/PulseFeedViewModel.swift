@@ -4,10 +4,11 @@
 //
 //  Backs the Pulse feed (Hub → Pulse pillar). Fetches
 //  `GET /api/posts/feed?surface=place|connections` and refetches when the
-//  surface toggle or the chip-row filter changes. Reactions optimistically
-//  toggle the local count and hit `POST /api/posts/:id/like`; the card
-//  overflow menu drives save / repost / share / hide / mute / not-helpful /
-//  solve / report / delete against `backend/routes/posts.js`.
+//  surface toggle, the topic chips (Nearby: `topic`, Pulse S4) or the
+//  chip-row filter changes. Reactions optimistically toggle the local count
+//  and hit `POST /api/posts/:id/like`; the card overflow menu drives save /
+//  repost / share / hide / mute / topic mute / not-helpful / solve / report /
+//  delete against `backend/routes/posts.js`.
 //
 
 import Foundation
@@ -33,6 +34,9 @@ private struct PulsePostOverride {
     var isSolved: Bool?
     var hasReacted: Bool?
     var likeCount: Int?
+    /// The asker kept the Ask open; `expiresAt` is its new end (Pulse S7).
+    var keptOpen: Bool?
+    var expiresAt: String?
 }
 
 /// Pulse / Connections / Beacons feed view-model. The same engine backs all
@@ -58,10 +62,11 @@ public final class PulseFeedViewModel {
     /// FAB's pre-fill.
     public private(set) var activeIntent: PulseIntent = .all
 
-    // MARK: - Topic lane (Nearby only)
+    // MARK: - Topics (Nearby only)
 
-    /// Active topic lane. Non-nil swaps the post-type chip row for the
-    /// topic's own mode chips — RN `useFeedFiltering.ts:45-50`.
+    /// The chosen topic chip (Pulse S4): the feed shows only that topic's
+    /// posts. Sports and fitness also swaps the post-type chip row for the
+    /// Sports lane's mode chips — RN `useFeedFiltering.ts:45-50`.
     public private(set) var activeTopic: PulseTopic?
 
     /// Mode chip inside the Sports lane.
@@ -78,9 +83,17 @@ public final class PulseFeedViewModel {
     /// the active-event module.
     public private(set) var primarySportsEvent: ActiveSportsEventDTO?
 
-    /// Topics offered on this surface. Topic lanes are Nearby-only.
-    public var availableTopics: [PulseTopic] {
-        surface == .pulse ? PulseTopic.allCases : []
+    /// Topic chips show on Nearby only (the server takes `topic` only there).
+    public var showsTopics: Bool {
+        surface == .pulse
+    }
+
+    /// The chosen topic (not the Sports lane, which has its own empty state)
+    /// while Nearby has nothing in it: the empty state says so and offers
+    /// every topic again.
+    public var quietTopic: PulseTopic? {
+        guard case .empty = state, surface == .pulse, !needsArea, let activeTopic, activeTopic != .sports else { return nil }
+        return activeTopic
     }
 
     /// True while the Sports lane is showing.
@@ -159,6 +172,9 @@ public final class PulseFeedViewModel {
 
     /// The post whose author is awaiting mute confirmation, if any.
     public var mutingPostId: String?
+
+    /// The asker's Ask awaiting "Close this question?", if any (Pulse S7).
+    public var closingAskPostId: String?
 
     /// True while the preferences sheet is presented.
     public var showsPreferences = false
@@ -359,7 +375,10 @@ public final class PulseFeedViewModel {
     /// Recompute the banner from the last page size. Called after every
     /// fetch and whenever the viewing radius changes.
     private func recomputeRadiusSuggestion() {
-        guard surface == .pulse, !radiusSuggestionDismissed, postsLoaded else {
+        // A quiet topic says so itself (Pulse S4); a wider area is no answer
+        // for one topic, so only every topic (and the Sports lane) suggests it.
+        let topicAllowsSuggestion = activeTopic == nil || activeTopic == .sports
+        guard surface == .pulse, !radiusSuggestionDismissed, postsLoaded, topicAllowsSuggestion else {
             radiusSuggestion = nil
             return
         }
@@ -594,6 +613,94 @@ public final class PulseFeedViewModel {
             toastMessage = "Couldn't mute \(label)."
             rebuildLoadedState()
         }
+    }
+
+    /// "Mute this topic": `POST /api/posts/mute/topic` `{ topic }`. No area ids
+    /// exist before Pulse S5, so the mute is everywhere (contract §2.9). The
+    /// topic's posts leave every feed at once (app-wide, like an author mute);
+    /// Pulse preferences undo it.
+    public func mutePulseTopic(postId: String) async {
+        guard let item = loadedItems.first(where: { $0.id == postId }),
+              let topic = PulseTopic(stored: item.topic) else { return }
+        moderation.addTopicMute(topic.rawValue)
+        rebuildLoadedState()
+        do {
+            _ = try await api.request(
+                FeedActionsEndpoints.mutePulseTopic(topic.rawValue, areaId: nil),
+                as: PostActionAckResponse.self
+            )
+            toastMessage = "\(topic.label) muted."
+            await refreshSavedOpeningPage()
+        } catch {
+            moderation.removeTopicMute(topic.rawValue)
+            toastMessage = "Couldn't mute \(topic.label)."
+            rebuildLoadedState()
+        }
+    }
+
+    /// After a topic mute: saved feed pages still hold the topic's posts, so
+    /// they read again when next opened, and the page Pulse opens on (every
+    /// topic and type) is read again now, so a relaunch never shows the
+    /// muted posts from the saved copy. The rows on screen stay as they are.
+    private func refreshSavedOpeningPage() async {
+        store.markStale(topics: [ScreenTopic.posts])
+        guard let area = lastArea else { return }
+        let opening = FeedQuery(
+            surface: surface.backendSurface,
+            area: area,
+            postType: nil,
+            topic: nil,
+            sportsMode: nil,
+            eventKey: nil
+        )
+        _ = try? await store.load(
+            feedEndpoint(opening),
+            as: FeedResponse.self,
+            kind: .nearby,
+            topics: [ScreenTopic.posts],
+            force: true
+        )
+    }
+
+    /// "Keep open 7 more days" on the asker's own open Ask (contract §2.12):
+    /// once; the card keeps its place and the Ask its replies.
+    public func keepAskOpen(postId: String) async {
+        do {
+            let response: PulseAskActionResponse = try await api.request(PulseEndpoints.keepAskOpen(postId: postId))
+            overrides[postId, default: PulsePostOverride()].keptOpen = true
+            if let endsAt = response.postStatus?.endsAt {
+                overrides[postId, default: PulsePostOverride()].expiresAt = endsAt
+            }
+            toastMessage = "Kept open for 7 more days."
+        } catch {
+            // Already kept open (another device, an earlier tap): the option goes away.
+            if Self.serverCode(error) == "ALREADY_KEPT_OPEN" {
+                overrides[postId, default: PulsePostOverride()].keptOpen = true
+            }
+            toastMessage = (error as? APIError)?.errorDescription ?? "Couldn't keep it open."
+        }
+        rebuildLoadedState()
+    }
+
+    /// "Close" on the asker's own open Ask, after "Close this question?"
+    /// (contract §2.12): it ends and leaves Pulse; My posts can restore it.
+    public func closeAsk(postId: String) async {
+        do {
+            _ = try await api.request(PulseEndpoints.closeAsk(postId: postId), as: PulseAskActionResponse.self)
+            removedPostIds.insert(postId)
+            rebuildLoadedState()
+            toastMessage = "Question closed."
+            // My posts lists it under Archived; the saved feed pages still hold it.
+            PulsePostsRefresh.notifyPostsDidChange()
+        } catch {
+            toastMessage = (error as? APIError)?.errorDescription ?? "Couldn't close it."
+        }
+    }
+
+    /// The server's `code` for a refused request, when it sent one.
+    private static func serverCode(_ error: any Error) -> String? {
+        guard case let .clientError(_, body) = error as? APIError else { return nil }
+        return APIError.code(in: body)
     }
 
     /// `POST /api/posts/:id/report` — one of the `reportPostSchema`
@@ -869,7 +976,13 @@ public final class PulseFeedViewModel {
         let visible = loadedItems.filter { isVisible($0) }
         if visible.isEmpty {
             if case .error = state { return }
-            state = .empty(needsArea ? FeedSurface.noAreaContent : surface.emptyContent(scopeLabel: scopeLabel, followCount: 0))
+            if needsArea {
+                state = .empty(FeedSurface.noAreaContent)
+            } else if surface == .pulse, let activeTopic, activeTopic != .sports {
+                state = .empty(FeedSurface.quietTopicContent(activeTopic))
+            } else {
+                state = .empty(surface.emptyContent(scopeLabel: scopeLabel, followCount: 0))
+            }
             return
         }
         var rows = visible.map { project($0) }
@@ -889,7 +1002,9 @@ public final class PulseFeedViewModel {
         guard moderation.isVisible(
             postId: post.id,
             userId: post.userId,
-            businessAuthorId: post.businessAuthorId
+            businessAuthorId: post.businessAuthorId,
+            // As on the server, a topic mute never hides the viewer's own posts.
+            topic: Self.isOwner(post: post, viewerId: viewerId) ? nil : post.topic
         ) else { return false }
         if let postType = post.postType, mutedPostTypes.contains(postType) { return false }
         return true
@@ -969,6 +1084,15 @@ public final class PulseFeedViewModel {
             : nil
         let isOwner = Self.isOwner(post: post, viewerId: viewerId)
         let isSolved = effectiveIsSolved(post)
+        let expiresAt = overrides[post.id]?.expiresAt ?? post.expiresAt
+        let askIsOpen = isOwner && !isSolved && PulsePostStatus.askIsOpen(
+            postType: post.postType,
+            state: post.state,
+            resolution: post.resolution,
+            expiresAt: expiresAt,
+            createdAt: post.createdAt
+        )
+        let keptOpen = post.keptOpenAt != nil || overrides[post.id]?.keptOpen == true
         return PulsePostCardContent(
             id: post.id,
             authorName: post.creator?.displayName ?? "Pantopus user",
@@ -1016,11 +1140,22 @@ public final class PulseFeedViewModel {
                 // A type this build doesn't know has no chip to name, so no type mute.
                 postType: intent == .generic ? nil : post.postType,
                 topicLabel: intent.cardChipLabel,
-                pending: pendingActions[post.id] ?? []
+                pending: pendingActions[post.id] ?? [],
+                canCloseAsk: askIsOpen,
+                canKeepAskOpen: askIsOpen && !keptOpen
             ),
             chipLabel: intent.chipLabel(lostFoundType: post.lostFoundType),
             isVisitor: post.isVisitorPost,
-            origin: post.origin
+            origin: post.origin,
+            pulseTopic: PulseTopic(stored: post.topic),
+            status: PulsePostStatus.from(
+                resolution: post.resolution,
+                // "Mark solved" tapped here reads as answered before the next read.
+                state: isSolved ? "solved" : post.state,
+                postType: post.postType,
+                goingCount: likeCount,
+                expiresAt: expiresAt
+            )
         )
     }
 
@@ -1034,6 +1169,8 @@ public final class PulseFeedViewModel {
         var parts = [relative(timestamp: post.createdAt)]
         // Ahead of the place so a long place name never truncates it; web draws the badge beside the time.
         if post.isVisitorPost { parts.append("Visitor") }
+        // The topic too (Pulse S4): "Mute this topic" names what the card shows.
+        if let topic = PulseTopic(stored: post.topic) { parts.append(topic.label) }
         if let locality = post.locationName, !locality.isEmpty { parts.append(locality) }
         return parts.joined(separator: " · ")
     }

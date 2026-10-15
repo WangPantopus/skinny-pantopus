@@ -19,6 +19,7 @@ public struct ConnectionsView: View {
     public var body: some View {
         ListOfRowsView(dataSource: viewModel)
             .accessibilityIdentifier("connections")
+            .refreshesOnStoreChange(affects: { $0.names(topic: ScreenTopic.connections) }, perform: { await viewModel.load() })
             .confirmationDialog(
                 "Remove connection?",
                 isPresented: Binding(
@@ -27,9 +28,9 @@ public struct ConnectionsView: View {
                 ),
                 titleVisibility: .visible,
                 presenting: viewModel.pendingRemoval
-            ) { _ in
+            ) { request in
                 Button("Remove", role: .destructive) {
-                    Task { @MainActor in await viewModel.confirmRemoval() }
+                    Task { @MainActor in await viewModel.confirmRemoval(request) }
                 }
                 .accessibilityIdentifier("connections.removeConfirm")
                 Button("Cancel", role: .cancel) { viewModel.cancelRemoval() }

@@ -93,14 +93,7 @@ internal fun ColumnScope.PlanHostBody(
             color = PantopusColors.appTextStrong,
         )
     }
-    if (plan.planState == PlanState.CANCELLED) {
-        PlanBanner(
-            title = "You cancelled this plan",
-            subtitle = "Everyone who was in or waiting was told. The pin is off the map.",
-            icon = PantopusIcon.XCircle,
-            tone = PlanBannerTone.Neutral,
-        )
-    }
+    if (closed) HostClosedBanner(plan)
     val pending = requests?.pending.orEmpty()
     val waiting = requests?.waitlisted.orEmpty()
     val count = maxOf(plan.requestsCount ?: 0, pending.size)
@@ -111,6 +104,10 @@ internal fun ColumnScope.PlanHostBody(
         WaitlistCard(waiting.mapNotNull { it.user?.displayName }, onOpenRequests)
     }
     GoingSection(plan, viewerId, busy, closed, asked = count > 0 || waiting.isNotEmpty(), onRemove = onRemove)
+    if (closed && plan.chatRoomId != null) {
+        // The chat stays to read once the plan is over (as on iOS).
+        GhostButton(title = "Read the group chat", onClick = onMessageGuests)
+    }
     if (!closed) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             if (plan.chatRoomId != null) {
@@ -125,6 +122,24 @@ internal fun ColumnScope.PlanHostBody(
     }
 }
 
+/** A cancelled plan says who was told and the host's note; an ended one says so (as on iOS). */
+@Composable
+private fun HostClosedBanner(plan: PlanDto) {
+    if (plan.planState == PlanState.CANCELLED) {
+        PlanBanner(
+            title = "You cancelled this plan",
+            subtitle = "Everyone who was in or waiting was told. The pin is off the map.",
+            icon = PantopusIcon.XCircle,
+            tone = PlanBannerTone.Neutral,
+        )
+        plan.cancelNote?.trim()?.takeIf(String::isNotEmpty)?.let { note ->
+            Text(text = "Your note: “$note”", style = PantopusTextStyle.small, color = PantopusColors.appTextSecondary)
+        }
+    } else {
+        PlanBanner(title = "This plan has ended", subtitle = null, icon = PantopusIcon.CheckCircle, tone = PlanBannerTone.Neutral)
+    }
+}
+
 @Composable
 private fun RequestsCard(
     count: Int,
@@ -133,7 +148,8 @@ private fun RequestsCard(
 ) {
     val who =
         when (names.size) {
-            0 -> "Tap to answer"
+            // The names aren't loaded yet (as on iOS).
+            0 -> if (count == 1) "Someone asked to join" else "$count people asked to join"
             1 -> "${names[0]} asked to join"
             2 -> "${names[0]} and ${names[1]} asked to join"
             else -> "${names[0]}, ${names[1]} and ${names.size - 2} more asked to join"
@@ -234,7 +250,8 @@ private fun GoingSection(
             )
         }
         guests.forEachIndexed { index, person ->
-            GuestRow(person, first = index == 0, atHome = plan.isAtHome, busy = busy, onRemove = onRemove)
+            // Nobody can be removed from a plan that's over (as on iOS, which drops the list there).
+            GuestRow(person, first = index == 0, atHome = plan.isAtHome, busy = busy, onRemove = onRemove.takeUnless { closed })
         }
     }
 }
@@ -245,7 +262,7 @@ private fun GuestRow(
     first: Boolean,
     atHome: Boolean,
     busy: Boolean,
-    onRemove: (PlanPersonDto) -> Unit,
+    onRemove: ((PlanPersonDto) -> Unit)?,
 ) {
     var menu by remember { mutableStateOf(false) }
     var confirm by remember { mutableStateOf(false) }
@@ -256,15 +273,19 @@ private fun GuestRow(
             listOfNotNull("$count ${if (count == 1) "kid" else "kids"}", KidsAgeBand.rangeLabel(person.kidsAgeBands))
                 .joinToString(", ")
         }
+    // Board H9, as on iOS: "Verified · about 1 mi · you hosted Alex before", "About 1 mi · new to Pantopus".
     val subtitle =
         listOfNotNull(
-            if (person.reconfirmNeeded == true) "hasn't confirmed the change" else null,
-            if (person.verifiedAddress) "verified" else null,
+            if (person.onMyWay) "On the way" else null,
+            if (person.verifiedAddress) "Verified" else null,
             PlanFormat.distance(person.distanceBand),
             kids,
-            if (person.hostedBefore == true) "you hosted ${PlanFormat.firstName(name)} before" else null,
-            if (person.newToPantopus == true) "new to Pantopus" else null,
-            if (person.onMyWay) "on the way" else null,
+            when {
+                person.hostedBefore == true -> "you hosted ${PlanFormat.firstName(name)} before"
+                person.newToPantopus == true -> "new to Pantopus"
+                else -> null
+            },
+            if (person.reconfirmNeeded == true) "asked “Still coming?”" else null,
         ).joinToString(" · ").replaceFirstChar { it.titlecase() }.ifBlank { "Going" }
     Column(modifier = Modifier.fillMaxWidth()) {
         if (!first) PlanDivider()
@@ -282,7 +303,7 @@ private fun GuestRow(
                 )
                 Text(text = subtitle, style = PantopusTextStyle.small.copy(fontSize = 13.sp), color = PantopusColors.appTextSecondary)
             }
-            if (person.requestId != null) {
+            if (person.requestId != null && onRemove != null) {
                 Box {
                     PlanRoundButton(
                         icon = PantopusIcon.MoreHorizontal,
@@ -310,7 +331,7 @@ private fun GuestRow(
             text = {
                 Text(
                     if (atHome) {
-                        "They've already seen your address. They lose the plan, the note and the chat from now on."
+                        "${PlanFormat.firstName(name)} has already seen the address. They lose the plan, the note and the chat from now on."
                     } else {
                         "They lose the plan, the exact place, the note and the chat from now on."
                     },
@@ -319,7 +340,7 @@ private fun GuestRow(
             confirmButton = {
                 TextButton(onClick = {
                     confirm = false
-                    onRemove(person)
+                    onRemove?.invoke(person)
                 }) { Text("Remove", color = PantopusColors.error) }
             },
             dismissButton = { TextButton(onClick = { confirm = false }) { Text("Not now") } },
@@ -339,8 +360,9 @@ internal fun PlanCancelSheet(
     onKeep: () -> Unit,
 ) {
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val inCount = plan.people.orEmpty().count { !it.isHost }
-    val asked = requests?.let { it.pending.size + it.waitlisted.size } ?: (plan.requestsCount ?: 0)
+    // People in count with their parties ("Chris + 1" is two), as on H9 and H11; everyone asking or waiting is told too.
+    val inCount = plan.people.orEmpty().filter { !it.isHost }.sumOf { it.partySize.coerceAtLeast(1) }
+    val asked = requests?.let { it.pending.size + it.waitlisted.size } ?: ((plan.requestsCount ?: 0) + plan.waitlistCount)
     ModalBottomSheet(onDismissRequest = onKeep, sheetState = sheet, containerColor = PantopusColors.appSurface) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s4).padding(bottom = Spacing.s6).navigationBarsPadding(),

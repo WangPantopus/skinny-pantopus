@@ -68,7 +68,7 @@ struct PlansMapView: View {
         }
         .background(Theme.Color.appBg)
         .task { await viewModel.start() }
-        .refreshesOnPlansChange { await viewModel.start() }
+        .refreshesOnStoreChange(affects: { PlansStoreReads.affects($0) }, perform: { await viewModel.start() })
         .onChange(of: viewModel.recenterRequest) { _, _ in recenter() }
         .onChange(of: viewModel.widenRequest) { _, _ in widen() }
         .sheet(isPresented: $showsAreaPicker) {
@@ -177,15 +177,17 @@ struct PlansMapView: View {
             nil
         }
         let calendar = PlanFormat.calendar(for: pin.timezone ?? card(for: pin.id)?.timezone)
+        let tag = PlanFormat.pinTag(
+            state: pin.state,
+            isFull: pin.isFull && !pin.isIn && !pin.isHosting,
+            startsAt: pin.startsAtDate,
+            dayPart: pin.dayPart,
+            calendar: calendar
+        )
         return PlanPinLook(
             kind: pin.kind,
-            tag: pin.isHosting && selected ? "Your plan" : PlanFormat.pinTag(
-                state: pin.state,
-                isFull: pin.isFull && !pin.isIn && !pin.isHosting,
-                startsAt: pin.startsAtDate,
-                dayPart: pin.dayPart,
-                calendar: calendar
-            ),
+            // "Your plan · Sun 1:25", as the posted pin reads (board H8) and Android's.
+            tag: pin.isHosting && selected ? "Your plan · \(tag)" : tag,
             isSelected: selected,
             isDimmed: viewModel.selectedId != nil && !selected,
             isFull: pin.isFull && !pin.isIn && !pin.isHosting,
@@ -445,7 +447,9 @@ enum PlansPinSpeech {
         } else if let start = pin.startsAtDate {
             parts.append(PlanFormat.spokenWhen(start, calendar: PlanFormat.calendar(for: pin.timezone ?? card?.timezone)))
         } else {
-            parts.append(PlanFormat.dayPart(pin.dayPart).lowercased())
+            // A playdate whose time is hidden: "Saturday morning", as its card says it (as on Android).
+            let calendar = PlanFormat.calendar(for: pin.timezone ?? card?.timezone)
+            parts.append(PlanFormat.dayPartPhrase(pin.dayPart, day: pin.startsOnDate, calendar: calendar))
         }
         let band = pin.distanceBand ?? card?.distanceBand ?? center.map {
             PlanFormat.band(meters: CLLocation(latitude: $0.latitude, longitude: $0.longitude)

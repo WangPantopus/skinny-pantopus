@@ -78,6 +78,7 @@ function makePost(overrides = {}) {
     target_place_id: null,
     resolved_at: null,
     archived_at: null,
+    moderation_state: 'live', // the column's default; the feeds show live posts only
     archive_reason: null,
     is_story: false,
     story_expires_at: null,

@@ -68,6 +68,17 @@ public struct PulsePostDetailContent: Sendable, Equatable, Hashable {
         self.hiddenReplyCount = hiddenReplyCount
     }
 
+    /// How the post ended, or when a Heads-up ends (Pulse S7).
+    public var status: PulsePostStatus? {
+        PulsePostStatus.from(
+            resolution: post.resolution,
+            state: post.state,
+            postType: post.postType,
+            goingCount: reactions.helpful,
+            expiresAt: post.expiresAt
+        )
+    }
+
     /// Copy with replaced interaction state — keeps optimistic updates
     /// from re-stating every identity field.
     public func replacing(
@@ -114,7 +125,16 @@ public final class PulsePostDetailViewModel {
     public private(set) var isSendingComment: Bool = false
 
     /// Transient error string surfaced in the toast overlay.
-    public var toastMessage: String?
+    public var toastMessage: String? {
+        // Every message is an error unless `showToast` says otherwise.
+        didSet { if toastMessage != nil { toastKind = .error } }
+    }
+
+    /// How the toast reads: an error unless an action went through.
+    public private(set) var toastKind: ToastKind = .error
+
+    /// Shows "Close this question?" for the asker's open Ask (Pulse S7).
+    public var showsCloseAskConfirm = false
 
     /// True when the entire reply thread is expanded.
     public private(set) var showingAllReplies: Bool = false
@@ -200,6 +220,56 @@ public final class PulsePostDetailViewModel {
         guard let currentUserId, !currentUserId.isEmpty else { return false }
         guard case let .loaded(content) = state else { return false }
         return content.post.userId == currentUserId
+    }
+
+    /// The asker's own open Ask (contract §2.12): "Close" is offered.
+    public var canCloseAsk: Bool {
+        guard isOwner, case let .loaded(content) = state else { return false }
+        let post = content.post
+        return PulsePostStatus.askIsOpen(
+            postType: post.postType,
+            state: post.state,
+            resolution: post.resolution,
+            expiresAt: post.expiresAt,
+            createdAt: post.createdAt
+        )
+    }
+
+    /// …and "Keep open 7 more days", once per Ask.
+    public var canKeepAskOpen: Bool {
+        guard canCloseAsk, case let .loaded(content) = state else { return false }
+        return content.post.keptOpenAt == nil
+    }
+
+    /// "Keep open 7 more days": the Ask stays up 7 more days, once.
+    public func keepAskOpen() async {
+        do {
+            _ = try await client.request(PulseEndpoints.keepAskOpen(postId: postId), as: PulseAskActionResponse.self)
+            showToast("Kept open for 7 more days.", kind: .success)
+            PulsePostsRefresh.notifyPostsDidChange()
+        } catch {
+            showToast((error as? APIError)?.errorDescription ?? "Couldn't keep it open.")
+        }
+        // The post's end and its keep-open mark come back with it (and a refusal's reason).
+        await refresh()
+    }
+
+    /// "Close", after "Close this question?": the Ask ends and leaves Pulse;
+    /// the asker still sees it here and can restore it from My posts.
+    public func closeAsk() async {
+        do {
+            _ = try await client.request(PulseEndpoints.closeAsk(postId: postId), as: PulseAskActionResponse.self)
+            showToast("Question closed.", kind: .success)
+            PulsePostsRefresh.notifyPostsDidChange()
+        } catch {
+            showToast((error as? APIError)?.errorDescription ?? "Couldn't close it.")
+        }
+        await refresh()
+    }
+
+    private func showToast(_ text: String, kind: ToastKind = .error) {
+        toastMessage = text
+        toastKind = kind
     }
 
     /// Opening the post: what's on screen stays (the store's or the feed's
@@ -463,7 +533,18 @@ public final class PulsePostDetailViewModel {
             PulsePostsRefresh.notifyPostsDidChange()
         } catch {
             logger.warning("Comment send failed: \(error)")
-            toastMessage = "Couldn't post your comment"
+            // A refusal says why in the server's words (contract §0); the draft stays.
+            toastMessage = Self.refusal(in: error) ?? "Couldn't post your comment"
+        }
+    }
+
+    /// The server's sentence for a refused request (403 or another 4xx);
+    /// nil for a failure that isn't a refusal (offline, 5xx).
+    private static func refusal(in error: any Error) -> String? {
+        switch error as? APIError {
+        case let .forbidden(message): message
+        case let .clientError(_, message): APIError.friendlyClientMessage(message)
+        default: nil
         }
     }
 
@@ -527,6 +608,8 @@ public final class PulsePostDetailViewModel {
     /// the card rather than failing the post. Kicked from its own `.task`
     /// so the card never blocks (or fails) the post itself.
     public func loadNearbyProviders() async {
+        // Launch cuts #6/#4 hide the card (business discovery and broad provider search): nothing is asked for it.
+        guard LaunchFeatures.businessDirectory, LaunchFeatures.openGigs else { return }
         await fetchNearbyProviders()
     }
 

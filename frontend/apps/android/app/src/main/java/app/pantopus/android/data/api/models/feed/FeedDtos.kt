@@ -16,6 +16,8 @@ data class FeedPost(
     val title: String? = null,
     val content: String? = null,
     @Json(name = "post_type") val postType: String? = null,
+    /** One of the 12 Pulse topics (`around_here` … `volunteering`), or null; a value this build doesn't know reads as none. */
+    val topic: String? = null,
     @Json(name = "created_at") val createdAt: String,
     @Json(name = "like_count") val likeCount: Int = 0,
     @Json(name = "comment_count") val commentCount: Int = 0,

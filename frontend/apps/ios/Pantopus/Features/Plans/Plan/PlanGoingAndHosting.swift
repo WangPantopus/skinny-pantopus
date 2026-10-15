@@ -96,12 +96,13 @@ struct PlanGoingSection: View {
         PlanCardLines.firstName(card.host.displayName)
     }
 
-    /// "Sam said yes · just now", or "You got in right away" when a rule let them in.
+    /// "Sam said yes · just now" (board J7), then "· 12 min ago" and later times
+    /// (as on Android); "You got in right away" when a rule let them in.
     private var yesLine: String {
         let request = viewModel.plan?.myRequest
         let said = request?.decidedBy == "rule" ? "You got in right away" : "\(hostFirst) said yes"
-        let recent = PlanTime.parse(request?.decidedAt).map { Date().timeIntervalSince($0) < 300 } ?? justNow
-        return recent ? "\(said) · just now" : said
+        if let decided = PlanTime.parse(request?.decidedAt) { return "\(said) · \(PlanFormat.ago(decided))" }
+        return justNow ? "\(said) · just now" : said
     }
 
     private func placeLine(_ place: PlanPlaceDTO) -> some View {
@@ -119,13 +120,9 @@ struct PlanGoingSection: View {
     }
 
     private var reconfirm: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            PlanBanner(
-                tone: .warning,
-                icon: .alertTriangle,
-                title: "\(hostFirst) moved the \(PlanCardLines.noun(card))",
-                message: "Now \(PlanScreenLines.when(card)). Still coming?"
-            )
+        let words = stillComingWords
+        return VStack(alignment: .leading, spacing: 10) {
+            PlanBanner(tone: .warning, icon: .alertTriangle, title: words.title, message: words.message)
             HStack(spacing: 10) {
                 Button("Can't make it") { onConfirm(.notComing(host: card.host.displayName)) }
                     .planButton(.secondary, size: .small)
@@ -134,6 +131,23 @@ struct PlanGoingSection: View {
                     .accessibilityIdentifier("planStillComing")
             }
         }
+    }
+
+    /// The "Still coming?" push's words for what the host changed (board H11; H11's preview and Android say the same).
+    private var stillComingWords: (title: String, message: String) {
+        let noun = PlanCardLines.noun(card)
+        switch viewModel.plan?.myRequest?.reconfirmReason {
+        case .place: return ("\(hostFirst) changed the place", "It's at a new place now. Still coming?")
+        case .both: return ("\(hostFirst) changed the \(noun)", "Now \(movedTo), at a new place. Still coming?")
+        case .time, nil: return ("\(hostFirst) moved the \(noun)", "Now \(movedTo). Still coming?")
+        }
+    }
+
+    /// "Sunday at 2:00 PM", "tomorrow at 7:30 PM" (board H11, as the push and Android say it).
+    private var movedTo: String {
+        let calendar = PlanFormat.calendar(for: card.timezone)
+        guard let start = card.startsAtDate else { return PlanScreenLines.when(card) }
+        return "\(PlanFormat.dayPhrase(start, calendar: calendar)) at \(PlanFormat.time(start, calendar: calendar))"
     }
 
     /// "You're in" slides up 8 pt and fades in (300–450 ms of the reveal).
@@ -256,7 +270,9 @@ struct PlanHostingSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            StatusChip("You're hosting", variant: .neutral, icon: .flag).accessibilityLabel("You're hosting")
+            // "Cancelled" once it is (board P2's status chip, as on Android).
+            let chip = card.state == .cancelled ? "Cancelled" : "You're hosting"
+            StatusChip(chip, variant: .neutral, icon: .flag).accessibilityLabel(chip)
             Text(card.title)
                 .planFont(.h2)
                 .foregroundStyle(Theme.Color.appText)
@@ -410,6 +426,11 @@ struct PlanHostingSection: View {
         if person.onMyWay { parts.append("On the way") }
         if person.verifiedAddress { parts.append("Verified") }
         if let distance = PlanFormat.distance(person.distanceBand) { parts.append(distance) }
+        if let count = person.kidsCount {
+            // A playdate's guest (as on Android): "2 kids, ages 2–5".
+            let kids = "\(count) \(count == 1 ? "kid" : "kids")"
+            parts.append([kids, PlanRowModel.ages(person.kidsAgeBands)].compactMap { $0 }.joined(separator: ", "))
+        }
         if person.hostedBefore {
             parts.append("you hosted \(PlanCardLines.firstName(person.displayName)) before")
         } else if person.newToPantopus {

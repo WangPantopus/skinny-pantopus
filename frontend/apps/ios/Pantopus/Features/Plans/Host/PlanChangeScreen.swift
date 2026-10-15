@@ -143,37 +143,55 @@ struct PlanChangeScreen: View {
 
     /// Moving the start by more than 30 minutes, or the place, asks everyone who's in.
     private func asksStillComing(_ card: PlanCardDTO) -> Bool {
-        guard goingCount(card) > 0 else { return false }
-        if newPlace != nil { return true }
+        goingCount(card) > 0 && (newPlace != nil || timeMoved(card))
+    }
+
+    private func timeMoved(_ card: PlanCardDTO) -> Bool {
         guard let original = card.startsAtDate else { return false }
         return abs(original.timeIntervalSince(start)) > 30 * 60
     }
 
+    /// The push the server sends, word for word (board H11; Android shows the same).
+    private func pushWords(_ card: PlanCardDTO) -> (title: String, body: String) {
+        let calendar = PlanFormat.calendar(for: card.timezone)
+        let host = PlanCardLines.firstName(card.host.displayName)
+        let noun = PlanCardLines.noun(card)
+        let now = "Now \(PlanFormat.dayPhrase(start, calendar: calendar)) at \(PlanFormat.time(start, calendar: calendar))"
+        if newPlace != nil, timeMoved(card) { return ("\(host) changed the \(noun)", "\(now), at a new place. Still coming?") }
+        if newPlace != nil { return ("\(host) changed the place", "It's at a new place now. Still coming?") }
+        return ("\(host) moved the \(noun)", "\(now). Still coming?")
+    }
+
+    /// Board H11: one sentence beside a warning glyph (as on Android).
     private func warning(_ card: PlanCardDTO) -> some View {
         let going = goingCount(card)
-        return PlanBanner(
-            tone: .warning,
-            icon: .alertTriangle,
-            title: "\(going) \(going == 1 ? "person is" : "people are") in",
-            message: newPlace == nil
-                ? "Moving the time by more than 30 minutes asks each of them \u{201C}Still coming?\u{201D}"
-                : "Changing the place asks each of them \u{201C}Still coming?\u{201D}"
-        )
+        let asks = newPlace == nil
+            ? "Moving the time by more than 30 minutes asks each of them \u{201C}Still coming?\u{201D}"
+            : "Changing the place asks each of them \u{201C}Still coming?\u{201D}"
+        return HStack(alignment: .top, spacing: Spacing.s3) {
+            Icon(.alertTriangle, size: 22, color: Theme.Color.warning)
+            Text("\(going) \(going == 1 ? "person is" : "people are") in. \(asks)")
+                .planFont(.small)
+                .foregroundStyle(Theme.Color.appTextStrong)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, Spacing.s3)
+        .background(RoundedRectangle(cornerRadius: Radii.xl, style: .continuous).fill(Theme.Color.warningBg))
+        .accessibilityElement(children: .combine)
     }
 
     private func preview(_ card: PlanCardDTO) -> some View {
-        let calendar = PlanFormat.calendar(for: card.timezone)
-        let host = PlanCardLines.firstName(card.host.displayName)
+        let push = pushWords(card)
         return VStack(alignment: .leading, spacing: Spacing.s2) {
             Text.planOverline("What they'll get")
             VStack(alignment: .leading, spacing: 3) {
                 Text("Pantopus · now").planFont(.footnote).foregroundStyle(Theme.Color.appTextSecondary)
-                Text("\(host) moved the \(card.kind.title.lowercased())").planFont(.smallStrong).foregroundStyle(Theme.Color.appText)
-                Text(
-                    "Now \(PlanFormat.dayPhrase(start, calendar: calendar)) at \(PlanFormat.time(start, calendar: calendar)). Still coming?"
-                )
-                .planFont(.small)
-                .foregroundStyle(Theme.Color.appText)
+                Text(push.title).planFont(.smallStrong).foregroundStyle(Theme.Color.appText)
+                Text(push.body)
+                    .planFont(.small)
+                    .foregroundStyle(Theme.Color.appText)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, Spacing.s3)

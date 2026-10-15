@@ -29,6 +29,18 @@ public struct FeedPostDTO: Decodable, Sendable, Hashable, Identifiable {
     public let state: String?
     /// Server-derived authorship: `user`, `curator` or `system`.
     public let origin: String?
+    /// One of the twelve Pulse topics, or null (`feedService.js:246`).
+    public let topic: String?
+    /// How the post ended (Pulse S7, contract §1): `answered`, `closed`,
+    /// `closed_unanswered`, `claimed`, `expired`, `happened`, `reunited`;
+    /// nil while open, and from servers before S7.
+    public let resolution: String?
+    /// When the post ends (ISO 8601), when it names a time.
+    public let expiresAt: String?
+    /// `choose` or `first`; it means something only on an offer.
+    public let claimMode: String?
+    /// The asker already used "Keep open 7 more days" (`post_metadata.kept_open_at`).
+    public let keptOpenAt: String?
     /// True for cold-start neighborhood facts injected by the feed handler
     /// (`backend/routes/posts.js:84`). Those rows are dismissable, not
     /// reportable.
@@ -61,7 +73,10 @@ public struct FeedPostDTO: Decodable, Sendable, Hashable, Identifiable {
         case userHasLiked
         case userHasSaved
         case userHasReposted
-        case state, origin
+        case state, origin, topic, resolution
+        case expiresAt = "expires_at"
+        case claimMode = "claim_mode"
+        case postMetadata = "post_metadata"
         case isSeeded = "is_seeded"
         case isVisitorPost = "is_visitor_post"
         case businessAuthorId = "business_author_id"
@@ -94,6 +109,11 @@ public struct FeedPostDTO: Decodable, Sendable, Hashable, Identifiable {
         userHasReposted = c.lenient(Bool.self, forKey: .userHasReposted) ?? false
         state = c.lenient(String.self, forKey: .state)
         origin = c.lenient(String.self, forKey: .origin)
+        topic = c.lenient(String.self, forKey: .topic)
+        resolution = c.lenient(String.self, forKey: .resolution)
+        expiresAt = c.lenient(String.self, forKey: .expiresAt)
+        claimMode = c.lenient(String.self, forKey: .claimMode)
+        keptOpenAt = c.lenient(PostLifecycleMetadata.self, forKey: .postMetadata)?.keptOpenAt
         isSeeded = c.lenient(Bool.self, forKey: .isSeeded) ?? false
         isVisitorPost = c.lenient(Bool.self, forKey: .isVisitorPost) ?? false
         businessAuthorId = c.lenient(String.self, forKey: .businessAuthorId)
@@ -107,6 +127,19 @@ public struct FeedPostDTO: Decodable, Sendable, Hashable, Identifiable {
         mediaTypes = c.lenient([String].self, forKey: .mediaTypes) ?? []
         mediaLiveURLs = c.lenient([String].self, forKey: .mediaLiveURLs) ?? []
         creator = c.lenient(PostCreatorDTO.self, forKey: .creator)
+    }
+}
+
+/// The lifecycle marks a post row carries in `post_metadata` (Pulse S7).
+struct PostLifecycleMetadata: Decodable {
+    let keptOpenAt: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case keptOpenAt = "kept_open_at"
+    }
+
+    init(from decoder: any Decoder) throws {
+        keptOpenAt = (try? decoder.container(keyedBy: CodingKeys.self))?.lenient(String.self, forKey: .keptOpenAt)
     }
 }
 

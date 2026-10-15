@@ -39,11 +39,12 @@ struct PlanComposerRoot: View {
                 NavigationStack(path: $path) {
                     Group {
                         if startsAtDetails {
+                            // The type is already chosen (F4, "Host again"): still step 2 of 3, as the boards and Android count.
                             PlanDetailsForm(
                                 model: model,
-                                step: "1 of 2",
+                                step: "2 of 3",
                                 onBack: { onFinish(nil) },
-                                onPreview: { path.append(.preview) }
+                                onPreview: { openPreview() }
                             )
                         } else {
                             PlanTypePicker(
@@ -71,11 +72,11 @@ struct PlanComposerRoot: View {
                                 model: model,
                                 step: "2 of 3",
                                 onBack: { path.removeLast() },
-                                onPreview: { path.append(.preview) }
+                                onPreview: { openPreview() }
                             )
                             .toolbar(.hidden, for: .navigationBar)
                         case .preview:
-                            PlanPreviewScreen(model: model, step: startsAtDetails ? "2 of 2" : "3 of 3") { path.removeLast() }
+                            PlanPreviewScreen(model: model, step: "3 of 3") { path.removeLast() }
                                 .toolbar(.hidden, for: .navigationBar)
                         }
                     }
@@ -83,6 +84,12 @@ struct PlanComposerRoot: View {
             }
         }
         .task { await model.load() }
+    }
+
+    /// H7 opens without the last attempt's refusal (as on Android): the host may have fixed it.
+    private func openPreview() {
+        model.postError = nil
+        path.append(.preview)
     }
 }
 
