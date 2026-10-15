@@ -143,7 +143,12 @@ internal fun PublicPlacePicker(
         trailingClose = true,
         footer = {
             state.error?.let { Text(text = it, style = PantopusTextStyle.small, color = PantopusColors.error) }
-            HostFooterButton(title = candidate?.let { "Use ${it.name}" } ?: "Choose a place", onClick = onUse)
+            // Greyed out until a place is picked, as on iOS.
+            HostFooterButton(
+                title = candidate?.let { "Use ${it.name}" } ?: "Choose a place",
+                onClick = onUse,
+                enabled = candidate != null,
+            )
         },
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.s4)) {
