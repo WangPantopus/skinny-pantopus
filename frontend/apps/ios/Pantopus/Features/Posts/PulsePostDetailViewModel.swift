@@ -213,7 +213,7 @@ public final class PulsePostDetailViewModel {
         self.client = client
         store = ScreenStore.store(for: client)
         if let copy = store.peek(conversationEndpoint, as: PulseConversationResponse.self) {
-            applyConversation(copy, startedAt: Date())
+            applyConversation(copy, holdNewReplies: false)
         }
     }
 
