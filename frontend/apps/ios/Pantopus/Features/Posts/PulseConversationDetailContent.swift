@@ -17,7 +17,7 @@ struct PulseConversationDetailContent: View {
     let onMenu: (PulseReplyDTO) -> Void
     let onOfferRequests: () -> Void
     let onPrivateMessage: () -> Void
-    let onFollowSettings: () -> Void
+    let onFollowSettings: @MainActor () -> Void
     @State private var focusRequest = 0
 
     private var card: PulsePageCard {
@@ -51,7 +51,8 @@ struct PulseConversationDetailContent: View {
         guard repliesOpen else { return nil }
         let label = content.post.viewer?.following == true ? "Following" : "Follow"
         return ContentDetailTopBarAction(icon: .bookmark, accessibilityLabel: label, text: label) {
-            Task { if await viewModel.followConversation() { onFollowSettings() } }
+            // The handler isn't main-actor isolated; the sheet's state is.
+            Task { @MainActor in if await viewModel.followConversation() { onFollowSettings() } }
         }
     }
 

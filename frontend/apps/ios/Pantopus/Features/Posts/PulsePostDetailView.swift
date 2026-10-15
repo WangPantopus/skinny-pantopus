@@ -165,7 +165,8 @@ public struct PulsePostDetailView: View {
                     canFollowUntilEnd: viewModel.canFollowConversationUntilEnd,
                     untilEndLabel: viewModel.conversationFollowEndLabel
                 ) {
-                    await viewModel.refresh()
+                    // Keep the replies in place; only the follow state changed.
+                    _ = await viewModel.refreshConversationAfterMutation(reportFailure: false)
                 }
             }
     }
