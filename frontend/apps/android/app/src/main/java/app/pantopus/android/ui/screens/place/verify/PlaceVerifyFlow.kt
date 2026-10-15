@@ -194,9 +194,8 @@ fun PlaceVerifySheet(
     var selected by remember { mutableStateOf(PlaceVerifyMethod.MAIL) }
     val methods = rememberVerifyMethods(homeId)
     val documentInReview = rememberDocumentInReview(homeId)
-    LaunchedEffect(documentInReview) {
-        if (documentInReview && selected == PlaceVerifyMethod.DOCUMENT) selected = PlaceVerifyMethod.MAIL
-    }
+    // A document already in review isn't a door to choose: mail leads again.
+    val chosen = if (documentInReview && selected == PlaceVerifyMethod.DOCUMENT) PlaceVerifyMethod.MAIL else selected
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = PantopusColors.appSurface) {
@@ -248,19 +247,7 @@ fun PlaceVerifySheet(
             Spacer(modifier = Modifier.height(18.dp))
 
             Overline("Choose how")
-            Column(modifier = Modifier.fillMaxWidth().placeCard().selectableGroup()) {
-                methods.forEachIndexed { i, m ->
-                    if (m == PlaceVerifyMethod.DOCUMENT && documentInReview) {
-                        DocumentReviewRow(onOpenDocumentStatus)
-                    } else {
-                        // A radio choice, so TalkBack says which method is selected.
-                        Box(modifier = Modifier.selectable(selected = selected == m, role = Role.RadioButton) { selected = m }) {
-                            VerifyRow(m.icon, m.label, m.sub, PlaceTileTone.SKY, trailing = { Radio(selected == m) })
-                        }
-                    }
-                    if (i < methods.lastIndex) Divider()
-                }
-            }
+            VerifyDoors(methods, chosen, documentInReview, onChoose = { selected = it }, onOpenDocumentStatus = onOpenDocumentStatus)
             Spacer(modifier = Modifier.height(16.dp))
 
             Row(horizontalArrangement = Arrangement.spacedBy(9.dp), modifier = Modifier.padding(horizontal = 2.dp, vertical = 0.dp)) {
@@ -281,7 +268,7 @@ fun PlaceVerifySheet(
                 )
             }
             Spacer(modifier = Modifier.height(16.dp))
-            PrimaryButton(title = "Start verification", onClick = { onStart(selected) }, modifier = Modifier.fillMaxWidth())
+            PrimaryButton(title = "Start verification", onClick = { onStart(chosen) }, modifier = Modifier.fillMaxWidth())
             Spacer(modifier = Modifier.height(20.dp))
         }
     }
@@ -306,6 +293,30 @@ private fun VerifyRow(
             Text(sub, fontSize = 12.5.sp, color = PantopusColors.appTextMuted)
         }
         trailing?.invoke()
+    }
+}
+
+/** "Choose how": the doors as one radio group; the document door shows its review while a document waits on one. */
+@Composable
+private fun VerifyDoors(
+    methods: List<PlaceVerifyMethod>,
+    chosen: PlaceVerifyMethod,
+    documentInReview: Boolean,
+    onChoose: (PlaceVerifyMethod) -> Unit,
+    onOpenDocumentStatus: (() -> Unit)?,
+) {
+    Column(modifier = Modifier.fillMaxWidth().placeCard().selectableGroup()) {
+        methods.forEachIndexed { i, m ->
+            if (m == PlaceVerifyMethod.DOCUMENT && documentInReview) {
+                DocumentReviewRow(onOpenDocumentStatus)
+            } else {
+                // A radio choice, so TalkBack says which method is selected.
+                Box(modifier = Modifier.selectable(selected = chosen == m, role = Role.RadioButton) { onChoose(m) }) {
+                    VerifyRow(m.icon, m.label, m.sub, PlaceTileTone.SKY, trailing = { Radio(chosen == m) })
+                }
+            }
+            if (i < methods.lastIndex) Divider()
+        }
     }
 }
 
