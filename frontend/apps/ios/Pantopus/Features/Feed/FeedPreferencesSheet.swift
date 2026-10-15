@@ -8,9 +8,10 @@
 //  (deals, safety alerts) plus a single political-content toggle that
 //  writes both the Place and Connections columns.
 //  Backed by `GET`/`PUT /api/posts/feed-preferences`
-//  (`backend/routes/posts.js:2257` / `:2286`). Below them, the Pulse topics
-//  this person muted from a post's menu, each with Unmute (Pulse S4;
-//  `GET`/`DELETE /api/posts/mute`).
+//  (`backend/routes/posts.js:2257` / `:2286`). Below them, everything this
+//  person follows, the updates those follows send and everything muted,
+//  each with its undo (Pulse S10.3, `PulsePreferencesSummarySections`; S4's
+//  muted topics are one of those lists).
 //
 
 import Foundation
@@ -25,13 +26,6 @@ public enum FeedPreferencesState: Sendable, Equatable {
     case error(message: String)
 }
 
-/// The Pulse topics this person muted, as the sheet lists them.
-public enum MutedTopicsState: Sendable, Equatable {
-    case loading
-    case loaded([TopicMuteDTO])
-    case error
-}
-
 /// Loads + patches the signed-in user's feed preferences.
 @Observable
 @MainActor
@@ -41,16 +35,12 @@ public final class FeedPreferencesViewModel {
     public private(set) var isSaving = false
     /// Transient error banner text.
     public var toastMessage: String?
-    /// The muted Pulse topics (Pulse S4).
-    public private(set) var mutedTopics: MutedTopicsState = .loading
 
     private let api: APIClient
-    private let moderation: FeedModerationStore
     private let logger = Logger(label: "app.pantopus.ios.FeedPreferences")
 
-    init(api: APIClient = .shared, moderation: FeedModerationStore = .shared) {
+    init(api: APIClient = .shared) {
         self.api = api
-        self.moderation = moderation
     }
 
     /// `GET /api/posts/feed-preferences`.
@@ -95,38 +85,6 @@ public final class FeedPreferencesViewModel {
         )
     }
 
-    /// `GET /api/posts/mute` → `topic_mutes`, the twelve Pulse topics only.
-    public func loadMutedTopics() async {
-        mutedTopics = .loading
-        do {
-            let response: MutedEntitiesResponse = try await api.request(FeedActionsEndpoints.mutedEntities())
-            mutedTopics = .loaded(response.topicMutes.filter { PulseTopic(stored: $0.topic) != nil })
-        } catch {
-            mutedTopics = .error
-        }
-    }
-
-    /// `DELETE /api/posts/mute` for one topic mute: the row leaves at once and
-    /// comes back if the call fails. True once the server took it.
-    public func unmute(_ mute: TopicMuteDTO) async -> Bool {
-        guard case let .loaded(current) = mutedTopics else { return false }
-        mutedTopics = .loaded(current.filter { $0 != mute })
-        do {
-            _ = try await api.request(
-                FeedActionsEndpoints.unmutePulseTopic(mute.topic, areaId: mute.areaId),
-                as: PostActionAckResponse.self
-            )
-            moderation.removeTopicMute(mute.topic)
-            // Saved feed pages were read without this topic's posts.
-            ScreenStore.store(for: api).markStale(topics: [ScreenTopic.posts])
-            return true
-        } catch {
-            mutedTopics = .loaded(current)
-            toastMessage = "Couldn't unmute that topic."
-            return false
-        }
-    }
-
     private func update(_ body: FeedPreferencesUpdateRequest) async {
         guard case let .loaded(current) = state, !isSaving else { return }
         isSaving = true
@@ -161,17 +119,25 @@ public final class FeedPreferencesViewModel {
 /// Bottom sheet body for Pulse Preferences.
 public struct FeedPreferencesSheet: View {
     @State private var viewModel: FeedPreferencesViewModel
+    @State private var summary = PulsePreferencesSummaryModel()
     private let onClose: @MainActor () -> Void
     /// Fired after any successful write so the host feed can refetch —
     /// RN's `onPrefsChanged` → `feed.onRefresh()`.
     private let onPrefsChanged: @MainActor () -> Void
+    /// The area the Pulse page reads, for "Mute a topic" (nil leaves it out).
+    private let areaId: String?
+    private let areaName: String?
 
     init(
         viewModel: FeedPreferencesViewModel? = nil,
+        areaId: String? = nil,
+        areaName: String? = nil,
         onClose: @escaping @MainActor () -> Void,
         onPrefsChanged: @escaping @MainActor () -> Void = {}
     ) {
         _viewModel = State(initialValue: viewModel ?? FeedPreferencesViewModel())
+        self.areaId = areaId
+        self.areaName = areaName
         self.onClose = onClose
         self.onPrefsChanged = onPrefsChanged
     }
@@ -179,7 +145,7 @@ public struct FeedPreferencesSheet: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s0) {
             header
-            // Scrolls once the muted topics or a large text size need the room.
+            // Scrolls once the lists or a large text size need the room.
             ScrollView(.vertical, showsIndicators: true) {
                 content
                     .padding(.bottom, Spacing.s5)
@@ -188,7 +154,7 @@ public struct FeedPreferencesSheet: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.Color.appBg)
         .task { await viewModel.load() }
-        .task { await viewModel.loadMutedTopics() }
+        .task { await summary.load() }
         .accessibilityIdentifier("pulsePreferencesSheet")
     }
 
@@ -268,7 +234,12 @@ public struct FeedPreferencesSheet: View {
                 await viewModel.setShowPolitics(next)
                 onPrefsChanged()
             }
-            mutedTopicsSection
+            PulsePreferencesSummarySections(
+                model: summary,
+                areaId: areaId,
+                areaName: areaName,
+                onChanged: onPrefsChanged
+            )
             HStack(spacing: Spacing.s2) {
                 Icon(.info, size: 13, color: Theme.Color.appTextMuted)
                 Text("These preferences sync across all your devices.")
@@ -318,84 +289,6 @@ public struct FeedPreferencesSheet: View {
         .frame(maxWidth: .infinity)
         .padding(Spacing.s5)
         .accessibilityIdentifier("pulsePreferencesError")
-    }
-
-    // MARK: - Muted topics (Pulse S4)
-
-    private var mutedTopicsSection: some View {
-        VStack(alignment: .leading, spacing: Spacing.s0) {
-            Text("MUTED TOPICS")
-                .pulseFont(.overline)
-                .foregroundStyle(Theme.Color.appTextMuted)
-                .accessibilityAddTraits(.isHeader)
-                .padding(.top, Spacing.s5)
-                .padding(.bottom, Spacing.s2)
-            switch viewModel.mutedTopics {
-            case .loading:
-                Shimmer(height: 44, cornerRadius: Radii.sm)
-            case let .loaded(mutes) where mutes.isEmpty:
-                Text("No muted topics.")
-                    .pulseFont(.small)
-                    .foregroundStyle(Theme.Color.appTextSecondary)
-                    .padding(.vertical, Spacing.s2)
-            case let .loaded(mutes):
-                ForEach(mutes) { mute in
-                    mutedTopicRow(mute)
-                }
-            case .error:
-                HStack(spacing: Spacing.s3) {
-                    Text("Couldn't load your muted topics.")
-                        .pulseFont(.small)
-                        .foregroundStyle(Theme.Color.appTextSecondary)
-                    Spacer(minLength: Spacing.s2)
-                    Button("Try again") {
-                        Task { await viewModel.loadMutedTopics() }
-                    }
-                    .pulseFont(.button)
-                    .frame(minHeight: 44)
-                    .accessibilityIdentifier("pulsePreferencesMutedTopicsRetry")
-                }
-            }
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("pulsePreferencesMutedTopics")
-    }
-
-    private func mutedTopicRow(_ mute: TopicMuteDTO) -> some View {
-        let name = PulseTopic(stored: mute.topic)?.label ?? mute.topic
-        // No area ids exist before Pulse S5, so the apps mute everywhere.
-        let scope = mute.areaId == nil ? "Everywhere" : "In one area"
-        return HStack(alignment: .center, spacing: Spacing.s3) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(name)
-                    .pulseFont(.button)
-                    .foregroundStyle(Theme.Color.appText)
-                Text(scope)
-                    .pulseFont(.footnote)
-                    .foregroundStyle(Theme.Color.appTextSecondary)
-            }
-            .accessibilityElement(children: .combine)
-            Spacer(minLength: Spacing.s2)
-            Button {
-                Task {
-                    if await viewModel.unmute(mute) { onPrefsChanged() }
-                }
-            } label: {
-                Text("Unmute")
-                    .pulseFont(.button)
-                    .foregroundStyle(Theme.Color.primaryInk)
-                    .padding(.horizontal, Spacing.s2)
-                    .frame(minHeight: 44)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Unmute \(name)")
-            .accessibilityIdentifier("pulsePreferencesUnmuteTopic_\(mute.topic)")
-        }
-        .padding(.vertical, Spacing.s1)
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(Theme.Color.appBorderSubtle).frame(height: 1)
-        }
-        .accessibilityIdentifier("pulsePreferencesMutedTopic_\(mute.topic)")
     }
 
     private func sectionLabel(_ text: String) -> some View {

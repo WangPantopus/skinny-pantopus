@@ -108,6 +108,7 @@ public struct PulsePageView: View {
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .task(id: pageIsActive) {
             guard pageIsActive else { return }
+            viewModel.noteSeeingTooMuch()
             await viewModel.load()
             await pollNewConversations()
         }
@@ -166,6 +167,8 @@ public struct PulsePageView: View {
         }
         .sheet(isPresented: $showsPreferences) {
             FeedPreferencesSheet(
+                areaId: viewModel.displayedAreaId,
+                areaName: viewModel.areaName,
                 onClose: { showsPreferences = false },
                 onPrefsChanged: { Task { await viewModel.refresh() } }
             )
@@ -218,6 +221,12 @@ public struct PulsePageView: View {
                     onCompose: onCompose
                 ) {
                     Task { await viewModel.selectTopic(nil) }
+                }
+            }
+            if viewModel.showsSeeingTooMuch, !content.isEmpty {
+                PulseSeeingTooMuchLine { tapped in
+                    viewModel.retireSeeingTooMuch(tapped: tapped)
+                    showsPreferences = tapped
                 }
             }
             ForEach(content.groups) { group in

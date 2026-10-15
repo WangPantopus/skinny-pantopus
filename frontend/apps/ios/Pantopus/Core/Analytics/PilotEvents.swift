@@ -35,6 +35,8 @@ final class PilotEvents {
         case sessionOpen = "session_open"
         case reminderAction = "reminder_action"
         case suggestionDecision = "suggestion_decision"
+        /// "Seeing too much?" tapped (Pulse S10.6, build spec §15).
+        case seeingTooMuchTap = "pulse_seeing_too_much_tap"
     }
 
     static let shared = PilotEvents()
