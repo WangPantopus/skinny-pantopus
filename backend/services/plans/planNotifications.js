@@ -429,6 +429,19 @@ async function hostSummary({ plan, comingCount, spotsLeft, requestsCount }) {
   });
 }
 
+/** The host invited someone to a plan made from a conversation (S14, "People I invite"). */
+async function invited({ plan, userId, hostFirst }) {
+  return notify({
+    userId,
+    type: 'plan_invited',
+    title: `${hostFirst} invited you to a ${noun(plan)}`,
+    body: whenText(plan.post.event_date, plan.timezone),
+    link: `/plans/${plan.post_id}`,
+    plan,
+    metadata: { user_id: String(plan.host_user_id) },
+  });
+}
+
 module.exports = {
   CATEGORY_BY_TYPE,
   BUNDLE_WINDOW_MS,
@@ -453,4 +466,5 @@ module.exports = {
   spotOpened,
   reminder,
   hostSummary,
+  invited,
 };

@@ -49,6 +49,8 @@ const FUNNEL_EVENT_TYPES = Object.freeze([
   // Recorded atomically by pulse_record_helpful_mark, not by a client event.
   'pulse_helpful_marked',
   'pulse_follow',
+  // Recorded by POST /api/pulse/posts/:id/plan (meta: plan_id, post_id, kind, audience).
+  'pulse_plan_suggested',
 ]);
 
 // Only these pilot events are accepted from an authenticated app. Delivery
