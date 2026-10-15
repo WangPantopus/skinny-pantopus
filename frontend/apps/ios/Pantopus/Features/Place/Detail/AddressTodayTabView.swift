@@ -76,10 +76,12 @@ struct AddressTodayTabView: View {
                 TimelineView(.everyMinute) { minute in
                     Text(minute.date.formatted(
                         Date.FormatStyle(timeZone: placeTimeZone)
-                            .weekday(.abbreviated).month(.abbreviated).day()
+                            .weekday(.abbreviated)
+                            .month(.abbreviated)
+                            .day()
                     ))
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Theme.Color.appTextMuted)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Theme.Color.appTextMuted)
                 }
             }
             if let address {

@@ -66,7 +66,14 @@ struct TodaySkyHero: View {
             let when = picked?.date ?? minute.date
             let shown = picked.map { SkyScrub.weather(data, at: $0, calendar: calendar) } ?? data
             let moment = picked == nil ? nowMoment : SkyMoment.at(when, sunrise: sun?.sunrise, sunset: sun?.sunset, calendar: calendar)
-            let note = picked == nil ? nowNote : SkyNote.pick(now: when, moment: moment, weather: shown, pickups: pickups, air: air, calendar: calendar)
+            let note = picked == nil ? nowNote : SkyNote.pick(
+                now: when,
+                moment: moment,
+                weather: shown,
+                pickups: pickups,
+                air: air,
+                calendar: calendar
+            )
             let sky = SkyPalette.sky(moment.phase, SkyPalette.Weather(shown.conditionCode))
             // A new hour, phase or kind of weather crossfades in.
             let key = SceneKey(hour: picked?.date, phase: moment.phase, sky: SkyPalette.Weather(shown.conditionCode))

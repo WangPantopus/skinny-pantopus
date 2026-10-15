@@ -17,7 +17,10 @@ struct TodaySunArcCard: View {
 
     var body: some View {
         TimelineView(.everyMinute) { minute in
-            TodaySunArcContent(data: data, moment: SkyMoment.at(minute.date, sunrise: data.sunrise, sunset: data.sunset, calendar: calendar))
+            TodaySunArcContent(
+                data: data,
+                moment: SkyMoment.at(minute.date, sunrise: data.sunrise, sunset: data.sunset, calendar: calendar)
+            )
         }
         .accessibilityIdentifier("todaySunArc")
     }
