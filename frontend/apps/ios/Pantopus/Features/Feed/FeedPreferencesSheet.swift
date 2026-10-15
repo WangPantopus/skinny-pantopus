@@ -188,7 +188,8 @@ public struct FeedPreferencesSheet: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.Color.appBg)
         .task { await viewModel.load() }
-        .task { await viewModel.loadMutedTopics() }
+        // Muted topics are the redesign's (Pulse S4, launch cut #11).
+        .task { if LaunchFeatures.pulseRedesign { await viewModel.loadMutedTopics() } }
         .accessibilityIdentifier("pulsePreferencesSheet")
     }
 
@@ -268,7 +269,7 @@ public struct FeedPreferencesSheet: View {
                 await viewModel.setShowPolitics(next)
                 onPrefsChanged()
             }
-            mutedTopicsSection
+            if LaunchFeatures.pulseRedesign { mutedTopicsSection }
             HStack(spacing: Spacing.s2) {
                 Icon(.info, size: 13, color: Theme.Color.appTextMuted)
                 Text("These preferences sync across all your devices.")

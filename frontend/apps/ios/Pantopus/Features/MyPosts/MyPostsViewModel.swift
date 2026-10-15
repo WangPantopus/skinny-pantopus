@@ -818,8 +818,9 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
 
     /// How the post ended, or when a Heads-up ends, in the feed card's words
     /// ("Answered", "Gone", "Reunited", "Happened · 3 went", "Ends Wed 4pm").
+    /// None while the Pulse redesign is off (launch cut #11), as on October 13.
     public static func lifecycleChip(for dto: MyPostDTO) -> RowChip? {
-        guard let status = PulsePostStatus.from(
+        guard LaunchFeatures.pulseRedesign, let status = PulsePostStatus.from(
             resolution: dto.resolution,
             state: dto.state,
             postType: dto.postType,

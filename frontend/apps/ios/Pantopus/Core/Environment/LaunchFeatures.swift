@@ -3,8 +3,8 @@
 //  Pantopus
 //
 //  First-launch scope (founder direction, 2026-09-27; Mailbox added
-//  2026-10-09). These features are hidden for the first launch; their code stays so any of them can come
-//  back. A feature is OFF unless its key is listed in the Info.plist value
+//  2026-10-09; the Pulse redesign 2026-10-15). These features are hidden for
+//  the first launch; their code stays so any of them can come back. A feature is OFF unless its key is listed in the Info.plist value
 //  `PantopusLaunchFeatures` (build setting `PANTOPUS_LAUNCH_FEATURES`,
 //  comma-separated, or "all"). Debug builds also read the
 //  `PANTOPUS_LAUNCH_FEATURES` environment variable (scheme env, or
@@ -48,6 +48,14 @@ public enum LaunchFeature: String, CaseIterable, Sendable {
     /// hold and mail search. While it is off the Mail tab is "Messages".
     /// Address verification by postcard stays.
     case mailbox
+    /// 11. The Pulse redesign (founder decision, 2026-10-15): the Pulse and
+    /// Plans tabs, the Pulse page with its area picker, topic chips and quiet
+    /// card, post status, the conversation page with its audience picker and
+    /// follow controls, the card controls and the muted-topic preferences.
+    /// While it is off the app is the October 13 Pulse: four tabs (Place ·
+    /// Today · Nearby · Messages), with Pulse, Plans and Connections opened
+    /// from Nearby, the feed and the post page.
+    case pulseRedesign = "pulse_redesign"
 }
 
 /// Read-only switches for the features cut from the first launch.
@@ -105,6 +113,10 @@ public enum LaunchFeatures {
 
     public static var mailbox: Bool {
         isEnabled(.mailbox)
+    }
+
+    public static var pulseRedesign: Bool {
+        isEnabled(.pulseRedesign)
     }
 
     /// Parses a comma-separated key list ("all" enables every feature).

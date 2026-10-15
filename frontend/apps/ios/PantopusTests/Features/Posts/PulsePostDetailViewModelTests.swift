@@ -14,6 +14,13 @@ final class PulsePostDetailViewModelTests: XCTestCase {
     override func setUp() {
         super.setUp()
         SequencedURLProtocol.reset()
+        // The Pulse conversation is the redesign's (launch cut #11): every cut switched on.
+        LaunchFeatures.overrideForTesting = Set(LaunchFeature.allCases)
+    }
+
+    override func tearDown() {
+        LaunchFeatures.overrideForTesting = nil
+        super.tearDown()
     }
 
     private func makeAPI() -> APIClient {
