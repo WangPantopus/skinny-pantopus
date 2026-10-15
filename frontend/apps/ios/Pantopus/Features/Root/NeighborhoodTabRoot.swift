@@ -130,7 +130,10 @@ public struct NeighborhoodTabRoot: View {
 
     /// A plan link, a push or a Today card asked for a Plans screen.
     private func consumePlansHandOff() {
-        guard rootTabs.selected == .nearby, plansFlags.plans else { return }
+        guard rootTabs.selected == .nearby, plansFlags.plans,
+              plans.pending != nil || plans.pendingHost != nil else { return }
+        // Only a plan closes the surface sheet: a feed or post link that just
+        // opened Pulse from the door keeps it (it closed on October 13).
         presentedSurface = nil
         // Not under the composer: it waits until the composer is gone.
         if let route = plans.pending, hostRequest == nil {
