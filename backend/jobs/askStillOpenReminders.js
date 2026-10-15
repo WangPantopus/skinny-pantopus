@@ -12,6 +12,7 @@
 
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
+const { skipForLaunchCut } = require('../utils/featureFlags');
 const notificationService = require('../services/notificationService');
 const { quietHoursOf, inQuietHours } = require('../services/plans/planNotifications');
 const {
@@ -40,6 +41,8 @@ function reminderFor(ask, hasReplies) {
 }
 
 async function askStillOpenReminders() {
+  // The reminder and the held reply-action pushes belong to the Pulse redesign (launch cut 11).
+  if (skipForLaunchCut('pulse_redesign', 'askStillOpenReminders')) return;
   // Direct reply-action pushes held overnight share this existing hourly tick.
   await require('../services/pulse/notices').releaseDue();
   const now = Date.now();
