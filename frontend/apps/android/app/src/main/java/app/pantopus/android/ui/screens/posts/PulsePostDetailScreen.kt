@@ -167,13 +167,15 @@ fun PulsePostDetailScreen(
     }
 
     fun launchShareSheet() {
-        val send =
-            Intent(Intent.ACTION_SEND).apply {
-                type = "text/plain"
-                putExtra(Intent.EXTRA_TEXT, viewModel.shareUrl)
-            }
-        context.startActivity(Intent.createChooser(send, "Share post"))
-        viewModel.recordShare()
+        viewModel.shareExternally { url ->
+            if (!lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return@shareExternally
+            val send =
+                Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, url)
+                }
+            context.startActivity(Intent.createChooser(send, "Share post"))
+        }
     }
 
     PullToRefreshBox(
@@ -206,7 +208,7 @@ fun PulsePostDetailScreen(
                         ),
                     // Only its author still sees a post a moderator removed, so nothing offers to spread it.
                     topBarSecondaryAction =
-                        if (content.post.isRemovedByModerator) {
+                        if (!content.post.canShareExternally) {
                             null
                         } else {
                             ContentDetailTopBarAction(

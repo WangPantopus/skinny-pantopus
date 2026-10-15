@@ -61,6 +61,7 @@ data class PulsePostActions(
     val isSaved: Boolean = false,
     val isReposted: Boolean = false,
     val shareCount: Int = 0,
+    val canShareExternally: Boolean = false,
     /**
      * `state == "solved"`: no "Mark solved" (the status pill says "Answered"). With the Pulse redesign off the card
      * shows the October 13 inline "Solved" badge instead of the pill.
