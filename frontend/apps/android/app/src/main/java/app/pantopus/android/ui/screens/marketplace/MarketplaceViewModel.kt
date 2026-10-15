@@ -207,7 +207,7 @@ class MarketplaceViewModel
         }
 
         private suspend fun resolveCenter(): NetworkResult<UserCoordinate?> {
-            return when (val payload = viewingLocation.current()) {
+            return when (val payload = viewingLocation.resolve()) {
                 is NetworkResult.Failure -> payload
                 is NetworkResult.Success -> {
                     val selected = payload.data.viewingLocation

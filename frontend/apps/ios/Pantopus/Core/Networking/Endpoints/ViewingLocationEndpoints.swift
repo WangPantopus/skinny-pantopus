@@ -18,6 +18,11 @@ public enum ViewingLocationEndpoints {
         Endpoint(method: .get, path: "/api/location")
     }
 
+    /// `GET /api/location/resolve` — selected area, home, then saved place.
+    public static func resolve() -> Endpoint {
+        Endpoint(method: .get, path: "/api/location/resolve")
+    }
+
     /// `PUT /api/location` — upsert the viewing location. The handler also
     /// pushes the value onto the recents list (deduped, trimmed to 5).
     /// Route `backend/routes/location.js:149`.

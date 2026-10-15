@@ -356,7 +356,7 @@ public final class ExploreMapViewModel {
         if let explicitCenter { return explicitCenter }
         // Retain the chosen viewport within this visit, including while offline.
         if let viewingCenter { return viewingCenter }
-        let payload: ViewingLocationPayload = try await api.request(ViewingLocationEndpoints.current())
+        let payload: SetViewingLocationResponse = try await api.request(ViewingLocationEndpoints.resolve())
         if let selected = payload.viewingLocation {
             return UserCoordinate(latitude: selected.latitude, longitude: selected.longitude, accuracyMeters: 0)
         }

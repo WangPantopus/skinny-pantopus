@@ -351,7 +351,7 @@ router.delete('/recents/:id', verifyToken, async (req, res) => {
  *   1. Pinned VL
  *   2. Last VL updated within 24h
  *   3. User's primary home location
- *   4. User profile city/state
+ *   4. Newest saved place, then older valid viewing location
  *   5. null (client shows "Set location")
  */
 router.get('/resolve', verifyToken, async (req, res) => {
@@ -365,7 +365,9 @@ router.get('/resolve', verifyToken, async (req, res) => {
       .eq('user_id', userId)
       .single();
 
-    if (vlRow) {
+    const validPoint = (row) => row && Number.isFinite(row.latitude) && Number.isFinite(row.longitude)
+      && Math.abs(row.latitude) <= 90 && Math.abs(row.longitude) <= 180;
+    if (validPoint(vlRow)) {
       // 1a. If pinned, always use it
       if (vlRow.is_pinned) {
         return res.json({ viewingLocation: formatVL(vlRow) });
@@ -384,8 +386,8 @@ router.get('/resolve', verifyToken, async (req, res) => {
       .rpc('get_user_home_locations', { p_user_id: userId });
 
     if (homeRows && homeRows.length > 0) {
-      const home = homeRows[0]; // first home = primary
-      if (home.latitude && home.longitude) {
+      const home = homeRows.find(validPoint); // primary first, skipping missing points
+      if (home) {
         return res.json({
           viewingLocation: {
             label: [home.city, home.state].filter(Boolean).join(', ') || home.home_name,
@@ -404,32 +406,20 @@ router.get('/resolve', verifyToken, async (req, res) => {
       }
     }
 
-    // 3. Try user profile city
-    const { data: user } = await supabaseAdmin
-      .from('User')
-      .select('city, state')
-      .eq('id', userId)
-      .single();
-
-    if (user && user.city) {
-      // We don't have exact coords for profile city, return label only
-      // Client will need to geocode or show "Set location"
-      return res.json({
-        viewingLocation: {
-          label: [user.city, user.state].filter(Boolean).join(', '),
-          type: 'searched',
-          latitude: null,
-          longitude: null,
-          radiusMiles: 100,
-          isPinned: false,
-          sourceId: null,
-          city: user.city,
-          state: user.state || null,
-          zipcode: null,
-          updatedAt: null,
-        },
-      });
+    // A private saved address is a valid fallback; a profile city label without
+    // coordinates is not a map center. Keep the established selected/home order.
+    const { data: places } = await supabaseAdmin.from('SavedPlace')
+      .select('id, label, latitude, longitude, city, state')
+      .eq('user_id', userId).order('created_at', { ascending: false });
+    const saved = (places || []).find(validPoint);
+    if (saved) {
+      return res.json({ viewingLocation: {
+        label: saved.label, type: 'searched', latitude: saved.latitude, longitude: saved.longitude,
+        radiusMiles: 100, isPinned: false, sourceId: saved.id,
+        city: saved.city || null, state: saved.state || null, zipcode: null, updatedAt: null,
+      } });
     }
+    if (validPoint(vlRow)) return res.json({ viewingLocation: formatVL(vlRow) });
 
     // 4. No location resolvable
     res.json({ viewingLocation: null });

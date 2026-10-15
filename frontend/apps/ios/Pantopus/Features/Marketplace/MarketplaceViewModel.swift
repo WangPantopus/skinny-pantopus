@@ -186,7 +186,7 @@ public final class MarketplaceViewModel {
 
     private func resolveCenter() async throws -> UserCoordinate? {
         // A failed selected-area read is not evidence that no area was saved.
-        let payload: ViewingLocationPayload = try await api.request(ViewingLocationEndpoints.current())
+        let payload: SetViewingLocationResponse = try await api.request(ViewingLocationEndpoints.resolve())
         if let selected = payload.viewingLocation {
             return UserCoordinate(latitude: selected.latitude, longitude: selected.longitude, accuracyMeters: 0)
         }

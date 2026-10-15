@@ -21,7 +21,7 @@ const savedSearchService = require('../services/marketplace/savedSearchService')
  */
 router.get('/price-suggestion', optionalAuth, async (req, res) => {
   try {
-    const { category, lat, lng, title, condition } = req.query;
+    const { category, lat, lng, radiusMiles, title, condition } = req.query;
 
     if (!category) {
       return res.status(400).json({ error: 'category is required' });
@@ -29,8 +29,9 @@ router.get('/price-suggestion', optionalAuth, async (req, res) => {
 
     const suggestion = await priceIntelligenceService.getPriceSuggestion({
       category,
-      latitude: lat ? parseFloat(lat) : undefined,
-      longitude: lng ? parseFloat(lng) : undefined,
+      latitude: typeof lat === 'string' && lat.trim() ? Number(lat) : undefined,
+      radiusMiles: radiusMiles === undefined ? undefined : Number(radiusMiles),
+      longitude: typeof lng === 'string' && lng.trim() ? Number(lng) : undefined,
       title,
       condition,
     });

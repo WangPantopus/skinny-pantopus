@@ -2,10 +2,6 @@
 
 import { usePrimaryHome } from '@/lib/primaryHome';
 
-// The Map page's placeholder centre ("Camas, WA"). It stays the fallback for a
-// Home without a stored location, so the Map renders exactly as before.
-const FALLBACK_CENTER = { lat: 45.5945, lng: -122.4065 };
-
 /**
  * The user's Home for the mailbox Home pages (records, map, community, tasks,
  * travel). Each page used to return a hard-coded `homeId: 'home_1'`.
@@ -17,15 +13,19 @@ const FALLBACK_CENTER = { lat: 45.5945, lng: -122.4065 };
 export default function useMailboxHome() {
   const { data, isLoading, isError, refetch } = usePrimaryHome();
   const home = data?.home ?? null;
-  const coordinates = home?.location?.coordinates; // PostGIS order: [lng, lat]
+  const location = home?.location as { latitude?: number; longitude?: number; coordinates?: number[] } | null;
+  const lat = location?.latitude ?? location?.coordinates?.[1];
+  const lng = location?.longitude ?? location?.coordinates?.[0];
+  const hasLocation = typeof lat === 'number' && typeof lng === 'number'
+    && Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
   const place = [home?.city, home?.state].filter(Boolean).join(', ');
   return {
     isLoading,
     isError,
     refetch,
     homeId: home?.id ?? '',
-    lat: Array.isArray(coordinates) ? coordinates[1] : FALLBACK_CENTER.lat,
-    lng: Array.isArray(coordinates) ? coordinates[0] : FALLBACK_CENTER.lng,
+    lat: hasLocation ? lat : null,
+    lng: hasLocation ? lng : null,
     address: place,
     neighborhood: place,
   };
