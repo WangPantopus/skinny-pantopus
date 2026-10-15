@@ -11,6 +11,7 @@ import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.feed.FeedActionsRepository
 import app.pantopus.android.data.feed.FeedModerationStore
 import app.pantopus.android.data.posts.PostsRepository
+import app.pantopus.android.data.posts.PulsePostsRefreshNotifier
 import app.pantopus.android.data.pulse.PulseFeedQuery
 import app.pantopus.android.data.pulse.PulseRepository
 import app.pantopus.android.data.store.StoreKind
@@ -60,6 +61,8 @@ class PulsePageViewModel
         private val feedActions: FeedActionsRepository,
         private val moderation: FeedModerationStore,
         private val savedState: SavedStateHandle,
+        /** Posts ended or restored on other screens (an Ask closed on its page, a post archived in My posts). */
+        private val postsRefresh: PulsePostsRefreshNotifier,
     ) : ViewModel() {
         private val _state = MutableStateFlow<PulsePageUiState>(PulsePageUiState.Loading)
         val state: StateFlow<PulsePageUiState> = _state.asStateFlow()
@@ -112,6 +115,7 @@ class PulsePageViewModel
 
         /** Tab entry and every return: what is on screen stays, a first entry shows the saved copy at once, and the page reads again once it is out of date. */
         fun load() {
+            applyPostEventsFromElsewhere()
             val q = _query.value
             if (_state.value is PulsePageUiState.Loaded) {
                 if (!repository.feedIsCurrent(q)) read(force = false)
@@ -460,6 +464,7 @@ class PulsePageViewModel
             if (!card.actions.canCloseAsk) return
             perform(card, "Question closed.", { repository.close(card.id) }) {
                 removedPosts.add(card.id)
+                postsRefresh.notifyPostEnded(card.id)
                 filterCards()
             }
         }
@@ -468,6 +473,7 @@ class PulsePageViewModel
             if (!card.actions.canDelete) return
             perform(card, "Post deleted.", { posts.deletePost(card.id) }) {
                 removedPosts.add(card.id)
+                postsRefresh.notifyPostEnded(card.id)
                 filterCards()
             }
         }
@@ -526,6 +532,20 @@ class PulsePageViewModel
 
         fun dismissToast() {
             _toast.value = null
+        }
+
+        private var postEventsSeen = 0L
+
+        /**
+         * A post ended on another screen leaves this page at once, even before the next read (which may be a saved copy
+         * while offline), and one restored from My posts comes back.
+         */
+        private fun applyPostEventsFromElsewhere() {
+            val (latest, events) = postsRefresh.postEventsAfter(postEventsSeen)
+            postEventsSeen = latest
+            if (events.isEmpty()) return
+            events.forEach { event -> if (event.ended) removedPosts.add(event.postId) else removedPosts.remove(event.postId) }
+            filterCards()
         }
 
         private companion object {

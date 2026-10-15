@@ -662,8 +662,14 @@ private fun buildA11yLabel(content: PulsePostCardContent): String {
     if (content.mediaUrls.isNotEmpty()) {
         parts.add("${content.mediaUrls.size} attached ${if (content.mediaUrls.size == 1) "photo" else "photos"}")
     }
-    // A part that already ends a sentence keeps its own mark: TalkBack reads a doubled period aloud ("2 period").
-    return parts.map(String::trimEnd).filter(String::isNotEmpty).joinToString(" ") { part ->
+    return spokenSentences(parts)
+}
+
+/**
+ * Joins [parts] into the sentences TalkBack reads. A part that already ends a sentence keeps its own mark: a doubled
+ * period is read aloud ("2 period").
+ */
+internal fun spokenSentences(parts: List<String>): String =
+    parts.map(String::trimEnd).filter(String::isNotEmpty).joinToString(" ") { part ->
         if (part.last() in ".?!") part else "$part."
     }
-}

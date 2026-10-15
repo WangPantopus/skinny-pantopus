@@ -7,6 +7,7 @@ import app.pantopus.android.data.api.models.pulse.PulsePostDto
 import app.pantopus.android.ui.screens.feed.pulse.PostStatus
 import app.pantopus.android.ui.screens.feed.pulse.PulsePostActions
 import app.pantopus.android.ui.screens.feed.pulse.PulseTopic
+import app.pantopus.android.ui.screens.feed.pulse.spokenSentences
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
@@ -247,12 +248,14 @@ internal fun PulsePostDto.toCard(
         areaId = this.about?.areaId,
         canShare = readScope == "public" && viewer?.canShare == true,
         description =
-            listOfNotNull(
-                listOfNotNull(name, label?.first, meta.ifEmpty { null }).joinToString(", "),
-                typeName.lowercase().replaceFirstChar { it.uppercase() },
-                body,
-                about,
-            ).joinToString(". "),
+            spokenSentences(
+                listOfNotNull(
+                    listOfNotNull(name, label?.first, meta.ifEmpty { null }).joinToString(", "),
+                    typeName.lowercase().replaceFirstChar { it.uppercase() },
+                    body,
+                    about,
+                ),
+            ),
     )
 }
 
