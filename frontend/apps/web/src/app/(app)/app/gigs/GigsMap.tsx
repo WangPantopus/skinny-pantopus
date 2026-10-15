@@ -11,6 +11,8 @@ import { BaseMap, useCluster, MapProgressBar, boundsChangedSignificantly, useAni
 import type { Bounds } from '@/components/map';
 import type { ClusterPoint } from '@/components/map';
 import type { NearestActivityCenter } from '@/components/map';
+import { useAreaPicker } from '@/hooks/useAreaPicker';
+import ChangeLocationModal from '@/components/hub/ChangeLocationModal';
 import type { MapTaskListItem } from '@/components/gig-browse/mapTaskTypes';
 
 // ─── Types ─────────────────────────────────────────────────
@@ -38,7 +40,6 @@ function createClusterIcon(count: number, active = false): L.DivIcon {
 }
 
 // ─── Defaults ──────────────────────────────────────────────
-const GIGS_DEFAULT_CENTER: [number, number] = [45.5231, -122.6765]; // Portland/Vancouver metro
 const DEFAULT_ZOOM = 10;
 const GEOLOCATED_ZOOM = 12;
 
@@ -57,7 +58,10 @@ export default function GigsMap({
   activeGigId,
   onPinSelect,
 }: GigsMapProps) {
-  const [mapCenter, setMapCenter] = useState<[number, number]>(GIGS_DEFAULT_CENTER);
+  const area = useAreaPicker(() => {});
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
+  const [chosenCenter, setMapCenter] = useState<[number, number] | null>(null);
+  const mapCenter = chosenCenter ?? (area.viewingLat != null && area.viewingLng != null ? [area.viewingLat, area.viewingLng] as [number, number] : null);
   const [mapZoom, setMapZoom] = useState(DEFAULT_ZOOM);
   const [mapReady, setMapReady] = useState(false);
   const [pins, setPins] = useState<GigMapPin[]>([]);
@@ -73,27 +77,7 @@ export default function GigsMap({
 
   const mapRef = useRef<L.Map | null>(null);
   const boundsRef = useRef<Bounds | null>(null);
-  const geolocatedRef = useRef(false);
   const prevFiltersRef = useRef({ searchQuery, selectedCategory, priceFilter, sortOption });
-
-  // Geolocate on mount
-  useEffect(() => {
-    if (geolocatedRef.current) return;
-    geolocatedRef.current = true;
-    if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const center: [number, number] = [pos.coords.latitude, pos.coords.longitude];
-          setMapCenter(center);
-          setMapZoom(GEOLOCATED_ZOOM);
-        },
-        () => {
-          // Keep defaults on failure
-        },
-        { timeout: 5000 }
-      );
-    }
-  }, []);
 
   // Fetch pins for current bounds
   const ZOOM_GATE = 8;
@@ -256,9 +240,17 @@ export default function GigsMap({
   // Viewport center for NearestActivityPrompt distance calculation
   const viewCenter = currentBounds
     ? { latitude: (currentBounds.south + currentBounds.north) / 2, longitude: (currentBounds.west + currentBounds.east) / 2 }
-    : { latitude: mapCenter[0], longitude: mapCenter[1] };
+    : mapCenter ? { latitude: mapCenter[0], longitude: mapCenter[1] } : null;
 
   const belowZoomGate = currentZoom < ZOOM_GATE;
+
+  if (!mapCenter) return (
+    <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-sm text-app-text-secondary">
+      <p>Choose a location to see nearby tasks.</p>
+      <button className="text-primary-600 font-medium" onClick={() => setShowLocationPicker(true)}>Choose location</button>
+      {showLocationPicker && <ChangeLocationModal onClose={() => setShowLocationPicker(false)} onLocationChanged={area.retryResolveArea} />}
+    </div>
+  );
 
   return (
     <div className="relative w-full h-full">

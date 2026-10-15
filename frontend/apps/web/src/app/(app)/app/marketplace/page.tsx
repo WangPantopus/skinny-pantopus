@@ -32,6 +32,7 @@ import { CategoryIcon } from './iconMap';
 import EmptyState from '@/components/ui/EmptyState';
 import ErrorState from '@/components/ui/ErrorState';
 import LoadingSkeleton from '@/components/ui/LoadingSkeleton';
+import ChangeLocationModal from '@/components/hub/ChangeLocationModal';
 
 const MarketplaceMap = dynamic(() => import('./MarketplaceMap'), { ssr: false });
 
@@ -120,6 +121,10 @@ export default function MarketplacePage() {
   const [activeBounds, setActiveBounds] = useState<Bounds | null>(null);
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [radiusMiles, setRadiusMiles] = useState(DEFAULT_RADIUS_MILES);
+
+  const [locationResolved, setLocationResolved] = useState(false);
+  const [locationVersion, setLocationVersion] = useState(0);
+  const [choosingLocation, setChoosingLocation] = useState(false);
 
   // ── UI state ─────────────────────────────────────────────────
   const [showCategoryModal, setShowCategoryModal] = useState(false);
@@ -407,23 +412,21 @@ export default function MarketplacePage() {
 
     const applyLocation = (loc: { latitude: number; longitude: number }, radius = DEFAULT_RADIUS_MILES) => {
       if (cancelled) return;
+      setLocationResolved(true);
       setUserLocation(loc);
       setRadiusMiles(radius);
       setActiveBounds(boundsFromCenter(loc.latitude, loc.longitude, radius));
     };
 
     const applyFallbackLocation = () => {
-      if (!cancelled) {
-        const fallback = { latitude: 45.5152, longitude: -122.6784 };
-        applyLocation(fallback);
-      }
+      if (!cancelled) { setLocationResolved(true); setUserLocation(null); setActiveBounds(null); }
     };
 
     (async () => {
       try {
         const resolved = await api.location.resolveLocation();
         const vl = resolved?.viewingLocation;
-        if (vl?.latitude != null && vl?.longitude != null) {
+        if (vl && Number.isFinite(vl.latitude) && Number.isFinite(vl.longitude) && vl.latitude != null && vl.longitude != null) {
           applyLocation(
             { latitude: vl.latitude, longitude: vl.longitude },
             vl.radiusMiles || DEFAULT_RADIUS_MILES
@@ -454,7 +457,7 @@ export default function MarketplacePage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [locationVersion]);
 
   useEffect(() => {
     if (viewMode !== 'grid' || !userLocation || activeTab === 'global') return;
@@ -740,6 +743,14 @@ export default function MarketplacePage() {
       </div>
     </div>
   ) : null;
+
+  if (!userLocation && locationResolved) return (
+    <div className="p-6 text-center text-app-text-secondary">
+      <p>Choose a location to see nearby listings.</p>
+      <button className="mt-3 text-primary-600 font-semibold" onClick={() => setChoosingLocation(true)}>Choose location</button>
+      {choosingLocation && <ChangeLocationModal onClose={() => setChoosingLocation(false)} onLocationChanged={() => setLocationVersion(v => v + 1)} />}
+    </div>
+  );
 
   // ── MAP VIEW ────────────────────────────────────────────────
   if (isMapView) {

@@ -41,8 +41,6 @@ export const TILE_ATTRIBUTION =
 
 // ── Map defaults ─────────────────────────────────────────────
 
-/** Default map center [lat, lng] — Portland, OR. */
-export const DEFAULT_CENTER: [number, number] = [45.5152, -122.6784];
 
 /** Default zoom level. */
 export const DEFAULT_ZOOM = 13;

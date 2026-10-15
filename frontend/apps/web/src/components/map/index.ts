@@ -18,6 +18,5 @@ export type { NearestActivityCenter } from './NearestActivityPrompt';
 export {
   TILE_URL,
   TILE_ATTRIBUTION,
-  DEFAULT_CENTER,
   DEFAULT_ZOOM,
 } from './constants';
