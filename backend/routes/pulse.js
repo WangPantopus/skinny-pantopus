@@ -12,6 +12,7 @@ const conversation = require('../services/pulse/conversation');
 const replyActions = require('../services/pulse/replyActions');
 const follows = require('../services/pulse/follows');
 const claims = require('../services/pulse/claims');
+const readScope = require('../services/pulse/readScope');
 const { isPulseTopic } = require('../services/pulse/topics');
 const {
   DAY_MS, askIdsWithReplies, windowDays, endsAt,
@@ -119,6 +120,11 @@ router.get('/posts/:postId/claims', verifyToken, async (req, res) => {
 
 router.post('/posts/:postId/claims/:claimId/choose', verifyToken, async (req, res) => {
   try { res.json(await claims.choose(req.params.postId, req.params.claimId, req.user.id)); }
+  catch (error) { feedError(res, error); }
+});
+
+router.put('/posts/:postId/read-scope', verifyToken, async (req, res) => {
+  try { res.json(await readScope.narrow(req.params.postId, req.user.id, req.body || {})); }
   catch (error) { feedError(res, error); }
 });
 
