@@ -7,6 +7,7 @@ const { distanceFormatter } = require('./distanceText');
 const { onlyShownReplies, isPubliclyShareable } = require('./readAccess');
 const { DAY_MS, endsAt } = require('./lifecycle');
 const follows = require('./follows');
+const { offerState, claimsFor } = require('./offers');
 
 const TYPES = new Set(['ask_local', 'share', 'offer', 'alert', 'event', 'lost_found']);
 const ACTIONS = { ask_local: ['answer', 'Answer'], share: ['reply', 'Reply'], offer: ['claim', 'Ask for it'],
@@ -35,12 +36,13 @@ async function replyCounts(posts, viewerId, blockedIds) {
  */
 async function postCards(rows, { viewerId, homes, areas, fallbackArea, blockedIds, publicResponse = false }) {
   if (!rows.length) return [];
-  const [enriched, counts, distance, ttlResult, followed] = await Promise.all([
+  const [enriched, counts, distance, ttlResult, followed, claims] = await Promise.all([
     feed.enrichFeedPosts(rows.map(row => feed.normalizeFeedPostRow(row)), viewerId),
     replyCounts(rows, viewerId, blockedIds),
     distanceFormatter(viewerId, { homes, publicResponse }),
     db.from('PostCategoryTTL').select('post_type, ttl_days'),
     viewerId ? follows.activeRows(viewerId) : [],
+    claimsFor(rows),
   ]);
   if (ttlResult.error) throw ttlResult.error;
   const days = new Map((ttlResult.data || []).map(row => [row.post_type, row.ttl_days]));
@@ -67,6 +69,9 @@ async function postCards(rows, { viewerId, homes, areas, fallbackArea, blockedId
     const open = raw.state === 'open' && !raw.resolution && !raw.archived_at
       && (!raw.expires_at || Date.parse(raw.expires_at) > readAt);
     const askEnd = endsAt(raw, days.get(raw.post_type) || 7).getTime();
+    const offer = type === 'offer' ? offerState(raw, claims.get(raw.id) || [], publicResponse ? null : viewerId) : null;
+    const done = action[0] === 'claim' ? ['requested', 'chosen'].includes(offer?.viewer_claim?.status)
+      : ['seen_it', 'going'].includes(action[0]) && !!post.userHasLiked;
     return {
       id: raw.id, type, legacy_type: type === 'legacy' ? raw.post_type : null,
       topic: raw.topic || null, title: raw.title || null, text: raw.content || '',
@@ -81,12 +86,12 @@ async function postCards(rows, { viewerId, homes, areas, fallbackArea, blockedId
       read_scope: raw.read_scope || null,
       status: { state: open ? 'open' : 'resolved', resolution: raw.resolution || (raw.state === 'solved' ? 'answered' : null),
         ends_at: raw.expires_at || (type === 'ask_local' ? new Date(askEnd).toISOString() : null) },
-      action: { kind: action[0], label: action[1], done: ['seen_it', 'going'].includes(action[0]) && !!post.userHasLiked },
+      action: { kind: action[0], label: action[1], done },
       counts: { replies: counts.get(raw.id) || 0, going: type === 'event' ? Number(raw.like_count || 0) : null },
       event: type === 'event' ? { starts_at: raw.event_date || null, ends_at: raw.event_end_date || null,
         venue: raw.event_venue || null } : null,
       lost_found: type === 'lost_found' ? { kind: raw.lost_found_type || 'lost' } : null,
-      offer: type === 'offer' ? { claim_mode: raw.claim_mode || 'choose', requests_open: open, gone: raw.resolution === 'claimed' } : null,
+      offer,
       viewer: { is_author: own, following: followed.some(row => row.target_type === 'post' && row.target_id === raw.id
           && (!row.ends_on_resolve || follows.open(raw))), can_mark_helpful: own && type === 'ask_local',
         saved: !!post.userHasSaved, can_share: isPubliclyShareable(raw) && raw.moderation_state === 'live',

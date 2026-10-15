@@ -64,13 +64,51 @@ function firstLevel(id, topology) {
   return id;
 }
 
+/** People in a conversation (reply authors, offer requesters) as its reader sees them:
+ * the feed's identity projection, the label in the post's area and a distance from a
+ * verified primary home only. `people` are `{ user_id, author }` rows, where `author`
+ * is a SAFE_CREATOR_SELECT row. No home id, point or measured distance is serialized.
+ */
+async function authorProjector(context, people, distance) {
+  const { post, viewerId, area } = context;
+  // The feed's identity projection honors the chosen LocalProfile name. Raw
+  // SAFE_CREATOR_SELECT intentionally has no private name fields and is only a
+  // fallback handle, so projecting it alone would disagree with the post header.
+  const identityInputs = new Map([[post.user_id, post]]);
+  for (const person of people) if (person.user_id && !identityInputs.has(person.user_id)) {
+    identityInputs.set(person.user_id, { user_id: person.user_id, creator: person.author });
+  }
+  const identities = await legacy.attachIdentityAuthors([...identityInputs.values()], viewerId);
+  const identityByUser = new Map([...identityInputs.keys()].map((id, i) => [id, identities[i]?.author]));
+  const authors = new Map();
+  const authorFor = person => {
+    if (!authors.has(person.user_id)) authors.set(person.user_id, (async () => {
+      const identity = identityByUser.get(person.user_id);
+      const authorHomes = person.user_id === post.user_id ? context.authorHomes : await homeAreaContext(person.user_id);
+      const label = await labelFor({ userId: person.user_id, accountType: person.author?.account_type,
+        origin: person.author?.account_type === 'curator' ? 'curator' : null,
+        identityType: person.author?.account_type === 'business' ? 'business' : 'local' }, area?.id, authorHomes);
+      let name = identity?.displayName || 'Neighbor';
+      if (post.read_scope === 'public' && label !== 'official') name = name.trim().split(/\s+/)[0] || 'Neighbor';
+      const home = authorHomes.primary?.verified
+        ? await checked(db.from('Home').select('location').eq('id', authorHomes.primary.id).maybeSingle()) : null;
+      const point = parsePoint(home?.location);
+      return { id: person.user_id, display_name: name, label, avatar_url: identity?.avatarUrl || null,
+        distance_text: point ? await distance({ ...point, location_precision: 'approx_area' }) : null,
+        is_curator: person.author?.account_type === 'curator' };
+    })());
+    return authors.get(person.user_id);
+  };
+  return { identityByUser, authorFor };
+}
+
 /** Flat, stable replies; hidden parents supply only ancestry, never a name or text.
  * Deleted authors/rows become anonymous placeholders. Distance uses only a
  * verified author's primary home, snapped through the same privacy helper as a
  * post; no home id, point or measured distance is serialized.
  */
 async function repliesFor(context, after) {
-  const { post, viewerId, homes, blocked, area } = context;
+  const { post, viewerId, homes, blocked } = context;
   const [topologyRows, rows, distance, newerRows, thanks] = await Promise.all([
     allRows(() => db.from('PostComment').select('id, parent_comment_id, created_at').eq('post_id', post.id)),
     allRows(() => {
@@ -85,38 +123,11 @@ async function repliesFor(context, after) {
       .eq('from_user_id', viewerId).eq('reply.post_id', post.id)),
   ]);
   const thanked = new Set(thanks.map(row => row.comment_id));
-  // The feed's identity projection honors the chosen LocalProfile name. Raw
-  // SAFE_CREATOR_SELECT intentionally has no private name fields and is only a
-  // fallback handle, so projecting it alone would disagree with the post header.
-  const identityInputs = new Map([[post.user_id, post]]);
-  for (const row of rows) if (row.user_id && !identityInputs.has(row.user_id)) {
-    identityInputs.set(row.user_id, { user_id: row.user_id, creator: row.author });
-  }
-  const identities = await legacy.attachIdentityAuthors([...identityInputs.values()], viewerId);
-  const identityByUser = new Map([...identityInputs.keys()].map((id, i) => [id, identities[i]?.author]));
+  const { identityByUser, authorFor } = await authorProjector(context, rows, distance);
   const asker = identityByUser.get(post.user_id);
   let helpfulTo = asker?.displayName || 'Neighbor';
   if (post.read_scope === 'public') helpfulTo = helpfulTo.trim().split(/\s+/)[0] || 'Neighbor';
   const topology = new Map(topologyRows.map(row => [row.id, row.parent_comment_id]));
-  const authors = new Map();
-  const authorFor = row => {
-    if (!authors.has(row.user_id)) authors.set(row.user_id, (async () => {
-      const identity = identityByUser.get(row.user_id);
-      const authorHomes = row.user_id === post.user_id ? context.authorHomes : await homeAreaContext(row.user_id);
-      const label = await labelFor({ userId: row.user_id, accountType: row.author?.account_type,
-        origin: row.author?.account_type === 'curator' ? 'curator' : null,
-        identityType: row.author?.account_type === 'business' ? 'business' : 'local' }, area?.id, authorHomes);
-      let name = identity?.displayName || 'Neighbor';
-      if (post.read_scope === 'public' && label !== 'official') name = name.trim().split(/\s+/)[0] || 'Neighbor';
-      const home = authorHomes.primary?.verified
-        ? await checked(db.from('Home').select('location').eq('id', authorHomes.primary.id).maybeSingle()) : null;
-      const point = parsePoint(home?.location);
-      return { id: row.user_id, display_name: name, label, avatar_url: identity?.avatarUrl || null,
-        distance_text: point ? await distance({ ...point, location_precision: 'approx_area' }) : null,
-        is_curator: row.author?.account_type === 'curator' };
-    })());
-    return authors.get(row.user_id);
-  };
   const result = await Promise.all(rows.map(async row => {
     const removed = row.is_deleted === true || !row.user_id;
     return {
@@ -157,4 +168,4 @@ async function read(postId, viewerId, { repliesOnly = false, after } = {}) {
   return { post, replies, plan: null };
 }
 
-module.exports = { contextFor, repliesFor, read, addCreatedReplyFields };
+module.exports = { contextFor, repliesFor, read, addCreatedReplyFields, authorProjector, unavailable };
