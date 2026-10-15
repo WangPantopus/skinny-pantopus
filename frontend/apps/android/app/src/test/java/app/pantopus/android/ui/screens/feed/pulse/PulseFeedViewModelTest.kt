@@ -231,6 +231,7 @@ class PulseFeedViewModelTest {
             sportsRepo,
             FeedModerationStore(),
             viewingLocation,
+            mockk(relaxed = true),
         )
 
     @Test fun beacon_badges_require_a_verified_public_credential() =
