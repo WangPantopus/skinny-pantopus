@@ -636,7 +636,12 @@ fun PlaceCivicDetailContent(intel: PlaceIntelligence) {
             val until = office?.note ?: "Until then, your state and county election offices have upcoming election dates."
             PlaceDetailCard {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("No election on our calendar yet", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
+                    Text(
+                        "No election on our calendar yet",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = PantopusColors.appText,
+                    )
                     Text(
                         "We'll show your next election here once we have its date. $until",
                         fontSize = 13.5.sp,
