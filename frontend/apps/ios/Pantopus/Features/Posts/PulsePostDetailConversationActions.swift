@@ -63,21 +63,39 @@ extension PulsePostDetailViewModel {
         }
     }
 
-    func toggleConversationFollow() async {
-        guard let content = conversation, beginConversationAction("follow") else { return }
+    func followConversation() async -> Bool {
+        guard let content = conversation else { return false }
+        if content.post.viewer?.following == true { return true }
+        guard beginConversationAction("follow") else { return false }
         defer { finishConversationAction("follow") }
-        let following = content.post.viewer?.following == true
+        let ends = canFollowConversationUntilEnd ? "on_resolve" : "keep"
         do {
-            _ = try await client.request(
-                following ? PulseEndpoints.unfollowPost(postId: postId) : PulseEndpoints.followPost(postId: postId),
-                as: PostActionAckResponse.self
+            let response: PulseFollowResponse = try await client.request(
+                PulseEndpoints.followPost(postId: postId, ends: ends)
             )
-            if await refreshConversationAfterMutation(), !following {
-                showToast("Saved to Following. Notifications are off.", kind: .success)
+            guard let follow = response.follow, !follow.id.isEmpty, follow.targetType == "post", follow.targetId == postId,
+                  follow.notify == "off", follow.ends == ends else {
+                showToast("Couldn't confirm Following. Refresh to check.")
+                return false
             }
+            await refreshConversationAfterMutation()
+            return conversation != nil
         } catch {
             showToast(Self.refusal(in: error) ?? "Couldn't update Following. Try again.")
+            return false
         }
+    }
+
+    var canFollowConversationUntilEnd: Bool {
+        guard let post = conversation?.post else { return false }
+        if post.status?.state == "resolved" || post.status?.resolution != nil { return false }
+        if let endsAt = PulsePageWords.parseDate(post.status?.endsAt), endsAt <= Date() { return false }
+        return true
+    }
+
+    var conversationFollowEndLabel: String {
+        guard let endsAt = PulsePageWords.parseDate(conversation?.post.status?.endsAt) else { return "Until it ends" }
+        return "Until it ends, \(PulsePostStatus.endsFormat(endsAt, timeZone: .current))"
     }
 
     func sendConversationReply() async {

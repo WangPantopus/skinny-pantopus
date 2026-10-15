@@ -2,10 +2,120 @@
 
 Owner: the PI session. Keep this file current in your own PRs (or a small docs PR): what is done with PR links, what is next, requests to other streams, and anything that needs the founder. Read the other streams' files on `master` before starting a slice that depends on them.
 
-## Continuation checkpoint — October 14, 2026
+## Continuation checkpoint — October 15, 2026 (UTC)
+
+**Current checkpoint; supersedes the sections below.** Nothing is merged: every PI PR waits on PB's implementing PRs (H4). The work now lives in the worktree `pulse-pi-ios-continuation-47830f` (the old `pulse-pi-ios-build-2ae310` worktree is left on a detached HEAD at `1ac2b709a`; no branch or file there changed).
+
+| PR | Branch head | Implemented | Built | Verified (PI preview backend, provisional) | Merged |
+| --- | --- | --- | --- | --- | --- |
+| [#2308 S6 page](https://github.com/WangPantopus/skinny-pantopus/pull/2308) | `claude/pulse-pi-s6-pulse-page` `70c1dc209` | yes | yes (in the stack build) | yes, see below | no — needs PB #2311/#2312 on `master` |
+| [#2314 S9 conversation](https://github.com/WangPantopus/skinny-pantopus/pull/2314) | `claude/pulse-pi-s9-conversation` `44e74ac3e` | partly (offers, rich found-item chat open) | yes | replies, pill, Helpful, Thank, offline send | no — needs #2313/#2317/#2319/#2320; claims not built by PB |
+| [#2323 S5 area picker](https://github.com/WangPantopus/skinny-pantopus/pull/2323) | `codex/pulse-pi-s5-area-controls` `8c75e379e` | area picker only | yes | own town, town search, browsing another town | no — area-pinned paging/counts need #2312 |
+| [#2324 S9 audience](https://github.com/WangPantopus/skinny-pantopus/pull/2324) | `codex/pulse-pi-s9-narrow-audience` `7945f9df1` | yes | yes | sheet, confirmation, refusal only (PB route missing) | no — needs #2321 plus PB's narrowing route |
+| [#2325 S10 follow + this file](https://github.com/WangPantopus/skinny-pantopus/pull/2325) | `codex/pulse-pi-s10-follow-controls` `cfc0c6180` + this update | conversation follow only | yes | follow, notify, duration, stop, relaunch | no — needs #2321/#2322 |
+
+**Builds and checks.** The existing-suite run of the published stack (`af6dc0ab6`) finished: 4,827 tests, 164 skipped, only the five known Pacific-time `BillsListViewModelTests` failures; eight Swift Testing cases passed. The fixed stack `cfc0c6180` has a successful exact-head Debug build and passes SwiftLint strict, SwiftFormat lint, the icon/overline guards and `git diff --check`. Its existing-suite run on `Pulse-PI` has the same result as the published stack: 4,827 tests, 164 skipped, only the five Pacific-time `BillsListViewModelTests` failures (CI runs in UTC), and the eight Swift Testing cases pass. No new tests; one existing detail test was updated for the intended fallback (a missing post now answers 404 on both reads).
+
+**Backend used.** PI's private backend on 56100 runs an unmodified archive of PB's `claude/pulse-pb-s10-follows` at `7113887b2` (code-identical to #2322's head `2e583df50`) against PI's database, with its migrations applied. This is provisional integration, **not** H4 acceptance. Master has gained only non-Pulse PRs since `b4234543c` (all five branches still merge cleanly).
+
+**Real-app scenarios run** (iOS on `Pulse-PI` as Alice; Bob through the local API and the PI web app; synthetic data only):
+
+- S6.3/S6.5: 70 fixture posts across the six types; the first page stops at 30 with only Show earlier (`caught_up` false); two Show earlier pages, then "Nothing earlier." and "You're caught up · …since yesterday"; nothing loaded while scrolling; the seen acknowledgment went out only with the end card on screen and stored the first page's `read_at`.
+- S6.2: Bob's new Ask raised "↑ 1 new conversation" on the next minute poll without moving the page; tapping it scrolled up and reread. No Pulse requests while on another tab.
+- S6.6/A3: backend stopped (by its listener PID): a pull keeps the cards with "Couldn't refresh. Showing 9:56 PM." and Retry; a cold relaunch shows the saved page with the same notice; an unopened post says "Can't reach Pantopus. Check your connection." with Try again; a failed reply keeps the draft ("Couldn't post your reply. Your draft is still here.") and after the restart one tap sent exactly one reply.
+- S9.1–S9.4: Alice's reply from the app; Bob's reply to it (accented, Japanese, Hebrew, Arabic, emoji) arrived behind "↓ 1 new reply" and merged under "Replying to Alice"; the same `clientRequestId` returned the same reply. Thank → "Thanked" and Bob got the private "A neighbor thanked you". Alice has no Helpful control and the API refuses her (403 `NOT_POST_AUTHOR`); Bob's mark shows "✓ Helpful to Bob" and "Answered" for Alice. Thanked, Helpful and Following survive a cold relaunch.
+- S10.1: Follow → Following (`notify: off`; an ended Ask offers no "Until it ends" row); recap/each are exclusive; For a week stores `until_at` +7 days; Stop following deletes it. Sheet copy matches the appendix.
+- S5.8: area pill → Camas ✓ and Another place; town search lists the three open towns; browsing Washougal reads "Quiet in Washougal today" and no longer moves the seen marker; choosing Camas again acknowledges as before.
+- Card "…": "Mute this topic in this area" sends the card's area (server stored `home_repairs` with the Camas area), the card leaves at once with "Topic muted in this area.", and Unmute in Pulse preferences ("In one area") restores it.
+- Cross-client (web 56101, Bob): Alice's iOS replies show threaded and the Ask "Solved"; Bob's web reply reached Alice's phone behind the pill.
+- A6: largest accessibility size and dark mode on the page, the conversation and the follow sheet; the "Conversation" title now scales instead of breaking mid-word. Deep link `pantopus://posts/<id>` opens the conversation on the Pulse tab.
+
+**Defects found in the app and fixed in this continuation** (one fix commit per layer, merged upward): a household/home/persona post (Pulse route 404 by design) dead-ended in the detail screen — it now opens in the existing post page; a refused action ("Who can read", "I'd like it", Share, the giver's list) replaced a still-readable conversation with "We couldn't find what you were looking for" — the server's sentence now shows and a fresh read decides; browsing another area moved the Nearby seen marker; the topic mute ignored areas; returning to a conversation could insert other people's replies inline; the reply poll used the device clock; the collapsed-branch line named the wrong people; VoiceOver missed "done" on Going/Seen it in the conversation; seen/pill/Show-earlier races; the follow sheet opened off the main actor; the largest-text title wrap. Copy now matches the appendix for "Reply to {Name}…" and Android for the Following empty state and "Choose an area".
+
+**Not verified here:** Bob on a second iOS device (`Pulse-PI-SE` needs the simulator tool's per-device permission in this session; Bob was driven through the API and web instead), S6.7 performance, the privacy matrix, S9.5 offers end to end and S9.11 narrowing end to end (PB has not built those routes), account deletion, Android, physical phones, hosted services and push delivery.
+
+**Still open in PI's area (not started in this continuation):** S5 labels on replies/adult confirmation/limits UI; S8 composer; the rest of S10 (topic/place follows, Following list view, preferences summary, "Why am I seeing this?", the card's Follow/See more entries, the usage nudge); S11 client; S12–S24 client parts. The planning estimate for the full PI lane stays at roughly two-thirds remaining (60–75%).
+
+**Next:** watch PB's chain; when #2311/#2312 land, integrate master into S6, apply migrations to PI's database, restart only the 56100 listener, rerun S6 against merged routes, then merge #2308 through the shared queue; repeat up the stack as each dependency lands.
+
+## Published handoff — October 14, 2026 (historical)
+
+**This was the checkpoint before the continuation above.** At the founder's request, every continuation branch has been pushed and has an open draft PR. No PR was merged. The authoritative handoff is this file on `codex/pulse-pi-s10-follow-controls` / #2325; lower branches retain older status snapshots.
+
+| PR | Branch | Review base |
+| --- | --- | --- |
+| [#2308 — S6 page](https://github.com/WangPantopus/skinny-pantopus/pull/2308) | `claude/pulse-pi-s6-pulse-page` (`c70b8aa96`) | `master` |
+| [#2314 — S9 conversation](https://github.com/WangPantopus/skinny-pantopus/pull/2314) | `claude/pulse-pi-s9-conversation` (`da6a80474`) | S6 |
+| [#2323 — S5 area picker](https://github.com/WangPantopus/skinny-pantopus/pull/2323) | `codex/pulse-pi-s5-area-controls` (`18acae69c`) | S9 |
+| [#2324 — S9 audience picker](https://github.com/WangPantopus/skinny-pantopus/pull/2324) | `codex/pulse-pi-s9-narrow-audience` (`8ae5d6058`) | S5 picker |
+| [#2325 — S10 follow controls + handoff](https://github.com/WangPantopus/skinny-pantopus/pull/2325) | `codex/pulse-pi-s10-follow-controls` (`af6dc0ab6` source plus this status update) | Audience picker |
+
+- The exact S6 Debug build passed. The earlier queued S9 existing-suite attempt failed at compile time: the synchronous top-bar share callback called a main-actor-isolated method. `da6a80474` dispatches that callback onto the main actor, and the fix is merged through all three downstream branches.
+- Strict SwiftLint, SwiftFormat lint, icon/overline guards and diff checks pass after that fix. A new existing-unit-suite run of the combined stack is in progress against pinned source `af6dc0ab6`; its private log is `publication-tests.log`. No successful final-stack build/test result or native acceptance is claimed yet. No new tests were added.
+- Publication is preservation, not acceptance: H4, current-head CI, two-account native/cross-client scenarios, relaunch/offline/odd-data checks and accessibility verification remain merge gates. All five PRs are drafts and their descriptions explain the holds.
+- All repository source and handoff work is represented in those PRs. Credentials, env files, operator tools/logs, database data and generated build artifacts intentionally remain private/local and must not be committed to the public repository.
+- Planning estimate for the **full PI lane**, excluding reserved S25: roughly **70% remains** (uncertain range 60–75%), including backend integration, real-app verification and release-readiness work. This is not a measured code-completion percentage or a whole-project estimate. Five foundational client slices are merged; S5/S6/S9/S10 have substantial but unaccepted work; S8, remaining S10, S11 and the applicable later slices remain. The current five-PR stack is much further along in implementation than the entire lane.
+
+Next: inspect the new run and CI, then follow the detailed remaining-work order below. Do not recreate the already preserved runtime or start a concurrent build. Before changing active build inputs, ensure the publication test process has finished.
+
+## Earlier session handoff — October 14, 2026, 16:16 PDT (historical publication state)
+
+The founder requested a handoff and a new-session prompt. **This section supersedes every runtime, Git and completion statement below. The lane is unfinished.** This continuation is committed locally but has not been pushed, published as new PRs, or merged. Do not confuse source implementation with a successful native build or real-app acceptance.
+
+### What exists
+
+- Already merged and reusable: S1 client, S2 tolerant decoding, S3 five-tab navigation, S4 topics and S7 status controls. Their PRs and earlier evidence are in Done below.
+- S6 continuation integrates master `b4234543c` and contract #2310: server `read_at`, area-aware new counts, earlier-page `caught_up`, monotonic seen acknowledgments and optional sharing permission. The feed/page implementation already existed in draft #2308.
+- S9 continuation adds offer request/choose and giver-list UI, found-item private-chat link draft, stale-action guards, server-authorized sharing, and initial town narrowing to the existing conversation/reply UI. The chat draft does not auto-send and is not the still-undefined rich post attachment.
+- S5 area-picker slice adds own open town/neighborhood/street choices and another-town search, with stale-request cancellation and area-pinned paging/counts. It does not change a home or send device coordinates. Selection is per open page, not persisted across app relaunch.
+- S9 audience follow-up implements public → verified town → eligible verified neighborhood/street choices under #2321. No lateral or wider transition is offered; malformed acknowledgments fail closed.
+- S10 conversation-follow slice adds notification-off first follow, recap/each settings, end/week/keep duration, local-zone deadline wording and Stop following. Mutations wait for valid server acknowledgments; reply polling pauses beneath the detail sheets. This is not all of S10.
+
+### Saved branch stack
+
+Use these local branches rather than rebuilding or flattening their changes. The three `codex/` follow-ups have no PR yet. New PRs should use the indicated stack bases so each diff stays small.
+
+| Branch | Saved checkpoint | Intended PR base / publication |
+| --- | --- | --- |
+| `claude/pulse-pi-s6-pulse-page` | `c70b8aa96` | `master`; draft #2308 still has remote head `c9d4554c9` |
+| `claude/pulse-pi-s9-conversation` | `edaec3323` | S6; draft #2314 still has remote head `d9422a46b` |
+| `codex/pulse-pi-s5-area-controls` | `2f809ad13` | S9; local only |
+| `codex/pulse-pi-s9-narrow-audience` | `c688becd1` | S5; local only |
+| `codex/pulse-pi-s10-follow-controls` | `d737ace69` plus this handoff | Audience follow-up; current branch, local only |
+
+### Verification and dependencies
+
+- Fetch at handoff still shows master `b4234543c`. PB #2311 distance, #2312 feed, #2313 claims contract, #2317 conversation reads, #2319 account-deletion preservation, #2320 Helpful/Thanks, #2321 follow/narrowing contract and #2322 follows are all open, not merged. The founder said they would resume PB. Recheck live state before relying on this snapshot.
+- The private PI backend previews the unmodified #2322 chain at `7113887b2`, with its migrations applied to PI's database. This enables provisional integration only. H4 still prohibits merging clients before their implementing backend dependencies land. Claims and narrowing implementations were still absent from that inspected chain.
+- Strict SwiftLint, SwiftFormat lint, icon and overline guards pass at the final source checkpoint. No new tests were added. The last tiny deadline-copy change initially exceeded the 300-line type limit; extracting the existing polling property into the same-file extension cleared it without changing behavior.
+- The exact S6 `c70b8aa96` Debug source build **succeeded** at handoff; the script installed and launched it on PI's SE simulator. This is not a UI scenario check. The serialized exact-S9 `edaec3323` existing-unit-suite queue is now preparing its run; no S9 test result exists yet. The shared Mac is severely overloaded; do not start another concurrent Xcode build or mutate the active private source directory.
+- No continuation native acceptance is claimed. Final-head builds/tests, two-account scenarios, native/web round trips, relaunch, offline/refusal, old/odd data, dark mode, large text and accessibility remain pending. Historical BillsListViewModelTests Pacific-time failures are not a new result and should not be chased as Pulse work.
+- The old remote S6 and S9 heads have successful CI runs `38632497270` and `38643471649`; **those runs do not cover the new local commits**.
+- Web-only evidence: Alice's multilingual reply on the direct post page survives reload. My posts side-panel restoration showed “Post not found.” No web source changes were retained. Physical devices, hosted services, live push delivery and Release builds are unverified.
+
+### Runtime is preserved, not deleted
+
+- Source `~/.config/pantopus/dev-env.sh`. Frozen dependencies, PI's database, two synthetic accounts, local env files and the newly recreated `Pulse-PI` / `Pulse-PI-SE` simulators exist. Do not repeat the historical cleanup or reuse the historical device IDs.
+- PI backend is 56100; PI web is 56101; PI Supabase API/database/inbox are 56001/56002/56004. Backend source is a private dependency preview, not a source edit in PB's lane. After master merges, apply its migrations, reload the schema cache and restart the backend by the current listener PID on 56100 only.
+- Read the private operator handoff at `~/.config/pantopus/pulse-pi-runtime/handoff.md` for the current simulator IDs, build/queue PIDs, immutable source copies, commands, fixture helpers and local evidence paths. Do not copy credentials, fixtures, logs or operator details into Git/PRs/chat. Check process identity and log outcomes afresh; PIDs and tool sessions may expire.
+- The active build path is `~/.config/pantopus/pulse-pi-runtime/frontend/apps/ios`; `s9-source`, `s5-source` and `s10-source` are separate pinned inputs. Wait for S6 and S9 before replacing the active source for the next incremental build. Keep four compiler jobs and explicitly target PI's simulator, never the Makefile's default device.
+
+### Next session order / remaining work
+
+1. Fetch and inspect branch/worktree/PR/CI state, all stream statuses on master, the founder checklist/brief and required Pulse docs. Read this top handoff and the private operator handoff first; preserve existing resources and local commits.
+2. Preserve the successful exact-S6 build and collect the queued S9 existing-suite outcome. Repair intended compile/test issues only, then build the final S5/audience/S10 stack at its committed head. No real-app acceptance should be inferred from a successful build, static check or an earlier changed-during-build run.
+3. Integrate newly merged master/dependencies into the appropriate stack bases; apply migrations and restart PI's backend. Complete S6 native acceptance against merged real routes, including filtered seen, area counts, earlier-page caught-up, monotonic acknowledgments and sharing refusals.
+4. Complete S9 real-backend/native acceptance: replies/pill/branch depth, Helpful/Thanks, offer request limits/giver choose, found chat, narrowing, refused/stale/offline actions and the other account's view. PB still needs exact “I'd like it” offer copy and a rich post-attachment contract; the private link draft is not full S9.6 acceptance.
+5. Verify the S5 area picker and S10 follow controls, then push the checked branches, refresh draft #2308/#2314 descriptions, and open small stacked PRs for the remaining slices. Attach every PR. Before each merge read the current repository merge procedure in `launch-streams/status/REQUESTS.md`; green final-head CI plus real-app acceptance plus H4 are mandatory.
+6. Continue unfinished S5 label limits/adult-confirmation/privacy matrix; S8 composer; remaining S10 topic/place follows, Following/preferences summary, Why and usage nudge; S11 notices/appeals/rules; and iOS portions of S12–S24 in dependency order. Reuse existing Plans/Support Train. S25 is reserved. Do not assume other lanes or any whole slice are complete because client controls exist.
+
+Scope remains `frontend/apps/ios/` and this file. No new tests, no other streams' resources, and no hosted changes, real credentials, spending, real recipients or store submissions. Only the founder performs those actions.
+
+## Earlier continuation checkpoint — October 14, 2026 (historical)
 
 This section supersedes the earlier handoff and runtime observations below. The iOS lane remains unfinished; green CI alone does not authorize a merge.
 
+- S10 conversation-follow controls are in progress on `codex/pulse-pi-s10-follow-controls`, stacked after the audience picker. A first tap follows with notifications off; Following opens the real settings, with exclusive recap/each choices, Until it ends / For a week / Keep following, and Stop following. The sheet uses #2321/#2322's optional envelopes and confirms server results before changing state. Ended conversations use Keep rather than an invalid on-resolve follow. Reply polling pauses under these detail sheets. The rest of S10 (topic/place follows, preferences summary, Why and the usage nudge) remains unfinished; no native acceptance is claimed yet.
 - New dependency audit: PB has since published account-deletion preservation #2319, Helpful/Thanks #2320, follow/narrowing contracts #2321 and Following #2322. They remain unmerged. PI's private real-backend preview now runs #2322's chain against PI's database with those additive migrations; that is still provisional, not H4 acceptance. Claims and narrowing implementations remain pending in the inspected chain.
 - `codex/pulse-pi-s9-narrow-audience` continues after the S5 picker. It adopts #2321's explicit `areaId` and `{ post }` acknowledgment: Public can narrow to Verified town, then to an eligible open street/neighborhood from the primary verified home. Other-town, unavailable, lateral and wider choices are not offered. A malformed success clears the cached detail rather than retaining the broader sharing state. This follow-up is not yet built or verified in the native app.
 - S5 area controls are being continued separately on `codex/pulse-pi-s5-area-controls`, stacked on S9 (which includes S6). The existing area pill opens the merged `/areas/mine` API, with open town/neighborhood/street choices and an “Another place” town search. Choosing an area resets the feed query and pins paging/counts to that area; it never changes the home or sends device coordinates. Search cancels stale requests and fails closed when eligibility cannot be loaded. Native acceptance and the final build are pending. This is the area-picker part only, not completion of adult confirmation, label limits or the privacy matrix.
@@ -103,7 +213,9 @@ The founder requested a committed, pushed handoff and removal of PI's local reso
 
 ## Requests (to other streams)
 
-- → PC/PV: investigate the PI local web session/detail failure: localhost:56101, proxying to localhost:56100, synthetic Alice signs in and My posts renders; the pickleball post's Comments panel says “Post not found”, and reloading My posts returns to sign-in. Direct authenticated GET of the same post on PI's backend succeeds. PI has not isolated whether this is local setup or web behavior and has left web source unchanged.
+- → PB (October 15, still open): in the chain through `7113887b2`, `PUT /api/pulse/posts/:id/read-scope` and the claims routes (`POST|GET /api/pulse/posts/:id/claims`, `…/choose`) answer 404 "Route not found"; the iOS controls for S9.5 and S9.11 can't be accepted until they exist. The card action label for offers is still "Ask for it" (`services/pulse/cards.js:12`); the spec says "I'd like it", which the iOS conversation already shows, so the card and the conversation disagree until the server changes.
+- → PA (parity, October 15): iOS now matches Android's draft on four points: no seen acknowledgment from another area's page, "Mute this topic in this area" with the card's area, Following's empty words, and "Choose an area". Two shared open points: (1) both apps re-read the page when the tab comes back and the saved copy is stale, so after "You're caught up" was acknowledged a return can show only "Quiet in Camas today" plus Show earlier; proposal: on in-app return keep the page and poll `/feed/new`, and re-read only on pull, the pill, Retry or a cold start (spec §3 "Nothing loads by itself"). (2) The §7 menu words ("Mute this person", "Report a problem", "Why am I seeing this?", "Follow this conversation", "See more of this topic") are not in either app yet; change them together. iOS's detail screen falls back to the existing post page when the Pulse route answers 404 (household, home and persona posts); worth the same rule when Android's conversation moves to the Pulse route.
+- → PC/PV: investigate the PI local web session/detail failure: localhost:56101, proxying to localhost:56100, synthetic Alice signs in and My posts renders; the pickleball post's Comments panel says “Post not found”, and reloading My posts returns to sign-in. Direct authenticated GET of the same post on PI's backend succeeds. PI has not isolated whether this is local setup or web behavior and has left web source unchanged. (October 15: Bob's web session on 56101 opened the direct post page, showed the threaded replies and posted a reply; the side-panel case was not retried.)
 
 - → PB (S9 contract detail): response-shape request addressed in open PR 2313, which freezes the claims list and preserves the additive `{ message, comment }` create-reply envelope. PI still needs its merged contract and implementing routes before real-backend acceptance.
 - → PB (S9 private chat): existing chat only accepts text/file/location/task/listing types, so found-item chat currently starts with a post-link draft, not a new rich attachment type. Define the rich post-attachment contract for full S9.6 acceptance. The narrower-area request is resolved by #2321's explicit `areaId`; PI adopted it in the audience follow-up.
