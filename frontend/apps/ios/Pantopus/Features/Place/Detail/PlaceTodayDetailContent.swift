@@ -506,6 +506,7 @@ struct AddressCalendarCard: View {
     @State private var picking = false
     @State private var saving: String?
     @State private var errorText: String?
+    @State private var collections: [PickupCollection] = []
     @State private var weekday = ""
     @State private var frequency = "not_set"
     @State private var nextDate = ""
@@ -554,6 +555,7 @@ struct AddressCalendarCard: View {
         _weekday = State(initialValue: data.pickupSchedule?.weekday ?? "")
         _frequency = State(initialValue: data.pickupSchedule?.recyclingFrequency ?? "not_set")
         _nextDate = State(initialValue: data.pickupSchedule?.recyclingNextDate ?? "")
+        _collections = State(initialValue: data.pickupSchedule?.collections ?? [])
         _openedVersion = State(initialValue: data.pickupVersion)
     }
 
@@ -570,6 +572,7 @@ struct AddressCalendarCard: View {
                         weekday = calendar.pickupSchedule?.weekday ?? ""
                         frequency = calendar.pickupSchedule?.recyclingFrequency ?? "not_set"
                         nextDate = calendar.pickupSchedule?.recyclingNextDate ?? ""
+                        collections = calendar.pickupSchedule?.collections ?? []
                         openedVersion = calendar.pickupVersion
                         errorText = nil
                         flyerMessage = nil
@@ -656,45 +659,25 @@ struct AddressCalendarCard: View {
     private var picker: some View {
         VStack(alignment: .leading, spacing: 8) {
             flyerControl
-            Text("Which day is garbage collected each week?")
+            Text("Choose the collections your household uses.")
                 .font(.system(size: 13))
-                .foregroundStyle(Theme.Color.appText)
-            Picker("Garbage collection", selection: $weekday) {
-                Text("Choose a day").tag("")
-                ForEach(Self.weekdays, id: \.id) { day in Text(day.label).tag(day.id) }
-            }
-            .font(.system(size: 14))
-            .frame(minHeight: 44)
-            // A menu picker's label can't wrap; at accessibility sizes it was clipped.
-            .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-            Text("Recycling")
-                .font(.system(size: 13))
-                .foregroundStyle(Theme.Color.appTextSecondary)
-            Picker("Recycling", selection: Binding(get: { frequency }, set: { frequency = $0
-                nextDate = ""
-            })) {
-                Text("Not sure yet").tag("not_set")
-                Text("Every week").tag("weekly")
-                Text("Every other week").tag("biweekly")
-            }
-            .font(.system(size: 14))
-            .frame(minHeight: 44)
-            .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-            if frequency != "not_set" {
-                Text("Next recycling pickup")
-                    .font(.system(size: 13))
-                    .foregroundStyle(Theme.Color.appTextSecondary)
-                Picker("Next recycling pickup", selection: $nextDate) {
-                    Text("Choose a date").tag("")
-                    ForEach(pickupDates, id: \.self) { day in Text(pickupDateLabel(day)).tag(day) }
+            ForEach(Self.collectionKinds, id: \.0) { kind, label in
+                Toggle(label, isOn: Binding(get: { collections.contains { $0.kind == kind } }, set: { enabled in
+                    if enabled {
+                        collections.append(PickupCollection(kind: kind))
+                    } else {
+                        collections.removeAll { $0.kind == kind }
+                    }
+                }))
+                .font(.system(size: 14, weight: .semibold))
+                if let index = collections.firstIndex(where: { $0.kind == kind }) {
+                    collectionFields(index: index, label: label)
                 }
-                .font(.system(size: 14))
-                .frame(minHeight: 44)
-                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
             }
             Text(
                 "Use your collection day, not the night you put bins out. Dates follow your home’s calendar. "
-                    + "If recycling is unknown, only garbage is saved. Check your provider for holiday changes."
+                    + "Keep the original start date for an unchanged cycle. "
+                    + "Turn off a type to remove it. Check your provider for holiday changes."
             )
             .font(.system(size: 11.5))
             .foregroundStyle(Theme.Color.appTextSecondary)
@@ -702,7 +685,8 @@ struct AddressCalendarCard: View {
                 .buttonStyle(.borderedProminent)
                 .tint(Theme.Color.primarySolid)
                 .controlSize(.large)
-                .disabled(weekday.isEmpty || (frequency != "not_set" && !pickupDates.contains(nextDate)))
+                .disabled(collections.isEmpty || collections
+                    .contains { $0.anchorDate.isEmpty || ($0.frequency == "weekly" && $0.weekdays.isEmpty) })
                 .accessibilityIdentifier("addressCalendarSave")
             if calendar.pickupSchedule != nil {
                 Button("Clear household schedule") { Task { await choose(reset: true) } }
@@ -773,9 +757,7 @@ struct AddressCalendarCard: View {
                 homeId: homeId, expectedVersion: openedVersion, dispatchGuard: guardCurrent
             )
                 : AddressCalendarEndpoints.setPickupDay(homeId: homeId, request: SetPickupDayRequest(
-                    weekday: weekday, recyclingFrequency: frequency,
-                    recyclingNextDate: frequency == "not_set" ? nil : nextDate,
-                    expectedVersion: openedVersion
+                    expectedVersion: openedVersion, collections: collections
                 ), dispatchGuard: guardCurrent)
             let response: AddressCalendarResponse = try await api.request(endpoint)
             try requirePickupCurrent(version)
@@ -801,6 +783,7 @@ struct AddressCalendarCard: View {
                 weekday = current.pickupSchedule?.weekday ?? ""
                 frequency = current.pickupSchedule?.recyclingFrequency ?? "not_set"
                 nextDate = current.pickupSchedule?.recyclingNextDate ?? ""
+                collections = current.pickupSchedule?.collections ?? []
                 openedVersion = current.pickupVersion
             }
             errorText = "The pickup schedule changed since you opened it. Review the current schedule and try again."
@@ -823,6 +806,100 @@ struct AddressCalendarCard: View {
 }
 
 extension AddressCalendarCard {
+    private static let collectionKinds = [
+        ("garbage", "Garbage"),
+        ("recycling", "Recycling"),
+        ("yard_waste", "Yard waste"),
+        ("bulk_pickup", "Bulk collection")
+    ]
+
+    private func collectionPattern(_ row: PickupCollection) -> String {
+        switch row.frequency {
+        case "weekly": "weekly-\(row.interval)"
+        case "monthly": "monthly-\(row.monthlyMode)"
+        default: "once"
+        }
+    }
+
+    private func collectionFields(index: Int, label: String) -> some View {
+        let row = collections[index]
+        let pattern = collectionPattern(row)
+        return VStack(alignment: .leading, spacing: 8) {
+            Picker("\(label) repeats", selection: Binding(get: { pattern }, set: { value in
+                if value.hasPrefix("weekly-") {
+                    collections[index].frequency = "weekly"
+                    collections[index].interval = Int(value.dropFirst(7)) ?? 1
+                } else if value.hasPrefix("monthly-") {
+                    collections[index].frequency = "monthly"
+                    collections[index].monthlyMode = String(value.dropFirst(8))
+                    collections[index].interval = row.frequency == "monthly" ? row.interval : 1
+                } else { collections[index].frequency = "once"
+                    collections[index].interval = 1
+                    collections[index].untilDate = nil
+                }
+            })) {
+                ForEach(1...4, id: \.self) { n in Text(n == 1 ? "Every week" : "Every \(n) weeks").tag("weekly-\(n)") }
+                Text("Monthly on this date").tag("monthly-day_of_month")
+                Text("Monthly on this weekday").tag("monthly-weekday")
+                Text("One time").tag("once")
+            }
+            if row.frequency == "monthly" {
+                Picker("\(label) month interval", selection: $collections[index].interval) {
+                    ForEach(1...12, id: \.self) { n in Text(n == 1 ? "Every month" : "Every \(n) months").tag(n) }
+                }
+            }
+            if row.frequency == "weekly" {
+                HStack(spacing: 3) {
+                    ForEach(Self.weekdays, id: \.id) { day in
+                        Button {
+                            if collections[index].weekdays.contains(day.id) {
+                                collections[index].weekdays.removeAll { $0 == day.id }
+                            } else {
+                                collections[index].weekdays.append(day.id)
+                            }
+                        } label: {
+                            Text(String(day.label.prefix(3)))
+                                .font(.system(size: 11, weight: .semibold))
+                                .frame(maxWidth: .infinity, minHeight: 44)
+                                .background(row.weekdays.contains(day.id) ? Theme.Color.primarySolid.opacity(0.15) : Theme.Color.appSurface)
+                                .clipShape(RoundedRectangle(cornerRadius: 7))
+                        }
+                        .accessibilityLabel("\(label) \(day.label)")
+                        .accessibilityValue(row.weekdays.contains(day.id) ? "Selected" : "Not selected")
+                    }
+                }
+            }
+            Text(row.frequency == "once" ? "Collection date" : "First collection date")
+            TextField("YYYY-MM-DD", text: $collections[index].anchorDate)
+                .textFieldStyle(.roundedBorder)
+                .autocorrectionDisabled()
+                .accessibilityLabel("\(label) collection date, YYYY-MM-DD")
+            if row.frequency != "once" {
+                Text("End date (optional)")
+                TextField(
+                    "YYYY-MM-DD",
+                    text: Binding(
+                        get: { collections[index].untilDate ?? "" },
+                        set: { collections[index].untilDate = $0.isEmpty ? nil : $0 }
+                    )
+                )
+                .textFieldStyle(.roundedBorder)
+                .autocorrectionDisabled()
+                .accessibilityLabel("\(label) end date, YYYY-MM-DD")
+            }
+            if row.frequency == "weekly" && row.interval > 1 {
+                Text("The start date anchors the collection week. Weeks begin Monday.")
+                    .font(.system(size: 12)).foregroundStyle(Theme.Color.appTextSecondary)
+            }
+            if row.frequency == "monthly" {
+                Text("The start date sets the pattern. Dates absent from a month are skipped; a fifth weekday means the last weekday.")
+                    .font(.system(size: 12)).foregroundStyle(Theme.Color.appTextSecondary)
+            }
+            Divider()
+        }
+        .font(.system(size: 13))
+    }
+
     private func whenLabel(_ event: PlaceCalendarEvent) -> String {
         switch event.daysUntil {
         case 0: return "Today"
@@ -978,6 +1055,7 @@ extension AddressCalendarCard {
 
     /// Only what the flyer shows changes; a field it doesn't show keeps the editor's value.
     private func fill(from reading: AIDraftPickupScheduleResponse) {
+        guard let utc = TimeZone(secondsFromGMT: 0) else { return }
         let read = reading.schedule
         if let day = read.garbageWeekday, Self.weekdays.contains(where: { $0.id == day }) {
             weekday = day
@@ -988,6 +1066,36 @@ extension AddressCalendarCard {
         }
         if frequency != "not_set", let day = read.recyclingNextDate, pickupDates.contains(day) {
             nextDate = day
+        }
+        if let day = read.garbageWeekday, Self.weekdays.contains(where: { $0.id == day }) {
+            let anchor = pickupDates.first { date in
+                let f = DateFormatter()
+                f.dateFormat = "yyyy-MM-dd"
+                f.timeZone = TimeZone(secondsFromGMT: 0)
+                guard let parsed = f.date(from: date) else { return false }
+                var calendar = Calendar(identifier: .gregorian)
+                calendar.timeZone = utc
+                return ["SU", "MO", "TU", "WE", "TH", "FR", "SA"][calendar.component(.weekday, from: parsed) - 1] == day
+            } ?? ""
+            collections.removeAll { $0.kind == "garbage" }
+            collections.append(PickupCollection(kind: "garbage", weekdays: [day], anchorDate: anchor))
+        }
+        if let cycle = read.recyclingFrequency, ["weekly", "biweekly"].contains(cycle), !nextDate.isEmpty {
+            let f = DateFormatter()
+            f.dateFormat = "yyyy-MM-dd"
+            f.timeZone = TimeZone(secondsFromGMT: 0)
+            if let date = f.date(from: nextDate) {
+                var calendar = Calendar(identifier: .gregorian)
+                calendar.timeZone = utc
+                let day = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"][calendar.component(.weekday, from: date) - 1]
+                collections.removeAll { $0.kind == "recycling" }
+                collections.append(PickupCollection(
+                    kind: "recycling",
+                    interval: cycle == "biweekly" ? 2 : 1,
+                    weekdays: [day],
+                    anchorDate: nextDate
+                ))
+            }
         }
         let lines = [read.summary, reading.note, "Check the days, then tap Save schedule."]
         flyerMessage = FlyerMessage(text: lines.compactMap { $0 }.joined(separator: " "), failed: false)

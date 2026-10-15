@@ -1273,10 +1273,32 @@ public struct HouseholdPickupSchedule: Decodable, Sendable, Hashable {
     public let recyclingFrequency: String
     public let recyclingNextDate: String?
 
+    public var collections: [PickupCollection]?
+
     private enum CodingKeys: String, CodingKey {
-        case weekday
+        case weekday, collections
         case recyclingFrequency = "recycling_frequency"
         case recyclingNextDate = "recycling_next_date"
+    }
+}
+
+public struct PickupCollection: Codable, Sendable, Hashable, Identifiable {
+    public var kind: String
+    public var frequency: String = "weekly"
+    public var interval: Int = 1
+    public var weekdays: [String] = []
+    public var anchorDate: String = ""
+    public var monthlyMode: String = "day_of_month"
+    public var untilDate: String?
+    public var id: String {
+        kind
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case kind, frequency, interval, weekdays
+        case anchorDate = "anchor_date"
+        case monthlyMode = "monthly_mode"
+        case untilDate = "until_date"
     }
 }
 

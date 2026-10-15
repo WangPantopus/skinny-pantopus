@@ -1139,6 +1139,7 @@ data class HouseholdPickupSchedule(
     val weekday: String? = null,
     @Json(name = "recycling_frequency") val recyclingFrequency: String = "not_set",
     @Json(name = "recycling_next_date") val recyclingNextDate: String? = null,
+    val collections: List<PickupCollection>? = null,
 )
 
 sealed interface PlaceSectionData {

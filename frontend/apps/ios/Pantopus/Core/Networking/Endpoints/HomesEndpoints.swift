@@ -692,19 +692,22 @@ public enum HomesEndpoints {
 
 public struct SetPickupDayRequest: Encodable, Sendable {
     /// MO TU WE TH FR SA SU
-    public let weekday: String
+    public let weekday: String?
     public let recyclingFrequency: String
     public let recyclingNextDate: String?
     /// The calendar's `pickupVersion` when the editor opened; the server
     /// answers 409 if the schedule changed since. Omitted when nil.
     public let expectedVersion: String?
+    public let collections: [PickupCollection]?
 
     public init(
-        weekday: String,
+        weekday: String? = nil,
         recyclingFrequency: String = "not_set",
         recyclingNextDate: String? = nil,
-        expectedVersion: String? = nil
+        expectedVersion: String? = nil,
+        collections: [PickupCollection]? = nil
     ) {
+        self.collections = collections
         self.weekday = weekday
         self.recyclingFrequency = recyclingFrequency
         self.recyclingNextDate = recyclingNextDate
@@ -712,7 +715,7 @@ public struct SetPickupDayRequest: Encodable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case weekday
+        case weekday, collections
         case recyclingFrequency = "recycling_frequency"
         case recyclingNextDate = "recycling_next_date"
         case expectedVersion = "expected_version"

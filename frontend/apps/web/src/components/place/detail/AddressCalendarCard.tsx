@@ -30,7 +30,7 @@ import {
 } from 'lucide-react';
 import * as api from '@pantopus/api';
 import type { PickupWeekday } from '@pantopus/api';
-import type { PlaceAddressCalendarData, PlaceCalendarEvent, PlaceCalendarKind } from '@pantopus/types';
+import type { PlaceAddressCalendarData, PlaceCalendarEvent, PlaceCalendarKind, PickupCollection } from '@pantopus/types';
 import { queryKeys } from '@/lib/query-keys';
 import { toast } from '@/components/ui/toast-store';
 import { IconTile } from '@/components/archetypes/place';
@@ -117,9 +117,7 @@ function HouseholdCalendar({ homeId, data }: AddressCalendarCardProps) {
   const [saving, setSaving] = useState(false);
   const busy = useRef(false);
   const [picking, setPicking] = useState(data.needs_pickup_day);
-  const [weekday, setWeekday] = useState<PickupWeekday | ''>(data.pickup_schedule?.weekday ?? '');
-  const [frequency, setFrequency] = useState<'not_set' | 'weekly' | 'biweekly'>(data.pickup_schedule?.recycling_frequency ?? 'not_set');
-  const [nextDate, setNextDate] = useState(data.pickup_schedule?.recycling_next_date ?? '');
+  const [collections, setCollections] = useState<PickupCollection[]>(data.pickup_schedule?.collections ?? []);
   // The schedule this form started from. A save sends it back, so a change
   // saved meanwhile on another device is not silently undone.
   const [openedVersion, setOpenedVersion] = useState(data.pickup_version);
@@ -130,32 +128,29 @@ function HouseholdCalendar({ homeId, data }: AddressCalendarCardProps) {
   const setupMessage = homeId && calendar.needs_pickup_day && !upcoming.some((e) => PICKUP_KINDS.includes(e.kind))
     ? 'Set your pickup day and your pickups start here.'
     : null;
-  const dateOptions = Array.from({ length: frequency === 'weekly' ? 7 : 14 }, (_, offset) => {
-    const date = new Date(`${calendar.today}T12:00:00Z`);
-    date.setUTCDate(date.getUTCDate() + offset);
-    return Number.isFinite(date.getTime()) ? date.toISOString().slice(0, 10) : '';
-  }).filter(Boolean);
+  const update = (kind: PickupCollection['kind'], patch: Partial<PickupCollection>) => {
+    setCollections(rows => rows.map(row => row.kind === kind ? { ...row, ...patch } : row));
+  };
+  const valid = collections.length > 0 && collections.every(row => row.anchor_date
+    && (row.frequency !== 'weekly' || row.weekdays.length > 0));
 
   const save = async (reset = false) => {
-    if (!homeId || busy.current || (!reset && !weekday)) return;
+    if (!homeId || busy.current || (!reset && !valid)) return;
     busy.current = true;
     setSaving(true);
     setError(null);
     try {
       const response = reset ? await api.clearPickupDay(homeId, openedVersion) : await api.setPickupDay(homeId, {
-        weekday: weekday as PickupWeekday,
-        recycling_frequency: frequency,
-        ...(frequency !== 'not_set' ? { recycling_next_date: nextDate } : {}),
+        collections,
         ...(openedVersion ? { expected_version: openedVersion } : {}),
       });
       setConfirmed(response.calendar);
-      setWeekday(response.calendar.pickup_schedule?.weekday ?? '');
-      setFrequency(response.calendar.pickup_schedule?.recycling_frequency ?? 'not_set');
-      setNextDate(response.calendar.pickup_schedule?.recycling_next_date ?? '');
+      setCollections(response.calendar.pickup_schedule?.collections ?? []);
       setOpenedVersion(response.calendar.pickup_version);
       toast.success(reset ? 'Household pickup schedule cleared.' : 'Pickup schedule saved to your household calendar.');
       setPicking(false);
       void queryClient.invalidateQueries({ queryKey: queryKeys.placeIntelligence(homeId) });
+      void queryClient.invalidateQueries({ queryKey: ['household-calendar', homeId] });
     } catch (err) {
       // Changed meanwhile: nothing was saved. Show the current schedule in the
       // form so the person can review it and try again.
@@ -163,11 +158,10 @@ function HouseholdCalendar({ homeId, data }: AddressCalendarCardProps) {
       if (failure?.statusCode === 409 && failure.data?.calendar) {
         const current = failure.data.calendar;
         setConfirmed(current);
-        setWeekday(current.pickup_schedule?.weekday ?? '');
-        setFrequency(current.pickup_schedule?.recycling_frequency ?? 'not_set');
-        setNextDate(current.pickup_schedule?.recycling_next_date ?? '');
+        setCollections(current.pickup_schedule?.collections ?? []);
         setOpenedVersion(current.pickup_version);
         void queryClient.invalidateQueries({ queryKey: queryKeys.placeIntelligence(homeId) });
+        void queryClient.invalidateQueries({ queryKey: ['household-calendar', homeId] });
       }
       setError(err instanceof Error ? err.message : 'Could not save your pickup schedule. Try again.');
     } finally {
@@ -182,9 +176,7 @@ function HouseholdCalendar({ homeId, data }: AddressCalendarCardProps) {
         <span className="text-[11px] font-bold uppercase tracking-[0.07em] text-app-text-secondary">Next {data.window_days} days at this address</span>
         {homeId ? (
           <button type="button" disabled={saving} onClick={() => {
-            setWeekday(calendar.pickup_schedule?.weekday ?? '');
-            setFrequency(calendar.pickup_schedule?.recycling_frequency ?? 'not_set');
-            setNextDate(calendar.pickup_schedule?.recycling_next_date ?? '');
+            setCollections(calendar.pickup_schedule?.collections ?? []);
             setOpenedVersion(calendar.pickup_version);
             setError(null);
             setPicking((p) => !p);
@@ -196,44 +188,59 @@ function HouseholdCalendar({ homeId, data }: AddressCalendarCardProps) {
 
       {picking && homeId ? (
         <div className="mt-2 mb-3 rounded-xl bg-app-surface-sunken p-3">
-          <p className="text-[13px] text-app-text-strong leading-[18px] mb-2">
-            Which day is garbage collected each week?
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {WEEKDAYS.map((w) => (
-              <button
-                key={w.id}
-                type="button"
-                disabled={saving}
-                aria-pressed={weekday === w.id}
-                onClick={() => setWeekday(w.id)}
-                className="px-3 py-1.5 rounded-lg border border-app-border bg-app-surface text-[13px] font-semibold text-app-text hover:border-primary-500 disabled:opacity-60"
-              >
-                {w.label}{weekday === w.id ? ' ✓' : ''}
-              </button>
-            ))}
-          </div>
-          <label className="block text-[13px] text-app-text mt-3">
-            Recycling
-            <select value={frequency} disabled={saving} onChange={(e) => { setFrequency(e.target.value as typeof frequency); setNextDate(''); }} className="mt-1 w-full rounded-lg border border-app-border bg-app-surface p-2">
-              <option value="not_set">Not sure yet — save garbage only</option>
-              <option value="weekly">Every week</option>
-              <option value="biweekly">Every other week</option>
-            </select>
-          </label>
-          {frequency !== 'not_set' ? (
-            <label className="block text-[13px] text-app-text mt-3">
-              Next recycling pickup
-              <select value={nextDate} disabled={saving} onChange={(e) => setNextDate(e.target.value)} className="mt-1 w-full rounded-lg border border-app-border bg-app-surface p-2">
-                <option value="">Choose a date</option>
-                {dateOptions.map((date) => <option key={date} value={date}>{new Date(`${date}T12:00:00Z`).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric', timeZone: 'UTC' })}</option>)}
-              </select>
-            </label>
-          ) : null}
-          <p className="text-[11.5px] text-app-text-muted mt-2">Use your collection day, not the night you put bins out. Dates follow your home’s calendar. Check your provider for holiday changes.</p>
+          <p className="text-[13px] text-app-text-strong mb-2">Choose the collections your household uses.</p>
+          {(['garbage', 'recycling', 'yard_waste', 'bulk_pickup'] as const).map(kind => {
+            const row = collections.find(item => item.kind === kind);
+            const label = { garbage: 'Garbage', recycling: 'Recycling', yard_waste: 'Yard waste', bulk_pickup: 'Bulk collection' }[kind];
+            const pattern = row?.frequency === 'weekly' ? `weekly-${row.interval}` : row?.frequency === 'monthly' ? `monthly-${row.monthly_mode ?? 'day_of_month'}` : 'once';
+            return <fieldset key={kind} className="mb-3 border-b border-app-border pb-3" disabled={saving}>
+              <label className="flex gap-2 items-center text-[13px] font-semibold">
+                <input type="checkbox" checked={!!row} onChange={e => setCollections(rows => e.target.checked
+                  ? [...rows, { kind, frequency: 'weekly', interval: 1, weekdays: [], anchor_date: '', monthly_mode: 'day_of_month' }]
+                  : rows.filter(item => item.kind !== kind))} />{label}
+              </label>
+              {row && <div className="mt-2 space-y-2">
+                <label className="block text-[13px]">{label} repeats
+                  <select aria-label={`${label} repeats`} value={pattern} onChange={e => {
+                    const value = e.target.value;
+                    update(kind, value.startsWith('weekly-') ? { frequency: 'weekly', interval: Number(value.slice(7)) }
+                      : value.startsWith('monthly-') ? { frequency: 'monthly', interval: row.frequency === 'monthly' ? row.interval : 1, monthly_mode: value.slice(8) as PickupCollection['monthly_mode'] }
+                      : { frequency: 'once', interval: 1, until_date: null });
+                  }} className="mt-1 w-full rounded-lg border border-app-border bg-app-surface p-2">
+                    {[1, 2, 3, 4].map(n => <option key={n} value={`weekly-${n}`}>{n === 1 ? 'Every week' : `Every ${n} weeks`}</option>)}
+                    <option value="monthly-day_of_month">Monthly on this date</option>
+                    <option value="monthly-weekday">Monthly on this weekday (e.g. second Tuesday)</option>
+                    <option value="once">One time</option>
+                  </select>
+                </label>
+                {row.frequency === 'monthly' && <label className="block text-[13px]">{label} month interval
+                  <select aria-label={`${label} month interval`} value={row.interval} onChange={e => update(kind, { interval: Number(e.target.value) })}
+                    className="mt-1 w-full rounded-lg border border-app-border bg-app-surface p-2">
+                    {Array.from({ length: 12 }, (_, i) => i + 1).map(n => <option key={n} value={n}>{n === 1 ? 'Every month' : `Every ${n} months`}</option>)}
+                  </select>
+                </label>}
+                {row.frequency === 'weekly' && <div className="flex flex-wrap gap-1.5" aria-label={`${label} days`}>
+                  {WEEKDAYS.map(day => <button key={day.id} type="button" aria-label={`${label} ${day.label}`} aria-pressed={row.weekdays.includes(day.id)}
+                    onClick={() => update(kind, { weekdays: row.weekdays.includes(day.id) ? row.weekdays.filter(d => d !== day.id) : [...row.weekdays, day.id] })}
+                    className="px-3 py-1.5 rounded-lg border border-app-border bg-app-surface text-[13px]">{day.label}{row.weekdays.includes(day.id) ? ' ✓' : ''}</button>)}
+                </div>}
+                <label className="block text-[13px]">{row.frequency === 'once' ? `${label} collection date` : `${label} first collection date`}
+                  <input aria-label={`${label} collection date`} type="date" value={row.anchor_date} onChange={e => update(kind, { anchor_date: e.target.value })}
+                    className="mt-1 w-full rounded-lg border border-app-border bg-app-surface p-2" />
+                </label>
+                {row.frequency !== 'once' && <label className="block text-[13px]">{label} end date (optional)
+                  <input type="date" value={row.until_date ?? ''} min={row.anchor_date} onChange={e => update(kind, { until_date: e.target.value || null })}
+                    className="mt-1 w-full rounded-lg border border-app-border bg-app-surface p-2" />
+                </label>}
+                {row.frequency === 'weekly' && row.interval > 1 && <p className="text-[12px] text-app-text-secondary">The start date anchors the collection week. Weeks begin Monday.</p>}
+                {row.frequency === 'monthly' && <p className="text-[12px] text-app-text-secondary">The start date sets the monthly pattern. Dates absent from a month are skipped; a fifth weekday means the last weekday.</p>}
+              </div>}
+            </fieldset>;
+          })}
+          <p className="text-[11.5px] text-app-text-muted mt-2">Use collection dates, not the night you put bins out. Keep the original start date when editing an unchanged cycle. Uncheck a type to remove it. Check your provider for holiday changes.</p>
           {error ? <p role="alert" className="text-[13px] text-red-600 mt-2">{error}</p> : null}
           <div className="flex flex-wrap gap-3 mt-3">
-            <button type="button" disabled={saving || !weekday || (frequency !== 'not_set' && !dateOptions.includes(nextDate))} onClick={() => save()} className="rounded-lg bg-primary-600 px-3 py-2 text-white text-[13px] font-semibold disabled:opacity-60">{saving ? 'Saving…' : 'Save schedule'}</button>
+            <button type="button" disabled={saving || !valid} onClick={() => save()} className="rounded-lg bg-primary-600 px-3 py-2 text-white text-[13px] font-semibold disabled:opacity-60">{saving ? 'Saving…' : 'Save schedule'}</button>
             {calendar.pickup_schedule ? <button type="button" disabled={saving} onClick={() => save(true)} className="text-[13px] text-app-text-secondary">Clear household schedule</button> : null}
           </div>
         </div>

@@ -9,6 +9,7 @@ import androidx.compose.ui.unit.dp
 import app.cash.paparazzi.DeviceConfig
 import app.cash.paparazzi.Paparazzi
 import app.pantopus.android.data.api.models.place.HouseholdPickupSchedule
+import app.pantopus.android.data.api.models.place.PickupCollection
 import app.pantopus.android.data.api.models.place.PlaceAddressCalendarData
 import app.pantopus.android.data.api.models.place.SetPickupDayRequest
 import app.pantopus.android.ui.screens.place.detail.AddressCalendarActions
@@ -42,7 +43,26 @@ class PickupScheduleSnapshotTest {
                         PickupScheduleEditor(
                             PlaceAddressCalendarData(
                                 today = "2026-09-03",
-                                pickupSchedule = HouseholdPickupSchedule("TH", "biweekly", "2026-09-11"),
+                                pickupSchedule =
+                                    HouseholdPickupSchedule(
+                                        "TH",
+                                        "biweekly",
+                                        "2026-09-11",
+                                        collections =
+                                            listOf(
+                                                PickupCollection(
+                                                    "garbage",
+                                                    weekdays = listOf("TH"),
+                                                    anchorDate = "2026-09-03",
+                                                ),
+                                                PickupCollection(
+                                                    "recycling",
+                                                    interval = 2,
+                                                    weekdays = listOf("FR"),
+                                                    anchorDate = "2026-09-11",
+                                                ),
+                                            ),
+                                    ),
                             ),
                             actions,
                             busy = false,

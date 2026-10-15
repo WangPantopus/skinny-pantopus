@@ -32,12 +32,21 @@ const PICKUP_VERSION = /^(none|[0-9a-f]{32})$/;
 const PICKUP_DENIED = "You don't have permission to change this household's pickup schedule.";
 
 const pickupSchema = Joi.object({
-  weekday: Joi.string().valid('MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU').required(),
+  weekday: Joi.string().valid('MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU').optional(),
+  collections: Joi.array().min(1).max(4).items(Joi.object({
+    kind: Joi.string().valid('garbage', 'recycling', 'yard_waste', 'bulk_pickup').required(),
+    frequency: Joi.string().valid('weekly', 'monthly', 'once').required(),
+    interval: Joi.number().integer().min(1).max(12).required(),
+    weekdays: Joi.array().max(7).unique().items(Joi.string().valid('MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU')).required(),
+    anchor_date: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).required(),
+    monthly_mode: Joi.string().valid('day_of_month', 'weekday').optional(),
+    until_date: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).allow(null).optional(),
+  })).optional(),
   recycling_every_other_week: Joi.boolean().optional(),
   recycling_frequency: Joi.string().valid('not_set', 'weekly', 'biweekly').optional(),
   recycling_next_date: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).optional(),
   expected_version: Joi.string().pattern(PICKUP_VERSION).optional(),
-});
+}).xor('weekday', 'collections');
 
 // Nothing was saved. Send the current calendar so the person can review it.
 async function sendScheduleChanged(req, res, err) {
@@ -65,7 +74,9 @@ router.get('/:id/calendar', verifyToken, async (req, res) => {
 router.put('/:id/calendar/pickup-day', verifyToken, validate(pickupSchema), async (req, res) => {
   try {
     const { home } = await addressCalendarService.getPickupContext(req.params.id, req.user.id);
-    const result = await addressCalendarService.setPickupDay(home, {
+    const result = req.body.collections
+      ? await addressCalendarService.setPickupSchedule(home, { collections: req.body.collections, userId: req.user.id, expectedVersion: req.body.expected_version })
+      : await addressCalendarService.setPickupDay(home, {
       weekday: req.body.weekday,
       // Older clients only send a weekday/boolean. Accept them, but do not
       // invent recycling dates without the new explicit schedule fields.
