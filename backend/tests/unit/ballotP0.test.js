@@ -501,7 +501,7 @@ describe('governments from the exact point', () => {
     const rows = getTable('PlaceSectionCache');
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
-      cache_key: `geo9:${encodeGeohash(45.5871, -122.3995, 9)}`,
+      cache_key: governments.pointCacheKey(45.5871, -122.3995),
       section_id: '_ballot_governments',
     });
     expect(rows[0].cache_key).not.toContain('home');
@@ -691,19 +691,19 @@ describe('the Place sections take Ballot only when the request opted in', () => 
     expect(env.data).toMatchObject({ coverage: 'supported', election_id: '2026-11-03-general', polling_place: null, ballot: [] });
   });
 
-  it('civic districts: without Ballot, the long-standing ~1 km cell and no governments', async () => {
+  it('civic districts: without Ballot, the exact point and no governments', async () => {
     const [env] = await placeSectionAdapters.composeCivicDistricts(HOME);
     expect(env.data).not.toHaveProperty('governments');
     expect(getTable('PlaceSectionCache').map((r) => [r.section_id, r.cache_key])).toEqual([
-      ['civic_districts', `geo:${encodeGeohash(HOME.map_center_lat, HOME.map_center_lng, 6)}`],
+      ['civic_districts', governments.pointCacheKey(HOME.map_center_lat, HOME.map_center_lng)],
     ]);
   });
 
-  it('civic districts: outside the pilot states Ballot changes nothing about the districts', async () => {
+  it('civic districts: outside the pilot states, districts still use the exact point', async () => {
     const [env] = await placeSectionAdapters.composeCivicDistricts({ ...HOME, state: 'TX' }, { ballot: true });
     expect(env.data).not.toHaveProperty('governments');
     expect(getTable('PlaceSectionCache').map((r) => [r.section_id, r.cache_key])).toEqual([
-      ['civic_districts', `geo:${encodeGeohash(HOME.map_center_lat, HOME.map_center_lng, 6)}`],
+      ['civic_districts', governments.pointCacheKey(HOME.map_center_lat, HOME.map_center_lng)],
     ]);
   });
 
@@ -712,7 +712,7 @@ describe('the Place sections take Ballot only when the request opted in', () => 
     expect(env.status).toBe('ready');
     expect(env.data.governments).toMatchObject({ count: 5, count_is_minimum: true });
     expect(env.data.districts.map((d) => d.name)).toEqual(expect.arrayContaining(['Camas School District', 'Clark County']));
-    const key = `geo9:${encodeGeohash(HOME.map_center_lat, HOME.map_center_lng, 9)}`;
+    const key = governments.pointCacheKey(HOME.map_center_lat, HOME.map_center_lng);
     expect(getTable('PlaceSectionCache').map((r) => [r.section_id, r.cache_key]).sort()).toEqual([
       ['_ballot_governments', key],
       ['civic_districts', key],

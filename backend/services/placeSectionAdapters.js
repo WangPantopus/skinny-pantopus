@@ -825,30 +825,18 @@ async function composeCivicGovernments(home) {
 async function composeCivicDistricts(home, { ballot = false } = {}) {
   const ll = homeLatLng(home);
   if (!ll) return [serializePlaceSection('civic_districts', { status: 'unavailable' })];
-  // Where Ballot shows the governments view, the districts and the governments
-  // share one exact point: one geocoder answer (shared while it runs) cached
-  // per ~5 m point, not per ~1 km cell that can straddle a district line and
-  // show a neighbor's school district next to this home's governments. Started
-  // here, beside the districts, so neither waits for the other. Elsewhere the
-  // long-standing per-cell cache stands.
-  const exactPoint = Boolean(ballot) && ballotReference.isSupportedState(home.state);
-  const governmentsPromise = exactPoint ? composeCivicGovernments(home) : Promise.resolve(null);
+  // District boundaries can cross a street or building. Every caller, including
+  // previews and residency claims, uses the same point cache in every state.
+  // Ballot opt-in controls only the additional governments presentation.
+  const showGovernments = Boolean(ballot) && ballotReference.isSupportedState(home.state);
+  const governmentsPromise = showGovernments ? composeCivicGovernments(home) : Promise.resolve(null);
   try {
     const { payload, fetchedAt, stale } = await readThrough({
-      cacheKey: exactPoint ? ballotGovernments.pointCacheKey(ll.lat, ll.lng) : `geo:${encodeGeohash(ll.lat, ll.lng, 6)}`,
+      cacheKey: ballotGovernments.pointCacheKey(ll.lat, ll.lng),
       sectionId: 'civic_districts',
       ttlMs: 90 * DAY_MS,
       fetch: async () => {
-        let geo;
-        if (exactPoint) {
-          geo = await ballotGovernments.sharedGeographies(ll.lat, ll.lng);
-        } else {
-          const data = await fetchJson(
-            'https://geocoding.geo.census.gov/geocoder/geographies/coordinates' +
-            `?x=${ll.lng}&y=${ll.lat}&benchmark=Public_AR_Current&vintage=Current_Current&layers=all&format=json`,
-          );
-          geo = data && data.result && data.result.geographies;
-        }
+        const geo = await ballotGovernments.sharedGeographies(ll.lat, ll.lng);
         if (!geo) return null;
         const { districts, codes } = districtsFromGeographies(geo);
         if (!districts.length) return null;
