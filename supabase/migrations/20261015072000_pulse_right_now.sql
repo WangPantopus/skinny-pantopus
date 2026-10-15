@@ -39,7 +39,8 @@ CREATE TABLE public."RightNowReport" (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   event_id uuid NOT NULL REFERENCES public."RightNowEvent"(id) ON DELETE CASCADE,
   user_id uuid NOT NULL REFERENCES public."User"(id) ON DELETE CASCADE,
-  home_id uuid NOT NULL REFERENCES public."Home"(id) ON DELETE CASCADE,
+  -- The reporter's verified home. No foreign key: Home's deletion policy owns every Home dependency.
+  home_id uuid NOT NULL,
   kind text NOT NULL CHECK (kind IN ('me_too', 'its_back')),
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
