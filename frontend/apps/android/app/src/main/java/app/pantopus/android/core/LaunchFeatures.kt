@@ -42,6 +42,15 @@ enum class LaunchFeature(
      * and mail notifications. While it is off the Mail tab is Messages. Address verification by postcard stays.
      */
     MAILBOX("mailbox"),
+
+    /**
+     * 11. The Pulse redesign (founder decision, 2026-10-15, pausing the Pulse build): Pulse and Plans as tabs, the
+     * quiet-state card and top menu on Pulse, the 12 topic chips and topic mutes, post status words and the asker's
+     * Keep open / Close. While it is off the app is the October 13 app: four tabs (Place · Today · Nearby · Messages),
+     * Pulse opens from Nearby, and the feed and post page are the October 13 ones. Crime and suspicion Heads-ups stay
+     * refused and businesses get no feed compose button either way.
+     */
+    PULSE_REDESIGN("pulse_redesign"),
 }
 
 /**
@@ -71,6 +80,7 @@ object LaunchFeatures {
     val mailExtras: Boolean get() = isEnabled(LaunchFeature.MAIL_EXTRAS)
     val giftFunds: Boolean get() = isEnabled(LaunchFeature.GIFT_FUNDS)
     val mailbox: Boolean get() = isEnabled(LaunchFeature.MAILBOX)
+    val pulseRedesign: Boolean get() = isEnabled(LaunchFeature.PULSE_REDESIGN)
 
     /** Parses a comma-separated key list ("all" enables every feature). */
     fun parse(raw: String?): Set<LaunchFeature> {

@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.feed.FeedPreferencesDto
 import app.pantopus.android.ui.components.RefreshFailedLine
 import app.pantopus.android.ui.components.RefreshOnStoreChange
@@ -255,7 +256,8 @@ private fun PreferencesLoaded(
             testTag = "pulsePreferencesShowPolitics",
             onCheckedChange = onShowPolitics,
         )
-        MutedTopicsSection(state = mutedTopics, onUnmute = onUnmuteTopic)
+        // Topic mutes came with the Pulse redesign (S4); the October 13 sheet has none.
+        if (LaunchFeatures.pulseRedesign) MutedTopicsSection(state = mutedTopics, onUnmute = onUnmuteTopic)
         Row(
             modifier = Modifier.fillMaxWidth().padding(top = Spacing.s5),
             verticalAlignment = Alignment.CenterVertically,

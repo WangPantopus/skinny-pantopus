@@ -4,6 +4,7 @@ package app.pantopus.android.ui.screens.feed
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.feed.FeedPreferencesDto
 import app.pantopus.android.data.api.models.feed.FeedPreferencesUpdateRequest
 import app.pantopus.android.data.api.net.NetworkError
@@ -100,6 +101,8 @@ class FeedPreferencesViewModel
         }
 
         private fun readMutedTopics() {
+            // Topic mutes came with the Pulse redesign (S4): the October 13 sheet has no "Muted topics".
+            if (!LaunchFeatures.pulseRedesign) return
             viewModelScope.launch {
                 when (val result = repo.mutedEntities()) {
                     is NetworkResult.Success ->

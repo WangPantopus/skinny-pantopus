@@ -35,6 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.feed.FeedMuteEntityType
 import app.pantopus.android.ui.screens.shared.feed.FeedAvatar
 import app.pantopus.android.ui.screens.shared.feed.FeedAvatarTint
@@ -60,7 +61,10 @@ data class PulsePostActions(
     val isSaved: Boolean = false,
     val isReposted: Boolean = false,
     val shareCount: Int = 0,
-    /** `state == "solved"`: no "Mark solved" (the status pill says "Answered"). */
+    /**
+     * `state == "solved"`: no "Mark solved" (the status pill says "Answered"). With the Pulse redesign off the card
+     * shows the October 13 inline "Solved" badge instead of the pill.
+     */
     val isSolved: Boolean = false,
     /** Viewer authored this post. */
     val isOwner: Boolean = false,
@@ -473,6 +477,9 @@ private fun ReactionStrip(
             )
         }
         content.status?.let { PostStatusPill(status = it, postId = content.id) }
+        if (!LaunchFeatures.pulseRedesign && content.actions.isSolved) {
+            SolvedBadge(postId = content.id)
+        }
         Spacer(modifier = Modifier.weight(1f))
         if (onToggleSave != null) {
             Box(
@@ -546,6 +553,39 @@ private fun ReactionStrip(
                 color = PantopusColors.appTextSecondary,
             )
         }
+    }
+}
+
+/**
+ * Inline "Solved" pill on the October 13 card (the Pulse redesign off) — RN renders the same badge once
+ * `state === 'solved'` (`PostCard.tsx:474-479`). With the redesign on the status pill says "Answered" instead.
+ */
+@Composable
+private fun SolvedBadge(postId: String) {
+    Row(
+        modifier =
+            Modifier
+                .height(22.dp)
+                .clip(RoundedCornerShape(Radii.pill))
+                .background(PantopusColors.successLight)
+                .padding(horizontal = Spacing.s2)
+                .semantics { contentDescription = "Solved" }
+                .testTag("pulsePostSolvedBadge_$postId"),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
+    ) {
+        PantopusIconImage(
+            icon = PantopusIcon.CheckCircle,
+            contentDescription = null,
+            size = 11.dp,
+            tint = PantopusColors.success,
+        )
+        Text(
+            text = "Solved",
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            color = PantopusColors.success,
+        )
     }
 }
 
