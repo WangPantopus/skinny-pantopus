@@ -2,7 +2,24 @@
 
 Owner: the PI session. Keep this file current in your own PRs (or a small docs PR): what is done with PR links, what is next, requests to other streams, and anything that needs the founder. Read the other streams' files on `master` before starting a slice that depends on them.
 
-## Checkpoint — October 15, 2026, 08:00 UTC (current; supersedes every section below)
+## Handoff — October 15, 2026, 08:05 UTC (the next session starts here)
+
+**On `master`:** PI's whole S6–S10 stack (#2308, #2314, #2323, #2324, #2325, #2342), merged at green exact heads; `master` CI run for `6c6de53d2` covers all six (it was in progress at handoff; check it once).
+
+**Open, in order (stacked):**
+
+1. [#2355](https://github.com/WangPantopus/skinny-pantopus/pull/2355) `claude/pulse-pi-s10-preferences` (base `master`): S10.3 preferences page with undo and S10.6 "Seeing too much?". Built, existing suite run (only the five Pacific-time Bills failures), checked in the app (see the 08:00 checkpoint below). Auto-fix is on. **Next: when its CI is green, merge it through `launch-streams/status/REQUESTS.md` (HOLD, merge at the exact head, RELEASE).**
+2. Draft PR `claude/pulse-pi-s8-composer` (base `claude/pulse-pi-s10-preferences`): S8's one-box composer, first part. Built at `80226d983`; SwiftLint strict, SwiftFormat, icon/overline guards pass. **The existing suite has not run on it yet.** After #2355 merges, retarget it to `master`, run the suite, recheck the two last fixes in the app, and mark it ready.
+
+**S8 checked in the app** (`Pulse-PI` as Alice, `master`'s backend): the composer matches wireframe 2 (first-post banner; Type/About/Topic; Who can read / Shown to with "and people who follow Gardening" and "Showing it to gardeners doesn't limit who can read it."; "Posting as Alice", then "[Resident]" once a post has worn it). With Alice's attestation cleared locally, Post brought the server's "Confirm you are 18 or older to post in Pulse." with "Not now" (nothing posted) and "I'm 18 or older" (attestation stored, then exactly one post with the same request id). A draft (text and topic) survived a cold relaunch. A Share without a place showed "Add the place this is about."; with "Crown Park" Alice's Share hit the weekly cap: "You can share twice a week. You can post again after Wed 3:03pm." (phone's zone); the same draft as an Offer with "First to ask" posted (`claim_mode` first, About "Crown Park"); a Heads-up posted as `power_outage`, ending 48 hours out. Cancel asks "Discard this post?". **Built but not rechecked in the app:** a refusal sentence now clears on any draft change (it lingered after switching type), and the Heads-up kind menu has a visible "Kind" label.
+
+**S8 not done yet:** photos were not exercised in the app; Event and Lost-and-found posts not posted; Visitor (Asks only, `VISITOR_ASK_ONLY`) and New here limits not exercised (needs a Visitor account signed in on the phone; Carol–Grace exist only for the API); offline Post; dark mode and largest text on the composer; editing a Pulse post still uses the old composer (`PULSE_FIELD_LOCKED` rules not handled); PS's composer check (suggestions, call-out sheet, private details, existing answers, tone/politics) is read fail-open and shows nothing until PS ships it; "Posting as" needs PB's label (request below).
+
+**After that:** S11 client parts that don't wait on PS (the Rules screen, "Awaiting review, usually within 2 hours" on one's own held post), then the S12–S24 client parts as PB/PS/PC publish their shapes. Planning estimate for the whole PI lane: roughly half remains, most of it waiting on other streams' backends.
+
+**Runtime (all PI-only, all still running, nothing to recreate):** see the START HERE section of `~/.config/pantopus/pulse-pi-runtime/handoff.md`. Backend 56100 runs `master` `fcd1e6472` (no backend change on `master` since then except PB's #2345 content helpers, not needed by iOS); web 56101; Supabase `pantopus-pulse-pi`; `Pulse-PI` has the `80226d983` S8 build with Alice signed in.
+
+## Checkpoint — October 15, 2026, 08:00 UTC (historical)
 
 **The S6–S10 stack is on `master`.** Merged through the shared queue, each at its exact green head with its recheck recorded in the PR: [#2308](https://github.com/WangPantopus/skinny-pantopus/pull/2308) S6 (`d7c6a0de5`), [#2314](https://github.com/WangPantopus/skinny-pantopus/pull/2314) S9 (`5dfd133ed`), [#2323](https://github.com/WangPantopus/skinny-pantopus/pull/2323) S5 area picker (`40ea9c5ff`), [#2324](https://github.com/WangPantopus/skinny-pantopus/pull/2324) S9 audience (`4cd929ed6`), [#2325](https://github.com/WangPantopus/skinny-pantopus/pull/2325) S10 follow sheet (`81301b800`), [#2342](https://github.com/WangPantopus/skinny-pantopus/pull/2342) S10 card controls (`6c6de53d2`). `master`'s iOS tree is identical to the tested stack head. The next `master` CI run covers all six.
 
