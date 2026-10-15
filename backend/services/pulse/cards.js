@@ -8,6 +8,7 @@ const { onlyShownReplies, isPubliclyShareable } = require('./readAccess');
 const { DAY_MS, endsAt } = require('./lifecycle');
 const follows = require('./follows');
 const { offerState, claimsFor } = require('./offers');
+const { waitingLines } = require('./rightNow');
 
 const TYPES = new Set(['ask_local', 'share', 'offer', 'alert', 'event', 'lost_found']);
 const ACTIONS = { ask_local: ['answer', 'Answer'], share: ['reply', 'Reply'], offer: ['claim', 'Ask for it'],
@@ -36,13 +37,14 @@ async function replyCounts(posts, viewerId, blockedIds) {
  */
 async function postCards(rows, { viewerId, homes, areas, fallbackArea, blockedIds, publicResponse = false }) {
   if (!rows.length) return [];
-  const [enriched, counts, distance, ttlResult, followed, claims] = await Promise.all([
+  const [enriched, counts, distance, ttlResult, followed, claims, waiting] = await Promise.all([
     feed.enrichFeedPosts(rows.map(row => feed.normalizeFeedPostRow(row)), viewerId),
     replyCounts(rows, viewerId, blockedIds),
     distanceFormatter(viewerId, { homes, publicResponse }),
     db.from('PostCategoryTTL').select('post_type, ttl_days'),
     viewerId ? follows.activeRows(viewerId) : [],
     claimsFor(rows),
+    waitingLines(rows),
   ]);
   if (ttlResult.error) throw ttlResult.error;
   const days = new Map((ttlResult.data || []).map(row => [row.post_type, row.ttl_days]));
@@ -86,8 +88,11 @@ async function postCards(rows, { viewerId, homes, areas, fallbackArea, blockedId
       about: { label: raw.post_metadata?.pulse_about || about?.name || null, area_id: about?.id || null },
       // A NULL legacy scope is intentionally preserved; it has its original audience rules.
       read_scope: raw.read_scope || null,
+      // A Heads-up waiting on an active Right now event ends with it (contract §2.16).
       status: { state: open ? 'open' : 'resolved', resolution: raw.resolution || (raw.state === 'solved' ? 'answered' : null),
-        ends_at: raw.expires_at || (type === 'ask_local' ? new Date(askEnd).toISOString() : null) },
+        ends_at: waiting.has(raw.right_now_event_id) && raw.post_metadata?.ends_with_event ? null
+          : raw.expires_at || (type === 'ask_local' ? new Date(askEnd).toISOString() : null),
+        ends_when: raw.post_metadata?.ends_with_event ? waiting.get(raw.right_now_event_id) || null : null },
       action: { kind: action[0], label: action[1], done },
       counts: { replies: counts.get(raw.id) || 0, going: type === 'event' ? Number(raw.like_count || 0) : null },
       event: type === 'event' ? { starts_at: raw.event_date || null, ends_at: raw.event_end_date || null,

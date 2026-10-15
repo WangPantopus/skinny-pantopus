@@ -245,6 +245,7 @@ const createPostSchema = Joi.object({
   claimMode: Joi.string().valid('choose', 'first').optional(),
   expiresAt: Joi.date().iso().optional(),
   knownEntryId: Joi.string().uuid().optional(),
+  rightNowEventId: Joi.string().uuid().optional(),
   visibility: Joi.string().valid('public', 'neighborhood', 'followers', 'private', 'city', 'radius', 'connections').default('neighborhood'),
   visibilityScope: Joi.string().valid(...VISIBILITY_SCOPES).default('neighborhood'),
   locationPrecision: Joi.string().valid(...LOCATION_PRECISIONS).default('approx_area'),
@@ -1267,7 +1268,7 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
       // A source link comes only from sourceUrl on an Official or curator notice (below), and a
       // Pulse post's named place only from Pulse mode.
       post_metadata: Object.fromEntries(Object.entries(postMetadata || {})
-        .filter(([key]) => !['source_url', 'pulse_about', 'known_entry_id'].includes(key))),
+        .filter(([key]) => !['source_url', 'pulse_about', 'known_entry_id', 'ends_with_event', 'alert_ends_set'].includes(key))),
       origin,
     };
     if (postType === 'alert' && sourceUrl && SOURCED_ALERT_ACCOUNT_TYPES.includes(req.user.accountType)) {
@@ -1457,6 +1458,10 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
       if (over) return res.status(over.status).json(over.body);
       // The Known entry this Ask asks again shows it until it is answered (contract §2.14).
       if (pulse.plan.knownEntryId) await require('../services/pulse/known').linkAsk(pulse.plan.knownEntryId, post.id);
+      // A Heads-up keeps its Right now event alive; outage Heads-ups from three homes start one (§2.16).
+      const rightNow = require('../services/pulse/rightNow');
+      if (pulse.plan.rightNowEventId) await rightNow.touch(pulse.plan.rightNowEventId);
+      rightNow.neighborOutage(post).catch(err => logger.warn('pulse.right_now.neighbors_failed', { error: err.message }));
     }
 
     logger.info('Post created', {
