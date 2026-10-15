@@ -48,7 +48,10 @@ public final class PulsePageViewModel {
     public private(set) var state: State = .loading
     /// The town the page reads, kept while another view or topic loads.
     public private(set) var areaName: String?
+    /// Another area chosen from the pill; nil reads the viewer's own town.
     public private(set) var selectedAreaId: String?
+    /// The viewer's own town, from the default page.
+    private(set) var homeAreaId: String?
     public private(set) var mode: PulsePageMode = .nearby
     public private(set) var activeTopic: PulseTopic?
     /// How many conversations wait behind "↑ N new conversations".
@@ -180,6 +183,7 @@ public final class PulsePageViewModel {
 
     private func apply(_ snapshot: ScreenSnapshot<PulseFeedResponse>, readStartedAt: Date, mutationRevision: Int) {
         let newRead = snapshot.fetchedAt != lastReadAt
+        if selectedAreaId == nil, let area = snapshot.value.area?.id { homeAreaId = area }
         lastResponse = snapshot.value
         lastReadAt = snapshot.fetchedAt
         staleSince = snapshot.refreshFailed ? snapshot.fetchedAt : nil
@@ -282,7 +286,9 @@ public final class PulsePageViewModel {
     /// marker is the view's, not a topic's (contract §2.3), so a topic's end
     /// leaves it alone: the other topics' new posts haven't been seen.
     public func endShown() async {
-        guard activeTopic == nil, case let .loaded(content) = state, content.end.caughtUp,
+        // The marker belongs to the view: another area's page, like a topic's,
+        // leaves it alone so the home page's unseen posts stay new (as Android).
+        guard activeTopic == nil, selectedAreaId == nil, case let .loaded(content) = state, content.end.caughtUp,
               let through = content.readThrough, staleSince == nil,
               seenThrough.map({ $0 < content.readAt }) ?? true,
               seenRequestReadAt.map({ $0 < content.readAt }) ?? true else { return }
@@ -378,7 +384,8 @@ extension PulsePageViewModel {
 
     func selectArea(_ area: PulseAreaChoice) async {
         guard area.id != displayedAreaId else { return }
-        selectedAreaId = area.id
+        // Choosing the own town again returns to the default page.
+        selectedAreaId = area.id == homeAreaId ? nil : area.id
         areaName = area.title
         await switchQuery()
     }

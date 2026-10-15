@@ -27,7 +27,7 @@ struct PulsePageHeader: View {
                 Spacer(minLength: Spacing.s2)
                 moreMenu
             }
-            areaPill(areaName ?? "Pick a town to look around")
+            areaPill(areaName ?? "Choose an area")
         }
         .padding(.horizontal, Spacing.s4)
         .padding(.top, Spacing.s2)
