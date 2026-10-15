@@ -42,11 +42,16 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 import javax.inject.Inject
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.pow
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 /** The host flow's steps (boards H1, H2 to H5, H7) and the place picker (H6) over them. */
 enum class HostStep { Type, Details, Place, Preview }
 
-/** A public place picked on H6 (or "You're here now" for a pickup game). */
+/** A public place picked on H6 (or found by "You're here now" for a pickup game). */
 data class PickedPlace(
     val name: String,
     val address: String?,
@@ -56,7 +61,12 @@ data class PickedPlace(
     val distanceMeters: Double?,
     /** H6's row words ("Court · tennis"); the first is [category]. */
     val categories: List<String> = emptyList(),
+    /** Found by "You're here now": H4 says so under the place's name. */
+    val hereNow: Boolean = false,
 )
+
+/** What H6's "You're here now" row says while it looks, or after it found nothing. */
+enum class HereNowState { Idle, Locating, NoPlace, NoLocation }
 
 /** The host's home, for "My place" (H2) and "My porch" (H5). */
 data class HostHome(
@@ -106,6 +116,9 @@ data class HostUi(
     /** The places' credit, shown under the list ("© OpenStreetMap contributors"). */
     val placesAttribution: String? = null,
     val placeCandidate: PickedPlace? = null,
+    val hereNow: HereNowState = HereNowState.Idle,
+    /** Every home of the host's with a point: "You're here now" never picks a place right at one. */
+    val homePoints: List<Pair<Double, Double>> = emptyList(),
     val origin: Pair<Double, Double>? = null,
     val playdatesOn: Boolean = false,
     /** False without a verified address: H1's playdate card leads to verification instead of the form. */
@@ -225,10 +238,11 @@ class HostFlowViewModel
         private suspend fun loadContext(gameId: String?) {
             val payload = (viewing.current() as? NetworkResult.Success)?.data ?: viewing.currentCopy()
             val home = payload?.homes?.firstOrNull()?.let { HostHome(it.id, it.name, it.city, it.latitude, it.longitude) }
+            val homePoints = payload?.homes.orEmpty().mapNotNull { h -> h.latitude?.let { lat -> h.longitude?.let { lat to it } } }
             val games = (repository.games() as? NetworkResult.Success)?.data.orEmpty()
             // Hosting a playdate needs a verified address (`/mine` says where the person stands; unknown means yes).
             val verified = (repository.mineCopy() ?: repository.mine().data)?.viewer?.verifiedAddress ?: true
-            _ui.update { it.copy(home = home, games = games, canHostPlaydates = verified) }
+            _ui.update { it.copy(home = home, homePoints = homePoints, games = games, canHostPlaydates = verified) }
             val draft = _ui.value.draft
             when {
                 gameId != null -> games.firstOrNull { it.id == gameId }?.let(::pickGame)
@@ -364,7 +378,7 @@ class HostFlowViewModel
         // ---- H6 ----
 
         fun openPlaces() {
-            _ui.update { it.copy(step = HostStep.Place, placeCandidate = it.draft.place) }
+            _ui.update { it.copy(step = HostStep.Place, placeCandidate = it.draft.place, hereNow = HereNowState.Idle) }
             viewModelScope.launch { loadPlaces() }
         }
 
@@ -431,19 +445,54 @@ class HostFlowViewModel
         }
 
         fun pickPlaceCandidate(place: PickedPlace) {
-            _ui.update { it.copy(placeCandidate = place) }
+            _ui.update { it.copy(placeCandidate = place, hereNow = HereNowState.Idle) }
         }
 
-        /** "You're here now" (H4): the pin shows the area around the person's fix, never the fix itself. */
+        /**
+         * "You're here now" (board H4): a fresh fix, then the nearest named public place within about 150 m of it from
+         * H6's own list, never the fix itself (decision D2). A place right at one of the host's homes doesn't count:
+         * the server refuses a public place that close to a home (HOME_GUARD_METERS in planRules.js).
+         */
         fun pickHereNow() {
+            if (_ui.value.hereNow == HereNowState.Locating) return
+            _ui.update { it.copy(hereNow = HereNowState.Locating, error = null) }
             viewModelScope.launch {
-                val fix = locations.gpsFix()
+                val fix = locations.newFix()
                 if (fix == null) {
-                    _ui.update { it.copy(error = "Turn on location to use where you are.") }
+                    _ui.update { it.copy(hereNow = HereNowState.NoLocation) }
                     return@launch
                 }
-                _ui.update { it.copy(placeCandidate = PickedPlace("Where I am now", null, fix.latitude, fix.longitude, null, 0.0)) }
+                val homes = _ui.value.homePoints
+                val spot =
+                    placesAround(fix.latitude to fix.longitude)
+                        .mapNotNull { it.toPicked() }
+                        .map { it to (it.distanceMeters ?: metersBetween(fix.latitude, fix.longitude, it.latitude, it.longitude)) }
+                        .filter { (place, meters) -> meters <= HERE_NOW_METERS && !atHome(place, homes) }
+                        .minByOrNull { (_, meters) -> meters }
+                        ?.first
+                _ui.update {
+                    if (spot == null) {
+                        it.copy(hereNow = HereNowState.NoPlace)
+                    } else {
+                        it.copy(hereNow = HereNowState.Idle, placeCandidate = spot.copy(hereNow = true))
+                    }
+                }
             }
+        }
+
+        private fun atHome(
+            place: PickedPlace,
+            homes: List<Pair<Double, Double>>,
+        ): Boolean = homes.any { (lat, lng) -> metersBetween(lat, lng, place.latitude, place.longitude) <= HOME_GUARD_METERS }
+
+        /** The public places around a point, nearest first; a first ask for an area may answer `loading` (as on H6). */
+        private suspend fun placesAround(point: Pair<Double, Double>): List<PlanNearbyPlaceDto> {
+            repeat(PLACES_ATTEMPTS) { attempt ->
+                val reply = (repository.nearbyPlaces(point.first, point.second) as? NetworkResult.Success)?.data ?: return emptyList()
+                if (!reply.loading || attempt == PLACES_ATTEMPTS - 1) return reply.places
+                delay(PLACES_RETRY_MS)
+            }
+            return emptyList()
         }
 
         fun usePlace() {
@@ -629,6 +678,25 @@ class HostFlowViewModel
             const val PLACES_ATTEMPTS = 4
             const val PLACES_RETRY_MS = 3_000L
             const val SEARCH_DEBOUNCE_MS = 350L
+
+            /** How close a public place must be to the host's fix to be "here" (about a city block). */
+            const val HERE_NOW_METERS = 150.0
+
+            /** The server refuses a public place this close to one of the host's homes. */
+            const val HOME_GUARD_METERS = 50.0
+            const val EARTH_RADIUS_METERS = 6_371_000.0
+
+            fun metersBetween(
+                fromLat: Double,
+                fromLng: Double,
+                toLat: Double,
+                toLng: Double,
+            ): Double {
+                val dLat = Math.toRadians(toLat - fromLat)
+                val dLng = Math.toRadians(toLng - fromLng)
+                val a = sin(dLat / 2).pow(2) + cos(Math.toRadians(fromLat)) * cos(Math.toRadians(toLat)) * sin(dLng / 2).pow(2)
+                return EARTH_RADIUS_METERS * 2 * atan2(sqrt(a), sqrt(1 - a))
+            }
 
             /** "Sam Rivera" → "Sam R." (first name and last initial, as everyone sees a host). */
             fun shortName(name: String?): String {

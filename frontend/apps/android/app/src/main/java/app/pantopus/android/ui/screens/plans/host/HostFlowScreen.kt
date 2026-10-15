@@ -235,12 +235,13 @@ private fun TypeCard(
     }
 }
 
-/** The footer button that moves a host step on. */
+/** The footer button that moves a host step on; greyed out while there is nothing to move on with. */
 @Composable
 internal fun HostFooterButton(
     title: String,
     onClick: () -> Unit,
     loading: Boolean = false,
+    enabled: Boolean = true,
 ) {
-    PrimaryButton(title = title, onClick = onClick, isLoading = loading, modifier = Modifier.height(50.dp))
+    PrimaryButton(title = title, onClick = onClick, isLoading = loading, isEnabled = enabled, modifier = Modifier.height(50.dp))
 }

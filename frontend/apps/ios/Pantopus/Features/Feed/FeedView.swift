@@ -90,11 +90,14 @@ public struct FeedView: View {
     ) {
         // Swift 5.10 crashes while lowering PulseFeedViewModel() in a default-argument thunk.
         let resolved = viewModel ?? PulseFeedViewModel()
+        let map = mapViewModel ?? FeedMapViewModel(surface: resolved.surface)
         _viewModel = State(initialValue: resolved)
-        _mapViewModel = State(initialValue: mapViewModel ?? FeedMapViewModel(surface: resolved.surface))
-        // The feed's area callback references the context bar weakly.
+        _mapViewModel = State(initialValue: map)
+        // The feed's area callback references the context bar weakly. A new
+        // area moves the map too.
         _contextBarViewModel = State(initialValue: FeedContextBarViewModel {
             Task { await resolved.refresh() }
+            Task { await map.followChosenArea() }
         })
         self.onOpenPost = onOpenPost
         self.onCompose = onCompose

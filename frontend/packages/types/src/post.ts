@@ -41,7 +41,7 @@ export type PersonaPostAudience = 'followers' | 'public';
 export type Audience = 'connections' | 'network' | 'nearby' | 'saved_place' | 'household' | 'neighborhood' | 'target_area' | 'public';
 export type FeedScope = 'nearby' | 'connections' | 'home' | 'saved-place';
 export type TrustLevel = 'verified_resident' | 'verified_business' | 'visitor' | 'incoming_resident' | 'remote_viewer';
-export type MapLayerType = 'post' | 'task' | 'offer' | 'business' | 'home';
+export type MapLayerType = 'post' | 'business' | 'home';
 
 export interface PostCreator extends Partial<Omit<PublicAuthorIdentity, 'id'>> {
   id: string;
