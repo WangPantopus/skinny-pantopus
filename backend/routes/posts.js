@@ -3070,6 +3070,14 @@ router.post('/:id/comments', verifyToken, validate(createCommentSchema), async (
       });
     }
 
+    // Followers who asked for each update get an in-app follow alert (contract §6); the
+    // post's author and the parent's author already have their direct notice above.
+    require('../services/pulse/followAlerts').replyCreated({
+      postId, reply: newComment, skipUserIds: [post.user_id, parent?.user_id],
+    }).catch(err => {
+      logger.warn('Follow alerts failed (non-blocking)', { error: err.message, postId });
+    });
+
     res.status(201).json({
       message: 'Comment added successfully',
       comment: await require('../services/pulse/conversation').addCreatedReplyFields(
