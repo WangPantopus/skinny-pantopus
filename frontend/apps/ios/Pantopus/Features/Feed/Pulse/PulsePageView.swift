@@ -203,7 +203,7 @@ public struct PulsePageView: View {
                 PulsePageQuietDay(
                     areaName: content.areaName,
                     following: viewModel.mode == .following,
-                    topic: viewModel.mode == .nearby ? viewModel.activeTopic : nil,
+                    topic: viewModel.activeTopic,
                     onCompose: onCompose
                 ) {
                     Task { await viewModel.selectTopic(nil) }
@@ -354,8 +354,8 @@ private extension PulsePageView {
                 }
                 .accessibilityIdentifier("pulsePageMenuDelete")
             } else {
-                if card.topic != nil {
-                    Button("Mute this topic") {
+                if card.topic != nil, card.areaId != nil {
+                    Button("Mute this topic in this area") {
                         menuCardId = nil
                         Task { await viewModel.muteTopic(cardId: id) }
                     }

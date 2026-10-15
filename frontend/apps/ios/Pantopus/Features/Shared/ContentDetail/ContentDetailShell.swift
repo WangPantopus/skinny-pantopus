@@ -209,7 +209,11 @@ public struct ContentDetailTopBar: View {
                 HStack(spacing: Spacing.s2) {
                     backControl
                     if let title {
+                        // At the largest sizes a one-word title shrinks to
+                        // fit rather than breaking mid-word.
                         Text(title).pulseFont(.headline)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.5)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .accessibilityAddTraits(.isHeader)
                     }

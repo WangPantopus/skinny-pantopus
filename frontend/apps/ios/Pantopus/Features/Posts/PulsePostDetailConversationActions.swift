@@ -136,7 +136,7 @@ extension PulsePostDetailViewModel {
     /// Full responses reconcile access and existing rows, while only a
     /// reply just submitted by this reader may appear without the pill.
     @discardableResult
-    func refreshConversationAfterMutation(ownReplyId: String? = nil) async -> Bool {
+    func refreshConversationAfterMutation(ownReplyId: String? = nil, reportFailure: Bool = true) async -> Bool {
         let generation = conversationGeneration
         do {
             let result: PulseConversationResponse = try await client.request(conversationEndpoint)
@@ -159,10 +159,24 @@ extension PulsePostDetailViewModel {
             return true
         } catch {
             guard generation == conversationGeneration else { return false }
-            if !clearRefusedConversation(error) {
+            if !clearRefusedConversation(error), reportFailure {
                 showToast("Saved, but couldn't refresh the conversation. Try again.")
             }
             return false
+        }
+    }
+
+    /// A refused action alone doesn't mean the conversation is gone:
+    /// `NEEDS_VERIFIED_ADDRESS`, `NOT_POST_AUTHOR`, `SHARE_NOT_ALLOWED`,
+    /// `OFFER_GONE` or a route an older server lacks all answer 4xx while the
+    /// reader can still read it. A fresh read decides, and clears the page
+    /// only when access really is gone.
+    func reconcileAfterRefusal(_ error: any Error) async {
+        switch error as? APIError {
+        case .unauthorized, .forbidden, .notFound, .clientError:
+            await refreshConversationAfterMutation(reportFailure: false)
+        default:
+            return
         }
     }
 

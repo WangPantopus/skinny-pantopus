@@ -123,7 +123,10 @@ public final class PulsePostDetailViewModel {
     var pendingComment: PostCommentRequest?
 
     var conversationReadAt: Date?
-    var conversationPollAfter: Date?
+    /// The Pulse conversation route doesn't serve this post (a household,
+    /// home or persona post, or an older server): the existing post page
+    /// shows it instead, as before Pulse.
+    var usesPostPage = false
     var conversationGeneration = 0
     var conversationMutationRevision = 0
     var conversationWaitingReplies: [PulseReplyDTO] = []
@@ -302,13 +305,22 @@ public final class PulsePostDetailViewModel {
     /// Opening the post: what's on screen stays (the store's or the feed's
     /// copy); the post is read when that copy is over a minute old.
     public func load() async {
-        if conversation == nil { state = .loading }
-        await fetchConversation(force: false)
+        if !usesPostPage {
+            if conversation == nil { state = .loading }
+            await fetchConversation(force: false)
+            guard usesPostPage else { return }
+        }
+        if case .loaded = state {} else { state = .loading }
+        await fetch(force: false)
     }
 
     /// Pull-to-refresh: always asks the server.
     public func refresh() async {
-        await fetchConversation(force: true)
+        if !usesPostPage {
+            await fetchConversation(force: true)
+            guard usesPostPage else { return }
+        }
+        await fetch(force: true)
     }
 
     /// Expand the truncated reply list.
