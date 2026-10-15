@@ -117,6 +117,8 @@ data class PlanMyRequestDto(
     @Json(name = "status") val status: String? = null,
     @Json(name = "party_size") val partySize: Int? = null,
     @Json(name = "reconfirm_needed") val reconfirmNeeded: Boolean = false,
+    /** What the host's change asked "Still coming?" about: "time", "place" or "both" (null from older servers). */
+    @Json(name = "reconfirm_reason") val reconfirmReason: String? = null,
     @Json(name = "note") val note: String? = null,
     @Json(name = "created_at") val createdAt: String? = null,
     @Json(name = "kids_count") val kidsCount: Int? = null,

@@ -91,6 +91,22 @@ public struct FeedMapRegion: Sendable, Hashable {
             || abs(latitudeDelta - other.latitudeDelta) > latThreshold
             || abs(longitudeDelta - other.longitudeDelta) > lonThreshold
     }
+
+    /// MapKit fits a requested region to the map's shape: the centre and one
+    /// side of the span stay, the other side widens. True when this settled
+    /// viewport is `requested` fitted that way (within the same 10% jitter),
+    /// so nobody moved the map.
+    public func isMapFit(of requested: FeedMapRegion) -> Bool {
+        let latThreshold = max(requested.latitudeDelta * 0.1, 0.0005)
+        let lonThreshold = max(requested.longitudeDelta * 0.1, 0.0005)
+        let keepsLatitude = abs(latitudeDelta - requested.latitudeDelta) <= latThreshold
+        let keepsLongitude = abs(longitudeDelta - requested.longitudeDelta) <= lonThreshold
+        return abs(latitude - requested.latitude) <= latThreshold
+            && abs(longitude - requested.longitude) <= lonThreshold
+            && latitudeDelta >= requested.latitudeDelta - latThreshold
+            && longitudeDelta >= requested.longitudeDelta - lonThreshold
+            && (keepsLatitude || keepsLongitude)
+    }
 }
 
 /// The two request dimensions the map mode re-fetches on: which feed
@@ -164,9 +180,14 @@ public final class FeedMapViewModel {
     public private(set) var isReady = false
 
     private let api: APIClient
+    /// The area chosen in the Pulse chip is read through the screen store,
+    /// so the map shares the copy the Pulse list read.
+    private let store: ScreenStore
     private let locationProvider: any LocationProviding
     private var query: FeedMapQuery
     private var userCoordinate: UserCoordinate?
+    /// The chosen area the camera last moved to; another pick moves it again.
+    private var shownArea: ViewingLocationDTO?
     private var pendingRegion: FeedMapRegion?
     private var debounceTask: Task<Void, Never>?
     private var fetchTask: Task<Void, Never>?
@@ -177,6 +198,7 @@ public final class FeedMapViewModel {
         locationProvider: any LocationProviding = DeviceLocationProvider.shared
     ) {
         self.api = api
+        store = ScreenStore.store(for: api)
         query = FeedMapQuery(surface: surface, postType: nil)
         self.locationProvider = locationProvider
         userCoordinate = locationProvider.cachedCoordinate()
@@ -185,9 +207,9 @@ public final class FeedMapViewModel {
     // MARK: - Lifecycle
 
     /// Entering Map mode, or the surface / chip-row filter changed while
-    /// it is showing. Resolves the viewing location on first use and
-    /// re-requests the current viewport thereafter (RN
-    /// `useFeedMap.ts:104`).
+    /// it is showing. Resolves the viewing location on first use; after
+    /// that, moves to a newly chosen area or re-requests the current
+    /// viewport (RN `useFeedMap.ts:104`).
     public func activate(query: FeedMapQuery) async {
         let changed = query != self.query
         self.query = query
@@ -195,28 +217,103 @@ public final class FeedMapViewModel {
             await initializeMap()
             return
         }
+        if await followChosenArea() { return }
         guard changed else { return }
         await fetchMarkers(for: pendingRegion ?? region)
     }
 
     public func refresh() async {
+        guard isReady else {
+            await initializeMap()
+            return
+        }
         await fetchMarkers(for: pendingRegion ?? region)
     }
 
+    /// The area in the Pulse chip changed since the map last moved to it:
+    /// move there and read its posts, as the list does. Returns whether it moved.
+    @discardableResult
+    public func followChosenArea() async -> Bool {
+        guard isReady,
+              let area = try? await viewingLocation().viewingLocation,
+              area.latitude != shownArea?.latitude || area.longitude != shownArea?.longitude
+        else { return false }
+        shownArea = area
+        let next = FeedMapRegion(
+            latitude: area.latitude,
+            longitude: area.longitude,
+            latitudeDelta: region.latitudeDelta,
+            longitudeDelta: region.longitudeDelta
+        )
+        region = next
+        pendingRegion = nil
+        viewportDirty = false
+        await fetchMarkers(for: next)
+        return true
+    }
+
+    /// Where the map opens: the area chosen in the Pulse chip, which the list
+    /// uses too; else the device; else the first home, then the newest saved
+    /// place, as the server does for a list sent without coordinates; else the
+    /// default region. Android's `FeedMapViewModel` opens in the same order.
     private func initializeMap() async {
+        state = .loading
+        guard let payload = try? await viewingLocation() else {
+            if !Task.isCancelled { state = .error(message: "Couldn't load your selected area.") }
+            return
+        }
+        shownArea = payload.viewingLocation
+        if let area = shownArea {
+            region = openingRegion(latitude: area.latitude, longitude: area.longitude)
+        }
         if userCoordinate == nil {
+            userCoordinate = locationProvider.cachedCoordinate()
+        }
+        // With an area chosen, opening the map doesn't ask for location; where
+        // it's allowed, a fix still marks where you are.
+        if userCoordinate == nil, shownArea == nil || locationProvider.canLocateWithoutAsking {
             userCoordinate = await locationProvider.requestCurrent(timeoutSeconds: 4)
         }
-        if let coordinate = userCoordinate {
-            region = FeedMapRegion(
-                latitude: coordinate.latitude,
-                longitude: coordinate.longitude,
-                latitudeDelta: FeedMapRegion.fallback.latitudeDelta,
-                longitudeDelta: FeedMapRegion.fallback.longitudeDelta
-            )
+        if shownArea == nil, let center = await fallbackCenter(homes: payload.homes) {
+            region = openingRegion(latitude: center.latitude, longitude: center.longitude)
         }
         await fetchMarkers(for: region)
         isReady = true
+    }
+
+    /// `GET /api/location`, read the way the Pulse list reads it.
+    private func viewingLocation() async throws -> ViewingLocationPayload {
+        try await store.load(
+            ViewingLocationEndpoints.current(),
+            as: ViewingLocationPayload.self,
+            kind: .you,
+            topics: [ScreenTopic.profileMe]
+        ).value
+    }
+
+    /// No area chosen: the device, then the first home, then the newest saved place.
+    private func fallbackCenter(homes: [HomeLocationDTO]) async -> (latitude: Double, longitude: Double)? {
+        if let userCoordinate {
+            return (userCoordinate.latitude, userCoordinate.longitude)
+        }
+        for home in homes {
+            if let latitude = home.latitude, let longitude = home.longitude {
+                return (latitude, longitude)
+            }
+        }
+        guard let place = try? await HomesStoreReads.savedPlaces(store: store).value.savedPlaces.first else {
+            return nil
+        }
+        return (place.latitude, place.longitude)
+    }
+
+    private func openingRegion(latitude: Double, longitude: Double) -> FeedMapRegion {
+        FeedMapRegion(
+            latitude: latitude,
+            longitude: longitude,
+            latitudeDelta: FeedMapRegion.fallback.latitudeDelta,
+            longitudeDelta: FeedMapRegion.fallback.longitudeDelta
+        )
     }
 
     // MARK: - Camera
@@ -224,9 +321,15 @@ public final class FeedMapViewModel {
     /// Camera settled on a new viewport. Marks the viewport dirty (so the
     /// "Search this area" pill appears) and debounces the follow-up
     /// region commit — the refetch itself waits for the explicit tap,
-    /// matching RN.
+    /// matching RN. With nothing pending, settling on `region` as MapKit
+    /// fitted it to the map's shape (opening the map, Recenter, a new area)
+    /// isn't a move.
     public func cameraDidSettle(on next: FeedMapRegion) {
-        guard next.changedSignificantly(from: pendingRegion ?? region) else { return }
+        if let pendingRegion {
+            guard next.changedSignificantly(from: pendingRegion) else { return }
+        } else if next.isMapFit(of: region) {
+            return
+        }
         pendingRegion = next
         viewportDirty = true
         clearSelection()
