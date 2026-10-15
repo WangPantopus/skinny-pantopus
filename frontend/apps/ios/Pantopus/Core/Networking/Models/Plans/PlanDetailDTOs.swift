@@ -149,6 +149,11 @@ public struct PlanDetailDTO: Decodable, Sendable, Hashable, Identifiable {
 // MARK: - The viewer's request
 
 /// The viewer's own request, on every card and detail (their own data only).
+/// What the host's change asked "Still coming?" about (the PLAN_CHANGED push's words).
+public enum PlanReconfirmReason: String, Decodable, Sendable, Hashable {
+    case time, place, both
+}
+
 public struct PlanMyRequestDTO: Decodable, Sendable, Hashable {
     public let id: String
     public let status: PlanRequestStatus
@@ -157,6 +162,8 @@ public struct PlanMyRequestDTO: Decodable, Sendable, Hashable {
     public let kidsCount: Int?
     public let kidsAgeBands: [PlanKidsAgeBand]?
     public let reconfirmNeeded: Bool?
+    /// Set while `reconfirmNeeded`; nil from servers before it was added.
+    public let reconfirmReason: PlanReconfirmReason?
     public let onMyWay: Bool?
     public let waitlistPosition: Int?
     public let decidedBy: String?
@@ -170,6 +177,7 @@ public struct PlanMyRequestDTO: Decodable, Sendable, Hashable {
         case kidsCount = "kids_count"
         case kidsAgeBands = "kids_age_bands"
         case reconfirmNeeded = "reconfirm_needed"
+        case reconfirmReason = "reconfirm_reason"
         case onMyWay = "on_my_way"
         case waitlistPosition = "waitlist_position"
         case decidedBy = "decided_by"
@@ -188,6 +196,7 @@ public struct PlanMyRequestDTO: Decodable, Sendable, Hashable {
         let bands = try? container.decodeIfPresent([String].self, forKey: .kidsAgeBands)
         kidsAgeBands = bands?.compactMap(PlanKidsAgeBand.init(rawValue:))
         reconfirmNeeded = try container.decodeIfPresent(Bool.self, forKey: .reconfirmNeeded)
+        reconfirmReason = try? container.decodeIfPresent(PlanReconfirmReason.self, forKey: .reconfirmReason)
         onMyWay = try container.decodeIfPresent(Bool.self, forKey: .onMyWay)
         waitlistPosition = try container.decodeIfPresent(Int.self, forKey: .waitlistPosition)
         decidedBy = try container.decodeIfPresent(String.self, forKey: .decidedBy)

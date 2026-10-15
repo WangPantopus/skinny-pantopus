@@ -43,7 +43,7 @@ struct PlanDetailsForm: View {
         }
         .background(Theme.Color.appBg)
         .sheet(isPresented: $showsPlacePicker) {
-            PlanPlacePicker(model: model) { showsPlacePicker = false }
+            PlanPlacePicker(model: model, offersHereNow: model.kind == .pickupGame) { showsPlacePicker = false }
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("planDetailsForm")
@@ -147,7 +147,7 @@ struct PlanDetailsForm: View {
                 Button { showsPlacePicker = true } label: {
                     PlanFormCard {
                         HStack(spacing: Spacing.s3) {
-                            smallTile(.mapPin, tint: model.kind.tint, ink: model.kind.color)
+                            smallTile(placeIsHereNow ? .navigation : .mapPin, tint: model.kind.tint, ink: model.kind.color)
                             VStack(alignment: .leading, spacing: 0) {
                                 Text(model.place?.name ?? "Choose a place").planFont(.bodyStrong).foregroundStyle(Theme.Color.appText)
                                 Text(placeSubtitle).planFont(.small).foregroundStyle(Theme.Color.appTextSecondary).lineLimit(1)
@@ -165,12 +165,19 @@ struct PlanDetailsForm: View {
         }
     }
 
-    /// "Playground · public place · 0.4 mi" (board H3, as on Android).
+    /// "Playground · public place · 0.4 mi" (board H3, as on Android); "You're here now" under a place
+    /// H6's "You're here now" found (board H4).
     private var placeSubtitle: String {
         guard let place = model.place else { return "Parks, courts, trails, libraries, cafés" }
+        if placeIsHereNow { return "You're here now" }
         let first = place.category?.split(separator: ",").first.map { $0.trimmingCharacters(in: .whitespaces) }
         let kind = first.flatMap { $0.isEmpty ? nil : $0.prefix(1).uppercased() + $0.dropFirst() }
         return [kind, "public place", place.distanceMeters.map(PlanFormat.placeDistance)].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    /// Board H4: the place H6's "You're here now" found (a pickup game's; another type shows the usual line).
+    private var placeIsHereNow: Bool {
+        model.kind == .pickupGame && model.placeIsHereNow
     }
 
     /// Boards H2 and H5 draw no line under a public place (as on Android).

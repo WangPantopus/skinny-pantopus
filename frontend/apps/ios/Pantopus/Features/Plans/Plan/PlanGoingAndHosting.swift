@@ -120,13 +120,9 @@ struct PlanGoingSection: View {
     }
 
     private var reconfirm: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            PlanBanner(
-                tone: .warning,
-                icon: .alertTriangle,
-                title: "\(hostFirst) moved the \(PlanCardLines.noun(card))",
-                message: "Now \(movedTo). Still coming?"
-            )
+        let words = stillComingWords
+        return VStack(alignment: .leading, spacing: 10) {
+            PlanBanner(tone: .warning, icon: .alertTriangle, title: words.title, message: words.message)
             HStack(spacing: 10) {
                 Button("Can't make it") { onConfirm(.notComing(host: card.host.displayName)) }
                     .planButton(.secondary, size: .small)
@@ -134,6 +130,16 @@ struct PlanGoingSection: View {
                     .planButton(.primary, size: .small)
                     .accessibilityIdentifier("planStillComing")
             }
+        }
+    }
+
+    /// The "Still coming?" push's words for what the host changed (board H11; H11's preview and Android say the same).
+    private var stillComingWords: (title: String, message: String) {
+        let noun = PlanCardLines.noun(card)
+        switch viewModel.plan?.myRequest?.reconfirmReason {
+        case .place: return ("\(hostFirst) changed the place", "It's at a new place now. Still coming?")
+        case .both: return ("\(hostFirst) changed the \(noun)", "Now \(movedTo), at a new place. Still coming?")
+        case .time, nil: return ("\(hostFirst) moved the \(noun)", "Now \(movedTo). Still coming?")
         }
     }
 

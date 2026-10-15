@@ -15,12 +15,6 @@ enum class PostsMapLayer(val key: String) {
     /** Neighborhood posts — `backend/routes/posts.js:1677`. */
     Posts("posts"),
 
-    /** Open / assigned / in-progress gigs — `backend/routes/posts.js:1715`. */
-    Tasks("tasks"),
-
-    /** `gig_type = offer` rows — `backend/routes/posts.js:1749`. */
-    Offers("offers"),
-
     /** Published business profiles — `backend/routes/posts.js:1783`. */
     Businesses("businesses"),
 
