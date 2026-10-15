@@ -652,6 +652,21 @@ async function composeAddressCalendar(home) {
   }
 }
 
+// A cached NFIP benchmark as the flood section ships it.
+function nfipPayload(benchmark, scope) {
+  return {
+    scope,
+    policy_count: benchmark.data.policy_count,
+    premium_p25: benchmark.data.premium_p25,
+    premium_median: benchmark.data.premium_median,
+    premium_p75: benchmark.data.premium_p75,
+    full_risk_median: benchmark.data.full_risk_median ?? null,
+    window_months: benchmark.data.window_months,
+    coverage: benchmark.data.coverage,
+    as_of: benchmark.fetchedAt || null,
+  };
+}
+
 async function composeNeighborhood(home) {
   const ll = homeLatLng(home);
   let profile = null;
@@ -746,21 +761,6 @@ async function composeDensity(home) {
     logger.warn('placeIntelligence: density failed', { homeId: home.id, error: err.message });
     return [serializePlaceSection('block_density', { access: 'available', status: 'error' })];
   }
-}
-
-// A cached NFIP benchmark as the flood section ships it.
-function nfipPayload(benchmark, scope) {
-  return {
-    scope,
-    policy_count: benchmark.data.policy_count,
-    premium_p25: benchmark.data.premium_p25,
-    premium_median: benchmark.data.premium_median,
-    premium_p75: benchmark.data.premium_p75,
-    full_risk_median: benchmark.data.full_risk_median ?? null,
-    window_months: benchmark.data.window_months,
-    coverage: benchmark.data.coverage,
-    as_of: benchmark.fetchedAt || null,
-  };
 }
 
 async function composeYourHome(home, tier) {
