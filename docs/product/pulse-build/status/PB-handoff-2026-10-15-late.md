@@ -18,7 +18,7 @@ The founder opened three lanes for this work: **PA** (Android), **PB** (backend,
 - **PV:** release sweeps, `06-coverage.md`'s Verified column, `status/BOARD.md`, and S20's abuse run.
 - **Hold points:** H2 (public exposure) needs PS's S11 baseline and the founder's moderation cover; H6 (sign-up by code) needs an abuse run from a session other than the one that built it.
 
-PB's recommendation, waiting for the founder's answer: PB also builds the server-side parts of PS and PC (they live in `backend/`); the web console and public pages wait for a web lane; a separate fresh session runs S20's abuse run. Until the founder answers, don't edit PS- or PC-owned files; ask.
+**Founder's decision (October 15):** PB stays on its own slices and leaves PS, PC and PV work unowned for now. Don't build it or edit their files (`backend/services/pulse/safety/*`, `routes/pulseSafety.js`, `routes/adminReports.js`, `backend/jobs/pulseDigest*.js`, `backend/services/pulse/digest/*`). PB's seams stay fail-open (composer checks, `interestInReply`) or in-app only (follow alerts, Right now). S15's public endpoints stay a draft PR (H2) and S20's PR stays a draft (H6, nobody runs the abuse run yet); say so in `status/PB.md` under "Needs founder".
 
 ## First: merge S12 (green, waiting only for the queue)
 
