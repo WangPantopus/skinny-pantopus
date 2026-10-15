@@ -40,8 +40,10 @@ async function contextFor(userId, areaId) {
 /** Read database chunks, then apply existing hide/mute/politics and legacy reader
  * checks before counting or taking the response page. New scopes are also a database
  * predicate. Never mistake an entirely filtered chunk for the end of the feed.
+ * `refine` narrows the candidate query and `keep` filters readable rows (async), both
+ * before counting or taking, for callers like PC's digest content (content.js).
  */
-async function scan(context, { view, topic, lower, before, readAt, take = Infinity, countOnly = false }) {
+async function scan(context, { view, topic, lower, before, readAt, take = Infinity, countOnly = false, refine, keep }) {
   if (!context.area || (view === 'following' && !context.follows.length)) return countOnly ? 0 : [];
   const found = [];
   let count = 0;
@@ -54,6 +56,7 @@ async function scan(context, { view, topic, lower, before, readAt, take = Infini
       .order('created_at', { ascending: false }).order('id', { ascending: false }).limit(BATCH);
     if (topic) query = query.eq('topic', topic);
     if (lower) query = query.gt('created_at', lower);
+    if (refine) query = refine(query);
     if (position) query = legacy.applyCursorCondition(query, position.t, position.id);
     const rows = await checked(query);
     let eligible = legacy.applyMuteHideFilters(rows, context.filters, 'place', context.userId)
@@ -70,7 +73,8 @@ async function scan(context, { view, topic, lower, before, readAt, take = Infini
     eligible = eligible.filter(post => post.area_id || legacyIds.has(post.id));
     if (view === 'following') eligible = eligible.filter(post => follows.matches(context.follows, post, context.area.id));
     const permissions = await Promise.all(eligible.map(post => canReadPost(post, context.userId, context.scope)));
-    const readable = eligible.filter((_, i) => permissions[i]);
+    let readable = eligible.filter((_, i) => permissions[i]);
+    if (keep && readable.length) readable = await keep(readable);
     if (countOnly) count += readable.length;
     else found.push(...readable);
     if (found.length >= take || rows.length < BATCH) return countOnly ? count : found.slice(0, take);
@@ -144,4 +148,4 @@ async function newCount(userId, { view, topic, areaId, after }) {
   return { count: await scan(context, { view, topic, lower: after, readAt, countOnly: true }) };
 }
 
-module.exports = { page, newCount, contextFor };
+module.exports = { page, newCount, contextFor, scan, groupsFor };
