@@ -11,6 +11,7 @@ package app.pantopus.android.ui.screens.feed.pulse
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.feed.FeedMuteEntityType
 import app.pantopus.android.data.api.models.feed.FeedPost
 import app.pantopus.android.data.api.models.feed.FeedResponse
@@ -152,9 +153,14 @@ class PulseFeedViewModel
         private val _primarySportsEvent = MutableStateFlow<ActiveSportsEventDto?>(null)
         val primarySportsEvent: StateFlow<ActiveSportsEventDto?> = _primarySportsEvent.asStateFlow()
 
-        /** Topics offered on this surface. Topic lanes are Nearby-only. */
+        /** Topics offered on this surface. Topic lanes are Nearby-only; the October 13 lane (the Pulse redesign off) had Sports alone. */
         val availableTopics: List<PulseTopic>
-            get() = if (_surface.value == FeedSurface.Pulse) PulseTopic.entries.toList() else emptyList()
+            get() =
+                when {
+                    _surface.value != FeedSurface.Pulse -> emptyList()
+                    LaunchFeatures.pulseRedesign -> PulseTopic.entries.toList()
+                    else -> listOf(PulseTopic.Sports)
+                }
 
         /** True while the Sports lane is showing. */
         val isInSportsLane: Boolean
@@ -1334,7 +1340,7 @@ class PulseFeedViewModel
             val likeCount = effectiveLikeCount(post)
             val isOwner = isOwner(post)
             val isSolved = effectiveIsSolved(post)
-            val openAsk = isOwner && isOpenAsk(post, isSolved)
+            val openAsk = isOwnOpenAsk(post, isOwner, isSolved)
             return PulsePostCardContent(
                 id = post.id,
                 likePending = post.id in liking,
@@ -1397,7 +1403,7 @@ class PulseFeedViewModel
                         muteEntityName = authorName,
                         postType = post.postType.takeUnless { intent == PulseIntent.Generic },
                         topicLabel = intent.cardChipLabel,
-                        pulseTopic = PulseTopic.fromKey(post.topic),
+                        pulseTopic = cardTopic(post),
                         canKeepOpen = openAsk && hasNotBeenKeptOpen(post),
                         canCloseAsk = openAsk,
                     ),
@@ -1405,17 +1411,32 @@ class PulseFeedViewModel
             )
         }
 
+        /** The asker's own open Ask: Keep open and Close (S7). The October 13 card (the Pulse redesign off) has neither. */
+        private fun isOwnOpenAsk(
+            post: FeedPost,
+            isOwner: Boolean,
+            isSolved: Boolean,
+        ): Boolean = LaunchFeatures.pulseRedesign && isOwner && isOpenAsk(post, isSolved)
+
+        /** The card's topic, named on its meta line and muted by "Mute this topic" (S4); none on the October 13 card. */
+        private fun cardTopic(post: FeedPost): PulseTopic? = PulseTopic.fromKey(post.topic)?.takeIf { LaunchFeatures.pulseRedesign }
+
         private fun hasNotBeenKeptOpen(post: FeedPost): Boolean =
             post.id !in keptOpenIds && post.lifecycleMetadata?.keptOpenAt.isNullOrBlank()
 
+        /** The status word (S7). The October 13 card (the Pulse redesign off) has none, only its "Solved" badge. */
         private fun statusFor(post: FeedPost): PostStatus? =
-            PostStatus.of(
-                postType = post.postType,
-                state = if (effectiveIsSolved(post)) "solved" else post.state,
-                resolution = post.resolution,
-                expiresAt = post.expiresAt,
-                goingCount = effectiveLikeCount(post),
-            )
+            if (!LaunchFeatures.pulseRedesign) {
+                null
+            } else {
+                PostStatus.of(
+                    postType = post.postType,
+                    state = if (effectiveIsSolved(post)) "solved" else post.state,
+                    resolution = post.resolution,
+                    expiresAt = post.expiresAt,
+                    goingCount = effectiveLikeCount(post),
+                )
+            }
 
         /** An Ask that hasn't ended: no resolution, not solved or archived, and not past its end. */
         private fun isOpenAsk(
@@ -1438,7 +1459,7 @@ class PulseFeedViewModel
                 // Ahead of the place so a long place name never truncates it; web draws the badge beside the time.
                 "Visitor".takeIf { post.isVisitorPost },
                 // The topic too, before the place, as on iOS ("2h · Gardening · Camas").
-                PulseTopic.fromKey(post.topic)?.label,
+                cardTopic(post)?.label,
                 post.locationName?.takeIf { it.isNotEmpty() },
             ).joinToString(" · ")
 

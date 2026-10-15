@@ -30,7 +30,7 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 log = logging.getLogger("seeder.handlers.mail_notifications")
 
 SEND_TIMEOUT_S = 15
-PACIFIC = ZoneInfo("America/Los_Angeles")
+from src.discovery.timezone import valid_timezone
 
 
 def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
@@ -66,10 +66,8 @@ def _run(event: dict[str, Any], context: Any) -> dict[str, Any]:
     # 1. Always process urgent/interrupt items (runs every 5 min)
     _process_urgent_mail(supabase, secrets, stats)
 
-    # 2. Process daily summary only during morning window (7-9 AM Pacific)
-    now_pt = datetime.now(PACIFIC)
-    if 7 <= now_pt.hour < 9:
-        _process_daily_summary(supabase, secrets, stats)
+    # Eligibility and date keys follow each recipient’s local morning.
+    _process_daily_summary(supabase, secrets, stats)
 
     elapsed_ms = time.monotonic_ns() // 1_000_000 - start_ms
     stats["latency_ms"] = elapsed_ms
@@ -173,7 +171,7 @@ def _process_urgent_mail(supabase, secrets: BriefingSecrets, stats: dict) -> Non
 
 def _process_daily_summary(supabase, secrets: BriefingSecrets, stats: dict) -> None:
     """Send a daily mailbox summary push to users with active mail."""
-    today_str = datetime.now(PACIFIC).strftime("%Y-%m-%d")
+    now = datetime.now(timezone.utc)
 
     # Find users with unarchived, delivered/opened mail
     try:
@@ -195,7 +193,26 @@ def _process_daily_summary(supabase, secrets: BriefingSecrets, stats: dict) -> N
     if not user_ids:
         return
 
+    zones = {}
+    try:
+        for offset in range(0, len(user_ids), 100):
+            response = httpx.post(f"{secrets.pantopus_api_base_url}/api/internal/briefing/timezones",
+                                  json={"userIds": user_ids[offset:offset + 100]},
+                                  headers={"x-internal-api-key": secrets.internal_api_key}, timeout=SEND_TIMEOUT_S)
+            response.raise_for_status()
+            zones.update(response.json().get("timezones", {}))
+    except Exception:
+        log.exception("Failed to resolve mail recipient timezones")
+        stats["errors"] += 1
+        return
     for uid in user_ids:
+        zone = valid_timezone(zones.get(uid))
+        if not zone:
+            continue
+        local_now = now.astimezone(ZoneInfo(zone))
+        if not 7 <= local_now.hour < 9:
+            continue
+        today_str = local_now.strftime("%Y-%m-%d")
         dedup_key = f"mail_summary_{uid}_{today_str}"
         if _already_sent(supabase, dedup_key):
             continue

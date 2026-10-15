@@ -56,6 +56,7 @@ import app.pantopus.android.ui.screens.plans.today.PlansTodayCards
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -89,14 +90,15 @@ fun TodayTabScreen(
     var pulled by remember { mutableStateOf(false) }
     var visibleFrame by remember { mutableStateOf(Rect.Zero) }
     LaunchedEffect(refreshing) { if (!refreshing) pulled = false }
-    val nowMs = rememberMinuteClock().toInstant().toEpochMilli()
+    val placeNow = rememberMinuteClock(todayPlaceZone(state))
+    val nowMs = placeNow.toInstant().toEpochMilli()
     Column(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg).testTag("todayTab")) {
         Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp)) {
             Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Today", fontSize = 22.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.4).sp, color = PantopusColors.appText)
                 // The date beside the title (the f1-today-tab design); it turns over at midnight.
                 Text(
-                    rememberMinuteClock().format(DateTimeFormatter.ofPattern("EEE, MMM d", Locale.getDefault())),
+                    placeNow.format(DateTimeFormatter.ofPattern("EEE, MMM d", Locale.getDefault())),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = PantopusColors.appTextMuted,
@@ -156,6 +158,10 @@ fun TodayTabScreen(
         }
     }
 }
+
+private fun todayPlaceZone(state: TodayTabUiState): ZoneId =
+    (state as? TodayTabUiState.Loaded)?.intelligence?.timeZone
+        ?.let { runCatching { ZoneId.of(it) }.getOrNull() } ?: ZoneId.systemDefault()
 
 /** Contract §4: an alert check past 30 minutes is never shown as "no alerts". */
 private fun alertsCheck(

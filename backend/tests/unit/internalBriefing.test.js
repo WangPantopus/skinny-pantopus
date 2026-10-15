@@ -13,7 +13,7 @@ jest.mock('../../services/context/providerOrchestrator', () => ({
   composeScheduledBriefing: jest.fn(),
 }));
 jest.mock('../../services/context/internalContextCollector', () => ({ collectInternalContext: jest.fn() }));
-jest.mock('../../services/context/locationResolver', () => ({ resolveLocation: jest.fn() }));
+jest.mock('../../services/context/locationResolver', () => ({ resolveLocation: jest.fn(), resolveNotificationTimezone: jest.fn(async (_id, prefs) => prefs?.daily_briefing_timezone || null) }));
 jest.mock('../../services/addressCalendarService', () => ({ composeForHomeId: jest.fn() }));
 
 const { composeScheduledBriefing } = require('../../services/context/providerOrchestrator');
@@ -191,7 +191,7 @@ describe('POST /api/internal/briefing/send', () => {
         expect(getTable('DailyBriefingDelivery')[0].status).toBe('failed');
         expect(getTable('DailyBriefingDelivery')[0].summary_text).toBeUndefined();
       }
-      expect(collector).toHaveBeenLastCalledWith(USER_ID, 'home-abc');
+      expect(collector).toHaveBeenLastCalledWith(USER_ID, 'home-abc', 'America/Los_Angeles');
     }
   });
 

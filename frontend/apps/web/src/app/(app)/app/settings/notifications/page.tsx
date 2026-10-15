@@ -238,6 +238,9 @@ export default function NotificationPreferencesPage() {
             );
           })}
         </Section>
+        <p className="px-1 text-xs text-gray-500 dark:text-gray-400">
+          Briefing times use {prefs.daily_briefing_timezone}.
+        </p>
       </div>
     </div>
   );

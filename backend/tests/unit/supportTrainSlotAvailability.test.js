@@ -26,7 +26,7 @@ describe('supportTrainSlotAvailability', () => {
 
   describe('train-local reminder delivery', () => {
     function seed({ date = '2026-10-04', start = '18:00', end = '19:00',
-      account = false, coords = {}, status = 'reserved', slotStatus = 'full',
+      account = false, coords = { delivery_lat: 45.587, delivery_lng: -122.399 }, status = 'reserved', slotStatus = 'full',
       trainStatus = 'active', eveningMarker = null, dayMarker = null,
       shared = null, noEmail = false, homeId = null } = {}) {
       supabase.seedTable('SupportTrain', [{

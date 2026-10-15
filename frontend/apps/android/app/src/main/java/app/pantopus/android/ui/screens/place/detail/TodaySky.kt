@@ -97,9 +97,7 @@ fun TodaySkyHero(
     pickups: List<PlaceCalendarEvent> = emptyList(),
     /** The air reading: smoke veils the sky, and bad air leads the card. */
     air: SkyAir? = null,
-    /** The resident's kind of home, and the far hill's lights after dusk. */
-    home: SkyHome = SkyHome.HOUSE,
-    streetLights: Int = 0,
+    place: SkyPlace = SkyPlace(),
     /** Tapping the bins shows the pickup schedule. */
     onBins: (() -> Unit)? = null,
 ) {
@@ -109,7 +107,7 @@ fun TodaySkyHero(
     var onScreen by remember { mutableStateOf(true) }
     val animating = !reduced && lifecycle.isAtLeast(Lifecycle.State.RESUMED) && onScreen
     val time = rememberSkyTime(animating)
-    val now = rememberMinuteClock()
+    val now = rememberMinuteClock(place.timeZone)
     val hours = remember(data.hourly, now) { SkyScrub.hours(data.hourly, now) }
     val scrub = rememberSkyScrub(reduced)
     // When the card appeared or got new data: the sun or moon rises into place.
@@ -161,7 +159,7 @@ fun TodaySkyHero(
                 ),
             label = "skyScene",
         ) { view ->
-            val painter = view.painter(!animating, home, streetLights)
+            val painter = view.painter(!animating, place.home, place.streetLights)
             Canvas(modifier = Modifier.fillMaxSize().clearAndSetSemantics { }) {
                 val t = time.doubleValue
                 val perDp = density
@@ -178,7 +176,7 @@ fun TodaySkyHero(
         SkyReading(SkyReadingModel.of(data, current.note, picked, now), hours.size, scrub)
         // The bins only stand at the curb now, not in an hour slid to.
         val bins = current.note?.takeIf { picked == null && it.bins.isNotEmpty() }
-        if (bins != null && onBins != null) BinsTarget(bins, home, onBins)
+        if (bins != null && onBins != null) BinsTarget(bins, place.home, onBins)
         scrub.index?.takeIf { picked != null }?.let { SkyScrubTrack(it, hours.size) }
         SkyScrubHint(hours.size, scrubbing = scrub.index != null)
     }

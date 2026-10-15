@@ -3,7 +3,7 @@
 //  PantopusUITests
 //
 //  P8.3 — End-to-end navigation smoke test. Walks the principal route
-//  groups in `HubRoute`, `YouRoute`, `InboxRoute`, and `PulseRoute` via
+//  groups in `HubRoute`, `YouRoute`, `InboxRoute`, and `NearbyRoute` via
 //  `accessibilityIdentifier` taps, asserting each destination renders
 //  without crashing.
 //
@@ -17,9 +17,10 @@
 //  smoke test into a fixture-management project. This test instead walks
 //  one representative tap-path per route GROUP (root tab → first-class
 //  destination), covering every parent route enum and every entry point
-//  on the tab landings (Place · Today · Pulse · Mail, plus Plans while
-//  its switch is on; You is a cover). The static reachability of the
-//  remaining ID-bearing children is enumerated in `docs/nav-graph-closure.md` and
+//  on the four tab landings (Place · Today · Nearby · Mail, the bar while
+//  the Pulse redesign is off, launch cut #11; You is a cover). The static
+//  reachability of the remaining ID-bearing children is enumerated in
+//  `docs/nav-graph-closure.md` and
 //  the route-by-route summary in `docs/nav-smoke-results.md`.
 //
 //  Like `RootTabUITests`, this suite launches with
@@ -94,7 +95,7 @@ final class NavigationSmokeTest: XCTestCase {
         )
     }
 
-    // MARK: - Root tab landings (Place · Today · Pulse · Mail)
+    // MARK: - Root tab landings (Place · Today · Nearby · Mail)
 
     func testTab_placeLanding() throws {
         guard let app = launchSignedIn() else {
@@ -114,12 +115,12 @@ final class NavigationSmokeTest: XCTestCase {
         assertReaches("todayDetail", in: app)
     }
 
-    func testTab_pulseLanding() throws {
+    func testTab_nearbyLanding() throws {
         guard let app = launchSignedIn() else {
             throw XCTSkip("Signed-in launch env not honoured.")
         }
-        tabButton("pulse", in: app).tap()
-        assertReaches("pulseFeed", in: app)
+        tabButton("nearby", in: app).tap()
+        assertReaches("nearbyDoor", in: app)
     }
 
     func testTab_mailLanding() throws {

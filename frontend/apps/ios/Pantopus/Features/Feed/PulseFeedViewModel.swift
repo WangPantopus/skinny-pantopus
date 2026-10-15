@@ -1085,7 +1085,8 @@ public final class PulseFeedViewModel {
         let isOwner = Self.isOwner(post: post, viewerId: viewerId)
         let isSolved = effectiveIsSolved(post)
         let expiresAt = overrides[post.id]?.expiresAt ?? post.expiresAt
-        let askIsOpen = isOwner && !isSolved && PulsePostStatus.askIsOpen(
+        // Keep open and Close are the redesign's (Pulse S7, launch cut #11).
+        let askIsOpen = LaunchFeatures.pulseRedesign && isOwner && !isSolved && PulsePostStatus.askIsOpen(
             postType: post.postType,
             state: post.state,
             resolution: post.resolution,
@@ -1147,15 +1148,24 @@ public final class PulseFeedViewModel {
             chipLabel: intent.chipLabel(lostFoundType: post.lostFoundType),
             isVisitor: post.isVisitorPost,
             origin: post.origin,
-            pulseTopic: PulseTopic(stored: post.topic),
-            status: PulsePostStatus.from(
-                resolution: post.resolution,
-                // "Mark solved" tapped here reads as answered before the next read.
-                state: isSolved ? "solved" : post.state,
-                postType: post.postType,
-                goingCount: likeCount,
-                expiresAt: expiresAt
-            )
+            // Topics on cards are the redesign's (Pulse S4, launch cut #11).
+            pulseTopic: LaunchFeatures.pulseRedesign ? PulseTopic(stored: post.topic) : nil,
+            status: Self.status(of: post, solved: isSolved, going: likeCount, expiresAt: expiresAt)
+        )
+    }
+
+    /// How the post ended, or when a Heads-up ends (Pulse S7); none while the
+    /// Pulse redesign is off (launch cut #11), when the card shows October 13's
+    /// Solved badge instead.
+    private static func status(of post: FeedPostDTO, solved: Bool, going: Int, expiresAt: String?) -> PulsePostStatus? {
+        guard LaunchFeatures.pulseRedesign else { return nil }
+        return PulsePostStatus.from(
+            resolution: post.resolution,
+            // "Mark solved" tapped here reads as answered before the next read.
+            state: solved ? "solved" : post.state,
+            postType: post.postType,
+            goingCount: going,
+            expiresAt: expiresAt
         )
     }
 
@@ -1170,7 +1180,7 @@ public final class PulseFeedViewModel {
         // Ahead of the place so a long place name never truncates it; web draws the badge beside the time.
         if post.isVisitorPost { parts.append("Visitor") }
         // The topic too (Pulse S4): "Mute this topic" names what the card shows.
-        if let topic = PulseTopic(stored: post.topic) { parts.append(topic.label) }
+        if LaunchFeatures.pulseRedesign, let topic = PulseTopic(stored: post.topic) { parts.append(topic.label) }
         if let locality = post.locationName, !locality.isEmpty { parts.append(locality) }
         return parts.joined(separator: " · ")
     }

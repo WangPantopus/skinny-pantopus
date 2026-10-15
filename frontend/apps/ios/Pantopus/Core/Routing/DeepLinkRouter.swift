@@ -28,8 +28,11 @@ final class DeepLinkRouter {
         case home
         /// `/pulse`, and the retired `/nearby` (Pulse S3: the Nearby tab is
         /// gone; its links and the server pushes that use it open Pulse).
+        /// While the Pulse redesign is off (launch cut #11) only `/nearby`
+        /// resolves here, and it opens the Nearby tab, as on October 13.
         case pulse
-        /// `/plans`: the Plans tab, while the `plans` switch is on.
+        /// `/plans`: the Plans tab, while the `plans` switch is on (Nearby
+        /// while the Pulse redesign is off).
         case plans
         case notifications
         case supportTrain(id: String)
@@ -533,7 +536,9 @@ final class DeepLinkRouter {
         case "home":
             return .home
         case "nearby", "pulse":
-            return segments.count == 1 ? .pulse : .unknown(url)
+            // The October 13 app (launch cut #11 off) had no `/pulse` link.
+            guard segments.count == 1, firstSegment == "nearby" || LaunchFeatures.pulseRedesign else { return .unknown(url) }
+            return .pulse
         case "plans", "plan":
             // `/plans` (the tab), `/plans/new`, `/plans/:id`, `/plans/:id/requests`.
             guard let id = segments.dropFirst().first, !id.isEmpty else { return .plans }

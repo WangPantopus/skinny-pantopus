@@ -1,4 +1,5 @@
 const rateLimit = require('express-rate-limit');
+const { timingSafeEqual } = require('node:crypto');
 const { clientIpKey } = require('../utils/clientIpKey');
 
 const isRead = (req) => req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS';
@@ -9,8 +10,21 @@ const isRead = (req) => req.method === 'GET' || req.method === 'HEAD' || req.met
  * authentication, so it's only a claim: it picks a larger per-IP budget, and the verified
  * user is then held to their own budget (userWriteLimits).
  */
+function hasBriefingCredential(req) {
+  if (!/^\/api\/internal\/briefing(?:\/|$)/.test(req.originalUrl || req.url || '')) return false;
+  const supplied = req.headers?.['x-internal-api-key'];
+  const expected = process.env.INTERNAL_API_KEY;
+  if (typeof supplied !== 'string' || !expected) return false;
+  const a = Buffer.from(supplied);
+  const b = Buffer.from(expected);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
 const hasCredential = (req) => String(req.headers?.authorization || '').startsWith('Bearer ')
-  || Boolean(req.cookies?.pantopus_access || req.cookies?.pantopus_refresh);
+  || Boolean(req.cookies?.pantopus_access || req.cookies?.pantopus_refresh)
+  // A scheduler sends many recipients through one IP. Its verified internal
+  // key uses the existing authenticated budget, not the anonymous 30/min cap.
+  || hasBriefingCredential(req);
 
 /**
  * App-level write limiters run before authentication, so they only see the client's IP. Many

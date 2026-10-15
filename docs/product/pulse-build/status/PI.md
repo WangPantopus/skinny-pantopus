@@ -2,7 +2,25 @@
 
 Owner: the PI session. Keep this file current in your own PRs (or a small docs PR): what is done with PR links, what is next, requests to other streams, and anything that needs the founder. Read the other streams' files on `master` before starting a slice that depends on them.
 
-## Checkpoint — October 15, 2026, 08:00 UTC (current; supersedes every section below)
+## Paused — October 15, 2026 (supersedes every section below)
+
+**The founder paused the Pulse build on October 15.** The October 13 Pulse ships at launch. The redesign stays in the code behind launch cut 11, `pulse_redesign`, which is off unless listed ([launch-scope flags](../../../launch-scope-flags-2026-10-01.md)). PB's server gate, [#2357](https://github.com/WangPantopus/skinny-pantopus/pull/2357), merges after the app switches.
+
+**The iOS switch is [#2358](https://github.com/WangPantopus/skinny-pantopus/pull/2358)** (`LaunchFeature.pulseRedesign` in `Core/Environment/LaunchFeatures.swift`).
+
+- **Off (the default):** four tabs, Place · Today · Nearby · Messages. Nearby is the October 13 tab again (`NeighborhoodTabRoot`, `NeighborhoodView`), or the Plans map while `plans` is on. Pulse, Plans and Connections open from it. Pulse is the October 13 feed (`FeedView`) with the Sports chip only, no topics on cards, the Solved badge, no status words, no Keep open or Close, and no muted topics in Pulse preferences. A post opens the October 13 post page, which never calls `/api/pulse`. Links land as on October 13: `/nearby` and `/plans` open Nearby, `/pulse` goes nowhere, and post and feed links open Pulse from Nearby.
+- **On:** the app as `master` was before the switch.
+- **Either way:** crime and suspicion Heads-ups are refused, businesses get no feed compose button, and the privacy fixes, tolerant decoding and the non-Pulse fixes #2327, #2330 and #2335 stay.
+
+**Parked:** draft [#2355](https://github.com/WangPantopus/skinny-pantopus/pull/2355) (`claude/pulse-pi-s10-preferences`: S10.3 preferences page and "Seeing too much?") and draft [#2356](https://github.com/WangPantopus/skinny-pantopus/pull/2356) (`claude/pulse-pi-s8-composer`: the S8 one-box composer, first part), unchanged since the 08:05 UTC handoff. Both simulators, `Pulse-PI` and `Pulse-PI-SE`, are shut down once the switch is merged, not erased.
+
+**To resume:**
+
+1. Turn the switch on locally. Build with `'PANTOPUS_LAUNCH_FEATURES=pulse_redesign'` on the `xcodebuild` line, or launch a Debug build with `SIMCTL_CHILD_PANTOPUS_LAUNCH_FEATURES=pulse_redesign xcrun simctl launch <UDID> app.pantopus.ios`. Run PI's backend with `LAUNCH_FEATURES=pulse_redesign`: once PB's gate is on `master`, every `/api/pulse` route answers 403 `PULSE_REDESIGN_UNAVAILABLE` without it.
+2. Rebase #2355 onto `master`, then #2356 onto #2355, and keep this section at the top of this file. Switch-gate what they add. #2355's preferences page and "Seeing too much?" line open from the Pulse page, which only exists with the switch on, but its `FeedPreferencesSheet` changes must leave the October 13 sheet while the switch is off. #2356 changes the `.compose` route and adds Heads-up kinds; with the switch off, the feed must still open the October 13 composer (`PulseComposeFlowView`, with Hazard and Other only).
+3. Continue from "Handoff — October 15, 2026, 08:05 UTC" in this file on `claude/pulse-pi-s8-composer`: run the existing suite on #2356, recheck its two last fixes in the app, then mark #2355 and #2356 ready.
+
+## Checkpoint — October 15, 2026, 08:00 UTC (before the pause; historical)
 
 **The S6–S10 stack is on `master`.** Merged through the shared queue, each at its exact green head with its recheck recorded in the PR: [#2308](https://github.com/WangPantopus/skinny-pantopus/pull/2308) S6 (`d7c6a0de5`), [#2314](https://github.com/WangPantopus/skinny-pantopus/pull/2314) S9 (`5dfd133ed`), [#2323](https://github.com/WangPantopus/skinny-pantopus/pull/2323) S5 area picker (`40ea9c5ff`), [#2324](https://github.com/WangPantopus/skinny-pantopus/pull/2324) S9 audience (`4cd929ed6`), [#2325](https://github.com/WangPantopus/skinny-pantopus/pull/2325) S10 follow sheet (`81301b800`), [#2342](https://github.com/WangPantopus/skinny-pantopus/pull/2342) S10 card controls (`6c6de53d2`). `master`'s iOS tree is identical to the tested stack head. The next `master` CI run covers all six.
 

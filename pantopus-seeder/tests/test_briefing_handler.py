@@ -98,7 +98,7 @@ class TestTimeWindow:
         assert _is_within_window("07:30", "07:30", 15) is True
 
     def test_within_window(self):
-        assert _is_within_window("07:20", "07:30", 15) is True
+        assert _is_within_window("07:20", "07:30", 15) is False
         assert _is_within_window("07:44", "07:30", 15) is True
 
     def test_outside_window(self):
@@ -106,7 +106,7 @@ class TestTimeWindow:
         assert _is_within_window("08:00", "07:30", 15) is False
 
     def test_midnight_wrap(self):
-        assert _is_within_window("23:55", "00:05", 15) is True
+        assert _is_within_window("23:55", "00:05", 15) is False
         assert _is_within_window("00:10", "00:05", 15) is True
 
 
@@ -161,7 +161,7 @@ class TestEligibleUserFiltering:
 
         sb.table.side_effect = table_side_effect
 
-        now_pacific = datetime(2026, 4, 6, 7, 28, 0, tzinfo=PACIFIC)
+        now_pacific = datetime(2026, 4, 6, 7, 31, 0, tzinfo=PACIFIC)
         with patch(f"{_HANDLER}.datetime") as mock_dt:
             mock_dt.now.return_value = now_pacific
             mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
@@ -424,24 +424,32 @@ class TestEndToEnd:
         preference_query = _mock_supabase().table.return_value
         preference_query.execute.return_value.data = [
             {"user_id": "creator", "daily_briefing_timezone": "America/Los_Angeles"},
+            {"user_id": "excluded", "daily_briefing_timezone": "America/Los_Angeles"},
+            {"user_id": "withdrawn", "daily_briefing_timezone": "America/Los_Angeles"},
             {"user_id": "member", "daily_briefing_timezone": "America/Los_Angeles"},
             {"user_id": "tomorrow", "daily_briefing_timezone": "Asia/Tokyo"},
             {"user_id": "next-day", "daily_briefing_timezone": "Pacific/Kiritimati"},
         ]
         history_query = _mock_supabase().table.return_value
         history_query.execute.return_value.data = []
+        home_query = _mock_supabase().table.return_value
+        home_query.execute.return_value.data = [{"id": "home-1", "map_center_lat": 45.6, "map_center_lng": -122.6}]
         reminder_db = MagicMock()
         task_capabilities = {
             "creator": {"can_edit": True, "can_complete": True},
             "member": {"can_edit": False, "can_complete": False},
         }
-        reminder_db.table.side_effect = lambda name: {"HomeTask": task_query, "UserNotificationPreferences": preference_query, "AlertNotificationHistory": history_query}[name]
+        reminder_db.table.side_effect = lambda name: {"Home": home_query, "HomeTask": task_query, "UserNotificationPreferences": preference_query, "AlertNotificationHistory": history_query}[name]
         reminder_db.rpc.side_effect = lambda name, args: MagicMock(execute=MagicMock(return_value=MagicMock(data=(
             args["p_user_id"] not in {"excluded", "withdrawn"} if name == "home_record_recipient"
             else {"ok": True, "records": [{**task_query.execute.return_value.data[0], "capabilities": task_capabilities.get(args["p_actor_id"])}] if args["p_actor_id"] not in {"excluded", "withdrawn"} else []}
         ))))
         with (
             patch(f"{reminder_module}.datetime") as mock_dt,
+            patch(f"{reminder_module}._load_timezones", return_value=(
+                {"home-1": "America/Los_Angeles"},
+                {row["user_id"]: row["daily_briefing_timezone"] for row in preference_query.execute.return_value.data},
+            )),
             patch(f"{reminder_module}._get_home_members", return_value={"home-1": ["creator", "member", "excluded", "withdrawn", "tomorrow", "next-day"]}),
             patch(f"{reminder_module}._send_reminder", return_value="sent") as send,
             patch(f"{reminder_module}._record_sent") as record,
@@ -451,9 +459,9 @@ class TestEndToEnd:
             task_stats = {"tasks_notified": 0, "errors": 0}
             home_reminders._process_tasks_due(reminder_db, secrets, task_stats)
             task_query.filter.assert_called_with("status", "not.in", '("done","canceled")')
-            assert task_stats["tasks_notified"] == 3
-            assert [item.args[1] for item in send.call_args_list] == ["creator", "member", "next-day"]
-            assert record.call_args_list == [call(reminder_db, "task_task-1_creator_2026-04-07", 1), call(reminder_db, "task_task-1_member_2026-04-07", 1), call(reminder_db, "task_task-1_next-day_2026-04-08", 1)]
+            assert task_stats["tasks_notified"] == 2
+            assert [item.args[1] for item in send.call_args_list] == ["creator", "member"]
+            assert record.call_args_list == [call(reminder_db, "task_task-1_creator_2026-04-07", 1), call(reminder_db, "task_task-1_member_2026-04-07", 1)]
             payload = send.call_args_list[0].args[-1]
             assert payload == {"entityId": "task-1", "category": "TASK_REMINDER", "taskId": "task-1", "homeId": "home-1", "link": "/app/homes/home-1/tasks/task-1", "route": "/app/homes/home-1/tasks/task-1"}
             assert all("category" not in item.args[-1] for item in send.call_args_list[1:])
@@ -515,9 +523,9 @@ class TestEndToEnd:
             send.assert_not_called()
 
         for schedule_time, expected_calls in [
-            ("2026-04-07T01:00:00Z", 0), ("2026-04-07T14:00:00Z", 1),
-            # Standard time: 07:00 Pacific is 15:00 UTC.
-            ("2026-12-07T14:00:00Z", 0), ("2026-12-07T15:00:00Z", 1),
+            ("2026-04-07T01:00:00Z", 1), ("2026-04-07T14:00:00Z", 1),
+            # Every invocation checks recipient-local eligibility, including standard time.
+            ("2026-12-07T14:00:00Z", 1), ("2026-12-07T15:00:00Z", 1),
         ]:
             with (
                 patch(f"{reminder_module}.get_briefing_secrets", return_value=secrets),
@@ -568,6 +576,9 @@ class TestEndToEnd:
             patch("supabase.create_client", return_value=sb),
             patch(f"{_HANDLER}.datetime") as mock_dt,
             patch(f"{_HANDLER}._process_user", side_effect=mock_process),
+            patch(f"{_HANDLER}.httpx.post", return_value=MagicMock(
+                json=MagicMock(return_value={"timezones": {f"user-{i}": "America/Los_Angeles" for i in range(150)}}),
+            )),
             patch(f"{_HANDLER}._publish_metrics"),
         ):
             mock_dt.now.return_value = now_pacific

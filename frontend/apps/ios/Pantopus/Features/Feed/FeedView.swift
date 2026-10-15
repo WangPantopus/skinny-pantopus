@@ -141,8 +141,15 @@ public struct FeedView: View {
                     FeedContextBar(viewModel: contextBarViewModel)
                 }
                 if viewModel.showsTopics {
-                    PulseTopicChipRow(activeTopic: viewModel.activeTopic) { topic in
-                        Task { await viewModel.selectTopic(topic) }
+                    if LaunchFeatures.pulseRedesign {
+                        PulseTopicChipRow(activeTopic: viewModel.activeTopic) { topic in
+                            Task { await viewModel.selectTopic(topic) }
+                        }
+                    } else {
+                        // Launch cut #11 off: October 13's one topic lane, Sports.
+                        PulseSportsLaneChipRow(activeTopic: viewModel.activeTopic) { topic in
+                            Task { await viewModel.selectTopic(topic) }
+                        }
                     }
                 }
                 chipRow

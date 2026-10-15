@@ -87,6 +87,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub pantopus-seeder-poster-${Environment}
+      ReservedConcurrentExecutions: 1
       Handler: src.handlers.poster.handler
       Description: !Sub 'Selects, humanizes, and posts content from the seeder queue [${Environment}]'
       CodeUri: ../build/
@@ -95,9 +96,8 @@ Resources:
           Type: Schedule
           Properties:
             Name: !Sub pantopus-seeder-post-${Environment}
-            # Run every hour from 14:00-01:00 UTC to cover all Pacific Time
-            # posting windows (7am, 12pm, 5pm PT) regardless of DST.
-            Schedule: cron(0 14-23,0-1 * * ? *)
+            # The handler selects 7 AM/noon/5 PM independently per region.
+            Schedule: cron(0 * * * ? *)
             Description: !Sub 'Hourly during posting windows [${Environment}]'
             Enabled: true
       Policies:
@@ -235,6 +235,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub pantopus-briefing-scheduler-${Environment}
+      ReservedConcurrentExecutions: 1
       Handler: src.handlers.briefing.handler
       Description: !Sub 'Finds eligible users and triggers daily briefing delivery [${Environment}]'
       CodeUri: ../build/
@@ -245,8 +246,8 @@ Resources:
           Type: Schedule
           Properties:
             Name: !Sub pantopus-briefing-schedule-${Environment}
-            Schedule: rate(15 minutes)
-            Description: !Sub 'Run briefing scheduler every 15 minutes [${Environment}]'
+            Schedule: cron(* * * * ? *)
+            Description: !Sub 'Check local briefing times each minute [${Environment}]'
             Enabled: true
       Policies:
         - Statement:
@@ -332,37 +333,23 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub pantopus-home-reminders-${Environment}
+      ReservedConcurrentExecutions: 1
       Handler: src.handlers.home_reminders.handler
       Description: !Sub 'Sends push for bills due, tasks due, and upcoming calendar events [${Environment}]'
       CodeUri: ../build/
       Timeout: 120
       MemorySize: 256
       Events:
-        # EventBridge Scheduler keeps 07:00 and 18:00 in Pacific time across
-        # daylight saving. The handler reads the scheduled time from the input:
-        # only the 07:00 run sends due-day task reminders. (New event names: a
-        # stack update can't change the type of the old UTC rules in place.)
-        MorningRemindersPacific:
+        LocalReminders:
           Type: ScheduleV2
           Properties:
-            Name: !Sub pantopus-home-reminders-morning-${Environment}
-            ScheduleExpression: cron(0 7 * * ? *)
-            ScheduleExpressionTimezone: America/Los_Angeles
-            Description: !Sub 'Morning home reminders, 7 AM Pacific [${Environment}]'
+            Name: !Sub pantopus-home-reminders-local-${Environment}
+            ScheduleExpression: cron(0/15 * * * ? *)
+            ScheduleExpressionTimezone: UTC
+            Description: !Sub 'Check recipient-local home reminder windows [${Environment}]'
             Input: '{"time": "<aws.scheduler.scheduled-time>"}'
             RetryPolicy:
-              MaximumEventAgeInSeconds: 7200
-            State: ENABLED
-        EveningRemindersPacific:
-          Type: ScheduleV2
-          Properties:
-            Name: !Sub pantopus-home-reminders-evening-${Environment}
-            ScheduleExpression: cron(0 18 * * ? *)
-            ScheduleExpressionTimezone: America/Los_Angeles
-            Description: !Sub 'Evening home reminders, 6 PM Pacific [${Environment}]'
-            Input: '{"time": "<aws.scheduler.scheduled-time>"}'
-            RetryPolicy:
-              MaximumEventAgeInSeconds: 7200
+              MaximumEventAgeInSeconds: 3600
             State: ENABLED
       Policies:
         - Statement:

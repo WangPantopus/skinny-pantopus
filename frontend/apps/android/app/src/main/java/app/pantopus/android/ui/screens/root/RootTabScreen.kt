@@ -317,6 +317,7 @@ import app.pantopus.android.ui.screens.membership.MembershipDetailScreen
 import app.pantopus.android.ui.screens.my_bids.MyBidsScreen
 import app.pantopus.android.ui.screens.my_posts.MyPostsScreen
 import app.pantopus.android.ui.screens.my_tasks.MyTasksScreen
+import app.pantopus.android.ui.screens.nearby.NearbyScreen
 import app.pantopus.android.ui.screens.nearby.NearbyViewModel
 import app.pantopus.android.ui.screens.nearby.pulseQuietStateCard
 import app.pantopus.android.ui.screens.notifications.NotificationsScreen
@@ -2260,13 +2261,21 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 navController.navigateToRootTab(PantopusRoute.Place)
                 DeepLinkRouter.consume()
             }
-            // Nearby is no longer a tab: its links, pushes and saved state open Pulse (Pulse build S3).
+            // Nearby is no longer a tab: its links, pushes and saved state open Pulse (Pulse build S3). With the Pulse
+            // redesign off Nearby is the tab, as on October 13.
             DeepLinkRouter.Destination.Nearby -> {
-                navController.navigateToRootTab(PantopusRoute.Pulse)
+                navController.navigateToRootTab(if (LaunchFeatures.pulseRedesign) PantopusRoute.Pulse else PantopusRoute.Nearby)
                 DeepLinkRouter.consume()
             }
             DeepLinkRouter.Destination.PlansTab -> {
-                navController.navigateToRootTab(if (DeepLinkRouter.plansEnabled()) PantopusRoute.Plans else PantopusRoute.Pulse)
+                // With the Pulse redesign off the Plans map is the Nearby tab (October 13).
+                navController.navigateToRootTab(
+                    when {
+                        !LaunchFeatures.pulseRedesign -> PantopusRoute.Nearby
+                        DeepLinkRouter.plansEnabled() -> PantopusRoute.Plans
+                        else -> PantopusRoute.Pulse
+                    },
+                )
                 DeepLinkRouter.consume()
             }
             is DeepLinkRouter.Destination.Connections -> {
@@ -2600,31 +2609,32 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 DeepLinkRouter.consume()
             }
             // Plans: a plan link opens the Plans tab with the plan on top, so Back lands on Plans; while the `plans`
-            // flag is off it opens Pulse instead.
+            // flag is off it opens Pulse instead. With the Pulse redesign off it opens as on October 13: the plan over
+            // the current screen, or Nearby while the flag is off.
             is DeepLinkRouter.Destination.Plan -> {
                 if (DeepLinkRouter.plansEnabled()) {
-                    navController.navigateToRootTab(PantopusRoute.Plans)
+                    if (LaunchFeatures.pulseRedesign) navController.navigateToRootTab(PantopusRoute.Plans)
                     navController.navigate(PlansRoutes.plan(pending.id))
                 } else {
-                    navController.navigateToRootTab(PantopusRoute.Pulse)
+                    navController.navigateToRootTab(if (LaunchFeatures.pulseRedesign) PantopusRoute.Pulse else PantopusRoute.Nearby)
                 }
                 DeepLinkRouter.consume()
             }
             is DeepLinkRouter.Destination.PlanRequests -> {
                 if (DeepLinkRouter.plansEnabled()) {
-                    navController.navigateToRootTab(PantopusRoute.Plans)
+                    if (LaunchFeatures.pulseRedesign) navController.navigateToRootTab(PantopusRoute.Plans)
                     navController.navigate(PlansRoutes.requests(pending.id))
                 } else {
-                    navController.navigateToRootTab(PantopusRoute.Pulse)
+                    navController.navigateToRootTab(if (LaunchFeatures.pulseRedesign) PantopusRoute.Pulse else PantopusRoute.Nearby)
                 }
                 DeepLinkRouter.consume()
             }
             DeepLinkRouter.Destination.NewPlan -> {
                 if (DeepLinkRouter.plansEnabled()) {
-                    navController.navigateToRootTab(PantopusRoute.Plans)
+                    if (LaunchFeatures.pulseRedesign) navController.navigateToRootTab(PantopusRoute.Plans)
                     navController.navigate(PlansRoutes.host())
                 } else {
-                    navController.navigateToRootTab(PantopusRoute.Pulse)
+                    navController.navigateToRootTab(if (LaunchFeatures.pulseRedesign) PantopusRoute.Pulse else PantopusRoute.Nearby)
                 }
                 DeepLinkRouter.consume()
             }
@@ -2713,7 +2723,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onOpenMenu = { navDrawerScope.launch { navDrawerState.open() } },
                     )
                 }
-                // ── Pulse build S3: Place · Today · Pulse · Plans · Mail ──────────
+                // ── Pulse build S3: Place · Today · Pulse · Plans · Mail (Place · Today · Nearby · Mail with the redesign off) ──
                 composable(PantopusRoute.Today.path) {
                     // Today's plan cards open in the Plans tab, as on iOS: the tab comes back on its map with [routes] on
                     // top, so Back lands on the map. Other Plans pages left open there give way; a plan being composed
@@ -2723,6 +2733,11 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         if (!navController.isOnBackStack(PlansRoutes.HOST)) navController.popToTabRoot(PantopusRoute.Plans)
                         routes.forEach { navController.navigate(it) }
                     }
+
+                    fun planChat(
+                        roomId: String,
+                        title: String,
+                    ) = ChildRoutes.chatConversationRoom(roomId, title, title.trim().take(1).uppercase(), verified = false)
                     TodayTabScreen(
                         onClaim = { navController.navigate(ChildRoutes.ADD_HOME) },
                         onOpenPlace = { homeId ->
@@ -2730,49 +2745,85 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             placeLinkScope.launch { currentPlaceHost?.let { navController.openPlaceLink(it, homeId, null) } }
                         },
                         plans =
-                            PlansTodayActions(
-                                onOpenPlan = { id -> openInPlansTab(PlansRoutes.plan(id)) },
-                                // "Message guests": the plan's chat over the plan, so Back goes to the plan, then the map.
-                                onOpenChat = { roomId, title, planId ->
-                                    openInPlansTab(
-                                        PlansRoutes.plan(planId),
-                                        ChildRoutes.chatConversationRoom(roomId, title, title.trim().take(1).uppercase(), verified = false),
-                                    )
-                                },
-                                // "Host again" opens over whatever the Plans tab shows, as iOS's composer does.
-                                onHostAgain = { kind, planId ->
-                                    navController.navigateToRootTab(PantopusRoute.Plans)
-                                    navController.navigate(PlansRoutes.host(kind = kind, again = planId))
-                                },
-                            ),
+                            if (LaunchFeatures.pulseRedesign) {
+                                PlansTodayActions(
+                                    onOpenPlan = { id -> openInPlansTab(PlansRoutes.plan(id)) },
+                                    // "Message guests": the plan's chat over the plan, so Back goes to the plan, then the map.
+                                    onOpenChat = { roomId, title, planId ->
+                                        openInPlansTab(PlansRoutes.plan(planId), planChat(roomId, title))
+                                    },
+                                    // "Host again" opens over whatever the Plans tab shows, as iOS's composer does.
+                                    onHostAgain = { kind, planId ->
+                                        navController.navigateToRootTab(PantopusRoute.Plans)
+                                        navController.navigate(PlansRoutes.host(kind = kind, again = planId))
+                                    },
+                                )
+                            } else {
+                                // With the Pulse redesign off there is no Plans tab: the cards open over Today (October 13).
+                                PlansTodayActions(
+                                    onOpenPlan = { id -> navController.navigate(PlansRoutes.plan(id)) },
+                                    onOpenChat = { roomId, title, _ -> navController.navigate(planChat(roomId, title)) },
+                                    onHostAgain = { kind, planId ->
+                                        navController.navigate(PlansRoutes.host(kind = kind, again = planId))
+                                    },
+                                )
+                            },
                     )
                 }
+
+                // The Plans map: the Plans tab, or the Nearby tab with the Pulse redesign off ([onOpenPulse] differs).
+                fun plansMapActions(onOpenPulse: () -> Unit) =
+                    PlansMapActions(
+                        onOpenPlan = { id -> navController.navigate(PlansRoutes.plan(id)) },
+                        onAsk = { id -> navController.navigate(PlansRoutes.plan(id, ask = true)) },
+                        onHost = { kind, game -> navController.navigate(PlansRoutes.host(kind = kind?.wire, game = game?.id)) },
+                        onOpenPulse = onOpenPulse,
+                        onOpenConnections = { navController.navigate(ChildRoutes.CONNECTIONS) },
+                        onInvite = { appContext.shareText(PLANS_INVITE_MESSAGE, "Invite a neighbor") },
+                    )
                 composable(PantopusRoute.Plans.path) {
+                    // With the Pulse redesign off Plans is not a tab: its map is the Nearby tab (October 13).
+                    if (!LaunchFeatures.pulseRedesign) {
+                        LaunchedEffect(Unit) { navController.navigateToRootTab(PantopusRoute.Nearby) }
+                        return@composable
+                    }
                     // Plans (the map and list of what's on) is a tab only while the `plans` flag is on. With it off there
                     // is nothing to show here: the switch watch above moves a person standing here to Pulse.
                     if (plansFlags.plans) {
-                        PlansMapScreen(
-                            actions =
-                                PlansMapActions(
-                                    onOpenPlan = { id -> navController.navigate(PlansRoutes.plan(id)) },
-                                    onAsk = { id -> navController.navigate(PlansRoutes.plan(id, ask = true)) },
-                                    onHost = { kind, game -> navController.navigate(PlansRoutes.host(kind = kind?.wire, game = game?.id)) },
-                                    onOpenPulse = { navController.navigateToRootTab(PantopusRoute.Pulse) },
-                                    onOpenConnections = { navController.navigate(ChildRoutes.CONNECTIONS) },
-                                    onInvite = { appContext.shareText(PLANS_INVITE_MESSAGE, "Invite a neighbor") },
-                                ),
-                        )
+                        PlansMapScreen(actions = plansMapActions(onOpenPulse = { navController.navigateToRootTab(PantopusRoute.Pulse) }))
                     }
                 }
-                // Nearby is no longer a tab; its old route (saved state, a stale entry) opens Pulse.
                 composable(PantopusRoute.Nearby.path) {
-                    LaunchedEffect(Unit) { navController.navigateToRootTab(PantopusRoute.Pulse) }
+                    when {
+                        // Nearby is no longer a tab; its old route (saved state, a stale entry) opens Pulse.
+                        LaunchFeatures.pulseRedesign -> LaunchedEffect(Unit) { navController.navigateToRootTab(PantopusRoute.Pulse) }
+                        // With the Pulse redesign off it is the October 13 tab: the Plans map while the `plans` flag is
+                        // on (decision D1), and the Nearby screen while it is off.
+                        plansFlags.plans ->
+                            PlansMapScreen(actions = plansMapActions(onOpenPulse = { navController.navigate(ChildRoutes.PULSE_FEED) }))
+                        else ->
+                            NearbyScreen(
+                                onClaim = { navController.navigate(ChildRoutes.ADD_HOME) },
+                                onOpenPulse = { navController.navigate(PantopusRoute.Pulse.path) },
+                                onOpenBeacons = { navController.navigate(ChildRoutes.BEACONS_FEED) },
+                                onOpenConnections = { navController.navigate(ChildRoutes.CONNECTIONS) },
+                                onOpenMarketplace = { navController.navigate(PantopusRoute.Marketplace.path) },
+                                onOpenTasks = { navController.navigate(PantopusRoute.Tasks.path) },
+                            )
+                    }
                 }
                 plansRoutes(
                     nav = navController,
                     external =
                         PlansExternalRoutes(
-                            openPulse = { navController.navigateToRootTab(PantopusRoute.Pulse) },
+                            // With the Pulse redesign off, the October 13 feed over the Plans pages.
+                            openPulse = {
+                                if (LaunchFeatures.pulseRedesign) {
+                                    navController.navigateToRootTab(PantopusRoute.Pulse)
+                                } else {
+                                    navController.navigate(ChildRoutes.PULSE_FEED)
+                                }
+                            },
                             openConnections = { navController.navigate(ChildRoutes.CONNECTIONS) },
                             openChat = { roomId, title, _ ->
                                 navController.navigate(
@@ -2794,7 +2845,11 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                     },
                                 )
                             },
-                            openNearby = { navController.navigateToRootTab(PantopusRoute.Plans) },
+                            openNearby = {
+                                navController.navigateToRootTab(
+                                    if (LaunchFeatures.pulseRedesign) PantopusRoute.Plans else PantopusRoute.Nearby,
+                                )
+                            },
                         ),
                 )
                 composable(PantopusRoute.Mail.path) {
@@ -2830,6 +2885,18 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 composable(PantopusRoute.Pulse.path) {
                     // Nearby's other content lives here now: the neighborhood meter or "Set up a home" as one
                     // quiet-state card, and Connections (Beacons too, while that launch cut is off) in the top menu.
+                    // With the Pulse redesign off this is the October 13 feed, opened from Nearby: neither.
+                    if (!LaunchFeatures.pulseRedesign) {
+                        return@composable FeedScreen(
+                            onOpenPost = { postId -> navController.navigate(ChildRoutes.pulsePost(postId)) },
+                            onCompose = { intent -> navController.navigate(ChildRoutes.composePost(intent.key)) },
+                            onComposeStarter = { starter ->
+                                navController.navigate(
+                                    ChildRoutes.composePost(PulseIntent.Ask.key, starter.placeholder),
+                                )
+                            },
+                        )
+                    }
                     val quietMeter: NearbyViewModel = hiltViewModel()
                     val quietStateCard =
                         pulseQuietStateCard(

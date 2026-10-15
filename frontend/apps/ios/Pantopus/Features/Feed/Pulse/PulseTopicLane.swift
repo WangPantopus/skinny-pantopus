@@ -231,6 +231,61 @@ struct PulseTopicChipRow: View {
     }
 }
 
+/// The October 13 topic row, shown while the Pulse redesign is off (launch
+/// cut #11): the one lane RN shipped, Sports. Tapping the active chip exits
+/// the lane (RN `TopicChipRow.tsx:38`).
+struct PulseSportsLaneChipRow: View {
+    let activeTopic: PulseTopic?
+    let onSelect: (PulseTopic?) -> Void
+
+    var body: some View {
+        let active = activeTopic == .sports
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: Spacing.s2) {
+                Button {
+                    onSelect(active ? nil : .sports)
+                } label: {
+                    HStack(spacing: 6) {
+                        Icon(
+                            .activity,
+                            size: 14,
+                            strokeWidth: 2.2,
+                            color: active ? Theme.Color.appTextInverse : Theme.Color.appTextStrong
+                        )
+                        Text("Sports")
+                            .font(.system(size: 12, weight: active ? .semibold : .regular))
+                            .foregroundStyle(
+                                active ? Theme.Color.appTextInverse : Theme.Color.appTextStrong
+                            )
+                    }
+                    .padding(.horizontal, Spacing.s3)
+                    .padding(.vertical, 6)
+                    .background(active ? Theme.Color.primarySolid : Theme.Color.appSurfaceRaised)
+                    .clipShape(Capsule())
+                    .overlay(
+                        Capsule().stroke(
+                            active ? Theme.Color.primary600 : Theme.Color.appBorder,
+                            lineWidth: 1
+                        )
+                    )
+                    .hitArea(vertical: 6)
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(active ? [.isSelected] : [])
+                .accessibilityLabel("Sports topic")
+                .accessibilityIdentifier("pulseTopicChip_sports")
+            }
+            .padding(.horizontal, Spacing.s3)
+            .padding(.vertical, 6)
+        }
+        .background(Theme.Color.appSurface)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(Theme.Color.appBorder).frame(height: 1)
+        }
+        .accessibilityIdentifier("pulseTopicChipRow")
+    }
+}
+
 // MARK: - Active event module
 
 /// Compact card above the Sports feed while a major event is live —

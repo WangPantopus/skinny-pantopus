@@ -1,6 +1,6 @@
 """Lambda handler for home bill/task/calendar reminder push notifications.
 
-Triggered twice daily by EventBridge Scheduler (07:00 and 18:00 Pacific).
+Triggered every 15 minutes; sends morning/evening reminders in the recipient’s timezone.
 Queries HomeBill, HomeTask, and HomeCalendarEvent for items due soon,
 then sends push notifications to household members via the Node backend.
 """
@@ -18,14 +18,13 @@ import httpx
 
 from src.config.secrets import get_briefing_secrets, BriefingSecrets
 from src.utils.supabase_errors import is_missing_table_error, log_missing_table_once
+from src.discovery.timezone import timezone_for_home, valid_timezone
 
 logging.basicConfig(level=logging.INFO, force=True)
 # httpx logs every request URL at INFO, and Supabase filters carry full user
 # ids; keep them out of CloudWatch.
 logging.getLogger("httpx").setLevel(logging.WARNING)
 log = logging.getLogger("seeder.handlers.home_reminders")
-
-PACIFIC = ZoneInfo("America/Los_Angeles")
 
 SEND_TIMEOUT_S = 15
 
@@ -60,18 +59,14 @@ def _run(event: dict[str, Any], context: Any) -> dict[str, Any]:
 
     stats = {"bills_notified": 0, "tasks_notified": 0, "calendar_notified": 0, "errors": 0}
 
-    _process_bills_due(supabase, secrets, stats)
-    # Use the scheduled time, so a delayed morning invocation remains morning.
-    # Only the 07:00 Pacific run sends due-day task reminders (template.yaml
-    # passes its scheduled time), in daylight and standard time alike.
-    try:
-        scheduled_at = datetime.fromisoformat(event["time"].replace("Z", "+00:00")) if event.get("time") else datetime.now(timezone.utc)
-        morning_run = scheduled_at.astimezone(PACIFIC).hour == 7
-    except (ValueError, TypeError):
-        morning_run = False
-    if morning_run:
-        _process_tasks_due(supabase, secrets, stats)
-    _process_calendar_events(supabase, secrets, stats)
+    # Use one scheduled instant throughout the run. Eligibility is evaluated
+    # for each recipient, never against the server's or Pacific time zone.
+    now = datetime.fromisoformat(event["time"].replace("Z", "+00:00")) if event.get("time") else datetime.now(timezone.utc)
+    if now.tzinfo is None:
+        return {"error": "invalid_schedule_time"}
+    _process_bills_due(supabase, secrets, stats, now=now)
+    _process_tasks_due(supabase, secrets, stats, now=now)
+    _process_calendar_events(supabase, secrets, stats, now=now)
 
     elapsed_ms = time.monotonic_ns() // 1_000_000 - start_ms
     stats["latency_ms"] = elapsed_ms
@@ -89,83 +84,58 @@ def _run(event: dict[str, Any], context: Any) -> dict[str, Any]:
 # ── Bills due today/tomorrow ────────────────────────────────────
 
 
-def _process_bills_due(supabase, secrets: BriefingSecrets, stats: dict) -> None:
-    """Find unpaid bills due today or tomorrow, notify household members."""
-    now = datetime.now(timezone.utc)
-    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
-    tomorrow_end = (now + timedelta(days=2)).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
-
+def _process_bills_due(supabase, secrets: BriefingSecrets, stats: dict, *, now=None) -> None:
+    """Date-only bill deadlines stay calendar dates in the household's zone."""
+    now = now or datetime.now(timezone.utc)
     try:
-        result = (
-            supabase.table("HomeBill")
-            .select("id, home_id, bill_type, provider_name, amount, due_date, status")
-            .neq("status", "paid")
-            .gte("due_date", today_start)
-            .lte("due_date", tomorrow_end)
-            .execute()
-        )
-        bills = result.data or []
+        bills = (supabase.table("HomeBill")
+                 .select("id, home_id, bill_type, provider_name, amount, due_date, status")
+                 .neq("status", "paid")
+                 .gte("due_date", (now - timedelta(days=1)).date().isoformat())
+                 .lte("due_date", (now + timedelta(days=2)).date().isoformat())
+                 .execute().data or [])
+        home_ids = list({bill["home_id"] for bill in bills})
+        members = _get_home_members(supabase, home_ids)
+        home_zones, user_zones = _load_timezones(supabase, home_ids, [u for users in members.values() for u in users], secrets)
     except Exception:
-        log.exception("Failed to query HomeBill")
+        log.exception("Failed to query bill reminder context")
         stats["errors"] += 1
         return
 
-    if not bills:
-        return
-
-    # Group bills by home_id
-    home_bills: dict[str, list] = {}
     for bill in bills:
-        hid = bill["home_id"]
-        if hid not in home_bills:
-            home_bills[hid] = []
-        home_bills[hid].append(bill)
-
-    # Get household members for each home
-    home_ids = list(home_bills.keys())
-    members = _get_home_members(supabase, home_ids)
-
-    # Build dedup key for today
-    today_str = now.strftime("%Y-%m-%d")
-
-    for home_id, home_bill_list in home_bills.items():
-        user_ids = members.get(home_id, [])
-        if not user_ids:
-            continue
-
-        for bill in home_bill_list:
-            dedup_key = f"bill_{bill['id']}_{today_str}"
-            if _already_sent(supabase, dedup_key):
+        for uid in members.get(bill["home_id"], []):
+            tz = user_zones.get(uid) or home_zones.get(bill["home_id"])
+            if not tz:
                 continue
-
+            local = now.astimezone(ZoneInfo(tz))
+            if local.hour not in {7, 18}:
+                continue
+            home_local = now.astimezone(ZoneInfo(home_zones.get(bill["home_id"]) or tz))
+            due_date = str(bill.get("due_date") or "")[:10]
+            dates = {home_local.date().isoformat(): "today", (home_local.date() + timedelta(days=1)).isoformat(): "tomorrow"}
+            when = dates.get(due_date)
+            if not when:
+                continue
+            key = f"bill_{bill['id']}_{uid}_{local.date().isoformat()}"
+            if _already_sent(supabase, key, fail_closed=True):
+                continue
             provider = bill.get("provider_name") or bill.get("bill_type") or "Bill"
             amount = bill.get("amount")
             amount_str = f"${float(amount):.0f} " if amount else ""
-            due_date = bill.get("due_date", "")
-            is_today = due_date[:10] == today_str if due_date else False
-
-            title = f"Bill due {'today' if is_today else 'tomorrow'}"
-            body = f"Your {amount_str}{provider} bill is due {'today' if is_today else 'tomorrow'}."
-
-            sent = 0
-            for uid in user_ids:
-                result = _send_reminder(secrets, uid, title, body, "bill_due", {
-                    "entityId": bill["id"],
-                    "route": f"/homes/{home_id}",
-                })
-                if result == "sent":
-                    sent += 1
-
-            _record_sent(supabase, dedup_key, sent)
-            stats["bills_notified"] += sent
+            result = _send_reminder(secrets, uid, f"Bill due {when}", f"Your {amount_str}{provider} bill is due {when}.", "bill_due", {
+                "entityId": bill["id"], "route": f"/homes/{bill['home_id']}",
+            })
+            if result == "sent":
+                _record_sent(supabase, key, 1)
+                stats["bills_notified"] += 1
 
 
 # ── Tasks due today ─────────────────────────────────────────────
 
 
-def _process_tasks_due(supabase, secrets: BriefingSecrets, stats: dict) -> None:
-    """Find incomplete tasks due on each authorized recipient's local day."""
-    now = datetime.now(timezone.utc)
+def _process_tasks_due(supabase, secrets: BriefingSecrets, stats: dict, *, now=None) -> None:
+    """Deliver due-day tasks at 7 AM for each authorized recipient."""
+    now = now or datetime.now(timezone.utc)
     # A UTC candidate window covers today's dates across recipient timezones;
     # exact local-day selection happens after the per-recipient access check.
     window_start = (now - timedelta(days=1)).isoformat()
@@ -195,6 +165,7 @@ def _process_tasks_due(supabase, secrets: BriefingSecrets, stats: dict) -> None:
     ))
     members = _get_home_members(supabase, home_ids_needed) if home_ids_needed else {}
 
+    recipient_zones = {}
     for task in tasks:
         if task.get("status") not in {"open", "in_progress"}:
             continue
@@ -206,8 +177,7 @@ def _process_tasks_due(supabase, secrets: BriefingSecrets, stats: dict) -> None:
         if not targets:
             continue
         try:
-            preferences = supabase.table("UserNotificationPreferences").select("user_id, daily_briefing_timezone").in_("user_id", targets).execute().data or []
-            timezones = {row["user_id"]: row.get("daily_briefing_timezone") for row in preferences}
+            home_zones, timezones = _load_timezones(supabase, [task["home_id"]], targets, secrets, recipient_zones)
         except Exception:
             log.warning("Task reminder timezone lookup failed", exc_info=True)
             stats["errors"] += 1
@@ -234,14 +204,18 @@ def _process_tasks_due(supabase, secrets: BriefingSecrets, stats: dict) -> None:
                 current = rows[0]
                 if current.get("id") != task["id"] or current.get("home_id") != task["home_id"] or current.get("status") not in {"open", "in_progress"} or current.get("assigned_to") != task.get("assigned_to"):
                     continue
-                try:
-                    local_tz = ZoneInfo(timezones.get(uid) or "America/Los_Angeles")
-                except (ValueError, KeyError):
-                    local_tz = ZoneInfo("America/Los_Angeles")
-                due = datetime.fromisoformat(current["due_at"].replace("Z", "+00:00"))
-                if due.tzinfo is None or due.astimezone(local_tz).date() != now.astimezone(local_tz).date():
+                zone = timezones.get(uid) or home_zones.get(task["home_id"])
+                if not zone:
                     continue
-                local_date = now.astimezone(local_tz).strftime("%Y-%m-%d")
+                local_tz = ZoneInfo(zone)
+                local_now = now.astimezone(local_tz)
+                if local_now.hour != 7:
+                    continue
+                home_tz = ZoneInfo(home_zones.get(task["home_id"]) or zone)
+                due = datetime.fromisoformat(current["due_at"].replace("Z", "+00:00"))
+                if due.tzinfo is None or due.astimezone(home_tz).date() != local_now.date():
+                    continue
+                local_date = local_now.strftime("%Y-%m-%d")
                 dedup_key = f"task_{task['id']}_{uid}_{local_date}"
                 if _already_sent(supabase, dedup_key, fail_closed=True):
                     continue
@@ -272,9 +246,9 @@ def _process_tasks_due(supabase, secrets: BriefingSecrets, stats: dict) -> None:
 # ── Calendar events starting soon ───────────────────────────────
 
 
-def _process_calendar_events(supabase, secrets: BriefingSecrets, stats: dict) -> None:
-    """Find calendar events starting in the next 2 hours, notify household."""
-    now = datetime.now(timezone.utc)
+def _process_calendar_events(supabase, secrets: BriefingSecrets, stats: dict, *, now=None) -> None:
+    """Find upcoming events by instant, independent of any server timezone."""
+    now = now or datetime.now(timezone.utc)
     two_hours = (now + timedelta(hours=2)).isoformat()
 
     try:
@@ -296,12 +270,7 @@ def _process_calendar_events(supabase, secrets: BriefingSecrets, stats: dict) ->
 
     home_ids = list(set(e["home_id"] for e in events))
     members = _get_home_members(supabase, home_ids)
-    today_str = now.strftime("%Y-%m-%d")
-
     for event in events:
-        dedup_key = f"calendar_{event['id']}_{today_str}"
-        if _already_sent(supabase, dedup_key):
-            continue
 
         event_title = event.get("title") or "Home event"
         start_at = event.get("start_at", "")
@@ -317,20 +286,35 @@ def _process_calendar_events(supabase, secrets: BriefingSecrets, stats: dict) ->
         body = f'"{event_title}" starts {time_str}.'
 
         targets = members.get(event["home_id"], [])
-        sent = 0
         for uid in targets:
+            dedup_key = f"calendar_{event['id']}_{uid}_{start_at}"
+            if _already_sent(supabase, dedup_key, fail_closed=True):
+                continue
             result = _send_reminder(secrets, uid, title, body, "calendar", {
                 "entityId": event["id"],
                 "route": f"/homes/{event['home_id']}",
             })
             if result == "sent":
-                sent += 1
-
-        _record_sent(supabase, dedup_key, sent)
-        stats["calendar_notified"] += sent
+                _record_sent(supabase, dedup_key, 1)
+                stats["calendar_notified"] += 1
 
 
 # ── Shared helpers ──────────────────────────────────────────────
+
+
+def _load_timezones(supabase, home_ids: list[str], user_ids: list[str], secrets: BriefingSecrets, cache=None) -> tuple[dict, dict]:
+    """Resolve the recipient's clock separately from each household's civil date."""
+    homes = (supabase.table("Home").select("id, map_center_lat, map_center_lng, location")
+             .in_("id", list(set(home_ids))).execute().data or []) if home_ids else []
+    zones = cache if cache is not None else {}
+    missing = [uid for uid in set(user_ids) if uid not in zones]
+    for offset in range(0, len(missing), 100):
+        response = httpx.post(f"{secrets.pantopus_api_base_url}/api/internal/briefing/timezones",
+                              json={"userIds": missing[offset:offset + 100]},
+                              headers={"x-internal-api-key": secrets.internal_api_key}, timeout=SEND_TIMEOUT_S)
+        response.raise_for_status()
+        zones.update({uid: valid_timezone(zone) for uid, zone in response.json().get("timezones", {}).items()})
+    return ({h["id"]: timezone_for_home(h, None) for h in homes}, zones)
 
 
 def _get_home_members(supabase, home_ids: list[str]) -> dict[str, list[str]]:

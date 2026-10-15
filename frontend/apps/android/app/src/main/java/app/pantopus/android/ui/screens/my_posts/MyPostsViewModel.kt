@@ -13,6 +13,7 @@ package app.pantopus.android.ui.screens.my_posts
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.feed.FeedCursor
 import app.pantopus.android.data.api.models.posts.MyPostDto
 import app.pantopus.android.data.api.models.posts.MyPostsResponse
@@ -760,12 +761,14 @@ class MyPostsViewModel
 
             /**
              * How the post ended, or when a heads-up ends (S7), beside the type chip: "Answered" with the check,
-             * "Gone", "Reunited", "Happened · 3 went", "Ends Thu 4pm" with the clock; none for the rest.
+             * "Gone", "Reunited", "Happened · 3 went", "Ends Thu 4pm" with the clock; none for the rest, and none with
+             * the Pulse redesign off (the October 13 lists).
              */
             fun statusChipFor(
                 dto: MyPostDto,
                 archived: Boolean = dto.archivedAt != null,
             ): RowChip? {
+                if (!LaunchFeatures.pulseRedesign) return null
                 val status =
                     PostStatus.of(
                         postType = dto.postType,

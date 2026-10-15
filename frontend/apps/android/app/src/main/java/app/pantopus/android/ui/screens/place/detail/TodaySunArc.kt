@@ -44,6 +44,7 @@ import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.SkyPalette
 import java.time.LocalTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import kotlin.math.PI
@@ -60,8 +61,11 @@ import kotlin.math.sin
  */
 
 @Composable
-fun TodaySunArcCard(data: PlaceSunriseSunsetData) {
-    val moment = SkyMoment.at(rememberMinuteClock(), data.sunrise, data.sunset)
+fun TodaySunArcCard(
+    data: PlaceSunriseSunsetData,
+    timeZone: ZoneId = ZoneId.systemDefault(),
+) {
+    val moment = SkyMoment.at(rememberMinuteClock(timeZone), data.sunrise, data.sunset)
     val up = moment.minutes >= moment.sunrise && moment.minutes <= moment.sunset
     val target =
         when {

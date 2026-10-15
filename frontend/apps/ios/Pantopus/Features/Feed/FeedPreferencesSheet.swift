@@ -154,7 +154,8 @@ public struct FeedPreferencesSheet: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.Color.appBg)
         .task { await viewModel.load() }
-        .task { await summary.load() }
+        // Follows, updates and mutes are the redesign's (Pulse S4/S10, launch cut #11).
+        .task { if LaunchFeatures.pulseRedesign { await summary.load() } }
         .accessibilityIdentifier("pulsePreferencesSheet")
     }
 
@@ -234,12 +235,14 @@ public struct FeedPreferencesSheet: View {
                 await viewModel.setShowPolitics(next)
                 onPrefsChanged()
             }
-            PulsePreferencesSummarySections(
-                model: summary,
-                areaId: areaId,
-                areaName: areaName,
-                onChanged: onPrefsChanged
-            )
+            if LaunchFeatures.pulseRedesign {
+                PulsePreferencesSummarySections(
+                    model: summary,
+                    areaId: areaId,
+                    areaName: areaName,
+                    onChanged: onPrefsChanged
+                )
+            }
             HStack(spacing: Spacing.s2) {
                 Icon(.info, size: 13, color: Theme.Color.appTextMuted)
                 Text("These preferences sync across all your devices.")

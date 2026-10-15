@@ -29,6 +29,7 @@ struct TodaySkyHero: View {
     /// The resident's kind of home, and the far hill's lights after dusk.
     var home: SkyHome = .house
     var streetLights = 0
+    var calendar: Calendar = .autoupdatingCurrent
     /// Tapping the bins shows the pickup schedule.
     var onBins: (() -> Void)?
 
@@ -60,12 +61,19 @@ struct TodaySkyHero: View {
         TimelineView(.everyMinute) { minute in
             let hours = SkyScrub.hours(data.hourly, after: minute.date)
             let picked = scrub.flatMap { hours.indices.contains($0) ? hours[$0] : nil }
-            let nowMoment = SkyMoment.at(minute.date, sunrise: sun?.sunrise, sunset: sun?.sunset)
-            let nowNote = SkyNote.pick(now: minute.date, moment: nowMoment, weather: data, pickups: pickups, air: air)
+            let nowMoment = SkyMoment.at(minute.date, sunrise: sun?.sunrise, sunset: sun?.sunset, calendar: calendar)
+            let nowNote = SkyNote.pick(now: minute.date, moment: nowMoment, weather: data, pickups: pickups, air: air, calendar: calendar)
             let when = picked?.date ?? minute.date
-            let shown = picked.map { SkyScrub.weather(data, at: $0) } ?? data
-            let moment = picked == nil ? nowMoment : SkyMoment.at(when, sunrise: sun?.sunrise, sunset: sun?.sunset)
-            let note = picked == nil ? nowNote : SkyNote.pick(now: when, moment: moment, weather: shown, pickups: pickups, air: air)
+            let shown = picked.map { SkyScrub.weather(data, at: $0, calendar: calendar) } ?? data
+            let moment = picked == nil ? nowMoment : SkyMoment.at(when, sunrise: sun?.sunrise, sunset: sun?.sunset, calendar: calendar)
+            let note = picked == nil ? nowNote : SkyNote.pick(
+                now: when,
+                moment: moment,
+                weather: shown,
+                pickups: pickups,
+                air: air,
+                calendar: calendar
+            )
             let sky = SkyPalette.sky(moment.phase, SkyPalette.Weather(shown.conditionCode))
             // A new hour, phase or kind of weather crossfades in.
             let key = SceneKey(hour: picked?.date, phase: moment.phase, sky: SkyPalette.Weather(shown.conditionCode))
@@ -75,16 +83,16 @@ struct TodaySkyHero: View {
                         moment: moment,
                         weather: shown,
                         note: note,
-                        season: SkySeason.at(when),
+                        season: SkySeason.at(when, calendar: calendar),
                         rain: SkyScrub.rain(data.hourly, at: when)
                     ),
-                    shower: SkyNote.meteors(now: when, moment: moment, calendar: .autoupdatingCurrent) != nil,
+                    shower: SkyNote.meteors(now: when, moment: moment, calendar: calendar) != nil,
                     rises: picked == nil
                 )
                 .id(key)
                 .transition(.opacity)
                 TodaySkyReading(
-                    reading: SkyReadingModel(now: data, note: nowNote, picked: picked, at: minute.date),
+                    reading: SkyReadingModel(now: data, note: nowNote, picked: picked, at: minute.date, calendar: calendar),
                     hours: hours.count,
                     scrub: $scrub
                 )
@@ -206,15 +214,15 @@ struct SkyReadingModel {
     let chips: [String]
     let spokenChips: String
 
-    init(now data: PlaceWeatherData, note: SkyNote?, picked: SkyScrubHour?, at now: Date) {
-        let shown = picked.map { SkyScrub.weather(data, at: $0) } ?? data
+    init(now data: PlaceWeatherData, note: SkyNote?, picked: SkyScrubHour?, at now: Date, calendar: Calendar = .autoupdatingCurrent) {
+        let shown = picked.map { SkyScrub.weather(data, at: $0, calendar: calendar) } ?? data
         weather = shown
-        kicker = picked.map { SkyScrub.kicker($0, now: now) } ?? note?.kicker ?? "NOW"
+        kicker = picked.map { SkyScrub.kicker($0, now: now, calendar: calendar) } ?? note?.kicker ?? "NOW"
         glass = picked == nil && note != nil
         let reading = "Now, \(Int(data.currentTempF.rounded()))°"
         let current = data.conditionLabel.isEmpty ? reading : "\(reading), \(data.conditionLabel)"
         spoken = note.map { "\($0.spoken) \(current)" } ?? current
-        value = picked.map { SkyScrub.spoken($0, now: now) } ?? ""
+        value = picked.map { SkyScrub.spoken($0, now: now, calendar: calendar) } ?? ""
         // High/low, feels-like (or an hour's chance of rain or its wind) and the wind
         // from 15 mph, each in a dark glass chip: they sit near the bright horizon,
         // where white text alone can't keep 4.5:1.
