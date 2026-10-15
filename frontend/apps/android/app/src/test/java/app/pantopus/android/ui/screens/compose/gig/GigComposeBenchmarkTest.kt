@@ -30,7 +30,7 @@ import org.junit.Test
 /**
  * P1.G — price-benchmark hint in the composer budget step: fetch on
  * entry with a category, silent hide on failure / zero comparables, and
- * the per-category dedupe guard.
+ * refresh on re-entry using the task address.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class GigComposeBenchmarkTest {
@@ -54,7 +54,13 @@ class GigComposeBenchmarkTest {
     private fun makeVm() =
         GigComposeViewModel(
             repo,
-            SavedStateHandle(),
+            SavedStateHandle(
+                mapOf(
+                    "composeGig2.locationMode" to "APlace",
+                    "composeGig2.placeLatitude" to 21.3069,
+                    "composeGig2.placeLongitude" to -157.8583,
+                ),
+            ),
             networkMonitor,
             filesRepo,
             mockk(relaxed = true),
@@ -80,7 +86,7 @@ class GigComposeBenchmarkTest {
     @Test
     fun fetch_with_category_populates_hint() =
         runTest {
-            coEvery { repo.priceBenchmark("handyman") } returns
+            coEvery { repo.priceBenchmark("handyman", 21.3069, -157.8583) } returns
                 NetworkResult.Success(PriceBenchmarkResponse(benchmark()))
             val vm = makeVm()
             vm.selectCategory(GigComposeCategory.Handyman)
@@ -99,13 +105,13 @@ class GigComposeBenchmarkTest {
             val vm = makeVm()
             vm.fetchPriceBenchmark()
             assertNull(vm.state.value.priceBenchmark)
-            coVerify(exactly = 0) { repo.priceBenchmark(any()) }
+            coVerify(exactly = 0) { repo.priceBenchmark(any(), any(), any()) }
         }
 
     @Test
     fun zero_comparables_hides_the_hint() =
         runTest {
-            coEvery { repo.priceBenchmark("handyman") } returns
+            coEvery { repo.priceBenchmark("handyman", 21.3069, -157.8583) } returns
                 NetworkResult.Success(PriceBenchmarkResponse(benchmark(comparableCount = 0)))
             val vm = makeVm()
             vm.selectCategory(GigComposeCategory.Handyman)
@@ -116,7 +122,7 @@ class GigComposeBenchmarkTest {
     @Test
     fun missing_percentiles_hide_the_hint() =
         runTest {
-            coEvery { repo.priceBenchmark("handyman") } returns
+            coEvery { repo.priceBenchmark("handyman", 21.3069, -157.8583) } returns
                 NetworkResult.Success(PriceBenchmarkResponse(benchmark(median = null)))
             val vm = makeVm()
             vm.selectCategory(GigComposeCategory.Handyman)
@@ -127,7 +133,7 @@ class GigComposeBenchmarkTest {
     @Test
     fun fetch_failure_is_silent() =
         runTest {
-            coEvery { repo.priceBenchmark("handyman") } returns
+            coEvery { repo.priceBenchmark("handyman", 21.3069, -157.8583) } returns
                 NetworkResult.Failure(NetworkError.Server(500, null))
             val vm = makeVm()
             vm.selectCategory(GigComposeCategory.Handyman)
@@ -137,21 +143,21 @@ class GigComposeBenchmarkTest {
         }
 
     @Test
-    fun refetch_is_deduped_per_category() =
+    fun refetch_uses_current_task_address() =
         runTest {
-            coEvery { repo.priceBenchmark("handyman") } returns
+            coEvery { repo.priceBenchmark("handyman", 21.3069, -157.8583) } returns
                 NetworkResult.Success(PriceBenchmarkResponse(benchmark()))
-            coEvery { repo.priceBenchmark("cleaning") } returns
+            coEvery { repo.priceBenchmark("cleaning", 21.3069, -157.8583) } returns
                 NetworkResult.Success(PriceBenchmarkResponse(benchmark()))
             val vm = makeVm()
             vm.selectCategory(GigComposeCategory.Handyman)
             vm.fetchPriceBenchmark()
             vm.fetchPriceBenchmark()
-            coVerify(exactly = 1) { repo.priceBenchmark("handyman") }
+            coVerify(exactly = 2) { repo.priceBenchmark("handyman", 21.3069, -157.8583) }
             // A category change re-arms the fetch.
             vm.selectCategory(GigComposeCategory.Cleaning)
             vm.fetchPriceBenchmark()
-            coVerify(exactly = 1) { repo.priceBenchmark("cleaning") }
+            coVerify(exactly = 1) { repo.priceBenchmark("cleaning", 21.3069, -157.8583) }
         }
 
     @Test

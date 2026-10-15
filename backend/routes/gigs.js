@@ -3299,7 +3299,7 @@ router.get('/rebookable', verifyToken, async (req, res) => {
  */
 router.get('/price-benchmark', optionalAuth, async (req, res) => {
   try {
-    const { category, lat, lng } = req.query;
+    const { category, lat, lng, radiusMiles } = req.query;
 
     if (!category) {
       return res.status(400).json({ error: 'category is required' });
@@ -3307,8 +3307,9 @@ router.get('/price-benchmark', optionalAuth, async (req, res) => {
 
     const benchmark = await gigPricingService.getGigPriceBenchmark({
       category: canonicalGigCategory(category),
-      latitude: lat ? parseFloat(lat) : undefined,
-      longitude: lng ? parseFloat(lng) : undefined,
+      latitude: typeof lat === 'string' && lat.trim() ? Number(lat) : undefined,
+      radiusMiles: radiusMiles === undefined ? undefined : Number(radiusMiles),
+      longitude: typeof lng === 'string' && lng.trim() ? Number(lng) : undefined,
     });
 
     res.json({ benchmark });

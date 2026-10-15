@@ -15,6 +15,7 @@ const { createNotification, notifyAddressRevealed } = require('../services/notif
 const savedSearchService = require('../services/marketplace/savedSearchService');
 const { LISTING_LIST } = require('../utils/columns');
 const { applyLocationPrecision } = require('../utils/locationPrivacy');
+const { haversineMiles } = require('../utils/geo');
 const { hydrateListingCreatorIdentities } = require('../utils/listingCreatorIdentity');
 const {
   AREA_SEARCH_CANDIDATE_LIMIT,
@@ -1397,7 +1398,7 @@ router.get('/:id/similar', optionalAuth, async (req, res) => {
     // Fetch the source listing's category and price
     const { data: listing, error: fetchErr } = await supabaseAdmin
       .from('Listing')
-      .select('id, category, price, latitude, longitude')
+      .select('id, category, condition, listing_type, price, latitude, longitude, location_precision, reveal_policy, visibility_scope')
       .eq('id', id)
       .single();
 
@@ -1405,14 +1406,30 @@ router.get('/:id/similar', optionalAuth, async (req, res) => {
       return res.status(404).json({ error: 'Listing not found' });
     }
 
-    // Build query: same category, active, not this listing, not archived
+    // Similar-nearby is centered on the public point, even for the owner.
+    // Hidden locations cannot be used as an address probe through related items.
+    const center = applyLocationPrivacy(listing, null);
+    const radiusMiles = 10;
+    if (center.latitude == null || center.longitude == null || listing.visibility_scope === 'neighborhood') {
+      return res.json({ listings: [], radius_miles: radiusMiles });
+    }
+    const latitudeMargin = widenRadiusMeters(radiusMiles * METERS_PER_MILE) / 110000;
+
+    // Same category/type/condition, active, public, and a local candidate band.
     let query = supabaseAdmin
       .from('Listing')
       .select(`*, creator:user_id (${SAFE_CREATOR_SELECT})`)
       .eq('category', listing.category)
       .eq('status', 'active')
       .neq('id', id)
-      .is('archived_at', null);
+      .is('archived_at', null)
+      .in('visibility_scope', ['city', 'radius', 'global'])
+      .in('location_precision', ['exact_place', 'approx_area'])
+      .gte('latitude', Math.max(-90, center.latitude - latitudeMargin))
+      .lte('latitude', Math.min(90, center.latitude + latitudeMargin))
+      .or('expires_at.is.null,expires_at.gt.' + new Date().toISOString());
+    if (listing.listing_type) query = query.eq('listing_type', listing.listing_type);
+    if (listing.condition) query = query.eq('condition', listing.condition);
 
     // If price exists and > 0, filter within 50% range
     if (listing.price && listing.price > 0) {
@@ -1423,14 +1440,21 @@ router.get('/:id/similar', optionalAuth, async (req, res) => {
 
     query = query
       .order('created_at', { ascending: false })
-      .limit(8);
+      .limit(AREA_SEARCH_CANDIDATE_LIMIT);
 
-    const { data: results, error } = await query;
+    const { data: candidates, error } = await query;
 
     if (error) {
       logger.error('Similar listings query error', { error: error.message, listingId: id });
       return res.status(500).json({ error: 'Failed to fetch similar listings' });
     }
+
+    const results = (candidates || []).filter((row) => {
+      const point = applyLocationPrivacy(row, null);
+      if (point.latitude == null || point.longitude == null) return false;
+      const distance = haversineMiles(center.latitude, center.longitude, point.latitude, point.longitude);
+      return distance <= radiusMiles && (row.visibility_scope !== 'radius' || distance <= Number(row.radius_miles));
+    }).slice(0, 8);
 
     // Apply save status enrichment
     let savedIds = new Set();
@@ -1454,7 +1478,7 @@ router.get('/:id/similar', optionalAuth, async (req, res) => {
 
     const listings = await applyLocationPrivacyBatch(normalized, viewerUserId);
 
-    res.json({ listings });
+    res.json({ listings, radius_miles: radiusMiles });
   } catch (err) {
     logger.error('Similar listings error', { error: err.message, listingId: req.params.id });
     res.status(500).json({ error: 'Failed to fetch similar listings' });

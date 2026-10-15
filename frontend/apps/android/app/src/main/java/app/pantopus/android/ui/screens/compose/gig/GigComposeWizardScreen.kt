@@ -680,7 +680,7 @@ internal fun BudgetModeStep(
     vm: GigComposeViewModel,
 ) {
     // P1.G — covers a restored wizard landing directly on this step;
-    // the VM dedupes per category so the step-advance fetch isn't repeated.
+    // each visit uses the current category and task address.
     LaunchedEffect(Unit) { vm.fetchPriceBenchmark() }
     HeadlineBlock("Budget & mode")
     SubcopyBlock("Pick a price model. Helpers see this on the gig card.")
@@ -735,7 +735,7 @@ internal fun BudgetModeStep(
     }
     // P1.G — nearby price-benchmark hint; hidden when the fetch failed
     // or there are no comparable tasks.
-    state.priceBenchmark?.let { benchmark ->
+    state.priceBenchmark?.takeIf { state.form.budgetType == GigComposeBudgetType.Fixed }?.let { benchmark ->
         Column(
             modifier =
                 Modifier

@@ -622,7 +622,9 @@ final class GigComposeViewModelTests: XCTestCase {
             category: .handyman,
             title: "Hang 3 shelves in the living room",
             description: "Need three IKEA Lack shelves mounted on drywall.",
-            photoIds: []
+            photoIds: [],
+            locationMode: .aPlace,
+            placeAddress: GigComposePlaceAddress(latitude: 21.3069, longitude: -157.8583)
         )
     }
 
@@ -642,8 +644,8 @@ final class GigComposeViewModelTests: XCTestCase {
             query[item.name] = item.value
         }
         XCTAssertEqual(query["category"], "handyman")
-        XCTAssertEqual(query["lat"], "40.7484", "Cached device location geo-scopes the benchmark.")
-        XCTAssertEqual(query["lng"], "-73.9857")
+        XCTAssertEqual(query["lat"], "21.3069", "The task address geo-scopes the benchmark.")
+        XCTAssertEqual(query["lng"], "-157.8583")
     }
 
     func testBenchmarkHiddenWhenNoComparables() async {
@@ -681,15 +683,15 @@ final class GigComposeViewModelTests: XCTestCase {
         )
     }
 
-    func testBenchmarkCachedPerCategory() async {
-        SequencedURLProtocol.sequence = [.status(200, body: Self.benchmarkJSON)]
+    func testBenchmarkRefreshesOnBudgetEntry() async {
+        SequencedURLProtocol.sequence = Array(repeating: .status(200, body: Self.benchmarkJSON), count: 2)
         let vm = makeVM(initialState: budgetStepState())
         await vm.loadPriceBenchmark()
         await vm.loadPriceBenchmark()
         XCTAssertEqual(
             SequencedURLProtocol.capturedRequests.count,
-            1,
-            "Re-entering the budget step with the same category doesn't refetch."
+            2,
+            "Re-entering the budget step refreshes comparisons for the current task address."
         )
         XCTAssertNotNil(vm.priceBenchmark)
     }
