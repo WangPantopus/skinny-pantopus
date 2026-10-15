@@ -295,7 +295,9 @@ async function assertHostLimits(userId) {
 
 // ── Create ───────────────────────────────────────────────────
 
-async function createPlan(user, input) {
+// `pulse` (S14, contract §2.18): the conversation a plan is suggested from and the audience it
+// takes (the plan post's read scope and area); absent for plans made in Plans.
+async function createPlan(user, input, pulse = null) {
   const viewer = await loadViewer(user, { gps: input.gps });
   const kind = input.kind;
   if (!rules.KINDS.includes(kind)) fail(422, 'validation', 'Choose what kind of plan this is.');
@@ -310,8 +312,9 @@ async function createPlan(user, input) {
   const place = resolvePlace(viewer, kind, input.place);
   assertHostNear(viewer, kind, place);
   const autoRules = normalizeAutoRules(kind, place.kind, input.auto_rules);
-  const joinRequirement = kind === 'playdate' ? 'verified'
-    : (oneOf(input.join_requirement, ['located', 'verified'], 'who can ask') || 'located');
+  // An invited plan comes only from a conversation's "People I invite" (S14, contract §2.18).
+  const joinRequirement = kind === 'playdate' ? 'verified' : pulse?.joinRequirement
+    || (oneOf(input.join_requirement, ['located', 'verified'], 'who can ask') || 'located');
   const details = normalizeDetails(kind, input.details);
   await assertHostLimits(viewer.id);
 
@@ -350,6 +353,7 @@ async function createPlan(user, input) {
     post_metadata: { plan: true },
     origin: 'user',
     allow_external_share: false,
+    ...(pulse ? { read_scope: pulse.readScope, area_id: pulse.areaId } : {}),
   }).select('id').single();
   if (postError) throw new Error(`Failed to save the plan: ${postError.message}`);
 
@@ -372,6 +376,7 @@ async function createPlan(user, input) {
     place_home_id: place.home_id,
     timezone,
     status: 'open',
+    ...(pulse ? { source_post_id: pulse.sourcePostId } : {}),
   });
   if (planError) {
     await supabaseAdmin.from('Post').delete().eq('id', post.id);
@@ -460,7 +465,8 @@ async function editPlan(user, postId, patch, { io = null } = {}) {
   if (patch.auto_rules !== undefined || patch.place !== undefined) {
     planUpdate.auto_rules = normalizeAutoRules(plan.kind, placeKind, patch.auto_rules !== undefined ? patch.auto_rules : plan.auto_rules);
   }
-  if (patch.join_requirement !== undefined && plan.kind !== 'playdate') {
+  // An invited plan stays invited: opening it would show it to people the host didn't choose.
+  if (patch.join_requirement !== undefined && plan.kind !== 'playdate' && plan.join_requirement !== 'invited') {
     planUpdate.join_requirement = oneOf(patch.join_requirement, ['located', 'verified'], 'who can ask');
   }
   if (patch.details !== undefined) planUpdate.details = normalizeDetails(plan.kind, patch.details);
@@ -728,7 +734,11 @@ async function askToJoin(user, postId, body, { io = null } = {}) {
   let decidedBy = null;
   if (seats <= spotsLeft) {
     const rule = planService.matchingAutoRule(plan, viewer, ctx);
-    if (rule) {
+    if (plan.join_requirement === 'invited') {
+      // The host invited this person, so Going needs no second approval.
+      status = 'accepted';
+      decidedBy = 'host';
+    } else if (rule) {
       status = 'accepted';
       decidedBy = 'rule';
     } else {
@@ -752,9 +762,10 @@ async function askToJoin(user, postId, body, { io = null } = {}) {
   let request;
   if (mine) {
     // Asking again after withdrawing, leaving or expiring.
+    // Asking again, or saying Going to an invitation (which uses no ask).
     const { data, error } = await supabaseAdmin.from('PlanRequest')
-      .update({ ...row, ask_count: (mine.ask_count || 1) + 1 })
-      .eq('id', mine.id).in('status', ['withdrawn', 'left', 'expired']).select(planService.REQUEST_COLUMNS);
+      .update({ ...row, ask_count: mine.status === 'invited' ? mine.ask_count || 1 : (mine.ask_count || 1) + 1 })
+      .eq('id', mine.id).in('status', ['withdrawn', 'left', 'expired', 'invited']).select(planService.REQUEST_COLUMNS);
     if (error) throw new Error(`Failed to send your request: ${error.message}`);
     if (!data || data.length === 0) return { status: 200, body: await requestResult(postId, viewer, mine.id) };
     request = data[0];
@@ -795,7 +806,8 @@ async function withdrawMine(user, postId, { io = null, reason = 'withdraw' } = {
     .select(planService.REQUEST_COLUMNS).eq('post_id', postId).eq('user_id', viewer.id).maybeSingle();
   if (error) throw new Error(`Failed to load your request: ${error.message}`);
   if (!mine) fail(404, 'not_found', "You haven't asked to join this plan.");
-  if (!['pending', 'waitlisted', 'accepted'].includes(mine.status)) return requestResult(postId, viewer, mine.id);
+  // "Not this time" on an invitation (S14) withdraws it; the person can still say Going later.
+  if (!['pending', 'waitlisted', 'accepted', 'invited'].includes(mine.status)) return requestResult(postId, viewer, mine.id);
 
   const stamp = nowIso();
   const leaving = mine.status === 'accepted';

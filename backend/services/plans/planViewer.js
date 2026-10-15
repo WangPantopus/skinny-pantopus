@@ -110,13 +110,17 @@ function parseGps(raw) {
  */
 async function loadViewer(user, opts = {}) {
   const userId = String(user.id);
-  const [playdatesFlag, filters, homes, savedPlaces, scopeAccess] = await Promise.all([
+  const [playdatesFlag, filters, homes, savedPlaces, scopeAccess, invites] = await Promise.all([
     isFeatureEnabled('plans_playdates', user),
     getMuteAndHideFilters(userId),
     loadHomes(userId),
     loadSavedPlaces(userId),
     postScopeAccess(userId),
+    // Plans this person was invited to (S14 "People I invite"); a removed invitation grants nothing.
+    supabaseAdmin.from('PlanRequest').select('post_id').eq('user_id', userId)
+      .in('status', ['invited', 'accepted', 'waitlisted', 'left', 'withdrawn']).limit(1000),
   ]);
+  if (invites.error) throw new Error(`Failed to load plan invitations: ${invites.error.message}`);
   const gps = parseGps(opts.gps);
   const verified = homes.some((home) => home.verified);
 
@@ -159,6 +163,7 @@ async function loadViewer(user, opts = {}) {
     blockedUserIds: filters.blockedUserIds || new Set(),
     mutedUserIds: filters.mutedUserIds || new Set(),
     hiddenPostIds: filters.hiddenPostIds || new Set(),
+    planInvites: new Set((invites.data || []).map((row) => String(row.post_id))),
   };
 }
 

@@ -154,18 +154,23 @@ async function repliesFor(context, after) {
 async function addCreatedReplyFields(comment, post, viewerId) {
   if (!post.distribution_targets?.includes('place') || ['home', 'persona'].includes(post.identity_context_type)) return comment;
   const context = await contextFor(post.id, viewerId);
-  const reply = (await repliesFor(context)).find(row => row.id === comment.id);
+  const bridge = require('./planBridge');
+  const [replies, plan] = await Promise.all([repliesFor(context), bridge.forConversation(post.id, viewerId)]);
+  const reply = bridge.decorateReplies(replies, plan).find(row => row.id === comment.id);
   if (!reply) throw unavailable();
   return { ...comment, ...reply, author: { ...comment.author, ...reply.author } };
 }
 
 async function read(postId, viewerId, { repliesOnly = false, after } = {}) {
   const context = await contextFor(postId, viewerId);
-  const replies = await repliesFor(context, after);
+  // The plan suggested from this conversation, as its reader may see it (contract §2.18).
+  const bridge = require('./planBridge');
+  const [rows, plan] = await Promise.all([repliesFor(context, after), bridge.forConversation(context.post.id, viewerId)]);
+  const replies = bridge.decorateReplies(rows, plan);
   if (repliesOnly) return { replies };
   const [post] = await postCards([context.post], { viewerId, homes: context.homes,
     areas: context.area ? [context.area] : [], fallbackArea: context.area, blockedIds: context.blocked });
-  return { post, replies, plan: null };
+  return { post, replies, plan: plan.plan };
 }
 
 module.exports = { contextFor, repliesFor, read, addCreatedReplyFields, authorProjector, unavailable };

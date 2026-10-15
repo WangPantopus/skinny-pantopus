@@ -18,7 +18,7 @@ const logger = require('../../utils/logger');
 const { verifiedUserIds } = require('./planViewer');
 const { localDisplayNames } = require('../../utils/identityProfiles');
 const rules = require('./planRules');
-const { canReadPostModeration, postScopeAccess } = require('../pulse/readAccess');
+const { canReadPostModeration, postScopeAccess, readablePosts, POST_READ_SELECT } = require('../pulse/readAccess');
 
 const POST_COLUMNS = 'id, user_id, title, content, event_date, event_end_date, latitude, longitude, location_precision, archived_at, archive_reason, moderation_state, created_at, read_scope, area_id, pulse_post_town_id, allow_external_share';
 const PLAN_COLUMNS = [
@@ -26,6 +26,7 @@ const PLAN_COLUMNS = [
   'area_label', 'city', 'details', 'guest_note', 'place_name', 'place_address', 'place_latitude',
   'place_longitude', 'place_home_id', 'timezone', 'status', 'cancel_note', 'chat_room_id',
   'chat_closed_at', 'host_summary_sent_at', 'created_at', 'updated_at', 'cancelled_at', 'ended_at',
+  'source_post_id',
 ].join(', ');
 const PLAN_SELECT = `${PLAN_COLUMNS}, post:Post!inner(${POST_COLUMNS})`;
 const REQUEST_COLUMNS = [
@@ -116,6 +117,8 @@ function isVisibleTo(plan, viewer) {
   if (!reviewingHeld && plan.post.read_scope != null && !viewer.scopeAccess?.allows(plan.post)) return false;
   const hostId = String(plan.host_user_id);
   if (hostId === viewer.id) return true;
+  // An invited plan exists only for its host and the people invited to it (contract §2.18).
+  if (plan.join_requirement === 'invited' && !viewer.planInvites?.has(String(plan.post_id))) return false;
   if (plan.kind === 'playdate' && !viewer.seesPlaydates) return false;
   if (viewer.blockedUserIds.has(hostId)) return false;
   if (viewer.mutedUserIds.has(hostId)) return false;
@@ -159,8 +162,16 @@ async function loadCardContext(plans, viewer, { withPeople = false } = {}) {
     answerMinutesByHost: new Map(),
     peopleStats: new Map(),
     viewerOpenRequestCount: 0,
+    // The Pulse conversations these plans came from that the viewer can read (S14).
+    readableSources: new Set(),
   };
   if (planIds.length === 0) return ctx;
+  const sourceIds = [...new Set(plans.map((p) => p.source_post_id).filter(Boolean))];
+  if (sourceIds.length) {
+    const { data: sources, error: sourceError } = await supabaseAdmin.from('Post').select(POST_READ_SELECT).in('id', sourceIds);
+    if (sourceError) throw new Error(`Failed to load plan details: ${sourceError.message}`);
+    for (const post of await readablePosts(sources || [], viewer.id)) ctx.readableSources.add(post.id);
+  }
 
   const [activeRequests, myRequests, openCount, hostedRows, myHistory] = await Promise.all([
     supabaseAdmin.from('PlanRequest').select(REQUEST_COLUMNS).in('post_id', planIds).in('status', ACTIVE_REQUEST_STATUSES),
@@ -387,6 +398,8 @@ function askEligibility(plan, viewer, ctx, { myRequest, spotsLeft, state }) {
   if (viewer.blockedUserIds.has(String(plan.host_user_id))) return no('blocked');
   if (myRequest && myRequest.ask_count >= rules.LIMITS.asksPerPlan) return no('too_many_requests');
   if (ctx.viewerOpenRequestCount >= rules.LIMITS.openRequestsPerPerson) return no('too_many_requests');
+  // The host already chose the invited people: no address or distance rules apply.
+  if (plan.join_requirement === 'invited') return spotsLeft > 0 ? { can_ask: true, cannot_ask_reason: null } : no('full_use_waitlist');
   const needsVerified = plan.kind === 'playdate' || plan.join_requirement === 'verified';
   if (needsVerified && !viewer.verified) return no('needs_verified_address');
   if (viewer.locations.length === 0) return no('needs_location');
@@ -496,6 +509,8 @@ function buildCard(plan, viewer, ctx) {
     details: publicDetails(plan),
     how_people_get_in: autoRule ? 'automatic' : 'host_approves',
     join_requirement: plan.join_requirement,
+    // The conversation it was suggested from, when the viewer can read it (contract §2.18).
+    source_post_id: plan.source_post_id && ctx.readableSources.has(plan.source_post_id) ? plan.source_post_id : null,
     state,
     asking_closes_at: hideTime ? null : rules.askingClosesAt(plan.kind, startsAt(plan), endsAt(plan)).toISOString(),
     viewer: {
@@ -750,7 +765,7 @@ async function listMine(viewer) {
     supabaseAdmin.from('PlanRequest')
       .select('post_id, status')
       .eq('user_id', viewer.id)
-      .in('status', ACTIVE_REQUEST_STATUSES)
+      .in('status', [...ACTIVE_REQUEST_STATUSES, 'invited'])
       .limit(200),
   ]);
   if (hosting.error) throw new Error(`Failed to load your plans: ${hosting.error.message}`);
@@ -763,7 +778,8 @@ async function listMine(viewer) {
   const ctx = await loadCardContext(visible, viewer);
 
   const out = {
-    hosting: [], going: [], asked: [], waitlisted: [], recent: [],
+    // `invited`: plans someone invited this person to (S14), until they say Going.
+    hosting: [], going: [], asked: [], waitlisted: [], invited: [], recent: [],
     // The viewer's own standing, so the apps can lead people without a verified address to "Verify your
     // address" instead of a playdate they can't ask to join or host.
     viewer: { verified_address: Boolean(viewer.verified), sees_playdates: Boolean(viewer.seesPlaydates) },
@@ -784,6 +800,7 @@ async function listMine(viewer) {
     else if (status === 'accepted') out.going.push(card);
     else if (status === 'pending') out.asked.push(card);
     else if (status === 'waitlisted') out.waitlisted.push(card);
+    else if (status === 'invited') out.invited.push(card);
   }
   return out;
 }

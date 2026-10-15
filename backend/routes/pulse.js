@@ -17,6 +17,7 @@ const known = require('../services/pulse/known');
 const pulseSearch = require('../services/pulse/search');
 const { upcoming } = require('../services/pulse/upcoming');
 const rightNow = require('../services/pulse/rightNow');
+const planBridge = require('../services/pulse/planBridge');
 const { isPulseTopic } = require('../services/pulse/topics');
 const {
   DAY_MS, askIdsWithReplies, windowDays, endsAt,
@@ -125,6 +126,19 @@ router.get('/posts/:postId/claims', verifyToken, async (req, res) => {
 router.post('/posts/:postId/claims/:claimId/choose', verifyToken, async (req, res) => {
   try { res.json(await claims.choose(req.params.postId, req.params.claimId, req.user.id)); }
   catch (error) { feedError(res, error); }
+});
+
+// "Suggest a plan" from a conversation (contract §2.18), through the existing Plans services.
+router.post('/posts/:postId/plan', verifyToken, async (req, res) => {
+  try {
+    res.status(201).json(await planBridge.suggest(req.user, req.params.postId, req.body || {}));
+  } catch (error) {
+    const { PlanError } = require('../services/plans/planActions');
+    if (error instanceof PlanError) {
+      return res.status(error.status).json({ error: error.message, code: error.code, ...(error.extra || {}) });
+    }
+    feedError(res, error);
+  }
 });
 
 router.put('/posts/:postId/read-scope', verifyToken, async (req, res) => {

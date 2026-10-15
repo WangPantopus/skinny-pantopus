@@ -167,6 +167,26 @@ router.patch('/:id', async (req, res) => {
   }
 });
 
+// "People I invite" (Pulse S14, contract §2.18): the host adds or removes invited people.
+router.post('/:id/invitees', async (req, res) => {
+  try {
+    return res.json(await require('../services/pulse/planBridge').invite(req.user, req.params.id, body(req)));
+  } catch (err) {
+    if (err?.status && err?.code && !(err instanceof planActions.PlanError)) return fail(res, err.status, err.code, err.message);
+    return serverError(res, err, 'invite', req);
+  }
+});
+
+router.delete('/:id/invitees/:userId', async (req, res) => {
+  try {
+    return res.json(await require('../services/pulse/planBridge').uninvite(req.user, req.params.id, req.params.userId,
+      { io: req.app.get('io') }));
+  } catch (err) {
+    if (err?.status && err?.code && !(err instanceof planActions.PlanError)) return fail(res, err.status, err.code, err.message);
+    return serverError(res, err, 'uninvite', req);
+  }
+});
+
 // POST /api/plans/:id/cancel { note }
 router.post('/:id/cancel', async (req, res) => {
   try {
