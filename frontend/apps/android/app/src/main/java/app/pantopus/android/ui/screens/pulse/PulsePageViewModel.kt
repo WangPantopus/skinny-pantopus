@@ -409,6 +409,30 @@ class PulsePageViewModel
             _menu.value = _menu.value?.copy(action = action)
         }
 
+        private val sharing = mutableSetOf<String>()
+
+        /**
+         * "Share…": the server records and allows the share before any link reaches another app, so a page saved before
+         * the post narrowed its audience never hands out the link ([onReady] gets it only when allowed).
+         */
+        fun shareExternally(
+            card: PulseCardUi,
+            onReady: (String) -> Unit,
+        ) {
+            dismissMenu()
+            if (!card.canShare || !sharing.add(card.id)) return
+            viewModelScope.launch {
+                try {
+                    when (val result = posts.share(card.id, shareType = "external")) {
+                        is NetworkResult.Success -> onReady("https://www.pantopus.com/posts/${card.id}")
+                        is NetworkResult.Failure -> _toast.value = result.error.displayMessage("Couldn't share this post. Try again.")
+                    }
+                } finally {
+                    sharing.remove(card.id)
+                }
+            }
+        }
+
         fun toggleSave(card: PulseCardUi) {
             val desired = !(savedPosts[card.id] ?: card.actions.isSaved)
             perform(card, "Saved.", { posts.toggleSave(card.id, desired) }) { result ->
