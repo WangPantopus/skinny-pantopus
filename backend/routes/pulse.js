@@ -14,6 +14,8 @@ const follows = require('../services/pulse/follows');
 const claims = require('../services/pulse/claims');
 const readScope = require('../services/pulse/readScope');
 const known = require('../services/pulse/known');
+const pulseSearch = require('../services/pulse/search');
+const { upcoming } = require('../services/pulse/upcoming');
 const { isPulseTopic } = require('../services/pulse/topics');
 const {
   DAY_MS, askIdsWithReplies, windowDays, endsAt,
@@ -184,6 +186,32 @@ for (const kind of ['confirm', 'correct', 'outdated']) {
     catch (error) { feedError(res, error); }
   });
 }
+
+function areaQuery(query) {
+  if (query.area_id != null && (typeof query.area_id !== 'string' || !feedCursor.UUID.test(query.area_id))) {
+    throw Object.assign(new Error('That area could not be found.'), { status: 400 });
+  }
+  return query.area_id;
+}
+
+// Search (contract §2.17): conversations (resolved ones too), Known and places in the area.
+router.get('/search', verifyToken, async (req, res) => {
+  try {
+    res.set('Cache-Control', 'private, no-store');
+    res.json(await pulseSearch.search(req.user.id, { q: req.query.q, areaId: areaQuery(req.query), cursor: req.query.cursor }));
+  } catch (error) { feedError(res, error); }
+});
+
+// Upcoming (contract §2.15): events and plans open to the area, soonest first.
+router.get('/upcoming', verifyToken, async (req, res) => {
+  try {
+    if (req.query.limit != null && (typeof req.query.limit !== 'string' || !/^\d+$/.test(req.query.limit) || Number(req.query.limit) < 1)) {
+      return res.status(400).json({ error: 'Choose a positive number of items.' });
+    }
+    res.set('Cache-Control', 'private, no-store');
+    res.json(await upcoming(req.user, { areaId: areaQuery(req.query), limit: Math.min(Number(req.query.limit) || 20, 50) }));
+  } catch (error) { feedError(res, error); }
+});
 
 router.get('/areas/mine', verifyToken, async (req, res) => {
   try {
