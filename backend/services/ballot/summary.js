@@ -232,7 +232,7 @@ function composeSummary({ stateValue, countyGeoid = null, governmentsResult = nu
       governments: null,
       ballot_week: { show: false },
       mover_prompt: null,
-      source_line: own ? `${defaults.source_line} · Links: ${state.election_office}` : defaults.source_line,
+      source_line: own ? `${linksOnlyDateLine(election, defaults)} · Links: ${state.election_office}` : linksOnlyDateLine(election, defaults),
       checked_at: own ? state.checked.at : null,
     };
   }
@@ -385,14 +385,14 @@ async function teaserForPoint({ lat, lng, state }, { now = new Date(), timeoutMs
       coverage: 'links_only',
       state: current.state.code,
       election: { id: current.election.id, name: current.election.name, date: current.election.date, days_until: Math.max(0, current.daysUntil) },
-      headline: `The general election is ${longMonthDay(current.election.date)}.`,
+      headline: electionHeadline(current.election),
       note: defaults.note,
       next_deadline: null,
       governments: null,
       primary_action: link ? { kind: 'link', label: checksRegistration ? 'Check your registration' : link.label, url: link.url } : null,
       source_line: own
-        ? `${defaults.source_line} · Links: ${current.state.election_office}`
-        : `${defaults.source_line} · Registration and deadlines: Vote.gov`,
+        ? `${linksOnlyDateLine(current.election, defaults)} · Links: ${current.state.election_office}`
+        : `${linksOnlyDateLine(current.election, defaults)} · Registration and deadlines: Vote.gov`,
     };
   }
 
@@ -414,7 +414,7 @@ async function teaserForPoint({ lat, lng, state }, { now = new Date(), timeoutMs
     election: { id: summary.election_id, name: summary.name, date: summary.date, days_until: summary.days_until },
     headline: summary.governments
       ? countLine(summary.governments, 'Your address')
-      : `The general election is ${longMonthDay(summary.date)}.`,
+      : electionHeadline({ name: summary.name, date: summary.date }),
     note: null,
     next_deadline: next ? { key: next.key, lead: next.teaser_lead, days_left: next.days_until, detail: next.teaser_detail } : null,
     governments: summary.governments
@@ -438,6 +438,22 @@ const LONG_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'Ju
 function longMonthDay(iso) {
   const [, m, d] = String(iso).split('-').map(Number);
   return `${LONG_MONTHS[m - 1]} ${d}`;
+}
+
+// "The general election is November 3." / "The spring election is April 6."
+// The record's name without its date ("April 6 spring election"), so a
+// state's own election is never called the general election.
+function electionHeadline(election) {
+  const when = longMonthDay(election.date);
+  const name = String(election.name || '');
+  const what = name.startsWith(`${when} `) ? name.slice(when.length + 1) : `${election.kind || 'general'} election`;
+  return `The ${what} is ${when}.`;
+}
+
+// A links-only card's date authority: federal law for the federal election,
+// else the record's own source (a state's statute or published calendar).
+function linksOnlyDateLine(election, defaults) {
+  return election.applies_to === 'all_states' ? defaults.source_line : `Election date: ${election.source}`;
 }
 
 /**
