@@ -16,10 +16,6 @@ import Foundation
 public enum PostsMapLayer: String, Sendable, CaseIterable {
     /// Neighborhood posts — `backend/routes/posts.js:1677`.
     case posts
-    /// Open / assigned / in-progress gigs — `backend/routes/posts.js:1715`.
-    case tasks
-    /// `gig_type = offer` rows — `backend/routes/posts.js:1749`.
-    case offers
     /// Published business profiles — `backend/routes/posts.js:1783`.
     case businesses
     /// Homes with a resolvable point — `backend/routes/posts.js:1810`.

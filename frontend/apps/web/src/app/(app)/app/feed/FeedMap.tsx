@@ -12,7 +12,7 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import { getPostTypeConfig, POST_TYPE_ICONS_LUCIDE, type PostTypeConfig } from '@pantopus/ui-utils';
 import type { FeedSurface, MapMarker, PostType } from '@pantopus/api';
-import { BaseMap, useCluster, useAnimatedPins, pinAnimClass, clusterAnimClass, ZoomGateOverlay, NearestActivityPrompt } from '@/components/map';
+import { BaseMap, useCluster, useAnimatedPins, pinAnimClass, clusterAnimClass, ZoomGateOverlay, NearestActivityPrompt, boundsChangedSignificantly } from '@/components/map';
 import type { Bounds } from '@/components/map';
 import type { ClusterPoint } from '@/components/map/useCluster';
 import type { NearestActivityCenter } from '@/components/map';
@@ -205,13 +205,16 @@ export default function FeedMap({
   const [error, setError] = useState(false);
   const [selectedPin, setSelectedPin] = useState<MapMarker | null>(null);
   const [clusterPosts, setClusterPosts] = useState<MapMarker[]>([]);
-  const [mapDirty, setMapDirty] = useState(false);
   const [bounds, setBounds] = useState<Bounds | null>(null);
+  // The view the pins were read for (none before the first read or below the zoom gate).
+  const [searchedBounds, setSearchedBounds] = useState<Bounds | null>(null);
   const [zoom, setZoom] = useState(13);
   const [nearestActivity, setNearestActivity] = useState<NearestActivityCenter | null>(null);
 
   // Derive map filter directly from the shared postTypeFilter prop — single source of truth
   const mapFilter = isPlaceSurface ? postTypeFilter : 'all';
+  // The surface and filter the pins were read with.
+  const [readWith, setReadWith] = useState(`${surface}:${mapFilter}`);
 
   const mapRef = useRef<L.Map | null>(null);
   const requestGeneration = useRef(0);
@@ -220,11 +223,6 @@ export default function FeedMap({
     () => [userLat ?? 40.7128, userLng ?? -74.006],
     [userLat, userLng]
   );
-
-  useEffect(() => {
-    if (!mapRef.current || userLat == null || userLng == null) return;
-    mapRef.current.flyTo([userLat, userLng], 13, { duration: 0.8 });
-  }, [userLat, userLng]);
 
   // ─── Fetch pins ──────────────────────────────────────────
   const ZOOM_GATE = 8;
@@ -258,12 +256,33 @@ export default function FeedMap({
     }
   }, [isPlaceSurface, mapFilter, surface]);
 
-  // Fetch on filter change
+  // Read the searched view, and read it again when the filter or surface changes
   useEffect(() => {
-    if (bounds) fetchPins(bounds);
+    if (searchedBounds) fetchPins(searchedBounds);
     const requests = requestGeneration;
     return () => { requests.current++; };
-  }, [bounds, fetchPins]);
+  }, [searchedBounds, fetchPins]);
+
+  // The map's own moves (to the viewing area, My location or the nearest activity) read the posts
+  // where they land, so they never show "Search this area".
+  const flyToAndSearch = useCallback((target: [number, number], targetZoom: number, duration: number) => {
+    const map = mapRef.current;
+    if (!map) return;
+    map.flyTo(target, targetZoom, { duration });
+    // Listen after flyTo: stopping a pan still in progress fires moveend at once.
+    map.once('moveend', () => {
+      const b = map.getBounds();
+      const view = { south: b.getSouth(), west: b.getWest(), north: b.getNorth(), east: b.getEast() };
+      setBounds(view);
+      setZoom(map.getZoom());
+      if (map.getZoom() >= ZOOM_GATE) setSearchedBounds(view);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (userLat == null || userLng == null) return;
+    flyToAndSearch([userLat, userLng], 13, 0.8);
+  }, [userLat, userLng, flyToAndSearch]);
 
   // ─── Clustered pins (Supercluster) ─────────────────────
   const clusteredPins = useCluster(pins, zoom, bounds);
@@ -272,19 +291,42 @@ export default function FeedMap({
   const animatedPins = useAnimatedPins(clusteredPins);
 
   // ─── Map events ──────────────────────────────────────────
+  // As in the iOS and Android apps, moving the map doesn't read its posts: a move off the
+  // searched view shows "Search this area" instead.
   const handleBoundsChange = useCallback((b: Bounds, z: number) => {
     setBounds(b);
     setZoom(z);
-    setMapDirty(true);
     if (z < ZOOM_GATE) {
+      // Too far out for posts: drop the read, so zooming back in reads the view again.
+      requestGeneration.current++;
+      setSearchedBounds(null);
       setPins([]);
       setNearestActivity(null);
+      setError(false);
+      setLoading(false);
+      return;
     }
+    // The first view (and the first one back past the zoom gate) reads its posts.
+    setSearchedBounds((searched) => searched ?? b);
   }, []);
 
+  const belowZoomGate = zoom < ZOOM_GATE;
+  const mapDirty = !!bounds && !!searchedBounds && boundsChangedSignificantly(searchedBounds, bounds);
+
+  // A new surface or filter reads the view on screen, as in the apps. Adjusted while rendering,
+  // so the read above runs once, with the new filter and the new view together.
+  if (readWith !== `${surface}:${mapFilter}`) {
+    setReadWith(`${surface}:${mapFilter}`);
+    if (mapDirty) setSearchedBounds(bounds);
+  }
+
+  // Reads the posts for the view on screen (a new object, so the same view reads again).
+  const searchView = () => {
+    if (bounds && !belowZoomGate) setSearchedBounds({ ...bounds });
+  };
+
   const handleSearchArea = () => {
-    fetchPins(bounds);
-    setMapDirty(false);
+    searchView();
     setSelectedPin(null);
     setClusterPosts([]);
   };
@@ -295,7 +337,7 @@ export default function FeedMap({
       (pos) => {
         const latitude = pos.coords.latitude;
         const longitude = pos.coords.longitude;
-        mapRef.current?.flyTo([latitude, longitude], 14, { duration: 1 });
+        flyToAndSearch([latitude, longitude], 14, 1);
         onUseCurrentLocation?.({ latitude, longitude });
       },
       () => {},
@@ -329,18 +371,21 @@ export default function FeedMap({
   }, []);
 
   // ─── Derived ─────────────────────────────────────────────
-  const postCount = pins.length;
+  // The pins stay where they were read, so a move can leave some of them out of view.
+  const postCount = bounds
+    ? pins.filter((p) => p.latitude >= bounds.south && p.latitude <= bounds.north
+      && p.longitude >= bounds.west && p.longitude <= bounds.east).length
+    : pins.length;
   const authorName = (p: MapMarker) => p.creator?.name || chosenUsername(p.creator?.username) || 'Neighbor';
   const postType = (p: MapMarker) => p.post_type || 'general';
 
-  const belowZoomGate = zoom < ZOOM_GATE;
   const viewCenter = bounds
     ? { latitude: (bounds.south + bounds.north) / 2, longitude: (bounds.west + bounds.east) / 2 }
     : { latitude: center[0], longitude: center[1] };
 
   const handleFlyToNearest = useCallback((target: NearestActivityCenter) => {
-    mapRef.current?.flyTo([target.latitude, target.longitude], 12, { duration: 1.2 });
-  }, []);
+    flyToAndSearch([target.latitude, target.longitude], 12, 1.2);
+  }, [flyToAndSearch]);
 
   return (
     <div className="relative w-full h-full">
@@ -393,7 +438,7 @@ export default function FeedMap({
           {MAP_FILTERS.map((f) => (
             <button
               key={f.key}
-              onClick={() => { onFilterChange?.(f.key); setMapDirty(false); }}
+              onClick={() => onFilterChange?.(f.key)}
               className={`flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[11px] font-semibold whitespace-nowrap shadow-md transition ${
                 mapFilter === f.key
                   ? 'bg-primary-600 text-white'
@@ -434,7 +479,7 @@ export default function FeedMap({
         <div role="alert" className="absolute top-14 left-1/2 -translate-x-1/2 z-[500] bg-app-surface/95 backdrop-blur-sm border border-app text-app-muted text-xs font-medium px-4 py-2 rounded-full shadow-md flex items-center gap-2">
           <span>Couldn&apos;t load posts.</span>
           <button
-            onClick={() => fetchPins(bounds)}
+            onClick={searchView}
             className="font-bold text-primary-600 dark:text-primary-300"
           >
             Try again
