@@ -138,6 +138,17 @@ Query: `view` = `nearby` (default) | `following`; `topic` (enum, optional); `are
 
 The response is the created post as today's endpoint returns it plus `pulse: PulsePost`.
 
+#### S8 details (frozen before the implementation PR)
+
+- **Where it is.** `areaId` is an open town, street or neighborhood; it defaults to the town of the author's primary home, and a person with no home must send it (`400 AREA_REQUIRED`). A town takes `readScope` `public` or `verified_town`; a street or neighborhood takes only `verified_area` and needs the author's primary home verified inside it (`403 NEEDS_VERIFIED_ADDRESS`). Any other pairing, or a `place` area before R4, is `403 AUDIENCE_NOT_ALLOWED`.
+- **No device location.** Pulse mode ignores `latitude`, `longitude`, the `gps*` fields, `homeId`, `audience`, `visibility`, `radiusMiles` and `distributionTargets`. The server places the post at the author's primary home with `location_precision: approx_area` (the same snapping as every place post); without a home it stores the area's center with precision `none`, so the post shows no distance. It always distributes to `place` only.
+- **Who may start what** (the label in that area, section 5): a Visitor starts Asks only (`403 VISITOR_ASK_ONLY`), one in 24 hours; New here, two posts in 24 hours; both answer `429 DAILY_LIMIT_REACHED { limit, resets_at, scope }` with `scope` `visitor_ask` or `new_here`. Anyone: two Share posts in a rolling 7 days (`429 SHARE_WEEKLY_CAP { limit, resets_at }`). `resets_at` is when the oldest counted post leaves the window. A retry with the same `clientRequestId` returns the first post even after a limit is reached.
+- **Per type.** `postType` is one of the six. A Share needs a place: `locationName` (up to 255 characters) or a street or neighborhood `areaId` (`400 SHARE_NEEDS_PLACE`). An Offer takes `claimMode` `choose` (default) or `first`. A Heads-up takes `expiresAt`, after now and at most 14 days ahead (`400 INVALID_EXPIRES_AT`), 48 hours when absent, and the resident kinds of section 1. `expires_at` is set at creation: Ask 7 days, Share 3, Offer 7, Lost and found 14 (the `PostCategoryTTL` rows), an Event 24 hours after its end (or its start), and an Event without a date its type's window. At most 9 photos (`400 TOO_MANY_PHOTOS`).
+- **Composer checks.** The create path calls PS's `evaluateComposerChecks(text, media, context)` from `backend/services/pulse/safety/composerChecks.js`, with `context` `{ userId, postType, topic, areaId, readScope, mode: "create" | "edit" }`. Besides the section 2.6 fields it returns `holds: [{ rule }]` for the server path only (a sale, PS's other hold rules). A block returns `422 COMPOSER_BLOCKED { blocks }` and creates nothing; a hold creates the post with `moderation_state: held` and that `moderation_rule`. While the module is absent, or when it fails, nothing blocks or holds (fail open, logged).
+- **About.** A Pulse post's `about.label` (2.1) is the `locationName` its author gave, otherwise its area's name; an older row's `location_name` is never shown there. `postMetadata.pulse_about` from a client is dropped.
+- **Held posts** reach only their author (section 5) and send no notifications; the response's `pulse.moderation.state` is `held`.
+- **Edits** (`PATCH /api/posts/:id`) of a post with a `read_scope` never change its type, point, precision, audience or window: a changed `postType`, `latitude`, `longitude`, `locationPrecision`, `visibility`, `visibilityScope` or `radiusMiles` answers `400 PULSE_FIELD_LOCKED`, and the same value sent back is ignored. Narrowing goes through section 2.13. A content edit runs the composer checks with `mode: "edit"`: a block answers `422 COMPOSER_BLOCKED` and keeps the old text. At most 9 photos.
+
 ### 2.6 Composer check (PS)
 
 `POST /api/pulse/composer/check` → fail-open; never blocks by itself.
@@ -331,7 +342,7 @@ Labels use the author's **primary** home, as posting and limits do. A second ver
 
 **Distance text:** from the reader's verified home to the author's displayed (grid-snapped) point, using the helpers in `backend/utils/locationPrivacy.js` (PRs 2199, 2201, 2203 and 2204 are changing them; build on `master`, not on the old behavior). Round to 0.1 mi under 1 mi, 0.5 mi under 10 mi, whole miles beyond; `"nearby"` when closer than the grid or when fewer than five verified homes fall in the band; `null` for readers without a verified home and on every public or signed-out response.
 
-**Limits** (constants in one file): Visitor: Asks only, 1 a day · New here: 2 town posts a day · Share: 2 per person per rolling 7 days · offer requests: 5 per offer · replies: 5 a minute per post (today's) · heated pair: 1 reply an hour to each other in that conversation (PS) · business replies: weekly cap (R4).
+**Limits** (constants in one file, `backend/services/pulse/limits.js`; the windows are rolling 24 hours and 7 days, details in 2.5): Visitor: Asks only, 1 a day · New here: 2 town posts a day · Share: 2 per person per rolling 7 days · offer requests: 5 per offer · replies: 5 a minute per post (today's) · heated pair: 1 reply an hour to each other in that conversation (PS) · business replies: weekly cap (R4).
 
 **Blocks** (`blockService`) hide two people from each other in both directions: neither reads the other's posts (`canReadPost`), comments or likes; neither can reply to the other's comment (`403`, "You can't reply to this comment."); and the notification list and every unread count (`GET /api/notifications`, `GET /api/notifications/unread-count`, the live badge) leave out notices whose actor (`metadata.user_id`) is across a block, including ones from before it. Unblocking brings those notices back.
 
@@ -378,6 +389,12 @@ Labels use the author's **primary** home, as posting and limits do. A second ver
 | 400 | `NOT_AN_OFFER` | A claim or choice on a post that isn't an Offer (2.8) |
 | 400 | `OWN_OFFER` | The giver asking for their own offer (2.8) |
 | 404 | `CLAIM_NOT_FOUND` | Choosing a request that isn't on the offer, or one across a block (2.8) |
+| 400 | `AREA_REQUIRED` | A Pulse post from someone with no home and no `areaId` (2.5) |
+| 403 | `VISITOR_ASK_ONLY` | A Visitor starting anything but an Ask (2.5) |
+| 400 | `SHARE_NEEDS_PLACE` | A Share with no place attached (2.5) |
+| 400 | `INVALID_EXPIRES_AT` | A Heads-up end in the past or more than 14 days ahead (2.5) |
+| 400 | `TOO_MANY_PHOTOS` | More than 9 photos on a Pulse post (2.5) |
+| 400 | `PULSE_FIELD_LOCKED` | An edit that would change a Pulse post's type, point or audience (2.5) |
 | 404 | `REPLY_NOT_FOUND` | A reply action (Helpful, Thanks, report) on a reply the person can't read (2.7) |
 | 400 | `OWN_REPLY` | Thanking or reporting your own reply (2.7) |
 
