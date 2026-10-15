@@ -60,6 +60,7 @@ data class PulsePostActions(
     val isSaved: Boolean = false,
     val isReposted: Boolean = false,
     val shareCount: Int = 0,
+    val canShareExternally: Boolean = false,
     /** `state == "solved"`: no "Mark solved" (the status pill says "Answered"). */
     val isSolved: Boolean = false,
     /** Viewer authored this post. */

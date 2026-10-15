@@ -616,9 +616,6 @@ class PulseFeedViewModel
             _showsPreferences.value = false
         }
 
-        /** Public web URL handed to the Android share chooser. */
-        fun shareUrl(postId: String): String = "https://www.pantopus.com/posts/$postId"
-
         /**
          * Keyset pagination — fires when the last loaded row appears.
          * No-ops while a fetch is in flight or when the feed is exhausted.
@@ -736,12 +733,30 @@ class PulseFeedViewModel
             }
         }
 
-        /**
-         * Records the external share once the chooser was used — count bump
-         * only, never surfaced (RN `useFeedData.ts:173`).
-         */
-        fun recordShare(postId: String) {
-            viewModelScope.launch { repo.share(postId, shareType = "external") }
+        private val sharingPosts = mutableSetOf<String>()
+
+        /** Authorize on the server before handing a link to another app, including from an older saved feed. */
+        fun shareExternally(
+            postId: String,
+            onReady: (String) -> Unit,
+        ) {
+            val actor = viewerId ?: return
+            if (loadedPosts.firstOrNull { it.id == postId }?.canShareExternally != true || !sharingPosts.add(postId)) return
+            viewModelScope.launch {
+                try {
+                    when (val result = repo.share(postId, shareType = "external")) {
+                        is NetworkResult.Success -> {
+                            if (viewerId == actor && loadedPosts.firstOrNull { it.id == postId }?.canShareExternally == true) {
+                                onReady("https://www.pantopus.com/posts/$postId")
+                            }
+                        }
+                        is NetworkResult.Failure ->
+                            _toastMessage.value = result.error.displayMessage("Couldn't share this post. Try again.")
+                    }
+                } finally {
+                    sharingPosts.remove(postId)
+                }
+            }
         }
 
         /**
@@ -1383,6 +1398,7 @@ class PulseFeedViewModel
                         isSaved = effectiveIsSaved(post),
                         isReposted = effectiveIsReposted(post),
                         shareCount = effectiveShareCount(post),
+                        canShareExternally = post.canShareExternally,
                         isSolved = isSolved,
                         isOwner = isOwner,
                         canMarkSolved = isOwner && post.postType == "ask_local" && !isSolved,

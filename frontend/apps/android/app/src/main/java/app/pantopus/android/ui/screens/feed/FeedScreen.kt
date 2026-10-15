@@ -222,13 +222,15 @@ fun FeedScreen(
     }
 
     fun launchShareSheet(postId: String) {
-        val send =
-            Intent(Intent.ACTION_SEND).apply {
-                type = "text/plain"
-                putExtra(Intent.EXTRA_TEXT, viewModel.shareUrl(postId))
-            }
-        context.startActivity(Intent.createChooser(send, "Share post"))
-        viewModel.recordShare(postId)
+        viewModel.shareExternally(postId) { url ->
+            if (!lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return@shareExternally
+            val send =
+                Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, url)
+                }
+            context.startActivity(Intent.createChooser(send, "Share post"))
+        }
     }
 
     Box(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg).testTag("pulseFeed")) {
@@ -500,10 +502,15 @@ fun FeedScreen(
                     viewModel.dismissOverflow()
                     viewModel.toggleRepost(row.id)
                 },
-                onShare = {
-                    viewModel.dismissOverflow()
-                    launchShareSheet(row.id)
-                },
+                onShare =
+                    if (row.actions.canShareExternally) {
+                        {
+                            viewModel.dismissOverflow()
+                            launchShareSheet(row.id)
+                        }
+                    } else {
+                        null
+                    },
                 onHide = {
                     viewModel.dismissOverflow()
                     viewModel.hidePost(row.id)
@@ -774,6 +781,7 @@ internal fun PostOverflowSheet(
                     onClick = repost,
                 )
             }
+            // A caller passes Share only for a post that may leave Pantopus; the server still decides before the chooser.
             onShare?.let { share ->
                 OverflowAction(label = "Share…", testTag = "pulseFeedOverflowShare", onClick = share)
             }
