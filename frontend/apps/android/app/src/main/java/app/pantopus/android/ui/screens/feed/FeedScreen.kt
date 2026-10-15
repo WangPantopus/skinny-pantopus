@@ -220,13 +220,15 @@ fun FeedScreen(
     }
 
     fun launchShareSheet(postId: String) {
-        val send =
-            Intent(Intent.ACTION_SEND).apply {
-                type = "text/plain"
-                putExtra(Intent.EXTRA_TEXT, viewModel.shareUrl(postId))
-            }
-        context.startActivity(Intent.createChooser(send, "Share post"))
-        viewModel.recordShare(postId)
+        viewModel.shareExternally(postId) { url ->
+            if (!lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return@shareExternally
+            val send =
+                Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, url)
+                }
+            context.startActivity(Intent.createChooser(send, "Share post"))
+        }
     }
 
     Box(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg).testTag("pulseFeed")) {
@@ -770,7 +772,9 @@ private fun PostOverflowSheet(
                 testTag = "pulseFeedOverflowRepost",
                 onClick = onToggleRepost,
             )
-            OverflowAction(label = "Share…", testTag = "pulseFeedOverflowShare", onClick = onShare)
+            if (actions.canShareExternally) {
+                OverflowAction(label = "Share…", testTag = "pulseFeedOverflowShare", onClick = onShare)
+            }
             OverflowAction(label = "Hide this post", testTag = "pulseFeedOverflowHide", onClick = onHide)
             if (actions.canFlagNotHelpful) {
                 OverflowAction(
