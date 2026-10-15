@@ -2,6 +2,18 @@
 
 Owner: the PB session. Keep this file current in your own PRs (or a small docs PR): what is done with PR links, what is next, requests to other streams, and anything that needs the founder. Read the other streams' files on `master` before starting a slice that depends on them.
 
+## October 15, 2026 — native acceptance of the open chain
+
+- **Worktree:** this session works in `.claude/worktrees/pulse-pb-backend-continue-0c75f4` (a hook keeps edits in the session's own worktree), on branch `claude/pulse-pb-s10-follows`. PB's backend and web now run from it; the runtime's `supabase/migrations` link points at it.
+- **Master merged into the top of the chain** (2322) with no conflicts (master's legacy-area, location-cell and Plans changes). Master gained `20261015002143_plan_request_reconfirm_reason.sql`, which sorts after the chain's seven unmerged migrations, so CI's history check would refuse them. They keep their contents and order under new versions: `20261015043400_pulse_distance_bands` … `20261015044000_pulse_follows` (the handoff lists the old names). PB's local ledger was renumbered to match and the Plans migration applied; nothing hosted has any of them.
+- **Native acceptance, two accounts per device, against the merged backend:** rebuilt PB's private copies from PI's top draft (2325 `1ac2b709a`, which contains 2308, 2314, 2323 and 2324) and PA 2303 (`a0d1fc8cd`).
+  - iOS (Alice, then Carol, then Alice again after sign-out): replies, the anonymous "Reply removed" and "Replying to a neighbor", reader distance (the same posts read 1.5 mi to Alice and 0.5 mi to Carol, replies "nearby"), Follow with "Daily recap" and with "Keep following", a reply sent with a double tap (one reply), Carol marking Helpful ("✓ Helpful to Carol", Answered) and unmarking (the Ask reopens), the topic chip with its own marker rule, the card "…" mute and its undo in Pulse preferences, "↑ 1 new conversation" for a post Bob made while the page was open. After relaunch and a fresh sign-in, Alice's view keeps her private "Thanked", her follows and her marks.
+  - Android (Alice): Following lists only followed open conversations; a "until it ends" follow ends when the Ask is answered and a "keep" follow survives; unmarking brings the Ask back. The new-conversation pill matches iOS. A capped first page (35 posts at one timestamp) shows no end card and "Show earlier"; the earlier page delivers the rest without duplicates and the marker moves to the first page's `read_at` only after "You're caught up" is on screen (iOS honored the same marker). Ending Alice's home refuses the verified-neighbors Ask on every path, hides it from her follows and gives Following `no_home`; restoring it brings both back.
+  - Web (Bob): the legacy feed renders all six types, the legacy row and the restricted Ask, never the held one; the post page shows "Solved" and the surviving reply under the nearest live parent; the inbox shows the private thanks.
+- **PB defects found and fixed in 2322:** (1) Following reported `quiet: sparse` with the meter card when a reader followed fewer than five open conversations; Android drew the card above the list. Only Nearby calls a town sparse now; Following reports only `empty` (contract §2.3). (2) Unmarking Helpful stopped a held push but left every earlier "Your reply helped" in the helper's list and counts. The notification projection now flags a notice whose mark is gone or was made again, and the shared inbox predicate leaves it out of lists, counts, badges and pushes (`20261015051000_pulse_withdrawn_helpful_notices.sql`).
+- **Not a product defect:** Android's "Add a home" on Following came from (1) plus PB's synthetic homes lacking `map_center_lat/lng`, which made the legacy meter answer `no_place`. The fixture homes now have map centers; the meter reads "forming".
+- Checks: privacy gates, migration policy against master, function lint (425 application functions), SQL contracts and the full backend Jest suite; suites that failed under machine load passed a serial rerun. No tests were added.
+
 ## Handoff checked October 14, 2026 — resumed session
 
 - **Current handoff:** [PB handoff, October 14](PB-handoff-2026-10-14.md). Branch `claude/pulse-pb-s10-follows`, implementation head `7113887b2`, with this later documentation update. The rebuilt PB stack, fixtures, native devices and build artifacts are retained. The earlier cleanup was completed before this resumed session; it does not describe the current runtime.
@@ -43,7 +55,7 @@ No new unit/UI tests were added. PB-only synthetic fixtures were used. No hosted
 
 ## Next
 
-1. Finish the two-account native/relaunch checks in the handoff before merging implementation drafts. Reuse client drafts; recheck current owner branches. Android's post-relaunch “Add a home” banner despite Alice's verified home needs investigation with PA. Do not treat API probes or CI as full app acceptance.
+1. Merge the accepted chain 2311 → 2322 as one merge of 2322's head (the parents retargeted to master first), then rename any migration again if master gains a newer one before the merge. The two-account native/relaunch checks are done (October 15 above); the Android "Add a home" banner is explained and fixed.
 2. Finish S5 label limits and S8 creation/edit support, using PS's `evaluateComposerChecks`. New types/read scopes, Share cap, held sales and expiry are still unfinished. Do not duplicate PS safety code.
 3. Remaining S9: OfferClaim request/choice/races/retries, reports with PS, narrower-only audience changes (contract §2.13 is frozen; implementation is absent), remaining notifications/slowed exchanges. Helpful/Thanks/deletion are built, not fully accepted.
 4. Remaining S10: core preferences, recap/each delivery with PC, native scenarios and remaining specified events. PB still owes PC shared-wall content helpers `digestPosts`, `unansweredForHelper`, `followRecaps`, `getSeenMarker`.
@@ -52,6 +64,9 @@ No new unit/UI tests were added. PB-only synthetic fixtures were used. No hosted
 H2 public exposure/moderation coverage and H6 auth abuse verification remain. H1/H3 are resolved. Keep all hosted changes and launch-cut features off.
 
 ## Requests (to other streams)
+
+- → PA, PI (S6.6, found October 15 with PB's backend stopped): a failed pull to refresh keeps the copy, as it should, but Android says nothing (its log reads "copy kept, read failed (network)") and iOS shows only a "Couldn't refresh Pulse." toast. The scenario asks for a line that stays, "Couldn't refresh. Showing 3:42 PM.", with retry.
+- → PA, PI (S6, contract §2.3 clarified in 2322): `quiet` on Following is now only `empty` with no card; the meter card belongs to Nearby. Before, a short Following list came back `sparse`, and Android drew the meter card there (with PB's fixture homes, as "Add a home"). Both apps' Following end card also reads "That's everything new around Camas since …"; a Following-specific line would read better.
 
 - → PI, PA (S9/S10 contract): §2.13 freezes `{ readScope, areaId? }` and `{ post }` for narrowing. Choosing a street/neighborhood from a town post requires its explicit `areaId`; a lateral move or widening is refused. §2.9 now freezes follow/list/delete envelopes, `off|recap|each`, `on_resolve|week|keep`, topic area keys and summary undo descriptors before their implementation PR. The follow/list/summary/why backend is implemented in 2322; narrowing is still only a contract commitment.
 
