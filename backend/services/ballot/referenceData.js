@@ -182,6 +182,9 @@ function validateReferenceData(statesDoc = STATES_DOC, electionsDoc = ELECTIONS_
     if (typeof entry.name !== 'string' || !entry.name) errors.push(`${at}: name is required`);
     if (!isTimezone(entry.timezone)) errors.push(`${at}: timezone ${entry.timezone} is not valid`);
     if (!COVERAGE.includes(entry.coverage)) errors.push(`${at}: coverage must be ${COVERAGE.join('|')}`);
+    // The office's own elections page, kept between elections (a supported
+    // state's election-information link is about one election).
+    if (entry.election_office_url != null && !isHttps(entry.election_office_url)) errors.push(`${at}: election_office_url must be https`);
     if (entry.coverage === 'supported') {
       if (!['all_mail', 'mail_or_in_person', 'in_person_with_absentee'].includes(entry.voting_method)) {
         errors.push(`${at}: voting_method is required for a supported state`);

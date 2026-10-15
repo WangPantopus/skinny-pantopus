@@ -58,6 +58,7 @@ import app.pantopus.android.data.api.models.place.RecordWatch
 import app.pantopus.android.data.api.models.place.RecordWatchEvaluation
 import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.screens.ballot.BallotGovernmentsSheet
+import app.pantopus.android.ui.screens.ballot.BallotLinksWell
 import app.pantopus.android.ui.screens.place.PlacePresentation
 import app.pantopus.android.ui.screens.place.components.PlaceChevron
 import app.pantopus.android.ui.screens.place.components.PlaceChip
@@ -629,15 +630,20 @@ fun PlaceCivicDetailContent(intel: PlaceIntelligence) {
             // With Ballot on, the section is state reference data and names its source; the legacy county label is the fallback.
             PlaceSourceNote(env.source.orEmpty().ifEmpty { "Official county elections" })
         } else {
+            // No date on Pantopus's calendar is not "no election": local, special
+            // and runoff elections can be on the way. Point at the office that runs them.
+            val office = intel.section(PlaceSectionId.CIVIC_DISTRICTS)?.civicDistricts?.electionOffice
+            val until = office?.note ?: "Until then, your state and county election offices have upcoming election dates."
             PlaceDetailCard {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("No upcoming election", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
+                    Text("No election on our calendar yet", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
                     Text(
-                        "We'll show the date here as soon as one is set.",
+                        "We'll show your next election here once we have its date. $until",
                         fontSize = 13.5.sp,
                         lineHeight = 18.sp,
                         color = PantopusColors.appTextSecondary,
                     )
+                    if (office != null) BallotLinksWell(office.links, modifier = Modifier.padding(top = Spacing.s2))
                 }
             }
         }

@@ -61,7 +61,7 @@ struct PlaceCivicDetailContent: View {
                     ElectionCard(data: data)
                     PlaceSourceNote(name: electionSource(election), asOf: nil)
                 } else {
-                    NoElectionCard()
+                    NoElectionCard(office: vm.section(.civicDistricts, in: intel)?.civicDistricts?.electionOffice)
                 }
             }
         }
@@ -264,17 +264,30 @@ private struct ElectionCard: View {
     }
 }
 
+/// No date on Pantopus's calendar is not "no election": local, special and
+/// runoff elections can be on the way. Points at the office that runs them.
 private struct NoElectionCard: View {
+    let office: BallotElectionOffice?
+
+    private var message: String {
+        let until = office?.note ?? "Until then, your state and county election offices have upcoming election dates."
+        return "We'll show your next election here once we have its date. \(until)"
+    }
+
     var body: some View {
         PlaceDetailCard {
             VStack(alignment: .leading, spacing: 6) {
-                Text("No upcoming election")
+                Text("No election on our calendar yet")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Theme.Color.appText)
-                Text("We'll show the date here as soon as one is set.")
+                Text(message)
                     .font(.system(size: 13.5))
                     .lineSpacing(2)
                     .foregroundStyle(Theme.Color.appTextSecondary)
+                if let office {
+                    BallotLinksWell(links: office.links)
+                        .padding(.top, Spacing.s2)
+                }
             }
         }
     }

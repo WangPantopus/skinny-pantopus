@@ -856,13 +856,21 @@ async function composeCivicDistricts(home, { ballot = false } = {}) {
         : Promise.resolve(payload.representatives || []),
       governmentsPromise,
     ]);
+    // Ballot opt-in: who runs this state's elections, for the Civic page's
+    // Election block when Pantopus has no next date (reference data only).
+    const electionOffice = ballot ? ballotSummary.electionOfficeFor(home.state) : null;
 
     return [serializePlaceSection('civic_districts', {
       asOf: fetchedAt,
       status: stale ? 'stale' : 'ready',
       source: 'U.S. Census Bureau · unitedstates/congress-legislators · OpenStates',
       coverage: representatives.length ? 'full' : 'partial',
-      data: { districts: payload.districts, representatives, ...(governments ? { governments } : {}) },
+      data: {
+        districts: payload.districts,
+        representatives,
+        ...(governments ? { governments } : {}),
+        ...(electionOffice ? { election_office: electionOffice } : {}),
+      },
     })];
   } catch (err) {
     logger.warn('placeSections: civic_districts failed', { homeId: home.id, error: err.message });
@@ -929,7 +937,7 @@ async function composeCivicElection(home, { ballot = false } = {}) {
   if (!apiKey) {
     return [serializePlaceSection('civic_election', {
       status: 'unavailable',
-      unavailableReason: 'Election data is not configured yet.',
+      unavailableReason: 'Pantopus doesn’t have your next election date yet.',
     })];
   }
   try {
@@ -955,7 +963,7 @@ async function composeCivicElection(home, { ballot = false } = {}) {
     if (!payload) {
       return [serializePlaceSection('civic_election', {
         status: 'unavailable',
-        unavailableReason: 'No upcoming election on the calendar for your area.',
+        unavailableReason: 'Pantopus doesn’t have your next election date yet.',
       })];
     }
     const daysUntil = Math.max(0, Math.ceil((Date.parse(payload.date) - Date.now()) / DAY_MS));

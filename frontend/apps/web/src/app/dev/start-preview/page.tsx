@@ -91,7 +91,7 @@ function sections(quiet: boolean): PlaceSection[] {
       { level: 'city', office_label: 'City', name: 'Camas' },
       { level: 'school', office_label: 'School district', name: 'Camas School District' },
     ], representatives: [] }),
-    env('civic_election', null, 'unavailable', 'No upcoming election on the calendar for your area.'),
+    env('civic_election', null, 'unavailable', 'Pantopus doesn’t have your next election date yet.'),
   ];
 }
 

@@ -441,6 +441,34 @@ function longMonthDay(iso) {
 }
 
 /**
+ * Who runs this state's elections, for the Civic page all year — above all
+ * between election cards, when Pantopus has no next date: the office, its
+ * elections page and its registration lookup. Null where the data names no
+ * office of the state's own (Vote.gov is not one).
+ */
+function electionOfficeFor(stateValue) {
+  const state = referenceData.isAvailable() ? referenceData.stateEntry(stateValue) : null;
+  if (!state || !state.election_office) return null;
+  const links = Array.isArray(state.official_links) ? state.official_links : [];
+  const info = links.find((l) => l.key === 'election_information');
+  // A supported state's election-information page is about one election;
+  // the office's elections page outlasts it.
+  const home = state.election_office_url || (state.coverage === 'links_only' && info ? info.url : null);
+  const registration = links.find((l) => l.key === 'registration');
+  const picked = [];
+  if (home) picked.push({ key: 'elections', label: 'Elections and voting', owner: state.election_office, url: home });
+  if (registration) picked.push({ key: registration.key, label: registration.label, owner: registration.owner, url: registration.url });
+  if (!picked.length) return null;
+  // In a sentence a state office takes "the" ("the Texas Secretary of State").
+  const phrase = state.election_office_phrase || `the ${state.election_office}`;
+  // Washington, D.C. has no counties: its Board of Elections runs every election.
+  const note = state.code === 'DC'
+    ? `Until then, ${phrase} has upcoming election dates.`
+    : `Until then, ${phrase} and your county election office have upcoming election dates.`;
+  return { name: state.election_office, phrase, note, links: picked };
+}
+
+/**
  * The governments view's data for the Civic page, all year (plan §11 item
  * 7): the card's block for a home in a supported state. With no election
  * in view, nothing is marked as on the ballot.
@@ -456,6 +484,7 @@ module.exports = {
   summaryForHome,
   teaserForPoint,
   civicGovernmentsForHome,
+  electionOfficeFor,
   // Exported for unit tests.
   pickLinks,
   governmentsSentence,
