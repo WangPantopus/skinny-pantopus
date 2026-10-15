@@ -27,6 +27,8 @@ const MAX_STALE_MS = 7 * DAY_MS;
 // the /start preview's per-section budget rather than the fetch timeout.
 const HOME_BUDGET_MS = 3500;
 const SECTION_ID = '_ballot_governments';
+// The District of Columbia's state FIPS code.
+const DC_STATE_GEOID = '11';
 
 function geocoderUrl(lat, lng) {
   return 'https://geocoding.geo.census.gov/geocoder/geographies/coordinates'
@@ -105,7 +107,8 @@ function governmentsFromGeographies(geo) {
   const items = [
     { level: 'federal', geoid: 'us', name: 'United States' },
     // The canvas names this layer "The state" everywhere (Overview, Peel).
-    { level: 'state', geoid: stateGeoid, name: 'The state' },
+    // Washington, D.C. has none: the District itself does what a state does.
+    ...(stateGeoid === DC_STATE_GEOID ? [] : [{ level: 'state', geoid: stateGeoid, name: 'The state' }]),
     { level: 'county', geoid: countyGeoid, name: String(county.NAME || '').trim() },
   ];
 
