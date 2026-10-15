@@ -70,7 +70,7 @@ async function notifyClaimToReview({ claim, home, claimantUserId }) {
   }
 }
 
-const REPORTED = { user: 'person', post: 'post', gig: 'task', message: 'neighbor message' };
+const REPORTED = { user: 'person', post: 'post', reply: 'reply', gig: 'task', message: 'neighbor message' };
 const REASONS = new Set(['spam', 'harassment', 'inappropriate', 'misinformation', 'safety', 'other']);
 
 function reportsQueueUrl() {

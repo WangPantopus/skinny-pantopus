@@ -11,6 +11,8 @@ const feedCursor = require('../services/pulse/feedCursor');
 const conversation = require('../services/pulse/conversation');
 const replyActions = require('../services/pulse/replyActions');
 const follows = require('../services/pulse/follows');
+const claims = require('../services/pulse/claims');
+const readScope = require('../services/pulse/readScope');
 const { isPulseTopic } = require('../services/pulse/topics');
 const {
   DAY_MS, askIdsWithReplies, windowDays, endsAt,
@@ -37,7 +39,9 @@ function feedOptions(query) {
 }
 
 function feedError(res, error) {
-  if (error.status) return res.status(error.status).json({ error: error.message, ...(error.code ? { code: error.code } : {}) });
+  if (error.status) {
+    return res.status(error.status).json({ error: error.message, ...(error.code ? { code: error.code } : {}), ...(error.body || {}) });
+  }
   logger.error('pulse.feed.error', { error: error.message });
   return res.status(503).json({ error: "Couldn't load Pulse. Please try again." });
 }
@@ -94,6 +98,34 @@ router.post('/posts/:postId/replies/:replyId/thanks', verifyToken, async (req, r
   try {
     res.json(await replyActions.act(req.params.postId, req.params.replyId, req.user.id, 'thanks'));
   } catch (error) { feedError(res, error); }
+});
+
+router.post('/posts/:postId/replies/:replyId/report', verifyToken, async (req, res) => {
+  try {
+    res.json(await replyActions.report(req.params.postId, req.params.replyId, req.user.id, req.body || {}));
+  } catch (error) { feedError(res, error); }
+});
+
+router.post('/posts/:postId/claims', verifyToken, async (req, res) => {
+  try { res.json(await claims.request(req.params.postId, req.user.id, req.body || {})); }
+  catch (error) { feedError(res, error); }
+});
+
+router.get('/posts/:postId/claims', verifyToken, async (req, res) => {
+  try {
+    res.set('Cache-Control', 'private, no-store');
+    res.json(await claims.list(req.params.postId, req.user.id));
+  } catch (error) { feedError(res, error); }
+});
+
+router.post('/posts/:postId/claims/:claimId/choose', verifyToken, async (req, res) => {
+  try { res.json(await claims.choose(req.params.postId, req.params.claimId, req.user.id)); }
+  catch (error) { feedError(res, error); }
+});
+
+router.put('/posts/:postId/read-scope', verifyToken, async (req, res) => {
+  try { res.json(await readScope.narrow(req.params.postId, req.user.id, req.body || {})); }
+  catch (error) { feedError(res, error); }
 });
 
 router.get('/follows', verifyToken, async (req, res) => {

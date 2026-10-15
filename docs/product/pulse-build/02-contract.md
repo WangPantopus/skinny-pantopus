@@ -62,7 +62,7 @@ Heads-up kinds a resident may create: `road_hazard`, `power_outage`, `weather_da
   "counts": { "replies": 6, "going": null },                             // going only for events
   "event": null,                  // { starts_at, ends_at, venue } for events
   "lost_found": null,             // { kind: "lost" | "found" }
-  "offer": null,                  // { claim_mode, requests_open, gone } for offers
+  "offer": null,                  // { claim_mode, requests_open, gone, viewer_claim } for offers (2.8)
   "viewer": {
     "is_author": false, "following": false, "can_mark_helpful": false,
     "saved": false,               // the viewer saved it; POST /api/posts/:id/save toggles it, as on today's cards
@@ -166,6 +166,7 @@ Private note to a home (signed): `POST /api/pulse/notes` `{ "toHomeId"? | "toPos
 - `POST /api/pulse/posts/:postId/replies/:replyId/helpful` `{ "helpful": true }` (the Ask's author only) → `{ "reply": PulseReply, "post_status": { "state": "resolved", "resolution": "answered" } }`. Unmarking the last Helpful reopens the Ask if it has not closed.
 - `POST /api/pulse/posts/:postId/replies/:replyId/thanks` → `{ "thanked": true }` (idempotent; one per person per reply; not for your own reply). The helper gets a private notification.
 - `POST /api/pulse/posts/:postId/replies/:replyId/report` `{ "reason", "details" }` (reasons as today's post report) → `{ "ok": true }`.
+  - `reason` is one of `spam`, `harassment`, `inappropriate`, `misinformation`, `safety`, `other`; `details` is optional, at most 1,000 characters. One report per person per reply: a retry or a second report answers the same `{ "ok": true }` and never overwrites the first. The reply must be one the reporter can read (`404 REPLY_NOT_FOUND` otherwise, including a removed reply or one across a block); a person cannot report their own reply (`400 OWN_REPLY`). The report is stored in the existing `PostReport` queue with `comment_id` set (section 4.1), so the moderator console lists it under its post until PS shows the reply itself.
 
 ### 2.8 Offers
 
@@ -188,6 +189,9 @@ The claims-list response is frozen for the giver's screen:
 - Only the post's author can list requests or choose; other readers get `403 NOT_POST_AUTHOR`. Rows are oldest first, with id as the tie-breaker, and include the giver's prior decision. The list exposes no home or address fields. Blocked people are omitted and cannot be chosen.
 - Creation is idempotent per person and offer: retrying returns the same claim. `choose` returns `claim.status: requested`; `first` atomically gives the first requester `chosen`. A successful choice (including a winning `first` request) adds `post_status: { state: "resolved", resolution: "claimed" }`.
 - `POST /claims/:claimId/choose` returns `{ "claim": { "id": "uuid", "status": "chosen" }, "post_status": { "state": "resolved", "resolution": "claimed" } }`; choosing that winner again returns the same success. Choosing another after that returns `409 OFFER_GONE`.
+- `PulsePost.offer` (2.1) is `{ "claim_mode", "requests_open", "gone", "viewer_claim" }` on an offer and null otherwise. `requests_open` is true while the offer is open and can take another request (in `choose`, fewer than five open requests; in `first`, nobody has it yet). `gone` is true once it is `claimed`. `viewer_claim` is the reader's own request, `{ "id", "status" }` with the statuses above, or null; it lets a client say "Requested", "It's yours" or "Someone else got this one." after a relaunch, and it never describes anyone else's request. `action.done` on an offer is true while the reader's request is `requested` or `chosen`.
+- `note` is optional, at most 500 characters. The giver cannot ask for their own offer (`400 OWN_OFFER`); another type answers `400 NOT_AN_OFFER`. Choosing a request that does not exist on that offer, or from someone across a block, answers `404 CLAIM_NOT_FOUND`.
+- Notifications (section 6): each new request sends the giver `offer_request` ("Someone asked for your offer"; in `first` mode, "Your offer was claimed"); a choice sends the winner `offer_chosen` ("It's yours") and every other open requester `offer_gone` ("Someone else got this one."). They carry `metadata` `{ post_id, claim_id, user_id }` (the actor) and follow the post's read check, blocks and quiet hours like the reply notices.
 - A sixth distinct request returns `429 ENOUGH_REQUESTS`; an offer that has ended returns `409 OFFER_GONE`. These error bodies retain the normal `error` and `code`, with `claim: { id: null, status: "enough_requests" | "gone" }` for clients using the status descriptor. No request is inserted on either refusal. Requests and choices always recheck post access and current offer state; a stale screen grants nothing.
 
 
@@ -278,6 +282,7 @@ Both answer `404 POST_NOT_FOUND`, `403 NOT_POST_AUTHOR` (not the asker), `400 NO
 |---|---|
 | `Post` | `read_scope text` (check: `public`, `verified_town`, `verified_area`), `area_id uuid` (FK `PulseArea`, after approval), `expires_at timestamptz`, `resolution text` (check, section 1), `claim_mode text default 'choose'`, `moderation_state text not null default 'live'`, `moderation_rule text`, `moderation_note text`, `moderated_at timestamptz`, `search_tsv tsvector` generated + GIN (R3). Widen `Post_post_type_check` with `share`, `offer`; widen `Post_topic_check` to the 12 topics (plus legacy `sports`); keep `state` in sync (`open` → `solved` when `answered`, `archived` otherwise) so older clients still read it. `expires_at`, `resolution`, `claim_mode` and the two new types are in `20261014070000_pulse_post_lifecycle.sql` (S7); legacy post rows (`/api/posts/feed`, saved, profile lists, `GET /api/posts/:id`) return the three columns as stored (`claim_mode` is on every row and means something only on an offer), and marking an Ask solved (`PATCH /api/posts/:id/solve`, `PATCH /api/posts/resolve/:id`) sets `resolution: answered` with `state: solved`. `moderation_state` (default `live`, check `live`/`held`/`removed`), `moderation_rule`, `moderation_note` and `moderated_at` are in `20261014090000_pulse_post_moderation_state.sql` (S11, PB's half); nothing writes `held` or `removed` until PS's moderation actions (S11) and S8's held sale posts |
 | `PostComment` | `helpful_at timestamptz`, `helpful_by uuid`, `moderation_state text not null default 'live'`, `moderation_rule text`. Account deletion must leave a "Reply removed" row instead of cascading (change `user_id` to nullable with `ON DELETE SET NULL`, and soft-delete the text). `moderation_state` (check `live`/`held`/`removed`) and `moderation_rule` are in `20261014091000_pulse_comment_moderation_state.sql` (S11, PB's half, part 2) |
+| `PostReport` | `comment_id uuid null` (foreign key to `PostComment`, deleted with it): a report about one reply of the post (S9, 2.7). Post reports leave it null |
 | `PostMute` | `area_id uuid null` (the `topic` entity type already exists); its unique index includes `area_id`. Added with `Post_topic_check`'s widening in `20261014031000_pulse_topics.sql` (S4); the foreign key to `PulseArea` comes with that table |
 | `User` | `adult_attested_at timestamptz`; `account_type` check widened with `official` |
 | `UserFeedPreference` | `pulse_nearby_seen_at timestamptz`, `pulse_following_seen_at timestamptz` (server-only storage finalized before S6; clients use `/feed/seen`, never these columns) |
@@ -370,6 +375,11 @@ Labels use the author's **primary** home, as posting and limits do. A second ver
 | 429 | `TOO_MANY_ATTEMPTS` | Five wrong tries, or a per-email, per-device or per-network limit (S20) |
 | 503 | `CHANNEL_UNAVAILABLE` | A text code before an SMS provider exists (S20) |
 | 409 | `ALREADY_MERGED` | Merging a merged post, or a post into itself (S23) |
+| 400 | `NOT_AN_OFFER` | A claim or choice on a post that isn't an Offer (2.8) |
+| 400 | `OWN_OFFER` | The giver asking for their own offer (2.8) |
+| 404 | `CLAIM_NOT_FOUND` | Choosing a request that isn't on the offer, or one across a block (2.8) |
+| 404 | `REPLY_NOT_FOUND` | A reply action (Helpful, Thanks, report) on a reply the person can't read (2.7) |
+| 400 | `OWN_REPLY` | Thanking or reporting your own reply (2.7) |
 
 ## 9. Funnel events
 
