@@ -252,11 +252,15 @@ public struct PulseOfferDTO: Decodable, Sendable, Hashable {
     public let claimMode: String?
     public let requestsOpen: Bool?
     public let gone: Bool
+    /// The reader's own request, `{ id, status }` (contract §2.8): nil when
+    /// they have none or the server doesn't say. Never anyone else's.
+    public let viewerClaim: PulseOfferClaimDTO?
 
     private enum CodingKeys: String, CodingKey {
         case gone
         case claimMode = "claim_mode"
         case requestsOpen = "requests_open"
+        case viewerClaim = "viewer_claim"
     }
 
     public init(from decoder: any Decoder) throws {
@@ -264,6 +268,7 @@ public struct PulseOfferDTO: Decodable, Sendable, Hashable {
         claimMode = c.lenient(String.self, forKey: .claimMode)
         requestsOpen = c.lenient(Bool.self, forKey: .requestsOpen)
         gone = c.lenient(Bool.self, forKey: .gone) ?? false
+        viewerClaim = c.lenient(PulseOfferClaimDTO.self, forKey: .viewerClaim).flatMap { $0.id.isEmpty ? nil : $0 }
     }
 }
 
