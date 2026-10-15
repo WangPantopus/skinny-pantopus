@@ -24,8 +24,8 @@ extension PulsePostDetailViewModel {
                   user.id == currentUser.id else { return false }
             return true
         } catch {
-            if conversation != nil { _ = clearRefusedConversation(error) }
             showToast(Self.refusal(in: error) ?? "Couldn't share this post. Try again.")
+            if conversation != nil { await reconcileAfterRefusal(error) }
             return false
         }
     }
@@ -51,8 +51,8 @@ extension PulsePostDetailViewModel {
             await refreshConversationAfterMutation()
             PulsePostsRefresh.notifyPostsDidChange()
         } catch {
-            _ = clearRefusedConversation(error)
             showToast(Self.refusal(in: error) ?? "Couldn't change who can read this post. Try again.")
+            await reconcileAfterRefusal(error)
         }
     }
 }

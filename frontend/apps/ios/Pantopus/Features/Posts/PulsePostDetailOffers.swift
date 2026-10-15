@@ -47,12 +47,12 @@ extension PulsePostDetailViewModel {
             await refreshConversationAfterMutation()
             PulsePostsRefresh.notifyPostsDidChange()
         } catch {
-            if clearRefusedConversation(error) { return }
             if let code = PulsePageViewModel.serverCode(error) {
                 if code == "ENOUGH_REQUESTS" { offerRequestStatus = "enough_requests" }
                 if code == "OFFER_GONE" { offerRequestStatus = "gone" }
             }
             showToast(Self.refusal(in: error) ?? "Couldn't request this offer. Try again.")
+            await reconcileAfterRefusal(error)
         }
     }
 
@@ -66,8 +66,8 @@ extension PulsePostDetailViewModel {
             offerRequestsState = .loaded(response)
         } catch {
             guard generation == conversationGeneration, !Task.isCancelled else { return }
-            _ = clearRefusedConversation(error)
             offerRequestsState = .error(Self.refusal(in: error) ?? "Couldn't load requests. Try again.")
+            await reconcileAfterRefusal(error)
         }
     }
 
@@ -95,8 +95,8 @@ extension PulsePostDetailViewModel {
             await refreshConversationAfterMutation()
             PulsePostsRefresh.notifyPostsDidChange()
         } catch {
-            _ = clearRefusedConversation(error)
             offerRequestsState = .error(Self.refusal(in: error) ?? "Couldn't confirm the request list. Reload before choosing again.")
+            await reconcileAfterRefusal(error)
         }
     }
 }

@@ -178,7 +178,11 @@ final class PulsePostDetailViewModelTests: XCTestCase {
     // MARK: - Errors
 
     func testNotFoundProducesFriendlyError() async {
-        SequencedURLProtocol.sequence = [.status(404, body: "{\"error\":\"missing\"}")]
+        // The Pulse conversation route, then the post page it falls back to.
+        SequencedURLProtocol.sequence = [
+            .status(404, body: "{\"error\":\"missing\"}"),
+            .status(404, body: "{\"error\":\"missing\"}")
+        ]
         let vm = PulsePostDetailViewModel(postId: "missing", client: makeAPI())
         await vm.load()
         guard case let .error(message, retryable) = vm.state else {
