@@ -103,7 +103,7 @@ fun skyWeather(code: WeatherConditionCode): SkyPalette.Weather =
 
 /** The minute clock: the sky moves from day to dusk while the tab stays open. */
 @Composable
-fun rememberMinuteClock(): ZonedDateTime {
+fun rememberMinuteClock(timeZone: ZoneId = ZoneId.systemDefault()): ZonedDateTime {
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
         while (isActive) {
@@ -111,5 +111,5 @@ fun rememberMinuteClock(): ZonedDateTime {
             now = System.currentTimeMillis()
         }
     }
-    return remember(now) { ZonedDateTime.ofInstant(Instant.ofEpochMilli(now), ZoneId.systemDefault()) }
+    return remember(now, timeZone) { ZonedDateTime.ofInstant(Instant.ofEpochMilli(now), timeZone) }
 }

@@ -16,6 +16,7 @@
  * Notices carry the area only, never an address or the venue's name.
  */
 
+const { resolveNotificationTimezone } = require('../context/locationResolver');
 const supabaseAdmin = require('../../config/supabaseAdmin');
 const logger = require('../../utils/logger');
 const pushService = require('../pushService');
@@ -149,7 +150,7 @@ async function quietHoursOf(userId, fallbackTz) {
     const start = minutesOfDay(data?.quiet_hours_start_local);
     const end = minutesOfDay(data?.quiet_hours_end_local);
     if (start != null && end != null) Object.assign(quiet, { start, end });
-    const tz = data?.daily_briefing_timezone;
+    const tz = await resolveNotificationTimezone(userId, data);
     if (tz) {
       new Intl.DateTimeFormat('en-US', { timeZone: tz }).format(new Date());
       quiet.tz = tz;
@@ -236,7 +237,7 @@ async function notify({ userId, type, title, body, link, plan, metadata = {}, re
     const row = rows && rows[0];
     if (!row) return null;
 
-    const quiet = await quietHoursOf(userId, plan.timezone);
+    const quiet = await quietHoursOf(userId, rules.timezoneForPlan(plan));
     const now = new Date();
     let deferUntil = holdUntil && holdUntil > now ? holdUntil : null;
     if (!(recipientIsIn && isNearPlan(plan, now.getTime()))) {
@@ -276,7 +277,7 @@ async function requestReceived({ plan, request, requesterUser, hostFirst, reques
     .order('created_at', { ascending: true })
     .limit(20);
   const head = (recent || []).find((n) => !n.metadata?.bundled);
-  const when = whenText(plan.post.event_date, plan.timezone);
+  const when = whenText(plan.post.event_date, rules.timezoneForPlan(plan));
   const parts = [when, partyText(plan, request, requesterFirst), bandText(request.distance_band)].filter(Boolean);
   return notify({
     userId: plan.host_user_id,
@@ -295,7 +296,7 @@ async function requestReceived({ plan, request, requesterUser, hostFirst, reques
 }
 
 async function accepted({ plan, request, hostFirst, byRule }) {
-  const when = whenText(plan.post.event_date, plan.timezone, { long: true });
+  const when = whenText(plan.post.event_date, rules.timezoneForPlan(plan), { long: true });
   const where = placePhrase(plan, hostFirst);
   const body = byRule
     ? `${capitalized(noun(plan))}, ${when} ${where}.`
@@ -326,7 +327,7 @@ async function declined({ plan, request, hostFirst }) {
 
 async function changed({ plan, request, hostFirst, timeMoved, placeChanged }) {
   // Board H11: "Now Sunday at 2:00 PM. Still coming?" (the apps preview the same words).
-  const when = whenText(plan.post.event_date, plan.timezone, { long: true, at: true });
+  const when = whenText(plan.post.event_date, rules.timezoneForPlan(plan), { long: true, at: true });
   let title;
   let body;
   if (timeMoved && placeChanged) {
@@ -354,8 +355,8 @@ async function changed({ plan, request, hostFirst, timeMoved, placeChanged }) {
 
 async function cancelled({ plan, request, hostFirst, note, wasIn }) {
   const hideTime = plan.kind === 'playdate' && !wasIn;
-  const when = whenText(plan.post.event_date, plan.timezone, {
-    long: true, hideTime, dayPart: rules.dayPart(plan.post.event_date, plan.timezone),
+  const when = whenText(plan.post.event_date, rules.timezoneForPlan(plan), {
+    long: true, hideTime, dayPart: rules.dayPart(plan.post.event_date, rules.timezoneForPlan(plan)),
   });
   return notify({
     userId: request.user_id,
@@ -385,7 +386,7 @@ async function expired({ plan, request, hostFirst }) {
 }
 
 async function spotOpened({ plan, request, hostFirst, nowIn }) {
-  const when = whenText(plan.post.event_date, plan.timezone);
+  const when = whenText(plan.post.event_date, rules.timezoneForPlan(plan));
   return notify({
     userId: request.user_id,
     type: 'plan_spot_opened',
@@ -399,7 +400,7 @@ async function spotOpened({ plan, request, hostFirst, nowIn }) {
 }
 
 async function reminder({ plan, request, goingCount, band }) {
-  const time = timeText(new Date(plan.post.event_date), plan.timezone || rules.DEFAULT_TIMEZONE).replace(/\s?[AP]M$/, '');
+  const time = timeText(new Date(plan.post.event_date), rules.timezoneForPlan(plan)).replace(/\s?[AP]M$/, '');
   const parts = [band ? band.replace(/ away$/, '') : null, `${goingCount} going`].filter(Boolean);
   return notify({
     userId: request.user_id,
@@ -414,7 +415,7 @@ async function reminder({ plan, request, goingCount, band }) {
 }
 
 async function hostSummary({ plan, comingCount, spotsLeft, requestsCount }) {
-  const time = timeText(new Date(plan.post.event_date), plan.timezone || rules.DEFAULT_TIMEZONE);
+  const time = timeText(new Date(plan.post.event_date), rules.timezoneForPlan(plan));
   const parts = [time, `${comingCount} coming`];
   if (spotsLeft > 0) parts.push(`${spotsLeft} ${spotsLeft === 1 ? 'spot' : 'spots'} left`);
   if (requestsCount > 0) parts.push(`${requestsCount} ${requestsCount === 1 ? 'request' : 'requests'}`);

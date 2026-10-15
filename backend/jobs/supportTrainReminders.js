@@ -24,9 +24,8 @@ function trainTakesReminders(reservation) {
 
 function localReminderTime(reservation, now) {
   const train = reservation.SupportTrain;
-  return DateTime.fromJSDate(now, {
-    zone: inferTimezone(train?.delivery_lat, train?.delivery_lng),
-  });
+  const zone = inferTimezone(train?.delivery_lat, train?.delivery_lng, train?.Activity?.timezone || null);
+  return zone ? DateTime.fromJSDate(now, { zone }) : DateTime.invalid('timezone unavailable');
 }
 
 // A reservation is claimed (its marker set while it is still reserved and
@@ -78,7 +77,7 @@ async function _send24hReminders() {
       .select(`
         id, user_id, guest_name, guest_email, support_train_id, contribution_mode,
         dish_title, restaurant_name, guest_address_shared_at, last_reminder_sent,
-        SupportTrain:support_train_id ( delivery_lat, delivery_lng, status ),
+        SupportTrain:support_train_id ( delivery_lat, delivery_lng, status, Activity:activity_id(timezone) ),
         SupportTrainSlot:slot_id (
           id, slot_date, slot_label, support_mode, start_time, end_time, status
         )
@@ -94,7 +93,7 @@ async function _send24hReminders() {
     const tomorrowReservations = (reservations || []).filter(r => {
       if (!trainTakesReminders(r)) return false;
       const localNow = localReminderTime(r, now);
-      return localNow.hour >= 17 &&
+      return localNow.isValid && localNow.hour >= 17 &&
         r.SupportTrainSlot?.slot_date === localNow.plus({ days: 1 }).toISODate() &&
         ['open', 'full'].includes(r.SupportTrainSlot.status);
     });
@@ -152,7 +151,7 @@ async function _sendDayOfReminders() {
       .select(`
         id, user_id, guest_name, guest_email, support_train_id, contribution_mode,
         dish_title, restaurant_name, guest_address_shared_at, day_of_reminder_sent_at,
-        SupportTrain:support_train_id ( delivery_lat, delivery_lng, status ),
+        SupportTrain:support_train_id ( delivery_lat, delivery_lng, status, Activity:activity_id(timezone) ),
         SupportTrainSlot:slot_id (
           id, slot_date, slot_label, support_mode, start_time, end_time, status
         )
@@ -169,7 +168,7 @@ async function _sendDayOfReminders() {
       if (!trainTakesReminders(r)) return false;
       const slot = r.SupportTrainSlot;
       const localNow = localReminderTime(r, now);
-      if (!slot || slot.slot_date !== localNow.toISODate()) return false;
+      if (!localNow.isValid || !slot || slot.slot_date !== localNow.toISODate()) return false;
       if (!['open', 'full'].includes(slot.status)) return false;
       const morning = localNow.startOf('day').set({ hour: 7 });
       if (!slot.start_time) return localNow >= morning;

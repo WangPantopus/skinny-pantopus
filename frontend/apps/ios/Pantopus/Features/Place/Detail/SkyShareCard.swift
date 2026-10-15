@@ -19,6 +19,7 @@ struct SkyShareCard: Transferable {
     let air: SkyAir?
     let city: String
     let date: Date
+    var calendar: Calendar = .autoupdatingCurrent
 
     static var transferRepresentation: some TransferRepresentation {
         DataRepresentation(exportedContentType: .png) { card in
@@ -35,10 +36,19 @@ struct SkyShareCard: Transferable {
         return data
     }
 
+    var dateLabel: String {
+        let format = DateFormatter()
+        format.locale = .autoupdatingCurrent
+        format.calendar = calendar
+        format.timeZone = calendar.timeZone
+        format.setLocalizedDateFormatFromTemplate("EEEE MMM d")
+        return format.string(from: date)
+    }
+
     /// The card's line: a sky note when there is one worth sharing (not the
     /// household's pickup day), otherwise "TODAY".
     func kicker(_ moment: SkyMoment) -> String {
-        let note = SkyNote.pick(now: date, moment: moment, weather: weather, pickups: [], air: air)
+        let note = SkyNote.pick(now: date, moment: moment, weather: weather, pickups: [], air: air, calendar: calendar)
         return note?.kicker ?? "TODAY"
     }
 }
@@ -48,7 +58,7 @@ struct SkyShareCardView: View {
     let card: SkyShareCard
 
     var body: some View {
-        let moment = SkyMoment.at(card.date, sunrise: card.sun?.sunrise, sunset: card.sun?.sunset)
+        let moment = SkyMoment.at(card.date, sunrise: card.sun?.sunrise, sunset: card.sun?.sunset, calendar: card.calendar)
         ZStack(alignment: .topLeading) {
             Canvas { context, size in
                 TodaySkyPainter(
@@ -56,8 +66,8 @@ struct SkyShareCardView: View {
                     moment: moment,
                     temperature: card.weather.currentTempF,
                     note: nil,
-                    season: SkySeason.at(card.date),
-                    meteorShower: SkyNote.meteors(now: card.date, moment: moment, calendar: .autoupdatingCurrent) != nil,
+                    season: SkySeason.at(card.date, calendar: card.calendar),
+                    meteorShower: SkyNote.meteors(now: card.date, moment: moment, calendar: card.calendar) != nil,
                     smoke: card.air?.smoke ?? 0,
                     windMph: card.weather.windMph,
                     windFrom: card.weather.windDirection,
@@ -81,7 +91,7 @@ struct SkyShareCardView: View {
                         .padding(.top, -10)
                 }
                 Spacer(minLength: 0)
-                Text("\(card.city) · \(card.date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()))")
+                Text("\(card.city) · \(card.dateLabel)")
                     .font(.system(size: 17, weight: .semibold))
                 Text("Pantopus")
                     .font(.system(size: 13, weight: .bold))
