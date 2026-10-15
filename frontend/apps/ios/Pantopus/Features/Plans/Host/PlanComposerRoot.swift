@@ -44,7 +44,7 @@ struct PlanComposerRoot: View {
                                 model: model,
                                 step: "2 of 3",
                                 onBack: { onFinish(nil) },
-                                onPreview: { path.append(.preview) }
+                                onPreview: { openPreview() }
                             )
                         } else {
                             PlanTypePicker(
@@ -72,7 +72,7 @@ struct PlanComposerRoot: View {
                                 model: model,
                                 step: "2 of 3",
                                 onBack: { path.removeLast() },
-                                onPreview: { path.append(.preview) }
+                                onPreview: { openPreview() }
                             )
                             .toolbar(.hidden, for: .navigationBar)
                         case .preview:
@@ -84,6 +84,12 @@ struct PlanComposerRoot: View {
             }
         }
         .task { await model.load() }
+    }
+
+    /// H7 opens without the last attempt's refusal (as on Android): the host may have fixed it.
+    private func openPreview() {
+        model.postError = nil
+        path.append(.preview)
     }
 }
 
