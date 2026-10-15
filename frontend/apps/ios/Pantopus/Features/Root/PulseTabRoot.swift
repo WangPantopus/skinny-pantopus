@@ -17,7 +17,8 @@ import SwiftUI
 /// Typed routes within the Pulse tab's NavigationStack.
 public enum PulseRoute: Hashable {
     case post(postId: String)
-    case compose(intent: String)
+    /// The one-box composer (Pulse S8); posts in Pulse mode.
+    case compose
     case editPost(postId: String)
     case publicProfile(userId: String)
 }
@@ -55,7 +56,7 @@ public struct PulseTabRoot: View {
                     path.append(.post(postId: postId))
                 },
                 onCompose: {
-                    path.append(.compose(intent: PulseIntent.all.rawValue))
+                    path.append(.compose)
                 },
                 onEdit: { postId in
                     path.append(.editPost(postId: postId))
@@ -195,9 +196,8 @@ public struct PulseTabRoot: View {
             // a new identity gives the new post its own view model and load.
             .id(postId)
             .onDisappear { router.completePostArrival(id: postId) }
-        case let .compose(intent):
-            PulseComposeFlowView(
-                prefillFeedIntent: PulseIntent(rawValue: intent),
+        case .compose:
+            PulseComposerView(
                 onCancel: { pop() },
                 onPosted: { _ in pop() }
             )
