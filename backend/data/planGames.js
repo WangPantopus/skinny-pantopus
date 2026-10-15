@@ -30,8 +30,8 @@
  * playoff games (from Nov 18, if they qualify), and conference title and bowl games.
  *
  * To add games: append rows with the official page as `source`, times in UTC (Pacific is
- * UTC-7 until Nov 1, 2026 and UTC-8 after). GET /api/plans/games serves the ones that
- * start within 14 days and have at least 30 minutes left.
+ * UTC-7 until Nov 1, 2026, then UTC-8 until Mar 14, 2027). GET /api/plans/games serves the
+ * ones that start within 14 days and have at least 30 minutes left.
  */
 
 const CHECKED_AT = '2026-10-14';
