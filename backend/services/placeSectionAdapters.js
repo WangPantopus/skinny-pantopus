@@ -32,6 +32,7 @@ const { serializePlaceSection } = require('../serializers/placeIntelligenceSeria
 const { readThrough } = require('./placeSectionCache');
 const { geocodeToTract } = require('./ai/neighborhoodProfileService');
 const { fetchHeatRisk } = require('./external/heatRisk');
+const { fetchHeatIndexDays } = require('./external/nwsHeatIndex');
 const { buildHeatColdOutlook } = require('./heatColdEngine');
 const ballotSummary = require('./ballot/summary');
 const ballotGovernments = require('./ballot/governments');
@@ -224,32 +225,60 @@ async function composeHeatCold(home, weather) {
 
   try {
     const gh5 = encodeGeohash(ll.lat, ll.lng, 5);
-    const { payload, fetchedAt, stale } = await readThrough({
-      cacheKey: `geo:${gh5}`,
-      sectionId: 'heat_cold',
-      ttlMs: 6 * 60 * 60 * 1000,
-      fetch: async () => {
-        const result = await fetchHeatRisk(ll.lat, ll.lng);
-        // A genuine out-of-CONUS gap ({days:[], covered:false}) IS cached —
-        // re-asking NWS about Honolulu every request buys nothing.
-        //
-        // A FAILURE (null) must not be. Coalescing the two used to pin
-        // "NWS HeatRisk covers the contiguous US" onto a Phoenix home for
-        // six hours during an NWS outage — a false statement about the
-        // place, cached across the whole geohash-5 cell. Returning null
-        // lets placeSectionCache decline to cache it and lets the section
-        // report an error instead of a calm reading.
-        return result;
-      },
-    });
+    let payload = null;
+    let fetchedAt = null;
+    let stale = false;
+    try {
+      ({ payload, fetchedAt, stale } = await readThrough({
+        cacheKey: `geo:${gh5}`,
+        sectionId: 'heat_cold',
+        ttlMs: 6 * 60 * 60 * 1000,
+        fetch: async () => {
+          const result = await fetchHeatRisk(ll.lat, ll.lng);
+          // A genuine out-of-CONUS gap ({days:[], covered:false}) IS cached —
+          // re-asking NWS about Honolulu every request buys nothing.
+          //
+          // A FAILURE (null) must not be. Coalescing the two used to pin
+          // "NWS HeatRisk covers the contiguous US" onto a Phoenix home for
+          // six hours during an NWS outage — a false statement about the
+          // place, cached across the whole geohash-5 cell. Returning null
+          // lets placeSectionCache decline to cache it and lets the section
+          // report an error instead of a calm reading.
+          return result;
+        },
+      }));
+    } catch (err) {
+      // A timeout cools the provider down for every caller; treat that like
+      // a failed fetch so the heat index can still answer.
+      logger.warn('placeSections: heat risk failed', { homeId: home.id, error: err.message });
+    }
 
     // Null payload = the NWS fetch failed (see above). The freeze half still
     // works off the temperature forecast, so the section degrades to
     // `partial` with an honest reason rather than claiming a coverage gap.
     const heatFetchFailed = payload == null;
 
+    // HeatRisk has no reading here (Alaska, Hawaii, the territories) or is
+    // down: the NWS heat index forecast stands in for the heat half. An
+    // answer is cached for 3 h; a failure isn't, and the card says so.
+    let heatIndex = null;
+    if (heatFetchFailed || !payload.covered) {
+      try {
+        ({ payload: heatIndex } = await readThrough({
+          cacheKey: `geo:${gh5}`,
+          sectionId: '_nws_heat_index',
+          ttlMs: 3 * 60 * 60 * 1000,
+          fetch: () => fetchHeatIndexDays(ll.lat, ll.lng),
+        }));
+      } catch (err) {
+        logger.warn('placeSections: heat index failed', { homeId: home.id, error: err.message });
+      }
+    }
+
     const outlook = buildHeatColdOutlook({
       heatRisk: heatFetchFailed ? null : payload,
+      heatRiskFailed: heatFetchFailed,
+      heatIndex,
       weather,
       home,
       timezone: (weather && weather.timezone) || null,
@@ -262,17 +291,16 @@ async function composeHeatCold(home, weather) {
       })];
     }
 
+    const forecastLabel = (weather && weather.source_label) || null;
+    const heatLabel = { heatrisk: 'NWS HeatRisk', heat_index: 'NWS heat index' }[outlook.heat_source];
     return [serializePlaceSection('heat_cold', {
       asOf: fetchedAt,
       status: stale ? 'stale' : 'ready',
-      // Outside CONUS the heat half has no data; the freeze half still works,
-      // so the section is genuinely partial rather than unavailable.
-      coverage: outlook.heat_covered ? 'full' : 'partial',
-      unavailableReason: outlook.heat_covered
-        ? null
-        : (heatFetchFailed
-          ? 'Heat risk is temporarily unavailable; the freeze forecast still applies.'
-          : 'NWS HeatRisk covers the contiguous US; the freeze forecast still applies here.'),
+      // Without a heat reading from either source the freeze half still
+      // works, so the section is genuinely partial rather than unavailable.
+      coverage: outlook.heat_source ? 'full' : 'partial',
+      unavailableReason: outlook.heat_note,
+      source: [heatLabel, forecastLabel].filter(Boolean).join(' · ') || 'Weather forecast',
       data: outlook,
     })];
   } catch (err) {

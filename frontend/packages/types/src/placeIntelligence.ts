@@ -434,6 +434,15 @@ export interface PlaceHeatColdData {
   guidance: string;
   /** Which forecast the headline came from. */
   source_note: string;
+  /** Where the heat half came from: NWS HeatRisk, the NWS heat index forecast, or neither. */
+  heat_source?: 'heatrisk' | 'heat_index' | null;
+  /**
+   * Shown instead of the HeatRisk scale when heat isn't from HeatRisk (Alaska,
+   * Hawaii, a HeatRisk outage). Absent from servers that predate it.
+   */
+  heat_note?: string | null;
+  /** The week's highest NWS heat index, when the heat half came from it. */
+  heat_index_peak?: { date: string; max_f: number; label: string | null } | null;
 }
 
 /** ASCE 7 seismic design categories (A lowest demand → E highest). */

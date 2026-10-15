@@ -614,12 +614,17 @@ async function composeTodayForPoint(lat, lng, { budgetMs = null } = {}) {
 // Promise.all, so both calls always missed and every request made two full
 // provider round-trips. The hub payload is now fetched ONCE in
 // composeHomeIntelligence and passed down.
+// The weather section's provider, as the Heat & cold card credits it.
+const WEATHER_SOURCE_LABELS = { WEATHERKIT: 'Apple Weather', OPEN_METEO: 'Open-Meteo' };
+
 async function composeHeatCold(home, hub) {
+  const provider = hub && hub.meta && hub.meta.section_providers && hub.meta.section_providers.weather;
   const weather = hub && hub.weather
     ? {
       hourly: mapWeatherHours(hub.weather.hourly),
       daily: mapWeatherDays(hub.weather.daily),
       timezone: (hub.location && hub.location.timezone) || null,
+      source_label: WEATHER_SOURCE_LABELS[provider] || null,
     }
     : null;
 

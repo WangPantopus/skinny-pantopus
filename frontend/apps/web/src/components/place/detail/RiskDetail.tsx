@@ -407,7 +407,8 @@ function HeatColdCard({ data }: { data: PlaceHeatColdData }) {
         </>
       ) : (
         <div className="text-[12.5px] text-app-text-muted">
-          NWS HeatRisk covers the contiguous US. The freeze forecast above still applies here.
+          {/* The server says where heat came from instead (Alaska, Hawaii, a HeatRisk outage). */}
+          {data.heat_note ?? 'NWS HeatRisk covers the contiguous US. The freeze forecast above still applies here.'}
         </div>
       )}
     </div>
