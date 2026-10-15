@@ -118,6 +118,8 @@ fun PlaceDashboardScreen(
     onDefaultHomeChange: () -> Unit = {},
     /** The Place tab tapped again while this dashboard is its root: back to the top. */
     scrollToTop: Flow<Unit>? = null,
+    /** The status of a residency document already in review (the Waiting Room). */
+    onOpenVerificationStatus: () -> Unit = {},
     viewModel: PlaceDashboardViewModel = hiltViewModel(key = "place-$homeId"),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -205,6 +207,10 @@ fun PlaceDashboardScreen(
                 onStartVerify(method, verifyAddress)
             },
             onDismiss = { showVerify = false },
+            onOpenDocumentStatus = {
+                showVerify = false
+                onOpenVerificationStatus()
+            },
         )
     }
 

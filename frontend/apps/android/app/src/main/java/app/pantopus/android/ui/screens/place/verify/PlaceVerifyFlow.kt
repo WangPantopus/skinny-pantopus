@@ -35,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -43,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.data.tenant.TenantRepository
 import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.screens.place.components.PlaceChevron
@@ -121,11 +123,13 @@ private val VERIFY_BENEFITS =
 
 // ─── B1 — the verify sheet ───────────────────────────────────
 
-/** Reads the tenant status that decides whether the landlord door is offered. */
+/** Reads the tenant status that decides whether the landlord door is offered, and the person's own claims. */
 @EntryPoint
 @InstallIn(SingletonComponent::class)
 interface PlaceVerifySheetDeps {
     fun tenantRepository(): TenantRepository
+
+    fun homesRepository(): HomesRepository
 }
 
 /**
@@ -151,6 +155,31 @@ private fun rememberVerifyMethods(homeId: String?): List<PlaceVerifyMethod> {
     return methods
 }
 
+/**
+ * The person's own claims, as the Waiting Room reads them: a residency document for this Home that is under review
+ * (a claim with no document yet isn't). The document door then says so instead of offering another upload. An
+ * unreadable list keeps the door.
+ */
+@Composable
+private fun rememberDocumentInReview(homeId: String?): Boolean {
+    val context = LocalContext.current
+    var inReview by remember(homeId) { mutableStateOf(false) }
+    LaunchedEffect(homeId) {
+        if (homeId == null) return@LaunchedEffect
+        val repository =
+            EntryPointAccessors
+                .fromApplication(context.applicationContext, PlaceVerifySheetDeps::class.java)
+                .homesRepository()
+        val claims = (repository.myOwnershipClaims() as? NetworkResult.Success)?.data?.claims ?: return@LaunchedEffect
+        inReview =
+            claims.any {
+                it.homeId.equals(homeId, ignoreCase = true) && it.claimType == "resident" &&
+                    it.status == "under_review" && it.hasEvidence != false
+            }
+    }
+    return inReview
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlaceVerifySheet(
@@ -158,10 +187,16 @@ fun PlaceVerifySheet(
     homeId: String?,
     onStart: (PlaceVerifyMethod) -> Unit,
     onDismiss: () -> Unit,
+    // Opens the status of a residency document already in review (the Waiting Room).
+    onOpenDocumentStatus: (() -> Unit)? = null,
 ) {
     // Mail leads: a postcard finishes on its own, while documents wait for a person to review them.
     var selected by remember { mutableStateOf(PlaceVerifyMethod.MAIL) }
     val methods = rememberVerifyMethods(homeId)
+    val documentInReview = rememberDocumentInReview(homeId)
+    LaunchedEffect(documentInReview) {
+        if (documentInReview && selected == PlaceVerifyMethod.DOCUMENT) selected = PlaceVerifyMethod.MAIL
+    }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = PantopusColors.appSurface) {
@@ -215,9 +250,13 @@ fun PlaceVerifySheet(
             Overline("Choose how")
             Column(modifier = Modifier.fillMaxWidth().placeCard().selectableGroup()) {
                 methods.forEachIndexed { i, m ->
-                    // A radio choice, so TalkBack says which method is selected.
-                    Box(modifier = Modifier.selectable(selected = selected == m, role = Role.RadioButton) { selected = m }) {
-                        VerifyRow(m.icon, m.label, m.sub, PlaceTileTone.SKY, trailing = { Radio(selected == m) })
+                    if (m == PlaceVerifyMethod.DOCUMENT && documentInReview) {
+                        DocumentReviewRow(onOpenDocumentStatus)
+                    } else {
+                        // A radio choice, so TalkBack says which method is selected.
+                        Box(modifier = Modifier.selectable(selected = selected == m, role = Role.RadioButton) { selected = m }) {
+                            VerifyRow(m.icon, m.label, m.sub, PlaceTileTone.SKY, trailing = { Radio(selected == m) })
+                        }
                     }
                     if (i < methods.lastIndex) Divider()
                 }
@@ -267,6 +306,21 @@ private fun VerifyRow(
             Text(sub, fontSize = 12.5.sp, color = PantopusColors.appTextMuted)
         }
         trailing?.invoke()
+    }
+}
+
+/** The document door while the person's residency document waits on a reviewer: where it stands and the way to its status. */
+@Composable
+private fun DocumentReviewRow(onOpenStatus: (() -> Unit)?) {
+    val open = if (onOpenStatus != null) Modifier.clickable(onClickLabel = "Open its status", role = Role.Button, onClick = onOpenStatus) else Modifier
+    Box(modifier = open.testTag("place.verifySheet.documentInReview")) {
+        VerifyRow(
+            PantopusIcon.Hourglass,
+            "Document under review",
+            "A person is reviewing your document. You'll get a notification when it's decided.",
+            PlaceTileTone.MUTED,
+            trailing = onOpenStatus?.let { { PlaceChevron() } },
+        )
     }
 }
 
