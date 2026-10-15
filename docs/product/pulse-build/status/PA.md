@@ -12,50 +12,25 @@ Owner: the PA session. Keep this file current in your own PRs (or a small docs P
 - **Restore after background process death:** [PR 2296](https://github.com/WangPantopus/skinny-pantopus/pull/2296), merged October 14. `MainActivity` no longer replays the original launch link when restoring the person's later screen. The prior session checked link-start, a link arriving during restore, and configuration changes.
 - **S4 topics:** [PR 2300](https://github.com/WangPantopus/skinny-pantopus/pull/2300), merged October 14 at `9bcbe0c89`. All required CI passed, including Android lint/test/assemble and instrumented tests; the PR records the two-account local checks and R8 Release check. Topic chips, empty-topic text, card topics, topic mutes and preferences undo are on `master`.
 
-## Handoff — October 14, 2026
+- **S7 lifecycle (client):** [PR 2302](https://github.com/WangPantopus/skinny-pantopus/pull/2302). Status words on the feed card, the post page, My posts and Saved ("Answered", "Gone", "Reunited", "Happened · N went", "Ends Thu 11:30pm" in the viewer's zone; nothing for closed or expired); the asker's "Keep open 7 more days" (once) and "Close" with "Close this question?" on the card and page menus; the day-6 reminders open the Ask from the list and from a tapped push, cold and warm; unknown types read as Post. An Ask closed, a post deleted or archived, or a post found gone on another screen leaves a Pulse feed that is still open, and comes back there when restored from My posts. Verified October 15 on a debug and an R8 Release build with Alice and Bob against the PA database: every status above (feed, page, My posts Active and Archived, Bob's Saved), manual archives (no actions, no future end), the seven real lifecycle-job endings as they appear in My posts, Keep open once and still gone after a cold relaunch, a stale "already kept open" and a concurrent close showing the server's sentence, Close cancelled, offline and retried, a double-tapped Close and a slow or failing (500) Keep open each sending one request, close and restore in the same open feed, edit keeping the creation time, end time and Bob's reply, delete then Bob's Saved, cached page and link refusing it (and the web page "not found"), Los Angeles and Tokyo times including a heads-up past midnight and one after the daylight-saving change, 2× text on a 320 × 480 dp screen (menus scroll to Cancel), TalkBack speech for the card and the page pill, and system dark mode (the app keeps its light theme, as `Theme.kt` intends). Helpful marks are S9.
 
-The founder requested a handoff, all work committed/pushed with PRs, and removal of this session's local resources. Development and final checks stopped at that request. **The Android lane is not complete.** All five branches below are pushed; all five PRs remain drafts. Earlier green checks do not validate their final heads.
+## Current state — October 15, 2026
 
-| Work | Branch / PR | State at handoff |
+| Work | State | What remains |
 |---|---|---|
-| S7 lifecycle | `claude/pulse-pa-s7-status`, [2302](https://github.com/WangPantopus/skinny-pantopus/pull/2302), `178902d6f` | Final R8 build canceled during Kotlin compilation; full final checks and device pass pending. |
-| S5/S6 page | `claude/pulse-pa-s6-pulse-page`, [2303](https://github.com/WangPantopus/skinny-pantopus/pull/2303), `a5f8d9ee3` | Final static fixes committed; no completed Kotlin/device/R8 run. Multi-page earlier handling still needs repair. H4 applies. |
-| S8 draft foundation | `claude/pulse-pa-compose-drafts`, [2315](https://github.com/WangPantopus/skinny-pantopus/pull/2315), `0ac4e4041` | Encrypted account/origin text/photo drafts, retry identity, restore/discard/deletion handling; no completed compile or native run. Full S8/S20 is not built. |
-| External-share privacy | `claude/pulse-pa-share-privacy`, [2316](https://github.com/WangPantopus/skinny-pantopus/pull/2316), `dea1fd151` | Permission-aware menu and server authorization before chooser; final checks/device/R8 pending. Unknown moderation values must also fail closed. |
-| Radius/comment follow-up | `claude/pulse-pa-feed-limits`, [2318](https://github.com/WangPantopus/skinny-pantopus/pull/2318) | 100-mile UI cap and safe server refusal wording; checks/device/R8 pending. Stacked on S7; retarget to master after S7 merges. |
+| S7 [2302](https://github.com/WangPantopus/skinny-pantopus/pull/2302) | Verified (above); merging through the shared queue after green CI on the final head | Retarget 2318 to `master` after it merges |
+| Sharing [2316](https://github.com/WangPantopus/skinny-pantopus/pull/2316) | Draft: menus offer Share only for public, live posts; the server authorizes before the chooser opens; unknown moderation values are refused | Integrate `master`, full checks, two-account, restricted/disabled/stale/offline/repeat-tap and R8 checks |
+| Radius and comments [2318](https://github.com/WangPantopus/skinny-pantopus/pull/2318) | Draft stacked on S7: 100-mile ladder and labels, the server's sentence on a refused comment | Re-apply on `master`, old saved radius, offline copy and refused-comment checks, R8 |
+| S5/S6 page [2303](https://github.com/WangPantopus/skinny-pantopus/pull/2303) | Draft: grouped page, area pill, views, topics, menus, earlier pages, seen marker | Integrate S7 and `master`; verify against PB's feed branch; the page's header must scroll with the posts at 2× text on small phones (today's Pulse feed keeps a fixed header that leaves only a strip for posts); merges after PB's [2311](https://github.com/WangPantopus/skinny-pantopus/pull/2311)/[2312](https://github.com/WangPantopus/skinny-pantopus/pull/2312) are on `master` (H4) |
+| Draft foundation [2315](https://github.com/WangPantopus/skinny-pantopus/pull/2315) | Draft: encrypted per-account drafts and photos that survive process death and sign-out (S8.10) | Integrate `master`, full checks, every persistence, account, photo, failure and deletion case, R8 |
 
-### What is actually verified
-
-- S7 recovery code passed ktlintCheck, detekt, lintDebug, test and paparazziVerify; Debug and Release unit suites each reported 5,054 tests, zero failures/errors, 76 skips. This predates the final scroll, own-mute and master changes.
-- Debug `ee30db711` was built and installed. Alice/Bob checks covered lifecycle status, Keep open once/refusal after relaunch, Close cancellation/offline/retry/concurrent ending, My posts/Saved, real lifecycle job for seven synthetic endings, day-6 notifications and cold/warm routes, time zones, editing with unchanged creation/expiry and preserved reply, and confirmed deletion.
-- The long owner menu scrolled to Cancel at 2× text on a 320×480 dp phone. Final own-post type/topic/author mute guards are committed but were not installed.
-- TalkBack focused Answered as one accessible node; no captured spoken utterance is claimed. Night mode still showed the existing light app root; actual dark-palette behavior is unfinished.
-- Web Alice saw the same server-created Ask and reply after hard reload. That does not claim new lifecycle UI on web.
-- No final S7 R8 success, S6 native success, draft-persistence native success or privacy-follow-up native success is claimed. Each PR body records its exact limits.
-
-### Resume in this order
-
-1. Fetch master, inspect open PRs and compare exact remote heads again. Preserve the primary checkout's unrelated `.claude/launch.json` modification. Recreate only the PA runtime/emulator and synthetic accounts; the old PA database and device were deleted at the founder's request, so old IDs/sessions are no longer valid.
-2. S7: integrate current master carefully, run all required checks and an R8 Release with a temporary local cleartext overlay (never commit it), then repeat affected two-account/device scenarios. Use the shared merge queue and merge only after exact-head CI and real-app checks pass.
-3. Radius/comments and external sharing: keep the small repairs separate. Make the share policy allow only absent/live moderation values, not unknown future states. Verify restricted/disabled/stale/offline sharing before merging.
-4. S6: PB's area/privacy routes are on master. At handoff feed [2312](https://github.com/WangPantopus/skinny-pantopus/pull/2312), contract [2310](https://github.com/WangPantopus/skinny-pantopus/pull/2310) and distance [2311](https://github.com/WangPantopus/skinny-pantopus/pull/2311) were pending; recheck H4. **Current Show earlier handles only one batch.** Append/deduplicate successive batches with the opaque cursor, retain the original server `read_at`, update caught-up from the final response and acknowledge only when the true end is visible. Keep loaded earlier rows during failures/actions. Empty pages must omit caught-up. New-count passes area_id; seen remains unfiltered/default-area only. Complete fixture then real-backend checks, dark palette, accessibility, offline/relaunch and R8.
-5. Draft foundation: final ktlint/detekt/debug run was canceled. Fix any actual findings; verify text/photos/account isolation, process death, save/discard failure, retry identity and confirmed deletion. Sign-out copy now explains draft retention. Restore rechecks eligibility; corrupt drafts have confirmed discard. Finish full S8 one-box/audience/adult/checks and S9 conversation next. PB [2313](https://github.com/WangPantopus/skinny-pantopus/pull/2313) publishes additive reply/claim envelopes; do not invent a second service.
-6. Continue S10–S24 against published contracts and hold points. S25 stays reserved. No new unit/UI tests or coverage work; update existing tests broken by intended changes. Update this status with actual verification and merge results.
-
-### Existing-work audit
-
-Audited 145 unmerged refs, 134 distinct heads and 46 relevant Android heads, including branches with no PR. Eighteen relevant patches were exact equivalents already on master. Earlier PA S1/S2/S3/S4/restore work is merged; no hidden S8–S24 implementation was found. [2158](https://github.com/WangPantopus/skinny-pantopus/pull/2158) is verification-only and must not merge. Reuse ScreenStore, PostsRepository, reply/request IDs, uploads, Plans and Support Train flows. The new PB backend drafts do not overlap Android ownership. Recheck the repository before acting on this dated audit.
-
-## Local cleanup and private continuation
-
-The PA backend, proxy, web server and local Gradle runs were stopped. The PA Supabase containers/data volumes and AVD `pulse-pa` were deleted. The four managed worktrees were archived for recovery, and regenerable PA build/dependency caches were removed. Other sessions' stacks, emulators and shared tools/daemons remain untouched. The primary source checkout and unrelated local launcher change remain.
-
-The detailed local continuation, commands and scratch helpers are in `~/.config/pantopus/pulse-pa-handoff/CONTINUE-20261014-PA.md`. This private material is not committed. Old fixture identifiers in earlier notes are historical, not live records.
+After those: full S8 (needs PS's composer check route and PB's Pulse-mode creation on `master`), S9 (PB's conversation chain 2313–2320), S10 (2321–2322), then S11–S24 as their owners publish shapes. S25 stays reserved. Only `/api/pulse/areas/*`, adult attestation, keep-open and close are on `master` today.
 
 ## Requests
 
+- → Web owner: S7's current web post page renders an answered Ask as `Solved` and a claimed Offer as a generic `Post`, without `Gone`. Fresh PA two-account browser verification confirms the content loads, but the shared lifecycle wording is still absent.
 - → PS/PB: full S8 still depends on the published composer checks/Pulse-mode creation; S9 and later work waits for the corresponding routes on master (H4).
-- → PV: actual dark-palette and TalkBack spoken-output verification remain open; focused TalkBack semantics are not a speech recording.
+- → PV: TalkBack speech for S7's card and page status was checked with TalkBack's speech output on the emulator. The app is light-only by design (`Theme.kt`), so a dark palette for Pulse screens is still open.
 - Stop only a stream's exact PID/port; never use broad process patterns or stop shared Gradle/Kotlin daemons.
 - H5: backend routes must deploy before clients consume them. The founder alone deploys, changes hosted systems, sends to real people or submits to stores.
 

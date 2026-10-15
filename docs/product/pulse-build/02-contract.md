@@ -66,6 +66,7 @@ Heads-up kinds a resident may create: `road_hazard`, `power_outage`, `weather_da
   "viewer": {
     "is_author": false, "following": false, "can_mark_helpful": false,
     "saved": false,               // the viewer saved it; POST /api/posts/:id/save toggles it, as on today's cards
+    "can_share": false,           // true only when isPubliclyShareable permits an external link; check before opening a share sheet
     "can_keep_open": false        // the asker's own open Ask, not yet kept open (2.12); false for everyone else
   },
   "moderation": { "state": "live" }   // "held" / "removed" only ever reaches the author
@@ -95,11 +96,12 @@ Replies are returned oldest first, flat. Clients show first-level replies and on
 
 ### 2.3 `GET /api/pulse/feed`
 
-Query: `view` = `nearby` (default) | `following`; `topic` (enum, optional); `area_id` (optional, default the viewer's town); `earlier_before` (ISO, for "Show earlier"); `limit` (default 30, max 40).
+Query: `view` = `nearby` (default) | `following`; `topic` (enum, optional); `area_id` (optional, default the viewer's town); `earlier_before` (the opaque `earlier_cursor`, or an ISO timestamp for compatibility, for "Show earlier"); `limit` (default 30, max 40).
 
 ```jsonc
 {
   "view": "nearby",
+  "read_at": "2026-10-14T18:00:00Z", // server snapshot boundary; use for /new after and /seen through
   "area": { "id": "uuid", "kind": "town", "name": "Camas", "state": "WA" },
   "areas_available": [{ "id": "uuid", "kind": "town", "name": "Camas", "title": "Camas" }],   // area pill; streets and neighborhoods only when opened
   "quiet": null,   // or { "reason": "sparse" | "no_home" | "empty", "card": "meter" | "set_up_home" | null }
@@ -107,14 +109,16 @@ Query: `view` = `nearby` (default) | `following`; `topic` (enum, optional); `are
   "groups": [
     { "key": "town", "title": "AROUND CAMAS", "area_id": "uuid", "items": [ /* PulsePost */ ] }
   ],                                       // order: street, neighborhood, town; only open areas; newest first inside a group
-  "end": { "caught_up": true, "since": "2026-10-14T15:00:00Z", "can_show_earlier": true, "earlier_cursor": "2026-10-13T20:11:00Z" }
+  "end": { "caught_up": true, "since": "2026-10-14T15:00:00Z", "can_show_earlier": true, "earlier_cursor": "<opaque cursor>" }
 }
 ```
 
+- `read_at` is the server time captured before the query; only items created at or before it enter the response. `end.since` is the lower bound of the new-items window, for the end card's wording; it is not a seen acknowledgment. Clients read `read_at` optionally until this backend ships and then use it instead of their device clock for polling and acknowledgments.
 - The first response holds items **newer than the viewer's last-seen marker** for that view (at least the last 24 hours if the marker is older), capped at `limit`. `caught_up` is true when nothing newer remains beyond the cap.
-- `earlier_before` returns the next older items in one flat group `{ "key": "earlier", "title": "EARLIER", … }` (the client appends it below the end card); nothing loads by itself.
-- `GET /api/pulse/feed/new?view=&topic=&after=<iso>` → `{ "count": 3 }` for the "↑ 3 new conversations" pill (poll about once a minute while the screen is visible, or on a socket event).
-- `POST /api/pulse/feed/seen` `{ "view": "nearby", "through": "<iso>" }` advances the marker. The client calls it when the end card has been on screen, never earlier.
+- `earlier_cursor` is an opaque string: clients pass it back unchanged. It contains the time/id tie-breaker and the original new-items window, so equal timestamps cannot skip posts and later pages preserve the snapshot. The server also accepts an ISO `earlier_before` for older callers.
+- `earlier_before` returns the next older items in one flat group `{ "key": "earlier", "title": "EARLIER", … }` (the client appends it below the end card); nothing loads by itself. If the first page was capped (`caught_up: false`), an earlier page sets `caught_up: true` once all remaining new items have been delivered. The client then updates the end card and can acknowledge the original `read_at` after that end is visible; it must not acknowledge an older page's device time.
+- `GET /api/pulse/feed/new?view=&topic=&area_id=&after=<iso>` → `{ "count": 3 }` for the "↑ 3 new conversations" pill (poll about once a minute while the screen is visible, or on a socket event). `area_id` is optional and uses the same area as `/feed`; a client browsing another area passes it to both routes.
+- `POST /api/pulse/feed/seen` `{ "view": "nearby", "through": "<iso>" }` advances the marker and returns `{ "ok": true, "through": "<iso>" }`. The stored marker never moves backward, including concurrent taps; a future `through` is capped at the server time. The client calls it when the unfiltered end card has been on screen and `caught_up` is true, never earlier.
 - The marker belongs to the view, not to a topic, and there is no per-topic marker. With a `topic` chosen, the page reads from the same marker, and the client does not call `/feed/seen` from it: a topic page shows only part of the view, so moving the view's marker would put the other topics' unseen posts behind "Show earlier". Only the unfiltered page (no `topic`) moves the marker.
 - Reader checks (section 5) apply to every item; hidden, muted, blocked and held items never appear. The legacy `/api/posts/feed` keeps its shape for the web.
 
@@ -225,7 +229,7 @@ Both answer `404 POST_NOT_FOUND`, `403 NOT_POST_AUTHOR` (not the asker), `400 NO
 | `PostComment` | `helpful_at timestamptz`, `helpful_by uuid`, `moderation_state text not null default 'live'`, `moderation_rule text`. Account deletion must leave a "Reply removed" row instead of cascading (change `user_id` to nullable with `ON DELETE SET NULL`, and soft-delete the text). `moderation_state` (check `live`/`held`/`removed`) and `moderation_rule` are in `20261014091000_pulse_comment_moderation_state.sql` (S11, PB's half, part 2) |
 | `PostMute` | `area_id uuid null` (the `topic` entity type already exists); its unique index includes `area_id`. Added with `Post_topic_check`'s widening in `20261014031000_pulse_topics.sql` (S4); the foreign key to `PulseArea` comes with that table |
 | `User` | `adult_attested_at timestamptz`; `account_type` check widened with `official` |
-| `UserFeedPreference` | `pulse_seen_nearby_at timestamptz`, `pulse_seen_following_at timestamptz` |
+| `UserFeedPreference` | `pulse_nearby_seen_at timestamptz`, `pulse_following_seen_at timestamptz` (server-only storage finalized before S6; clients use `/feed/seen`, never these columns) |
 | `UserNotificationPreferences` | `digest_enabled boolean`, `digest_time_local time`, `digest_channel text`, `weekly_street_digest_enabled boolean` (PC), `nudge_helper boolean default true` |
 | `Plan` | `source_post_id uuid null` (R3); S21: `series_id uuid`, `recurrence jsonb`, `co_host_ids uuid[]`, `paused_at timestamptz` |
 | `Post` (later slices) | S23: `merged_into_post_id uuid null`; S24: pinned sources live in `post_metadata.pins` (no column) |

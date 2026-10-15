@@ -583,8 +583,8 @@ class MyPostsViewModel
             applyState()
             viewModelScope.launch {
                 when (postsRepo.archivePost(postId)) {
-                    // A Pulse feed still listing it would show it until its next read: lists refetch.
-                    is NetworkResult.Success -> postsRefresh.notifyPostsDidChange()
+                    // A Pulse feed still listing it keeps its rows on a quiet read: it drops this one.
+                    is NetworkResult.Success -> postsRefresh.notifyPostEnded(postId)
                     is NetworkResult.Failure -> {
                         localArchiveOverrides = previous.toMutableMap()
                         applyState()
@@ -603,7 +603,8 @@ class MyPostsViewModel
             applyState()
             viewModelScope.launch {
                 when (postsRepo.unarchivePost(postId)) {
-                    is NetworkResult.Success -> postsRefresh.notifyPostsDidChange()
+                    // Including an Ask closed from a feed that still has it: that feed shows it again.
+                    is NetworkResult.Success -> postsRefresh.notifyPostRestored(postId)
                     is NetworkResult.Failure -> {
                         localArchiveOverrides = previous.toMutableMap()
                         applyState()
@@ -624,7 +625,7 @@ class MyPostsViewModel
             applyState()
             viewModelScope.launch {
                 when (postsRepo.deletePost(target.postId)) {
-                    is NetworkResult.Success -> postsRefresh.notifyPostsDidChange()
+                    is NetworkResult.Success -> postsRefresh.notifyPostEnded(target.postId)
                     is NetworkResult.Failure -> {
                         posts = previousPosts
                         localArchiveOverrides = previousOverrides.toMutableMap()
@@ -683,7 +684,7 @@ class MyPostsViewModel
                     )
                 }
             val headerChips = mutableListOf(intentChip(intent, projection.isArchived))
-            statusChipFor(dto)?.let(headerChips::add)
+            statusChipFor(dto, projection.isArchived)?.let(headerChips::add)
             if (projection.isArchived) headerChips.add(archivedChip())
 
             return RowModel(
@@ -761,13 +762,16 @@ class MyPostsViewModel
              * How the post ended, or when a heads-up ends (S7), beside the type chip: "Answered" with the check,
              * "Gone", "Reunited", "Happened · 3 went", "Ends Thu 4pm" with the clock; none for the rest.
              */
-            fun statusChipFor(dto: MyPostDto): RowChip? {
+            fun statusChipFor(
+                dto: MyPostDto,
+                archived: Boolean = dto.archivedAt != null,
+            ): RowChip? {
                 val status =
                     PostStatus.of(
                         postType = dto.postType,
                         state = dto.state,
                         resolution = dto.resolution,
-                        expiresAt = dto.expiresAt,
+                        expiresAt = dto.expiresAt.takeUnless { archived },
                         goingCount = dto.likeCount,
                     ) ?: return null
                 val (foreground, background) =
