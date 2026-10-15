@@ -1341,7 +1341,8 @@ public final class PulseComposeViewModel {
     }
 }
 
-private extension PulseComposePhoto {
+// Internal: the one-box composer (Pulse S8) uploads the same way.
+extension PulseComposePhoto {
     func asMultipartFile(index: Int) -> MultipartFile {
         let (filename, mimeType) = Self.mimeInfo(for: data, index: index)
         return MultipartFile(fieldName: "files", filename: filename, mimeType: mimeType, data: data)

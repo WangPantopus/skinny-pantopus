@@ -21,6 +21,8 @@ import SwiftUI
 /// Typed routes within the Pulse tab's NavigationStack.
 public enum PulseRoute: Hashable {
     case post(postId: String)
+    /// New post: the one-box composer (Pulse S8, Pulse mode) while the
+    /// redesign is on, else the October 13 composer for this intent.
     case compose(intent: String)
     case editPost(postId: String)
     case publicProfile(userId: String)
@@ -220,11 +222,18 @@ public struct PulseTabRoot: View {
             .id(postId)
             .onDisappear { router.completePostArrival(id: postId) }
         case let .compose(intent):
-            PulseComposeFlowView(
-                prefillFeedIntent: PulseIntent(rawValue: intent),
-                onCancel: { pop() },
-                onPosted: { _ in pop() }
-            )
+            if LaunchFeatures.pulseRedesign {
+                PulseComposerView(
+                    onCancel: { pop() },
+                    onPosted: { _ in pop() }
+                )
+            } else {
+                PulseComposeFlowView(
+                    prefillFeedIntent: PulseIntent(rawValue: intent),
+                    onCancel: { pop() },
+                    onPosted: { _ in pop() }
+                )
+            }
         case let .editPost(postId):
             PulseComposeFlowView(
                 editingPostId: postId,
