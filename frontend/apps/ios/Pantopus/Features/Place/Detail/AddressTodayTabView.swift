@@ -74,7 +74,10 @@ struct AddressTodayTabView: View {
                     .foregroundStyle(Theme.Color.appText)
                 // The date beside the title (the f1-today-tab design); it turns over at midnight.
                 TimelineView(.everyMinute) { minute in
-                    Text(minute.date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))
+                    Text(minute.date.formatted(
+                        Date.FormatStyle(timeZone: placeTimeZone)
+                            .weekday(.abbreviated).month(.abbreviated).day()
+                    ))
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(Theme.Color.appTextMuted)
                 }
@@ -94,6 +97,12 @@ struct AddressTodayTabView: View {
     private var address: String? {
         if let detail, case let .loaded(intel) = detail.state { return placeDetailAddress(intel.place) }
         return nil
+    }
+
+    private var placeTimeZone: TimeZone {
+        if let detail, case let .loaded(intel) = detail.state,
+           let name = intel.timeZone, let zone = TimeZone(identifier: name) { return zone }
+        return .autoupdatingCurrent
     }
 
     @ViewBuilder
