@@ -15,6 +15,7 @@ struct PulsePageHeader: View {
     let areaName: String?
     let topMenu: FeedTopMenu?
     let onOpenPreferences: () -> Void
+    let onOpenAreas: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
@@ -26,28 +27,32 @@ struct PulsePageHeader: View {
                 Spacer(minLength: Spacing.s2)
                 moreMenu
             }
-            if let areaName {
-                areaPill(areaName)
-            }
+            areaPill(areaName ?? "Choose an area")
         }
         .padding(.horizontal, Spacing.s4)
         .padding(.top, Spacing.s2)
     }
 
-    /// The town the page reads (the switcher comes with S5's areas).
     private func areaPill(_ name: String) -> some View {
-        HStack(spacing: Spacing.s1) {
-            Icon(.mapPin, size: 16, strokeWidth: 2.2, color: Theme.Color.primaryInk)
-                .accessibilityHidden(true)
-            Text(name)
-                .pulseFont(.button)
-                .foregroundStyle(Theme.Color.appText)
+        Button(action: onOpenAreas) {
+            HStack(spacing: Spacing.s1) {
+                Icon(.mapPin, size: 16, strokeWidth: 2.2, color: Theme.Color.primaryInk)
+                    .accessibilityHidden(true)
+                Text(name)
+                    .pulseFont(.button)
+                    .foregroundStyle(Theme.Color.appText)
+                Icon(.chevronDown, size: 16, color: Theme.Color.appTextSecondary)
+                    .accessibilityHidden(true)
+            }
+            .padding(.horizontal, Spacing.s3)
+            .padding(.vertical, Spacing.s2)
+            .frame(minHeight: 44)
+            .overlay(Capsule().stroke(Theme.Color.appBorder, lineWidth: 1))
         }
-        .padding(.horizontal, Spacing.s3)
-        .padding(.vertical, Spacing.s2)
-        .overlay(Capsule().stroke(Theme.Color.appBorder, lineWidth: 1))
+        .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Area: \(name)")
+        .accessibilityHint("Choose where to read Pulse")
         .accessibilityIdentifier("pulseAreaPill")
     }
 

@@ -22,6 +22,7 @@ public struct PulsePageView: View {
     @State private var deletingCardId: String?
     @State private var mutingCardId: String?
     @State private var showsPreferences = false
+    @State private var showsAreas = false
     @State private var viewportHeight: CGFloat = 0
     @State private var endVisibleForRead: Date?
     private let isActive: Bool
@@ -57,9 +58,12 @@ public struct PulsePageView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: Spacing.s3) {
-                    PulsePageHeader(areaName: viewModel.areaName, topMenu: topMenu) {
-                        showsPreferences = true
-                    }
+                    PulsePageHeader(
+                        areaName: viewModel.areaName,
+                        topMenu: topMenu,
+                        onOpenPreferences: { showsPreferences = true },
+                        onOpenAreas: { showsAreas = true }
+                    )
                     .id(Self.topID)
                     PulsePageModePicker(selected: viewModel.mode) { mode in
                         Task { await viewModel.selectMode(mode) }
@@ -167,6 +171,11 @@ public struct PulsePageView: View {
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
         }
+        .sheet(isPresented: $showsAreas) {
+            PulseAreaPickerView(selectedAreaId: viewModel.displayedAreaId) { area in
+                Task { await viewModel.selectArea(area) }
+            }
+        }
     }
 
     // MARK: - States
@@ -271,7 +280,7 @@ public struct PulsePageView: View {
     }
 
     private var pageIsActive: Bool {
-        isActive && scenePhase == .active && !showsPreferences
+        isActive && scenePhase == .active && !showsPreferences && !showsAreas
     }
 
     private var visibleEndRead: Date? {
