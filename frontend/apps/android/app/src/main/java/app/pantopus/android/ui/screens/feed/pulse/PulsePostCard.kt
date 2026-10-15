@@ -60,7 +60,7 @@ data class PulsePostActions(
     val isSaved: Boolean = false,
     val isReposted: Boolean = false,
     val shareCount: Int = 0,
-    /** `state == "solved"` — renders the inline Solved badge. */
+    /** `state == "solved"`: no "Mark solved" (the status pill says "Answered"). */
     val isSolved: Boolean = false,
     /** Viewer authored this post. */
     val isOwner: Boolean = false,
@@ -79,6 +79,10 @@ data class PulsePostActions(
     val topicLabel: String? = null,
     /** The Pulse topic the post is tagged with, when it is one of the 12; "Mute this topic" mutes it. */
     val pulseTopic: PulseTopic? = null,
+    /** The asker's own open Ask that hasn't been kept open yet: "Keep open 7 more days" (S7). */
+    val canKeepOpen: Boolean = false,
+    /** The asker's own open Ask: "Close" (S7). */
+    val canCloseAsk: Boolean = false,
 ) {
     /** Report is offered to everyone except the author. */
     val canReport: Boolean get() = !isOwner && !isSeeded
@@ -90,11 +94,11 @@ data class PulsePostActions(
     val canMuteAuthor: Boolean
         get() = !isOwner && !isSeeded && muteEntityType != null && !muteEntityId.isNullOrEmpty()
 
-    /** Topic mute needs a concrete post type. */
-    val canMuteTopic: Boolean get() = !isSeeded && !postType.isNullOrEmpty()
+    /** Type mute needs another person's post with a concrete post type. */
+    val canMuteTopic: Boolean get() = !isOwner && !isSeeded && !postType.isNullOrEmpty()
 
     /** "Mute this topic": only on a post tagged with one of the 12 Pulse topics. */
-    val canMuteThisTopic: Boolean get() = !isSeeded && pulseTopic != null
+    val canMuteThisTopic: Boolean get() = !isOwner && !isSeeded && pulseTopic != null
 }
 
 /** VM-prepared content for a single Pulse card. */
@@ -124,6 +128,8 @@ data class PulsePostCardContent(
     val origin: String? = null,
     val likePending: Boolean = false,
     val savePending: Boolean = false,
+    /** How the post ended, or when a heads-up ends (S7): "Answered", "Gone", "Ends Wed 4pm"; null shows none. */
+    val status: PostStatus? = null,
 ) {
     val isCurator: Boolean get() = origin == "curator"
 
@@ -466,9 +472,7 @@ private fun ReactionStrip(
                 postId = content.id,
             )
         }
-        if (content.actions.isSolved) {
-            SolvedBadge(postId = content.id)
-        }
+        content.status?.let { PostStatusPill(status = it, postId = content.id) }
         Spacer(modifier = Modifier.weight(1f))
         if (onToggleSave != null) {
             Box(
@@ -542,39 +546,6 @@ private fun ReactionStrip(
                 color = PantopusColors.appTextSecondary,
             )
         }
-    }
-}
-
-/**
- * Inline "Solved" pill — RN renders the same badge once
- * `state === 'solved'` (`PostCard.tsx:474-479`).
- */
-@Composable
-private fun SolvedBadge(postId: String) {
-    Row(
-        modifier =
-            Modifier
-                .height(22.dp)
-                .clip(RoundedCornerShape(Radii.pill))
-                .background(PantopusColors.successLight)
-                .padding(horizontal = Spacing.s2)
-                .semantics { contentDescription = "Solved" }
-                .testTag("pulsePostSolvedBadge_$postId"),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
-    ) {
-        PantopusIconImage(
-            icon = PantopusIcon.CheckCircle,
-            contentDescription = null,
-            size = 11.dp,
-            tint = PantopusColors.success,
-        )
-        Text(
-            text = "Solved",
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            color = PantopusColors.success,
-        )
     }
 }
 
@@ -666,7 +637,7 @@ private val attendeeTints =
 
 private fun PulseIntent.tintColors(): Pair<Color, Color> =
     when (this) {
-        PulseIntent.All -> PantopusColors.appTextSecondary to PantopusColors.appSurfaceSunken
+        PulseIntent.All, PulseIntent.Generic -> PantopusColors.appTextSecondary to PantopusColors.appSurfaceSunken
         PulseIntent.Ask -> PantopusColors.warmAmber to PantopusColors.warmAmberBg
         PulseIntent.Recommend -> PantopusColors.success to PantopusColors.successLight
         PulseIntent.Event -> PantopusColors.magic to PantopusColors.magicBg
@@ -687,8 +658,12 @@ private fun buildA11yLabel(content: PulsePostCardContent): String {
     if (content.isVisitor) parts.add("Visitor")
     content.title?.takeIf { it.isNotEmpty() }?.let { parts.add(it) }
     if (content.body.isNotEmpty()) parts.add(content.body)
+    content.status?.let { parts.add(it.spoken) }
     if (content.mediaUrls.isNotEmpty()) {
         parts.add("${content.mediaUrls.size} attached ${if (content.mediaUrls.size == 1) "photo" else "photos"}")
     }
-    return parts.joinToString(". ")
+    // A part that already ends a sentence keeps its own mark: TalkBack reads a doubled period aloud ("2 period").
+    return parts.map(String::trimEnd).filter(String::isNotEmpty).joinToString(" ") { part ->
+        if (part.last() in ".?!") part else "$part."
+    }
 }

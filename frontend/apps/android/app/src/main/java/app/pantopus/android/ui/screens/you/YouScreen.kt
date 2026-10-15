@@ -279,8 +279,13 @@ fun YouScreen(
         AlertDialog(
             onDismissRequest = { confirmVisible = false },
             title = { Text("Sign out of Pantopus?") },
-            // Instant Screens contract §7: the sign-out confirmation says the phone's saved copy goes too.
-            text = { Text("You'll need to sign in again to use your account. Signing out removes what Pantopus saved on this phone.") },
+            // Saved pages are cleared; private Pulse drafts stay scoped to this account on this device.
+            text = {
+                Text(
+                    "You'll need to sign in again to use your account. Saved pages are removed from this phone. " +
+                        "Your private Pulse draft stays for your next sign-in.",
+                )
+            },
             modifier = Modifier.testTag(YouScreenTags.CONFIRM_DIALOG),
             confirmButton = {
                 TextButton(onClick = {

@@ -1,6 +1,7 @@
 package app.pantopus.android.data.api.models.posts
 
 import app.pantopus.android.core.identity.MadeUpUsername
+import app.pantopus.android.data.api.models.pulse.PostLifecycleMetadata
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
@@ -123,6 +124,15 @@ data class PostDetailDto(
     @Json(name = "deal_business_name") val dealBusinessName: String? = null,
     /** `moderation` when a moderator removed the post. Only its author can still open it then. */
     @Json(name = "archive_reason") val archiveReason: String? = null,
+    /** Manual archive can leave `state` open; an archived post has no lifecycle actions. */
+    @Json(name = "archived_at") val archivedAt: String? = null,
+    /** Lifecycle state: `open`, `solved`, `archived`. */
+    val state: String? = null,
+    /** How the post ended (S7); null while open. */
+    val resolution: String? = null,
+    /** When the post ends (S7). */
+    @Json(name = "expires_at") val expiresAt: String? = null,
+    @Json(name = "post_metadata") val lifecycleMetadata: PostLifecycleMetadata? = null,
 ) {
     /** A moderator removed the post: neighbors can't see it or reply. */
     val isRemovedByModerator: Boolean get() = archiveReason == "moderation"

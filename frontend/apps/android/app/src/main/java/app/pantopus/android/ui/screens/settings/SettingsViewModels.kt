@@ -736,7 +736,7 @@ class PrivacySettingsViewModel
                 if (result is NetworkResult.Success) {
                     _deletingAccount.value = false
                     _deleteSheetVisible.value = false
-                    authRepository.eraseAllLocalState()
+                    authRepository.eraseAllLocalState(deletedUserId)
                     appLock.clearTransientState()
                     _accountDeleted.value = true
                 } else if (signedOutByDeletion) {
