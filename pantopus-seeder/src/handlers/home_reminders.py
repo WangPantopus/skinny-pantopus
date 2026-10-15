@@ -306,11 +306,7 @@ def _load_timezones(supabase, home_ids: list[str], user_ids: list[str], secrets:
     """Resolve the recipient's clock separately from each household's civil date."""
     homes = (supabase.table("Home").select("id, map_center_lat, map_center_lng, location")
              .in_("id", list(set(home_ids))).execute().data or []) if home_ids else []
-    prefs = (supabase.table("UserNotificationPreferences").select("user_id, daily_briefing_timezone")
-             .in_("user_id", list(set(user_ids))).execute().data or []) if user_ids else []
     zones = cache if cache is not None else {}
-    zones.update({p["user_id"]: valid_timezone(p.get("daily_briefing_timezone")) for p in prefs
-                  if valid_timezone(p.get("daily_briefing_timezone"))})
     missing = [uid for uid in set(user_ids) if uid not in zones]
     for offset in range(0, len(missing), 100):
         response = httpx.post(f"{secrets.pantopus_api_base_url}/api/internal/briefing/timezones",

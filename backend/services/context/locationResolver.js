@@ -352,10 +352,11 @@ async function resolveNotificationTimezone(userId, prefs) {
     if (error) throw new Error('Could not read notification timezone');
     prefs = data;
   }
-  const explicit = validTimezone(prefs?.daily_briefing_timezone);
-  if (explicit) return explicit;
+  // The selected briefing location defines its clock. A legacy Pacific
+  // default (or a phone's old zone) must not override a known location.
   const location = await resolveLocation(userId);
-  return location?.source !== 'none' ? validTimezone(location?.timezone) : null;
+  if (location?.source && location.source !== 'none') return validTimezone(location.timezone);
+  return validTimezone(prefs?.daily_briefing_timezone);
 }
 
 module.exports = { resolveLocation, locationFromCoordinates, inferTimezone, resolveNotificationTimezone };

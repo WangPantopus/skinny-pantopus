@@ -157,9 +157,9 @@ def _find_eligible_users(supabase, *, secrets=None) -> list[dict[str, Any]]:
     today_dates = set()
     user_tz_map: dict[str, tuple[str, str]] = {}  # user_id → (local_date, local_time_hhmm)
 
-    # Existing explicit choices are preserved. New/unconfigured accounts use
-    # the backend's shared location hierarchy; never silently assign Pacific.
-    missing = [row["user_id"] for row in prefs_rows if not valid_timezone(row.get("daily_briefing_timezone"))]
+    # The selected location wins over historical defaults or an old device
+    # clock. Resolve every recipient through the backend's shared hierarchy.
+    missing = [row["user_id"] for row in prefs_rows]
     resolved = {}
     if missing and secrets:
         for offset in range(0, len(missing), 100):
@@ -169,7 +169,7 @@ def _find_eligible_users(supabase, *, secrets=None) -> list[dict[str, Any]]:
             response.raise_for_status()
             resolved.update(response.json().get("timezones", {}))
     for row in prefs_rows:
-        tz_str = valid_timezone(row.get("daily_briefing_timezone")) or valid_timezone(resolved.get(row["user_id"]))
+        tz_str = valid_timezone(resolved.get(row["user_id"]) if secrets else row.get("daily_briefing_timezone"))
         if not tz_str:
             continue
         row["daily_briefing_timezone"] = tz_str

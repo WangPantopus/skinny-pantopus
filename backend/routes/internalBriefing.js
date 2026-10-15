@@ -585,7 +585,7 @@ router.post('/reminder-push', verifyInternalApiKey, async (req, res) => {
       return res.json({ status: 'skipped', reason: 'preference_disabled' });
     }
 
-    if (prefs && !validTimezone(prefs.daily_briefing_timezone)) {
+    if (prefs) {
       prefs.daily_briefing_timezone = await resolveNotificationTimezone(userId, prefs);
       if (!prefs.daily_briefing_timezone && prefs.quiet_hours_start_local && prefs.quiet_hours_end_local) {
         return res.json({ status: 'skipped', reason: 'timezone_unavailable' });

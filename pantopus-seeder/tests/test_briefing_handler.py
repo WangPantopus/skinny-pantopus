@@ -446,6 +446,10 @@ class TestEndToEnd:
         ))))
         with (
             patch(f"{reminder_module}.datetime") as mock_dt,
+            patch(f"{reminder_module}._load_timezones", return_value=(
+                {"home-1": "America/Los_Angeles"},
+                {row["user_id"]: row["daily_briefing_timezone"] for row in preference_query.execute.return_value.data},
+            )),
             patch(f"{reminder_module}._get_home_members", return_value={"home-1": ["creator", "member", "excluded", "withdrawn", "tomorrow", "next-day"]}),
             patch(f"{reminder_module}._send_reminder", return_value="sent") as send,
             patch(f"{reminder_module}._record_sent") as record,
@@ -572,6 +576,9 @@ class TestEndToEnd:
             patch("supabase.create_client", return_value=sb),
             patch(f"{_HANDLER}.datetime") as mock_dt,
             patch(f"{_HANDLER}._process_user", side_effect=mock_process),
+            patch(f"{_HANDLER}.httpx.post", return_value=MagicMock(
+                json=MagicMock(return_value={"timezones": {f"user-{i}": "America/Los_Angeles" for i in range(150)}}),
+            )),
             patch(f"{_HANDLER}._publish_metrics"),
         ):
             mock_dt.now.return_value = now_pacific
