@@ -312,14 +312,19 @@ private fun VerifyRow(
 /** The document door while the person's residency document waits on a reviewer: where it stands and the way to its status. */
 @Composable
 private fun DocumentReviewRow(onOpenStatus: (() -> Unit)?) {
-    val open = if (onOpenStatus != null) Modifier.clickable(onClickLabel = "Open its status", role = Role.Button, onClick = onOpenStatus) else Modifier
+    val open =
+        if (onOpenStatus != null) {
+            Modifier.clickable(onClickLabel = "Open its status", role = Role.Button, onClick = onOpenStatus)
+        } else {
+            Modifier
+        }
     Box(modifier = open.testTag("place.verifySheet.documentInReview")) {
         VerifyRow(
             PantopusIcon.Hourglass,
             "Document under review",
             "A person is reviewing your document. You'll get a notification when it's decided.",
             PlaceTileTone.MUTED,
-            trailing = onOpenStatus?.let { { PlaceChevron() } },
+            trailing = { if (onOpenStatus != null) PlaceChevron() },
         )
     }
 }
