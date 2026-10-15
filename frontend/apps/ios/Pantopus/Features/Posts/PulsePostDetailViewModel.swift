@@ -649,6 +649,8 @@ public final class PulsePostDetailViewModel {
     /// the card rather than failing the post. Kicked from its own `.task`
     /// so the card never blocks (or fails) the post itself.
     public func loadNearbyProviders() async {
+        // Launch cuts #6/#4 hide the card (business discovery and broad provider search): nothing is asked for it.
+        guard LaunchFeatures.businessDirectory, LaunchFeatures.openGigs else { return }
         await fetchNearbyProviders()
     }
 

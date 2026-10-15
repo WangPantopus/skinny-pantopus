@@ -320,6 +320,7 @@ async function shouldSuppressAudienceNotification(userId, type, metadata) {
  * @param {string} [opts.link] - in-app link to navigate to
  * @param {Object} [opts.metadata] - extra data (home_id, gig_id, etc.)
  * @param {string} [opts.idempotencyKey] - stable event identity; existing notices are never re-emitted
+ * @param {boolean} [opts.sendPush] - false leaves transport to the caller's durable quiet-hours queue
  * @param {string} [opts.contextType] - 'personal' or 'business' (Identity Firewall)
  * @param {string} [opts.contextId] - business_user_id when contextType='business'
  * @param {string} [opts.context] - 'personal' | 'audience' | 'platform'
@@ -328,7 +329,7 @@ async function shouldSuppressAudienceNotification(userId, type, metadata) {
  *   pass `context: 'audience'` explicitly).
  * @returns {Promise<Object|null>} notification or null on error
  */
-async function createNotification({ userId, type, title, body, icon, link, metadata, contextType, contextId, context, idempotencyKey }) {
+async function createNotification({ userId, type, title, body, icon, link, metadata, contextType, contextId, context, idempotencyKey, sendPush = true }) {
   if (!userId || !type || !title) {
     logger.warn('createNotification called with missing required fields', { userId, type, title });
     return null;
@@ -393,7 +394,7 @@ async function createNotification({ userId, type, title, body, icon, link, metad
     // Send push notification only if:
     // 1. User has global push enabled (MailPreferences.push_notifications)
     // 2. User hasn't disabled this specific notification type (UserNotificationPreferences)
-    Promise.all([isPushEnabled(userId), isTypeEnabled(userId, type)])
+    if (sendPush) Promise.all([isPushEnabled(userId), isTypeEnabled(userId, type)])
       .then(async ([pushEnabled, typeEnabled]) => {
         if (!pushEnabled || !typeEnabled) return;
         if (!(await readableNotifications([data])).length) return;

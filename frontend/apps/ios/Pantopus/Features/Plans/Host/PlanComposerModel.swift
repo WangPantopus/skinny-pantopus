@@ -46,7 +46,11 @@ final class PlanComposerModel {
     var startsNow = true
     var whereKind: Where = .publicPlace
     var place: PlanPlaceOptionDTO?
+    /// The place came from H6's "You're here now": H4 says so under its name.
+    var placeIsHereNow = false
     private(set) var home: PlanHomeChoice?
+    /// Every home of the host's with a point: "You're here now" never picks a place right at one.
+    private(set) var homePoints: [(latitude: Double, longitude: Double)] = []
     var spots = 8
     var approval: PlanApproval = .approveEach
     var alsoHostedBefore = false
@@ -112,10 +116,10 @@ final class PlanComposerModel {
     }
 
     private func loadHome() async {
-        guard let homes = try? await HomesStoreReads.myHomes().value.homes,
-              let mine = homes.first(where: { $0.location != nil && $0.showsCopyBeforeRecheck }) ?? homes
-              .first(where: { $0.location != nil }),
-              let point = mine.location else { return }
+        guard let homes = try? await HomesStoreReads.myHomes().value.homes else { return }
+        homePoints = homes.compactMap { $0.location.map { (latitude: $0.latitude, longitude: $0.longitude) } }
+        let located = homes.filter { $0.location != nil }
+        guard let mine = located.first(where: \.showsCopyBeforeRecheck) ?? located.first, let point = mine.location else { return }
         home = PlanHomeChoice(
             id: mine.home.id,
             street: mine.home.address,
