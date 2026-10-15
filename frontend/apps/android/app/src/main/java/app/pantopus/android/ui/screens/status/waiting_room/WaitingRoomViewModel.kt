@@ -104,6 +104,9 @@ class WaitingRoomViewModel
 
         private var claimId: String? = null
 
+        /** The claim is a renter's residency document (`claim_type` "resident"). */
+        private var claimIsResidency = false
+
         fun consumeNavEvent() {
             _navEvent.value = null
         }
@@ -123,10 +126,12 @@ class WaitingRoomViewModel
         private suspend fun applyClaims(claim: OwnershipClaimDto?) {
             if (claim == null) {
                 claimId = null
+                claimIsResidency = false
                 applyVerificationFallback()
                 return
             }
             claimId = claim.id
+            claimIsResidency = claim.claimType == "resident"
             if (claim.status != UNDER_REVIEW_STATUS) {
                 if (claim.status in APPROVED_STATUSES) {
                     // A18.2 "You're the owner". Dates come straight off the
@@ -262,7 +267,13 @@ class WaitingRoomViewModel
 
         fun handleInlineAction(action: WaitingRoomInlineAction) {
             when (action.actionKey) {
-                "update_evidence" -> claimId?.let { _navEvent.value = WaitingRoomNav.UpdateEvidence(homeId, it) }
+                // A residency document is updated in the residency document flow, never the ownership one.
+                "update_evidence" ->
+                    if (claimIsResidency) {
+                        _navEvent.value = WaitingRoomNav.UploadProof(homeId)
+                    } else {
+                        claimId?.let { _navEvent.value = WaitingRoomNav.UpdateEvidence(homeId, it) }
+                    }
                 "cancel_claim" -> _navEvent.value = WaitingRoomNav.CancelClaim(homeId)
                 "verify_postcard" -> _navEvent.value = WaitingRoomNav.VerifyPostcard(homeId)
                 else -> log("inline.${action.actionKey}")
