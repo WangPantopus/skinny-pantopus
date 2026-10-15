@@ -124,9 +124,11 @@ async function page(userId, { view, topic, areaId, earlierBefore, limit }) {
   let quiet = null;
   if (!context.homes.primary) quiet = { reason: 'no_home', card: 'set_up_home' };
   else if (!before && !topic) {
-    const active = await scan(context, { view, readAt, take: 5 });
+    // The meter describes the town, so only Nearby can call it sparse. Following is the
+    // reader's own list: a short one is not quiet, and an empty one has no card.
+    const active = await scan(context, { view, readAt, take: view === 'nearby' ? 5 : 1 });
     if (!active.length) quiet = { reason: 'empty', card: null };
-    else if (active.length < 5) quiet = { reason: 'sparse', card: 'meter' };
+    else if (view === 'nearby' && active.length < 5) quiet = { reason: 'sparse', card: 'meter' };
   }
   return {
     view, read_at: readAt, area: areaDto(context.area), areas_available: context.available.map(areaDto), quiet,

@@ -113,6 +113,7 @@ Query: `view` = `nearby` (default) | `following`; `topic` (enum, optional); `are
 }
 ```
 
+- `quiet` is `no_home` (card `set_up_home`) on any page for a reader without a home. Otherwise only the unfiltered first page has one: on Nearby, `empty` when the area has no open conversation and `sparse` (card `meter`) when it has fewer than five, because the meter describes the town; on Following, only `empty` (no card) when nothing followed is open. A short Following list is not quiet.
 - `read_at` is the server time captured before the query; only items created at or before it enter the response. `end.since` is the lower bound of the new-items window, for the end card's wording; it is not a seen acknowledgment. Clients read `read_at` optionally until this backend ships and then use it instead of their device clock for polling and acknowledgments.
 - The first response holds items **newer than the viewer's last-seen marker** for that view (at least the last 24 hours if the marker is older), capped at `limit`. `caught_up` is true when nothing newer remains beyond the cap.
 - `earlier_cursor` is an opaque string: clients pass it back unchanged. It contains the time/id tie-breaker and the original new-items window, so equal timestamps cannot skip posts and later pages preserve the snapshot. The server also accepts an ISO `earlier_before` for older callers.
