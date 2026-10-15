@@ -193,8 +193,18 @@ function cleanText(value, max, label) {
   return text || null;
 }
 
+// Watch parties and walks may be hosted at home (decision D6); pickup games and playdates meet in public.
+const AT_HOME_MESSAGES = {
+  watch_party: 'That’s at your home. To host there, choose “My place”: only people you accept see your address.',
+  walk_coffee: 'That’s at your home. To host there, choose “My porch”: only people you accept see your address.',
+  pickup_game: 'That’s at your home. Choose a public place nearby, like a park or a court.',
+  playdate: 'That’s at your home. Playdates meet in public places: choose one nearby.',
+  // H11 moves a public plan to another public place only.
+  move: 'That’s at your home. Choose another public place nearby.',
+};
+
 /** The place, from the body: a public place, or the host's own home. */
-function resolvePlace(viewer, kind, place) {
+function resolvePlace(viewer, kind, place, { moving = false } = {}) {
   if (!place || typeof place !== 'object') fail(422, 'validation', 'Choose where the plan happens.');
   if (place.kind === 'home') {
     if (kind === 'playdate') fail(422, 'validation', 'Playdates meet in public places.');
@@ -219,6 +229,12 @@ function resolvePlace(viewer, kind, place) {
   }
   const name = cleanText(place.name, 120, 'The place name');
   if (!name) fail(422, 'validation', 'Name the place.');
+  // A "public" place at the host's own home would hand its exact spot to everyone who gets in,
+  // without the at-home rules (the host approves each person and confirms sharing the address).
+  const point = { latitude, longitude };
+  if (viewer.homes.some((h) => h.point && rules.distanceMeters(h.point, point) <= rules.HOME_GUARD_METERS)) {
+    fail(422, 'place_at_home', moving ? AT_HOME_MESSAGES.move : AT_HOME_MESSAGES[kind] || AT_HOME_MESSAGES.pickup_game);
+  }
   return {
     kind: 'public',
     name,
@@ -401,7 +417,7 @@ async function editPlan(user, postId, patch, { io = null } = {}) {
 
   let placeKind = plan.place_kind;
   if (patch.place !== undefined) {
-    const place = resolvePlace(viewer, plan.kind, patch.place);
+    const place = resolvePlace(viewer, plan.kind, patch.place, { moving: true });
     assertHostNear(viewer, plan.kind, place);
     placeKind = place.kind;
     placeChanged = place.kind !== plan.place_kind
@@ -476,7 +492,13 @@ async function editPlan(user, postId, patch, { io = null } = {}) {
     const accepted = requests.filter((r) => r.status === 'accepted');
     if (accepted.length > 0) {
       const { error } = await supabaseAdmin.from('PlanRequest')
-        .update({ reconfirm_requested_at: stamp, reconfirmed: null, updated_at: stamp, ...(remindAgain ? { reminded_at: null } : {}) })
+        .update({
+          reconfirm_requested_at: stamp,
+          reconfirmed: null,
+          reconfirm_reason: timeMoved && placeChanged ? 'both' : timeMoved ? 'time' : 'place',
+          updated_at: stamp,
+          ...(remindAgain ? { reminded_at: null } : {}),
+        })
         .eq('post_id', postId).eq('status', 'accepted');
       if (error) throw new Error(`Failed to ask "Still coming?": ${error.message}`);
       const hostFirst = firstOf((await userNames([viewer.id])).get(viewer.id));
@@ -722,6 +744,7 @@ async function askToJoin(user, postId, body, { io = null } = {}) {
     queued_at: stamp,
     reconfirm_requested_at: null,
     reconfirmed: null,
+    reconfirm_reason: null,
     on_my_way_at: null,
     updated_at: stamp,
   };

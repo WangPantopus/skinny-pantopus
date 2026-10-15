@@ -205,7 +205,7 @@ private fun PeopleLine(
     }
 }
 
-/** "Sam moved the watch party. Still coming?" with its two answers (the in-app side of the H11 push). */
+/** "Sam moved the watch party. Still coming?" with its two answers (the in-app side of the H11 push, in its words). */
 @Composable
 private fun StillComingCard(
     plan: PlanDto,
@@ -221,13 +221,21 @@ private fun StillComingCard(
                 .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
+        val host = plan.hostFirst
+        val noun = PlanFormat.noun(plan)
+        val (title, message) =
+            when (plan.myRequest?.reconfirmReason) {
+                "place" -> "$host changed the place" to "It's at a new place now. Still coming?"
+                "both" -> "$host changed the $noun" to "Now ${PlanFormat.dayAt(plan)}, at a new place. Still coming?"
+                else -> "$host moved the $noun" to "Now ${PlanFormat.dayAt(plan)}. Still coming?"
+            }
         Text(
-            text = "${plan.hostFirst} moved the ${PlanFormat.noun(plan)}",
+            text = title,
             style = PantopusTextStyle.body.copy(fontWeight = FontWeight.SemiBold),
             color = PantopusColors.appText,
         )
         Text(
-            text = "Now ${PlanFormat.dayAt(plan)}. Still coming?",
+            text = message,
             style = PantopusTextStyle.small,
             color = PantopusColors.appTextStrong,
         )

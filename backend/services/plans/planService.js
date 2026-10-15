@@ -30,7 +30,7 @@ const PLAN_COLUMNS = [
 const PLAN_SELECT = `${PLAN_COLUMNS}, post:Post!inner(${POST_COLUMNS})`;
 const REQUEST_COLUMNS = [
   'id', 'post_id', 'user_id', 'status', 'party_size', 'note', 'kids_count', 'kids_age_bands',
-  'stays_with_kids', 'decided_by', 'reconfirm_requested_at', 'reconfirmed', 'on_my_way_at',
+  'stays_with_kids', 'decided_by', 'reconfirm_requested_at', 'reconfirmed', 'reconfirm_reason', 'on_my_way_at',
   'ask_count', 'distance_band', 'queued_at', 'reminded_at', 'feedback', 'feedback_note', 'feedback_at',
   'created_at', 'decided_at', 'updated_at',
 ].join(', ');
@@ -399,6 +399,7 @@ function askEligibility(plan, viewer, ctx, { myRequest, spotsLeft, state }) {
 
 function myRequestView(plan, request, { waitlistPosition = null } = {}) {
   if (!request) return null;
+  const reconfirmNeeded = Boolean(request.reconfirm_requested_at) && request.reconfirmed == null && request.status === 'accepted';
   return {
     id: request.id,
     status: request.status,
@@ -406,7 +407,9 @@ function myRequestView(plan, request, { waitlistPosition = null } = {}) {
     note: request.note || null,
     kids_count: plan.kind === 'playdate' ? request.kids_count ?? null : null,
     kids_age_bands: plan.kind === 'playdate' ? request.kids_age_bands || [] : null,
-    reconfirm_needed: Boolean(request.reconfirm_requested_at) && request.reconfirmed == null && request.status === 'accepted',
+    reconfirm_needed: reconfirmNeeded,
+    // What the host's change asked about ('time', 'place' or 'both'), so the card says what the push said.
+    reconfirm_reason: reconfirmNeeded ? request.reconfirm_reason || null : null,
     on_my_way: Boolean(request.on_my_way_at),
     waitlist_position: waitlistPosition,
     decided_by: request.decided_by || null,

@@ -22,6 +22,17 @@ function openAreas(query) {
   return query.not('opened_at', 'is', null).lte('opened_at', new Date().toISOString());
 }
 
+function eligibleHomeOccupancy(row) {
+  return currentOccupancy(row) && !!resolveHomeRole(row)
+    && !!row.home && !['archived', 'merged'].includes(row.home.home_status)
+    && !['frozen', 'frozen_silent', 'disputed'].includes(row.home.security_state);
+}
+
+function verifiedHomeOccupancy(row) {
+  return eligibleHomeOccupancy(row) && !NON_RESIDENT_ROLES.has(resolveHomeRole(row))
+    && isVerifiedResident({ occupancy: row });
+}
+
 // Public area metadata only. Home ids, boundaries and measured distances never enter endpoint DTOs.
 function areaDto(area) {
   return area ? { id: area.id, kind: area.kind, name: area.name, state: area.state, title: area.name } : null;
@@ -47,11 +58,8 @@ async function homeAreaContext(userId) {
     // compatible before that column ships and follows the choice as soon as it does.
     checked(db.from('UserNotificationPreferences').select('*').eq('user_id', userId).maybeSingle()),
   ]);
-  const homes = (occupancies || []).filter(row => currentOccupancy(row) && resolveHomeRole(row)
-    && row.home && !['archived', 'merged'].includes(row.home.home_status)
-    && !['frozen', 'frozen_silent', 'disputed'].includes(row.home.security_state))
-    .map(row => ({ id: row.home_id, verified: !NON_RESIDENT_ROLES.has(resolveHomeRole(row))
-      && isVerifiedResident({ occupancy: row }),
+  const homes = (occupancies || []).filter(eligibleHomeOccupancy)
+    .map(row => ({ id: row.home_id, verified: verifiedHomeOccupancy(row),
       pendingPostcard: row.verification_status === 'pending_postcard' }));
   const primary = homes.find(home => home.id === preferences?.default_home_id) || homes[0] || null;
   if (!homes.length) return { homes, primary, areas: [], matches: [], verifiedAreaIds: new Set() };
@@ -65,8 +73,8 @@ async function homeAreaContext(userId) {
   return { homes, primary, areas: areas || [], matches: matches || [], verifiedAreaIds };
 }
 
-async function myAreas(userId) {
-  const context = await homeAreaContext(userId);
+async function myAreas(userId, loadedContext) {
+  const context = loadedContext || await homeAreaContext(userId);
   const inside = new Set(context.matches.filter(match => match.home_id === context.primary?.id
     && match.inside === true).map(match => match.area_id));
   const available = context.areas.filter(area => inside.has(area.id));
@@ -96,4 +104,5 @@ async function labelFor(author, areaId, context) {
   return 'visitor';
 }
 
-module.exports = { AREA_SELECT, areaDto, openAreas, searchTowns, homeAreaContext, myAreas, labelFor };
+module.exports = { AREA_SELECT, HOME_SELECT, areaDto, openAreas, searchTowns, homeAreaContext,
+  myAreas, labelFor, eligibleHomeOccupancy, verifiedHomeOccupancy };
