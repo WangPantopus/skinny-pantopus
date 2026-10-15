@@ -223,7 +223,7 @@ class PrivacyViewModelTest {
         vm.confirmDeleteAccount(hostActivity = activity)
 
         coVerify(exactly = 1) { accountDeletion.deleteAccount("tok-1") }
-        coVerify(exactly = 1) { auth.eraseAllLocalState() }
+        coVerify(exactly = 1) { auth.eraseAllLocalState(any()) }
         assertTrue(vm.accountDeleted.value)
         assertFalse(vm.deleteSheetVisible.value)
     }
@@ -273,7 +273,7 @@ class PrivacyViewModelTest {
         vm.confirmDeleteAccount(hostActivity = activity)
 
         assertEquals("Finish your gigs first.", vm.deleteAccountError.value)
-        coVerify(exactly = 0) { auth.eraseAllLocalState() }
+        coVerify(exactly = 0) { auth.eraseAllLocalState(any()) }
         assertFalse(vm.accountDeleted.value)
     }
 

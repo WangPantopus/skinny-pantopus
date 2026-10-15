@@ -1343,8 +1343,10 @@ class AuthRepository
          * the account is gone) and erase every local trace including the
          * remembered accounts, the Block Store entry and both Keystore keys.
          */
-        suspend fun eraseAllLocalState() {
+        suspend fun eraseAllLocalState(deletedUserId: String? = null) {
+            val actor = deletedUserId ?: (_state.value as? State.SignedIn)?.user?.id
             signOut(reason = SessionEndReason.expired(code = "ACCOUNT_DELETED"))
+            actor?.let { accountDeviceData.clearRetainedPulseDraft(it) }
             PendingDeepLinkStore.clear()
             runCatching { accountHints.delete() }
             _rememberedAccounts.value = emptyList()

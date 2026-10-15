@@ -20,12 +20,16 @@ import app.pantopus.android.data.api.models.posts.PostDetailDto
 import app.pantopus.android.data.api.models.posts.PostPrecheckRequest
 import app.pantopus.android.data.api.models.posts.PostUpdateRequest
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.businesses.BusinessPostsRepository
 import app.pantopus.android.data.location.LocationProvider
 import app.pantopus.android.data.location.UserCoordinate
 import app.pantopus.android.data.network.NetworkMonitor
 import app.pantopus.android.data.posts.PostPrecheckRepository
 import app.pantopus.android.data.posts.PostsRepository
+import app.pantopus.android.data.posts.PulseComposeDraft
+import app.pantopus.android.data.posts.PulseComposeDraftStore
+import app.pantopus.android.data.posts.PulseDraftPhoto
 import app.pantopus.android.data.posts.PulsePostsRefreshNotifier
 import app.pantopus.android.data.upload.UploadRepository
 import app.pantopus.android.ui.screens.compose.placepicker.MediaCaptureLocation
@@ -39,6 +43,8 @@ import app.pantopus.android.ui.screens.shared.form.isoDateOrEmpty
 import app.pantopus.android.ui.screens.shared.form.maxLength
 import app.pantopus.android.ui.screens.shared.form.required
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -242,6 +248,8 @@ class PulseComposeViewModel
         private val businessPosts: BusinessPostsRepository,
         /** Pre-post safety precheck — `POST /api/posts/precheck`. */
         private val precheckRepo: PostPrecheckRepository,
+        private val draftStore: PulseComposeDraftStore,
+        private val auth: AuthRepository,
     ) : ViewModel() {
         private val _state = MutableStateFlow<PulseComposeUiState>(PulseComposeUiState.Idle)
         val state: StateFlow<PulseComposeUiState> = _state.asStateFlow()
@@ -393,7 +401,7 @@ class PulseComposeViewModel
          * owner dashboard's "Post as this business" FAB; the backend gates it
          * on `profile.edit` (owner / admin / editor).
          */
-        private val createCommandId = java.util.UUID.randomUUID().toString()
+        private var createCommandId = java.util.UUID.randomUUID().toString()
         private var businessAuthorId: String? = null
 
         /**
@@ -402,6 +410,166 @@ class PulseComposeViewModel
          * while. Pick-time coordinates remain the fallback.
          */
         private var freshGpsFix: UserCoordinate? = null
+
+        private val _draftLoad = MutableStateFlow<PulseDraftLoadState>(PulseDraftLoadState.Loading)
+        val draftLoad: StateFlow<PulseDraftLoadState> = _draftLoad.asStateFlow()
+        private val _draftNotice = MutableStateFlow<String?>(null)
+        val draftNotice: StateFlow<String?> = _draftNotice.asStateFlow()
+        private var draftScope: String? = null
+        private var draftActor: String? = null
+        private var draftReady = false
+        private var draftLoading: Job? = null
+        private var draftRevision = 0L
+        private var discardingDraft = false
+        var restoredDraftTarget: PulsePostingTarget? = null
+            private set
+
+        /** Called before the create flow renders, so a late disk read cannot replace new typing. */
+        fun openDraft() {
+            if (draftReady || draftLoading?.isActive == true) return
+            if (isEditing) {
+                _draftLoad.value = PulseDraftLoadState.Ready
+                return
+            }
+            val actor = (auth.state.value as? AuthRepository.State.SignedIn)?.user?.id
+            if (actor == null) {
+                _draftLoad.value = PulseDraftLoadState.Error("Sign in to open your saved draft.")
+                return
+            }
+            val scope = PulseComposeDraftStore.accountScope(actor)
+            draftScope = scope
+            draftActor = actor
+            _draftLoad.value = PulseDraftLoadState.Loading
+            draftLoading =
+                viewModelScope.launch {
+                    try {
+                        val draft = draftStore.read(scope)
+                        check((auth.state.value as? AuthRepository.State.SignedIn)?.user?.id == actor)
+                        draft?.let(::restoreDraft)
+                        draftReady = true
+                        _draftLoad.value = PulseDraftLoadState.Ready
+                        if (draft != null) checkPlaceEligibility()
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (_: Exception) {
+                        _draftLoad.value = PulseDraftLoadState.Error("Couldn't open your saved draft. It's still on this phone. Try again.")
+                    }
+                }
+        }
+
+        private fun persistDraft() {
+            val scope = draftScope ?: return
+            if (!draftReady || isEditing || (auth.state.value as? AuthRepository.State.SignedIn)?.user?.id != draftActor) return
+            val revision = ++draftRevision
+            val write = draftStore.save(scope, draftSnapshot())
+            viewModelScope.launch {
+                try {
+                    write.await()
+                    if (revision == draftRevision) _draftNotice.value = null
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (_: Exception) {
+                    if (revision == draftRevision) {
+                        _draftNotice.value = "Couldn't save your draft on this phone. Keep this screen open and retry."
+                    }
+                }
+            }
+        }
+
+        fun retryDraftSave() {
+            if (_state.value is PulseComposeUiState.Success) {
+                viewModelScope.launch { if (completeDraft()) _shouldDismiss.value = true }
+            } else {
+                persistDraft()
+            }
+        }
+
+        /** FormShell has already asked before discarding a dirty form. */
+        fun discardDraft(onDiscarded: () -> Unit) {
+            val scope = draftScope
+            if (scope == null || isEditing) {
+                onDiscarded()
+                return
+            }
+            if (isSubmitting || discardingDraft) return
+            if ((auth.state.value as? AuthRepository.State.SignedIn)?.user?.id != draftActor) return
+            val wasReady = draftReady
+            discardingDraft = true
+            draftReady = false
+            draftRevision++
+            val removal = draftStore.discard(scope)
+            viewModelScope.launch {
+                try {
+                    removal.await()
+                    onDiscarded()
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (_: Exception) {
+                    draftReady = wasReady
+                    val message = "Couldn't discard your draft. Try again."
+                    if (wasReady) _draftNotice.value = message else _draftLoad.value = PulseDraftLoadState.Error(message)
+                } finally {
+                    discardingDraft = false
+                }
+            }
+        }
+
+        private fun draftSnapshot(): PulseComposeDraft {
+            val values =
+                buildMap {
+                    _fields.value.forEach { (field, value) -> put("field.${field.key}", value.value) }
+                    put("request", createCommandId)
+                    put("intent", _activeIntent.value.key)
+                    put("identity", _identity.value.key)
+                    put("visibility", _visibility.value.key)
+                    put("lostKind", _lostFoundKind.value.key)
+                    put("contact", _lostFoundContactPref.value.key)
+                    put("dealEnd", _dealExpiresAt.value.toString())
+                    put("audience", _announceAudience.value.key)
+                    put("alertKind", _safetyAlertKind.value.key)
+                    _askCategory.value?.let { put("askCategory", it.key) }
+                    put("rating", _recommendRating.value.toString())
+                    composePurpose?.let { put("purpose", it.key) }
+                    postingTarget?.let { putAll(PulseDraftCodec.targetValues(it)) }
+                    _selectedPlaceTag.value?.let { putAll(PulseDraftCodec.placeValues(it)) }
+                }
+            return PulseComposeDraft(
+                values,
+                _photos.value.map { PulseDraftPhoto(it.id, it.data, it.capturedLatitude, it.capturedLongitude) },
+            )
+        }
+
+        private fun restoreDraft(draft: PulseComposeDraft) {
+            val values = draft.values
+            createCommandId = values.getValue("request").also { java.util.UUID.fromString(it) }
+            _activeIntent.value = PulseDraftCodec.option(values, "intent", PulseComposeIntent.entries) { it.key }
+            _identity.value = PulseDraftCodec.option(values, "identity", PulseComposeIdentity.entries) { it.key }
+            _visibility.value = PulseDraftCodec.option(values, "visibility", PulseComposeVisibility.entries) { it.key }
+            _lostFoundKind.value = PulseDraftCodec.option(values, "lostKind", PulseLostFoundKind.entries) { it.key }
+            _lostFoundContactPref.value = PulseDraftCodec.option(values, "contact", PulseLostFoundContactPref.entries) { it.key }
+            _announceAudience.value = PulseDraftCodec.option(values, "audience", PulseAnnounceAudience.entries) { it.key }
+            _safetyAlertKind.value = PulseDraftCodec.option(values, "alertKind", PulseSafetyAlertKind.entries) { it.key }
+            _askCategory.value =
+                values["askCategory"]?.let {
+                    PulseDraftCodec.option(values, "askCategory", PulseAskCategory.entries) { option -> option.key }
+                }
+            _dealExpiresAt.value = LocalDateTime.parse(values.getValue("dealEnd"))
+            _recommendRating.value = values.getValue("rating").toInt().coerceIn(1, 5)
+            composePurpose =
+                values["purpose"]?.let {
+                    PulseDraftCodec.option(values, "purpose", PulseComposePurpose.entries) { option -> option.key }
+                }
+            postingTarget = PulseDraftCodec.target(values)
+            restoredDraftTarget = postingTarget
+            flowConfigured = postingTarget != null
+            _selectedPlaceTag.value = PulseDraftCodec.place(values)
+            _fields.value =
+                PulseComposeField.entries.associateWith { field ->
+                    val value = values["field.${field.key}"].orEmpty()
+                    FormFieldState(id = field.key, value = value, touched = value.isNotEmpty(), error = validator(field).validate(value))
+                }
+            _photos.value = draft.photos.map { PulseComposePhoto(it.id, it.bytes, it.latitude, it.longitude) }
+        }
 
         /** True when the draft screen was reached via target/purpose pickers. */
         val isFlowMode: Boolean get() = postingTarget != null
@@ -440,6 +608,7 @@ class PulseComposeViewModel
             if (flowConfigured) return
             flowConfigured = true
             postingTarget = target
+            restoredDraftTarget = target
             composePurpose = purpose
             purpose?.legacyIntent?.let { _activeIntent.value = it }
             // A Connections post is stored as "general" (effectivePostType), so its draft starts on the
@@ -453,6 +622,7 @@ class PulseComposeViewModel
             baselineIdentity = _identity.value
             baselineVisibility = _visibility.value
             checkPlaceEligibility()
+            persistDraft()
         }
 
         /**
@@ -511,50 +681,62 @@ class PulseComposeViewModel
             if (isIntentLocked) return
             if (_activeIntent.value == intent) return
             _activeIntent.value = intent
+            persistDraft()
         }
 
         fun selectIdentity(identity: PulseComposeIdentity) {
             _identity.value = identity
+            persistDraft()
         }
 
         fun selectVisibility(visibility: PulseComposeVisibility) {
             _visibility.value = visibility
+            persistDraft()
         }
 
         fun selectLostFoundKind(kind: PulseLostFoundKind) {
             _lostFoundKind.value = kind
+            persistDraft()
         }
 
         fun selectLostFoundContactPref(pref: PulseLostFoundContactPref) {
             _lostFoundContactPref.value = pref
+            persistDraft()
         }
 
         fun selectDealExpires(value: LocalDateTime) {
             _dealExpiresAt.value = value
+            persistDraft()
         }
 
         fun selectAnnounceAudience(audience: PulseAnnounceAudience) {
             _announceAudience.value = audience
+            persistDraft()
         }
 
         fun selectSafetyAlertKind(kind: PulseSafetyAlertKind) {
             _safetyAlertKind.value = kind
+            persistDraft()
         }
 
         fun selectAskCategory(category: PulseAskCategory) {
             _askCategory.value = category
+            persistDraft()
         }
 
         fun selectRecommendRating(rating: Int) {
             _recommendRating.value = rating.coerceIn(1, 5)
+            persistDraft()
         }
 
         fun selectPlaceTag(tag: PostPlaceTag) {
             _selectedPlaceTag.value = tag
+            persistDraft()
         }
 
         fun clearPlaceTag() {
             _selectedPlaceTag.value = null
+            persistDraft()
         }
 
         fun update(
@@ -574,6 +756,7 @@ class PulseComposeViewModel
             // RN re-arms the precheck whenever the body text changes
             // (`PostComposerModal.tsx:789`).
             if (field == PulseComposeField.Body && changed) precheckDone = false
+            persistDraft()
         }
 
         /** X on the precheck nudge banner. */
@@ -645,15 +828,18 @@ class PulseComposeViewModel
 
         fun setPhotos(photos: List<PulseComposePhoto>) {
             _photos.value = photos.take(PULSE_COMPOSE_MAX_PHOTOS)
+            persistDraft()
         }
 
         fun appendPhoto(photo: PulseComposePhoto) {
             if (_photos.value.size >= PULSE_COMPOSE_MAX_PHOTOS) return
             _photos.value = _photos.value + photo
+            persistDraft()
         }
 
         fun removePhoto(id: String) {
             _photos.value = _photos.value.filterNot { it.id == id }
+            persistDraft()
         }
 
         fun dismissToast() {
@@ -894,6 +1080,7 @@ class PulseComposeViewModel
                 if (editingId != null) {
                     handleUpdate(editingId)
                 } else {
+                    if (!retainDraftBeforePost()) return@launch
                     refreshGpsFixIfNeeded()
                     handleCreate()
                 }
@@ -908,6 +1095,37 @@ class PulseComposeViewModel
         private suspend fun refreshGpsFixIfNeeded() {
             if (postingTarget !is PulsePostingTarget.CurrentLocation) return
             freshGpsFix = locationProvider.requestCurrent(timeoutMillis = GPS_REFRESH_TIMEOUT_MS)
+        }
+
+        private suspend fun retainDraftBeforePost(): Boolean {
+            val scope = draftScope ?: return true
+            return try {
+                draftStore.save(scope, draftSnapshot()).await()
+                true
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                val message = "Couldn't save your draft on this phone. Try again before posting."
+                _state.value = PulseComposeUiState.Error(message)
+                _toast.value = PulseComposeToast(message, isError = true)
+                false
+            }
+        }
+
+        private suspend fun completeDraft(): Boolean {
+            val scope = draftScope ?: return true
+            draftReady = false
+            draftRevision++
+            return try {
+                draftStore.discard(scope).await()
+                _draftNotice.value = null
+                true
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                _draftNotice.value = "Your post is saved, but the local draft couldn't be cleared. Try again."
+                false
+            }
         }
 
         private suspend fun handleCreate() {
@@ -936,11 +1154,12 @@ class PulseComposeViewModel
                         postsRefresh.notifyPostsDidChange()
                         return
                     }
+                    val cleared = completeDraft()
                     _state.value = PulseComposeUiState.Success(postId = postId)
                     // A Connections post isn't in the Nearby feed (nor, being yours, in Connections): say where it went.
                     val successText = if (request.visibility == "connections") "Posted to your connections" else toastText
                     _toast.value = PulseComposeToast(successText, isError = toastError)
-                    _shouldDismiss.value = true
+                    _shouldDismiss.value = cleared
                     postsRefresh.notifyPostsDidChange()
                     Analytics.track(
                         AnalyticsEvent.FormPulseComposeSubmit(
