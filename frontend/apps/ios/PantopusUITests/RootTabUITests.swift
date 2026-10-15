@@ -2,11 +2,13 @@
 //  RootTabUITests.swift
 //  PantopusUITests
 //
-//  Covers the bottom bar (Pulse S3 — Place · Today · Pulse · Plans · Mail,
-//  Plans only while the `plans` switch is on): Place is selected at launch
-//  (once signed in), each tab is tappable, and secondary tabs render their
-//  expected landing states. Tasks / Marketplace present as sheets from the
-//  Pulse tab; Messages is a segment of the Mail tab.
+//  Covers the 4-tab bottom bar (wedge Phase 1.5 IA — Place · Today ·
+//  Nearby · Mail): Place is selected at launch (once signed in), each tab
+//  is tappable, and secondary tabs render their expected landing states.
+//  Pulse / Tasks / Marketplace present as sheets from the Nearby door;
+//  Messages is a segment of the Mail tab. This is the bar of a build with
+//  the Pulse redesign off (launch cut #11); with it on, the bar is Place ·
+//  Today · Pulse · Plans · Mail.
 //
 //  These tests launch the app with `UI_TESTS_SIGNED_IN=1`, which the app
 //  honours by seeding an in-memory signed-in session without hitting the
@@ -50,13 +52,11 @@ final class RootTabUITests: XCTestCase {
         XCTAssertTrue(placeTab.isSelected || placeTab.value as? String == "1")
     }
 
-    func testTabsPresent() throws {
+    func testAllFourTabsPresent() throws {
         guard let app = launchSignedIn() else {
             throw XCTSkip("Signed-in launch env not honoured.")
         }
-        // The stubbed session has the `plans` switch off: four tabs, no Nearby.
-        XCTAssertFalse(tabButton("nearby", in: app).exists)
-        for tab in ["place", "today", "pulse", "mail"] {
+        for tab in ["place", "today", "nearby", "mail"] {
             let button = tabButton(tab, in: app)
             XCTAssertTrue(
                 button.waitForExistence(timeout: 2),
@@ -82,13 +82,12 @@ final class RootTabUITests: XCTestCase {
         XCTAssertTrue(today.waitForExistence(timeout: 5))
     }
 
-    func testTapPulseShowsFeed() throws {
+    func testTapNearbyShowsDoor() throws {
         guard let app = launchSignedIn() else {
             throw XCTSkip("Signed-in launch env not honoured.")
         }
-        tabButton("pulse", in: app).tap()
-        let feed = app.descendants(matching: .any).matching(identifier: "pulseFeed").firstMatch
-        XCTAssertTrue(feed.waitForExistence(timeout: 5))
+        tabButton("nearby", in: app).tap()
+        XCTAssertTrue(app.otherElements["nearbyDoor"].waitForExistence(timeout: 5))
     }
 
     func testMailMessagesSegmentShowsChatListEmptyState() throws {

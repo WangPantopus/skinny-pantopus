@@ -69,9 +69,11 @@ public struct PulsePostDetailContent: Sendable, Equatable, Hashable {
         self.hiddenReplyCount = hiddenReplyCount
     }
 
-    /// How the post ended, or when a Heads-up ends (Pulse S7).
+    /// How the post ended, or when a Heads-up ends (Pulse S7); none while the
+    /// Pulse redesign is off (launch cut #11), as on October 13.
     public var status: PulsePostStatus? {
-        PulsePostStatus.from(
+        guard LaunchFeatures.pulseRedesign else { return nil }
+        return PulsePostStatus.from(
             resolution: post.resolution,
             state: post.state,
             postType: post.postType,
@@ -125,8 +127,9 @@ public final class PulsePostDetailViewModel {
     var conversationReadAt: Date?
     /// The Pulse conversation route doesn't serve this post (a household,
     /// home or persona post, or an older server): the existing post page
-    /// shows it instead, as before Pulse.
-    var usesPostPage = false
+    /// shows it instead, as before Pulse. Always while the Pulse redesign is
+    /// off (launch cut #11): the October 13 post page, never `/api/pulse`.
+    var usesPostPage = !LaunchFeatures.pulseRedesign
     var conversationGeneration = 0
     var conversationMutationRevision = 0
     var conversationWaitingReplies: [PulseReplyDTO] = []
@@ -212,7 +215,17 @@ public final class PulsePostDetailViewModel {
         self.currentUserId = currentUserId
         self.client = client
         store = ScreenStore.store(for: client)
-        if let copy = store.peek(conversationEndpoint, as: PulseConversationResponse.self) {
+        if usesPostPage {
+            // The first frame (launch cut #11 off, as on October 13): the store's
+            // copy of the post, else the feed card's copy while the post and its
+            // comments load.
+            if let copy = store.peek(endpoint, as: PostDetailResponse.self) {
+                apply(copy.value.post)
+            } else if let card = store.seeded(endpoint, as: FeedPostDTO.self), let post = PostDetailDTO(feedPost: card) {
+                apply(post)
+                commentsPending = true
+            }
+        } else if let copy = store.peek(conversationEndpoint, as: PulseConversationResponse.self) {
             applyConversation(copy, holdNewReplies: false)
         }
     }
@@ -236,10 +249,11 @@ public final class PulsePostDetailViewModel {
         return content.post.userId == currentUserId
     }
 
-    /// The asker's own open Ask (contract §2.12): "Close" is offered.
+    /// The asker's own open Ask (contract §2.12): "Close" is offered. Never
+    /// while the Pulse redesign is off (launch cut #11).
     public var canCloseAsk: Bool {
         if let conversation { return isOwner && conversation.post.pageCard().isOpenAsk }
-        guard isOwner, case let .loaded(content) = state else { return false }
+        guard LaunchFeatures.pulseRedesign, isOwner, case let .loaded(content) = state else { return false }
         let post = content.post
         return PulsePostStatus.askIsOpen(
             postType: post.postType,

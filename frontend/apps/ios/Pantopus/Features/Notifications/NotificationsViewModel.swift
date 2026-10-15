@@ -851,8 +851,10 @@ public final class NotificationsViewModel: ListOfRowsDataSource {
     ) -> RowModel {
         let unread = dto.isRead != true
         let category = NotificationCategory.from(rawType: dto.type)
-        // The day-6 Ask reminder (Pulse S7) has its own icon in its bucket.
-        let icon: PantopusIcon = dto.type?.lowercased() == "ask_still_open" ? .helpCircle : category.icon
+        // The day-6 Ask reminder (Pulse S7) has its own icon in its bucket
+        // (a plain notice while the Pulse redesign is off, launch cut #11).
+        let isAskReminder = LaunchFeatures.pulseRedesign && dto.type?.lowercased() == "ask_still_open"
+        let icon: PantopusIcon = isAskReminder ? .helpCircle : category.icon
         let rowId = dto.id
         let destructive = onDelete.map { handler in
             RowDestructiveAction(

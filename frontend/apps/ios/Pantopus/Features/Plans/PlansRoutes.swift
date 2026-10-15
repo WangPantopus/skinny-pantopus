@@ -2,8 +2,9 @@
 //  PlansRoutes.swift
 //  Pantopus
 //
-//  The Plans screens pushed on the Plans tab's stack (`PlansTabRoot`),
-//  and the composer it presents. Only `Hashable` payloads.
+//  The Plans screens pushed on the Plans tab's stack (`PlansTabRoot`), or on
+//  Nearby's (`NeighborhoodTabRoot`) while the Pulse redesign is off (launch
+//  cut #11), and the composer it presents. Only `Hashable` payloads.
 //
 
 import SwiftUI
@@ -20,7 +21,8 @@ enum PlansRoute: Hashable {
 }
 
 /// Hand-off into the Plans tab's stack from outside it: a deep link, a push,
-/// a Today card. `PlansTabRoot` consumes it.
+/// a Today card. `PlansTabRoot` consumes it (`NeighborhoodTabRoot` while the
+/// Pulse redesign is off).
 @Observable
 @MainActor
 final class PlansNavigator {

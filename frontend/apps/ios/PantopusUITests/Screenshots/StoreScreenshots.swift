@@ -91,12 +91,12 @@ final class StoreScreenshots: XCTestCase {
             app.buttons["groupedListBackButton"].firstMatch.tap()
         }
 
-        // Pulse tab → the neighborhood feed.
-        app.buttons["tab.pulse"].firstMatch.tap()
+        // Nearby tab → the density-gated door.
+        app.buttons["tab.nearby"].firstMatch.tap()
         if app.descendants(matching: .any)
-            .matching(identifier: "pulseFeed").firstMatch
+            .matching(identifier: "nearbyDoor").firstMatch
             .waitForExistence(timeout: 5) {
-            snapshot("10_Pulse")
+            snapshot("10_NearbyDoor")
         }
         app.buttons["tab.place"].firstMatch.tap()
 

@@ -13,6 +13,10 @@
 //  it reads Mail and hosts the mailbox and the Messages inbox as two
 //  segments; its id stays `mail` either way.
 //
+//  While the Pulse redesign is off (launch cut #11, `LaunchFeatures.pulseRedesign`,
+//  founder decision 2026-10-15) the bar is the October 13 one: Place · Today ·
+//  Nearby · Messages, with Pulse, Plans and Connections opened from Nearby.
+//
 
 // swiftlint:disable file_length
 
@@ -22,7 +26,7 @@ import SwiftUI
 /// A tab in the primary bottom bar. Encoded as an enum so call sites never
 /// reach for stringly-typed paths.
 public enum RootTab: Hashable, CaseIterable {
-    case place, today, pulse, plans, mail
+    case place, today, nearby, pulse, plans, mail
 
     /// Human-readable label rendered under each tab icon. The last tab is
     /// "Messages" while Mailbox is off for launch; its id stays `mail`.
@@ -30,6 +34,7 @@ public enum RootTab: Hashable, CaseIterable {
         switch self {
         case .place: "Place"
         case .today: "Today"
+        case .nearby: "Nearby"
         case .pulse: "Pulse"
         case .plans: "Plans"
         case .mail: LaunchFeatures.mailbox ? "Mail" : "Messages"
@@ -41,6 +46,7 @@ public enum RootTab: Hashable, CaseIterable {
         switch self {
         case .place: "place"
         case .today: "today"
+        case .nearby: "nearby"
         case .pulse: "pulse"
         case .plans: "plans"
         case .mail: "mail"
@@ -52,10 +58,23 @@ public enum RootTab: Hashable, CaseIterable {
         switch self {
         case .place: .home
         case .today: .sun
+        case .nearby: .compass
         case .pulse: .activity
         case .plans: .calendar
         case .mail: LaunchFeatures.mailbox ? .mail : .messageCircle
         }
+    }
+
+    /// Where Pulse opens: its own tab, or Nearby's door while the Pulse
+    /// redesign is off (launch cut #11), as on October 13.
+    static var pulseHome: RootTab {
+        LaunchFeatures.pulseRedesign ? .pulse : .nearby
+    }
+
+    /// Where the Plans screens open: the Plans tab, or Nearby while the Pulse
+    /// redesign is off (launch cut #11), as on October 13.
+    static var plansHome: RootTab {
+        LaunchFeatures.pulseRedesign ? .plans : .nearby
     }
 }
 
@@ -145,16 +164,24 @@ public struct RootTabView: View {
                 .tabItem { tabLabel(.today) }
                 .tag(RootTab.today)
 
-            PulseTabRoot(onAddHome: startAddingHome)
-                .tabItem { tabLabel(.pulse) }
-                .tag(RootTab.pulse)
+            if LaunchFeatures.pulseRedesign {
+                PulseTabRoot(onAddHome: startAddingHome)
+                    .tabItem { tabLabel(.pulse) }
+                    .tag(RootTab.pulse)
 
-            // Only while the `plans` switch is on (`onChange` below moves a
-            // reader off it when the switch turns off).
-            if plansFlags.plans {
-                PlansTabRoot()
-                    .tabItem { tabLabel(.plans) }
-                    .tag(RootTab.plans)
+                // Only while the `plans` switch is on (`onChange` below moves a
+                // reader off it when the switch turns off).
+                if plansFlags.plans {
+                    PlansTabRoot()
+                        .tabItem { tabLabel(.plans) }
+                        .tag(RootTab.plans)
+                }
+            } else {
+                // Launch cut #11 (the Pulse redesign) is off: October 13's
+                // Nearby tab, which opens Pulse, Plans and Connections.
+                NeighborhoodTabRoot()
+                    .tabItem { tabLabel(.nearby) }
+                    .tag(RootTab.nearby)
             }
 
             MailTabRoot(
@@ -267,10 +294,14 @@ public struct RootTabView: View {
         // as sheets from the Pulse tab, whose surface root consumes the
         // pending destination as before.
         case .feed, .post, .pulse:
-            model.selected = .pulse
+            if LaunchFeatures.pulseRedesign {
+                model.selected = .pulse
+            } else {
+                openNearby(pending)
+            }
         case .gig:
             if LaunchFeatures.openGigs {
-                model.selected = .pulse
+                model.selected = RootTab.pulseHome
                 NeighborhoodDoorStore.shared.pendingSurface = .tasks
             } else {
                 // Launch cut #4 (Open gigs): no Tasks surface, so the task's
@@ -278,7 +309,7 @@ public struct RootTabView: View {
                 model.selected = .place
             }
         case .listing:
-            model.selected = .pulse
+            model.selected = RootTab.pulseHome
             NeighborhoodDoorStore.shared.pendingSurface = .marketplace
         // Mailbox-cluster destinations resolve in the Mail tab's stack
         // (a mailbox-rooted HubTabRoot sharing the same destinations). While
@@ -354,15 +385,33 @@ public struct RootTabView: View {
         } else {
             PlansNavigator.shared.pendingHost = PlansHostRequest(start: nil)
         }
-        model.selected = .plans
+        model.selected = RootTab.plansHome
     }
 
-    /// `/plans`: the Plans tab itself, while the switch is on.
+    /// `/plans`: the Plans tab itself, while the switch is on. With the Pulse
+    /// redesign off (launch cut #11) it opens Nearby, which shows the Plans
+    /// map while that switch is on, as on October 13.
     private func openPlansTab() {
         _ = router.consume()
+        guard LaunchFeatures.pulseRedesign else {
+            model.selected = .nearby
+            return
+        }
         plansFlags.prime(account: signedInUserID)
         guard plansFlags.plans else { return }
         model.selected = .plans
+    }
+
+    /// With the Pulse redesign off (launch cut #11), as on October 13: `/nearby`
+    /// opens the Nearby tab, and a feed or post link opens Pulse from Nearby's
+    /// door, whose Pulse sheet then consumes it.
+    private func openNearby(_ destination: DeepLinkRouter.Destination) {
+        model.selected = .nearby
+        if destination == .pulse {
+            _ = router.consume()
+        } else {
+            NeighborhoodDoorStore.shared.pendingSurface = .pulse
+        }
     }
 
     /// "Set up a home" from Today or Pulse: the Place tab starts adding one.

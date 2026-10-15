@@ -11,6 +11,10 @@
 //  the matching sheet, whose tab root then consumes the pending deep-link
 //  destination exactly as it did when it was a tab.
 //
+//  While the Pulse redesign is off (launch cut #11) the October 13 door is
+//  back: the dispatcher selects the Nearby tab instead, and
+//  `NeighborhoodTabRoot` presents Pulse, Tasks or Marketplace from it.
+//
 
 import Foundation
 import Observation
@@ -40,7 +44,8 @@ public final class NeighborhoodDoorStore {
 
     /// Set by the cross-tab dispatcher; consumed (nil-ed) by
     /// `PulseTabRoot` when it presents the surface. (`.pulse` is the Pulse
-    /// tab itself and presents nothing.)
+    /// tab itself and presents nothing.) While the Pulse redesign is off,
+    /// `NeighborhoodTabRoot` consumes it and presents every surface.
     public var pendingSurface: Surface?
 
     public init() {}
