@@ -19,7 +19,7 @@ final class MarketplaceViewModelTests: XCTestCase {
     }
 
     private func makeAPI() -> APIClient {
-        SequencedURLProtocol.routeResponses["/api/location"] = Array(repeating: .status(200, body: """
+        SequencedURLProtocol.routeResponses["/api/location/resolve"] = Array(repeating: .status(200, body: """
         {"viewingLocation":null,"recentLocations":[],"homes":[],"businessLocations":[]}
         """), count: 2)
         return APIClient(
@@ -190,7 +190,7 @@ final class MarketplaceViewModelTests: XCTestCase {
         let vm = MarketplaceViewModel(api: makeAPI(), location: location)
         let initialLoad = Task { await vm.load() }
         // The slow response must go to the initial load: wait until its listings request is in
-        // flight. The first captured request is the viewing-location read (`/api/location`), so
+        // flight. The first captured request is the viewing-location read (`/api/location/resolve`), so
         // waiting for any request let the chip's fetch race the initial one to the slow 3-row
         // response on a busy CI simulator.
         await waitFor {

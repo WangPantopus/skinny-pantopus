@@ -20,6 +20,7 @@ export default function DiscoverBusinessesPage() {
     hasHome,
     noLocation,
     homeCenter,
+    areaLabel,
     gpsCenter,
 
     // Search
@@ -108,6 +109,7 @@ export default function DiscoverBusinessesPage() {
           homeLoading={homeLoading}
           noLocation={noLocation}
           homeCenter={homeCenter}
+          areaLabel={areaLabel}
           gpsCenter={gpsCenter}
           viewerHome={viewerHome}
           onSelectBusiness={handleMapBusinessSelect}

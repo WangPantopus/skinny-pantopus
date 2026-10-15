@@ -48,6 +48,7 @@ interface DiscoverMapViewProps {
   homeCenter: [number, number] | null;
   gpsCenter: [number, number] | null;
   viewerHome: { city?: string } | null;
+  areaLabel?: string;
   onSelectBusiness: (marker: MapBusinessMarker) => void;
   onSelectGig: (gig: { id: string }) => void;
 }
@@ -77,6 +78,7 @@ export default function DiscoverMapView({
   homeCenter,
   gpsCenter,
   viewerHome,
+  areaLabel,
   onSelectBusiness,
   onSelectGig,
 }: DiscoverMapViewProps) {
@@ -122,9 +124,9 @@ export default function DiscoverMapView({
             <MeasureFromChip
               value={measureFrom}
               onChange={setMeasureFrom}
-              hasHome={hasHome}
+              hasHome={homeCenter != null}
               hasGps={gpsCenter != null}
-              homeCity={viewerHome?.city}
+              homeCity={areaLabel || 'Selected area'}
             />
           </div>
 
@@ -190,9 +192,9 @@ export default function DiscoverMapView({
                   <MeasureFromChip
                     value={measureFrom}
                     onChange={setMeasureFrom}
-                    hasHome={hasHome}
+                    hasHome={homeCenter != null}
                     hasGps={gpsCenter != null}
-                    homeCity={viewerHome?.city}
+                    homeCity={areaLabel || 'Selected area'}
                   />
                 </div>
               </div>

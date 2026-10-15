@@ -52,7 +52,7 @@ class ExploreMapViewModelTest {
         LaunchFeatures.overrideForTesting = null
     }
 
-    private fun makeVm(): ExploreMapViewModel = ExploreMapViewModel(mockk(), mockk(), mockk(), mockk(), mockk(), mockk())
+    private fun makeVm(): ExploreMapViewModel = ExploreMapViewModel(mockk(), mockk(), mockk(), mockk(), mockk())
 
     private fun loaded(vm: ExploreMapViewModel): ExploreMapUiState.Loaded = vm.state.value as ExploreMapUiState.Loaded
 
@@ -228,8 +228,8 @@ class ExploreMapViewModelTest {
                 Stored(PostsMapResponse(markers = emptyList()), fetchedAt = System.currentTimeMillis())
 
             val viewingLocation: ViewingLocationRepository = mockk()
-            coEvery { viewingLocation.current() } returns NetworkResult.Success(ViewingLocationPayload())
-            val vm = ExploreMapViewModel(gigsRepo, listingsRepo, postsMapRepo, location, viewingLocation, mockk())
+            coEvery { viewingLocation.resolve() } returns NetworkResult.Success(ViewingLocationPayload())
+            val vm = ExploreMapViewModel(gigsRepo, listingsRepo, postsMapRepo, location, viewingLocation)
             vm.load()
 
             val loaded = vm.state.value as ExploreMapUiState.Loaded

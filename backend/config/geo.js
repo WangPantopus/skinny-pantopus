@@ -34,9 +34,6 @@ const MAP_TILE_ATTRIBUTION =
 
 // ── Map defaults ─────────────────────────────────────────────
 
-/** Default map center [lat, lng] — Portland, OR. */
-const DEFAULT_CENTER = [45.5152, -122.6784];
-
 /** Default zoom level. */
 const DEFAULT_ZOOM = 13;
 
@@ -54,6 +51,5 @@ module.exports = {
   GEO_PROVIDER,
   MAP_TILE_URL,
   MAP_TILE_ATTRIBUTION,
-  DEFAULT_CENTER,
   DEFAULT_ZOOM,
 };

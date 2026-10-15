@@ -45,7 +45,7 @@ class MarketplaceViewModelTest {
 
     @Before fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
-        coEvery { viewingLocation.current() } returns NetworkResult.Success(ViewingLocationPayload())
+        coEvery { viewingLocation.resolve() } returns NetworkResult.Success(ViewingLocationPayload())
         every { location.cachedCoordinate() } returns center
         coEvery { location.requestCurrent(any()) } returns center
     }

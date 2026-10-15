@@ -7,8 +7,7 @@ import type { HomeMapPin, MapPinType } from '@/types/mailbox';
 import { useMapPins, useAddPinToCalendar } from '@/lib/mailbox-queries';
 import { TrustBadge } from '@/components/mailbox';
 import { TILE_URL, TILE_ATTRIBUTION } from '@/components/map/constants';
-// The user's Home; the page used a hard-coded 'home_1' stub. A Home without a
-// stored location keeps the Camas fallback centre.
+// The map requires this Home's actual stored location.
 import useHomeProfile from '../_components/useMailboxHome';
 import { launchFeatures } from '@/lib/featureFlags';
 
@@ -76,7 +75,7 @@ const TRUST_MAP: Record<string, 'verified_gov' | 'verified_utility' | 'verified_
 
 export default function MailMapPage() {
   const home = useHomeProfile();
-  const hasLocation = home.lat !== 0 && home.lng !== 0;
+  const hasLocation = home.lat != null && home.lng != null;
 
   const [activeFilter, setActiveFilter] = useState<PinFilter>('all');
   const [selectedPin, setSelectedPin] = useState<HomeMapPin | null>(null);
@@ -155,7 +154,7 @@ export default function MailMapPage() {
   }, [calendarMutation]);
 
   // ── No home location ──────────────────────────────────────
-  if (!hasLocation) {
+  if (home.lat == null || home.lng == null) {
     return (
       <div className="flex-1 flex items-center justify-center bg-app-surface-raised">
         <div className="text-center px-6">
