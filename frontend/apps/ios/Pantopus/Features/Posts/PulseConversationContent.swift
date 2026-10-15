@@ -80,7 +80,8 @@ public struct PulseReplyBranch: Identifiable, Sendable, Equatable {
         let hidden = descendants.count - Self.initialDescendants
         guard hidden > 0 else { return nil }
         var names: [String] = []
-        for reply in descendants where !reply.removed {
+        // The people in the replies the line stands for, not the shown ones.
+        for reply in descendants.dropFirst(Self.initialDescendants) where !reply.removed {
             if let name = reply.author?.displayName, !name.isEmpty, !names.contains(name) { names.append(name) }
         }
         let count = hidden == 1 ? "1 more reply" : "\(hidden) more replies"
