@@ -13,6 +13,7 @@ const {
   applyLocationPrecision,
   leastPrecise,
   MAX_DISPLAY_OFFSET_DEGREES,
+  snapToNeighborhoodCells,
 } = require('../utils/locationPrivacy');
 const s3 = require('./s3Service');
 const { readablePosts, postScopeAccess } = require('./pulse/readAccess');
@@ -852,14 +853,24 @@ function capPlaceBox({ south, west, north, east }) {
   };
 }
 
-// The box a query reads so it finds every post whose displayed point can be inside `box`.
+// The box a query reads so it finds every post whose displayed point can be inside `box`. It is
+// widened by the most the location rule moves a point and made of whole location cells, so the
+// rows a capped query reads never depend on where in its cell a stored point is.
 function widenForDisplayedPoints(box) {
-  return {
+  return snapToNeighborhoodCells({
     south: box.south - MAX_DISPLAY_OFFSET_DEGREES,
     north: box.north + MAX_DISPLAY_OFFSET_DEGREES,
     west: box.west - MAX_DISPLAY_OFFSET_DEGREES,
     east: box.east + MAX_DISPLAY_OFFSET_DEGREES,
-  };
+  });
+}
+
+// Area reads leave out other people's posts with precision `none`: they show this viewer no
+// point, so they can't be in an area, and in a capped query their stored points would still
+// decide which rows it reads.
+function withoutOthersUnplacedPosts(query, userId) {
+  return query.or(['location_precision.is.null', 'location_precision.neq.none', userId && `user_id.eq.${userId}`]
+    .filter(Boolean).join(','));
 }
 
 function pointInBox(point, box) {
@@ -1048,10 +1059,10 @@ async function getListFeed({
     // Use OR to fall back to latitude/longitude when effective_* columns are NULL
     // (can happen if PostgREST schema cache is stale after migration 20260308130000)
     if (surface === 'place') {
-      query = query.or(
+      query = withoutOthersUnplacedPosts(query.or(
         `and(effective_latitude.gte.${box.south},effective_latitude.lte.${box.north},effective_longitude.gte.${box.west},effective_longitude.lte.${box.east}),` +
         `and(effective_latitude.is.null,latitude.gte.${box.south},latitude.lte.${box.north},longitude.gte.${box.west},longitude.lte.${box.east})`
-      );
+      ), userId);
     }
 
     // 6. postType and topic filters (topic=sports is its own lane, above)
@@ -1301,12 +1312,12 @@ async function fetchSportsCandidates({
         .limit(Math.min(pageLimit, maxRowsPerSide - rows.length));
 
       if (kind === 'local') {
-        query = query
+        query = withoutOthersUnplacedPosts(query
           .contains('distribution_targets', ['place'])
           .or(
             `and(effective_latitude.gte.${localQueryBox.south},effective_latitude.lte.${localQueryBox.north},effective_longitude.gte.${localQueryBox.west},effective_longitude.lte.${localQueryBox.east}),`
             + `and(effective_latitude.is.null,latitude.gte.${localQueryBox.south},latitude.lte.${localQueryBox.north},longitude.gte.${localQueryBox.west},longitude.lte.${localQueryBox.east})`
-          );
+          ), userId);
       } else {
         // National Sports content is platform-curated only. User-created
         // Sports posts can appear in local/social surfaces, never country-wide.
@@ -1561,14 +1572,14 @@ async function loadMapPosts({
   // come back follows the points the viewer sees, never the stored ones.
   const box = { south, west, north, east };
   const queryBox = widenForDisplayedPoints(box);
-  let query = scopeAccess.query(onlyShownPosts(supabaseAdmin
+  let query = withoutOthersUnplacedPosts(scopeAccess.query(onlyShownPosts(supabaseAdmin
     .from('Post')
     .select(FEED_POST_SELECT)
     .is('archived_at', null)))
     .or(
       `and(effective_latitude.gte.${queryBox.south},effective_latitude.lte.${queryBox.north},effective_longitude.gte.${queryBox.west},effective_longitude.lte.${queryBox.east}),` +
       `and(effective_latitude.is.null,latitude.gte.${queryBox.south},latitude.lte.${queryBox.north},longitude.gte.${queryBox.west},longitude.lte.${queryBox.east})`
-    )
+    ), userId)
     .overlaps('distribution_targets', [distributionTarget])
     .order('created_at', { ascending: false })
     .limit(queryLimit + 40);

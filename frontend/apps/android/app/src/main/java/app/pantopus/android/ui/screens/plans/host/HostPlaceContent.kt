@@ -79,6 +79,7 @@ internal fun PlacePickerStep(
                 attribution = ui.placesAttribution,
                 origin = ui.origin,
                 error = ui.error,
+                hereNow = ui.hereNow,
             ),
         onClose = vm::closePlaces,
         onUse = vm::usePlace,
@@ -109,11 +110,13 @@ internal data class PlacePickerState(
     val attribution: String?,
     val origin: Pair<Double, Double>?,
     val error: String?,
+    val hereNow: HereNowState = HereNowState.Idle,
 )
 
 /**
  * H6's picker: search, a small map, the public places near you, then "Use …". [onHereNow] adds "You're here now"
- * (pickup games); [homeRow] adds "My place" after the places (the host flow only).
+ * (pickup games): it finds the public place the host is at, and once found the row names it, as board H4 does ("City
+ * courts / You're here now"); [homeRow] adds "My place" after the places (the host flow only).
  */
 @Composable
 internal fun PublicPlacePicker(
@@ -156,15 +159,23 @@ internal fun PublicPlacePicker(
                 PlanOverline(if (query.length >= 2) "Results" else "Public places near you", modifier = Modifier.padding(bottom = 2.dp))
                 var first = true
                 if (onHereNow != null) {
-                    val here = candidate?.name == "Where I am now"
+                    val found = candidate?.takeIf { it.hereNow }
+                    val line =
+                        when {
+                            found != null -> "You're here now"
+                            state.hereNow == HereNowState.Locating -> "Finding where you are…"
+                            state.hereNow == HereNowState.NoPlace -> "No public place right here. Pick one below."
+                            state.hereNow == HereNowState.NoLocation -> "Turn on location to use where you are."
+                            else -> "Use the park or court you're at"
+                        }
                     PlanRow(
-                        title = "You're here now",
-                        subtitle = "The pin shows the area, never your exact spot",
-                        end = if (here) PlanRowEnd.Check else PlanRowEnd.None,
+                        title = found?.name ?: "You're here now",
+                        subtitle = line,
+                        end = if (found != null) PlanRowEnd.Check else PlanRowEnd.None,
                         first = true,
                         leading = { PlanIconTile(PantopusIcon.Navigation, PantopusColors.primary100, PantopusColors.primary700) },
-                        spoken = "You're here now${if (here) ", selected" else ""}",
-                        onClick = onHereNow,
+                        spoken = "${found?.name ?: "You're here now"}, $line${if (found != null) ", selected" else ""}",
+                        onClick = onHereNow.takeIf { state.hereNow != HereNowState.Locating },
                     )
                     first = false
                 }
@@ -249,7 +260,7 @@ private fun HomeRow(
     }
 }
 
-private fun PlanNearbyPlaceDto.toPicked(): PickedPlace? {
+internal fun PlanNearbyPlaceDto.toPicked(): PickedPlace? {
     val lat = center?.lat ?: latitude ?: return null
     val lng = center?.lng ?: longitude ?: return null
     return PickedPlace(

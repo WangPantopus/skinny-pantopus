@@ -21,7 +21,7 @@ Staging, GitHub release gates and Lambda schedules rechecked: 2026-10-11 by L4. 
 | Piece | State on October 7, 2026 (19:15Z) |
 |---|---|
 | Website `pantopus.com` | Up, on Vercel. The deployment is about four months old (June). Its JavaScript calls `https://api.pantopus.com`. |
-| Production API `api.pantopus.com` | Doesn't answer. The DNS record is proxied by Cloudflare to the server's old public address; the server's address changed when it restarted in September. |
+| Production API `api.pantopus.com` | Checked October 14 at 17:00 Pacific (L4): the name resolves straight to the server (DNS only, the same address as `staging-api.pantopus.com`) and serves a Let's Encrypt certificate issued October 9. nginx answers 502 because no production backend runs yet. P1 looks done; the health check waits for P6. |
 | Staging | `https://staging-api.pantopus.com` runs the API and worker; `https://staging.pantopus.com` is the Vercel project `pantopus-staging`, with production branch `dev`. Both services released `dev 132e45a5f` on October 10: the API and worker deployment completed at 10:24 UTC ([run 38044657594](https://github.com/WangPantopus/skinny-pantopus/actions/runs/38044657594)); Vercel released the web at 09:52 UTC (deployment 6979118646). The backend database and deployment steps ran successfully, rather than skipping. Checked October 11 at 17:36 Pacific: API healthy, hosted checks 9/10 (Android app links await P10). The October 10 Lambda check found no observed errors in active/daily staging jobs and six alarms OK. S10 below distinguishes completed checks from the remaining web and physical-Android checks. |
 | `pantopus.app` | The zone is on Cloudflare with no records, so `pantopus.app`, `api.pantopus.app` and `staging.api.pantopus.app` don't resolve. |
 | April store apps | App Store "Pantopus" (`com.pantopus.app`, version 1.5.0 from May 12) and Google Play `com.pantopus.app`: the Expo app from the older repository. The live website links to both. Their API host was set in Expo's build settings (the old guides used `https://api.pantopus.com`); it can't be read from here. |
@@ -426,6 +426,10 @@ production one and switches the schedules back on.
 
 **Check:** `curl -sI https://api.pantopus.com/` shows a valid certificate
 (after P6 the health check answers).
+
+**Checked October 14 at 17:00 Pacific (L4):** the certificate is valid (Let's Encrypt, issued
+October 9) and nginx answers 502 until P6 starts the backend, so this step looks
+done.
 
 ### P2A. Production database: new project (founder)
 
