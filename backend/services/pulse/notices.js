@@ -10,7 +10,7 @@ const { quietHoursOf, inQuietHours, nextQuietEnd } = require('../plans/planNotif
 const { readableNotifications } = require('./notificationAccess');
 const logger = require('../../utils/logger');
 
-const TYPES = ['pulse_helpful', 'pulse_thanks'];
+const TYPES = ['pulse_helpful', 'pulse_thanks', 'offer_request', 'offer_chosen', 'offer_gone'];
 
 async function deliver(row, now = new Date()) {
   if (!row || !TYPES.includes(row.type) || row.metadata?.pulse_push_sent_at) return;
@@ -33,16 +33,18 @@ async function deliver(row, now = new Date()) {
   if (error) throw error;
   if (!enabled || !data?.length || !(await readableNotifications([row])).length) return;
   await pushService.sendToUser(row.user_id, { title: row.title, body: row.body || '',
-    data: { notificationId: row.id, type: row.type, link: row.link,
-      post_id: row.metadata.post_id, comment_id: row.metadata.comment_id } });
+    data: { notificationId: row.id, type: row.type, link: row.link, post_id: row.metadata.post_id,
+      ...(row.metadata.comment_id ? { comment_id: row.metadata.comment_id } : {}),
+      ...(row.metadata.claim_id ? { claim_id: row.metadata.claim_id } : {}) } });
 }
 
-async function notify({ userId, type, title, body, postId, replyId, actorId, helpfulAt, key }) {
+// `metadata` adds the notice's own references (comment_id and helpful_at for a reply,
+// claim_id for an offer); post_id and the actor's user_id are always there.
+async function notify({ userId, type, title, body, postId, actorId, key, metadata = {} }) {
   try {
     const row = await notificationService.createNotification({ userId, type, title, body,
       link: `/posts/${postId}`, idempotencyKey: key, sendPush: false,
-      metadata: { post_id: postId, comment_id: replyId, user_id: actorId,
-        ...(helpfulAt ? { helpful_at: helpfulAt } : {}),
+      metadata: { post_id: postId, user_id: actorId, ...metadata,
         pulse_push_due_at: new Date().toISOString() },
     });
     // A repeated action never recreates the inbox item. An interrupted delivery
