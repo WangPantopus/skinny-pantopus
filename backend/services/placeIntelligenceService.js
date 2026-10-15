@@ -949,13 +949,15 @@ async function composeHomeSystems(home, tier) {
 // ════════════════════════════════════════════════════════════
 // Band B like your_home: the answer lives on the exact parcel's
 // assessor record. The service returns an honesty ladder
-// (on_file / none_on_file / unknown); this maps its unavailable
-// reasons onto the designed copy.
+// (on_file / none_on_file / unknown, or not_checked when no parcel line
+// was read); this maps its reasons onto the designed copy. Each reason
+// says why the parcel wasn't checked — never that the area has no
+// records, since a missing provider key is ours, not the county's.
 const EXEMPTION_UNAVAILABLE_COPY = {
-  ATTOM_NOT_CONFIGURED: "Exemption records aren't available for your area yet.",
-  ATTOM_UNAVAILABLE: "County exemption records aren't reachable right now.",
-  NO_PARCEL_MATCH: "We couldn't match this address to a county parcel record.",
-  NO_PROPERTY_FOUND: "We couldn't match this address to a county parcel record.",
+  ATTOM_NOT_CONFIGURED: "We can't read county exemption records yet, so we can't tell what's on file for this parcel.",
+  ATTOM_UNAVAILABLE: "County exemption records aren't reachable right now, so we can't tell what's on file.",
+  NO_PARCEL_MATCH: "We couldn't match this address to a county parcel record, so we can't tell what's on file.",
+  NO_PROPERTY_FOUND: "We couldn't match this address to a county parcel record, so we can't tell what's on file.",
 };
 
 // Real Rent Benchmark (Wave 3) — what verified neighbors on this
@@ -1056,6 +1058,17 @@ async function composeExemptionCheck(home, tier) {
   }
   try {
     const result = await exemptionCheckService.getExemptionCheck(home);
+    if (result.status === 'partial') {
+      // not_checked: only the state's program is shown, so it is the source.
+      return [serializePlaceSection('exemption_check', {
+        access,
+        status: 'partial',
+        data: result.data,
+        source: result.data.state_program.source_name || null,
+        coverage: 'partial',
+        unavailableReason: EXEMPTION_UNAVAILABLE_COPY[result.unavailableReason] || null,
+      })];
+    }
     if (result.status !== 'ready') {
       return [serializePlaceSection('exemption_check', {
         access,
