@@ -12,7 +12,7 @@
  *   lead_radon             CountyRadonZone table (mig. 158)  local read
  *                          + Home.year_built lead screening
  *   rent_band              HudFmr table (mig. 158)           local read
- *   drinking_water         EPA SDWIS via data.epa.gov        90 d cache
+ *   drinking_water         EPA water service areas + SDWIS   90 d cache
  *   environmental_hazards  EPA ECHO get_facilities           90 d cache
  *
  * `incentives` stays BUILD_PENDING: DSIRE's API is license-gated
@@ -24,6 +24,7 @@
  * lat/lng; that lookup is itself cached per home for 90 days.
  */
 
+const { createHash } = require('crypto');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 const { encodeGeohash } = require('../utils/geohash');
@@ -417,29 +418,117 @@ async function composeRentBand(home) {
 }
 
 // ════════════════════════════════════════════════════════════
-// drinking_water — EPA SDWIS (data.epa.gov dmapservice)
+// drinking_water — the public water system that serves this address
 // ════════════════════════════════════════════════════════════
+// EPA's Community Water Service Area Boundaries map each community water
+// system's service area: 56% from state or utility records, the rest
+// estimated by EPA's model (MIT licence, © 2025 US EPA). A point query names
+// the system at the address, and EPA SDWIS gives that system's health-based
+// violations. No service area at the point is an answer in itself, often a
+// private well. Only when the map can't be reached does the section fall
+// back to EPA's county records, and then it says the system is a guess.
 const SDWIS_BASE = 'https://data.epa.gov/dmapservice';
+const SERVICE_AREAS_URL = 'https://services.arcgis.com/cJ9YHowT8TU7DUyn/arcgis/rest/services/Water_System_Boundaries/FeatureServer/0/query';
+
+// EPA: private wells aren't regulated federally or by most states; test one
+// every year for coliform bacteria, nitrates, dissolved solids and pH.
+const NO_SERVICE_AREA_REASON = "No public water system serves this address on EPA's service-area map. "
+  + 'If your home has a private well, no federal rule and few state rules cover its water, so EPA '
+  + 'advises testing it every year for bacteria, nitrates, dissolved solids and pH.';
+
+// The service area that contains the point, or null when none does. Areas
+// overlap (an estimated area over a recorded one, a wholesaler around the
+// towns it supplies): recorded areas win, then the smallest.
+async function fetchServiceArea(ll) {
+  const params = new URLSearchParams({
+    geometry: `${ll.lng},${ll.lat}`,
+    geometryType: 'esriGeometryPoint',
+    inSR: '4326',
+    spatialRel: 'esriSpatialRelIntersects',
+    outFields: 'PWSID,PWS_Name,Model_Method,Area_SqKM',
+    returnGeometry: 'false',
+    f: 'json',
+  });
+  const data = await fetchJson(`${SERVICE_AREAS_URL}?${params}`);
+  // ArcGIS reports a failed query inside a 200 response.
+  if (!data || data.error || !Array.isArray(data.features)) throw new Error('service area query failed');
+  const areas = data.features
+    .map((f) => f.attributes || {})
+    .filter((a) => a.PWSID)
+    .map((a) => ({
+      pws_id: String(a.PWSID).trim(),
+      name: String(a.PWS_Name || '').replace(/\s+/g, ' ').trim(),
+      estimated: Boolean(String(a.Model_Method || '').trim()),
+      area: Number(a.Area_SqKM) > 0 ? Number(a.Area_SqKM) : Infinity,
+    }));
+  if (!areas.length) return null;
+  areas.sort((a, b) => (a.estimated - b.estimated) || (a.area - b.area));
+  return areas[0];
+}
+
+// Health-based violations that began in the last 5 years.
+async function recentHealthViolations(pwsid) {
+  const violations = (await fetchJson(
+    `${SDWIS_BASE}/sdwis.violation/pwsid/equals/${encodeURIComponent(pwsid)}` +
+    '/and/is_health_based_ind/equals/Y/1:200/json',
+  )) || [];
+  const cutoff = Date.now() - 5 * 365 * DAY_MS;
+  return violations.filter((v) => {
+    const t = Date.parse(v.compl_per_begin_date || '');
+    return Number.isFinite(t) && t >= cutoff;
+  }).length;
+}
+
+// The section's data. The summary names the system and how sure the match
+// is, because the apps show only the summary on most surfaces.
+function waterData({ name, pwsId, count, match, estimated = false, county = null }) {
+  const record = count > 0
+    ? `${count} health-based violation${count === 1 ? '' : 's'} reported in the last 5 years.`
+    : 'No health-based violations reported in the last 5 years.';
+  let lead = `${name} serves this address.`;
+  if (match === 'county') lead = `Not confirmed for this address: EPA's county records list ${name} in ${county}.`;
+  else if (estimated) lead = `${name} likely serves this address (EPA estimated its service area; a water bill confirms it).`;
+  return {
+    utility_name: name,
+    pws_id: pwsId,
+    match,
+    estimated_area: estimated,
+    recent_health_violations: count > 0,
+    violation_count: count,
+    summary: `${lead} ${record}`,
+  };
+}
+
+async function fetchServiceAreaWater(ll) {
+  const area = await fetchServiceArea(ll);
+  // Cached like any answer: the map says no public system serves the point.
+  if (!area) return { match: 'none' };
+  const count = await recentHealthViolations(area.pws_id);
+  return waterData({ name: area.name, pwsId: area.pws_id, count, match: 'service_area', estimated: area.estimated });
+}
 
 function stripCountySuffix(name) {
   return String(name || '').replace(/\s+(county|parish|borough|census area|municipality|planning region)$/i, '').trim();
 }
 
-// The county as EPA names it: HUD's county name, except in Connecticut,
-// where EPA still uses the old county the home's town belongs to.
+// The county as EPA names it (HUD's county name, except in Connecticut,
+// where EPA still uses the old county the home's town belongs to), and as
+// the summary shows it.
 async function waterCounty(countyFips, legacy) {
-  if (legacy) return { county: legacy.county_name, state: 'CT' };
+  if (legacy) return { county: legacy.county_name, state: 'CT', label: `${legacy.county_name} County` };
   const fmr = await hudFmrRow(countyFips);
-  return fmr ? { county: stripCountySuffix(fmr.county_name), state: fmr.state_abbr } : null;
+  return fmr ? { county: stripCountySuffix(fmr.county_name), state: fmr.state_abbr, label: fmr.county_name } : null;
 }
 
-// One county fetch: active community systems → pick the one serving the
-// home's city when the name matches, else the largest; then its
-// health-based violations (last 5 years).
+const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// The fallback when the service-area map can't be reached: the county's
+// active community systems, the one named for the home's city if there is
+// one, else the largest. It can be the wrong system, and the summary says so.
 async function fetchCountyWater(countyFips, homeCity, legacy = null) {
   const where = await waterCounty(countyFips, legacy);
   if (!where) return null;
-  const { county, state } = where;
+  const { county, state, label } = where;
 
   // area_type_code is a set of codes: "CN" (county) or "CN,CT" (county and
   // city). Every active Connecticut system reads "CN,CT", so an exact "CN"
@@ -448,73 +537,87 @@ async function fetchCountyWater(countyFips, homeCity, legacy = null) {
     `${SDWIS_BASE}/sdwis.geographic_area/area_type_code/contains/CN` +
     `/and/county_served/equals/${encodeURIComponent(county)}` +
     `/and/primacy_agency_code/equals/${state}` +
-    '/and/pws_type_code/equals/CWS/and/pws_activity_code/equals/A/1:40/json',
+    '/and/pws_type_code/equals/CWS/and/pws_activity_code/equals/A/1:300/json',
   );
   const pwsids = [...new Set((areas || []).map((a) => a.pwsid).filter(Boolean))];
   if (!pwsids.length) return null;
 
-  const orChain = pwsids.map((id) => `pwsid/equals/${id}`).join('/or/');
-  const systems = (await fetchJson(`${SDWIS_BASE}/sdwis.water_system/${orChain}/json`)) || [];
+  // Big counties list a few hundred systems; ask for them 40 to a request.
+  const batches = [];
+  for (let i = 0; i < pwsids.length; i += 40) batches.push(pwsids.slice(i, i + 40));
+  const systems = (await Promise.all(batches.map((ids) => fetchJson(
+    `${SDWIS_BASE}/sdwis.water_system/${ids.map((id) => `pwsid/equals/${id}`).join('/or/')}/json`,
+  )))).flat().filter(Boolean);
   const active = systems.filter((s) => s.pws_activity_code === 'A' && s.pws_type_code === 'CWS');
   if (!active.length) return null;
 
-  const cityUpper = String(homeCity || '').toUpperCase();
-  const cityMatches = cityUpper
-    ? active.filter((s) => String(s.pws_name || '').toUpperCase().includes(cityUpper))
-    : [];
+  // The city as a whole word: "ROME" names ROME WATER, not ROMEO MHP.
+  const city = String(homeCity || '').trim();
+  const cityWord = city ? new RegExp(`\\b${escapeRegExp(city)}\\b`, 'i') : null;
+  const cityMatches = cityWord ? active.filter((s) => cityWord.test(String(s.pws_name || ''))) : [];
   const pool = cityMatches.length ? cityMatches : active;
   const system = pool.reduce((a, b) =>
     (Number(b.population_served_count) || 0) > (Number(a.population_served_count) || 0) ? b : a);
 
-  const violations = (await fetchJson(
-    `${SDWIS_BASE}/sdwis.violation/pwsid/equals/${system.pwsid}` +
-    '/and/is_health_based_ind/equals/Y/1:200/json',
-  )) || [];
-  const cutoff = Date.now() - 5 * 365 * DAY_MS;
-  const recent = violations.filter((v) => {
-    const t = Date.parse(v.compl_per_begin_date || '');
-    return Number.isFinite(t) && t >= cutoff;
+  const count = await recentHealthViolations(system.pwsid);
+  return waterData({
+    name: String(system.pws_name || '').replace(/\s+/g, ' ').trim(),
+    pwsId: system.pwsid || null,
+    count,
+    match: 'county',
+    county: label,
   });
+}
 
-  return {
-    utility_name: String(system.pws_name || '').replace(/\s+/g, ' ').trim(),
-    pws_id: system.pwsid || null,
-    recent_health_violations: recent.length > 0,
-    violation_count: recent.length,
-    summary: recent.length > 0
-      ? `${recent.length} health-based violation${recent.length === 1 ? '' : 's'} reported in the last 5 years.`
-      : 'No health-based violations reported in the last 5 years.',
-  };
+async function composeCountyWater(home) {
+  const countyFips = await homeCountyFips(home);
+  const legacy = isConnecticutPlanningRegion(countyFips) ? await connecticutLegacyCounty(home) : null;
+  if (!countyFips || (isConnecticutPlanningRegion(countyFips) && !legacy)) return null;
+  const keyFips = legacy ? legacy.county_fips : countyFips;
+  // City folded into the key: neighbors in the same city share the row. Its
+  // own section id, so a slow service-area map doesn't pause this too.
+  const citySlug = String(home.city || '').toLowerCase().replace(/[^a-z]/g, '') || 'any';
+  return readThrough({
+    cacheKey: `county:${keyFips}:${citySlug}`,
+    sectionId: '_water_county',
+    ttlMs: 90 * DAY_MS,
+    fetch: () => fetchCountyWater(countyFips, home.city, legacy),
+  });
 }
 
 async function composeDrinkingWater(home) {
+  const ll = homeLatLng(home);
+  if (!ll) return [serializePlaceSection('drinking_water', { status: 'unavailable' })];
   try {
-    const countyFips = await homeCountyFips(home);
-    if (!countyFips) return [serializePlaceSection('drinking_water', { status: 'unavailable' })];
-    const legacy = isConnecticutPlanningRegion(countyFips) ? await connecticutLegacyCounty(home) : null;
-    if (isConnecticutPlanningRegion(countyFips) && !legacy) {
-      return [serializePlaceSection('drinking_water', { status: 'unavailable' })];
+    let result;
+    try {
+      // Keyed by the exact point, hashed: two homes across a service-area
+      // line must not share an answer, and the key holds no coordinates.
+      const pointKey = createHash('sha256').update(`${ll.lat},${ll.lng}`).digest('hex');
+      result = await readThrough({
+        cacheKey: `point:${pointKey}`,
+        sectionId: 'drinking_water',
+        ttlMs: 90 * DAY_MS,
+        fetch: () => fetchServiceAreaWater(ll),
+      });
+    } catch (err) {
+      logger.warn('placeSections: water service areas failed, trying county records', { homeId: home.id, error: err.message });
+      result = await composeCountyWater(home);
     }
-    const keyFips = legacy ? legacy.county_fips : countyFips;
-
-    // City folded into the key: neighbors in the same city share the row.
-    const citySlug = String(home.city || '').toLowerCase().replace(/[^a-z]/g, '') || 'any';
-    const { payload, fetchedAt, stale } = await readThrough({
-      cacheKey: `county:${keyFips}:${citySlug}`,
-      sectionId: 'drinking_water',
-      ttlMs: 90 * DAY_MS,
-      fetch: () => fetchCountyWater(countyFips, home.city, legacy),
-    });
-    if (!payload) {
+    const { payload, fetchedAt, stale } = result || {};
+    if (!payload || payload.match === 'none') {
       return [serializePlaceSection('drinking_water', {
         status: 'unavailable',
-        unavailableReason: 'No community water system found for your area in EPA records.',
+        unavailableReason: payload ? NO_SERVICE_AREA_REASON : 'No community water system found for your area in EPA records.',
       })];
     }
     return [serializePlaceSection('drinking_water', {
       asOf: fetchedAt,
       status: stale ? 'stale' : 'ready',
-      coverage: 'partial', // county-level match, not a service-area polygon
+      // Only a recorded service area is a full answer; an estimated area or
+      // a county guess is partial.
+      coverage: payload.match === 'service_area' && !payload.estimated_area ? 'full' : 'partial',
+      source: payload.match === 'service_area' ? 'EPA water service areas · EPA SDWIS' : 'EPA SDWIS county records',
       data: payload,
     })];
   } catch (err) {

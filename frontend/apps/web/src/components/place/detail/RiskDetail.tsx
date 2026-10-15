@@ -172,6 +172,9 @@ function LeadRadonCard({ data }: { data: PlaceLeadRadonData }) {
 }
 
 function DrinkingWaterCard({ data }: { data: PlaceDrinkingWaterData }) {
+  // A county-records guess can be the wrong system, so its record isn't
+  // shown as this home's; the summary says what is known.
+  const unconfirmed = data.match === 'county';
   return (
     <div className="bg-app-surface border border-app-border rounded-2xl shadow-sm p-4">
       <div className="flex items-center gap-3">
@@ -181,11 +184,15 @@ function DrinkingWaterCard({ data }: { data: PlaceDrinkingWaterData }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[15.5px] font-semibold text-app-text -tracking-[0.01em] truncate">{data.utility_name}</span>
-            <Chip
-              label={data.recent_health_violations ? `${data.violation_count} health violation${data.violation_count === 1 ? '' : 's'}` : 'No health violations'}
-              variant={data.recent_health_violations ? 'warning' : 'success'}
-              icon={data.recent_health_violations ? TriangleAlert : ShieldCheck}
-            />
+            {unconfirmed ? (
+              <Chip label="Not confirmed" variant="neutral" />
+            ) : (
+              <Chip
+                label={data.recent_health_violations ? `${data.violation_count} health violation${data.violation_count === 1 ? '' : 's'}` : 'No health violations'}
+                variant={data.recent_health_violations ? 'warning' : 'success'}
+                icon={data.recent_health_violations ? TriangleAlert : ShieldCheck}
+              />
+            )}
           </div>
           <div className="text-[13px] text-app-text-secondary leading-[19px] mt-1">{data.summary}</div>
         </div>

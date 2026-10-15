@@ -485,12 +485,20 @@ export interface PlaceLeadRadonData {
   disclaimer: string;
 }
 
-/** Launch layer #7 — Drinking-water system (EPA SDWIS; coverage ~80%). */
+/** Launch layer #7 — Drinking-water system (EPA service areas + SDWIS). */
 export interface PlaceDrinkingWaterData {
   /** e.g. "Portland Water Bureau". */
   utility_name: string;
   /** Public Water System id. */
   pws_id: string | null;
+  /**
+   * How the system was found: the EPA service area that contains the
+   * address, or (when that map can't be reached) EPA's county records, which
+   * can name the wrong system. Absent from responses cached before it existed.
+   */
+  match?: 'service_area' | 'county';
+  /** EPA estimated this service area rather than taking it from records. */
+  estimated_area?: boolean;
   recent_health_violations: boolean;
   violation_count: number;
   summary: string;
