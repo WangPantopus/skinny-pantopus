@@ -73,7 +73,7 @@ public struct PulsePostDetailView: View {
                     }
                 }
                 if viewModel.isOwner {
-                    if viewModel.canNarrowToTown {
+                    if viewModel.canNarrowAudience {
                         Button("Who can read") { showsReadScopeConfirm = true }
                             .accessibilityIdentifier("pulseConversationReadScope")
                     }
@@ -155,11 +155,8 @@ public struct PulsePostDetailView: View {
             .sheet(item: $privateMessage) { destination in
                 PulsePrivateMessageSheet(destination: destination)
             }
-            .alert("Who can read", isPresented: $showsReadScopeConfirm) {
-                Button("Verified neighbors of the town") { Task { await viewModel.narrowConversationToTown() } }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("People outside this audience will lose access. You can't widen it later.")
+            .sheet(isPresented: $showsReadScopeConfirm) {
+                PulseAudiencePickerView(viewModel: viewModel)
             }
     }
 

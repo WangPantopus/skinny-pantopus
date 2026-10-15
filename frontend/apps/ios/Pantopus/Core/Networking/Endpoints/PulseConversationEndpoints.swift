@@ -58,9 +58,13 @@ public extension PulseEndpoints {
         Endpoint(method: .post, path: "/api/pulse/posts/\(postId)/claims/\(claimId)/choose")
     }
 
-    /// `PUT /api/pulse/posts/:id/read-scope` — S9 addition in §3.
-    static func narrowReadScope(postId: String, readScope: String) -> Endpoint {
-        Endpoint(method: .put, path: "/api/pulse/posts/\(postId)/read-scope", body: ReadScopeRequest(readScope: readScope))
+    /// Planned `backend/routes/pulse.js`: `PUT /api/pulse/posts/:id/read-scope`, contract §2.13 / PR 2321.
+    static func narrowReadScope(postId: String, readScope: String, areaId: String? = nil) -> Endpoint {
+        Endpoint(
+            method: .put,
+            path: "/api/pulse/posts/\(postId)/read-scope",
+            body: ReadScopeRequest(readScope: readScope, areaId: areaId)
+        )
     }
 
     /// `PUT /api/pulse/follows` — §2.9; one tap means notifications off.
@@ -89,6 +93,7 @@ private struct ClaimRequest: Encodable {
 
 private struct ReadScopeRequest: Encodable {
     let readScope: String
+    let areaId: String?
 }
 
 private struct FollowPostRequest: Encodable {

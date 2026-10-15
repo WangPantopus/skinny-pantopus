@@ -62,7 +62,7 @@ final class PulseAreaPickerViewModel {
         }
     }
 
-    private static func choice(_ area: PulseAreaDTO) -> PulseAreaChoice? {
+    static func choice(_ area: PulseAreaDTO) -> PulseAreaChoice? {
         guard let id = area.id, UUID(uuidString: id) != nil,
               let kind = area.kind, ["town", "neighborhood", "street"].contains(kind),
               let title = [area.title, area.name].compactMap({ $0?.trimmingCharacters(in: .whitespacesAndNewlines) })
