@@ -1,5 +1,7 @@
 # Prompts to start the six streams
 
+> **Paused on October 15, 2026:** the redesign is behind the launch-cut key `pulse_redesign` and the apps ship the October 13 Pulse. Before using a prompt below, read the paused note at the top of the [README](README.md); where a prompt says "no feature flag", the key now applies.
+
 The founder pastes one prompt into one new session per stream. **Before pasting:** the kit, [PR 2252](https://github.com/WangPantopus/skinny-pantopus/pull/2252) (the Share fix) and [PR 625](https://github.com/WangPantopus/skinny-pantopus/pull/625) (the design and wireframes) are merged on `master`. Start PB, PI, PA, PS and PV now; start PC when R2 begins (about week 3). Each session works in its own worktree. **Sessions already running** (PB, PI, PA and PC were started from the first version of these prompts) get [the addendum at the end of this file](#addendum-for-sessions-already-running) instead of a new prompt.
 
 Every prompt below begins with the same shared lines; they are repeated so each prompt stands alone.

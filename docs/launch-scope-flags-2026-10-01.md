@@ -1,8 +1,9 @@
 # First-launch scope flags (2026-10-01)
 
 For the first launch the founder cut eight features (direction of 2026-09-27; see the "LAUNCH SCOPE" block in the
-coordination hub). Two keys came later: `gift_funds` (2026-10-06) and `mailbox` (founder decision of 2026-10-09, with
-the Instant Screens work). They are **hidden behind flags, not deleted**: every screen, route, API, job and test is still
+coordination hub). Three keys came later: `gift_funds` (2026-10-06), `mailbox` (founder decision of 2026-10-09, with
+the Instant Screens work) and `pulse_redesign` (founder decision of 2026-10-15, pausing the Pulse build). They are
+**hidden behind flags, not deleted**: every screen, route, API, job and test is still
 in the code, and any feature comes back by switching its flag on. This document says what each flag hides, how to switch
 one back on, and the calls that were made while hiding them.
 
@@ -23,6 +24,7 @@ feature on.
 | `mail_extras` | 8. Mail extras | Writing letters (Compose / Write a letter / Send mail), ceremonial letters, certified mail and e-signing, Family Mail Party, community mail, mail event invitations, translations; the Stamps postage wallet and its header actions (call 9); Earn, the mailbox's offer and ad earnings (call 12). **Kept:** the mailbox for received mail, vacation hold, My Mail Day, the vault and the Stamps gallery |
 | `gift_funds` | 9. Support Train gift funds (added 2026-10-06 by L3) | The organizer's gift fund: Start a Train's "Gift funds" option, the Manage gift fund section, the "Gift Funds" support type on Train pages, and the fund enable and contribution routes (403 `GIFT_FUNDS_UNAVAILABLE`). No app can take a contribution yet, and the payee, holding, fee and non-member questions wait for the founder (status/FOUNDER.md, L3). **Kept:** everything else about Trains |
 | `mailbox` | 10. Mailbox (added 2026-10-09, founder decision; `docs/product/instant-screens-contract-2026-10-09.md` §9) | The mailbox for received mail: Incoming, Counter and Vault, the Me / Home / Biz drawers, letters and the item detail, My Mail Day, vacation hold, mail search, the Stamps gallery, the Hub's mail tile, "Scan mail" chip and Mailbox shortcut, mail rows in Today, the Hub, the briefings and activity, mail notification settings, and the assistant's mail tools. The tab that read **Mail** reads **Messages** and opens the conversation list; its badge counts unread messages. The server sends no mail notifications, pushes or emails, counts no mail in badges or lists, and skips Mail Day and the other mailbox jobs. **Kept:** address verification by postcard ("Verify your address by mail"), home permissions (`mailbox.view` and the rest), all Mailbox code |
+| `pulse_redesign` | 11. The Pulse redesign (added 2026-10-15, founder decision; the build kit is `docs/product/pulse-build/`) | What the Pulse build added from October 13: the five-tab bar with Pulse and Plans as tabs, the Pulse page (area picker, topic lanes, quiet card, post status), the conversation page, the audience picker, follow and card controls, Pulse preferences, Pulse-mode posting, offers and claims, Helpful and thanks, and the Ask reminder. With the key off the apps are the October 13 apps: four tabs (Place · Today · Nearby · Messages), and Pulse is the October 13 feed that opens from Nearby, with its composer and post page. The server refuses every `/api/pulse` route and a Pulse-mode post (403 `PULSE_REDESIGN_UNAVAILABLE`), stores no follow alert, Helpful, thanks or offer notices, and skips the Ask reminder job. **Kept:** the October 13 Pulse and everything it uses; the rules and fixes in call 15; all redesign code, tables and tests |
 
 A surface that belongs to two cut features shows only when **both** are on.
 
@@ -102,6 +104,22 @@ Tests run with every feature on (`backend/jest.config.js`, `frontend/apps/web/te
 14. **Letters to a contact need both mail keys:** the email or text that tells a non-member about a letter, and the
    `mail_claimed` / `mail_escrow_*` notices, go out only with `mailbox` and `mail_extras` both on (a surface of two cut
    features).
+15. **What stays while `pulse_redesign` is off (2026-10-15, founder decision):**
+   - **Two rules from the Pulse build stay in force:**
+     - Heads-ups about crime or suspicious people stay refused (`ALERT_KIND_NOT_ALLOWED`). Old posts of those kinds
+       stay readable.
+     - Businesses still can't start posts in the neighborhood feed (`BUSINESS_CANNOT_POST`). Their feed compose
+       button stays gone.
+   - **The privacy fixes made during the Pulse build stay on:**
+     - the Share link check
+     - replies and notifications across blocks
+     - the profile and local-activity post walls
+     - the pinned-post read check
+     - audience read checks
+   - **Some changes stay without the October 13 apps showing them:** posts end hourly, the feed radius is capped at
+     100 miles, and posts keep a topic.
+   - **Each lane gates its own code:** iOS and Android restore their October 13 Pulse screens behind the key. The
+     server gate merges after them, so no app shows the redesign to a server that refuses it.
 
 ## Known limits
 
@@ -109,3 +127,5 @@ Tests run with every feature on (`backend/jest.config.js`, `frontend/apps/web/te
   deleted either.
 - Native apps read the switches at build time, so bringing a feature back to phones needs a new app build.
 - Mail that arrives while `mailbox` is off is stored as before; nobody is told about it until the mailbox returns.
+- The Pulse redesign's tables and columns stay in the database (its migrations are additive). Resuming the build
+  and switching it back on is in `docs/product/pulse-build/README.md`.

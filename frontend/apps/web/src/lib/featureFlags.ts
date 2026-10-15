@@ -58,6 +58,7 @@ export const LAUNCH_FEATURE_KEYS = [
   'mail_extras', // 8. Letters, e-signing, community mail, event invitations by mail
   'gift_funds', // 9. Support Train gift funds (no app can take a contribution yet)
   'mailbox', // 10. The digital Mailbox (October 9); the Mail tab becomes Messages
+  'pulse_redesign', // 11. The Pulse redesign, paused for launch (October 15); the web has no redesign screens
 ] as const;
 
 export type LaunchFeatureKey = (typeof LAUNCH_FEATURE_KEYS)[number];
