@@ -2,9 +2,9 @@
 
 Owner: the PB session. Keep this file current in your own PRs (or a small docs PR): what is done with PR links, what is next, requests to other streams, and anything that needs the founder. Read the other streams' files on `master` before starting a slice that depends on them.
 
-## Current handoff (October 15, 06:20 UTC)
+## Current handoff (October 15, about 08:00 UTC)
 
-[PB handoff, October 15](PB-handoff-2026-10-15.md): what merged today (#2322 with its seven parents; #2339 with #2337 and #2338), the open S8 PRs (#2340 contract, #2341 implementation, both green), the next PB work in order (S8 merge, PC's content helpers and follow alerts, S12, S14, S15–S17, S20, S21–S24) and the live runtime the next session reuses.
+[PB handoff, October 15 late](PB-handoff-2026-10-15-late.md): S8 and PC's content helpers merged; the S12 chain (#2346 → #2347 → #2349 → #2350) is green and only waits for master's queue; S14 (#2351, #2352) and the S16/S17 contract (#2353) are open; S16's code is on `claude/pulse-pb-s16-places` and not yet verified. It lists the merge steps, the order of the remaining work (S16, S17, S15 as a draft under H2, S20 behind H6, S21–S24) and the live runtime the next session reuses. The morning handoff ([PB-handoff-2026-10-15.md](PB-handoff-2026-10-15.md)) is history.
 
 - **Merged:** offer requests and the giver's choice (`OfferClaim`), reply reports into the `PostReport` queue, and narrowing who can read ([#2338](https://github.com/WangPantopus/skinny-pantopus/pull/2338), [#2339](https://github.com/WangPantopus/skinny-pantopus/pull/2339), contract [#2337](https://github.com/WangPantopus/skinny-pantopus/pull/2337)). Checked on iOS (request with a double tap, the giver's list and choice, narrowing to the town and to a synthetic street), on web (inbox, narrowed posts, refused share) and on Android (inbox).
 - **Merged later on October 15:** Pulse-mode creation and edits ([#2340](https://github.com/WangPantopus/skinny-pantopus/pull/2340), [#2341](https://github.com/WangPantopus/skinny-pantopus/pull/2341)); see the next section.
