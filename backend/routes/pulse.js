@@ -16,6 +16,7 @@ const readScope = require('../services/pulse/readScope');
 const known = require('../services/pulse/known');
 const pulseSearch = require('../services/pulse/search');
 const { upcoming } = require('../services/pulse/upcoming');
+const rightNow = require('../services/pulse/rightNow');
 const { isPulseTopic } = require('../services/pulse/topics');
 const {
   DAY_MS, askIdsWithReplies, windowDays, endsAt,
@@ -211,6 +212,39 @@ router.get('/upcoming', verifyToken, async (req, res) => {
     res.set('Cache-Control', 'private, no-store');
     res.json(await upcoming(req.user, { areaId: areaQuery(req.query), limit: Math.min(Number(req.query.limit) || 20, 50) }));
   } catch (error) { feedError(res, error); }
+});
+
+// Right now (contract §2.16): the card, neighbors' reports, and official start, update and clear.
+router.get('/right-now', verifyToken, async (req, res) => {
+  try {
+    res.set('Cache-Control', 'private, no-store');
+    res.json(await rightNow.read(req.user.id, areaQuery(req.query)));
+  } catch (error) { feedError(res, error); }
+});
+
+router.post('/right-now', verifyToken, async (req, res) => {
+  try { res.status(201).json(await rightNow.start(req.user.id, req.body || {})); }
+  catch (error) { feedError(res, error); }
+});
+
+router.post('/right-now/:id/report', verifyToken, async (req, res) => {
+  try { res.json(await rightNow.report(req.user.id, req.params.id, req.body?.kind ?? '')); }
+  catch (error) { feedError(res, error); }
+});
+
+router.delete('/right-now/:id/report', verifyToken, async (req, res) => {
+  try { res.json(await rightNow.report(req.user.id, req.params.id, null)); }
+  catch (error) { feedError(res, error); }
+});
+
+router.post('/right-now/:id/update', verifyToken, async (req, res) => {
+  try { res.json(await rightNow.update(req.user.id, req.params.id, req.body || {})); }
+  catch (error) { feedError(res, error); }
+});
+
+router.post('/right-now/:id/clear', verifyToken, async (req, res) => {
+  try { res.json(await rightNow.clear(req.user.id, req.params.id)); }
+  catch (error) { feedError(res, error); }
 });
 
 router.get('/areas/mine', verifyToken, async (req, res) => {
