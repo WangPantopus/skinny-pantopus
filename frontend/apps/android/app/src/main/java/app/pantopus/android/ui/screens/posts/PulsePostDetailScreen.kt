@@ -34,6 +34,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -233,12 +234,12 @@ fun PulsePostDetailScreen(
             }
         }
         toast?.let { message ->
-            // Tinted by kind: "Report submitted" is good news, the rest are failures.
+            // Tinted by kind: a report sent, an Ask kept open or closed is good news; the rest are failures.
             Toast(
                 message =
                     ToastMessage(
                         text = message,
-                        kind = if (message == POST_REPORT_SUBMITTED_TOAST) ToastKind.Success else ToastKind.Error,
+                        kind = if (message in POST_DETAIL_SUCCESS_TOASTS) ToastKind.Success else ToastKind.Error,
                     ),
                 modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 100.dp),
             )
@@ -430,6 +431,8 @@ private fun OverflowAction(
             fontSize = 14.sp,
             fontWeight = FontWeight.Medium,
             color = if (isDestructive) PantopusColors.error else PantopusColors.appText,
+            // A label that wraps at large text stays centered like the others.
+            textAlign = TextAlign.Center,
         )
     }
 }

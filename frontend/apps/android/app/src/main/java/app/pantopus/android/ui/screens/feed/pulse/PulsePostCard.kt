@@ -662,5 +662,8 @@ private fun buildA11yLabel(content: PulsePostCardContent): String {
     if (content.mediaUrls.isNotEmpty()) {
         parts.add("${content.mediaUrls.size} attached ${if (content.mediaUrls.size == 1) "photo" else "photos"}")
     }
-    return parts.joinToString(". ")
+    // A part that already ends a sentence keeps its own mark: TalkBack reads a doubled period aloud ("2 period").
+    return parts.map(String::trimEnd).filter(String::isNotEmpty).joinToString(" ") { part ->
+        if (part.last() in ".?!") part else "$part."
+    }
 }
