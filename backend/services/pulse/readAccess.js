@@ -121,7 +121,9 @@ async function notificationPostFilter(userId) {
   return query => {
     let q = access.query(query, null, 'pulse_notification_post_access')
       .or(`${field('moderation_state')}.is.null,${field('moderation_state')}.eq.live,${field('user_id')}.eq.${userId}`)
-      .or(`${field('reply_moderation_state')}.is.null,${field('reply_moderation_state')}.eq.live,${field('reply_user_id')}.eq.${userId}`);
+      .or(`${field('reply_moderation_state')}.is.null,${field('reply_moderation_state')}.eq.live,${field('reply_user_id')}.eq.${userId}`)
+      // A Helpful notice whose mark was withdrawn or made again no longer describes anything.
+      .or(`${field('withdrawn')}.is.null`);
     if (blocked.size) {
       const ids = [...blocked].join(',');
       q = q.or(`${field('user_id')}.is.null,${field('user_id')}.not.in.(${ids})`)

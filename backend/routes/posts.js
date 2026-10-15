@@ -467,6 +467,39 @@ async function ensurePostMute({ userId, entityType, entityId, surface = null, ar
   return Array.isArray(data) ? data[0] : data;
 }
 
+// Old clients omit deleted rows and render a tree from parent_comment_id. Keep
+// their surviving replies reachable without changing the stored Pulse topology.
+// Read only ancestry/deletion state, never the missing parent's identity or text.
+async function legacyReplyParents(comments, postId) {
+  const known = new Map(comments.map(row => [row.id, row]));
+  let missing = [...new Set(comments.map(row => row.parent_comment_id).filter(id => id && !known.has(id)))];
+  while (missing.length) {
+    const next = new Set();
+    for (let start = 0; start < missing.length; start += 100) {
+      const ids = missing.slice(start, start + 100);
+      const { data, error } = await supabaseAdmin.from('PostComment')
+        .select('id, parent_comment_id, is_deleted').eq('post_id', postId).in('id', ids);
+      if (error) throw error;
+      for (const id of ids) known.set(id, null);
+      for (const row of data || []) known.set(row.id, row);
+      for (const row of data || []) {
+        if (row.is_deleted && row.parent_comment_id && !known.has(row.parent_comment_id)) next.add(row.parent_comment_id);
+      }
+    }
+    missing = [...next].filter(id => !known.has(id));
+  }
+  return comments.map(row => {
+    let parent = row.parent_comment_id;
+    const visited = new Set([row.id]);
+    while (parent && known.get(parent)?.is_deleted) {
+      if (visited.has(parent)) { parent = null; break; }
+      visited.add(parent);
+      parent = known.get(parent).parent_comment_id;
+    }
+    return parent === row.parent_comment_id ? row : { ...row, parent_comment_id: parent };
+  });
+}
+
 async function attachFilesToComments(comments) {
   if (!Array.isArray(comments) || comments.length === 0) return [];
 
@@ -2418,7 +2451,8 @@ router.get('/:id', optionalAuth, async (req, res) => {
       .eq('post_id', id).eq('is_deleted', false), userId)
       .order('created_at', { ascending: true });
 
-    const commentRows = await serializeCommentsForViewer(await attachFilesToComments(comments || []), post, userId);
+    const commentRows = await legacyReplyParents(
+      await serializeCommentsForViewer(await attachFilesToComments(comments || []), post, userId), id);
 
     let userLike = null;
     let userSave = null;
@@ -2890,7 +2924,8 @@ router.post('/:id/comments', verifyToken, validate(createCommentSchema), async (
       }
       return res.status(201).json({
         message: 'Comment added successfully',
-        comment: (await serializeCommentsForViewer([{ ...existing, attachments: [] }], post, userId, audienceAuthors))[0],
+        comment: await require('../services/pulse/conversation').addCreatedReplyFields(
+          (await serializeCommentsForViewer([{ ...existing, attachments: [] }], post, userId, audienceAuthors))[0], post, userId),
       });
     };
     if (commentId) {
@@ -2970,7 +3005,8 @@ router.post('/:id/comments', verifyToken, validate(createCommentSchema), async (
 
     res.status(201).json({
       message: 'Comment added successfully',
-      comment: (await serializeCommentsForViewer([{ ...newComment, attachments: [] }], post, userId, audienceAuthors))[0],
+      comment: await require('../services/pulse/conversation').addCreatedReplyFields(
+        (await serializeCommentsForViewer([{ ...newComment, attachments: [] }], post, userId, audienceAuthors))[0], post, userId),
     });
   } catch (err) {
     logger.error('Comment creation error', { error: err.message, postId: req.params.id });
@@ -3006,7 +3042,8 @@ router.get('/:id/comments', verifyToken, async (req, res) => {
     }
 
     const enrichedComments = await attachFilesToComments(comments || []);
-    const projectedComments = await serializeCommentsForViewer(enrichedComments, post, userId);
+    const projectedComments = await legacyReplyParents(
+      await serializeCommentsForViewer(enrichedComments, post, userId), postId);
     const commentsWithLikes = projectedComments.map(c => ({
       ...c,
       userHasLiked: userLikedSet.has(c.id),
