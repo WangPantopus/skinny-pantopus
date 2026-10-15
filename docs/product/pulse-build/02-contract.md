@@ -411,7 +411,7 @@ The feed's `right_now` (2.3) and `GET /api/pulse/right-now?area_id=` → `{ "rig
 | `User` | `adult_attested_at timestamptz`; `account_type` check widened with `official` |
 | `UserFeedPreference` | `pulse_nearby_seen_at timestamptz`, `pulse_following_seen_at timestamptz` (server-only storage finalized before S6; clients use `/feed/seen`, never these columns) |
 | `UserNotificationPreferences` | `digest_enabled boolean`, `digest_time_local time`, `digest_channel text`, `weekly_street_digest_enabled boolean` (PC), `nudge_helper boolean default true` |
-| `Plan` | `source_post_id uuid null` (S14, FK `Post`, set null when the conversation is deleted); `join_requirement` gains `invited` and `PlanRequest.status` gains `invited` (S14, check widenings); S21: `series_id uuid`, `recurrence jsonb`, `co_host_ids uuid[]`, `paused_at timestamptz` |
+| `Plan` | `source_post_id uuid null` (S14; no foreign key, since `Plan` already references `Post` and a second key would make existing embeds ambiguous; a deleted conversation simply stops linking); `join_requirement` gains `invited` and `PlanRequest.status` gains `invited` (S14, check widenings); S21: `series_id uuid`, `recurrence jsonb`, `co_host_ids uuid[]`, `paused_at timestamptz` |
 | `Post` (later slices) | S23: `merged_into_post_id uuid null`; S24: pinned sources live in `post_metadata.pins` (no column) |
 | `SupportTrain` | S22: `source_post_id uuid null` |
 | `User` (later slices) | S20/S24: `signup_source text` |
