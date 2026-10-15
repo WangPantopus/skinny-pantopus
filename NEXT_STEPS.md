@@ -89,11 +89,12 @@ Sessions you start for one job (Instant Screens, Nearby Plans, single fixes) wor
 - [x] Share posts are allowed (a place attached, at most 2 a week); crime, suspicious, theft, vandalism and scam alert kinds can no longer be created; businesses reply and never post; the PR 625 review's recommendations are the defaults; the Share leak is fixed in [PR 2252](https://github.com/WangPantopus/skinny-pantopus/pull/2252).
 - [x] Labels and permissions, adult-only posting and Visitors who may start Asks (one a day) as in the design. Paid moderation is approved in principle; the founder confirms real cover before public web exposure.
 - [x] No unit tests or coverage for Pulse: every feature, flow and edge case is verified end to end by launching the web, iOS and Android apps ([scenarios](docs/product/pulse-build/05-scenarios.md)).
-- [ ] The eleven new tables in the [contract](docs/product/pulse-build/02-contract.md#42-new-tables-awaiting-founder-approval): awaiting the founder's approval.
+- [x] The eleven new tables in the [contract](docs/product/pulse-build/02-contract.md#42-new-tables-awaiting-founder-approval): you approved all eleven on October 14, together with downloading the public Census boundaries for Camas, Washougal and Vancouver ([PR 2304](https://github.com/WangPantopus/skinny-pantopus/pull/2304)). The approval doesn't cover changes to hosted databases or deploys.
 
 **Made by the founder on October 14.**
 
 - [x] The stylized home picture and the Place tab are no longer parked and are for everyone now: the Today sky draws the household's own house from its county record (PR 2202), and the Place tab is the person's place, with the legacy Hub removed (PR 2189). Both merged October 13.
+- [x] Production keeps releasing from every master merge once you enable it; there is no release branch. Until you enable it, production deploys stay off (`BACKEND_DEPLOY_ENABLED` is false in the GitHub `production` environment).
 
 **Still open. The brief builds the default until you decide.**
 
@@ -358,15 +359,21 @@ Decided October 12 (section 0) and built by three founder-started sessions: back
 
 Decided October 13 (section 0). The [build kit](docs/product/pulse-build/README.md) has the spec, the API and data contract, the delivery plan, the verification kit and one brief per stream. Six sessions work in parallel: PB backend and data, PI iOS, PA Android, PS safety and composer checks, PC channels and public web, PV verification and release. Each keeps its status in `docs/product/pulse-build/status/`; PV keeps the [board](docs/product/pulse-build/status/BOARD.md). There is no flag: slices merge in the order the kit sets, and you choose when to deploy (backend, then web, then app builds) and cut builds.
 
-- [ ] Share leak fix: [PR 2252](https://github.com/WangPantopus/skinny-pantopus/pull/2252), built and verified; merge it before the streams start.
-- [ ] You: tick "New tables" in the kit's README (eleven tables). Nothing that creates a table merges before that.
-- [ ] R1 (about weeks 1–3): rule cleanups, tolerant decoding, the five tabs, topics, areas and labels with server-enforced audience, the Pulse page, lifecycle.
+- [x] Share leak fix: [PR 2252](https://github.com/WangPantopus/skinny-pantopus/pull/2252), merged October 14 at 04:12 UTC, before the streams' first slices.
+- [x] "New tables" is ticked in the kit's README: you approved all eleven tables on October 14 (PR 2304, section 0).
+- [ ] R1 (about weeks 1–3): rule cleanups, tolerant decoding, the five tabs, topics, areas and labels with server-enforced audience, the Pulse page, lifecycle. Progress on master at the end of October 14, from the streams' [status files](docs/product/pulse-build/status/):
+  - [x] Rule cleanups (S1: server PR 2259, iOS 2266, Android 2271), tolerant decoding (S2: iOS 2263, Android 2265), the five tabs (S3: iOS 2291, Android 2293) and topics (S4: server 2264, iOS 2295, Android 2300) are merged. The web composer still offers the four Heads-up kinds the server now refuses; the server says why and keeps the draft (a small web fix, no owner yet).
+  - [ ] Areas, labels and walls (S5): the server side so far is merged: one read check for profile post lists, business mentions and pinned posts (PRs 2268, 2270, 2276), adult attestation (2269), the three approved towns with areas taken from verified homes (2278, 2306, 2307), and verified-home audiences on the old feed reads and on notifications (2309). Still to do: distance text and label limits on the server, and the labels, area pill and adult confirmation in both apps.
+  - [ ] The Pulse page (S6): its contract is merged (PRs 2298, 2310) and the backend feed is next. The iOS and Android pages are drafts (PRs 2308, 2303) waiting for it.
+  - [ ] Lifecycle (S7): the server (PRs 2273, 2274, 2275) and iOS (2299) are merged; Android is a draft (PR 2302).
+  - [x] Also merged: held and removed posts and replies reach only their author, the server half of the moderation baseline (S11: PRs 2290 and 2301, and 2305 for Plans); no replies or notices across a block (2277, 2281); the old Place feed and map read at most 100 miles around their point (2287); on Android, reopening after the system stopped the app returns where the person was (2296); on iOS, a refused comment shows the server's reason (2297).
+  - [ ] Pulse's own release checks haven't started. The safety (PS) and verification (PV) streams have nothing on master, the [board](docs/product/pulse-build/status/BOARD.md) still says "not started" for every slice, and the kit's release-candidate sweep (two-account privacy matrix, every push and link route) hasn't run. L4's release rechecks in section 3 cover launch, app links, offline start and screen-reader names, not Pulse's privacy rules.
 - [ ] R2 (about weeks 3–6): composer and checks, conversations, following and controls, moderation baseline.
 - [ ] R3 (about weeks 6–10): Known, Upcoming, Right now, search, digests, the plans bridge.
 - [ ] R4 (about weeks 10–15): public web and guest browsing (after the moderation baseline and your confirmation of moderator cover), place pages and streets, business and official accounts, text channel and reply-by-email (after your provider accounts), transparency.
 - [ ] R5 (about weeks 11–18): what the design requires that the first plan missed: sign-up by emailed code at the moment of posting, recurring plans and co-hosts (wireframe 5's "Repeats"), Support Train from a conversation, merging duplicate conversations and the emergency hold, a second home for reading, pinned sources, the extra metric.
 - [x] October 14: finish everything in the design and have all of it in the app at launch ([coverage check](docs/product/pulse-build/06-coverage.md), [launch bar](docs/product/pulse-build/03-delivery-plan.md#the-launch-bar)). Two parts need other products and are reserved (S25): the Crew Day option and provider pages, and street welcomes. Decide before launch: build those products, or ship without them.
-- [ ] Decide when the pilot builds ship relative to the Pulse launch (L4 proposed pinning a pre-Pulse commit). Until you answer, the pilot's build source is unchanged.
+- [x] When the pilot builds ship relative to the Pulse launch: decided October 14. No pre-Pulse commit is pinned (you said not to worry about the pilot), and production releases from master once you enable it (section 0).
 - [ ] You, when the time comes: confirm moderator cover; the published rules and law-enforcement policy, read by counsel; the Anthropic key on hosted environments for the composer checks; outage-data, SMS and inbound-email accounts (texting registration can take weeks, so start early); legal review and NCMEC reporting setup; officials invited and verified; approval of the seeded Known content; store listing updates for user-generated content; deploys; first-town acceptance rounds with 8 to 10 people.
 
 ## Background backlog
