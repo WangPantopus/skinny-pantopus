@@ -312,7 +312,11 @@ describe('GET /api/public/place', () => {
       const rows = getTable('PlaceSectionCache');
       expect(rows.length).toBeGreaterThan(0);
       for (const row of rows) {
-        expect(row.cache_key).toMatch(/^(geo|state|us|county):/);
+        if (row.section_id === 'civic_districts') {
+          expect(row.cache_key).toMatch(/^point:v2:[a-f0-9]{64}$/);
+        } else {
+          expect(row.cache_key).toMatch(/^(geo|state|us|county):/);
+        }
         expect(row.cache_key.toLowerCase()).not.toContain('oak');
         expect(row.cache_key).not.toContain('home:');
       }
