@@ -201,6 +201,13 @@ function validateReferenceData(statesDoc = STATES_DOC, electionsDoc = ELECTIONS_
         validateLinks(county.official_links, `${at}.counties.${geoid}`, errors);
       }
       if (!entry.checked || !isIsoDate(entry.checked.at)) errors.push(`${at}: checked.at date is required`);
+    } else if (entry.official_links != null) {
+      // A links-only state may carry its own election office's pages (still
+      // no dates): the same link rules, the office that owns them, and the
+      // day a person checked them.
+      validateLinks(entry.official_links, at, errors);
+      if (typeof entry.election_office !== 'string' || !entry.election_office) errors.push(`${at}: election_office is required with official_links`);
+      if (!entry.checked || !isIsoDate(entry.checked.at)) errors.push(`${at}: checked.at date is required with official_links`);
     }
   }
 
