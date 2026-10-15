@@ -9,6 +9,17 @@ Continue from here; this replaces the morning handoff ([PB-handoff-2026-10-15.md
 3. The runtime is live; reuse it (table below). Check: `lsof -nP -iTCP:55100 -iTCP:55101 -sTCP:LISTEN`, `docker ps | grep pulse-pb`, `xcrun simctl list devices | grep Pulse-PB`, `adb devices`.
 4. The backend and web run from the previous worktree, `.claude/worktrees/pulse-pb-s8-continue-513ec0` (branch `claude/pulse-pb-s16-places`, the same code you check out). Keep them until you change backend code; then point the runtime at your worktree: `ln -sfn <your worktree>/supabase/migrations ~/.config/pantopus/pulse-pb-runtime/supabase/migrations` and `PB_WORKTREE=<your worktree> ~/.config/pantopus/pulse-pb-runtime/restart-backend.sh`.
 
+## Only three lanes exist (founder, October 15)
+
+The founder opened three lanes for this work: **PA** (Android), **PB** (backend, this lane) and **PI** (iOS). There is no PS (safety), PC (channels) or PV (verification) session, so their parts of the kit have no owner until the founder decides otherwise:
+
+- **PS:** `backend/services/pulse/safety/*` (the composer checks, so S8's seam fails open and nothing is blocked or held), the S11 moderation actions, tables and appeals, `routes/pulseSafety.js` and `routes/adminReports.js`, the web moderator console, `interestInReply` (S14), Known drafting and curator seeding, Official verification and offer approval (S17), the emergency hold (S23).
+- **PC:** the digest and noise budget (follow alerts stay in-app and Right now pushes nothing until it exists), `GET|PUT /api/pulse/preferences`, email and text channels, the public web pages and sitemap (S15).
+- **PV:** release sweeps, `06-coverage.md`'s Verified column, `status/BOARD.md`, and S20's abuse run.
+- **Hold points:** H2 (public exposure) needs PS's S11 baseline and the founder's moderation cover; H6 (sign-up by code) needs an abuse run from a session other than the one that built it.
+
+PB's recommendation, waiting for the founder's answer: PB also builds the server-side parts of PS and PC (they live in `backend/`); the web console and public pages wait for a web lane; a separate fresh session runs S20's abuse run. Until the founder answers, don't edit PS- or PC-owned files; ask.
+
 ## First: merge S12 (green, waiting only for the queue)
 
 The S12 chain is green on every check: [#2346](https://github.com/WangPantopus/skinny-pantopus/pull/2346) contract (`05c6d1b51`) → [#2347](https://github.com/WangPantopus/skinny-pantopus/pull/2347) Known (`55e6a8f33`) → [#2349](https://github.com/WangPantopus/skinny-pantopus/pull/2349) search and Upcoming (`ffcfb5418`) → [#2350](https://github.com/WangPantopus/skinny-pantopus/pull/2350) Right now (`c4bd5ed964730f2833df4d486f223d07fa3fda9a`). All real-app checks are recorded in the PRs and `status/PB.md`. It wasn't merged only because master's CI run for PI's last merge (`6c6de53d2`, run 38701561307) was still queued, and merging then would have cancelled it.

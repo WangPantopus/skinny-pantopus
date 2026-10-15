@@ -138,6 +138,8 @@ H2 public exposure/moderation coverage and H6 auth abuse verification remain. H1
 
 ## Needs founder
 
+- **Only three lanes exist (October 15):** PA, PB and PI. Nobody owns PS's safety work (composer checks, S11 moderation, the console, `interestInReply`, Known drafting, Official and offer approval, the emergency hold), PC's channels work (digest, noise budget, preferences, email and text, public pages) or PV's verification (sweeps, coverage, S20's abuse run), so H2 and H6 can't clear as written. PB's recommendation: PB builds the server-side parts of PS and PC; the web console and public pages wait for a web lane; a separate fresh session runs the abuse run. Decision needed: who owns these.
+
 - **Resolved October 14:** founder approved all eleven tables and downloading public Census boundaries. [PR 2304](https://github.com/WangPantopus/skinny-pantopus/pull/2304) is merged and records the README tick. No hosted migration or deployment is authorized.
 - Deploy note for S1: deploy the seeder no later than the backend. The backend refuses a curator public-safety alert without a source link; the updated seeder sends one, and an older backend ignores the extra field.
 - Deploy note for S4 and S7: the migration before the backend (the release workflow already migrates first). Code from before S7 runs unchanged on the S7 schema.
