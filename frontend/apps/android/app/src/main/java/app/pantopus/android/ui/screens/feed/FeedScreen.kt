@@ -84,6 +84,7 @@ import app.pantopus.android.ui.screens.feed.map.FeedViewMode
 import app.pantopus.android.ui.screens.feed.pulse.PulseFeedUiState
 import app.pantopus.android.ui.screens.feed.pulse.PulseFeedViewModel
 import app.pantopus.android.ui.screens.feed.pulse.PulseIntent
+import app.pantopus.android.ui.screens.feed.pulse.PulsePostActions
 import app.pantopus.android.ui.screens.feed.pulse.PulsePostCard
 import app.pantopus.android.ui.screens.feed.pulse.PulsePostCardContent
 import app.pantopus.android.ui.screens.feed.pulse.PulseSportsEventModule
@@ -100,6 +101,7 @@ import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
+import app.pantopus.android.ui.theme.adaptiveColor
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 
@@ -154,6 +156,7 @@ fun FeedScreen(
     val overflowPostId by viewModel.overflowPostId.collectAsStateWithLifecycle()
     val reportingPostId by viewModel.reportingPostId.collectAsStateWithLifecycle()
     val deletingPostId by viewModel.deletingPostId.collectAsStateWithLifecycle()
+    val closingAskId by viewModel.closingAskId.collectAsStateWithLifecycle()
     val mutingPostId by viewModel.mutingPostId.collectAsStateWithLifecycle()
     val showsPreferences by viewModel.showsPreferences.collectAsStateWithLifecycle()
     val activeTopic by viewModel.activeTopic.collectAsStateWithLifecycle()
@@ -319,7 +322,7 @@ fun FeedScreen(
                 }
             } else {
                 FeedChipRow(
-                    chips = PulseIntent.entries.map { FeedChipItem(id = it.key, label = it.label) },
+                    chips = PulseIntent.filterEntries.map { FeedChipItem(id = it.key, label = it.label) },
                     activeId = activeIntent.key,
                     onSelect = { id -> viewModel.selectIntent(PulseIntent.fromKey(id)) },
                     skeleton = state is PulseFeedUiState.Loading,
@@ -432,7 +435,7 @@ fun FeedScreen(
                 title = { Text("Filter by intent") },
                 text = {
                     Column {
-                        PulseIntent.entries.forEach { intent ->
+                        PulseIntent.filterEntries.forEach { intent ->
                             TextButton(
                                 onClick = {
                                     showsIntentPicker = false
@@ -487,7 +490,7 @@ fun FeedScreen(
     overflowPostId?.let { id ->
         loadedRows.firstOrNull { it.id == id }?.let { row ->
             PostOverflowSheet(
-                row = row,
+                actions = row.actions,
                 onDismiss = { viewModel.dismissOverflow() },
                 onToggleSave = {
                     viewModel.dismissOverflow()
@@ -522,10 +525,31 @@ fun FeedScreen(
                     viewModel.dismissOverflow()
                     viewModel.markSolved(row.id)
                 },
+                onKeepOpen = { viewModel.keepOpen(row.id) },
+                onCloseAsk = { viewModel.beginCloseAsk(row.id) },
                 onReport = { viewModel.beginReport(row.id) },
                 onDelete = { viewModel.beginDelete(row.id) },
             )
         }
+    }
+
+    closingAskId?.let { id ->
+        AlertDialog(
+            onDismissRequest = { viewModel.cancelCloseAsk() },
+            title = { Text("Close this question?") },
+            text = { Text("It leaves Pulse. You can restore it from My posts.") },
+            confirmButton = {
+                TextButton(
+                    onClick = { viewModel.closeAsk(id) },
+                    modifier = Modifier.testTag("pulseAskCloseConfirm"),
+                ) {
+                    Text("Close", color = PantopusColors.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.cancelCloseAsk() }) { Text("Cancel") }
+            },
+        )
     }
 
     reportingPostId?.let { id ->
@@ -610,7 +634,7 @@ fun FeedScreen(
 }
 
 /** Report reasons accepted by `reportPostSchema` (`backend/routes/posts.js:3168`). */
-private val pulseReportReasons =
+internal val pulseReportReasons =
     listOf(
         "spam" to "Spam",
         "harassment" to "Harassment",
@@ -703,50 +727,56 @@ private fun FeedSurfaceTabs(
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun PostOverflowSheet(
-    row: PulsePostCardContent,
+internal fun PostOverflowSheet(
+    actions: PulsePostActions,
     onDismiss: () -> Unit,
     onToggleSave: () -> Unit,
-    onToggleRepost: () -> Unit,
-    onShare: () -> Unit,
+    onToggleRepost: (() -> Unit)?,
+    onShare: (() -> Unit)?,
     onHide: () -> Unit,
     onNotHelpful: () -> Unit,
     onMuteAuthor: () -> Unit,
     onMuteTopic: () -> Unit,
     onMuteThisTopic: () -> Unit,
     onMarkSolved: () -> Unit,
+    onKeepOpen: () -> Unit,
+    onCloseAsk: () -> Unit,
     onReport: () -> Unit,
     onDelete: () -> Unit,
+    topicMuteLabel: String = "Mute this topic",
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val actions = row.actions
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = PantopusColors.appBg,
+        containerColor = adaptiveColor(PantopusColors.appBg, PantopusColors.appBgDark),
         modifier = Modifier.testTag("pulseFeedOverflowSheet"),
     ) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(Spacing.s4),
+            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(Spacing.s4),
             verticalArrangement = Arrangement.spacedBy(Spacing.s1),
         ) {
             Text(
                 text = "Post options",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
-                color = PantopusColors.appText,
+                color = adaptiveColor(PantopusColors.appText, PantopusColors.appTextDark),
             )
             OverflowAction(
                 label = if (actions.isSaved) "Remove bookmark" else "Save post",
                 testTag = "pulseFeedOverflowSave",
                 onClick = onToggleSave,
             )
-            OverflowAction(
-                label = if (actions.isReposted) "Undo repost" else "Repost",
-                testTag = "pulseFeedOverflowRepost",
-                onClick = onToggleRepost,
-            )
-            OverflowAction(label = "Share…", testTag = "pulseFeedOverflowShare", onClick = onShare)
+            onToggleRepost?.let { repost ->
+                OverflowAction(
+                    label = if (actions.isReposted) "Undo repost" else "Repost",
+                    testTag = "pulseFeedOverflowRepost",
+                    onClick = repost,
+                )
+            }
+            onShare?.let { share ->
+                OverflowAction(label = "Share…", testTag = "pulseFeedOverflowShare", onClick = share)
+            }
             OverflowAction(label = "Hide this post", testTag = "pulseFeedOverflowHide", onClick = onHide)
             if (actions.canFlagNotHelpful) {
                 OverflowAction(
@@ -764,7 +794,7 @@ private fun PostOverflowSheet(
             }
             if (actions.canMuteThisTopic) {
                 OverflowAction(
-                    label = "Mute this topic",
+                    label = topicMuteLabel,
                     testTag = "pulseFeedOverflowMuteThisTopic",
                     onClick = onMuteThisTopic,
                 )
@@ -783,6 +813,12 @@ private fun PostOverflowSheet(
                     testTag = "pulseFeedOverflowMarkSolved",
                     onClick = onMarkSolved,
                 )
+            }
+            if (actions.canKeepOpen) {
+                OverflowAction(label = "Keep open 7 more days", testTag = "pulseAskKeepOpen", onClick = onKeepOpen)
+            }
+            if (actions.canCloseAsk) {
+                OverflowAction(label = "Close", testTag = "pulseAskClose", onClick = onCloseAsk)
             }
             if (actions.canReport) {
                 OverflowAction(
@@ -819,7 +855,15 @@ private fun OverflowAction(
     ) {
         Text(
             text = label,
-            color = if (isDestructive) PantopusColors.error else PantopusColors.appText,
+            color =
+                if (isDestructive) {
+                    adaptiveColor(
+                        PantopusColors.error,
+                        PantopusColors.errorLight,
+                    )
+                } else {
+                    adaptiveColor(PantopusColors.appText, PantopusColors.appTextDark)
+                },
             modifier = Modifier.fillMaxWidth(),
         )
     }
@@ -1021,7 +1065,7 @@ data class FeedTopMenu(
 
 /** Connections (and Beacons while that launch cut is off), then the page's preferences. */
 @Composable
-private fun PulseMoreMenu(
+internal fun PulseMoreMenu(
     menu: FeedTopMenu,
     onPreferences: (() -> Unit)?,
 ) {
@@ -1040,7 +1084,7 @@ private fun PulseMoreMenu(
                 icon = PantopusIcon.MoreVertical,
                 contentDescription = null,
                 size = 20.dp,
-                tint = PantopusColors.appText,
+                tint = adaptiveColor(PantopusColors.appText, PantopusColors.appTextDark),
             )
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
@@ -1072,8 +1116,15 @@ private fun PulseMenuItem(
     onClick: () -> Unit,
 ) {
     DropdownMenuItem(
-        text = { Text(title, color = PantopusColors.appText) },
-        leadingIcon = { PantopusIconImage(icon = icon, contentDescription = null, size = 18.dp, tint = PantopusColors.appText) },
+        text = { Text(title, color = adaptiveColor(PantopusColors.appText, PantopusColors.appTextDark)) },
+        leadingIcon = {
+            PantopusIconImage(
+                icon = icon,
+                contentDescription = null,
+                size = 18.dp,
+                tint = adaptiveColor(PantopusColors.appText, PantopusColors.appTextDark),
+            )
+        },
         onClick = onClick,
         modifier = Modifier.testTag(tag),
     )
@@ -1102,6 +1153,7 @@ internal fun FeedEmptyState(
     content: FeedEmptyContent,
     onCta: () -> Unit,
 ) {
+    val footerEmphasisColor = adaptiveColor(PantopusColors.appTextStrong, PantopusColors.appTextStrongDark)
     Column(
         modifier =
             Modifier
@@ -1131,14 +1183,14 @@ internal fun FeedEmptyState(
             text = content.headline,
             fontSize = 20.sp,
             fontWeight = FontWeight.Bold,
-            color = PantopusColors.appText,
+            color = adaptiveColor(PantopusColors.appText, PantopusColors.appTextDark),
             textAlign = TextAlign.Center,
         )
         Spacer(modifier = Modifier.size(Spacing.s2))
         Text(
             text = content.body,
             fontSize = 13.5.sp,
-            color = PantopusColors.appTextSecondary,
+            color = adaptiveColor(PantopusColors.appTextSecondary, PantopusColors.appTextSecondaryDark),
             textAlign = TextAlign.Center,
         )
         Spacer(modifier = Modifier.size(Spacing.s4))
@@ -1178,8 +1230,8 @@ internal fun FeedEmptyState(
                 modifier =
                     Modifier
                         .clip(RoundedCornerShape(Radii.md))
-                        .background(PantopusColors.appSurface)
-                        .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.md))
+                        .background(adaptiveColor(PantopusColors.appSurface, PantopusColors.appSurfaceDark))
+                        .border(1.dp, adaptiveColor(PantopusColors.appBorder, PantopusColors.appBorderDark), RoundedCornerShape(Radii.md))
                         .padding(horizontal = 14.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
@@ -1188,7 +1240,7 @@ internal fun FeedEmptyState(
                     icon = content.footerIcon,
                     contentDescription = null,
                     size = 13.dp,
-                    tint = PantopusColors.appTextMuted,
+                    tint = adaptiveColor(PantopusColors.appTextMuted, PantopusColors.appTextSecondaryDark),
                 )
                 Text(
                     text =
@@ -1197,13 +1249,13 @@ internal fun FeedEmptyState(
                             withStyle(
                                 SpanStyle(
                                     fontWeight = FontWeight.Bold,
-                                    color = PantopusColors.appTextStrong,
+                                    color = footerEmphasisColor,
                                 ),
                             ) { append(emphasis) }
                             append(content.footerTrail)
                         },
                     fontSize = 11.5.sp,
-                    color = PantopusColors.appTextSecondary,
+                    color = adaptiveColor(PantopusColors.appTextSecondary, PantopusColors.appTextSecondaryDark),
                 )
             }
         }

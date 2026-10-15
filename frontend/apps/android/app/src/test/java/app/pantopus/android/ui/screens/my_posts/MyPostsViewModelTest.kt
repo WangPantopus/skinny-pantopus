@@ -181,8 +181,8 @@ class MyPostsViewModelTest {
         assertEquals(PulseIntent.Lost, PulseIntent.fromPostType("lost_found"))
         assertEquals(PulseIntent.Announce, PulseIntent.fromPostType("local_update"))
         assertEquals(PulseIntent.Ask, PulseIntent.fromPostType("ask"))
-        assertEquals(PulseIntent.Announce, PulseIntent.fromPostType(null))
-        assertEquals(PulseIntent.Announce, PulseIntent.fromPostType("garbage"))
+        assertEquals(PulseIntent.Generic, PulseIntent.fromPostType(null))
+        assertEquals(PulseIntent.Generic, PulseIntent.fromPostType("garbage"))
     }
 
     @Test

@@ -32,7 +32,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.Radii
+import app.pantopus.android.ui.theme.adaptiveColor
 
 private val ShimmerBase = Color(0xFFEEF0F3)
 private val ShimmerHighlight = Color(0xFFF6F7F9)
@@ -52,6 +54,8 @@ fun Shimmer(
     cornerRadius: Dp = 6.dp,
     modifier: Modifier = Modifier,
 ) {
+    val base = adaptiveColor(ShimmerBase, PantopusColors.appSurfaceRaisedDark)
+    val highlight = adaptiveColor(ShimmerHighlight, PantopusColors.appBorderStrongDark)
     val motionEnabled = rememberAnimationsEnabled()
 
     if (!motionEnabled) {
@@ -62,7 +66,7 @@ fun Shimmer(
                     .heightIn(min = height)
                     .size(width = width, height = height)
                     .clip(RoundedCornerShape(cornerRadius))
-                    .background(ShimmerBase)
+                    .background(base)
                     .semantics(mergeDescendants = false) { },
         )
         return
@@ -86,7 +90,7 @@ fun Shimmer(
                 .width(width)
                 .size(width = width, height = height)
                 .clip(RoundedCornerShape(cornerRadius))
-                .background(ShimmerBase)
+                .background(base)
                 .drawBehind {
                     val widthPx = size.width
                     val start = widthPx * (phase - 1f)
@@ -96,9 +100,9 @@ fun Shimmer(
                             Brush.linearGradient(
                                 colors =
                                     listOf(
-                                        ShimmerBase.copy(alpha = 0f),
-                                        ShimmerHighlight,
-                                        ShimmerBase.copy(alpha = 0f),
+                                        base.copy(alpha = 0f),
+                                        highlight,
+                                        base.copy(alpha = 0f),
                                     ),
                                 start = Offset(start, size.height / 2),
                                 end = Offset(end, size.height / 2),

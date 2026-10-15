@@ -27,6 +27,7 @@ import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Spacing
+import app.pantopus.android.ui.theme.adaptiveColor
 
 /**
  * Shared empty-state scaffold: 72dp tinted hero circle + Lucide icon +
@@ -55,7 +56,7 @@ fun EmptyState(
         modifier =
             modifier
                 .fillMaxSize()
-                .background(PantopusColors.appBg)
+                .background(adaptiveColor(PantopusColors.appBg, PantopusColors.appBgDark))
                 .padding(horizontal = Spacing.s6)
                 .semantics { contentDescription = "$headline. $subcopy" },
         verticalArrangement = Arrangement.Center,
@@ -75,14 +76,14 @@ fun EmptyState(
         Text(
             text = headline,
             style = PantopusTextStyle.h3,
-            color = PantopusColors.appText,
+            color = adaptiveColor(PantopusColors.appText, PantopusColors.appTextDark),
             textAlign = TextAlign.Center,
         )
         Spacer(Modifier.size(Spacing.s2))
         Text(
             text = subcopy,
             style = PantopusTextStyle.small,
-            color = PantopusColors.appTextSecondary,
+            color = adaptiveColor(PantopusColors.appTextSecondary, PantopusColors.appTextSecondaryDark),
             textAlign = TextAlign.Center,
         )
         if (ctaTitle != null && onCta != null) {

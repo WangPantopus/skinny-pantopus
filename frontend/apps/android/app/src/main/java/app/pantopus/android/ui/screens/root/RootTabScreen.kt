@@ -119,7 +119,6 @@ import app.pantopus.android.ui.screens.explore.ExploreKind
 import app.pantopus.android.ui.screens.explore.ExploreMapFocus
 import app.pantopus.android.ui.screens.explore.ExploreMapScreen
 import app.pantopus.android.ui.screens.feed.FeedScreen
-import app.pantopus.android.ui.screens.feed.FeedTopMenu
 import app.pantopus.android.ui.screens.feed.beacons.BeaconsFeedScreen
 import app.pantopus.android.ui.screens.feed.pulse.PulseIntent
 import app.pantopus.android.ui.screens.following.FollowingScreen
@@ -369,6 +368,7 @@ import app.pantopus.android.ui.screens.profile.EditProfileScreen
 import app.pantopus.android.ui.screens.profile.PUBLIC_PROFILE_USER_ID_KEY
 import app.pantopus.android.ui.screens.profile.PublicProfileScreen
 import app.pantopus.android.ui.screens.profile.professional.ProfessionalProfileScreen
+import app.pantopus.android.ui.screens.pulse.PulsePageScreen
 import app.pantopus.android.ui.screens.review_claims.ReviewClaimDetailScreen
 import app.pantopus.android.ui.screens.review_claims.ReviewClaimsScreen
 import app.pantopus.android.ui.screens.review_signups.ReviewSignupsScreen
@@ -2828,29 +2828,19 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     )
                 }
                 composable(PantopusRoute.Pulse.path) {
-                    // Nearby's other content lives here now: the neighborhood meter or "Set up a home" as one
-                    // quiet-state card, and Connections (Beacons too, while that launch cut is off) in the top menu.
+                    // S6 stays draft until PB's feed is on master (H4).
                     val quietMeter: NearbyViewModel = hiltViewModel()
                     val quietStateCard =
                         pulseQuietStateCard(
                             onClaim = { navController.navigate(ChildRoutes.ADD_HOME) },
                             viewModel = quietMeter,
                         )
-                    FeedScreen(
+                    PulsePageScreen(
                         onOpenPost = { postId -> navController.navigate(ChildRoutes.pulsePost(postId)) },
-                        onCompose = { intent -> navController.navigate(ChildRoutes.composePost(intent.key)) },
-                        onComposeStarter = { starter ->
-                            navController.navigate(
-                                ChildRoutes.composePost(PulseIntent.Ask.key, starter.placeholder),
-                            )
-                        },
-                        topMenu =
-                            FeedTopMenu(
-                                onOpenConnections = { navController.navigate(ChildRoutes.CONNECTIONS) },
-                                // Launch cut #1 (Beacon): no Beacons entry for the first launch.
-                                onOpenBeacons = { navController.navigate(ChildRoutes.BEACONS_FEED) }.takeIf { LaunchFeatures.beacon },
-                            ),
-                        quietStateCard = quietStateCard,
+                        onCompose = { navController.navigate(ChildRoutes.composePost(PulseIntent.Ask.key)) },
+                        onOpenConnections = { navController.navigate(ChildRoutes.CONNECTIONS) },
+                        onOpenBeacons = { navController.navigate(ChildRoutes.BEACONS_FEED) }.takeIf { LaunchFeatures.beacon },
+                        quietStateCard = { quietStateCard?.invoke() },
                         onRefreshQuietStateCard = quietMeter::refresh,
                     )
                 }
