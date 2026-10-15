@@ -10,6 +10,7 @@ const { getMuteAndHideFilters } = require('../feedService');
 const { POST_READ_SELECT, canReadPost, postScopeAccess } = require('./readAccess');
 const follows = require('./follows');
 const logger = require('../../utils/logger');
+const { skipForLaunchCut } = require('../../utils/featureFlags');
 
 const TYPE = 'pulse_follow_reply';
 const POST_SELECT = `${POST_READ_SELECT}, title, content, state, resolution, expires_at`;
@@ -27,6 +28,7 @@ function subjectOf(post) {
  * hid the post gets nothing. Returns how many alerts were stored.
  */
 async function replyCreated({ postId, reply, skipUserIds = [] }) {
+  if (skipForLaunchCut('pulse_redesign', 'pulseFollowAlerts')) return 0;
   if (!reply?.id || !reply.user_id || reply.is_deleted || (reply.moderation_state || 'live') !== 'live') return 0;
   const { data: post, error } = await db.from('Post').select(POST_SELECT).eq('id', postId).maybeSingle();
   if (error) throw error;

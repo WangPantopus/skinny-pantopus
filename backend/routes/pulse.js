@@ -17,8 +17,14 @@ const { isPulseTopic } = require('../services/pulse/topics');
 const {
   DAY_MS, askIdsWithReplies, windowDays, endsAt,
 } = require('../services/pulse/lifecycle');
+const { isLaunchFeatureEnabled } = require('../utils/featureFlags');
 
 const router = express.Router();
+
+// Every route here belongs to the Pulse redesign, launch cut 11 (docs/launch-scope-flags-2026-10-01.md).
+// While `pulse_redesign` is off the apps show the October 13 Pulse, which uses the post routes.
+router.use((req, res, next) => (isLaunchFeatureEnabled('pulse_redesign') ? next()
+  : res.status(403).json({ error: "This isn't available yet.", code: 'PULSE_REDESIGN_UNAVAILABLE' })));
 
 // Days an Ask's author can add, once, from the day-6 reminder (build spec §4).
 const KEEP_OPEN_DAYS = 7;

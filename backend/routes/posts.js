@@ -15,7 +15,7 @@ const {
   getPersonaById,
   localDisplayNames,
 } = require('../utils/identityProfiles');
-const { isPersonaEnabled } = require('../utils/featureFlags');
+const { isPersonaEnabled, isLaunchFeatureEnabled } = require('../utils/featureFlags');
 const {
   SAFE_CREATOR_SELECT,
   serializeUserAsLocalIdentity,
@@ -900,6 +900,10 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
     }
     // Pulse mode (contract §2.5): the server decides where the post is and who may start it.
     const pulseMode = req.body.readScope !== undefined;
+    // Pulse mode is the redesign's composer (launch cut 11); the October 13 composer never sends readScope.
+    if (pulseMode && !isLaunchFeatureEnabled('pulse_redesign')) {
+      return res.status(403).json({ error: "This isn't available yet.", code: 'PULSE_REDESIGN_UNAVAILABLE' });
+    }
     // Infer postAs from homeId/businessId when client sends 'personal' (backwards compat)
     const postAs = pulseMode ? (rawPostAs || 'personal')
       : (rawPostAs === 'personal' && homeId) ? 'home'

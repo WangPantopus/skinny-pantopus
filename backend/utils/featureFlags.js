@@ -35,6 +35,7 @@ const LAUNCH_FEATURE_KEYS = [
   'mail_extras', // 8. Letters, e-signing, community mail, event invitations by mail
   'gift_funds', // 9. Support Train gift funds (no app can take a contribution yet)
   'mailbox', // 10. The mailbox: received mail, Mail Day, vault, vacation hold, Stamps (2026-10-09)
+  'pulse_redesign', // 11. The Pulse redesign (PR 625), paused for launch (2026-10-15); the October 13 Pulse stays
 ];
 
 function isLaunchFeatureEnabled(key) {
@@ -127,6 +128,15 @@ const LAUNCH_NOTIFICATION_TYPE_FEATURES = {
   mail_urgent: ['mailbox'],
   mail_interrupt: ['mailbox'],
   home_mail_removed: ['mailbox'],
+  // 11. The Pulse redesign: follow alerts, Helpful and thanks notices, offer requests and the
+  // Ask reminder. The October 13 Pulse's reply and mention notices are not here.
+  pulse_follow_reply: ['pulse_redesign'],
+  pulse_helpful: ['pulse_redesign'],
+  pulse_thanks: ['pulse_redesign'],
+  offer_request: ['pulse_redesign'],
+  offer_chosen: ['pulse_redesign'],
+  offer_gone: ['pulse_redesign'],
+  ask_still_open: ['pulse_redesign'],
 };
 
 // The audience stream (context 'audience') is Beacon/persona only.
