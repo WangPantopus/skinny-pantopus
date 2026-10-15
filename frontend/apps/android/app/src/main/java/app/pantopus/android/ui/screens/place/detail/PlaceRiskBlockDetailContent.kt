@@ -246,18 +246,23 @@ private fun RiskCard(env: PlaceSectionEnvelope) {
             }
             summary?.let { Text(it, fontSize = 13.5.sp, lineHeight = 18.sp, color = PantopusColors.appTextSecondary) }
             disclaimer?.let { Text(it, fontSize = 12.sp, color = PantopusColors.appTextMuted) }
-            env.flood?.nfip?.let { NfipBlock(it) }
+            // The tract's benchmark, else the county's (sent only when the tract is too thin to compare).
+            (env.flood?.nfip ?: env.flood?.nfipArea)?.let { NfipBlock(it, countyWide = env.flood?.nfip == null) }
         }
     }
 }
 
 /**
- * Wave 2 — what flood policies in this tract actually cost. Absent
- * while the benchmark warms or sits below the 10-policy floor, so the
- * card degrades to zone-only. A benchmark, never a quote.
+ * Wave 2 — what flood policies in this tract actually cost, or across
+ * the county when the tract sits below the 10-policy floor. Absent while
+ * the benchmark warms, so the card degrades to zone-only. A benchmark,
+ * never a quote.
  */
 @Composable
-private fun NfipBlock(nfip: PlaceFloodNfipData) {
+private fun NfipBlock(
+    nfip: PlaceFloodNfipData,
+    countyWide: Boolean,
+) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         HorizontalDivider(color = PantopusColors.appBorderSubtle)
         Text(
@@ -280,9 +285,23 @@ private fun NfipBlock(nfip: PlaceFloodNfipData) {
             )
         }
         val sampled = if (nfip.coverage == "partial") " (sampled)" else ""
+        val scope =
+            if (countyWide) {
+                "policies written across your county over the last ${nfip.windowMonths} months$sampled — " +
+                    "your census tract has too few to compare. "
+            } else {
+                "policies written in your census tract over the last ${nfip.windowMonths} months$sampled. "
+            }
         Text(
-            "Real NFIP premiums for the ${nfip.policyCount} policies written in your census tract over the " +
-                "last ${nfip.windowMonths} months$sampled. A benchmark, not a quote — premiums vary house to house.",
+            "Real NFIP premiums for the ${nfip.policyCount} " + scope +
+                "A benchmark, not a quote — premiums vary house to house.",
+            fontSize = 12.sp,
+            lineHeight = 16.sp,
+            color = PantopusColors.appTextMuted,
+        )
+        // FEMA's required notice wherever OpenFEMA data is shown.
+        Text(
+            "This product uses the Federal Emergency Management Agency's OpenFEMA API, but is not endorsed by FEMA.",
             fontSize = 12.sp,
             lineHeight = 16.sp,
             color = PantopusColors.appTextMuted,

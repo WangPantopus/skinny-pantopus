@@ -349,6 +349,8 @@ data class PlaceFloodData(
     @Json(name = "plain_meaning") val plainMeaning: String,
     /** Wave 2 — the tract's NFIP premium benchmark, when warmed. */
     @Json(name = "nfip") val nfip: PlaceFloodNfipData? = null,
+    /** The county-wide benchmark, sent only when the tract has too few policies (never alongside [nfip]). */
+    @Json(name = "nfip_area") val nfipArea: PlaceFloodNfipData? = null,
 )
 
 /**
