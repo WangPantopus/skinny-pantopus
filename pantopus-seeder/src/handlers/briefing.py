@@ -1,6 +1,6 @@
 """Lambda handler for the daily briefing scheduler.
 
-Triggered every 15 minutes by EventBridge.  Finds users whose morning or
+Triggered each minute by EventBridge.  Finds users whose morning or
 evening briefing time falls within the current window, then calls the Node
 backend to compose and send each briefing.
 """
@@ -17,6 +17,7 @@ from zoneinfo import ZoneInfo
 import httpx
 
 from src.config.secrets import get_briefing_secrets, BriefingSecrets
+from src.discovery.timezone import valid_timezone
 
 # Configure logging for Lambda (root logger must be set to INFO)
 logging.basicConfig(level=logging.INFO, force=True)
@@ -29,7 +30,7 @@ log.setLevel(logging.INFO)
 # Maximum users per invocation (safety cap)
 MAX_USERS_PER_RUN = 100
 
-# ±15 minute window around the user's preferred briefing time
+# Deliver at or after the preferred time, never before it.
 WINDOW_MINUTES = 15
 
 # HTTP timeout for calling the Node backend (seconds)
@@ -37,7 +38,7 @@ SEND_TIMEOUT_S = 30
 
 
 def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
-    """Briefing scheduler Lambda entry point. Triggered every 15 min by EventBridge."""
+    """Briefing scheduler Lambda entry point. Triggered each minute by EventBridge."""
     try:
         result = _run(event, context)
     except Exception:
@@ -68,7 +69,7 @@ def _run(event: dict[str, Any], context: Any) -> dict[str, Any]:
         return {"error": "supabase_init_failed", "users_processed": 0}
 
     # Find eligible users
-    eligible = _find_eligible_users(supabase)
+    eligible = _find_eligible_users(supabase, secrets=secrets)
     log.info("Briefing scheduler: %d eligible users found", len(eligible))
 
     if len(eligible) > MAX_USERS_PER_RUN:
@@ -126,7 +127,7 @@ def _run(event: dict[str, Any], context: Any) -> dict[str, Any]:
 # ── Find eligible users ──────────────────────────────────────────
 
 
-def _find_eligible_users(supabase) -> list[dict[str, Any]]:
+def _find_eligible_users(supabase, *, secrets=None) -> list[dict[str, Any]]:
     """Find users whose morning/evening briefing window is now and not yet processed today."""
 
     # 1. Fetch preference rows
@@ -156,13 +157,23 @@ def _find_eligible_users(supabase) -> list[dict[str, Any]]:
     today_dates = set()
     user_tz_map: dict[str, tuple[str, str]] = {}  # user_id → (local_date, local_time_hhmm)
 
+    # Existing explicit choices are preserved. New/unconfigured accounts use
+    # the backend's shared location hierarchy; never silently assign Pacific.
+    missing = [row["user_id"] for row in prefs_rows if not valid_timezone(row.get("daily_briefing_timezone"))]
+    resolved = {}
+    if missing and secrets:
+        for offset in range(0, len(missing), 100):
+            response = httpx.post(f"{secrets.pantopus_api_base_url}/api/internal/briefing/timezones",
+                                  json={"userIds": missing[offset:offset + 100]},
+                                  headers={"x-internal-api-key": secrets.internal_api_key}, timeout=SEND_TIMEOUT_S)
+            response.raise_for_status()
+            resolved.update(response.json().get("timezones", {}))
     for row in prefs_rows:
-        tz_str = row.get("daily_briefing_timezone") or "America/Los_Angeles"
-        try:
-            tz = ZoneInfo(tz_str)
-        except Exception:
-            tz = ZoneInfo("America/Los_Angeles")
-
+        tz_str = valid_timezone(row.get("daily_briefing_timezone")) or valid_timezone(resolved.get(row["user_id"]))
+        if not tz_str:
+            continue
+        row["daily_briefing_timezone"] = tz_str
+        tz = ZoneInfo(tz_str)
         now_local = datetime.now(tz)
         local_date = now_local.strftime("%Y-%m-%d")
         local_time = now_local.strftime("%H:%M")
@@ -177,7 +188,7 @@ def _find_eligible_users(supabase) -> list[dict[str, Any]]:
         )
 
     # Query deliveries for all relevant dates in one batch
-    already_processed: set[tuple[str, str]] = set()
+    already_processed: set[tuple[str, str, str]] = set()
     try:
         for date_str in today_dates:
             result = (
@@ -189,7 +200,7 @@ def _find_eligible_users(supabase) -> list[dict[str, Any]]:
                 .execute()
             )
             for row in result.data or []:
-                already_processed.add((row["user_id"], row.get("briefing_kind") or "morning"))
+                already_processed.add((row["user_id"], row.get("briefing_kind") or "morning", date_str))
     except Exception:
         log.exception("Failed to batch-check DailyBriefingDelivery")
         raise
@@ -217,7 +228,7 @@ def _find_eligible_users(supabase) -> list[dict[str, Any]]:
             slots.append(("evening", row.get("evening_briefing_time_local") or "18:00"))
 
         for briefing_kind, briefing_time in slots:
-            if (uid, briefing_kind) in already_processed:
+            if (uid, briefing_kind, local_date) in already_processed:
                 continue
 
             if not _is_within_window(local_time, str(briefing_time), WINDOW_MINUTES):
@@ -247,7 +258,7 @@ def _to_minutes(val) -> int | None:
 
 
 def _is_within_window(current_hhmm, target_hhmm, window_min: int) -> bool:
-    """Check if current time is within ±window_min of target time.
+    """Check the delivery window after the preferred time.
 
     Accepts str ('07:00', '07:00:00'), or datetime.time objects.
     """
@@ -256,10 +267,8 @@ def _is_within_window(current_hhmm, target_hhmm, window_min: int) -> bool:
     if cur_mins is None or tgt_mins is None:
         print(f"[BRIEFING] _is_within_window parse failed: current={current_hhmm!r} target={target_hhmm!r}")
         return False
-    diff = abs(cur_mins - tgt_mins)
-    if diff > 720:
-        diff = 1440 - diff
-    return diff <= window_min
+    # Do not wrap a late-night slot into a different calendar day's briefing.
+    return 0 <= cur_mins - tgt_mins < window_min
 
 
 def _is_in_quiet_hours(current_hhmm, start_hhmm, end_hhmm) -> bool:

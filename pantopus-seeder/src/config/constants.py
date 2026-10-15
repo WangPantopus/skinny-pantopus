@@ -45,13 +45,13 @@ TAPERING_STAGES: dict[str, dict[str, Any]] = {
 }
 
 # ---------------------------------------------------------------------------
-# Posting cadence — time slots in Pacific Time hours
+# Posting cadence — time slots in each publishing region’s local hours
 # ---------------------------------------------------------------------------
 
 POSTING_SLOTS: dict[str, int] = {
-    "morning": 7,    # ~7:30 AM PT
-    "midday": 12,    # ~12:00 PM PT
-    "evening": 17,   # ~5:00 PM PT
+    "morning": 7,    # 7 AM local
+    "midday": 12,    # noon local
+    "evening": 17,   # 5 PM local
 }
 
 CADENCE_SLOTS: dict[str, list[str]] = {

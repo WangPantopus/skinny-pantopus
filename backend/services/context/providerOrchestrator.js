@@ -26,7 +26,7 @@ const {
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
-function getLocalHour(timezone = 'America/Los_Angeles', now = new Date()) {
+function getLocalHour(timezone = 'UTC', now = new Date()) {
   try {
     const parts = new Intl.DateTimeFormat('en-US', {
       timeZone: timezone,
@@ -35,14 +35,14 @@ function getLocalHour(timezone = 'America/Los_Angeles', now = new Date()) {
     }).formatToParts(now);
     const hourPart = parts.find((part) => part.type === 'hour');
     const hour = Number(hourPart?.value);
-    if (Number.isFinite(hour)) return hour;
+    if (Number.isFinite(hour)) return hour % 24;
   } catch {
     // Fall back to server-local time.
   }
   return now.getHours();
 }
 
-function getTimeOfDay(timezone = 'America/Los_Angeles', now = new Date()) {
+function getTimeOfDay(timezone = 'UTC', now = new Date()) {
   const hour = getLocalHour(timezone, now);
   if (hour < 6) return 'night';
   if (hour < 12) return 'morning';
@@ -52,7 +52,7 @@ function getTimeOfDay(timezone = 'America/Los_Angeles', now = new Date()) {
   return 'night';
 }
 
-function isWeekend(timezone = 'America/Los_Angeles', now = new Date()) {
+function isWeekend(timezone = 'UTC', now = new Date()) {
   try {
     const weekday = new Intl.DateTimeFormat('en-US', {
       timeZone: timezone,
@@ -128,7 +128,7 @@ function hasPrecipNext6h(hourly) {
 }
 
 const EMPTY_HUB_RESULT = {
-  location: { label: 'Unknown', source: 'none', latitude: null, longitude: null, timezone: 'America/Los_Angeles', confidence: 0 },
+  location: { label: 'Unknown', source: 'none', latitude: null, longitude: null, timezone: 'UTC', confidence: 0 },
   summary: 'Location not available.',
   display_mode: 'hidden',
   weather: null,
@@ -285,7 +285,7 @@ async function getHubToday(userId, options = {}) {
     fetchWeather(latitude, longitude),
     fetchAQI(latitude, longitude),
     fetchAlerts(latitude, longitude),
-    collectInternalContext(userId, location.homeId),
+    collectInternalContext(userId, location.homeId, location.timezone),
     fetchAddressCalendar(location, userId),
   ]);
   const fetchMs = Date.now() - fetchStartMs;
@@ -317,7 +317,7 @@ async function getHubToday(userId, options = {}) {
   // pending. Recollect household records under current authority at this response
   // boundary, after the calendar awaits too, without repeating public providers.
   if (internal.bills_due?.length || internal.tasks_due?.length || internal.calendar_events?.length) {
-    try { internal = await collectInternalContext(userId, location.homeId); }
+    try { internal = await collectInternalContext(userId, location.homeId, location.timezone); }
     catch (_) { internal = defaultInternalContext(); }
   }
 
@@ -356,7 +356,7 @@ async function getHubToday(userId, options = {}) {
   }
 
   // 3. Seasonal context (deterministic, no async)
-  const seasonal = getSeasonalContext({ latitude, longitude });
+  const seasonal = getSeasonalContext({ latitude, longitude, state: location.state });
 
   // 4. Rank signals
   const rankedOutput = rankSignals({
@@ -557,7 +557,7 @@ async function composeMorningBriefing(userId, location) {
     fetchWeather(latitude, longitude),
     fetchAQI(latitude, longitude),
     fetchAlerts(latitude, longitude),
-    collectInternalContext(userId, location.homeId),
+    collectInternalContext(userId, location.homeId, location.timezone),
     fetchAddressCalendar(location, userId),
     getRecentBriefings(userId),
   ]);
@@ -571,10 +571,10 @@ async function composeMorningBriefing(userId, location) {
 
   // Public providers may outlast the original authorized household read.
   if (internal.bills_due?.length || internal.tasks_due?.length || internal.calendar_events?.length) {
-    internal = await collectInternalContext(userId, location.homeId);
+    internal = await collectInternalContext(userId, location.homeId, location.timezone);
   }
 
-  const seasonal = getSeasonalContext({ latitude, longitude });
+  const seasonal = getSeasonalContext({ latitude, longitude, state: location.state });
   const briefingHistory = filterHistoryForLocation(recentBriefings, location.geohash);
   const weekend = isWeekend(location.timezone);
   const baseRankInputs = {
@@ -660,7 +660,7 @@ async function composeMorningBriefing(userId, location) {
   });
 
   if (briefingSignals.some(signal => ['bill_due', 'task_due', 'calendar'].includes(signal.kind))) {
-    const current = await collectInternalContext(userId, location.homeId);
+    const current = await collectInternalContext(userId, location.homeId, location.timezone);
     if (['bills_due', 'tasks_due', 'calendar_events'].some(key => JSON.stringify(current[key] || []) !== JSON.stringify(internal[key] || []))) {
       throw Object.assign(new Error('Home access changed while loading. Please retry.'), { code: 'HOME_LIST_ACCESS_CHANGED', statusCode: 503 });
     }
@@ -683,7 +683,7 @@ async function composeEveningBriefing(userId, location) {
   const [weatherResult, alertsResult, internalResult, addressCalendarResult, recentBriefingsResult] = await Promise.allSettled([
     fetchWeather(latitude, longitude),
     fetchAlerts(latitude, longitude),
-    collectInternalContext(userId, location.homeId),
+    collectInternalContext(userId, location.homeId, location.timezone),
     fetchAddressCalendar(location, userId),
     getRecentBriefings(userId),
   ]);
@@ -694,7 +694,7 @@ async function composeEveningBriefing(userId, location) {
   let internal = internalResult.status === 'fulfilled' ? internalResult.value : defaultInternalContext();
   let addressCalendar = addressCalendarResult.status === 'fulfilled' ? addressCalendarResult.value : null;
   if (internal.bills_due?.length || internal.tasks_due?.length || internal.calendar_events?.length) {
-    internal = await collectInternalContext(userId, location.homeId);
+    internal = await collectInternalContext(userId, location.homeId, location.timezone);
   }
   const briefingHistory = filterHistoryForLocation(recentBriefings, location.geohash);
 
@@ -744,7 +744,7 @@ async function composeEveningBriefing(userId, location) {
   }
 
   if (signals.some(signal => ['bill_due', 'task_due', 'calendar'].includes(signal.kind))) {
-    const current = await collectInternalContext(userId, location.homeId);
+    const current = await collectInternalContext(userId, location.homeId, location.timezone);
     if (['bills_due', 'tasks_due', 'calendar_events'].some(key => JSON.stringify(current[key] || []) !== JSON.stringify(internal[key] || []))) {
       throw Object.assign(new Error('Home access changed while loading. Please retry.'), { code: 'HOME_LIST_ACCESS_CHANGED', statusCode: 503 });
     }

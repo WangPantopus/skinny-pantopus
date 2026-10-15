@@ -27,14 +27,10 @@ logging.basicConfig(level=logging.INFO, force=True)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 log = logging.getLogger("seeder.handlers.poster")
 
-PACIFIC = ZoneInfo("America/Los_Angeles")
-
-# Slot detection tolerance: current hour must be within ±1 of the slot hour
-_SLOT_TOLERANCE = 1
 
 
 def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
-    """Poster Lambda entry point. Triggered 3x/day by EventBridge at cadence times."""
+    """Poster Lambda entry point. Triggered hourly; each region posts at its own local cadence times."""
     try:
         result = _run(event, context)
     except Exception:
@@ -48,33 +44,13 @@ def _run(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """Core poster logic."""
     force = event.get("force", False)
 
-    # Determine current slot
-    now_pt = datetime.now(PACIFIC)
-    slot_name = _detect_slot(now_pt)
-
-    if slot_name is None:
-        if force:
-            slot_name = "morning"
-            log.info("Force mode: using slot '%s' (actual hour %d PT)", slot_name, now_pt.hour)
-        else:
-            log.info("Current hour %d PT does not match any posting slot", now_pt.hour)
-            return {"skipped": "no_matching_slot", "hour": now_pt.hour}
-
-    # Weekend rules (skipped in force mode)
-    if not force:
-        weekday = now_pt.weekday()  # 0=Mon, 6=Sun
-        if weekday == 6:  # Sunday
-            log.info("No posts on Sunday")
-            return {"skipped": "sunday"}
-        if weekday == 5 and slot_name != "morning":  # Saturday, non-morning
-            log.info("Saturday: only morning slot allowed")
-            return {"skipped": "saturday_non_morning"}
-
-    # Jitter (skipped in force mode)
-    if not force:
-        jitter_seconds = random.randint(0, MAX_JITTER_MINUTES * 60)
-        log.info("Applying %d seconds of jitter", jitter_seconds)
-        time.sleep(jitter_seconds)
+    # One UTC instant, interpreted independently in each publishing region.
+    # EventBridge supplies its scheduled instant so delays cannot change slots.
+    now = datetime.fromisoformat(event["time"].replace("Z", "+00:00")) if event.get("time") else datetime.now(timezone.utc)
+    if now.tzinfo is None:
+        return {"error": "invalid_schedule_time", "regions_processed": 0}
+    if not force and event.get("time") and datetime.now(timezone.utc) >= now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1):
+        return {"skipped": "expired_posting_slot", "regions_processed": 0}
 
     # Init
     try:
@@ -105,7 +81,35 @@ def _run(event: dict[str, Any], context: Any) -> dict[str, Any]:
         "tapering_stages": {},
     }
 
+    jitter_applied = False
     for region_cfg in regions:
+        local_now = now.astimezone(ZoneInfo(region_cfg.timezone))
+        slot_name = _detect_slot(local_now)
+        if force:
+            slot_name = slot_name or "morning"
+        elif (slot_name is None or local_now.weekday() == 6
+              or (local_now.weekday() == 5 and slot_name != "morning")):
+            continue
+        if not force:
+            # Reserved concurrency serializes runs; the queue marker also keeps
+            # EventBridge retries from selecting another item for this slot.
+            slot_start = now.replace(minute=0, second=0, microsecond=0)
+            try:
+                previous = (supabase.table("seeder_content_queue").select("id")
+                            .eq("region", region_cfg.region).in_("status", ["humanized", "posted"])
+                            .gte("updated_at", slot_start.isoformat())
+                            .lt("updated_at", (slot_start + timedelta(hours=1)).isoformat())
+                            .limit(1).execute())
+                if previous.data:
+                    continue
+            except Exception:
+                log.exception("Cannot check publishing slot for %s", region_cfg.region)
+                summary["items_failed"] += 1
+                continue
+        # Only the due regions incur jitter or paid composition work.
+        if not force and not jitter_applied:
+            time.sleep(random.randint(0, MAX_JITTER_MINUTES * 60))
+            jitter_applied = True
         try:
             result = _process_region(region_cfg, slot_name, supabase, secrets)
             summary["regions_processed"] += 1
@@ -124,10 +128,10 @@ def _run(event: dict[str, Any], context: Any) -> dict[str, Any]:
     return summary
 
 
-def _detect_slot(now_pt: datetime) -> str | None:
-    """Match the current Pacific hour to a posting slot (±1h tolerance)."""
+def _detect_slot(now_local: datetime) -> str | None:
+    """Match the region-local hour; hourly invocations must not post three times per slot."""
     for slot_name, slot_hour in POSTING_SLOTS.items():
-        if abs(now_pt.hour - slot_hour) <= _SLOT_TOLERANCE:
+        if now_local.hour == slot_hour:
             return slot_name
     return None
 
@@ -185,7 +189,8 @@ def _process_region(region_cfg: RegionConfig, slot_name: str, supabase, secrets)
             _update_queue_item(supabase, item["id"], "failed", failure_reason=reason)
             return {"stage": stage, "outcome": "failed"}
 
-        _update_queue_item(supabase, item["id"], "humanized", humanized_text=humanized_text)
+        if not _update_queue_item(supabase, item["id"], "humanized", humanized_text=humanized_text):
+            return {"stage": stage, "outcome": "failed"}
 
         # Authenticate
         token = authenticate_curator(curator_auth_client(secrets), secrets.curator_email, secrets.curator_password)

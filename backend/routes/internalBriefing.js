@@ -16,7 +16,8 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 const { composeScheduledBriefing } = require('../services/context/providerOrchestrator');
 const { collectInternalContext } = require('../services/context/internalContextCollector');
-const { resolveLocation } = require('../services/context/locationResolver');
+const { validTimezone } = require('../utils/timezone');
+const { resolveLocation, resolveNotificationTimezone } = require('../services/context/locationResolver');
 const { buildTomorrowPickupSignal } = require('../services/context/eveningBriefingService');
 const addressCalendarService = require('../services/addressCalendarService');
 const pushService = require('../services/pushService');
@@ -100,16 +101,16 @@ function isBriefingEnabled(prefs, briefingConfig, briefingKind) {
 function isInQuietHours(prefs) {
   if (!prefs.quiet_hours_start_local || !prefs.quiet_hours_end_local) return false;
 
-  const tz = prefs.daily_briefing_timezone || 'America/Los_Angeles';
+  const tz = validTimezone(prefs.daily_briefing_timezone) || 'UTC';
   let nowLocal;
   try {
-    nowLocal = new Date().toLocaleTimeString('en-US', { timeZone: tz, hour12: false, hour: '2-digit', minute: '2-digit' });
+    nowLocal = new Date().toLocaleTimeString('en-US', { timeZone: tz, hourCycle: 'h23', hour: '2-digit', minute: '2-digit' });
   } catch {
     nowLocal = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
   }
 
-  const start = prefs.quiet_hours_start_local;
-  const end = prefs.quiet_hours_end_local;
+  const start = prefs.quiet_hours_start_local.slice(0, 5);
+  const end = prefs.quiet_hours_end_local.slice(0, 5);
 
   // Handle overnight quiet hours (e.g., 22:00 - 07:00)
   if (start > end) {
@@ -128,6 +129,24 @@ function getTodayLocal(tz) {
     return new Date().toISOString().slice(0, 10);
   }
 }
+
+// The scheduler uses the same location hierarchy as Today for accounts that
+// have never explicitly chosen a notification timezone. No coordinates leave
+// this authenticated internal endpoint.
+router.post('/timezones', verifyInternalApiKey, async (req, res) => {
+  const ids = req.body?.userIds;
+  if (!Array.isArray(ids) || ids.length > 100 || ids.some(id => typeof id !== 'string' || !UUID_RE.test(id))) {
+    return res.status(400).json({ error: 'Invalid userIds' });
+  }
+  try {
+    const zones = {};
+    for (const userId of new Set(ids)) zones[userId] = await resolveNotificationTimezone(userId);
+    return res.json({ timezones: zones });
+  } catch (err) {
+    logger.error('Internal timezone lookup failed', { error: err.message });
+    return res.status(503).json({ error: 'Timezone lookup unavailable' });
+  }
+});
 
 // ── POST /send ──────────────────────────────────────────────────────
 
@@ -157,7 +176,7 @@ router.post('/send', verifyInternalApiKey, async (req, res) => {
 
     const prefs = {
       [briefingConfig.prefField]: briefingKind === 'evening',
-      daily_briefing_timezone: 'America/Los_Angeles',
+      daily_briefing_timezone: null,
       quiet_hours_start_local: null,
       quiet_hours_end_local: null,
       ...(prefsRow || {}),
@@ -167,13 +186,16 @@ router.post('/send', verifyInternalApiKey, async (req, res) => {
       return res.json({ status: 'skipped', skip_reason: 'opted_out' });
     }
 
+    prefs.daily_briefing_timezone = await resolveNotificationTimezone(userId, prefs);
+    if (!prefs.daily_briefing_timezone) return res.json({ status: 'skipped', skip_reason: 'timezone_unavailable' });
+
     // 3. Check quiet hours
     if (isInQuietHours(prefs)) {
       return res.json({ status: 'skipped', skip_reason: 'quiet_hours' });
     }
 
     // 4. Check idempotency
-    const tz = prefs.daily_briefing_timezone || 'America/Los_Angeles';
+    const tz = validTimezone(prefs.daily_briefing_timezone) || 'UTC';
     const todayLocal = getTodayLocal(tz);
 
     const { data: existing } = await supabaseAdmin
@@ -268,7 +290,7 @@ router.post('/send', verifyInternalApiKey, async (req, res) => {
     // private projections before either storing the text or handing it to push.
     const householdSignals = (result.signals_snapshot || []).filter(signal => ['bill_due', 'task_due', 'calendar'].includes(signal.kind));
     if (householdSignals.length) {
-      const current = await collectInternalContext(userId, result.home_id || null);
+      const current = await collectInternalContext(userId, result.home_id || null, prefs.daily_briefing_timezone);
       const records = {
         bill_due: { rows: current.bills_due || [], id: 'bill_id', due: 'due_date', fields: ['amount'] },
         task_due: { rows: current.tasks_due || [], id: 'task_id', due: 'due_at', fields: ['priority'] },
@@ -563,6 +585,12 @@ router.post('/reminder-push', verifyInternalApiKey, async (req, res) => {
       return res.json({ status: 'skipped', reason: 'preference_disabled' });
     }
 
+    if (prefs && !validTimezone(prefs.daily_briefing_timezone)) {
+      prefs.daily_briefing_timezone = await resolveNotificationTimezone(userId, prefs);
+      if (!prefs.daily_briefing_timezone && prefs.quiet_hours_start_local && prefs.quiet_hours_end_local) {
+        return res.json({ status: 'skipped', reason: 'timezone_unavailable' });
+      }
+    }
     if (prefs && isInQuietHours(prefs)) {
       return res.json({ status: 'skipped', reason: 'quiet_hours' });
     }

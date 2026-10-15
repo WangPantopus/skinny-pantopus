@@ -11,7 +11,7 @@
 const supabaseAdmin = require('../../config/supabaseAdmin');
 const logger = require('../../utils/logger');
 const ngeohash = require('ngeohash');
-const { timezoneFromCoordinates: inferTimezone, validTimezone } = require('../../utils/timezone');
+const { timezoneFromCoordinates: inferTimezone, validTimezone, coordinates } = require('../../utils/timezone');
 const parseHomeLocation = require('../../utils/parsePostGISPoint');
 
 const GEOHASH_PRECISION = 5;
@@ -69,12 +69,9 @@ function makeResult(lat, lng, label, source, homeId = null, fallbackTimezone = '
 }
 
 function makeViewingLocationResult(vl, fallbackTimezone, preferredSource = null) {
-  if (!vl || vl.latitude == null || vl.longitude == null) return null;
-  const lat = Number(vl.latitude);
-  const lng = Number(vl.longitude);
-  // Reject (0, 0) — "Null Island" in the Gulf of Guinea, never a real user location
-  if (lat === 0 && lng === 0) return null;
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  const point = coordinates(vl?.latitude, vl?.longitude);
+  if (!point) return null;
+  const { latitude: lat, longitude: lng } = point;
   const source = preferredSource || (vl.is_pinned ? 'viewing_pinned' : 'viewing_recent');
   const label = vl.label || 'Viewing location';
   return makeResult(lat, lng, label, source, null, fallbackTimezone);
@@ -88,25 +85,18 @@ function makePrimaryHomeResult(occupancies, fallbackTimezone) {
     if (!home) continue;
 
     // Prefer flat coords, fall back to PostGIS location column
-    let lat = home.map_center_lat != null ? Number(home.map_center_lat) : null;
-    let lng = home.map_center_lng != null ? Number(home.map_center_lng) : null;
-
-    if (lat == null || lng == null) {
-      const parsed = parseHomeLocation(home.location);
-      if (parsed) {
-        lat = parsed.latitude;
-        lng = parsed.longitude;
-      }
-    }
-
-    if (lat == null || lng == null || !Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+    const parsed = parseHomeLocation(home.location);
+    const point = coordinates(home.map_center_lat, home.map_center_lng)
+      || coordinates(parsed?.latitude, parsed?.longitude);
+    if (!point) continue;
+    const { latitude: lat, longitude: lng } = point;
 
     const source = i === 0 ? 'primary_home' : 'home';
     const label = home.city
       ? `Near ${[home.city, home.state].filter(Boolean).join(', ')}`
       : 'Near Home';
 
-    return makeResult(lat, lng, label, source, home.id, fallbackTimezone);
+    return { ...makeResult(lat, lng, label, source, home.id, fallbackTimezone), state: home.state || null };
   }
 
   return null;
@@ -223,9 +213,9 @@ async function resolveLocation(userId) {
     const fallbackTimezone = validTimezone(prefs?.daily_briefing_timezone) || 'UTC';
     const locationMode = prefs?.location_mode || 'primary_home';
 
-    if (locationMode === 'custom' && prefs?.custom_latitude != null && prefs.custom_longitude != null) {
-      const lat = Number(prefs.custom_latitude);
-      const lng = Number(prefs.custom_longitude);
+    const customPoint = coordinates(prefs?.custom_latitude, prefs?.custom_longitude);
+    if (locationMode === 'custom' && customPoint) {
+      const { latitude: lat, longitude: lng } = customPoint;
       const label = prefs.custom_label || 'Custom location';
       logger.debug('locationResolver: resolved via custom', { userId, label });
       return makeResult(lat, lng, label, 'custom', null, fallbackTimezone);
@@ -291,8 +281,8 @@ async function resolveLocation(userId) {
 
     // ── Step 5: Best-available fallback chain ──
     if (vl?.is_pinned && vl.latitude != null && vl.longitude != null) {
-      logger.debug('locationResolver: resolved via pinned VL', { userId, label: vl.label });
-      return makeViewingLocationResult(vl, fallbackTimezone, 'viewing_pinned');
+      const pinned = makeViewingLocationResult(vl, fallbackTimezone, 'viewing_pinned');
+      if (pinned) return pinned;
     }
 
     const homeLocation = makePrimaryHomeResult(homeCandidates, fallbackTimezone);
@@ -310,7 +300,7 @@ async function resolveLocation(userId) {
     // Home fallback above keep their priority.
     const { data: saved, error: savedError } = await supabaseAdmin
       .from('SavedPlace')
-      .select('id, label, latitude, longitude')
+      .select('id, label, latitude, longitude, state')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .order('id', { ascending: false })
@@ -322,13 +312,13 @@ async function resolveLocation(userId) {
     if (!savedError && saved && Number.isFinite(saved.latitude) && Number.isFinite(saved.longitude)
       && Math.abs(saved.latitude) <= 90 && Math.abs(saved.longitude) <= 180
       && (saved.latitude !== 0 || saved.longitude !== 0)) {
-      return { ...makeResult(saved.latitude, saved.longitude, saved.label, 'saved_place', null, fallbackTimezone), savedPlaceId: saved.id };
+      return { ...makeResult(saved.latitude, saved.longitude, saved.label, 'saved_place', null, fallbackTimezone), savedPlaceId: saved.id, state: saved.state || null };
     }
 
     // ── Step 6: Last known viewing location (not pinned) ──
     if (vl && vl.latitude != null && vl.longitude != null) {
-      logger.debug('locationResolver: resolved via recent VL', { userId, label: vl.label });
-      return makeViewingLocationResult(vl, fallbackTimezone, 'viewing_recent');
+      const recent = makeViewingLocationResult(vl, fallbackTimezone, 'viewing_recent');
+      if (recent) return recent;
     }
 
     // ── Step 7: No location available ──
@@ -349,12 +339,23 @@ async function resolveLocation(userId) {
  * @returns the standard location shape, or null for missing/invalid coords.
  */
 function locationFromCoordinates({ latitude, longitude, label, homeId } = {}) {
-  if (latitude == null || longitude == null) return null;
-  const lat = Number(latitude);
-  const lng = Number(longitude);
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-  if (lat === 0 && lng === 0) return null; // Null Island, never a real home
+  const point = coordinates(latitude, longitude);
+  if (!point) return null;
+  const { latitude: lat, longitude: lng } = point;
   return makeResult(lat, lng, label || 'Home', 'home', homeId || null);
 }
 
-module.exports = { resolveLocation, locationFromCoordinates, inferTimezone };
+async function resolveNotificationTimezone(userId, prefs) {
+  if (prefs === undefined) {
+    const { data, error } = await supabaseAdmin.from('UserNotificationPreferences')
+      .select('daily_briefing_timezone').eq('user_id', userId).maybeSingle();
+    if (error) throw new Error('Could not read notification timezone');
+    prefs = data;
+  }
+  const explicit = validTimezone(prefs?.daily_briefing_timezone);
+  if (explicit) return explicit;
+  const location = await resolveLocation(userId);
+  return location?.source !== 'none' ? validTimezone(location?.timezone) : null;
+}
+
+module.exports = { resolveLocation, locationFromCoordinates, inferTimezone, resolveNotificationTimezone };

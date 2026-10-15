@@ -176,7 +176,7 @@ async function logMailEvent(userId, eventType, mailId, metadata = {}) {
 
 // Mail Day's "today" and greeting follow the person's push notification timezone, as the Mail
 // Day push does (jobs/mailDayNotification.js); the server's own clock runs on UTC.
-const MAIL_DAY_DEFAULT_TIMEZONE = 'America/Los_Angeles';
+const { resolveNotificationTimezone } = require('../services/context/locationResolver');
 
 async function mailDayNow(userId) {
   const { data: prefs } = await supabaseAdmin
@@ -184,9 +184,7 @@ async function mailDayNow(userId) {
     .select('daily_briefing_timezone')
     .eq('user_id', userId)
     .maybeSingle();
-  const now = DateTime.now().setZone(prefs?.daily_briefing_timezone || MAIL_DAY_DEFAULT_TIMEZONE);
-  // An unknown zone name leaves an invalid time: the default stands in.
-  return now.isValid ? now : DateTime.now().setZone(MAIL_DAY_DEFAULT_TIMEZONE);
+  return DateTime.now().setZone(await resolveNotificationTimezone(userId, prefs) || 'UTC');
 }
 
 

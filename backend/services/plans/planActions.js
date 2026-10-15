@@ -467,7 +467,7 @@ async function editPlan(user, postId, patch, { io = null } = {}) {
 
   // A plan moved to another time is reminded again (when its new reminder time is still
   // ahead) and, moved to a later day, gets that day's morning summary.
-  const tz = planUpdate.timezone || plan.timezone || rules.DEFAULT_TIMEZONE;
+  const tz = planUpdate.timezone || rules.timezoneForPlan(plan);
   let remindAgain = false;
   if (timeMoved) {
     remindAgain = rules.reminderAt(postUpdate.event_date, tz).getTime() > Date.now();

@@ -1,3 +1,4 @@
+const { timezoneFromCoordinates, validTimezone } = require('../utils/timezone');
 const express = require('express');
 const { createHash } = require('node:crypto');
 const Joi = require('joi');
@@ -149,7 +150,7 @@ function formatSupportTrainSlotDate(raw) {
 function todayWhereTrainIs(timezone) {
   try {
     return new Intl.DateTimeFormat('en-CA', {
-      timeZone: timezone || 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit',
+      timeZone: validTimezone(timezone) || 'UTC', year: 'numeric', month: '2-digit', day: '2-digit',
     }).format(new Date());
   } catch {
     return new Date().toISOString().slice(0, 10);
@@ -160,7 +161,7 @@ function todayWhereTrainIs(timezone) {
 async function slotDateHasPassed(st, slot) {
   const { data: activity } = await supabaseAdmin
     .from('Activity').select('timezone').eq('id', st.activity_id).maybeSingle();
-  return String(slot.slot_date) < todayWhereTrainIs(activity?.timezone);
+  return String(slot.slot_date) < todayWhereTrainIs(timezoneFromCoordinates(st.delivery_lat, st.delivery_lng, activity?.timezone));
 }
 
 function formatAddressLabel(address) {
@@ -346,7 +347,7 @@ const createSupportTrainSchema = Joi.object({
   enable_takeout: Joi.boolean().default(true),
   enable_groceries: Joi.boolean().default(true),
   enable_gift_funds: Joi.boolean().default(false),
-  timezone: Joi.string().max(64).default('America/Los_Angeles'),
+  timezone: Joi.string().max(64).custom((value, helpers) => validTimezone(value) ? value : helpers.error('any.invalid')),
 });
 
 const updateSupportTrainSchema = Joi.object({
@@ -723,7 +724,7 @@ router.post(
       title,
       summary: draft_payload.story || null,
       home_id: resolvedActivityHomeId,
-      timezone,
+      timezone: timezoneFromCoordinates(deliveryFields.delivery_lat, deliveryFields.delivery_lng, timezone || null),
     };
     const trainFields = {
       recipient_user_id: recipient_user_id || null,
@@ -993,7 +994,7 @@ router.post(
     // A date that is over can't take a signup, so no slot is made for it.
     const { data: scheduleActivity } = await supabaseAdmin
       .from('Activity').select('timezone').eq('id', st.activity_id).maybeSingle();
-    const today = todayWhereTrainIs(scheduleActivity?.timezone);
+    const today = todayWhereTrainIs(timezoneFromCoordinates(st.delivery_lat, st.delivery_lng, scheduleActivity?.timezone));
 
     for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
       const dow = d.getUTCDay(); // 0=Sun, 1=Mon, ..., 6=Sat

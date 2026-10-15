@@ -15,7 +15,8 @@ function validTimezone(value) {
 }
 
 function coordinates(latitude, longitude) {
-  if (latitude == null || longitude == null || latitude === '' || longitude === '') return null;
+  if (![latitude, longitude].every(value => typeof value === 'number'
+    || (typeof value === 'string' && value.trim() !== ''))) return null;
   const lat = Number(latitude);
   const lng = Number(longitude);
   if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180
@@ -47,4 +48,4 @@ function resolveHomeTimezone(home, fallback = 'UTC') {
   return timezoneFromCoordinates(point?.latitude, point?.longitude, fallback);
 }
 
-module.exports = { validTimezone, timezoneFromCoordinates, resolveHomeTimezone };
+module.exports = { validTimezone, coordinates, timezoneFromCoordinates, resolveHomeTimezone };

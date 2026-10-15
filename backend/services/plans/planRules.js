@@ -54,7 +54,12 @@ const LIMITS = Object.freeze({
   startGraceMinutes: 10,
 });
 
-const DEFAULT_TIMEZONE = 'America/Los_Angeles';
+const DEFAULT_TIMEZONE = 'UTC';
+const { timezoneFromCoordinates } = require('../../utils/timezone');
+
+function timezoneForPlan(plan) {
+  return timezoneFromCoordinates(plan?.place_latitude, plan?.place_longitude, plan?.timezone || DEFAULT_TIMEZONE);
+}
 
 // Past this, a band would mislead: the plan is simply not nearby.
 const MAX_BAND_METERS = 10 * MILE_METERS;
@@ -191,6 +196,7 @@ module.exports = {
   GPS_MAX_AGE_MS,
   HOME_GUARD_METERS,
   DEFAULT_TIMEZONE,
+  timezoneForPlan,
   distanceBandFromMeters,
   distanceMeters,
   localParts,

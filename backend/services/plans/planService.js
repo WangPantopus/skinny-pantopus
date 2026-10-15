@@ -450,7 +450,7 @@ function buildCard(plan, viewer, ctx) {
   const state = rules.planState(plan, startsAt(plan), endsAt(plan), now);
   const hideTime = plan.kind === 'playdate' && !isIn;
   const area = areaPoint(plan);
-  const local = rules.localParts(startsAt(plan), plan.timezone);
+  const local = rules.localParts(startsAt(plan), rules.timezoneForPlan(plan));
   const myWaitIndex = myRequest?.status === 'waitlisted'
     ? waitlist.findIndex((r) => r.id === myRequest.id)
     : -1;
@@ -467,8 +467,8 @@ function buildCard(plan, viewer, ctx) {
     starts_at: hideTime ? null : startsAt(plan),
     ends_at: hideTime ? null : endsAt(plan),
     starts_on: local ? local.date : null,
-    day_part: rules.dayPart(startsAt(plan), plan.timezone),
-    timezone: plan.timezone,
+    day_part: rules.dayPart(startsAt(plan), rules.timezoneForPlan(plan)),
+    timezone: rules.timezoneForPlan(plan),
     area: {
       label: plan.area_label,
       city: plan.city || null,
@@ -596,7 +596,7 @@ function windowMatches(plan, window, now = Date.now()) {
   const start = new Date(startsAt(plan)).getTime();
   const end = new Date(endsAt(plan)).getTime();
   if (!Number.isFinite(start) || !Number.isFinite(end) || end <= now) return false;
-  const tz = plan.timezone || rules.DEFAULT_TIMEZONE;
+  const tz = rules.timezoneForPlan(plan);
   const live = start <= now;
   switch (window) {
     case 'now':

@@ -24,6 +24,8 @@ const { getHubToday, clearHubTodayCache } = require('../services/context/provide
 const { excludeHiddenLaunchNotifications, isLaunchFeatureEnabled } = require('../utils/featureFlags');
 const { stableEtag } = require('../utils/stableEtag');
 const { recordFunnelEvent, APP_POSTABLE_EVENT_TYPES } = require('../services/funnelEvents');
+const { validTimezone } = require('../utils/timezone');
+const { resolveNotificationTimezone } = require('../services/context/locationResolver');
 const { chosenUsernameOrNull } = require('../utils/personalUsername');
 
 // Authenticated pilot beacons: account identity comes only from verifyToken.
@@ -786,7 +788,7 @@ router.get('/preferences', verifyToken, async (req, res) => {
       user_id: req.user.id,
       daily_briefing_enabled: false,
       daily_briefing_time_local: '07:30',
-      daily_briefing_timezone: 'America/Los_Angeles',
+      daily_briefing_timezone: null,
       daily_briefing_prompted_at: null,
       evening_briefing_enabled: true,
       evening_briefing_time_local: '18:00',
@@ -804,6 +806,7 @@ router.get('/preferences', verifyToken, async (req, res) => {
       custom_label: null,
     };
 
+    prefs.daily_briefing_timezone = await resolveNotificationTimezone(req.user.id, prefs) || 'UTC';
     res.json({ preferences: withHhmmTimes(prefs) });
   } catch (err) {
     logger.error('Hub preferences error', { error: err.message, userId: req.user.id });
@@ -817,22 +820,22 @@ router.get('/preferences', verifyToken, async (req, res) => {
 // ============================================================
 const preferencesSchema = Joi.object({
   daily_briefing_enabled: Joi.boolean(),
-  daily_briefing_time_local: Joi.string().pattern(/^\d{2}:\d{2}$/),
-  daily_briefing_timezone: Joi.string().max(100),
+  daily_briefing_time_local: Joi.string().pattern(/^(?:[01]\d|2[0-3]):[0-5]\d$/),
+  daily_briefing_timezone: Joi.string().max(100).custom((value, helpers) => validTimezone(value) ? value : helpers.error('any.invalid')).allow(null),
   // Records that the morning-briefing opt-in was SHOWN. Sent as a boolean so
   // the server stamps the time — a client-supplied timestamp would let a
   // skewed clock re-arm or permanently suppress the ask.
   daily_briefing_prompted: Joi.boolean(),
   evening_briefing_enabled: Joi.boolean(),
-  evening_briefing_time_local: Joi.string().pattern(/^\d{2}:\d{2}$/),
+  evening_briefing_time_local: Joi.string().pattern(/^(?:[01]\d|2[0-3]):[0-5]\d$/),
   weather_alerts_enabled: Joi.boolean(),
   aqi_alerts_enabled: Joi.boolean(),
   mail_summary_enabled: Joi.boolean(),
   gig_updates_enabled: Joi.boolean(),
   beacon_push_enabled: Joi.boolean(),
   home_reminders_enabled: Joi.boolean(),
-  quiet_hours_start_local: Joi.string().pattern(/^\d{2}:\d{2}$/).allow(null),
-  quiet_hours_end_local: Joi.string().pattern(/^\d{2}:\d{2}$/).allow(null),
+  quiet_hours_start_local: Joi.string().pattern(/^(?:[01]\d|2[0-3]):[0-5]\d$/).allow(null),
+  quiet_hours_end_local: Joi.string().pattern(/^(?:[01]\d|2[0-3]):[0-5]\d$/).allow(null),
   location_mode: Joi.string().valid('viewing_location', 'primary_home', 'device_location', 'custom'),
   custom_latitude: Joi.number().min(-90).max(90).allow(null),
   custom_longitude: Joi.number().min(-180).max(180).allow(null),
@@ -859,6 +862,12 @@ router.put('/preferences', verifyToken, validate(preferencesSchema), async (req,
     // client clock can neither re-arm the ask nor suppress it forever.
     const { daily_briefing_prompted: prompted, ...rest } = updates;
     const patch = { ...rest };
+    // Choosing a new briefing location also chooses its local clock. Older
+    // accounts may still have the former database-wide Pacific default.
+    if (!Object.hasOwn(rest, 'daily_briefing_timezone')
+      && ['location_mode', 'custom_latitude', 'custom_longitude'].some(key => Object.hasOwn(rest, key))) {
+      patch.daily_briefing_timezone = null;
+    }
     if (prompted === true) patch.daily_briefing_prompted_at = new Date().toISOString();
     if (prompted === false) patch.daily_briefing_prompted_at = null;
 
@@ -892,7 +901,7 @@ router.put('/preferences', verifyToken, validate(preferencesSchema), async (req,
 
     // The briefing location mode feeds Hub Today; drop this user's cached copy.
     clearHubTodayCache(userId);
-    res.json({ preferences: withHhmmTimes(data) });
+    res.json({ preferences: withHhmmTimes({ ...data, daily_briefing_timezone: await resolveNotificationTimezone(userId, data) || 'UTC' }) });
   } catch (err) {
     logger.error('Hub preferences update error', { error: err.message, userId: req.user.id });
     res.status(500).json({ error: 'Failed to update preferences' });
