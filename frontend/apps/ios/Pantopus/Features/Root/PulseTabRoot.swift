@@ -49,16 +49,21 @@ public struct PulseTabRoot: View {
 
     public var body: some View {
         NavigationStack(path: navigationPathBinding) {
-            FeedView(
+            // The Pulse page (Pulse S6) reads `GET /api/pulse/feed`.
+            PulsePageView(
                 onOpenPost: { postId in
                     path.append(.post(postId: postId))
                 },
-                onCompose: { intent in
-                    path.append(.compose(intent: intent.rawValue))
+                onCompose: {
+                    path.append(.compose(intent: PulseIntent.all.rawValue))
+                },
+                onEdit: { postId in
+                    path.append(.editPost(postId: postId))
                 },
                 topMenu: topMenu,
-                topCard: quietCard,
-                onRefresh: refreshQuietCard
+                quietCard: quietCard,
+                onRefresh: refreshQuietCard,
+                isActive: path.isEmpty && rootTabs.selected == .pulse && presentedSurface == nil
             )
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: PulseRoute.self) { route in

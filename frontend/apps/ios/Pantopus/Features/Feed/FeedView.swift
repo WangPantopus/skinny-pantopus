@@ -13,8 +13,8 @@ import SwiftUI
 // swiftlint:disable type_body_length file_length
 
 /// Report reasons accepted by `reportPostSchema`
-/// (`backend/routes/posts.js:3168`).
-private let pulseReportReasons: [(key: String, label: String)] = [
+/// (`backend/routes/posts.js:3168`); the Pulse page uses them too.
+let pulseReportReasons: [(key: String, label: String)] = [
     ("spam", "Spam"),
     ("harassment", "Harassment"),
     ("inappropriate", "Inappropriate content"),

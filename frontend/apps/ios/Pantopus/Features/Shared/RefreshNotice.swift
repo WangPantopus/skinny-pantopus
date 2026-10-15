@@ -19,11 +19,11 @@ struct RefreshNotice: View {
             Icon(.cloudOff, size: 14, color: Theme.Color.appTextSecondary)
                 .accessibilityHidden(true)
             Text(text)
-                .font(.system(size: 13))
+                .font(.footnote)
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
             Button("Retry", action: onRetry)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.footnote.weight(.semibold))
                 .foregroundStyle(Theme.Color.primaryInk)
                 .accessibilityIdentifier("refreshNoticeRetry")
         }
@@ -39,7 +39,12 @@ extension ScreenSnapshot {
     /// "Couldn't refresh. Showing 3:42 PM." when the copy is past its max
     /// shown age and the last refresh failed; nil otherwise.
     var refreshNotice: String? {
-        guard showsRefreshFailureLine else { return nil }
+        refreshNotice(afterEveryFailure: false)
+    }
+
+    /// Pulse names a failed refresh immediately, even for a recent copy.
+    func refreshNotice(afterEveryFailure: Bool) -> String? {
+        guard refreshFailed, afterEveryFailure || isPastMaxShownAge else { return nil }
         let shown = Calendar.current.isDateInToday(fetchedAt)
             ? fetchedAt.formatted(date: .omitted, time: .shortened)
             : fetchedAt.formatted(.dateTime.month(.abbreviated).day().hour().minute())
