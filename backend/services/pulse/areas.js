@@ -4,7 +4,7 @@ const db = require('../../config/supabaseAdmin');
 const { currentOccupancy, resolveHomeRole, NON_RESIDENT_ROLES } = require('../../utils/homeAccessPolicy');
 const { isVerifiedResident } = require('../../utils/homePermissions');
 
-const AREA_SELECT = 'id, kind, name, slug, parent_id, state, opened_at';
+const AREA_SELECT = 'id, kind, name, slug, parent_id, state, opened_at, radius_m, place_type, restricted';
 const HOME_SELECT = [
   'home_id', 'is_active', 'role', 'role_base', 'verification_status', 'verification_source',
   'verified_at', 'start_at', 'end_at', 'access_start_at', 'access_end_at', 'created_at',
@@ -34,8 +34,16 @@ function verifiedHomeOccupancy(row) {
 }
 
 // Public area metadata only. Home ids, boundaries and measured distances never enter endpoint DTOs.
+// An area without a boundary is a labeled radius (only those have radius_m) and its title says so
+// (contract §2.19).
 function areaDto(area) {
-  return area ? { id: area.id, kind: area.kind, name: area.name, state: area.state, title: area.name } : null;
+  if (!area) return null;
+  const radius = area.radius_m != null ? Number(area.radius_m) : null;
+  const exact = radius ? radius / 1609.344 : null;
+  const miles = exact == null ? null : exact < 1 ? Math.max(0.1, Math.round(exact * 10) / 10) : Math.round(exact * 2) / 2;
+  return { id: area.id, kind: area.kind, name: area.name, state: area.state,
+    title: radius ? `${area.name} · within ${miles} mi` : area.name,
+    radius_m: radius, ...(area.kind === 'place' ? { place_type: area.place_type || null } : {}) };
 }
 
 async function searchTowns(text) {
@@ -88,11 +96,25 @@ async function myAreas(userId, loadedContext) {
     street: verified ? areaDto(child('street')) : null, home_verified: verified };
 }
 
+// A park or a library holds no homes: labels there come from its town. A restricted place (a
+// building, an HOA) keeps its own area, whose residents live inside it (contract §2.19).
+const labelAreas = new Map();
+async function labelAreaId(areaId) {
+  const cached = labelAreas.get(areaId);
+  if (cached && cached.until > Date.now()) return cached.id;
+  const area = await checked(db.from('PulseArea').select('id, kind, restricted').eq('id', areaId).maybeSingle());
+  const id = area?.kind === 'place' && !area.restricted
+    ? await checked(db.rpc('pulse_area_town_id', { p_area_id: area.id })) || areaId : areaId;
+  labelAreas.set(areaId, { id, until: Date.now() + 60 * 1000 });
+  return id;
+}
+
 async function labelFor(author, areaId, context) {
   if (author.origin === 'curator') return 'pantopus';
   if (author.accountType === 'official') return 'official';
   if (author.identityType === 'business') return 'business';
   if (!areaId || !author.userId) return 'visitor';
+  areaId = await labelAreaId(areaId);
   const homes = context || await homeAreaContext(author.userId);
   // Extra homes grant reading access only. Posting, limits and the author's label
   // always use their primary home (build spec §12, two homes).

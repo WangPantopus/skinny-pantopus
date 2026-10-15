@@ -38,6 +38,7 @@ const LIMIT_MESSAGES = {
   visitor_ask: 'Visitors can ask one question a day here.',
   new_here: 'Until your address is verified you can start two posts a day.',
   share: 'You can share twice a week.',
+  visitor_observation: 'Visitors can add one observation a day here.',
 };
 
 function refusal(code, extra = {}) {
@@ -136,9 +137,10 @@ async function prepareCreate({ userId, accountType, body, retry = false }) {
   if (entry && entry.area_id !== area.id) return { refusal: refusal('INVALID_PULSE_POST') };
   const event = body.rightNowEventId != null ? await require('./rightNow').forHeadsUp(body.rightNowEventId, area) : null;
   if (body.rightNowEventId != null && !event) return { refusal: refusal('INVALID_PULSE_POST') };
-  if (area.kind === 'town') {
+  // An open place (S16) is read like its town; a restricted one (a building, an HOA) like a street.
+  if (area.kind === 'town' || (area.kind === 'place' && !area.restricted)) {
     if (!['public', 'verified_town'].includes(readScope)) return { refusal: refusal('AUDIENCE_NOT_ALLOWED') };
-  } else if (['street', 'neighborhood'].includes(area.kind)) {
+  } else if (['street', 'neighborhood'].includes(area.kind) || area.kind === 'place') {
     if (readScope !== 'verified_area') return { refusal: refusal('AUDIENCE_NOT_ALLOWED') };
     const inside = homes.primary?.verified === true && homes.matches.some(match => match.home_id === homes.primary.id
       && match.area_id === area.id && match.inside === true);
@@ -154,7 +156,7 @@ async function prepareCreate({ userId, accountType, body, retry = false }) {
     identityType: 'local' }, area.id, homes);
   if (label === 'visitor' && postType !== 'ask_local') return { refusal: refusal('VISITOR_ASK_ONLY') };
   if (postType === 'share' && !(typeof body.locationName === 'string' && body.locationName.trim())
-    && !['street', 'neighborhood'].includes(area.kind)) return { refusal: refusal('SHARE_NEEDS_PLACE') };
+    && !['street', 'neighborhood', 'place'].includes(area.kind)) return { refusal: refusal('SHARE_NEEDS_PLACE') };
 
   const scopes = [...(label === 'visitor' ? ['visitor_ask'] : []), ...(label === 'new_here' ? ['new_here'] : []),
     ...(postType === 'share' ? ['share'] : [])];
@@ -250,4 +252,5 @@ async function prepareEdit({ userId, existing, body, updates }) {
   return { updates };
 }
 
-module.exports = { PULSE_TYPES, READ_SCOPES, LOCKED_EDIT_FIELDS, prepareCreate, recheckLimits, prepareEdit };
+module.exports = { PULSE_TYPES, READ_SCOPES, LOCKED_EDIT_FIELDS, prepareCreate, recheckLimits, prepareEdit, composerChecks,
+  limitRefusal };

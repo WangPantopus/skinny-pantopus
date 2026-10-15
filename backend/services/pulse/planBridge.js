@@ -12,6 +12,7 @@ const { homeAreaContext, openAreas, AREA_SELECT } = require('./areas');
 const { UUID } = require('./feedCursor');
 const { POST_READ_SELECT, canReadPost } = require('./readAccess');
 const blockService = require('../blockService');
+const parsePoint = require('../../utils/parsePostGISPoint');
 const logger = require('../../utils/logger');
 
 // From a conversation only these kinds are offered; never playdates (build spec §9).
@@ -261,4 +262,25 @@ function decorateReplies(replies, info) {
   });
 }
 
-module.exports = { KINDS, suggest, forConversation, decorateReplies, toastFor, invite, uninvite, participantsOf };
+/** The feed's street line (contract §2.19): open plans the reader can see whose area point is inside the street. */
+async function streetPlansLine(viewerId, streetId) {
+  if (!viewerId || !streetId || !await isFeatureEnabled('plans', viewerId)) return null;
+  const [area] = await checked(db.from('PulseArea').select('id, centroid, radius_m').eq('id', streetId));
+  const center = parsePoint(area?.centroid);
+  if (!center) return null;
+  const planService = require('../plans/planService');
+  const { loadViewer } = require('../plans/planViewer');
+  const user = await checked(db.from('User').select('id, role').eq('id', viewerId).maybeSingle());
+  const viewer = await loadViewer(user || { id: viewerId }, {});
+  const box = planService.boundingBox(center, (area.radius_m || 3000) + 500);
+  const points = (await planService.queryOpenPlansInBox(box, { scopeAccess: viewer.scopeAccess }))
+    .filter(plan => planService.isVisibleTo(plan, viewer))
+    .map(plan => ({ id: plan.post_id, ...(planService.areaPoint(plan) || {}) })).filter(point => point.latitude != null);
+  if (!points.length) return null;
+  const inside = await checked(db.rpc('pulse_area_contains_displayed_points', { p_area_id: streetId, p_points: points }));
+  const count = (inside || []).length;
+  return count ? { count, text: `${count} ${count === 1 ? 'plan' : 'plans'} on your street` } : null;
+}
+
+module.exports = { KINDS, suggest, forConversation, decorateReplies, toastFor, invite, uninvite, participantsOf,
+  streetPlansLine };
