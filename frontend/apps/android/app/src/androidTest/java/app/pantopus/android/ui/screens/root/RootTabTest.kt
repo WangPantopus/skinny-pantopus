@@ -45,7 +45,7 @@ class RootTabTest {
         }
 
         composeRule.onNodeWithTag("landing.root/home").assertIsDisplayed()
-        for (tab in listOf("today", "pulse", "plans", "mail", "home")) {
+        for (tab in listOf("today", "nearby", "mail", "home")) {
             composeRule.onNodeWithTag("tab.$tab").performClick().assertIsSelected()
             composeRule.onNodeWithTag("landing.root/$tab").assertIsDisplayed()
         }

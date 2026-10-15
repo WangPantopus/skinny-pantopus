@@ -46,7 +46,7 @@ class NavigationSmokeTest {
         }
 
         composeRule.onNodeWithTag("smoke.root/home").assertIsDisplayed()
-        for (tab in listOf("today", "pulse", "plans", "mail", "home")) {
+        for (tab in listOf("today", "nearby", "mail", "home")) {
             composeRule.onNodeWithTag("tab.$tab").assertIsDisplayed().performClick()
             composeRule.onNodeWithTag("smoke.root/$tab").assertIsDisplayed()
         }
@@ -82,8 +82,9 @@ class NavigationSmokeTest {
             PantopusRoute.entries.map { route ->
                 "tab.${route.path.substringAfterLast('/')}"
             }
-        // Place keeps its legacy home path for deep-link compatibility.
-        check(expectedTags == listOf("tab.home", "tab.today", "tab.pulse", "tab.plans", "tab.mail")) {
+        // Place keeps its legacy home path for deep-link compatibility. These builds list no launch keys, so the
+        // Pulse redesign is off: the October 13 bar.
+        check(expectedTags == listOf("tab.home", "tab.today", "tab.nearby", "tab.mail")) {
             "PantopusRoute.entries derived testTags drifted: $expectedTags"
         }
     }

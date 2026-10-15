@@ -32,6 +32,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.sports.ActiveSportsEventDto
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -64,6 +65,9 @@ enum class PulseTopic(
     LocalGovernment("local_government", "Local government", PantopusIcon.Landmark),
     Volunteering("volunteering", "Volunteering", PantopusIcon.Hand),
     ;
+
+    /** The name in the October 13 lane (the Pulse redesign off), which had Sports alone, called "Sports". */
+    val launchLabel: String get() = if (this == Sports) "Sports" else label
 
     companion object {
         /** Chips shown before "More" (build spec section 4: a few at a time). */
@@ -139,7 +143,8 @@ data class PulseSportsStarter(
  * shows the rest in the same row. Picking a topic replaces the one chosen; All, or tapping the chosen chip again,
  * clears it. A chosen topic always shows, and nothing is remembered across a relaunch. TalkBack reads one name per
  * chip ("All topics", "Gardening topic", "More topics"); ids `pulseTopicChip_all`, `pulseTopicChip_<topic id>` and
- * `pulseTopicChip_more`, as on iOS.
+ * `pulseTopicChip_more`, as on iOS. With the Pulse redesign off it is the October 13 lane: the Sports chip alone
+ * (`PulseFeedViewModel.availableTopics`), named "Sports", and no All; tapping it again leaves the lane.
  */
 @Composable
 fun PulseTopicChipRow(
@@ -148,6 +153,7 @@ fun PulseTopicChipRow(
     onSelect: (PulseTopic?) -> Unit,
 ) {
     if (topics.isEmpty()) return
+    val redesign = LaunchFeatures.pulseRedesign
     var expanded by rememberSaveable { mutableStateOf(false) }
     val first = topics.take(PulseTopic.SHOWN_BEFORE_MORE)
     val shown =
@@ -168,19 +174,22 @@ fun PulseTopicChipRow(
         horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        TopicChip(
-            label = "All",
-            icon = null,
-            spokenName = "All topics",
-            active = activeTopic == null,
-            testTag = "pulseTopicChip_all",
-            onClick = { onSelect(null) },
-        )
-        shown.forEach { topic ->
+        if (redesign) {
             TopicChip(
-                label = topic.label,
+                label = "All",
+                icon = null,
+                spokenName = "All topics",
+                active = activeTopic == null,
+                testTag = "pulseTopicChip_all",
+                onClick = { onSelect(null) },
+            )
+        }
+        shown.forEach { topic ->
+            val label = if (redesign) topic.label else topic.launchLabel
+            TopicChip(
+                label = label,
                 icon = topic.icon,
-                spokenName = "${topic.label} topic",
+                spokenName = if (redesign) "$label topic" else label,
                 active = activeTopic == topic,
                 testTag = "pulseTopicChip_${topic.key}",
                 onClick = { onSelect(if (activeTopic == topic) null else topic) },
