@@ -22,15 +22,9 @@ async function deliver(row, now = new Date()) {
     if (error) throw error;
     return;
   }
-  // Check current scope, moderation and blocks again before claiming transport.
-  let readable = (await readableNotifications([row])).length > 0;
-  if (readable && row.type === 'pulse_helpful') {
-    const { data, error } = await db.from('PostComment').select('helpful_at')
-      .eq('id', row.metadata.comment_id).maybeSingle();
-    if (error) throw error;
-    // Unmarking while quiet hours hold the push withdraws that old notice.
-    readable = !!data?.helpful_at && data.helpful_at === row.metadata.helpful_at;
-  }
+  // Check current scope, moderation, blocks and a withdrawn Helpful mark again before
+  // claiming transport: unmarking while quiet hours hold the push withdraws that notice.
+  const readable = (await readableNotifications([row])).length > 0;
   const enabled = readable && await notificationService.isPushEnabled(row.user_id);
   const { data, error } = await db.from('Notification').update({ metadata: {
     ...row.metadata, pulse_push_sent_at: now.toISOString(),
