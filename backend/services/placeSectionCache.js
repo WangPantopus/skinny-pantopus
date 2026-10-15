@@ -75,6 +75,7 @@ function warnMissingTableOnce(where, error) {
 // whole: its ~1 km prefix is enough to debug a cache problem.
 function logKey(cacheKey) {
   const key = String(cacheKey || '');
+  if (key.startsWith('point:')) return 'point:[redacted]';
   return key.startsWith('geo9:') ? `${key.slice(0, 11)}…` : key;
 }
 

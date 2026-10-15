@@ -1,19 +1,13 @@
 // ============================================================
 // BALLOT GOVERNMENTS — the typed governments an exact point sits inside
 //
-// The Place `civic_districts` section caches the Census geocoder per
-// geohash-6 (~1.2 × 0.6 km) and keeps only display rows, so two homes in
-// one cell can get each other's districts. Ballot never reads that row.
-// It asks the geocoder about the exact point and keeps typed identities:
-//
-//   • a saved home → cached per exact point (`geo9:<geohash-9>`, ~5 m),
-//     30 days, never served more than 7 days stale. The key names no home
-//     and no household: it is a fact about the land, like the flood zone,
-//     and a moved pin is a new key, so an address change never reuses the
-//     old answer. Building-level keys are cut to ~1 km in log lines
-//     (placeSectionCache);
-//   • an anonymous /start lookup → a live call that writes nothing here
-//     (the route may keep the answer in its in-memory preview cache).
+// Civic districts and Ballot governments share the exact supplied point and
+// in-flight Census lookup nationwide. Versioned point keys bypass the old
+// geohash-6 and geohash-9 rows, which could cross a district boundary.
+// The key identifies land, not a home or household; moving a pin gets a new
+// answer. Point keys are redacted from logs by placeSectionCache.
+// A saved home's governments expire after 30 days (at most 7 days stale).
+// An anonymous /start lookup makes a live call without writing here.
 //
 // P0 counts governments, not election districts: the United States, the
 // state, the county, an incorporated place and the school district(s).
@@ -22,7 +16,7 @@
 // ============================================================
 
 const logger = require('../../utils/logger');
-const { encodeGeohash } = require('../../utils/geohash');
+const { createHash } = require('crypto');
 const { readThrough, readRow } = require('../placeSectionCache');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -39,9 +33,9 @@ function geocoderUrl(lat, lng) {
     + `?x=${lng}&y=${lat}&benchmark=Public_AR_Current&vintage=Current_Current&layers=all&format=json`;
 }
 
-// The cache key for an exact point: ~5 m, no home id.
+// No rounding: even adjacent points across a boundary must not share a row.
 function pointCacheKey(lat, lng) {
-  return `geo9:${encodeGeohash(lat, lng, 9)}`;
+  return `point:v2:${createHash('sha256').update(`${Number(lat)},${Number(lng)}`).digest('hex')}`;
 }
 
 async function fetchGeographies(lat, lng, { timeoutMs = FETCH_TIMEOUT_MS } = {}) {
