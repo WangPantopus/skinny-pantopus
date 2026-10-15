@@ -26,6 +26,7 @@ import app.pantopus.android.data.plans.KidsAgeBand
 import app.pantopus.android.data.plans.PlanAutoRule
 import app.pantopus.android.data.plans.PlanFormat
 import app.pantopus.android.data.plans.PlanKind
+import app.pantopus.android.ui.screens.plans.colors
 import app.pantopus.android.ui.screens.plans.components.PlanChoice
 import app.pantopus.android.ui.screens.plans.components.PlanChoiceGroup
 import app.pantopus.android.ui.screens.plans.components.PlanField
@@ -403,7 +404,12 @@ private fun PlaceRow(
             onClick = onClick,
             modifier = Modifier.semantics(mergeDescendants = true) { role = Role.Button },
         ) {
-            PlanTile(kind, size = 36.dp, glyph = 18.dp, corner = 10.dp)
+            if (place?.hereNow == true) {
+                // Board H4: the place "You're here now" found wears the location arrow.
+                PlanIconTile(PantopusIcon.Navigation, kind.colors.tint, kind.colors.accent, size = 36.dp, glyph = 18.dp, corner = 10.dp)
+            } else {
+                PlanTile(kind, size = 36.dp, glyph = 18.dp, corner = 10.dp)
+            }
             Column(modifier = Modifier.weight(1f)) {
                 Text(text = place?.name ?: "Choose a place", style = semibold, color = PantopusColors.appText)
                 Text(
@@ -449,8 +455,9 @@ private fun HostedBeforeRow(
     }
 }
 
-/** "Park · public place · 0.4 mi" (the host's own distance to a public place). */
+/** "Park · public place · 0.4 mi" (the host's own distance to a public place); "You're here now" (board H4). */
 internal fun placeCaption(place: PickedPlace): String {
+    if (place.hereNow) return "You're here now"
     val distance = place.distanceMeters?.let { metersToMiles(it) }
     return listOfNotNull(place.category?.replaceFirstChar { it.titlecase() }, "public place", distance).joinToString(" · ")
 }

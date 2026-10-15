@@ -141,6 +141,8 @@ const POST_TYPES = [
 ];
 
 const FEED_SURFACES = ['place', 'connections', 'personas'];
+// Types only Pulse mode creates (contract §2.5); older composers can't.
+const PULSE_ONLY_TYPES = ['share', 'offer'];
 
 const PLACE_POST_TYPES = [
   'ask_local', 'recommendation', 'event', 'lost_found',
@@ -212,6 +214,11 @@ const LOCAL_AUDIENCES = ['nearby', 'neighborhood', 'saved_place', 'target_area']
 
 const { PULSE_TOPICS, PULSE_TOPIC_NAMES, isPulseTopic } = require('../services/pulse/topics');
 const pulseLifecycle = require('../services/pulse/lifecycle');
+const pulseCompose = require('../services/pulse/compose');
+// The created post as its author's Pulse card (contract §2.5 response).
+async function pulseCard(postId, userId) {
+  return (await require('../services/pulse/conversation').read(postId, userId)).post;
+}
 // The one read check every path uses (this file keeps calling it canViewPost).
 const {
   canReadPost: canViewPost, readablePosts, postScopeAccess, isPubliclyShareable, POST_READ_SELECT, canReadReply, onlyShownReplies,
@@ -230,8 +237,13 @@ const createPostSchema = Joi.object({
   mediaTypes: Joi.array().items(Joi.string().valid('image', 'video', 'live_photo')).optional(),
   mediaThumbnails: Joi.array().items(Joi.string().uri().allow('', null)).max(10).optional(),
   mediaLiveUrls: Joi.array().items(Joi.string().uri().allow('', null)).max(10).optional(),
-  postType: Joi.string().valid(...POST_TYPES).default('general'),
+  postType: Joi.string().valid(...POST_TYPES, ...PULSE_ONLY_TYPES).default('general'),
   postFormat: Joi.string().valid(...POST_FORMATS).default('standard'),
+  // Pulse mode (contract §2.5): a request with readScope. The server decides the rest.
+  readScope: Joi.string().valid('public', 'verified_town', 'verified_area').optional(),
+  areaId: Joi.string().uuid().optional(),
+  claimMode: Joi.string().valid('choose', 'first').optional(),
+  expiresAt: Joi.date().iso().optional(),
   visibility: Joi.string().valid('public', 'neighborhood', 'followers', 'private', 'city', 'radius', 'connections').default('neighborhood'),
   visibilityScope: Joi.string().valid(...VISIBILITY_SCOPES).default('neighborhood'),
   locationPrecision: Joi.string().valid(...LOCATION_PRECISIONS).default('approx_area'),
@@ -318,6 +330,9 @@ const createPostSchema = Joi.object({
     starter_key: Joi.string().valid('anyone_watching', 'best_place_watch', 'youth_signups', 'pickup_weekend').optional(),
   }).unknown(true).optional(),
 }).custom((value, helpers) => {
+  if (PULSE_ONLY_TYPES.includes(value.postType) && value.readScope === undefined) {
+    return helpers.error('any.custom', { message: 'Share and Offer posts are created in Pulse.' });
+  }
   if ((value.latitude != null) !== (value.longitude != null)) {
     return helpers.error('any.custom', { message: 'latitude and longitude must both be provided together' });
   }
@@ -345,7 +360,7 @@ const updatePostSchema = Joi.object({
   mediaTypes: Joi.array().items(Joi.string().valid('image', 'video', 'live_photo')),
   mediaThumbnails: Joi.array().items(Joi.string().uri().allow('', null)).max(10),
   mediaLiveUrls: Joi.array().items(Joi.string().uri().allow('', null)).max(10),
-  postType: Joi.string().valid(...POST_TYPES),
+  postType: Joi.string().valid(...POST_TYPES, ...PULSE_ONLY_TYPES),
   postFormat: Joi.string().valid(...POST_FORMATS),
   visibility: Joi.string().valid('public', 'neighborhood', 'followers', 'private', 'city', 'radius'),
   visibilityScope: Joi.string().valid(...VISIBILITY_SCOPES),
@@ -394,6 +409,13 @@ const sharePostSchema = Joi.object({
 // ============ HELPER FUNCTIONS ============
 
 /** Derive a purpose enum from canonical postType */
+// The Post id one composer command keeps across retries (POST /api/posts clientRequestId).
+function commandPostId(userId, commandId) {
+  return commandId ? createHash('sha256')
+    .update(`pantopus:post-create:v1:${userId.toLowerCase()}:${commandId.toLowerCase()}`)
+    .digest('hex').slice(0, 32) : null;
+}
+
 function derivePurposeFromPostType(postType) {
   const map = {
     ask_local: 'ask', lost_found: 'ask',
@@ -465,6 +487,39 @@ async function ensurePostMute({ userId, entityType, entityId, surface = null, ar
   }
 
   return Array.isArray(data) ? data[0] : data;
+}
+
+// Old clients omit deleted rows and render a tree from parent_comment_id. Keep
+// their surviving replies reachable without changing the stored Pulse topology.
+// Read only ancestry/deletion state, never the missing parent's identity or text.
+async function legacyReplyParents(comments, postId) {
+  const known = new Map(comments.map(row => [row.id, row]));
+  let missing = [...new Set(comments.map(row => row.parent_comment_id).filter(id => id && !known.has(id)))];
+  while (missing.length) {
+    const next = new Set();
+    for (let start = 0; start < missing.length; start += 100) {
+      const ids = missing.slice(start, start + 100);
+      const { data, error } = await supabaseAdmin.from('PostComment')
+        .select('id, parent_comment_id, is_deleted').eq('post_id', postId).in('id', ids);
+      if (error) throw error;
+      for (const id of ids) known.set(id, null);
+      for (const row of data || []) known.set(row.id, row);
+      for (const row of data || []) {
+        if (row.is_deleted && row.parent_comment_id && !known.has(row.parent_comment_id)) next.add(row.parent_comment_id);
+      }
+    }
+    missing = [...next].filter(id => !known.has(id));
+  }
+  return comments.map(row => {
+    let parent = row.parent_comment_id;
+    const visited = new Set([row.id]);
+    while (parent && known.get(parent)?.is_deleted) {
+      if (visited.has(parent)) { parent = null; break; }
+      visited.add(parent);
+      parent = known.get(parent).parent_comment_id;
+    }
+    return parent === row.parent_comment_id ? row : { ...row, parent_comment_id: parent };
+  });
 }
 
 async function attachFilesToComments(comments) {
@@ -843,8 +898,11 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
         code: 'wrong_post_route',
       });
     }
+    // Pulse mode (contract §2.5): the server decides where the post is and who may start it.
+    const pulseMode = req.body.readScope !== undefined;
     // Infer postAs from homeId/businessId when client sends 'personal' (backwards compat)
-    const postAs = (rawPostAs === 'personal' && homeId) ? 'home'
+    const postAs = pulseMode ? (rawPostAs || 'personal')
+      : (rawPostAs === 'personal' && homeId) ? 'home'
       : (rawPostAs === 'personal' && businessId) ? 'business'
       : rawPostAs;
     // Normalize aliased fields: canonical name takes precedence
@@ -911,10 +969,24 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
       return res.status(400).json({ error: alertRefusal, code: 'ALERT_KIND_NOT_ALLOWED' });
     }
 
+    let pulse = null;
+    let pulseRetry = false;
+    if (pulseMode) {
+      // A retry of a post this command already created skips the limits and returns it.
+      const retryId = commandPostId(userId, req.body.clientRequestId);
+      if (retryId) {
+        const { data: prior, error: priorError } = await supabaseAdmin.from('Post').select('id').eq('id', retryId).maybeSingle();
+        if (priorError) throw priorError;
+        pulseRetry = !!prior;
+      }
+      pulse = await pulseCompose.prepareCreate({ userId, accountType: req.user.accountType, body: req.body, retry: pulseRetry });
+      if (pulse.refusal) return res.status(pulse.refusal.status).json(pulse.refusal.body);
+    }
+
     let homeContext = null;
 
     // ── Post As validation ──
-    if (homeId && postAs !== 'persona') {
+    if (homeId && postAs !== 'persona' && !pulse) {
       const { data: home, error: homeErr } = await supabaseAdmin
         .from('Home')
         .select('id, owner_id, name, address, city, state, location')
@@ -1012,8 +1084,9 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
     const isHomeIdentityPost = postAs === 'home' && !!homeContext;
 
     // ── Audience guardrails ──
-    // Curator accounts bypass trust-state checks — they are platform-owned, not a real neighbor
-    if (!isCurator && postAs !== 'persona') {
+    // Curator accounts bypass trust-state checks — they are platform-owned, not a real neighbor.
+    // Pulse posts use their label and area instead (pulse/compose.js).
+    if (!isCurator && postAs !== 'persona' && !pulse) {
       if (effectiveLatitude != null && effectiveLongitude != null) {
         const trustState = isHomeIdentityPost
           ? { level: 'verified_resident', roleBase: homeContext.roleBase }
@@ -1046,12 +1119,12 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
       (distributionTargets && distributionTargets.includes('place'))
     );
 
-    if (isPlacePost && (effectiveLatitude == null || effectiveLongitude == null)) {
+    if (isPlacePost && !pulse && (effectiveLatitude == null || effectiveLongitude == null)) {
       return res.status(400).json({ error: 'Place posts require a target location or a verified home address.' });
     }
 
     // Curator accounts bypass place eligibility — platform-owned, not a real neighbor
-    if (!isCurator && isPlacePost && effectiveLatitude != null && effectiveLongitude != null) {
+    if (!isCurator && !pulse && isPlacePost && effectiveLatitude != null && effectiveLongitude != null) {
       const trustState = isHomeIdentityPost
         ? { level: 'verified_resident' }
         : await computeTrustState(userId, effectiveLatitude, effectiveLongitude);
@@ -1070,7 +1143,7 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
 
     // ── v1.1: Post type enforcement for Place surface ──
     // Curator accounts bypass Place type restrictions — platform-owned, not a real neighbor
-    if (isPlacePost && !isCurator) {
+    if (isPlacePost && !isCurator && !pulse) {
       if (!PLACE_POST_TYPES.includes(postType)) {
         return res.status(400).json({
           error: `Post type "${postType}" is not allowed on the Place feed. Allowed types: ${PLACE_POST_TYPES.join(', ')}`,
@@ -1190,8 +1263,10 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
       // Sports topic lane (Phase 1)
       topic: topic || null,
       sports_scope: sportsScope || null,
-      // A source link comes only from sourceUrl on an Official or curator notice (below).
-      post_metadata: Object.fromEntries(Object.entries(postMetadata || {}).filter(([key]) => key !== 'source_url')),
+      // A source link comes only from sourceUrl on an Official or curator notice (below), and a
+      // Pulse post's named place only from Pulse mode.
+      post_metadata: Object.fromEntries(Object.entries(postMetadata || {})
+        .filter(([key]) => !['source_url', 'pulse_about'].includes(key))),
       origin,
     };
     if (postType === 'alert' && sourceUrl && SOURCED_ALERT_ACCOUNT_TYPES.includes(req.user.accountType)) {
@@ -1315,15 +1390,20 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
       }
     }
 
+    // A Pulse post's place, audience, window and hold come from the server (pulse/compose.js),
+    // never from device coordinates or the client's audience fields.
+    if (pulse) {
+      Object.assign(postData, pulse.fields);
+      postData.post_metadata = { ...postData.post_metadata, ...pulse.metadata };
+    }
+
     // Compute initial utility_score so the post ranks properly before the background job runs
     postData.utility_score = computeUtilityScore(postData);
 
     // Reuse the existing Post primary key for retries of one composer command.
     // GPS is refreshed at submit time; it is authorization evidence, not a new draft.
     const commandId = req.body.clientRequestId;
-    const postId = commandId ? createHash('sha256')
-      .update(`pantopus:post-create:v1:${userId.toLowerCase()}:${commandId.toLowerCase()}`)
-      .digest('hex').slice(0, 32) : null;
+    const postId = commandPostId(userId, commandId);
     const requestBody = { ...req.body };
     for (const key of ['clientRequestId', 'gpsTimestamp', 'gpsLatitude', 'gpsLongitude']) delete requestBody[key];
     // Key the stored fingerprint with the client's secret command id: viewers read
@@ -1349,7 +1429,7 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
         media_urls: normalizeMediaUrls(existing.media_urls),
         media_thumbnails: normalizeAlignedMediaUrls(existing.media_thumbnails),
         media_live_urls: normalizeAlignedMediaUrls(existing.media_live_urls),
-      }, userId) });
+      }, userId), ...(existing.read_scope ? { pulse: await pulseCard(existing.id, userId) } : {}) });
     };
     if (postId) {
       const existing = await readRetry();
@@ -1370,6 +1450,11 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
       logger.error('Error creating post', { error: error?.message || 'No receipt', userId });
       return res.status(500).json({ error: 'Failed to create post' });
     }
+    // Two posts that passed a Pulse limit at once: the later one is undone (contract §2.5).
+    if (pulse && !pulseRetry) {
+      const over = await pulseCompose.recheckLimits(userId, pulse.plan, post.id);
+      if (over) return res.status(over.status).json(over.body);
+    }
 
     logger.info('Post created', {
       postId: post.id,
@@ -1389,12 +1474,15 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
       });
     }
 
-    runPostCreatedHooks({
-      post,
-      userId,
-      personaContext,
-      targets: postData.distribution_targets || [],
-    });
+    // A held post notifies no one until it is live (contract §5).
+    if (!pulse?.plan.held) {
+      runPostCreatedHooks({
+        post,
+        userId,
+        personaContext,
+        targets: postData.distribution_targets || [],
+      });
+    }
 
     const responsePost = await serializePostForViewer({
       ...post,
@@ -1406,6 +1494,7 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
     res.status(201).json({
       message: 'Post created successfully',
       post: responsePost,
+      ...(pulse ? { pulse: await pulseCard(post.id, userId) } : {}),
     });
   } catch (err) {
     logger.error('Post creation error', { error: err.message, userId: req.user.id });
@@ -1692,74 +1781,6 @@ router.get('/map', verifyToken, async (req, res) => {
       } catch (error) {
         logger.error('Error fetching map posts', { error: error.message, userId, surface });
         if (enabledLayers.filter(Boolean).every(layer => layer === 'posts')) throw error;
-      }
-    }
-
-    // ── Tasks layer (Gig table) ──
-    if (enabledLayers.includes('tasks')) {
-      const { data: gigs, error: gigErr } = await supabaseAdmin
-        .from('Gig')
-        .select('id, title, description, status, latitude, longitude, location_name, category, created_at, poster_id, user_id, accepted_by, location_precision, reveal_policy, poster:poster_id (id, username, name, profile_picture_url)')
-        .gte('latitude', s).lte('latitude', n)
-        .gte('longitude', w).lte('longitude', e)
-        .in('status', ['open', 'assigned', 'in_progress'])
-        .limit(lim);
-      if (gigErr) {
-        logger.error('Error fetching map tasks', { error: gigErr.message });
-      } else {
-        const { resolveGigPrecision: _resolveTask, applyLocationPrecision: _applyTask } = require('../utils/locationPrivacy');
-        (gigs || []).forEach(g => {
-          const { precision, isOwner, locationUnlocked } = _resolveTask(g, userId);
-          _applyTask(g, precision, isOwner);
-          results.push({
-            layer_type: 'task',
-            id: g.id,
-            latitude: g.latitude,
-            longitude: g.longitude,
-            title: g.title,
-            description: g.description,
-            status: g.status,
-            category: g.category,
-            location_name: g.location_name,
-            created_at: g.created_at,
-            locationUnlocked,
-            creator: g.poster ? { id: g.poster.id, username: g.poster.username, name: g.poster.name, profile_picture_url: g.poster.profile_picture_url } : null,
-          });
-        });
-      }
-    }
-
-    // ── Offers layer (Gig offers/services) ──
-    if (enabledLayers.includes('offers')) {
-      const { data: offers, error: offerErr } = await supabaseAdmin
-        .from('Gig')
-        .select('id, title, description, latitude, longitude, location_name, category, created_at, poster_id, user_id, accepted_by, location_precision, reveal_policy, poster:poster_id (id, username, name, profile_picture_url)')
-        .eq('gig_type', 'offer')
-        .gte('latitude', s).lte('latitude', n)
-        .gte('longitude', w).lte('longitude', e)
-        .in('status', ['open'])
-        .limit(lim);
-      if (offerErr) {
-        logger.error('Error fetching map offers', { error: offerErr.message });
-      } else {
-        const { resolveGigPrecision: _resolveOffer, applyLocationPrecision: _applyOffer } = require('../utils/locationPrivacy');
-        (offers || []).forEach(o => {
-          const { precision, isOwner, locationUnlocked } = _resolveOffer(o, userId);
-          _applyOffer(o, precision, isOwner);
-          results.push({
-            layer_type: 'offer',
-            id: o.id,
-            latitude: o.latitude,
-            longitude: o.longitude,
-            title: o.title,
-            description: o.description,
-            category: o.category,
-            location_name: o.location_name,
-            created_at: o.created_at,
-            locationUnlocked,
-            creator: o.poster ? { id: o.poster.id, username: o.poster.username, name: o.poster.name, profile_picture_url: o.poster.profile_picture_url } : null,
-          });
-        });
       }
     }
 
@@ -2486,7 +2507,8 @@ router.get('/:id', optionalAuth, async (req, res) => {
       .eq('post_id', id).eq('is_deleted', false), userId)
       .order('created_at', { ascending: true });
 
-    const commentRows = await serializeCommentsForViewer(await attachFilesToComments(comments || []), post, userId);
+    const commentRows = await legacyReplyParents(
+      await serializeCommentsForViewer(await attachFilesToComments(comments || []), post, userId), id);
 
     let userLike = null;
     let userSave = null;
@@ -2546,10 +2568,16 @@ router.patch('/:id', verifyToken, validate(updatePostSchema), async (req, res) =
     const userId = req.user.id;
 
     const { data: existing } = await supabaseAdmin.from('Post')
-      .select('user_id, media_urls, media_thumbnails, media_live_urls, safety_alert_kind, post_metadata')
+      .select(`user_id, media_urls, media_thumbnails, media_live_urls, safety_alert_kind, post_metadata,
+        post_type, content, topic, area_id, read_scope, latitude, longitude, location_precision,
+        visibility, visibility_scope, radius_miles`)
       .eq('id', id).single();
     if (!existing) return res.status(404).json({ error: 'Post not found' });
     if (existing.user_id !== userId) return res.status(403).json({ error: 'You can only edit your own posts' });
+    // Only Pulse creates Share and Offer posts; an older post can't become one.
+    if (!existing.read_scope && PULSE_ONLY_TYPES.includes(req.body.postType) && req.body.postType !== existing.post_type) {
+      return res.status(400).json({ error: "A post's type can't be changed to this one.", code: 'PULSE_FIELD_LOCKED' });
+    }
     if (req.user.accountType !== 'curator' && hasOutsideMedia(req.body, [normalizeMediaUrls(existing.media_urls),
       normalizeAlignedMediaUrls(existing.media_thumbnails), normalizeAlignedMediaUrls(existing.media_live_urls)])) {
       return res.status(400).json({ error: OUTSIDE_MEDIA_ERROR });
@@ -2585,6 +2613,11 @@ router.patch('/:id', verifyToken, validate(updatePostSchema), async (req, res) =
     // Map frontend safety kinds to valid DB enum values
     if (updates.safety_alert_kind) {
       updates.safety_alert_kind = toDbSafetyKind(updates.safety_alert_kind);
+    }
+    // A Pulse post keeps its type, place, audience and window; new text is checked again.
+    if (existing.read_scope) {
+      const edit = await pulseCompose.prepareEdit({ userId, existing, body: req.body, updates });
+      if (edit.refusal) return res.status(edit.refusal.status).json(edit.refusal.body);
     }
 
     const { data: post, error } = await supabaseAdmin
@@ -2958,7 +2991,8 @@ router.post('/:id/comments', verifyToken, validate(createCommentSchema), async (
       }
       return res.status(201).json({
         message: 'Comment added successfully',
-        comment: (await serializeCommentsForViewer([{ ...existing, attachments: [] }], post, userId, audienceAuthors))[0],
+        comment: await require('../services/pulse/conversation').addCreatedReplyFields(
+          (await serializeCommentsForViewer([{ ...existing, attachments: [] }], post, userId, audienceAuthors))[0], post, userId),
       });
     };
     if (commentId) {
@@ -3038,7 +3072,8 @@ router.post('/:id/comments', verifyToken, validate(createCommentSchema), async (
 
     res.status(201).json({
       message: 'Comment added successfully',
-      comment: (await serializeCommentsForViewer([{ ...newComment, attachments: [] }], post, userId, audienceAuthors))[0],
+      comment: await require('../services/pulse/conversation').addCreatedReplyFields(
+        (await serializeCommentsForViewer([{ ...newComment, attachments: [] }], post, userId, audienceAuthors))[0], post, userId),
     });
   } catch (err) {
     logger.error('Comment creation error', { error: err.message, postId: req.params.id });
@@ -3074,7 +3109,8 @@ router.get('/:id/comments', verifyToken, async (req, res) => {
     }
 
     const enrichedComments = await attachFilesToComments(comments || []);
-    const projectedComments = await serializeCommentsForViewer(enrichedComments, post, userId);
+    const projectedComments = await legacyReplyParents(
+      await serializeCommentsForViewer(enrichedComments, post, userId), postId);
     const commentsWithLikes = projectedComments.map(c => ({
       ...c,
       userHasLiked: userLikedSet.has(c.id),
