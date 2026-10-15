@@ -179,12 +179,11 @@ async function computeHealthScore(homeId) {
   // The home's coordinates are passed so the seasonal engine can tell
   // whether its region-specific copy applies here. Calling without them
   // used to satisfy the old `!hasCoords ||` gate, which served Portland
-  // ice statistics to every home in the country. The season itself is
-  // month-based and resolves regardless, so the checklist query below is
-  // unaffected either way.
+  // ice statistics to every home in the country. Both campaign selection
+  // and copy now follow the household’s actual region.
   const { data: homeRow, error: homeError } = await supabaseAdmin
     .from('Home')
-    .select('map_center_lat, map_center_lng')
+    .select('state, map_center_lat, map_center_lng')
     .eq('id', homeId)
     .maybeSingle();
   const coordinate = (value, max) => value === null || (typeof value === 'number' && Number.isFinite(value) && Math.abs(value) <= max);
@@ -194,9 +193,9 @@ async function computeHealthScore(homeId) {
   const homeCoords = homeRow.map_center_lat !== null && homeRow.map_center_lng !== null
     ? { latitude: homeRow.map_center_lat, longitude: homeRow.map_center_lng } : null;
 
-  const seasonalCtx = getSeasonalContext({ ...(homeCoords || {}) });
-  const currentYear = new Date().getFullYear();
-  const seasonKey = seasonalCtx.primary_season;
+  const seasonalCtx = getSeasonalContext({ state: homeRow.state, ...(homeCoords || {}) });
+  const currentYear = seasonalCtx.year;
+  const seasonKey = seasonalCtx.checklist_season;
 
   // Fire all 6 queries in parallel
   const [
@@ -221,13 +220,10 @@ async function computeHealthScore(homeId) {
       .eq('home_id', homeId)
       .in('status', ['due', 'overdue']),
 
-    // 3. Seasonal checklist items for current season/year
-    supabaseAdmin
-      .from('HomeSeasonalChecklistItem')
-      .select('id, status, title, gig_id')
-      .eq('home_id', homeId)
-      .eq('season_key', seasonKey)
-      .eq('year', currentYear),
+    // Read through the same regional selection and completion reuse as the
+    // checklist beside this score, including an empty applicable campaign.
+    require('./seasonalChecklistService').getOrCreateChecklist(homeId, seasonKey, currentYear)
+      .then(data => ({ data })),
 
     // 4. Emergency contacts
     supabaseAdmin
@@ -263,30 +259,6 @@ async function computeHealthScore(homeId) {
     && (row.due_date === null || day(row.due_date)) && nullableText(row.provider_name) && nonblank(row.bill_type));
   const checklistRow = row => nonblank(row.id) && ['pending', 'completed', 'skipped', 'hired'].includes(row.status);
   let checklist = readRows(checklistRes, checklistRow);
-  // The dashboard reads the score and the checklist in parallel, and the
-  // checklist read creates the season's items on a Home's first view. Create
-  // them here too (idempotent) so that first score doesn't report "No
-  // seasonal checklist created yet" beside the checklist being shown.
-  if (checklist.length === 0) {
-    try {
-      const { getOrCreateChecklist } = require('./seasonalChecklistService');
-      const created = await getOrCreateChecklist(homeId, seasonKey, currentYear);
-      checklist = (Array.isArray(created) ? created : []).filter(checklistRow);
-    } catch (err) {
-      logger.warn('Health score could not create the seasonal checklist', { homeId, error: err.message });
-    }
-  }
-  // A hired item whose task has closed goes back to pending when the
-  // checklist is read. Apply the same rule here, so the score never counts
-  // that item as handled while the checklist beside it shows it pending.
-  if (checklist.some(row => row.status === 'hired')) {
-    try {
-      const { releaseClosedHires } = require('./seasonalChecklistService');
-      checklist = (await releaseClosedHires(homeId, checklist)).filter(checklistRow);
-    } catch (err) {
-      logger.warn('Health score could not check hired checklist tasks', { homeId, error: err.message });
-    }
-  }
   const contacts = readRows(emergencyRes, row => nonblank(row.id));
   const members = readRows(membersRes, row => nonblank(row.user_id) && (row.user === null
     || (row.user && row.user.id === row.user_id && nullableText(row.user.profile_picture_url))));
@@ -296,7 +268,9 @@ async function computeHealthScore(homeId) {
   // Score each dimension
   const maintenance = scoreMaintenance(issues);
   const bills = scoreBills(outstandingBills);
-  const seasonal = scoreSeasonal(checklist);
+  const seasonal = seasonKey ? scoreSeasonal(checklist)
+    : seasonalCtx.is_relevant_region ? { score: DIMENSIONS.seasonal, issues: [] }
+      : { score: 0, issues: ['Seasonal guidance needs a home location'] };
   const emergency = scoreEmergency(contacts);
   const household = scoreHousehold(members);
   const documents = scoreDocuments(documentCount);

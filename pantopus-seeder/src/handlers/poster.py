@@ -171,6 +171,10 @@ def _process_region(region_cfg: RegionConfig, slot_name: str, supabase, secrets)
             region=region,
             anthropic_api_key=secrets.anthropic_api_key,
             region_display_name=region_cfg.display_name,
+            region_lat=region_cfg.lat,
+            region_lng=region_cfg.lng,
+            region_timezone=region_cfg.timezone,
+            region_state=getattr(region_cfg, "state", None),
         )
 
         if humanize_error or not humanized_text:

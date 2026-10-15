@@ -1,5 +1,5 @@
 /**
- * Tests for Pacific Northwest Seasonal Intelligence Engine.
+ * Tests for regional Seasonal Intelligence Engine.
  *
  * Covers seasonal calendar correctness, overlap handling, home-specific
  * tips, first-action nudges, and edge cases.
@@ -10,7 +10,7 @@ const { getSeasonalContext, SEASONS } = require('../services/ai/seasonalEngine')
 
 /** Create a Date for a specific month/day in 2026. Month is 1-indexed for readability. */
 function dateOf(month, day) {
-  return new Date(2026, month - 1, day);
+  return new Date(Date.UTC(2026, month - 1, day, 18));
 }
 
 // Portland OR — inside the two supported PNW circles.
@@ -44,7 +44,7 @@ describe('SeasonalEngine', () => {
 
     for (const { month, day, label, expected } of cases) {
       it(`${label} (${month}/${day}) returns ${expected.join(', ')}`, () => {
-        const ctx = getSeasonalContext({ date: dateOf(month, day) });
+        const ctx = getSeasonalContext({ date: dateOf(month, day), ...PNW });
         expect(ctx.active_seasons.sort()).toEqual(expected.sort());
       });
     }
@@ -267,14 +267,14 @@ describe('SeasonalEngine', () => {
 // The engine used to know only the PNW: with coordinates outside it every
 // tip was null (Hub, briefing, pulse and health score lost the whole
 // seasonal signal for the rest of the country), and Portland statistics
-// were once served to Phoenix. Now a home resolves to one of twelve
+// were once served to Phoenix. Now a home resolves to one of the shared
 // climate regions and gets copy that never claims a number about
 // somewhere it is not; without any location the copy still fails closed.
 describe('region gating', () => {
   const PHOENIX = { latitude: 33.4484, longitude: -112.0740 };
 
   it('never serves Portland-specific copy to a home outside the PNW', () => {
-    const ctx = getSeasonalContext({ date: dateOf(1, 15), ...PHOENIX });
+    const ctx = getSeasonalContext({ date: dateOf(7, 15), ...PHOENIX });
     expect(ctx.region).toBe('southwest');
     expect(ctx.is_relevant_region).toBe(true);
     expect(ctx.seasonal_tip).toBeTruthy();
@@ -293,14 +293,18 @@ describe('region gating', () => {
     expect(ctx.suggested_gig_categories).toEqual([]);
   });
 
-  it('still resolves the season nationally, so the checklist keeps working', () => {
-    // The month-based calendar is generic; only the tip copy is regional.
-    for (const loc of [PHOENIX, {}, { latitude: 40.7128, longitude: -74.0060 }]) {
+  it('selects only an applicable regional campaign, without a fallback for unknown geography', () => {
+    for (const loc of [PHOENIX, {}]) {
       const ctx = getSeasonalContext({ date: dateOf(1, 15), ...loc });
-      expect(ctx.primary_season).toBe('winter_ice');
-      expect(ctx.active_seasons).toContain('winter_ice');
-      expect(ctx.urgency).toBe('high');
+      expect(ctx.primary_season).toBeNull();
+      expect(ctx.checklist_season).toBeNull();
+      expect(ctx.active_seasons).toEqual([]);
+      expect(ctx.seasonal_tip).toBeNull();
     }
+    const northeast = getSeasonalContext({ date: dateOf(1, 15), latitude: 40.7128, longitude: -74.0060 });
+    expect(northeast.primary_season).toBe('winter_storm_season');
+    expect(northeast.active_seasons).toContain('winter_ice');
+    expect(northeast.urgency).toBe('high');
   });
 
   it('still serves the PNW copy inside the PNW', () => {
@@ -317,7 +321,7 @@ describe('climate regions', () => {
   it('covers every state and DC, and the state code wins over coordinates', () => {
     expect(Object.keys(REGION_BY_STATE)).toHaveLength(51);
     for (const region of Object.values(REGION_BY_STATE)) expect(REGIONS[region]).toBeDefined();
-    expect(resolveClimateRegion({ state: 'fl', ...PNW })).toBe('southeast');
+    expect(resolveClimateRegion({ state: 'fl', ...PNW })).toBe('florida');
     expect(resolveClimateRegion({ latitude: 51.5074, longitude: -0.1278 })).toBeNull(); // London
     expect(resolveClimateRegion({ latitude: 21.3069, longitude: -157.8583 })).toBe('hawaii');
     expect(resolveClimateRegion({ latitude: 61.2181, longitude: -149.9003 })).toBe('alaska');
@@ -332,9 +336,9 @@ describe('climate regions', () => {
     expect(ctx.home_specific_tip).toMatch(/1985/);
     expect(ctx.urgency).toBe('high');
     expect(ctx.suggested_gig_categories).toEqual(OVERLAYS.hurricane_season.gigs.categories);
-    // The base key stays a base key for the checklist and health score.
-    expect(['smoke_season', 'fall_prep', 'summer_dry']).toContain(ctx.primary_season);
-    expect(ctx.primary_season).not.toBe('smoke_season');
+    // Checklist and home-health consumers select the same regional campaign.
+    expect(ctx.primary_season).toBe('hurricane_season');
+    expect(ctx.checklist_season).toBe('hurricane_season');
   });
 
   it('Phoenix in July leads with heat, Minneapolis in January with blizzards, Anchorage with the deep freeze', () => {

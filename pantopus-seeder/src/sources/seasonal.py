@@ -1,179 +1,40 @@
-"""Date-based seasonal tip generator for the PNW region."""
+"""Seasonal tips filtered by publishing geography before any AI rewriting."""
 
 from __future__ import annotations
 
 import hashlib
+import json
+from pathlib import Path
 import random
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 from src.sources.base import ContentSource, RawContentItem
+from src.discovery.timezone import timezone_from_coords
+from src.utils.coordinates import parse_valid_coordinates
 
-PACIFIC = ZoneInfo("America/Los_Angeles")
-
-# ---------------------------------------------------------------------------
-# PNW Seasonal Calendar
-# ---------------------------------------------------------------------------
-# Each season: name, (start_month, start_day), (end_month, end_day), tips list.
-# Date ranges are inclusive. Overlaps are intentional.
-
-SEASONAL_CALENDAR: list[dict] = [
-    {
-        "name": "winter_ice",
-        "start": (12, 1),
-        "end": (2, 29),
-        "tips": [
-            "If you haven't insulated exposed pipes yet, late fall is the time. "
-            "A single hard freeze can burst an unprotected outdoor spigot, and plumber "
-            "availability drops fast once temperatures dip below 30.",
-            "Rock salt works on driveways but it kills grass along the edges. "
-            "Sand or kitty litter gives traction on walkways without the lawn damage.",
-            "Keep a flashlight, batteries, and a phone charger bank somewhere easy to grab. "
-            "Portland-Vancouver ice storms knock out power for days more often than people expect.",
-            "January is a great month for indoor projects — organizing the garage, painting a room, "
-            "or finally fixing that sticky cabinet door. The daylight is short anyway.",
-            "Schedule a furnace tune-up before the coldest stretch hits. Most HVAC companies "
-            "offer lower rates in early December before the holiday rush.",
-        ],
-    },
-    {
-        "name": "spring_cleanup",
-        "start": (3, 1),
-        "end": (4, 30),
-        "tips": [
-            "Clark County, WA and Portland both run yard debris pickup in March and April. "
-            "Check your hauler's schedule so you don't miss the free pickup window.",
-            "Gutters packed with winter debris cause basement leaks during spring rain. "
-            "Flushing them in early March saves a lot of headaches later.",
-            "Moss grows aggressively on PNW roofs over winter. Treating it in spring "
-            "before it sets deep roots makes removal a lot easier and cheaper.",
-            "Pressure washing the driveway and siding in April clears a winter's worth "
-            "of algae and grime before it stains permanently.",
-            "Early spring is the best planting window for PNW natives — Oregon grape, "
-            "sword fern, and red flowering currant all do well when planted before May.",
-        ],
-    },
-    {
-        "name": "summer_dry",
-        "start": (6, 1),
-        "end": (8, 31),
-        "tips": [
-            "Most PNW lawns go dormant in summer heat and come back fine in fall. "
-            "Watering deeply once a week beats light daily sprinkling every time.",
-            "Outdoor painting and staining projects go fastest in July and August "
-            "when you can count on dry weather for proper curing.",
-            "If you're traveling this summer, neighborhood pet-sitting swaps "
-            "are more reliable than apps — ask around before booking a stranger.",
-            "Vegetable gardens here need about an inch of water per week through August. "
-            "A soaker hose on a timer is the easiest way to stay consistent.",
-            "Clear dry brush and dead vegetation at least 30 feet from your home. "
-            "Wildfire risk in the Portland-Vancouver area has climbed noticeably in recent summers.",
-        ],
-    },
-    {
-        "name": "smoke_season",
-        "start": (7, 15),
-        "end": (9, 30),
-        "tips": [
-            "Smoke season typically runs July through September in the Portland-Vancouver area. "
-            "Replacing HVAC filters before it starts makes a real difference indoors.",
-            "On heavy smoke days, the library, community centers, and malls all have filtered air. "
-            "Worth knowing if your home doesn't have good air sealing.",
-            "If anyone in your household has asthma or respiratory issues, stock up on medications "
-            "before smoke season peaks. Pharmacies get busy when air quality drops.",
-            "A box fan with a furnace filter taped to the back is a cheap DIY air purifier "
-            "that actually works. MERV 13 filters are the sweet spot for smoke particles.",
-        ],
-    },
-    {
-        "name": "fall_prep",
-        "start": (9, 1),
-        "end": (11, 30),
-        "tips": [
-            "Late October is when most Clark County, WA homeowners schedule gutter cleaning. "
-            "Booking early usually means better rates and more availability.",
-            "Big-leaf maples drop an enormous volume of leaves in the Portland-Vancouver area. "
-            "Mulching them into the lawn with a mower is faster than raking and feeds the soil.",
-            "Weatherstripping doors and windows before November pays for itself in a single "
-            "heating season. The foam tape from any hardware store takes about ten minutes per door.",
-            "If your furnace hasn't run since spring, turn it on before you actually need it. "
-            "Finding out it needs repair on the first cold night is not ideal.",
-            "Roof inspections are easiest in dry October weather. Missing or cracked shingles "
-            "caught now won't become leaks during November rain.",
-        ],
-    },
-    {
-        "name": "holiday_season",
-        "start": (11, 15),
-        "end": (12, 31),
-        "tips": [
-            "Package theft spikes between Thanksgiving and Christmas. If you won't be home, "
-            "a neighbor willing to grab your boxes is the simplest solution.",
-            "Outdoor holiday lights pull more current than people expect. Using one heavy-duty "
-            "outdoor extension cord per circuit prevents tripped breakers and fire risk.",
-            "Heading out of town for the holidays? A neighbor who can check on your house "
-            "and grab your mail is worth more than any smart-home camera.",
-            "Winterization deadlines sneak up fast — disconnect garden hoses and shut off "
-            "exterior spigot valves before the first hard freeze, usually by mid-December here.",
-        ],
-    },
+# The existing backend climate calendar is the canonical source. Packaging
+# copies this public JSON alongside the seeder; source checkouts read it in place.
+_PACKAGED = Path(__file__).resolve().parents[1] / "config" / "seasonalClimate.json"
+_SOURCE = Path(__file__).resolve().parents[3] / "backend" / "services" / "ai" / "seasonalClimate.json"
+CLIMATE = json.loads((_PACKAGED if _PACKAGED.exists() else _SOURCE).read_text())
+SEASONAL_CALENDAR = [
+    {"name": key, "months": value["months"], "tips": CLIMATE["tips"].get(key, [])}
+    for key, value in CLIMATE["seasons"].items()
 ]
 
-# Optional narrower publication windows for tips that mention specific timing.
-# The broad seasonal calendar says when a theme is relevant; these windows keep
-# date-specific copy from being posted after its useful window has passed.
-TIP_ACTIVE_WINDOWS: dict[str, tuple[tuple[int, int], tuple[int, int]]] = {
-    "January is a great month for indoor projects — organizing the garage, painting a room, "
-    "or finally fixing that sticky cabinet door. The daylight is short anyway.": (
-        (1, 1),
-        (1, 31),
-    ),
-    "Schedule a furnace tune-up before the coldest stretch hits. Most HVAC companies "
-    "offer lower rates in early December before the holiday rush.": (
-        (12, 1),
-        (12, 15),
-    ),
-    "Gutters packed with winter debris cause basement leaks during spring rain. "
-    "Flushing them in early March saves a lot of headaches later.": (
-        (3, 1),
-        (3, 15),
-    ),
-    "Pressure washing the driveway and siding in April clears a winter's worth "
-    "of algae and grime before it stains permanently.": (
-        (4, 1),
-        (4, 30),
-    ),
-    "Early spring is the best planting window for PNW natives — Oregon grape, "
-    "sword fern, and red flowering currant all do well when planted before May.": (
-        (3, 1),
-        (4, 30),
-    ),
-    "Smoke season typically runs July through September in the Portland-Vancouver area. "
-    "Replacing HVAC filters before it starts makes a real difference indoors.": (
-        (6, 1),
-        (7, 14),
-    ),
-    "Late October is when most Clark County, WA homeowners schedule gutter cleaning. "
-    "Booking early usually means better rates and more availability.": (
-        (9, 1),
-        (10, 31),
-    ),
-    "Weatherstripping doors and windows before November pays for itself in a single "
-    "heating season. The foam tape from any hardware store takes about ten minutes per door.": (
-        (9, 1),
-        (10, 31),
-    ),
-    "Roof inspections are easiest in dry October weather. Missing or cracked shingles "
-    "caught now won't become leaks during November rain.": (
-        (10, 1),
-        (10, 31),
-    ),
-    "Winterization deadlines sneak up fast — disconnect garden hoses and shut off "
-    "exterior spigot valves before the first hard freeze, usually by mid-December here.": (
-        (11, 15),
-        (12, 15),
-    ),
-}
+
+def climate_region(config: dict) -> str | None:
+    state = str(config.get("state") or "").strip().upper()
+    if state in CLIMATE["states"]:
+        return CLIMATE["states"][state]
+    coords = parse_valid_coordinates(config.get("region_lat"), config.get("region_lng"))
+    if coords is None:
+        return None
+    lat, lng = coords
+    return next((area["region"] for area in CLIMATE["coordinate_regions"]
+                 if area["lat"][0] <= lat <= area["lat"][1]
+                 and area["lng"][0] <= lng <= area["lng"][1]), None)
 
 
 def _tip_hash(tip: str) -> str:
@@ -193,35 +54,45 @@ def _date_in_range(month: int, day: int, start: tuple[int, int], end: tuple[int,
     return (s_month, s_day) <= (month, day) <= (e_month, e_day)
 
 
-def get_active_seasons(month: int, day: int) -> list[dict]:
-    """Return all seasons active on the given month/day."""
-    return [
-        season for season in SEASONAL_CALENDAR
-        if _date_in_range(month, day, season["start"], season["end"])
-    ]
+def get_active_seasons(month: int, day: int, region: str | None = None, coordinates: tuple[float, float] | None = None) -> list[dict]:
+    """Use the shared climate month windows, never an unrelated fallback."""
+    config = CLIMATE["regions"].get(region)
+    if config is None:
+        return []
+    active = [season for season in SEASONAL_CALENDAR
+              if month - 1 in season["months"] and season["name"] not in config["exclude"]]
+    for key, months in config["overlays"].items():
+        if month - 1 in months:
+            areas = CLIMATE.get("overlay_regions", {}).get(key)
+            if areas and (coordinates is None or not any(
+                area["lat"][0] <= coordinates[0] <= area["lat"][1]
+                and area["lng"][0] <= coordinates[1] <= area["lng"][1] for area in areas)):
+                continue
+            tips = CLIMATE.get("regional_tips", {}).get(region, {}).get(key, CLIMATE["overlays"][key]["tips"])
+            active.append({"name": key, "tips": tips})
+    return active
 
 
 def is_tip_active(tip: str, month: int, day: int) -> bool:
-    """Return whether a tip is appropriate to publish on the given date."""
-    window = TIP_ACTIVE_WINDOWS.get(tip)
-    if window is None:
-        return True
-
-    start, end = window
-    return _date_in_range(month, day, start, end)
+    # Shared tips contain no narrower date-specific claims. Season windows are
+    # applied before selection; no LLM is responsible for geographic filtering.
+    return True
 
 
 class SeasonalSource(ContentSource):
-    """Generates seasonal tips based on the current date and PNW seasonal calendar."""
+    """Generates seasonal tips based on the publishing region and shared climate calendar."""
 
     def __init__(self, config: dict, recently_used_tip_hashes: list[str] | None = None) -> None:
         super().__init__(config)
+        self._climate = climate_region(config)
+        self._coordinates = parse_valid_coordinates(config.get("region_lat"), config.get("region_lng"))
+        self._timezone = ZoneInfo(timezone_from_coords(config.get("region_lat"), config.get("region_lng"), "UTC"))
         self._recently_used = set(recently_used_tip_hashes or [])
 
     def fetch(self) -> list[RawContentItem]:
         """Generate seasonal tip items for the current date."""
-        now = datetime.now(PACIFIC)
-        active = get_active_seasons(now.month, now.day)
+        now = datetime.now(self._timezone)
+        active = get_active_seasons(now.month, now.day, self._climate, self._coordinates)
 
         if not active:
             self.log.info("No active season for %s-%s", now.month, now.day)

@@ -8,7 +8,7 @@
  * community data.
  *
  * It shipped Pacific-Northwest-only and failed closed everywhere else. It
- * now resolves one of twelve climate regions from the home's state (or,
+ * now resolves a climate region from the home's state (or,
  * failing that, coarse coordinates), runs the month-based base calendar
  * everywhere minus the seasons that do not apply to a region, layers the
  * region's own seasons on top (hurricane, tornado, monsoon, heat,
@@ -22,102 +22,16 @@ const { isInClarkCountyWA, isInOregonMetro } = require('../../utils/geo');
 
 // ── Climate regions ─────────────────────────────────────────────────────
 
-const REGION_BY_STATE = {
-  WA: 'pacific_northwest', OR: 'pacific_northwest', ID: 'pacific_northwest',
-  CA: 'california',
-  AZ: 'southwest', NM: 'southwest', NV: 'southwest', UT: 'southwest',
-  CO: 'mountain', MT: 'mountain', WY: 'mountain',
-  ND: 'northern_plains', SD: 'northern_plains', NE: 'northern_plains', KS: 'northern_plains',
-  MN: 'upper_midwest', WI: 'upper_midwest', MI: 'upper_midwest', IA: 'upper_midwest',
-  IL: 'ohio_valley', IN: 'ohio_valley', OH: 'ohio_valley', KY: 'ohio_valley', WV: 'ohio_valley', MO: 'ohio_valley', TN: 'ohio_valley',
-  NY: 'northeast', NJ: 'northeast', PA: 'northeast', CT: 'northeast', RI: 'northeast', MA: 'northeast', VT: 'northeast',
-  NH: 'northeast', ME: 'northeast', MD: 'northeast', DE: 'northeast', DC: 'northeast',
-  VA: 'southeast', NC: 'southeast', SC: 'southeast', GA: 'southeast', FL: 'southeast', AL: 'southeast',
-  TX: 'south_central', OK: 'south_central', AR: 'south_central', LA: 'south_central', MS: 'south_central',
-  AK: 'alaska',
-  HI: 'hawaii',
-};
-
-/**
- * Region config: which BASE seasons do not apply, and which regional
- * seasons overlay the base calendar (with their months, 0-indexed).
- */
-const REGIONS = {
-  pacific_northwest: { label: 'Pacific Northwest', exclude: [], overlays: {} },
-  california: {
-    label: 'California',
-    exclude: ['smoke_season', 'winter_ice'],
-    overlays: { wildfire_season: [5, 6, 7, 8, 9], heat_season: [5, 6, 7, 8], winter_storm_season: [10, 11, 0, 1, 2] },
-  },
-  southwest: {
-    label: 'Southwest',
-    exclude: ['smoke_season'],
-    overlays: { heat_season: [4, 5, 6, 7, 8], monsoon_season: [5, 6, 7, 8], wildfire_season: [4, 5] },
-  },
-  mountain: {
-    label: 'Mountain West',
-    exclude: ['smoke_season'],
-    overlays: { wildfire_season: [5, 6, 7, 8], blizzard_season: [10, 11, 0, 1, 2] },
-  },
-  northern_plains: {
-    label: 'Northern Plains',
-    exclude: ['smoke_season'],
-    overlays: { tornado_season: [3, 4, 5, 6], blizzard_season: [10, 11, 0, 1, 2] },
-  },
-  upper_midwest: {
-    label: 'Upper Midwest',
-    exclude: ['smoke_season'],
-    overlays: { tornado_season: [3, 4, 5, 6], blizzard_season: [10, 11, 0, 1, 2] },
-  },
-  ohio_valley: {
-    label: 'Ohio Valley',
-    exclude: ['smoke_season'],
-    overlays: { tornado_season: [2, 3, 4, 5], heat_season: [5, 6, 7] },
-  },
-  northeast: {
-    label: 'Northeast',
-    exclude: ['smoke_season'],
-    overlays: { hurricane_season: [7, 8, 9], winter_storm_season: [10, 11, 0, 1, 2] },
-  },
-  southeast: {
-    label: 'Southeast',
-    exclude: ['smoke_season'],
-    overlays: { hurricane_season: [5, 6, 7, 8, 9, 10], heat_season: [5, 6, 7, 8], pollen_season: [2, 3, 4], tornado_season: [2, 3, 4] },
-  },
-  south_central: {
-    label: 'South Central',
-    exclude: ['smoke_season'],
-    overlays: { tornado_season: [2, 3, 4, 5], hurricane_season: [5, 6, 7, 8, 9, 10], heat_season: [5, 6, 7, 8], pollen_season: [2, 3] },
-  },
-  alaska: {
-    label: 'Alaska',
-    exclude: ['smoke_season', 'summer_dry'],
-    overlays: { freeze_season: [9, 10, 11, 0, 1, 2, 3], wildfire_season: [5, 6, 7] },
-  },
-  hawaii: {
-    label: 'Hawaii',
-    exclude: ['winter_ice', 'smoke_season'],
-    overlays: { hurricane_season: [5, 6, 7, 8, 9, 10] },
-  },
-};
+const { states: REGION_BY_STATE, regions: REGIONS, seasons: SEASONS, coordinate_regions: COORDINATE_REGIONS, regional_tips: REGIONAL_TIPS, overlay_regions: OVERLAY_REGIONS } = require('./seasonalClimate.json');
+const { resolveHomeTimezone } = require('../../utils/timezone');
 
 /**
  * Coarse coordinate fallback for callers that have no state code. Bands
  * are deliberately rough — a home row always carries `state`, which wins.
  */
 function regionFromCoords(lat, lng) {
-  if (lat >= 18 && lat <= 23 && lng >= -161 && lng <= -154) return 'hawaii';
-  if (lat > 51 && (lng < -129 || lng > 170)) return 'alaska';
-  if (lat < 24 || lat > 50 || lng < -125 || lng > -66) return null; // not the contiguous US
-  if (lng < -114) return lat >= 42 ? 'pacific_northwest' : 'california';
-  if (lng < -102) return lat >= 37 ? 'mountain' : 'southwest';
-  if (lng < -94) return lat >= 37 ? 'northern_plains' : 'south_central';
-  if (lng < -84) {
-    if (lat >= 41.5) return 'upper_midwest';
-    if (lat >= 36.5) return 'ohio_valley';
-    return lng < -88 ? 'south_central' : 'southeast';
-  }
-  return lat >= 39.5 ? 'northeast' : 'southeast';
+  return COORDINATE_REGIONS.find(area => lat >= area.lat[0] && lat <= area.lat[1]
+    && lng >= area.lng[0] && lng <= area.lng[1])?.region || null;
 }
 
 /**
@@ -129,6 +43,7 @@ function regionFromCoords(lat, lng) {
 function resolveClimateRegion(options = {}) {
   const state = typeof options.state === 'string' ? options.state.trim().toUpperCase() : '';
   if (state && REGION_BY_STATE[state]) return REGION_BY_STATE[state];
+  if (options.latitude == null || options.longitude == null || options.latitude === '' || options.longitude === '') return null;
   const latitude = Number(options.latitude);
   const longitude = Number(options.longitude);
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
@@ -143,46 +58,10 @@ function isSupportedSeasonalRegion(options = {}) {
 // ── Seasonal Calendar ──────────────────────────────────────────────────────
 
 /**
- * PNW seasonal calendar. Months are 0-indexed (0 = January).
+ * Shared seasonal calendar. Months are 0-indexed (0 = January).
  * Seasons can overlap — the engine returns ALL active seasons.
  */
-const SEASONS = {
-  winter_ice: {
-    months: [11, 0, 1],             // Dec, Jan, Feb
-    label: 'Winter Ice Season',
-    urgency: 'high',
-  },
-  spring_cleanup: {
-    months: [2, 3],                 // Mar, Apr
-    label: 'Spring Cleanup',
-    urgency: 'moderate',
-  },
-  early_summer: {
-    months: [4, 5],                 // May, Jun
-    label: 'Early Summer',
-    urgency: 'low',
-  },
-  summer_dry: {
-    months: [6, 7],                 // Jul, Aug
-    label: 'Summer & Smoke Season',
-    urgency: 'moderate',
-  },
-  smoke_season: {
-    months: [6, 7, 8],             // Jul, Aug, Sep
-    label: 'Smoke Season',
-    urgency: 'high',
-  },
-  fall_prep: {
-    months: [8, 9, 10],            // Sep, Oct, Nov
-    label: 'Fall Prep & Gutter Season',
-    urgency: 'moderate',
-  },
-  holiday_season: {
-    months: [10, 11],              // Nov, Dec
-    label: 'Holiday Season',
-    urgency: 'low',
-  },
-};
+
 
 // ── Seasonal Tips ──────────────────────────────────────────────────────────
 
@@ -365,7 +244,7 @@ const OVERLAYS = {
         homeTip: null,
       },
     ],
-    gigs: { categories: ['Handyman', 'Cleaning'], nudge: 'Post a task to clear gutters and secure loose outdoor items before the September peak.' },
+    gigs: { categories: ['Handyman', 'Cleaning'], nudge: 'Post a task to clear gutters and secure loose outdoor items before a storm.' },
   },
   tornado_season: {
     label: 'Tornado Season',
@@ -606,11 +485,13 @@ function findBestTip(seasonKey, ctx, table = SEASONAL_TIPS) {
  */
 function getSeasonalContext(options = {}) {
   const date = options.date || new Date();
-  const month = date.getMonth(); // 0-indexed
+  const localParts = new Intl.DateTimeFormat('en-US', { timeZone: resolveHomeTimezone(options), year: 'numeric', month: 'numeric' }).formatToParts(date);
+  const month = Number(localParts.find(part => part.type === 'month').value) - 1;
+  const year = Number(localParts.find(part => part.type === 'year').value);
 
   // Region-specific COPY requires knowing the region. Without a state or
   // coordinates we do not know it and must not claim it, so the tips fail
-  // closed; the month-based season calendar still runs everywhere.
+  // closed; unknown geography also has no selected campaign.
   const region = resolveClimateRegion(options);
   const regionCfg = region ? REGIONS[region] : null;
   const inRegion = regionCfg != null;
@@ -624,26 +505,35 @@ function getSeasonalContext(options = {}) {
   const excluded = new Set(regionCfg ? regionCfg.exclude : []);
   const activeSeasons = [];
   for (const [key, season] of Object.entries(SEASONS)) {
-    if (season.months.includes(month) && !excluded.has(key)) {
+    if (inRegion && season.months.includes(month) && !excluded.has(key)) {
       activeSeasons.push(key);
     }
   }
 
   // 2. The region's own seasons on top
   const overlayActive = regionCfg
-    ? Object.entries(regionCfg.overlays).filter(([, months]) => months.includes(month)).map(([key]) => key)
+    ? Object.entries(regionCfg.overlays).filter(([key, months]) => {
+      if (!months.includes(month)) return false;
+      const areas = OVERLAY_REGIONS[key];
+      if (!areas) return true;
+      if (options.latitude == null || options.longitude == null) return ['HI', 'FL', 'LA', 'MS', 'SC', 'NC'].includes(String(options.state || '').trim().toUpperCase());
+      return areas.some(area => options.latitude >= area.lat[0] && options.latitude <= area.lat[1]
+        && options.longitude >= area.lng[0] && options.longitude <= area.lng[1]);
+    }).map(([key]) => key)
     : [];
   const regionalSeason = overlayActive.slice().sort((a, b) => OVERLAYS[a].priority - OVERLAYS[b].priority)[0] || null;
 
-  // 3. Primary base season by priority — always a base key, so every
-  //    consumer of `primary_season` (checklist, health score) keeps working
-  const primarySeason = SEASON_PRIORITY.find((k) => activeSeasons.includes(k)) || activeSeasons[0] || 'early_summer';
+  // 3. Choose an active base campaign for copy; a regional campaign takes
+  //    precedence in the returned context. No active campaign means null.
+  const primarySeason = SEASON_PRIORITY.find((k) => activeSeasons.includes(k)) || activeSeasons[0] || null;
 
   // 4. Copy: the PNW keeps its own, unless the tip names a place the home
   //    is not in (or, with a state and no coordinates, may not be in);
   //    everywhere else gets the number-free default; an active regional
   //    season outranks the base tip
-  const pnwBase = region === 'pacific_northwest' ? findBestTip(primarySeason, ctx, SEASONAL_TIPS) : null;
+  const usesWetNorthwestCopy = region === 'pacific_northwest'
+    && options.longitude != null && Number(options.longitude) < -120.5;
+  const pnwBase = usesWetNorthwestCopy ? findBestTip(primarySeason, ctx, SEASONAL_TIPS) : null;
   const base = pnwBase && (!pnwBase.where || PILOT_PLACES[pnwBase.where](options.latitude, options.longitude))
     ? pnwBase
     : findBestTip(primarySeason, ctx, DEFAULT_TIPS);
@@ -651,13 +541,16 @@ function getSeasonalContext(options = {}) {
   // No base season genuinely active this month (Hawaii in January) and no
   // regional season either → no copy, rather than a fallback's copy.
   const baseIsActive = activeSeasons.includes(primarySeason);
-  const tip = overlay && overlay.tip ? overlay.tip : (baseIsActive ? base.tip : null);
+  let tip = overlay && overlay.tip ? overlay.tip : (baseIsActive ? base.tip : null);
+  if (region === 'hawaii' && regionalSeason === 'hurricane_season') {
+    tip = REGIONAL_TIPS.hawaii.hurricane_season[0];
+  }
   const homeTip = overlay && overlay.tip ? overlay.homeTip : (baseIsActive ? base.homeTip : null);
 
   // 5. Gig suggestions follow the same choice
   const gigSuggestion = regionalSeason
     ? OVERLAYS[regionalSeason].gigs
-    : (SEASONAL_GIG_SUGGESTIONS[primarySeason] || SEASONAL_GIG_SUGGESTIONS.early_summer);
+    : SEASONAL_GIG_SUGGESTIONS[primarySeason];
 
   // 6. Urgency: the highest across everything active
   const urgencyRank = { high: 3, moderate: 2, low: 1 };
@@ -673,15 +566,18 @@ function getSeasonalContext(options = {}) {
 
   return {
     active_seasons: [...activeSeasons, ...overlayActive],
-    primary_season: primarySeason,
+    primary_season: regionalSeason || primarySeason,
+    checklist_season: regionalSeason || primarySeason,
+    year,
+    month: month + 1,
     regional_season: regionalSeason,
     region,
     region_label: regionCfg ? regionCfg.label : null,
     seasonal_tip: inRegion ? tip : null,
-    suggested_gig_categories: inRegion && tip ? gigSuggestion.categories : [],
+    suggested_gig_categories: inRegion && tip && gigSuggestion ? gigSuggestion.categories : [],
     home_specific_tip: inRegion ? homeTip : null,
     urgency: maxUrgency,
-    first_action_nudge: inRegion && tip ? gigSuggestion.nudge : null,
+    first_action_nudge: inRegion && tip && gigSuggestion ? gigSuggestion.nudge : null,
     is_relevant_region: inRegion,
   };
 }
