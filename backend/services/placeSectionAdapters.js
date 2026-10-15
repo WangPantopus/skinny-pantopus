@@ -1131,6 +1131,8 @@ module.exports = {
   // The anonymous preview leads with a dollar figure and needs the raw
   // HUD row for a county it has geocoded, without a Home row.
   hudFmrRow,
+  // The address calendar's county rules (Home has no county column).
+  homeCountyFips,
   // Exported for testing.
   parseCsv,
   districtEq,

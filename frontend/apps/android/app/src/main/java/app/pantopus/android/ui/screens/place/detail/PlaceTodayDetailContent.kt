@@ -470,6 +470,15 @@ private fun AddressCalendarCard(
         }
         errorText?.let { Text(it, fontSize = 12.5.sp, color = PantopusColors.error) }
         UpcomingEvents(data, canSetPickupDay = viewModel != null)
+        data.taxNote?.let {
+            Text(
+                it,
+                fontSize = 12.5.sp,
+                lineHeight = 17.sp,
+                color = PantopusColors.appTextMuted,
+                modifier = Modifier.testTag("addressCalendar.taxNote"),
+            )
+        }
     }
     if (viewModel != null) PickupReminderPrimer(viewModel)
 }

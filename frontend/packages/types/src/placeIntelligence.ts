@@ -304,6 +304,11 @@ export interface PlaceAddressCalendarData {
    * saving, so a change made meanwhile is not undone. Omitted by older servers.
    */
   pickup_version?: string;
+  /**
+   * Where property-tax dates are set when the home has no tax rule and its
+   * state sets none (towns, counties, school districts). Omitted by older servers.
+   */
+  tax_note?: string | null;
 }
 
 // ── Risk & readiness ─────────────────────────────────────────

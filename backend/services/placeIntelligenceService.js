@@ -638,11 +638,14 @@ async function composeAddressCalendar(home) {
   try {
     const data = await addressCalendarService.composeForHome(home);
     if (!data.rule_count) {
+      // Where towns or counties set the tax dates, say where to look.
+      const taxNote = addressCalendarService.taxDateGuidance(home.state);
+      const base = home.id
+        ? `No calendar for ${home.city} yet. Set your pickup day and it starts here.`
+        : `No public calendar for ${home.city} yet.`;
       return [serializePlaceSection('address_calendar', {
         status: 'unavailable',
-        unavailableReason: home.id
-          ? `No calendar for ${home.city} yet. Set your pickup day and it starts here.`
-          : `No public calendar for ${home.city} yet.`,
+        unavailableReason: taxNote ? `${base} ${taxNote}` : base,
       })];
     }
     return [serializePlaceSection('address_calendar', { asOf: new Date().toISOString(), data })];

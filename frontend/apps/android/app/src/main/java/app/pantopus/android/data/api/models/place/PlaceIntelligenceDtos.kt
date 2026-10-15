@@ -1124,6 +1124,8 @@ data class PlaceAddressCalendarData(
      * meanwhile on another device is not undone. Omitted by older servers.
      */
     @Json(name = "pickup_version") val pickupVersion: String? = null,
+    /** Where property-tax dates are set when the home has no tax rule and its state sets none. */
+    @Json(name = "tax_note") val taxNote: String? = null,
 ) {
     val pickupSetupMessage: String?
         get() =

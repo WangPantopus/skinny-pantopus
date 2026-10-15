@@ -1250,6 +1250,9 @@ public struct PlaceAddressCalendarData: Decodable, Sendable, Hashable {
     /// `expected_version`, so a change saved meanwhile on another device is
     /// not undone. Omitted by older servers.
     public var pickupVersion: String?
+    /// Where property-tax dates are set when the home has no tax rule and
+    /// its state sets none. Omitted by older servers.
+    public var taxNote: String?
 
     public var pickupSetupMessage: String? {
         let kinds = ["garbage", "recycling", "yard_waste", "bulk_pickup"]
@@ -1265,6 +1268,7 @@ public struct PlaceAddressCalendarData: Decodable, Sendable, Hashable {
         case ruleCount = "rule_count"
         case pickupSchedule = "pickup_schedule"
         case pickupVersion = "pickup_version"
+        case taxNote = "tax_note"
     }
 }
 
