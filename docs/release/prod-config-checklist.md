@@ -809,6 +809,10 @@ app-link files, robots.txt).
 
 ### iOS (TestFlight, then App Store)
 
+- [x] Already registered (found October 13; see the verification section at the
+  top): the App Group `group.app.pantopus.ios`, both App IDs with the
+  capabilities below and the App Store Connect record **Pantopus Home**. Don't
+  create them again; the rest of the next step is still open.
 - [ ] Founder: in Certificates, Identifiers & Profiles register the App Group
   `group.app.pantopus.ios` and two App IDs: `app.pantopus.ios` with **Sign in
   with Apple**, **Push Notifications**, **Associated Domains** (app links and
