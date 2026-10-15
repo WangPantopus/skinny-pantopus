@@ -13,10 +13,11 @@ import SwiftUI
 
 struct TodaySunArcCard: View {
     let data: PlaceSunriseSunsetData
+    var calendar: Calendar = .autoupdatingCurrent
 
     var body: some View {
         TimelineView(.everyMinute) { minute in
-            TodaySunArcContent(data: data, moment: SkyMoment.at(minute.date, sunrise: data.sunrise, sunset: data.sunset))
+            TodaySunArcContent(data: data, moment: SkyMoment.at(minute.date, sunrise: data.sunrise, sunset: data.sunset, calendar: calendar))
         }
         .accessibilityIdentifier("todaySunArc")
     }

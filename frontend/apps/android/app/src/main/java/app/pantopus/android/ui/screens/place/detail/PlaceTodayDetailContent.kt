@@ -1195,6 +1195,9 @@ private fun skyAir(intel: PlaceIntelligence): SkyAir? =
         SkyAir(it.index, it.categoryLabel, smoky = it.dominantPollutant == "pm25")
     }
 
+private fun placeSkyZone(intel: PlaceIntelligence): ZoneId =
+    runCatching { ZoneId.of(intel.timeZone.orEmpty()) }.getOrDefault(ZoneId.systemDefault())
+
 @Composable
 private fun TodayWeatherSection(
     intel: PlaceIntelligence,
@@ -1212,7 +1215,7 @@ private fun TodayWeatherSection(
                         intel.section(PlaceSectionId.SUNRISE_SUNSET)?.sunriseSunset,
                         skyAir(intel),
                         intel.place.city,
-                        ZonedDateTime.now(),
+                        ZonedDateTime.now(placeSkyZone(intel)),
                     ),
                 )
             }
@@ -1226,6 +1229,7 @@ private fun TodayWeatherSection(
                 air,
                 home = intel.section(PlaceSectionId.YOUR_HOME)?.yourHome.let { SkyHome.of(it?.house, it?.homeType) },
                 streetLights = SkyStreet.lights(intel.section(PlaceSectionId.BLOCK_DENSITY)?.blockDensity?.bucket?.name?.lowercase()),
+                timeZone = placeSkyZone(intel),
                 onBins = onBins,
             )
             PlaceSourceNote(env.source.orEmpty().ifBlank { "Source unavailable" }, PlacePresentation.fmtTime(env.asOf))
@@ -1294,7 +1298,7 @@ private fun TodayAirAlertsSunSections(
         PlaceDetailSectionLabel("Sun")
         val data = env.sunriseSunset
         if (data != null) {
-            TodaySunArcCard(data)
+            TodaySunArcCard(data, timeZone = placeSkyZone(intel))
             PlaceSourceNote("Your location", PlacePresentation.fmtSunDay(data.sunrise))
         } else {
             PlaceDetailFallbackCard(env)

@@ -72,6 +72,7 @@ import app.pantopus.android.data.api.models.place.PlaceWeatherData
 import app.pantopus.android.ui.theme.SkyPalette
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import java.time.ZoneId
 import java.time.ZonedDateTime
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -100,6 +101,7 @@ fun TodaySkyHero(
     /** The resident's kind of home, and the far hill's lights after dusk. */
     home: SkyHome = SkyHome.HOUSE,
     streetLights: Int = 0,
+    timeZone: ZoneId = ZoneId.systemDefault(),
     /** Tapping the bins shows the pickup schedule. */
     onBins: (() -> Unit)? = null,
 ) {
@@ -109,7 +111,7 @@ fun TodaySkyHero(
     var onScreen by remember { mutableStateOf(true) }
     val animating = !reduced && lifecycle.isAtLeast(Lifecycle.State.RESUMED) && onScreen
     val time = rememberSkyTime(animating)
-    val now = rememberMinuteClock()
+    val now = rememberMinuteClock(timeZone)
     val hours = remember(data.hourly, now) { SkyScrub.hours(data.hourly, now) }
     val scrub = rememberSkyScrub(reduced)
     // When the card appeared or got new data: the sun or moon rises into place.
