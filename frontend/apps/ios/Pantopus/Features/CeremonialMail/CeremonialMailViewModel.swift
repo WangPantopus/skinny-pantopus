@@ -190,7 +190,7 @@ public final class CeremonialMailViewModel: WizardModel {
             primaryCTALabel: primaryCtaLabel,
             primaryCTAEnabled: primaryCtaEnabled,
             secondaryCTA: step == .success
-                ? WizardSecondaryCTA(label: "Back to Hub", identifier: "ceremonialBackToHub")
+                ? WizardSecondaryCTA(label: "Close", identifier: "ceremonialBackToHub")
                 : nil,
             isSubmitting: isSubmitting,
             dirty: stepDirty,

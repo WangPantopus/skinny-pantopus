@@ -628,6 +628,11 @@ final class DeepLinkRouter {
             return .unknown(url)
         case "today":
             return segments.count == 1 ? .todayTab : .unknown(url)
+        case "hub":
+            // The Hub left the apps. Its web addresses open what replaced it:
+            // `/app/hub` the Place tab, `/app/hub/today` the Today tab.
+            if segments.count == 1 { return .home }
+            return segments.count == 2 && segments[1] == "today" ? .todayTab : .unknown(url)
         case "hub-today", "hub_today":
             // `?deliveryId=` + `?kind=` ride the Morning/Evening Briefing push.
             return .hubToday(

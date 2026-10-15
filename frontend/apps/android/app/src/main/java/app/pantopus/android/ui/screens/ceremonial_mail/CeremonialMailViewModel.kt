@@ -229,7 +229,7 @@ class CeremonialMailViewModel
                     primaryCtaEnabled = primaryEnabledFor(current),
                     secondaryCta =
                         if (current.step == CeremonialMailStep.Success) {
-                            WizardSecondaryCta(label = "Back to Hub", testTag = "ceremonialBackToHub")
+                            WizardSecondaryCta(label = "Close", testTag = "ceremonialBackToHub")
                         } else {
                             null
                         },

@@ -750,6 +750,14 @@ object DeepLinkRouter {
             "nearby" -> if (segments.size == 1) Destination.Nearby else Destination.Unknown(raw)
             "notifications" -> Destination.Notifications
             "today" -> if (segments.size == 1) Destination.TodayTab else Destination.Unknown(raw)
+            // The Hub left the apps. Its web addresses open what replaced it: `/app/hub` the Place
+            // tab, `/app/hub/today` the Today tab.
+            "hub" ->
+                when {
+                    segments.size == 1 -> Destination.Home
+                    segments.size == 2 && segments[1] == "today" -> Destination.TodayTab
+                    else -> Destination.Unknown(raw)
+                }
             "hub-today", "hub_today" ->
                 // `?deliveryId=` + `?kind=` ride the Morning/Evening Briefing push.
                 Destination.HubToday(
