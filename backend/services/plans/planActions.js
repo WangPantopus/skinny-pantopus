@@ -490,7 +490,13 @@ async function editPlan(user, postId, patch, { io = null } = {}) {
     const accepted = requests.filter((r) => r.status === 'accepted');
     if (accepted.length > 0) {
       const { error } = await supabaseAdmin.from('PlanRequest')
-        .update({ reconfirm_requested_at: stamp, reconfirmed: null, updated_at: stamp, ...(remindAgain ? { reminded_at: null } : {}) })
+        .update({
+          reconfirm_requested_at: stamp,
+          reconfirmed: null,
+          reconfirm_reason: timeMoved && placeChanged ? 'both' : timeMoved ? 'time' : 'place',
+          updated_at: stamp,
+          ...(remindAgain ? { reminded_at: null } : {}),
+        })
         .eq('post_id', postId).eq('status', 'accepted');
       if (error) throw new Error(`Failed to ask "Still coming?": ${error.message}`);
       const hostFirst = firstOf((await userNames([viewer.id])).get(viewer.id));
@@ -736,6 +742,7 @@ async function askToJoin(user, postId, body, { io = null } = {}) {
     queued_at: stamp,
     reconfirm_requested_at: null,
     reconfirmed: null,
+    reconfirm_reason: null,
     on_my_way_at: null,
     updated_at: stamp,
   };
