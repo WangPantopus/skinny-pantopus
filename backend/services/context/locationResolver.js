@@ -11,6 +11,8 @@
 const supabaseAdmin = require('../../config/supabaseAdmin');
 const logger = require('../../utils/logger');
 const ngeohash = require('ngeohash');
+const { timezoneFromCoordinates: inferTimezone, validTimezone } = require('../../utils/timezone');
+const parseHomeLocation = require('../../utils/parsePostGISPoint');
 
 const GEOHASH_PRECISION = 5;
 const HOME_LOCATION_SELECT = 'id, name, address, city, state, map_center_lat, map_center_lng, location';
@@ -32,44 +34,11 @@ const EMPTY_RESULT = {
   longitude: null,
   label: 'Unknown',
   source: 'none',
-  timezone: 'America/Los_Angeles',
+  timezone: 'UTC',
   geohash: null,
   confidence: 0.0,
   homeId: null,
 };
-
-function inBounds(lat, lng, bounds) {
-  return lat >= bounds.minLat
-    && lat <= bounds.maxLat
-    && lng >= bounds.minLng
-    && lng <= bounds.maxLng;
-}
-
-function inferTimezone(lat, lng, fallback = 'America/Los_Angeles') {
-  if (typeof lat !== 'number' || typeof lng !== 'number' || !isFinite(lat) || !isFinite(lng)) {
-    return fallback;
-  }
-
-  // Hawaii
-  if (lat < 23 && lng < -154) return 'Pacific/Honolulu';
-  // Alaska
-  if (lat > 51 || lng < -130) return 'America/Anchorage';
-  // Arizona does not observe DST, except the Navajo Nation in the northeast corner.
-  if (inBounds(lat, lng, { minLat: 31.0, maxLat: 37.1, minLng: -114.9, maxLng: -109.0 })) {
-    if (inBounds(lat, lng, { minLat: 35.8, maxLat: 37.1, minLng: -110.9, maxLng: -109.0 })) {
-      return 'America/Denver';
-    }
-    return 'America/Phoenix';
-  }
-  // Pacific
-  if (lng < -114.5) return 'America/Los_Angeles';
-  // Mountain
-  if (lng < -102) return 'America/Denver';
-  // Central
-  if (lng < -87) return 'America/Chicago';
-  // Eastern
-  return 'America/New_York';
-}
 
 /**
  * Compute geohash5 from coordinates, or null if invalid.
@@ -86,7 +55,7 @@ function computeGeohash(lat, lng) {
 /**
  * Build the standard result shape.
  */
-function makeResult(lat, lng, label, source, homeId = null, fallbackTimezone = 'America/Los_Angeles') {
+function makeResult(lat, lng, label, source, homeId = null, fallbackTimezone = 'UTC') {
   return {
     latitude: lat,
     longitude: lng,
@@ -109,29 +78,6 @@ function makeViewingLocationResult(vl, fallbackTimezone, preferredSource = null)
   const source = preferredSource || (vl.is_pinned ? 'viewing_pinned' : 'viewing_recent');
   const label = vl.label || 'Viewing location';
   return makeResult(lat, lng, label, source, null, fallbackTimezone);
-}
-
-/**
- * Parse PostGIS location (GeoJSON, WKT POINT, or binary) into {latitude, longitude}.
- */
-function parseHomeLocation(loc) {
-  if (!loc) return null;
-  // GeoJSON: { type: "Point", coordinates: [lng, lat] }
-  if (typeof loc === 'object' && loc.coordinates) {
-    const lng = loc.coordinates[0];
-    const lat = loc.coordinates[1];
-    if (Number.isFinite(lng) && Number.isFinite(lat)) return { latitude: lat, longitude: lng };
-  }
-  // WKT: POINT(lng lat)
-  if (typeof loc === 'string') {
-    const m = loc.match(/POINT\(([^ ]+) ([^ ]+)\)/);
-    if (m) {
-      const lng = parseFloat(m[1]);
-      const lat = parseFloat(m[2]);
-      if (Number.isFinite(lng) && Number.isFinite(lat)) return { latitude: lat, longitude: lng };
-    }
-  }
-  return null;
 }
 
 function makePrimaryHomeResult(occupancies, fallbackTimezone) {
@@ -274,7 +220,7 @@ async function resolveLocation(userId) {
       logger.warn('locationResolver: prefs query error', { userId, error: prefsErr.message });
     }
 
-    const fallbackTimezone = prefs?.daily_briefing_timezone || 'America/Los_Angeles';
+    const fallbackTimezone = validTimezone(prefs?.daily_briefing_timezone) || 'UTC';
     const locationMode = prefs?.location_mode || 'primary_home';
 
     if (locationMode === 'custom' && prefs?.custom_latitude != null && prefs.custom_longitude != null) {
@@ -387,7 +333,7 @@ async function resolveLocation(userId) {
 
     // ── Step 7: No location available ──
     logger.debug('locationResolver: no location found', { userId });
-    return { ...EMPTY_RESULT };
+    return { ...EMPTY_RESULT, timezone: fallbackTimezone };
   } catch (err) {
     logger.error('locationResolver: unexpected error', { userId, error: err.message });
     return { ...EMPTY_RESULT };

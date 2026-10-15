@@ -10,6 +10,7 @@ import logging
 from dataclasses import dataclass
 
 from src.utils.coordinates import parse_valid_coordinates
+from src.discovery.timezone import timezone_from_coords
 
 log = logging.getLogger("seeder.config.region_registry")
 
@@ -66,7 +67,7 @@ def load_active_regions(supabase_client) -> list[RegionConfig]:
                     lat=lat,
                     lng=lng,
                     radius_meters=int(row.get("radius_meters", 25000)),
-                    timezone=row.get("timezone", "America/Los_Angeles"),
+                    timezone=timezone_from_coords(lat, lng, row.get("timezone") or "UTC"),
                     display_name=row.get("display_name", row["region"]),
                     curator_user_id=row["curator_user_id"],
                 ))

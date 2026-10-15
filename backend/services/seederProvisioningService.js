@@ -40,31 +40,8 @@ function haversineM(lat1, lng1, lat2, lng2) {
   return 2 * EARTH_RADIUS_M * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-/**
- * Derive a US timezone from longitude. Covers CONUS + Alaska + Hawaii.
- * Falls back to America/Chicago for ambiguous cases.
- */
-function timezoneFromLng(lat, lng) {
-  // Hawaii
-  if (lat < 23 && lng < -154) return 'Pacific/Honolulu';
-  // Alaska
-  if (lat > 51 || lng < -130) return 'America/Anchorage';
-  // Arizona does not observe DST, except the Navajo Nation in the northeast corner.
-  if (lat >= 31.0 && lat <= 37.1 && lng >= -114.9 && lng <= -109.0) {
-    if (lat >= 35.8 && lng >= -110.9) {
-      return 'America/Denver';
-    }
-    return 'America/Phoenix';
-  }
-  // Pacific (west of ~-114.5)
-  if (lng < -114.5) return 'America/Los_Angeles';
-  // Mountain (-114.5 to -102)
-  if (lng < -102) return 'America/Denver';
-  // Central (-102 to -87)
-  if (lng < -87) return 'America/Chicago';
-  // Eastern
-  return 'America/New_York';
-}
+// Keep the existing export for callers; the implementation uses timezone polygons.
+const { timezoneFromCoordinates: timezoneFromLng } = require('../utils/timezone');
 
 /**
  * Create a URL-safe region slug from city + state.
