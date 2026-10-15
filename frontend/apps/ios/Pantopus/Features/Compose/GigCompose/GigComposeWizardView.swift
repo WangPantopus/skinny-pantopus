@@ -1341,7 +1341,7 @@ private struct BudgetStep: View {
                 )
             }
         }
-        if let benchmark = viewModel.priceBenchmark {
+        if viewModel.form.budgetType == .fixed, let benchmark = viewModel.priceBenchmark {
             PriceBenchmarkHint(
                 benchmark: benchmark,
                 categoryLabel: viewModel.form.category?.label.lowercased() ?? "similar"

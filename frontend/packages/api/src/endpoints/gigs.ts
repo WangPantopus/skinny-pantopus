@@ -1277,10 +1277,12 @@ export async function getGigPriceBenchmark(
   category: string,
   lat?: number,
   lng?: number,
+  radiusMiles?: number,
 ): Promise<{ benchmark: PriceBenchmark | null }> {
   const params: Record<string, unknown> = { category };
   if (lat != null) params.lat = lat;
   if (lng != null) params.lng = lng;
+  if (radiusMiles != null) params.radiusMiles = radiusMiles;
   return get<{ benchmark: PriceBenchmark | null }>('/api/gigs/price-benchmark', params);
 }
 

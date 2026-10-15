@@ -17,6 +17,9 @@ import retrofit2.http.PUT
  * (`backend/app.js:387`).
  */
 interface ViewingLocationApi {
+    @GET("api/location/resolve")
+    suspend fun resolve(): SetViewingLocationResponse
+
     /**
      * `GET /api/location` — current viewing location plus the pickers'
      * source lists (recents, homes, business locations).

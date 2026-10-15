@@ -10,7 +10,6 @@ import type { Bounds } from '@/components/map';
 import { getCategoryColor } from './MapRail';
 
 // ─── Constants ─────────────────────────────────────────────────
-const DEFAULT_CENTER: [number, number] = [45.5152, -122.6784]; // Portland
 const DEFAULT_ZOOM = 12;
 
 // ─── Clustering ────────────────────────────────────────────────
@@ -247,9 +246,9 @@ export default function MapRailInner({
   const [preview, setPreview] = useState<GigListItem | null>(null);
   const [clusterPreview, setClusterPreview] = useState<GigListItem[]>([]);
 
-  const center: [number, number] = userLocation
+  const center: [number, number] | null = userLocation
     ? [userLocation.lat, userLocation.lng]
-    : DEFAULT_CENTER;
+    : null;
 
   // Track zoom for clustering
   const handleBoundsChange = useCallback(

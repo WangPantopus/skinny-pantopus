@@ -4,7 +4,7 @@ import { type ReactNode, useEffect, useRef, useState, useCallback } from 'react'
 import { MapContainer, TileLayer, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import '../map/leaflet-setup'; // patch Leaflet icons once
-import { TILE_URL, TILE_ATTRIBUTION, DEFAULT_CENTER, DEFAULT_ZOOM } from './constants';
+import { TILE_URL, TILE_ATTRIBUTION, DEFAULT_ZOOM } from './constants';
 import { useMapBounds, type Bounds } from './useMapBounds';
 import { MapSkeleton } from './MapSkeleton';
 import { CachedTileLayer } from './CachedTileLayer';
@@ -90,7 +90,7 @@ function TilesLoadWatcher({ onLoaded }: { onLoaded: () => void }) {
 // ═══════════════════════════════════════════════════════════════
 
 export interface BaseMapProps {
-  center?: [number, number];
+  center?: [number, number] | null;
   zoom?: number;
   className?: string;
   /** Debounced callback when user pans/zooms */
@@ -107,7 +107,7 @@ export interface BaseMapProps {
 }
 
 export function BaseMap({
-  center = DEFAULT_CENTER,
+  center,
   zoom = DEFAULT_ZOOM,
   className = 'h-full w-full z-0',
   onBoundsChange,
@@ -127,6 +127,10 @@ export function BaseMap({
   useEffect(() => {
     if (isOnline) setServingCachedTiles(false);
   }, [isOnline]);
+
+  if (!center || !center.every(Number.isFinite) || Math.abs(center[0]) > 90 || Math.abs(center[1]) > 180) {
+    return <div className="flex h-full min-h-[200px] items-center justify-center p-6 text-sm text-app-text-secondary" role="status">Choose a location to see the map.</div>;
+  }
 
   return (
     <div className="relative h-full w-full">
