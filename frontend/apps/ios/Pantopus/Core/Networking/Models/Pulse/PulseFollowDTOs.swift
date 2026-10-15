@@ -60,3 +60,30 @@ public struct PulseFollowResponse: Decodable, Sendable, Hashable {
 public struct PulseFollowDeleteResponse: Decodable, Sendable, Hashable {
     public let ok: Bool?
 }
+
+/// `GET /api/pulse/posts/:id/why` (contract §2.9): the reader's own choices,
+/// each a plain sentence. An unknown kind still shows its sentence.
+public struct PulseWhyResponse: Decodable, Sendable, Hashable {
+    public let reasons: [PulseWhyReason]
+
+    private enum CodingKeys: String, CodingKey { case reasons }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        reasons = container.lossyList(PulseWhyReason.self, forKey: .reasons)
+    }
+}
+
+public struct PulseWhyReason: Decodable, Sendable, Hashable {
+    /// `area`, `topic`, `follow` or `time`.
+    public let kind: String?
+    public let text: String
+
+    private enum CodingKeys: String, CodingKey { case kind, text }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        kind = container.lenient(String.self, forKey: .kind)
+        text = try container.decode(String.self, forKey: .text)
+    }
+}

@@ -22,6 +22,7 @@ public struct PulsePostDetailView: View {
     @State private var showsOfferRequests = false
     @State private var showsFollowSettings = false
     @State private var showsReadScopeConfirm = false
+    @State private var showsWhy = false
     @State private var privateMessage: PulsePrivateMessageDestination?
     @Environment(\.scenePhase) private var scenePhase
     private let onBack: @MainActor () -> Void
@@ -64,6 +65,10 @@ public struct PulsePostDetailView: View {
                     Task { await viewModel.toggleSave() }
                 }
                 if viewModel.conversation != nil {
+                    Button("Why am I seeing this?") { showsWhy = true }
+                        .accessibilityIdentifier("pulseConversationWhy")
+                }
+                if viewModel.conversation != nil {
                     if viewModel.canShareConversation {
                         Button("Share post", action: requestShare)
                             .disabled(viewModel.isPreparingShare)
@@ -97,7 +102,10 @@ public struct PulsePostDetailView: View {
                     }
                     Button("Delete post", role: .destructive) { showsDeleteConfirm = true }
                 } else {
-                    Button("Report post", role: .destructive) { showsReportDialog = true }
+                    // Build spec §7's words on a Pulse conversation; the older post page keeps its own.
+                    Button(viewModel.conversation != nil ? "Report a problem" : "Report post", role: .destructive) {
+                        showsReportDialog = true
+                    }
                 }
                 Button("Cancel", role: .cancel) {}
             }
@@ -155,6 +163,9 @@ public struct PulsePostDetailView: View {
             }
             .sheet(item: $privateMessage) { destination in
                 PulsePrivateMessageSheet(destination: destination)
+            }
+            .sheet(isPresented: $showsWhy) {
+                PulseWhySheet(postId: viewModel.postId, view: nil, topic: nil, areaId: nil)
             }
             .sheet(isPresented: $showsReadScopeConfirm) {
                 PulseAudiencePickerView(viewModel: viewModel)
@@ -306,7 +317,9 @@ public struct PulsePostDetailView: View {
             onRefresh: { [viewModel] in await viewModel.refresh() }
         )
     }
+}
 
+extension PulsePostDetailView {
     private var overflowAction: ContentDetailTopBarAction {
         ContentDetailTopBarAction(
             icon: .moreHorizontal,
@@ -320,11 +333,9 @@ public struct PulsePostDetailView: View {
             accessibilityLabel: "Share post"
         ) { Task { @MainActor in requestShare() } }
     }
-}
 
-extension PulsePostDetailView {
     private var canPollReplies: Bool {
-        isVisible && scenePhase == .active && !showsFollowSettings && !showsReadScopeConfirm
+        isVisible && scenePhase == .active && !showsFollowSettings && !showsReadScopeConfirm && !showsWhy
             && !showsOfferRequests && !showsShareSheet && privateMessage == nil
     }
 

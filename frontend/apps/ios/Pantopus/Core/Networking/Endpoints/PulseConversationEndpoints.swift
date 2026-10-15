@@ -81,6 +81,25 @@ public extension PulseEndpoints {
     static func unfollowPost(postId: String) -> Endpoint {
         Endpoint(method: .delete, path: "/api/pulse/follows", query: ["targetType": "post", "targetId": postId])
     }
+
+    /// "See more of this topic": a topic followed in one area, notifications
+    /// off, kept until stopped (contract §2.9, S10 envelopes; a topic needs
+    /// `areaId` and refuses `on_resolve`). Route `backend/routes/pulse.js:106`
+    /// in PR 2322.
+    static func followTopic(_ topic: String, areaId: String) -> Endpoint {
+        Endpoint(method: .put, path: "/api/pulse/follows", body: FollowTopicRequest(targetId: topic, areaId: areaId))
+    }
+
+    /// `GET /api/pulse/posts/:id/why` — only the reader's own choices
+    /// (contract §2.9), read with the page's view, topic and area. Route
+    /// `backend/routes/pulse.js:123` in PR 2322.
+    static func whyShown(postId: String, view: String?, topic: String?, areaId: String?) -> Endpoint {
+        var query: [String: String] = [:]
+        if let view { query["view"] = view }
+        if let topic { query["topic"] = topic }
+        if let areaId { query["area_id"] = areaId }
+        return Endpoint(method: .get, path: "/api/pulse/posts/\(postId)/why", query: query)
+    }
 }
 
 private struct HelpfulRequest: Encodable {
@@ -106,4 +125,12 @@ private struct FollowPostRequest: Encodable {
     let targetId: String
     let notify: String
     let ends: String
+}
+
+private struct FollowTopicRequest: Encodable {
+    let targetType = "topic"
+    let targetId: String
+    let areaId: String
+    let notify = "off"
+    let ends = "keep"
 }

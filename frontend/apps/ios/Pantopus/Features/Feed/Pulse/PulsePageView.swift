@@ -21,6 +21,7 @@ public struct PulsePageView: View {
     @State private var reportingCardId: String?
     @State private var deletingCardId: String?
     @State private var mutingCardId: String?
+    @State private var whyCardId: String?
     @State private var showsPreferences = false
     @State private var showsAreas = false
     @State private var viewportHeight: CGFloat = 0
@@ -171,6 +172,16 @@ public struct PulsePageView: View {
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
         }
+        .sheet(isPresented: presenting($whyCardId)) {
+            if let id = whyCardId {
+                PulseWhySheet(
+                    postId: id,
+                    view: viewModel.mode.rawValue,
+                    topic: viewModel.activeTopic?.queryValue,
+                    areaId: viewModel.selectedAreaId
+                )
+            }
+        }
         .sheet(isPresented: $showsAreas) {
             PulseAreaPickerView(selectedAreaId: viewModel.displayedAreaId) { area in
                 Task { await viewModel.selectArea(area) }
@@ -280,7 +291,7 @@ public struct PulsePageView: View {
     }
 
     private var pageIsActive: Bool {
-        isActive && scenePhase == .active && !showsPreferences && !showsAreas
+        isActive && scenePhase == .active && !showsPreferences && !showsAreas && whyCardId == nil
     }
 
     private var visibleEndRead: Date? {
@@ -328,6 +339,25 @@ private extension PulsePageView {
                 }
                 .accessibilityIdentifier("pulsePageMenuSave")
             }
+            Button("Why am I seeing this?") {
+                menuCardId = nil
+                whyCardId = id
+            }
+            .accessibilityIdentifier("pulsePageMenuWhy")
+            if !card.isAuthor, !card.following {
+                Button("Follow this conversation") {
+                    menuCardId = nil
+                    Task { await viewModel.followConversation(cardId: id) }
+                }
+                .accessibilityIdentifier("pulsePageMenuFollow")
+            }
+            if card.topic != nil, card.areaId != nil {
+                Button("See more of this topic") {
+                    menuCardId = nil
+                    Task { await viewModel.followTopic(cardId: id) }
+                }
+                .accessibilityIdentifier("pulsePageMenuSeeMoreTopic")
+            }
             if card.isAuthor {
                 if card.canKeepOpen {
                     Button("Keep open 7 more days") {
@@ -367,13 +397,13 @@ private extension PulsePageView {
                 }
                 .accessibilityIdentifier("pulsePageMenuHide")
                 if card.authorId != nil {
-                    Button("Mute \(card.authorName)") {
+                    Button("Mute this person") {
                         menuCardId = nil
                         mutingCardId = id
                     }
                     .accessibilityIdentifier("pulsePageMenuMuteAuthor")
                 }
-                Button("Report post", role: .destructive) {
+                Button("Report a problem", role: .destructive) {
                     menuCardId = nil
                     reportingCardId = id
                 }

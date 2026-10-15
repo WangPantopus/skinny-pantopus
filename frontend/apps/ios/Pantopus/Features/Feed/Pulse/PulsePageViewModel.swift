@@ -88,6 +88,7 @@ public final class PulsePageViewModel {
     private var actionOverrides: [String: Bool] = [:]
     var keptOpen: Set<String> = []
     var savedOverrides: [String: Bool] = [:]
+    var followingOverrides: [String: Bool] = [:]
     /// Cards with a Going, Seen it or save request still out.
     var pending: Set<String> = []
     var removed: Set<String> = []
@@ -201,6 +202,7 @@ public final class PulsePageViewModel {
                 }
                 actionOverrides = actionOverrides.filter { keep($0.key) }
                 savedOverrides = savedOverrides.filter { keep($0.key) }
+                followingOverrides = followingOverrides.filter { keep($0.key) }
             }
         }
         rebuild()
@@ -239,6 +241,7 @@ public final class PulsePageViewModel {
             }
             if keptOpen.contains(card.id) { card.canKeepOpen = false }
             if let saved = savedOverrides[card.id] { card.saved = saved }
+            if let following = followingOverrides[card.id] { card.following = following }
             return card
         }
         return group.cards.isEmpty ? nil : group

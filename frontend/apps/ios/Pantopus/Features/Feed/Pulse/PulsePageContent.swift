@@ -81,6 +81,8 @@ public struct PulsePageCard: Sendable, Hashable, Identifiable {
     /// The area the card is shown in (its group's), for "Mute this topic in
     /// this area"; nil offers no topic mute.
     public var areaId: String?
+    /// The reader follows this conversation (`viewer.following`, S10).
+    public var following = false
 
     /// "14 going", on an event.
     public var goingText: String? {
@@ -290,7 +292,8 @@ public extension PulsePostDTO {
             type: type,
             isOpenAsk: openAsk,
             canKeepOpen: viewer?.canKeepOpen ?? false,
-            saved: viewer?.saved
+            saved: viewer?.saved,
+            following: viewer?.following ?? false
         )
     }
 }
