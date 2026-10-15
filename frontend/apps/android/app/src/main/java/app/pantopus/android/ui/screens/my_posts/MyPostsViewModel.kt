@@ -24,6 +24,7 @@ import app.pantopus.android.data.posts.PostsRepository
 import app.pantopus.android.data.posts.PulsePostsRefreshNotifier
 import app.pantopus.android.data.store.StoreKind
 import app.pantopus.android.ui.components.RefreshNotice
+import app.pantopus.android.ui.screens.feed.pulse.PostStatus
 import app.pantopus.android.ui.screens.feed.pulse.PulseIntent
 import app.pantopus.android.ui.screens.shared.activity_filter_sheet.ActivityFilter
 import app.pantopus.android.ui.screens.shared.activity_filter_sheet.ActivitySortOrder
@@ -582,8 +583,8 @@ class MyPostsViewModel
             applyState()
             viewModelScope.launch {
                 when (postsRepo.archivePost(postId)) {
-                    // A Pulse feed still listing it would show it until its next read: lists refetch.
-                    is NetworkResult.Success -> postsRefresh.notifyPostsDidChange()
+                    // A Pulse feed still listing it keeps its rows on a quiet read: it drops this one.
+                    is NetworkResult.Success -> postsRefresh.notifyPostEnded(postId)
                     is NetworkResult.Failure -> {
                         localArchiveOverrides = previous.toMutableMap()
                         applyState()
@@ -602,7 +603,8 @@ class MyPostsViewModel
             applyState()
             viewModelScope.launch {
                 when (postsRepo.unarchivePost(postId)) {
-                    is NetworkResult.Success -> postsRefresh.notifyPostsDidChange()
+                    // Including an Ask closed from a feed that still has it: that feed shows it again.
+                    is NetworkResult.Success -> postsRefresh.notifyPostRestored(postId)
                     is NetworkResult.Failure -> {
                         localArchiveOverrides = previous.toMutableMap()
                         applyState()
@@ -623,7 +625,7 @@ class MyPostsViewModel
             applyState()
             viewModelScope.launch {
                 when (postsRepo.deletePost(target.postId)) {
-                    is NetworkResult.Success -> postsRefresh.notifyPostsDidChange()
+                    is NetworkResult.Success -> postsRefresh.notifyPostEnded(target.postId)
                     is NetworkResult.Failure -> {
                         posts = previousPosts
                         localArchiveOverrides = previousOverrides.toMutableMap()
@@ -682,6 +684,7 @@ class MyPostsViewModel
                     )
                 }
             val headerChips = mutableListOf(intentChip(intent, projection.isArchived))
+            statusChipFor(dto, projection.isArchived)?.let(headerChips::add)
             if (projection.isArchived) headerChips.add(archivedChip())
 
             return RowModel(
@@ -755,6 +758,40 @@ class MyPostsViewModel
                 )
             }
 
+            /**
+             * How the post ended, or when a heads-up ends (S7), beside the type chip: "Answered" with the check,
+             * "Gone", "Reunited", "Happened · 3 went", "Ends Thu 4pm" with the clock; none for the rest.
+             */
+            fun statusChipFor(
+                dto: MyPostDto,
+                archived: Boolean = dto.archivedAt != null,
+            ): RowChip? {
+                val status =
+                    PostStatus.of(
+                        postType = dto.postType,
+                        state = dto.state,
+                        resolution = dto.resolution,
+                        expiresAt = dto.expiresAt.takeUnless { archived },
+                        goingCount = dto.likeCount,
+                    ) ?: return null
+                val (foreground, background) =
+                    when (status.kind) {
+                        PostStatus.Kind.Answered -> PantopusColors.success to PantopusColors.successLight
+                        PostStatus.Kind.Ended -> PantopusColors.slate to PantopusColors.slateBg
+                        PostStatus.Kind.Ends -> PantopusColors.warning to PantopusColors.warningBg
+                    }
+                return RowChip(
+                    text = status.text,
+                    icon =
+                        when (status.kind) {
+                            PostStatus.Kind.Answered -> PantopusIcon.CheckCircle
+                            PostStatus.Kind.Ends -> PantopusIcon.Clock
+                            PostStatus.Kind.Ended -> null
+                        },
+                    tint = RowChip.Tint.Custom(background = background, foreground = foreground),
+                )
+            }
+
             private fun archivedChip(): RowChip =
                 RowChip(
                     text = "ARCHIVED",
@@ -770,6 +807,7 @@ class MyPostsViewModel
             fun intentFilterId(intent: PulseIntent): String =
                 when (intent) {
                     PulseIntent.All -> "all"
+                    PulseIntent.Generic -> "generic"
                     PulseIntent.Ask -> "ask"
                     PulseIntent.Recommend -> "recommend"
                     PulseIntent.Event -> "event"
@@ -785,6 +823,7 @@ class MyPostsViewModel
             fun intentLabel(intent: PulseIntent): String =
                 when (intent) {
                     PulseIntent.All -> "All"
+                    PulseIntent.Generic -> "Post"
                     PulseIntent.Ask -> "Ask"
                     PulseIntent.Recommend -> "Recommend"
                     PulseIntent.Event -> "Event"
@@ -803,7 +842,7 @@ class MyPostsViewModel
 
             private fun paletteFor(intent: PulseIntent): IntentPalette =
                 when (intent) {
-                    PulseIntent.All ->
+                    PulseIntent.All, PulseIntent.Generic ->
                         IntentPalette(
                             foreground = PantopusColors.appTextSecondary,
                             background = PantopusColors.appSurfaceSunken,
@@ -906,6 +945,7 @@ class MyPostsViewModel
                     PulseIntent.NeighborhoodWin,
                     PulseIntent.VisitorGuide,
                     PulseIntent.All,
+                    PulseIntent.Generic,
                     ->
                         listOf(replies, likes)
                 }

@@ -11,7 +11,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
@@ -32,6 +34,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -51,6 +54,7 @@ import app.pantopus.android.ui.components.ToastKind
 import app.pantopus.android.ui.components.ToastMessage
 import app.pantopus.android.ui.screens.compose.pulse.PulseLostFoundContactPref
 import app.pantopus.android.ui.screens.compose.pulse.PulseLostFoundKind
+import app.pantopus.android.ui.screens.feed.pulse.PostStatusPill
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailShell
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailTopBar
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailTopBarAction
@@ -120,6 +124,7 @@ fun PulsePostDetailScreen(
     val isSending by viewModel.isSendingComment.collectAsStateWithLifecycle()
     val toast by viewModel.toastMessage.collectAsStateWithLifecycle()
     val showsOverflow by viewModel.showsOverflowMenu.collectAsStateWithLifecycle()
+    val confirmingClose by viewModel.confirmingClose.collectAsStateWithLifecycle()
     val didDelete by viewModel.didDeletePost.collectAsStateWithLifecycle()
     val likePending by viewModel.likePending.collectAsStateWithLifecycle()
     val savePending by viewModel.savePending.collectAsStateWithLifecycle()
@@ -229,12 +234,12 @@ fun PulsePostDetailScreen(
             }
         }
         toast?.let { message ->
-            // Tinted by kind: "Report submitted" is good news, the rest are failures.
+            // Tinted by kind: a report sent, an Ask kept open or closed is good news; the rest are failures.
             Toast(
                 message =
                     ToastMessage(
                         text = message,
-                        kind = if (message == POST_REPORT_SUBMITTED_TOAST) ToastKind.Success else ToastKind.Error,
+                        kind = if (message in POST_DETAIL_SUCCESS_TOASTS) ToastKind.Success else ToastKind.Error,
                     ),
                 modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 100.dp),
             )
@@ -251,6 +256,7 @@ fun PulsePostDetailScreen(
                 modifier =
                     Modifier
                         .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
                         .padding(Spacing.s4),
                 verticalArrangement = Arrangement.spacedBy(Spacing.s2),
             ) {
@@ -276,6 +282,12 @@ fun PulsePostDetailScreen(
                         viewModel.dismissOverflowMenu()
                         viewModel.toggleRepost()
                     }
+                }
+                if (viewModel.canKeepOpen) {
+                    OverflowAction(label = "Keep open 7 more days", testTag = "pulseAskKeepOpen") { viewModel.keepOpen() }
+                }
+                if (viewModel.canCloseAsk) {
+                    OverflowAction(label = "Close", testTag = "pulseAskClose") { viewModel.beginCloseAsk() }
                 }
                 if (viewModel.isOwner) {
                     OverflowAction(label = "Edit post", testTag = "pulsePostDetail-edit") {
@@ -332,6 +344,25 @@ fun PulsePostDetailScreen(
             confirmButton = {},
             dismissButton = {
                 TextButton(onClick = { showsReportReasons = false }) { Text("Cancel") }
+            },
+        )
+    }
+
+    if (confirmingClose) {
+        AlertDialog(
+            onDismissRequest = { viewModel.cancelCloseAsk() },
+            title = { Text("Close this question?") },
+            text = { Text("It leaves Pulse. You can restore it from My posts.") },
+            confirmButton = {
+                TextButton(
+                    onClick = { viewModel.closeAsk() },
+                    modifier = Modifier.testTag("pulseAskCloseConfirm"),
+                ) {
+                    Text("Close", color = PantopusColors.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.cancelCloseAsk() }) { Text("Cancel") }
             },
         )
     }
@@ -400,6 +431,8 @@ private fun OverflowAction(
             fontSize = 14.sp,
             fontWeight = FontWeight.Medium,
             color = if (isDestructive) PantopusColors.error else PantopusColors.appText,
+            // A label that wraps at large text stays centered like the others.
+            textAlign = TextAlign.Center,
         )
     }
 }
@@ -453,6 +486,13 @@ fun PulsePostDetailLoadedContent(
                     intent = content.intent,
                     onAvatarTap = { onOpenProfile(content.post.userId) },
                 )
+                content.status?.let { status ->
+                    PostStatusPill(
+                        status = status,
+                        postId = content.post.id,
+                        modifier = Modifier.padding(horizontal = Spacing.s4),
+                    )
+                }
                 if (actionPending) {
                     Text(
                         "Pending",

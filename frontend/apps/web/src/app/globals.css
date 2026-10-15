@@ -845,15 +845,29 @@ body {
 }
 
 /* ─── Map pin transition animations ──────────────────────────── */
+/* These classes sit on .leaflet-marker-icon, which Leaflet places with an inline
+   transform: translate3d(). A keyframe transform would replace it and draw the pin
+   at the map's top-left corner, so the scale is added to it instead
+   (animation-composition: add); browsers without that get the fade alone. */
 
 @keyframes pin-fade-in {
-  from { opacity: 0; transform: scale(0.7); }
-  to   { opacity: 1; transform: scale(1);   }
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 @keyframes pin-fade-out {
-  from { opacity: 1; transform: scale(1);   }
-  to   { opacity: 0; transform: scale(0.7); }
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+@keyframes pin-scale-in {
+  from { transform: scale(0.7); }
+  to   { transform: scale(1);   }
+}
+
+@keyframes pin-scale-out {
+  from { transform: scale(1);   }
+  to   { transform: scale(0.7); }
 }
 
 @keyframes cluster-count-pop {
@@ -862,20 +876,45 @@ body {
   100% { transform: scale(1);   }
 }
 
-/* Enter: new pins fade + scale in */
+/* Enter: new pins fade + scale in. No fill: a class left on (Explore Map) does
+   nothing once the animation ends. */
 .pin-enter {
-  animation: pin-fade-in 200ms ease-out both;
+  animation: pin-fade-in 200ms ease-out;
 }
 
 /* Exit: removed pins fade + scale out, then become non-interactive */
 .pin-exit {
   animation: pin-fade-out 150ms ease-in both;
+}
+
+/* Outranks Leaflet's .leaflet-marker-icon.leaflet-interactive { pointer-events: auto } */
+.leaflet-marker-icon.leaflet-interactive.pin-exit {
   pointer-events: none;
 }
 
-/* Cluster count badge pops when the icon is re-created (count change) */
-.cluster-pop > div {
-  animation: cluster-count-pop 250ms ease-out;
+@supports (animation-composition: add) {
+  /* Scale about the icon's center, where every caller anchors it, not Leaflet's 0 0 */
+  .leaflet-marker-icon.pin-enter,
+  .leaflet-marker-icon.pin-exit {
+    transform-origin: 50% 50%;
+  }
+
+  .pin-enter {
+    animation: pin-fade-in 200ms ease-out, pin-scale-in 200ms ease-out;
+    animation-composition: replace, add;
+  }
+
+  .pin-exit {
+    animation: pin-fade-out 150ms ease-in both, pin-scale-out 150ms ease-in both;
+    animation-composition: replace, add;
+  }
+
+  /* Cluster count badge pops when the icon is re-created (count change), on top of
+     the badge's own transform (Explore Map centers it with translate(-50%, -50%)) */
+  .cluster-pop > div {
+    animation: cluster-count-pop 250ms ease-out;
+    animation-composition: add;
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════

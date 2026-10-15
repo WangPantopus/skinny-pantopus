@@ -12,14 +12,17 @@ import app.pantopus.android.data.api.models.posts.PostDetailDto
 import app.pantopus.android.data.api.models.posts.PostReactionKind
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.posts.MatchedBusinessesRepository
 import app.pantopus.android.data.posts.PostsRepository
 import app.pantopus.android.data.posts.PulsePostsRefreshNotifier
+import app.pantopus.android.data.pulse.PulseRepository
 import app.pantopus.android.data.store.StoreKind
 import app.pantopus.android.ui.components.IdentityPillar
 import app.pantopus.android.ui.components.RefreshNotice
+import app.pantopus.android.ui.screens.feed.pulse.PostStatus
 import app.pantopus.android.ui.screens.shared.content_detail.bodies.PostCommentRow
 import app.pantopus.android.ui.screens.shared.content_detail.bodies.PostReactionCounts
 import app.pantopus.android.ui.screens.shared.content_detail.headers.PostIntent
@@ -63,6 +66,8 @@ data class PulsePostDetailContent(
     val reactions: PostReactionCounts,
     val comments: List<PostCommentRow>,
     val hiddenReplyCount: Int,
+    /** How the post ended, or when a heads-up ends (S7): the pill under the author. */
+    val status: PostStatus? = null,
 )
 
 /** Observed UI state for the Pulse post detail screen. */
@@ -75,8 +80,12 @@ sealed interface PulsePostDetailUiState {
     data class Error(val message: String, val retryable: Boolean = true) : PulsePostDetailUiState
 }
 
-/** The one success toast on this screen; every other toast reports a failure. */
 internal const val POST_REPORT_SUBMITTED_TOAST = "Report submitted"
+internal const val ASK_KEPT_OPEN_TOAST = "Kept open for 7 more days."
+internal const val ASK_CLOSED_TOAST = "Question closed."
+
+/** The success toasts on this screen; every other toast reports a failure. */
+internal val POST_DETAIL_SUCCESS_TOASTS = setOf(POST_REPORT_SUBMITTED_TOAST, ASK_KEPT_OPEN_TOAST, ASK_CLOSED_TOAST)
 
 /** Loads + mutates a single Pulse post. */
 @HiltViewModel
@@ -88,6 +97,8 @@ class PulsePostDetailViewModel
         private val postsRefresh: PulsePostsRefreshNotifier,
         private val matchedBusinessesRepo: MatchedBusinessesRepository,
         savedStateHandle: SavedStateHandle,
+        /** Pulse's own routes: the asker's keep-open and close (S7). */
+        private val pulseRepo: PulseRepository,
     ) : ViewModel() {
         private val postId: String =
             requireNotNull(savedStateHandle[PULSE_POST_DETAIL_ID_KEY]) {
@@ -176,6 +187,92 @@ class PulsePostDetailViewModel
 
         private val signedInUserId: String?
             get() = (authRepo.state.value as? AuthRepository.State.SignedIn)?.user?.id
+
+        private var keptOpen = false
+        private var endingAsk = false
+
+        /** The asker's own Ask that hasn't ended (S7): no resolution, not solved or archived, not past its end. */
+        private val isOwnOpenAsk: Boolean
+            get() {
+                val post = (_state.value as? PulsePostDetailUiState.Loaded)?.content?.post ?: return false
+                if (!isOwner || post.postType != "ask_local" || post.resolution != null) return false
+                if (post.archivedAt != null || (post.state != null && post.state != "open")) return false
+                return PostStatus.askWindowIsOpen(post.createdAt, post.expiresAt)
+            }
+
+        /** "Keep open 7 more days": once per Ask (S7). */
+        val canKeepOpen: Boolean
+            get() {
+                val post = (_state.value as? PulsePostDetailUiState.Loaded)?.content?.post
+                return isOwnOpenAsk && !keptOpen && post?.lifecycleMetadata?.keptOpenAt.isNullOrBlank()
+            }
+
+        /** "Close" (S7). */
+        val canCloseAsk: Boolean get() = isOwnOpenAsk
+
+        private val _confirmingClose = MutableStateFlow(false)
+
+        /** "Close this question?" is on screen. */
+        val confirmingClose: StateFlow<Boolean> = _confirmingClose.asStateFlow()
+
+        /** "Keep open 7 more days" (contract 2.12); a refusal shows the server's sentence. */
+        fun keepOpen() {
+            if (endingAsk) return
+            endingAsk = true
+            _showsOverflowMenu.value = false
+            viewModelScope.launch {
+                try {
+                    when (val result = pulseRepo.keepOpen(postId)) {
+                        is NetworkResult.Success -> {
+                            keptOpen = true
+                            _toastMessage.value = ASK_KEPT_OPEN_TOAST
+                            fetch(force = true)
+                        }
+                        is NetworkResult.Failure -> {
+                            if (PulseRepository.refusalCode(result.error) == PulseRepository.ALREADY_KEPT_OPEN) keptOpen = true
+                            _toastMessage.value = result.error.displayMessage("Couldn't keep it open. Try again.")
+                            fetch(force = true)
+                        }
+                    }
+                } finally {
+                    endingAsk = false
+                }
+            }
+        }
+
+        fun beginCloseAsk() {
+            _showsOverflowMenu.value = false
+            _confirmingClose.value = true
+        }
+
+        fun cancelCloseAsk() {
+            _confirmingClose.value = false
+        }
+
+        /** The confirmed "Close" (contract 2.12): the Ask ends and leaves Pulse; My posts can restore it. */
+        fun closeAsk() {
+            if (endingAsk) return
+            endingAsk = true
+            _confirmingClose.value = false
+            viewModelScope.launch {
+                try {
+                    when (val result = pulseRepo.close(postId)) {
+                        is NetworkResult.Success -> {
+                            _toastMessage.value = ASK_CLOSED_TOAST
+                            // A list still showing it (the feed it was opened from) drops it; My posts files it as ended.
+                            postsRefresh.notifyPostEnded(postId)
+                            fetch(force = true)
+                        }
+                        is NetworkResult.Failure -> {
+                            _toastMessage.value = result.error.displayMessage("Couldn't close it. Try again.")
+                            fetch(force = true)
+                        }
+                    }
+                } finally {
+                    endingAsk = false
+                }
+            }
+        }
 
         /** The screen observes post changes only while it is visible. */
         val postChanges = postsRefresh.ticks
@@ -379,7 +476,7 @@ class PulsePostDetailViewModel
             viewModelScope.launch {
                 when (repo.deletePost(postId)) {
                     is NetworkResult.Success -> {
-                        postsRefresh.notifyPostsDidChange()
+                        postsRefresh.notifyPostEnded(postId)
                         _didDeletePost.value = true
                     }
                     is NetworkResult.Failure -> _toastMessage.value = "Couldn't delete the post"
@@ -523,9 +620,9 @@ class PulsePostDetailViewModel
             val wasGone = (_state.value as? PulsePostDetailUiState.Error)?.retryable == false
             _commentsLoading.value = false
             _state.value = PulsePostDetailUiState.Error(message = friendlyMessage(failure), retryable = !gone)
-            // Gone (deleted, or no longer visible to you): a list still showing its card refetches without it.
+            // Gone (deleted, or no longer visible to you): a list still showing its card drops it.
             // Only on the way into this state: this screen refetches on the same signal.
-            if (gone && !wasGone) postsRefresh.notifyPostsDidChange()
+            if (gone && !wasGone) postsRefresh.notifyPostEnded(postId)
         }
 
         /**
@@ -585,6 +682,14 @@ class PulsePostDetailViewModel
                     ),
                 comments = rows,
                 hiddenReplyCount = hidden,
+                status =
+                    PostStatus.of(
+                        postType = post.postType,
+                        state = post.state,
+                        resolution = post.resolution,
+                        expiresAt = post.expiresAt.takeIf { post.archivedAt == null },
+                        goingCount = post.likeCount,
+                    ),
             )
         }
 
