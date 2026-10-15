@@ -81,7 +81,9 @@ async function postCards(rows, { viewerId, homes, areas, fallbackArea, blockedId
       author: { id: publicResponse ? null : raw.user_id, display_name: name, label,
         distance_text: await distance(raw), avatar_url: post.author?.avatarUrl || null,
         is_curator: raw.origin === 'curator' },
-      about: { label: about?.name || null, area_id: about?.id || null },
+      // The place a Pulse post's author named ("Crown Park"); otherwise its area. An older
+      // row's location_name can be an address, so it is never shown here.
+      about: { label: raw.post_metadata?.pulse_about || about?.name || null, area_id: about?.id || null },
       // A NULL legacy scope is intentionally preserved; it has its original audience rules.
       read_scope: raw.read_scope || null,
       status: { state: open ? 'open' : 'resolved', resolution: raw.resolution || (raw.state === 'solved' ? 'answered' : null),

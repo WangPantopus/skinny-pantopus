@@ -2,6 +2,13 @@
 
 Owner: the PB session. Keep this file current in your own PRs (or a small docs PR): what is done with PR links, what is next, requests to other streams, and anything that needs the founder. Read the other streams' files on `master` before starting a slice that depends on them.
 
+## Current handoff (October 15, 06:20 UTC)
+
+[PB handoff, October 15](PB-handoff-2026-10-15.md): what merged today (#2322 with its seven parents; #2339 with #2337 and #2338), the open S8 PRs (#2340 contract, #2341 implementation, both green), the next PB work in order (S8 merge, PC's content helpers and follow alerts, S12, S14, S15–S17, S20, S21–S24) and the live runtime the next session reuses.
+
+- **Merged:** offer requests and the giver's choice (`OfferClaim`), reply reports into the `PostReport` queue, and narrowing who can read ([#2338](https://github.com/WangPantopus/skinny-pantopus/pull/2338), [#2339](https://github.com/WangPantopus/skinny-pantopus/pull/2339), contract [#2337](https://github.com/WangPantopus/skinny-pantopus/pull/2337)). Checked on iOS (request with a double tap, the giver's list and choice, narrowing to the town and to a synthetic street), on web (inbox, narrowed posts, refused share) and on Android (inbox).
+- **Open:** Pulse-mode creation and edits ([#2340](https://github.com/WangPantopus/skinny-pantopus/pull/2340), [#2341](https://github.com/WangPantopus/skinny-pantopus/pull/2341)): server-derived place and audience, label limits, Share cap, per-type windows, the composer-check seam (fail open until PS ships it), held posts and locked edits.
+
 ## October 15, 2026 — native acceptance of the open chain
 
 - **Worktree:** this session works in `.claude/worktrees/pulse-pb-backend-continue-0c75f4` (a hook keeps edits in the session's own worktree), on branch `claude/pulse-pb-s10-follows`. PB's backend and web now run from it; the runtime's `supabase/migrations` link points at it.
@@ -55,7 +62,7 @@ No new unit/UI tests were added. PB-only synthetic fixtures were used. No hosted
 
 ## Next
 
-1. Merge the accepted chain 2311 → 2322 as one merge of 2322's head (the parents retargeted to master first), then rename any migration again if master gains a newer one before the merge. The two-account native/relaunch checks are done (October 15 above); the Android "Add a home" banner is explained and fixed.
+1. Done October 15: the chain merged as #2322 and S9's claims, reports and narrowing as #2339. Next: merge S8 (#2340, #2341), then the PC content helpers and follow alerts (handoff, October 15).
 2. Finish S5 label limits and S8 creation/edit support, using PS's `evaluateComposerChecks`. New types/read scopes, Share cap, held sales and expiry are still unfinished. Do not duplicate PS safety code.
 3. Remaining S9: OfferClaim request/choice/races/retries, reports with PS, narrower-only audience changes (contract §2.13 is frozen; implementation is absent), remaining notifications/slowed exchanges. Helpful/Thanks/deletion are built, not fully accepted.
 4. Remaining S10: core preferences, recap/each delivery with PC, native scenarios and remaining specified events. PB still owes PC shared-wall content helpers `digestPosts`, `unansweredForHelper`, `followRecaps`, `getSeenMarker`.
@@ -64,6 +71,9 @@ No new unit/UI tests were added. PB-only synthetic fixtures were used. No hosted
 H2 public exposure/moderation coverage and H6 auth abuse verification remain. H1/H3 are resolved. Keep all hosted changes and launch-cut features off.
 
 ## Requests (to other streams)
+
+- → PS (S11): PB built a minimal `POST /api/pulse/posts/:postId/replies/:replyId/report` (the existing `PostReport` queue with `comment_id`) because PI's S9 client calls it. Your brief lists reply reports under S11: move the route into `pulseSafety.js` if you prefer and show reply reports in the console. → PS (S8): PB's create and edit paths call `evaluateComposerChecks(text, media, context)` from `backend/services/pulse/safety/composerChecks.js` and also read `holds: [{ rule }]` (contract §2.5); until it exists nothing blocks or holds.
+- → PC (S13): the four content functions and the follow-alert type names are PB's next item after S8 (see the October 15 handoff for the planned module and names).
 
 - → PA, PI (S6.6, found October 15 with PB's backend stopped): a failed pull to refresh keeps the copy, as it should, but Android says nothing (its log reads "copy kept, read failed (network)") and iOS shows only a "Couldn't refresh Pulse." toast. The scenario asks for a line that stays, "Couldn't refresh. Showing 3:42 PM.", with retry.
 - → PA, PI (S6, contract §2.3 clarified in 2322): `quiet` on Following is now only `empty` with no card; the meter card belongs to Nearby. Before, a short Following list came back `sparse`, and Android drew the meter card there (with PB's fixture homes, as "Add a home"). Both apps' Following end card also reads "That's everything new around Camas since …"; a Following-specific line would read better.
