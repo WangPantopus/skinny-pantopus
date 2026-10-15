@@ -5584,6 +5584,9 @@ router.delete('/account', verifyToken, requireStepUp('delete_account'), requireS
     // ── 4. Delete User row ───────────────────────────────────────
     // This triggers ON DELETE CASCADE for ~70+ tables (Posts, Gigs,
     // Wallet, Listings, Notifications, Chat participants, etc.)
+    // Pulse's BEFORE DELETE trigger scrubs the author's replies atomically;
+    // their nullable user_id then SET NULLs, preserving other people's branches.
+    // If the delete fails, neither the scrub nor its count changes commit.
     const { error: deleteError } = await supabaseAdmin
       .from('User')
       .delete()
