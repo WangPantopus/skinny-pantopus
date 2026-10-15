@@ -193,6 +193,14 @@ function cleanText(value, max, label) {
   return text || null;
 }
 
+// Watch parties and walks may be hosted at home (decision D6); pickup games and playdates meet in public.
+const AT_HOME_MESSAGES = {
+  watch_party: 'That’s at your home. To host there, choose “My place”: only people you accept see your address.',
+  walk_coffee: 'That’s at your home. To host there, choose “My porch”: only people you accept see your address.',
+  pickup_game: 'That’s at your home. Choose a public place nearby, like a park or a court.',
+  playdate: 'That’s at your home. Playdates meet in public places: choose one nearby.',
+};
+
 /** The place, from the body: a public place, or the host's own home. */
 function resolvePlace(viewer, kind, place) {
   if (!place || typeof place !== 'object') fail(422, 'validation', 'Choose where the plan happens.');
@@ -219,6 +227,12 @@ function resolvePlace(viewer, kind, place) {
   }
   const name = cleanText(place.name, 120, 'The place name');
   if (!name) fail(422, 'validation', 'Name the place.');
+  // A "public" place at the host's own home would hand its exact spot to everyone who gets in,
+  // without the at-home rules (the host approves each person and confirms sharing the address).
+  const point = { latitude, longitude };
+  if (viewer.homes.some((h) => h.point && rules.distanceMeters(h.point, point) <= rules.HOME_GUARD_METERS)) {
+    fail(422, 'place_at_home', AT_HOME_MESSAGES[kind] || AT_HOME_MESSAGES.pickup_game);
+  }
   return {
     kind: 'public',
     name,

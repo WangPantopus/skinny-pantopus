@@ -353,7 +353,9 @@ Decided October 12 (section 0) and built by three founder-started sessions: back
 
 - [x] Backend: the `Plan` and `PlanRequest` tables, both flags and the read endpoints (PR 2206); hosting, joining, the plan chat, notifications and a five-minute job for reminders and lifecycle (PR 2210). Both merged October 13.
 - [x] The map layer, sports games and places, quiet hours and polish (PRs 2212, 2215–2220, 2237), and the web share page with its public endpoint, which shows only the area and works only while the host has Plans (PR 2211). All merged October 13.
-- [ ] iOS (PRs 2209, 2222, 2225, 2227, 2238) and Android (PRs 2221, 2224, 2226, 2228) merged October 13. L4's release checks show both apps unchanged while the flag is off. Still to finish: each journey checked on a simulator or emulator against the design boards.
+- [x] iOS (PRs 2209, 2222, 2225, 2227, 2238) and Android (PRs 2221, 2224, 2226, 2228) merged October 13. L4's release checks show both apps unchanged while the flag is off. Every journey was then checked on a simulator and an emulator against the design boards, and both apps were brought to the boards' words and behavior in three polish rounds (PRs 2237–2240, 2245, 2249, 2254, 2255, 2257, 2258, 2283, 2284, 2288, 2289 and 2292, all merged October 13–14).
+- [x] "You're here now" for pickup games (board H4) names the public place the host is at, never their own location, and the server refuses a "public" place at the host's home (PR 2331). Before it, Android posted the host's raw location as the place, so a host at home showed the home's exact spot to everyone who got in.
+- [ ] Check the watch-party game list (`backend/data/planGames.js`) again before December 17. PR 2329 refreshed it through December 31 on October 15, and the app offers the next 14 days.
 - [ ] Turn on `plans` for the internal team or beta users once the journeys pass; `plans_playdates` waits for production address verification and a lawyer's read.
 
 ## Pulse (added October 13)
