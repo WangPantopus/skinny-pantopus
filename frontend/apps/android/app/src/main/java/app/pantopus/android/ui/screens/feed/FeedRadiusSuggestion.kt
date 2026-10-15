@@ -40,16 +40,17 @@ data class FeedRadiusSuggestion(
     enum class Direction { Expand, Narrow }
 
     companion object {
-        /** Radius ladder — RN `useRadiusSuggestion.ts:34`. */
-        val radiusOptions: List<Double> = listOf(1.0, 3.0, 10.0, 25.0, 100.0, 1000.0, 25000.0)
+        /** The legacy feed reads at most 100 miles, matching the server's privacy cap. */
+        val radiusOptions: List<Double> = listOf(1.0, 3.0, 10.0, 25.0, MAX_RADIUS_MILES)
 
-        /** `25000` reads "Global"; everything else is "<n> mi". */
-        fun formatRadius(miles: Double): String =
-            when {
-                miles >= GLOBAL_RADIUS_MILES -> "Global"
-                miles == Math.floor(miles) -> "${miles.toInt()} mi"
-                else -> String.format(Locale.US, "%.1f mi", miles)
-            }
+        /** Older saved choices (including Global) display the radius the server actually reads. */
+        fun effectiveRadius(miles: Double?): Double =
+            miles?.takeIf { it.isFinite() && it > 0 }?.coerceAtMost(MAX_RADIUS_MILES) ?: MAX_RADIUS_MILES
+
+        fun formatRadius(miles: Double): String {
+            val radius = effectiveRadius(miles)
+            return if (radius == Math.floor(radius)) "${radius.toInt()} mi" else String.format(Locale.US, "%.1f mi", radius)
+        }
 
         /**
          * Thresholds ported verbatim from RN
@@ -62,7 +63,8 @@ data class FeedRadiusSuggestion(
             singularLabel: String = "post",
             pluralLabel: String = "posts",
         ): FeedRadiusSuggestion? {
-            val index = radiusOptions.indexOf(currentRadius)
+            val radius = effectiveRadius(currentRadius)
+            val index = radiusOptions.indexOf(radius)
             val noun = if (itemCount == 1) singularLabel else pluralLabel
             val canExpand = index in 0 until radiusOptions.lastIndex
             val canNarrow = index > 0
@@ -72,14 +74,14 @@ data class FeedRadiusSuggestion(
                 itemCount == 0 && canExpand ->
                     expand(
                         next = radiusOptions[index + 1],
-                        reasonLead = "No $pluralLabel within ${formatRadius(currentRadius)}.",
+                        reasonLead = "No $pluralLabel within ${formatRadius(radius)}.",
                     )
-                itemCount <= 2 && currentRadius < GLOBAL_RADIUS_MILES && canExpand ->
+                itemCount <= 2 && canExpand ->
                     expand(
                         next = radiusOptions[index + 1],
-                        reasonLead = "$itemCount $noun within ${formatRadius(currentRadius)}.",
+                        reasonLead = "$itemCount $noun within ${formatRadius(radius)}.",
                     )
-                itemCount >= CROWDED_THRESHOLD && currentRadius > 1 && canNarrow ->
+                itemCount >= CROWDED_THRESHOLD && radius > 1 && canNarrow ->
                     FeedRadiusSuggestion(
                         suggestedRadius = radiusOptions[index - 1],
                         reason = "Lots of $pluralLabel here. Focus to ${formatRadius(radiusOptions[index - 1])}?",
@@ -99,8 +101,7 @@ data class FeedRadiusSuggestion(
                 direction = Direction.Expand,
             )
 
-        /** RN's ceiling radius, rendered as "Global". */
-        private const val GLOBAL_RADIUS_MILES = 25000.0
+        private const val MAX_RADIUS_MILES = 100.0
 
         /** RN's "too many results" threshold. */
         private const val CROWDED_THRESHOLD = 50
