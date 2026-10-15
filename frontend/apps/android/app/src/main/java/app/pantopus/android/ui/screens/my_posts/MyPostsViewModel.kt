@@ -583,8 +583,8 @@ class MyPostsViewModel
             applyState()
             viewModelScope.launch {
                 when (postsRepo.archivePost(postId)) {
-                    // A Pulse feed still listing it would show it until its next read: lists refetch.
-                    is NetworkResult.Success -> postsRefresh.notifyPostsDidChange()
+                    // A Pulse feed still listing it keeps its rows on a quiet read: it drops this one.
+                    is NetworkResult.Success -> postsRefresh.notifyPostEnded(postId)
                     is NetworkResult.Failure -> {
                         localArchiveOverrides = previous.toMutableMap()
                         applyState()
@@ -603,7 +603,8 @@ class MyPostsViewModel
             applyState()
             viewModelScope.launch {
                 when (postsRepo.unarchivePost(postId)) {
-                    is NetworkResult.Success -> postsRefresh.notifyPostsDidChange()
+                    // Including an Ask closed from a feed that still has it: that feed shows it again.
+                    is NetworkResult.Success -> postsRefresh.notifyPostRestored(postId)
                     is NetworkResult.Failure -> {
                         localArchiveOverrides = previous.toMutableMap()
                         applyState()
@@ -624,7 +625,7 @@ class MyPostsViewModel
             applyState()
             viewModelScope.launch {
                 when (postsRepo.deletePost(target.postId)) {
-                    is NetworkResult.Success -> postsRefresh.notifyPostsDidChange()
+                    is NetworkResult.Success -> postsRefresh.notifyPostEnded(target.postId)
                     is NetworkResult.Failure -> {
                         posts = previousPosts
                         localArchiveOverrides = previousOverrides.toMutableMap()

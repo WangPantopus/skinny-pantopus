@@ -80,8 +80,12 @@ sealed interface PulsePostDetailUiState {
     data class Error(val message: String, val retryable: Boolean = true) : PulsePostDetailUiState
 }
 
-/** The one success toast on this screen; every other toast reports a failure. */
 internal const val POST_REPORT_SUBMITTED_TOAST = "Report submitted"
+internal const val ASK_KEPT_OPEN_TOAST = "Kept open for 7 more days."
+internal const val ASK_CLOSED_TOAST = "Question closed."
+
+/** The success toasts on this screen; every other toast reports a failure. */
+internal val POST_DETAIL_SUCCESS_TOASTS = setOf(POST_REPORT_SUBMITTED_TOAST, ASK_KEPT_OPEN_TOAST, ASK_CLOSED_TOAST)
 
 /** Loads + mutates a single Pulse post. */
 @HiltViewModel
@@ -221,7 +225,7 @@ class PulsePostDetailViewModel
                     when (val result = pulseRepo.keepOpen(postId)) {
                         is NetworkResult.Success -> {
                             keptOpen = true
-                            _toastMessage.value = "Kept open for 7 more days."
+                            _toastMessage.value = ASK_KEPT_OPEN_TOAST
                             fetch(force = true)
                         }
                         is NetworkResult.Failure -> {
@@ -254,8 +258,9 @@ class PulsePostDetailViewModel
                 try {
                     when (val result = pulseRepo.close(postId)) {
                         is NetworkResult.Success -> {
-                            _toastMessage.value = "Question closed."
-                            postsRefresh.notifyPostsDidChange()
+                            _toastMessage.value = ASK_CLOSED_TOAST
+                            // A list still showing it (the feed it was opened from) drops it; My posts files it as ended.
+                            postsRefresh.notifyPostEnded(postId)
                             fetch(force = true)
                         }
                         is NetworkResult.Failure -> {
@@ -471,7 +476,7 @@ class PulsePostDetailViewModel
             viewModelScope.launch {
                 when (repo.deletePost(postId)) {
                     is NetworkResult.Success -> {
-                        postsRefresh.notifyPostsDidChange()
+                        postsRefresh.notifyPostEnded(postId)
                         _didDeletePost.value = true
                     }
                     is NetworkResult.Failure -> _toastMessage.value = "Couldn't delete the post"
@@ -615,9 +620,9 @@ class PulsePostDetailViewModel
             val wasGone = (_state.value as? PulsePostDetailUiState.Error)?.retryable == false
             _commentsLoading.value = false
             _state.value = PulsePostDetailUiState.Error(message = friendlyMessage(failure), retryable = !gone)
-            // Gone (deleted, or no longer visible to you): a list still showing its card refetches without it.
+            // Gone (deleted, or no longer visible to you): a list still showing its card drops it.
             // Only on the way into this state: this screen refetches on the same signal.
-            if (gone && !wasGone) postsRefresh.notifyPostsDidChange()
+            if (gone && !wasGone) postsRefresh.notifyPostEnded(postId)
         }
 
         /**

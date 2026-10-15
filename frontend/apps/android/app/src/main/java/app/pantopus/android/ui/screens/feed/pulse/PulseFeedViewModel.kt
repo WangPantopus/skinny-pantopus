@@ -257,7 +257,15 @@ class PulseFeedViewModel
         /** Asks kept open here (or refused as already kept open): "Keep open 7 more days" no longer shows. */
         private var keptOpenIds: Set<String> = emptySet()
         private val endingAskIds = mutableSetOf<String>()
-        private val closedAskGenerations = mutableMapOf<String, Int>()
+
+        /**
+         * Posts that ended while this list showed them (an Ask closed here or on its page, a post deleted, archived or
+         * found gone elsewhere), with the read generation then: hidden until restored or a newer read returns them open.
+         */
+        private val endedPostGenerations = mutableMapOf<String, Int>()
+
+        /** The last ended-or-restored change from other screens this list has applied. */
+        private var postEventsSeen = 0L
 
         /** The post whose author is awaiting mute confirmation, if any. */
         private val _mutingPostId = MutableStateFlow<String?>(null)
@@ -362,6 +370,7 @@ class PulseFeedViewModel
          * of date (Nearby: 2 minutes, or an own post).
          */
         fun load() {
+            applyPostEventsFromElsewhere()
             if (_state.value is PulseFeedUiState.Loaded) {
                 val query = lastQuery
                 if (query == null || !repo.feedFirstPageIsCurrent(query)) fetch(quiet = true)
@@ -572,7 +581,9 @@ class PulseFeedViewModel
                 try {
                     when (val result = pulseRepo.close(postId)) {
                         is NetworkResult.Success -> {
-                            closedAskGenerations[postId] = fetchGeneration
+                            endedPostGenerations[postId] = fetchGeneration
+                            // Other lists (My posts, another feed) hide it too.
+                            postsRefresh.notifyPostEnded(postId)
                             _toastMessage.value = "Question closed."
                             rebuildLoadedState()
                         }
@@ -973,7 +984,7 @@ class PulseFeedViewModel
         private fun visiblePosts(): List<FeedPost> =
             loadedPosts.filter { post ->
                 post.id !in removedPostIds &&
-                    post.id !in closedAskGenerations &&
+                    post.id !in endedPostGenerations &&
                     moderation.isVisible(
                         postId = post.id,
                         userId = post.userId,
@@ -1095,18 +1106,33 @@ class PulseFeedViewModel
             loadedPosts.firstOrNull { it.id == postId }?.let(repo::seedDetail)
         }
 
-        /** A fresh read after Close may return an Ask restored from My posts; an older read cannot undo Close. */
+        /** A fresh read after Close may return an Ask restored elsewhere (web, another phone); an older read cannot undo Close. */
         private fun acceptRestoredAsks(
             posts: List<FeedPost>,
             generation: Int,
         ) {
             posts.forEach { post ->
-                val closedDuring = closedAskGenerations[post.id] ?: return@forEach
-                if (generation > closedDuring && isOpenAsk(post, post.state == "solved")) {
-                    closedAskGenerations.remove(post.id)
+                val endedDuring = endedPostGenerations[post.id] ?: return@forEach
+                if (generation > endedDuring && isOpenAsk(post, post.state == "solved")) {
+                    endedPostGenerations.remove(post.id)
                     loadedPosts = loadedPosts.map { if (it.id == post.id) post else it }
                 }
             }
+        }
+
+        /**
+         * Own posts closed, deleted, archived or found gone on another screen leave this list at once, and come back when
+         * restored from My posts: a quiet read keeps the rows on screen, so it would not drop them by itself.
+         */
+        private fun applyPostEventsFromElsewhere() {
+            val (latest, events) = postsRefresh.postEventsAfter(postEventsSeen)
+            postEventsSeen = latest
+            if (events.isEmpty()) return
+            events.forEach { event ->
+                if (event.ended) endedPostGenerations[event.postId] = fetchGeneration else endedPostGenerations.remove(event.postId)
+            }
+            // Only the current query's rows are redrawn; a read still running or failed shows its own state.
+            if (postsLoaded) rebuildLoadedState()
         }
 
         /**
