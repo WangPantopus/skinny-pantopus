@@ -696,6 +696,76 @@
           }
         }
       }
+    },
+    {
+      "id": "2027-04-06-spring-wi",
+      "date": "2027-04-06",
+      "name": "April 6 spring election",
+      "kind": "spring",
+      "applies_to": ["WI"],
+      "source": "Wis. Stat. § 5.02(21)",
+      "source_url": "https://docs.legis.wisconsin.gov/statutes/statutes/5/i/02/21",
+      "states": {}
+    },
+    {
+      "id": "2027-10-09-gubernatorial-primary-la",
+      "date": "2027-10-09",
+      "name": "October 9 gubernatorial primary",
+      "kind": "primary",
+      "applies_to": ["LA"],
+      "source": "Louisiana Secretary of State, 2027 election schedule",
+      "source_url": "https://www.sos.la.gov/media/byfpyc5f/elections-calendar-2027.pdf",
+      "states": {}
+    },
+    {
+      "id": "2027-11-02-general-ky",
+      "date": "2027-11-02",
+      "name": "November 2 general election",
+      "kind": "general",
+      "applies_to": ["KY"],
+      "source": "Kentucky State Board of Elections, 2027 election calendar",
+      "source_url": "https://elect.ky.gov/Resources/Documents/2027%20Election%20Calendar.pdf",
+      "states": {}
+    },
+    {
+      "id": "2027-11-02-general-ms",
+      "date": "2027-11-02",
+      "name": "November 2 general election",
+      "kind": "general",
+      "applies_to": ["MS"],
+      "source": "Mississippi Secretary of State, 2026–2027 election calendar",
+      "source_url": "https://www.sos.ms.gov/sites/default/files/publications/Election%20Calendar_2026.pdf",
+      "states": {}
+    },
+    {
+      "id": "2027-11-02-general-nj",
+      "date": "2027-11-02",
+      "name": "November 2 general election",
+      "kind": "general",
+      "applies_to": ["NJ"],
+      "source": "N.J. Const. art. II, § I, ¶ 1",
+      "source_url": "https://www.njleg.state.nj.us/constitution",
+      "states": {}
+    },
+    {
+      "id": "2027-11-02-general-va",
+      "date": "2027-11-02",
+      "name": "November 2 general election",
+      "kind": "general",
+      "applies_to": ["VA"],
+      "source": "Va. Code § 24.2-101",
+      "source_url": "https://law.lis.virginia.gov/vacode/title24.2/chapter1/section24.2-101/",
+      "states": {}
+    },
+    {
+      "id": "2027-11-20-gubernatorial-general-la",
+      "date": "2027-11-20",
+      "name": "November 20 gubernatorial general election",
+      "kind": "general",
+      "applies_to": ["LA"],
+      "source": "Louisiana Secretary of State, 2027 election schedule",
+      "source_url": "https://www.sos.la.gov/media/byfpyc5f/elections-calendar-2027.pdf",
+      "states": {}
     }
   ]
 }

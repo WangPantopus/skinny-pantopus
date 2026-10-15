@@ -221,6 +221,8 @@ function validateReferenceData(statesDoc = STATES_DOC, electionsDoc = ELECTIONS_
     ids.add(election.id);
     if (!isIsoDate(election.date)) errors.push(`${at}: date must be YYYY-MM-DD`);
     if (typeof election.name !== 'string' || !election.name) errors.push(`${at}: name is required`);
+    // A links-only card cites it as the date's authority ("Election date: …").
+    if (typeof election.source !== 'string' || !election.source) errors.push(`${at}: source is required`);
     if (election.applies_to !== 'all_states' && !Array.isArray(election.applies_to)) {
       errors.push(`${at}: applies_to must be "all_states" or a list of states`);
     }
@@ -402,6 +404,9 @@ function currentElection(value, { now = new Date(), timezone = null } = {}) {
     .filter((e) => electionAppliesTo(e, state.code))
     .map((e) => ({ election: e, daysUntil: daysBetween(today, e.date), afterDays: afterDaysFor(e, state) }))
     .filter(({ daysUntil, afterDays }) => phaseFor(daysUntil, afterDays) !== null)
+    // A links-only card is gone once its election passes, so the week after
+    // one must not hide the next (Louisiana: Oct 9 primary, Nov 20 general).
+    .filter(({ daysUntil, afterDays }) => state.coverage === 'supported' || phaseFor(daysUntil, afterDays) !== 'after')
     .sort((a, b) => a.election.date.localeCompare(b.election.date));
   if (!candidates.length) return null;
   const { election, daysUntil, afterDays } = candidates[0];
