@@ -287,6 +287,7 @@ private fun PulsePageMenus(viewModel: PulsePageViewModel) {
     val selected = menu ?: return
     val card = selected.card
     val context = LocalContext.current
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
     if (selected.action == null) {
         PostOverflowSheet(
             actions = card.actions.copy(pulseTopic = card.actions.pulseTopic.takeIf { card.areaId != null }),
@@ -296,13 +297,17 @@ private fun PulsePageMenus(viewModel: PulsePageViewModel) {
             onShare =
                 if (card.canShare) {
                     {
-                        viewModel.dismissMenu()
-                        val share =
-                            Intent(Intent.ACTION_SEND).apply {
-                                type = "text/plain"
-                                putExtra(Intent.EXTRA_TEXT, "https://www.pantopus.com/posts/${card.id}")
+                        viewModel.shareExternally(card) { url ->
+                            // The answer can arrive after the person left the page: no chooser over another screen.
+                            if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                                val share =
+                                    Intent(Intent.ACTION_SEND).apply {
+                                        type = "text/plain"
+                                        putExtra(Intent.EXTRA_TEXT, url)
+                                    }
+                                context.startActivity(Intent.createChooser(share, "Share post"))
                             }
-                        context.startActivity(Intent.createChooser(share, "Share post"))
+                        }
                     }
                 } else {
                     null
