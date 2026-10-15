@@ -8,24 +8,27 @@ enum PulseOfferRequestsState: Equatable {
 
 extension PulsePostDetailViewModel {
     var offerActionLabel: String {
-        if conversation?.post.offer?.gone == true, offerRequestStatus != "chosen" {
-            return offerRequestStatus == "requested" ? "Someone else got this one." : "Gone"
-        }
-        switch offerRequestStatus {
-        case "requested": return "Requested"
+        let offer = conversation?.post.offer
+        // The server's word on the reader's own request (`offer.viewer_claim`,
+        // contract §2.8) survives a relaunch; this screen's answer covers the
+        // moment before the next read.
+        switch offer?.viewerClaim?.status ?? offerRequestStatus {
         case "chosen": return "It's yours"
+        case "requested": return offer?.gone == true ? "Someone else got this one." : "Requested"
         case "enough_requests": return "Enough requests already"
-        case "gone": return "Gone"
+        // A refused request (`OFFER_GONE`) had no request of the reader's own.
+        case "gone": return offer?.viewerClaim == nil ? "Gone" : "Someone else got this one."
         default:
+            if offer?.gone == true { return "Gone" }
             if conversation?.post.action?.done == true { return "Requested" }
-            if conversation?.post.offer?.requestsOpen == false { return "Enough requests already" }
+            if offer?.requestsOpen == false { return "Enough requests already" }
             return "I'd like it"
         }
     }
 
     var canRequestOffer: Bool {
         guard let post = conversation?.post, post.type == "offer", !isOwner,
-              post.offer?.requestsOpen == true, post.offer?.gone != true,
+              post.offer?.requestsOpen == true, post.offer?.gone != true, post.offer?.viewerClaim == nil,
               post.action?.done != true, offerRequestStatus == nil else { return false }
         return pendingConversationActions.isEmpty && !isSendingComment
     }
