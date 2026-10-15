@@ -46,7 +46,9 @@ CREATE TABLE public."KnownConfirmation" (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   entry_id uuid NOT NULL REFERENCES public."KnownEntry"(id) ON DELETE CASCADE,
   user_id uuid NOT NULL REFERENCES public."User"(id) ON DELETE CASCADE,
-  home_id uuid REFERENCES public."Home"(id) ON DELETE SET NULL,
+  -- The verified home it counted for. No foreign key: Home's deletion policy owns every Home
+  -- dependency, and a deleted home's earlier confirmation still counted when it was made.
+  home_id uuid,
   kind text NOT NULL CHECK (kind IN ('confirm', 'correct', 'outdated')),
   note text CHECK (note IS NULL OR char_length(note) <= 500),
   created_at timestamptz NOT NULL DEFAULT now(),
