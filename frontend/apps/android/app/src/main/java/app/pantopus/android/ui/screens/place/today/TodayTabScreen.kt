@@ -90,10 +90,7 @@ fun TodayTabScreen(
     var pulled by remember { mutableStateOf(false) }
     var visibleFrame by remember { mutableStateOf(Rect.Zero) }
     LaunchedEffect(refreshing) { if (!refreshing) pulled = false }
-    val placeZone =
-        (state as? TodayTabUiState.Loaded)?.intelligence?.timeZone
-            ?.let { runCatching { ZoneId.of(it) }.getOrNull() } ?: ZoneId.systemDefault()
-    val placeNow = rememberMinuteClock(placeZone)
+    val placeNow = rememberMinuteClock(todayPlaceZone(state))
     val nowMs = placeNow.toInstant().toEpochMilli()
     Column(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg).testTag("todayTab")) {
         Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp)) {
@@ -161,6 +158,10 @@ fun TodayTabScreen(
         }
     }
 }
+
+private fun todayPlaceZone(state: TodayTabUiState): ZoneId =
+    (state as? TodayTabUiState.Loaded)?.intelligence?.timeZone
+        ?.let { runCatching { ZoneId.of(it) }.getOrNull() } ?: ZoneId.systemDefault()
 
 /** Contract §4: an alert check past 30 minutes is never shown as "no alerts". */
 private fun alertsCheck(

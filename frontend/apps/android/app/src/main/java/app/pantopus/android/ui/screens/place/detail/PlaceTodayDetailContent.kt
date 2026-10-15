@@ -1227,9 +1227,13 @@ private fun TodayWeatherSection(
                 intel.section(PlaceSectionId.SUNRISE_SUNSET)?.sunriseSunset,
                 pickups,
                 air,
-                home = intel.section(PlaceSectionId.YOUR_HOME)?.yourHome.let { SkyHome.of(it?.house, it?.homeType) },
-                streetLights = SkyStreet.lights(intel.section(PlaceSectionId.BLOCK_DENSITY)?.blockDensity?.bucket?.name?.lowercase()),
-                timeZone = placeSkyZone(intel),
+                place =
+                    SkyPlace(
+                        home = intel.section(PlaceSectionId.YOUR_HOME)?.yourHome.let { SkyHome.of(it?.house, it?.homeType) },
+                        streetLights =
+                            SkyStreet.lights(intel.section(PlaceSectionId.BLOCK_DENSITY)?.blockDensity?.bucket?.name?.lowercase()),
+                        timeZone = placeSkyZone(intel),
+                    ),
                 onBins = onBins,
             )
             PlaceSourceNote(env.source.orEmpty().ifBlank { "Source unavailable" }, PlacePresentation.fmtTime(env.asOf))
