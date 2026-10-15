@@ -35,6 +35,7 @@ const { buildHeatColdOutlook } = require('./heatColdEngine');
 const ballotSummary = require('./ballot/summary');
 const ballotGovernments = require('./ballot/governments');
 const ballotReference = require('./ballot/referenceData');
+const { isConnecticutPlanningRegion, legacyCountyForTown } = require('../data/connecticutTowns');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 8000;
@@ -118,6 +119,37 @@ async function lookupCountyFips(home, ll, pointKey) {
     return (payload && payload.county_fips) || null;
   } catch (err) {
     logger.warn('placeSections: county fips failed', { homeId: home.id, error: err.message });
+    return null;
+  }
+}
+
+// ── Connecticut: the old county for a point, through its town ──
+// Since 2022 the geocoder places Connecticut in planning regions, but
+// EPA's radon map and drinking-water records still use the eight old
+// counties, and a planning region spans several of them. The town decides:
+// every town lies wholly inside one old county (data/connecticutTowns.js).
+// Asked only for Connecticut points; cached like the county itself.
+async function connecticutLegacyCounty(home) {
+  const ll = homeLatLng(home);
+  if (!ll) return null;
+  try {
+    const { payload } = await readThrough({
+      cacheKey: `geo:${encodeGeohash(ll.lat, ll.lng, 7)}`,
+      sectionId: '_ct_legacy_county',
+      ttlMs: 365 * DAY_MS,
+      fetch: async () => {
+        const data = await fetchJson(
+          'https://geocoding.geo.census.gov/geocoder/geographies/coordinates'
+          + `?x=${ll.lng}&y=${ll.lat}&benchmark=Public_AR_Current&vintage=Current_Current`
+          + '&layers=County%20Subdivisions&format=json',
+        );
+        const town = data?.result?.geographies?.['County Subdivisions']?.[0];
+        return town && town.STATE === '09' ? legacyCountyForTown(town.COUSUB) : null;
+      },
+    });
+    return payload || null;
+  } catch (err) {
+    logger.warn('placeSections: connecticut town failed', { homeId: home.id, error: err.message });
     return null;
   }
 }
@@ -280,7 +312,13 @@ function leadRadonSummary(yearBuilt, risk, zone) {
 
 async function composeLeadRadon(home) {
   try {
-    const countyFips = await homeCountyFips(home);
+    let countyFips = await homeCountyFips(home);
+    // EPA zoned Connecticut by its old counties; a planning region has no
+    // single zone, so the town picks the county (null when it can't).
+    if (isConnecticutPlanningRegion(countyFips)) {
+      const legacy = await connecticutLegacyCounty(home);
+      countyFips = legacy ? legacy.county_fips : null;
+    }
     let zone = null;
     let countyName = null;
     if (countyFips) {
@@ -387,17 +425,27 @@ function stripCountySuffix(name) {
   return String(name || '').replace(/\s+(county|parish|borough|census area|municipality|planning region)$/i, '').trim();
 }
 
+// The county as EPA names it: HUD's county name, except in Connecticut,
+// where EPA still uses the old county the home's town belongs to.
+async function waterCounty(countyFips, legacy) {
+  if (legacy) return { county: legacy.county_name, state: 'CT' };
+  const fmr = await hudFmrRow(countyFips);
+  return fmr ? { county: stripCountySuffix(fmr.county_name), state: fmr.state_abbr } : null;
+}
+
 // One county fetch: active community systems → pick the one serving the
 // home's city when the name matches, else the largest; then its
 // health-based violations (last 5 years).
-async function fetchCountyWater(countyFips, homeCity) {
-  const fmr = await hudFmrRow(countyFips);
-  if (!fmr) return null;
-  const county = stripCountySuffix(fmr.county_name);
-  const state = fmr.state_abbr;
+async function fetchCountyWater(countyFips, homeCity, legacy = null) {
+  const where = await waterCounty(countyFips, legacy);
+  if (!where) return null;
+  const { county, state } = where;
 
+  // area_type_code is a set of codes: "CN" (county) or "CN,CT" (county and
+  // city). Every active Connecticut system reads "CN,CT", so an exact "CN"
+  // match found none there.
   const areas = await fetchJson(
-    `${SDWIS_BASE}/sdwis.geographic_area/area_type_code/equals/CN` +
+    `${SDWIS_BASE}/sdwis.geographic_area/area_type_code/contains/CN` +
     `/and/county_served/equals/${encodeURIComponent(county)}` +
     `/and/primacy_agency_code/equals/${state}` +
     '/and/pws_type_code/equals/CWS/and/pws_activity_code/equals/A/1:40/json',
@@ -443,14 +491,19 @@ async function composeDrinkingWater(home) {
   try {
     const countyFips = await homeCountyFips(home);
     if (!countyFips) return [serializePlaceSection('drinking_water', { status: 'unavailable' })];
+    const legacy = isConnecticutPlanningRegion(countyFips) ? await connecticutLegacyCounty(home) : null;
+    if (isConnecticutPlanningRegion(countyFips) && !legacy) {
+      return [serializePlaceSection('drinking_water', { status: 'unavailable' })];
+    }
+    const keyFips = legacy ? legacy.county_fips : countyFips;
 
     // City folded into the key: neighbors in the same city share the row.
     const citySlug = String(home.city || '').toLowerCase().replace(/[^a-z]/g, '') || 'any';
     const { payload, fetchedAt, stale } = await readThrough({
-      cacheKey: `county:${countyFips}:${citySlug}`,
+      cacheKey: `county:${keyFips}:${citySlug}`,
       sectionId: 'drinking_water',
       ttlMs: 90 * DAY_MS,
-      fetch: () => fetchCountyWater(countyFips, home.city),
+      fetch: () => fetchCountyWater(countyFips, home.city, legacy),
     });
     if (!payload) {
       return [serializePlaceSection('drinking_water', {
