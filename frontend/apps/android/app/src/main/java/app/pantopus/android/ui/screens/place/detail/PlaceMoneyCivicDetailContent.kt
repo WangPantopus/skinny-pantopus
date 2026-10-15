@@ -125,18 +125,10 @@ fun PlaceMoneyDetailContent(
     }
     intel.section(PlaceSectionId.EXEMPTION_CHECK)?.let { env ->
         PlaceDetailSectionLabel("Property-tax exemption")
-        val data = env.exemptionCheck
-        // A partial section is the not_checked card: the state's program
-        // without a parcel reading.
-        val notChecked =
-            env.status == PlaceSectionStatus.PARTIAL && data?.filingStatus == ExemptionFilingStatus.NOT_CHECKED
-        if (data != null && (env.isLive() || notChecked)) {
-            ExemptionCheckCard(data, reason = if (notChecked) env.unavailableReason else null)
-        } else {
-            PlaceDetailFallbackCard(env)
-        }
+        val data = env.exemptionCheck?.takeIf { env.isLive() || env.exemptionNotChecked }
+        if (data != null) ExemptionCheckCard(data, reason = env.unavailableReason) else PlaceDetailFallbackCard(env)
         // not_checked links its state's page inside the card instead.
-        if (!notChecked) SourceNoteUnlessLocked(env, "County records · ATTOM")
+        if (!env.exemptionNotChecked) SourceNoteUnlessLocked(env, "County records · ATTOM")
     }
     // Rate watch, deed alerts and the property-tax check are the owner's, like the exemption check.
     if (intel.ownerTools) OwnerTools(intel, viewModel)
@@ -359,6 +351,10 @@ private fun RateColumn(
         )
     }
 }
+
+/** A partial exemption section is the not_checked card: the state's program without a parcel reading. */
+private val PlaceSectionEnvelope.exemptionNotChecked: Boolean
+    get() = status == PlaceSectionStatus.PARTIAL && exemptionCheck?.filingStatus == ExemptionFilingStatus.NOT_CHECKED
 
 // Wave 2 — the honesty ladder as a card: ON_FILE (green, nothing to
 // chase) · NONE_ON_FILE (amber — the "exemptions aren't automatic"
