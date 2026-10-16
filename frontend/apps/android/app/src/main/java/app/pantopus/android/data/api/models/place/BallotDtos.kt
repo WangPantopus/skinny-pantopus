@@ -62,6 +62,30 @@ data class BallotOfficialLink(
     val url: String,
 )
 
+/** Who runs the state's elections (`civic_districts.election_office`). */
+@JsonClass(generateAdapter = true)
+data class BallotElectionOffice(
+    val name: String,
+    /** The office as it reads in a sentence: "the Texas Secretary of State". */
+    @Json(name = "phrase") val sentencePhrase: String? = null,
+    /** "Until then, the Texas Secretary of State and your county election office have upcoming election dates." */
+    val note: String? = null,
+    val links: List<BallotOfficialLink> = emptyList(),
+) {
+    val phrase: String get() = sentencePhrase ?: "the $name"
+
+    companion object {
+        /** A section's `election_office` field, or null when absent, malformed or linkless. */
+        fun decodeIn(
+            moshi: Moshi,
+            data: Any?,
+        ): BallotElectionOffice? =
+            (data as? Map<*, *>)?.get("election_office")?.let { raw ->
+                runCatching { moshi.adapter(BallotElectionOffice::class.java).fromJsonValue(raw) }.getOrNull()
+            }?.takeIf { it.links.isNotEmpty() }
+    }
+}
+
 @JsonClass(generateAdapter = true)
 data class BallotGovernment(
     val level: String,
