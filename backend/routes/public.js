@@ -372,13 +372,15 @@ async function fetchMoneyLeadCached(lat, lng, resolveTract) {
       const [nfip, fmr] = await Promise.all([
         // enqueue: false — an anonymous drive-by must not take a slot in
         // the warm queue ahead of a tract someone actually lives in.
-        nfipPremiumService.getTractBenchmark(tract.tractId, { enqueue: false }).catch(() => null),
+        placeSectionAdapters.nfipBenchmarkAt({ lat, lng, tractId: tract.tractId }, { enqueue: false }).catch(() => null),
         placeSectionAdapters.hudFmrRow(`${tract.stateCode}${tract.countyCode}`).catch(() => null),
       ]);
 
       // Flood cost first: it is the most specific to the address (a
-      // census tract, not a county) and the most surprising.
-      if (nfip && nfip.status === 'ready' && nfip.data && nfip.data.premium_p25 && nfip.data.premium_p75) {
+      // census tract, not a county) and the most surprising. A Connecticut
+      // tract too thin to compare reads its old county instead, the figure
+      // the Place flood section shows there, and the lead says county-wide.
+      if (nfip && nfip.data && nfip.data.premium_p25 && nfip.data.premium_p75) {
         // WHOLE DOLLARS. The NFIP quantile returns a raw premium straight
         // from OpenFEMA, which carries cents — so this could be 1243.5.
         // Two reasons that must not escape: a headline reading
@@ -389,15 +391,31 @@ async function fetchMoneyLeadCached(lat, lng, resolveTract) {
         // platforms and are unaffected.)
         const low = Math.round(nfip.data.premium_p25);
         const high = Math.round(nfip.data.premium_p75);
-        lead = {
-          kind: 'flood_premium',
-          headline: `Flood policies near here run $${low.toLocaleString('en-US')}–$${high.toLocaleString('en-US')} a year`,
-          detail: `Across ${nfip.data.policy_count} real NFIP policies in this census tract. A benchmark, not a quote. ${nfipPremiumService.OPENFEMA_NOTICE}`,
-          low,
-          high,
-          scope: 'census tract',
-          source: 'FEMA · OpenFEMA NFIP policies',
-        };
+        const band = `$${low.toLocaleString('en-US')}–$${high.toLocaleString('en-US')}`;
+        lead = nfip.scope === 'county'
+          ? {
+            kind: 'flood_premium',
+            headline: `Flood policies across ${nfip.county_name || 'the county'} run ${band} a year`,
+            // A county benchmark is usually a capped sample of its
+            // policies (coverage 'partial'), and the count says so.
+            detail: `From ${nfip.data.coverage === 'partial' ? 'a sample of ' : ''}`
+              + `${Number(nfip.data.policy_count).toLocaleString('en-US')} real NFIP policies written across the county `
+              + `in the last ${nfip.data.window_months} months; this census tract has too few to compare. `
+              + `A benchmark, not a quote. ${nfipPremiumService.OPENFEMA_NOTICE}`,
+            low,
+            high,
+            scope: 'county',
+            source: 'FEMA · OpenFEMA NFIP policies',
+          }
+          : {
+            kind: 'flood_premium',
+            headline: `Flood policies near here run ${band} a year`,
+            detail: `Across ${nfip.data.policy_count} real NFIP policies in this census tract. A benchmark, not a quote. ${nfipPremiumService.OPENFEMA_NOTICE}`,
+            low,
+            high,
+            scope: 'census tract',
+            source: 'FEMA · OpenFEMA NFIP policies',
+          };
       } else if (fmr && Array.isArray(fmr.fmr_lo) && fmr.fmr_lo[2]) {
         // Every figure in this headline has to come off the HUD row.
         //

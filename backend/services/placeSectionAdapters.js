@@ -34,6 +34,7 @@ const { geocodeToTract } = require('./ai/neighborhoodProfileService');
 const { fetchHeatRisk } = require('./external/heatRisk');
 const { fetchHeatIndexDays } = require('./external/nwsHeatIndex');
 const { buildHeatColdOutlook } = require('./heatColdEngine');
+const nfipPremiumService = require('./nfipPremiumService');
 const ballotSummary = require('./ballot/summary');
 const ballotGovernments = require('./ballot/governments');
 const ballotReference = require('./ballot/referenceData');
@@ -155,6 +156,31 @@ async function connecticutLegacyCounty(home) {
     logger.warn('placeSections: connecticut town failed', { homeId: home.id, error: err.message });
     return null;
   }
+}
+
+// ── NFIP premiums at a point (the anonymous preview and Scout) ──
+// Both have coordinates and a geocoded tract but no Home row. OpenFEMA
+// files Connecticut policies under the old counties, so a planning-region
+// tract is read as `<old county><tract>` (the 2022 change kept the tract
+// codes), and a tract too thin to compare falls back to that old county,
+// labeled county-wide: what the Place flood section shows a Connecticut
+// home. No town, no benchmark. Other states read the tract alone (the
+// Place flood section falls back to the county in every state).
+// Cache reads only. Resolves to { scope, county_name, data } or null.
+async function nfipBenchmarkAt({ lat, lng, tractId }, { enqueue }) {
+  const id = String(tractId || '');
+  const ready = (benchmark, scope, countyName = null) => (benchmark.status === 'ready'
+    ? { scope, county_name: countyName, data: benchmark.data }
+    : null);
+  if (!isConnecticutPlanningRegion(id.slice(0, 5))) {
+    return ready(await nfipPremiumService.getTractBenchmark(id, { enqueue }), 'census tract');
+  }
+  const legacy = await connecticutLegacyCounty({ map_center_lat: lat, map_center_lng: lng });
+  if (!legacy) return null;
+  const tract = await nfipPremiumService.getTractBenchmark(`${legacy.county_fips}${id.slice(5)}`, { enqueue });
+  if (tract.status !== 'suppressed') return ready(tract, 'census tract');
+  const county = await nfipPremiumService.getCountyBenchmark(legacy.county_fips, { enqueue });
+  return ready(county, 'county', legacy.county_name ? `${legacy.county_name} County` : null);
 }
 
 async function hudFmrRow(countyFips) {
@@ -1402,6 +1428,8 @@ module.exports = {
   homeCountyFips,
   // OpenFEMA still files Connecticut flood policies under the old counties.
   connecticutLegacyCounty,
+  // The preview's and Scout's flood-premium benchmark, Connecticut included.
+  nfipBenchmarkAt,
   // Exported for testing.
   parseCsv,
   districtEq,
