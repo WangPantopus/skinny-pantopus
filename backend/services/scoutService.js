@@ -156,7 +156,7 @@ function askBeforeYouSign({ flood, nfip, radon, water, rentBand, askingRent }) {
       asks.push({
         id: 'flood_premium_benchmark',
         question: 'Ask to see the current flood policy and its declarations page.',
-        because: `Real NFIP policies in this census tract run a median of $${nfip.premium_median.toLocaleString('en-US')} a year. A quote for this address could differ, but a number far below that is worth asking about.`,
+        because: `Real NFIP policies in this census tract run a median of $${nfip.premium_median.toLocaleString('en-US')} a year. A quote for this address could differ, but a number far below that is worth asking about. ${nfipPremiumService.OPENFEMA_NOTICE}`,
         source: 'FEMA · OpenFEMA NFIP policies',
       });
     }

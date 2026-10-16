@@ -670,6 +670,21 @@ async function composeAddressCalendar(home) {
   }
 }
 
+// A cached NFIP benchmark as the flood section ships it.
+function nfipPayload(benchmark, scope) {
+  return {
+    scope,
+    policy_count: benchmark.data.policy_count,
+    premium_p25: benchmark.data.premium_p25,
+    premium_median: benchmark.data.premium_median,
+    premium_p75: benchmark.data.premium_p75,
+    full_risk_median: benchmark.data.full_risk_median ?? null,
+    window_months: benchmark.data.window_months,
+    coverage: benchmark.data.coverage,
+    as_of: benchmark.fetchedAt || null,
+  };
+}
+
 async function composeNeighborhood(home) {
   const ll = homeLatLng(home);
   let profile = null;
@@ -705,16 +720,13 @@ async function composeNeighborhood(home) {
       try {
         const nfip = await nfipPremiumService.getTractBenchmark(profile.tract_id);
         if (nfip.status === 'ready') {
-          floodData.nfip = {
-            policy_count: nfip.data.policy_count,
-            premium_p25: nfip.data.premium_p25,
-            premium_median: nfip.data.premium_median,
-            premium_p75: nfip.data.premium_p75,
-            full_risk_median: nfip.data.full_risk_median ?? null,
-            window_months: nfip.data.window_months,
-            coverage: nfip.data.coverage,
-            as_of: nfip.fetchedAt || null,
-          };
+          floodData.nfip = nfipPayload(nfip, 'tract');
+        } else if (nfip.status === 'suppressed') {
+          // Too few policies in the tract to compare: the county's, labeled
+          // county-wide. A separate field, so builds that call every
+          // benchmark "your census tract" never show a county one.
+          const county = await nfipPremiumService.getCountyBenchmark(String(profile.tract_id).slice(0, 5));
+          if (county.status === 'ready') floodData.nfip_area = nfipPayload(county, 'county');
         }
       } catch (err) {
         logger.warn('placeIntelligence: nfip benchmark failed', { homeId: home.id, error: err.message });
@@ -915,7 +927,15 @@ async function composeBillBenchmark(home, access, userId) {
   }
   const comparableTypes = new Set(peers.filter(row => ownByType.get(row.bill_type)?.has(row.month)).map(row => row.bill_type));
   const picked = pickBillType(peers, comparableTypes);
-  if (!picked) return [serializePlaceSection('bill_benchmark', { access: 'available', status: 'unavailable' })];
+  if (!picked) {
+    // Say why, instead of a bare "unavailable": the comparison waits for
+    // enough neighbors (no count — small cohorts stay undisclosed).
+    return [serializePlaceSection('bill_benchmark', {
+      access: 'available',
+      status: 'unavailable',
+      unavailableReason: 'Not enough households near you have shared bills yet. Comparisons start once 10 nearby households share the same kind of bill.',
+    })];
+  }
   const own = ownByType.get(picked.type);
   const common = own ? picked.rows.filter(row => own.has(row.month)) : [];
   const selected = common.length ? common : picked.rows;

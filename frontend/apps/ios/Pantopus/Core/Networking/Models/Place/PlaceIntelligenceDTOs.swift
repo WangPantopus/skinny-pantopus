@@ -458,6 +458,9 @@ public struct PlaceFloodData: Decodable, Sendable, Hashable {
     public let plainMeaning: String
     /// Wave 2 — the tract's NFIP premium benchmark, when warmed.
     public let nfip: PlaceFloodNfipData?
+    /// The county-wide benchmark, sent only when the tract has too few
+    /// policies (never alongside `nfip`).
+    public let nfipArea: PlaceFloodNfipData?
 
     private enum CodingKeys: String, CodingKey {
         case zone
@@ -467,6 +470,7 @@ public struct PlaceFloodData: Decodable, Sendable, Hashable {
         case insuranceRequired = "insurance_required"
         case plainMeaning = "plain_meaning"
         case nfip
+        case nfipArea = "nfip_area"
     }
 }
 

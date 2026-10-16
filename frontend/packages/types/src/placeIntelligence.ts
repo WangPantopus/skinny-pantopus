@@ -318,6 +318,8 @@ export type FloodRiskLevel = 'minimal' | 'moderate' | 'high';
  * A benchmark, never a quote — Risk Rating 2.0 varies within a tract.
  */
 export interface PlaceFloodNfipData {
+  /** Where the policies were written; 'county' only under `nfip_area`. */
+  scope?: 'tract' | 'county';
   policy_count: number;
   premium_p25: number;
   premium_median: number;
@@ -348,6 +350,12 @@ export interface PlaceFloodData {
    * to zone-only.
    */
   nfip?: PlaceFloodNfipData;
+  /**
+   * The county-wide benchmark, sent only when the tract has too few
+   * policies to compare (never alongside `nfip`). Its own field so builds
+   * that describe `nfip` as "your census tract" never show county numbers.
+   */
+  nfip_area?: PlaceFloodNfipData;
 }
 
 /**

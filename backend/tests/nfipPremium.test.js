@@ -135,7 +135,7 @@ describe('warmPendingTracts', () => {
     }]);
   }
 
-  test('fetches the pending tract with the bare-range query and stores the benchmark', async () => {
+  test('fetches the pending tract with the dated, state-filtered query and stores the benchmark', async () => {
     seedPending();
     global.fetch.mockResolvedValue({
       ok: true,
@@ -147,13 +147,13 @@ describe('warmPendingTracts', () => {
     const result = await warmPendingTracts({ limit: 3 });
     expect(result).toEqual({ warmed: 1, failed: 0, deadLettered: 0 });
 
-    // The only fast query shape: bare censusGeoid range, no count, no
-    // orderby, no extra conjunctions (all of those 503 — probed live).
-    const url = global.fetch.mock.calls[0][0];
-    expect(url).toContain('censusGeoid');
+    // The fast query shape (re-probed live 2026-10-15): the state, the
+    // tract's geoid prefix and the window's start date; no count, no orderby.
+    const url = decodeURIComponent(global.fetch.mock.calls[0][0]).replace(/\+/g, ' ');
+    expect(url).toContain(`propertyState eq 'WA' and startswith(censusGeoid,'${TRACT}')`);
+    expect(url).toContain('policyEffectiveDate ge ');
     expect(url).not.toContain('inlinecount');
     expect(url).not.toContain('orderby');
-    expect(url).not.toContain('policyEffectiveDate%20ge');
 
     const row = getTable('PlaceSectionCache').find((r) => r.cache_key === `tract:${TRACT}`);
     expect(row.payload.pending).toBeUndefined();
