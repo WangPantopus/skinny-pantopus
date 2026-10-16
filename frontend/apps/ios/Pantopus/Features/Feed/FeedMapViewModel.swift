@@ -139,23 +139,32 @@ public struct FeedMapLoaded: Sendable, Hashable {
     /// Backend hint offered when the viewport was empty
     /// (`backend/routes/posts.js:1854`).
     public let nearestActivityCenter: FeedMapRegion?
+    /// Posts of the tapped cluster shown as a list (one zooming can't split).
+    public let clusterPostIds: Set<String>
 
     public init(
         entities: [ExploreEntity],
         markers: [ExploreMarker],
         userCoordinate: UserCoordinate?,
         selectedId: String? = nil,
-        nearestActivityCenter: FeedMapRegion? = nil
+        nearestActivityCenter: FeedMapRegion? = nil,
+        clusterPostIds: Set<String> = []
     ) {
         self.entities = entities
         self.markers = markers
         self.userCoordinate = userCoordinate
         self.selectedId = selectedId
         self.nearestActivityCenter = nearestActivityCenter
+        self.clusterPostIds = clusterPostIds
     }
 
     public var isEmpty: Bool {
         entities.isEmpty
+    }
+
+    /// The listed cluster's posts, nearest first.
+    public var clusterPosts: [ExploreEntity] {
+        entities.filter { clusterPostIds.contains($0.id) }
     }
 }
 
@@ -394,15 +403,23 @@ public final class FeedMapViewModel {
 
     // MARK: - Selection
 
-    public func selectEntity(_ id: String?) {
+    /// Shows a pin's preview card, or none for nil, or (with `clusterPostIds`)
+    /// a tapped cluster's posts as a list in its place.
+    public func selectEntity(_ id: String?, clusterPostIds: Set<String> = []) {
         guard case let .loaded(loaded) = state else { return }
         state = .loaded(FeedMapLoaded(
             entities: loaded.entities,
             markers: loaded.markers,
             userCoordinate: loaded.userCoordinate,
             selectedId: id,
-            nearestActivityCenter: loaded.nearestActivityCenter
+            nearestActivityCenter: loaded.nearestActivityCenter,
+            clusterPostIds: clusterPostIds
         ))
+    }
+
+    /// Lists `cluster`'s posts in the preview card's place.
+    public func showClusterPosts(_ cluster: ExploreCluster) {
+        selectEntity(nil, clusterPostIds: Set(cluster.entityIds))
     }
 
     /// Currently selected pin, if any.
@@ -415,9 +432,12 @@ public final class FeedMapViewModel {
         selectEntity(nil)
     }
 
+    /// The smallest cluster radius, in degrees, however far the map zooms in.
+    static let minClusterRadius = 0.0005
+
     /// Widen the cluster radius as the camera zooms out and vice versa.
     public func clusterRadius(for region: FeedMapRegion) -> Double {
-        max(0.0005, min(region.latitudeDelta * 0.08, 0.05))
+        max(Self.minClusterRadius, min(region.latitudeDelta * 0.08, 0.05))
     }
 
     // MARK: - Fetch

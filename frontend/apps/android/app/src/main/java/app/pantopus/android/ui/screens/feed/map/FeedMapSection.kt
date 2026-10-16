@@ -9,12 +9,18 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -31,6 +37,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -72,6 +79,7 @@ import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
 import kotlinx.coroutines.launch
 import kotlin.math.abs
+import kotlin.math.floor
 import kotlin.math.ln
 import kotlin.math.max
 
@@ -80,7 +88,8 @@ import kotlin.math.max
  * single layer: a full-bleed Google Map of post pins (clustered by the
  * Explore clusterer), a floating "Search this area" pill that appears once
  * the camera leaves the fetched viewport, a recenter control, and a bottom
- * preview card for the selected pin.
+ * preview card for the selected pin (or the posts of a tapped cluster that
+ * zooming can't split).
  *
  * Reuses `ExploreTypedPin` / `ExploreClusterDot` / `ExploreYouAreHereDot` so
  * Pulse and Explore render one pin vocabulary.
@@ -131,7 +140,15 @@ fun FeedMapSection(
             userCoordinate = (state as? FeedMapUiState.Loaded)?.userCoordinate,
             cameraState = cameraState,
             onPinTap = viewModel::selectEntity,
-            onClusterTap = { cluster -> scope.launch { zoomToCluster(cameraState, cluster) } },
+            onClusterTap = { cluster ->
+                // Search would leave it one cluster when its posts share a point
+                // or the camera is already as close as the tap zooms: list them.
+                if (zoomCanSplit(cluster) && clusterZoom(cluster) > cameraState.position.zoom + 0.1f) {
+                    scope.launch { zoomToCluster(cameraState, cluster) }
+                } else {
+                    viewModel.showClusterPosts(cluster)
+                }
+            },
         )
         if (viewportDirty) {
             SearchThisAreaPill(
@@ -162,8 +179,15 @@ fun FeedMapSection(
                 is FeedMapUiState.Error -> ErrorCard(current.message, viewModel::refresh)
                 is FeedMapUiState.Loaded -> {
                     val selected = current.entities.firstOrNull { it.id == current.selectedId }
+                    val clusterPosts = current.clusterPosts
                     when {
                         selected != null -> PreviewCard(selected) { onOpenPost(selected.id) }
+                        clusterPosts.isNotEmpty() ->
+                            ClusterPostsCard(
+                                posts = clusterPosts,
+                                onOpenPost = onOpenPost,
+                                onClose = { viewModel.selectEntity(null) },
+                            )
                         current.isEmpty ->
                             EmptyCard(
                                 hasHint = current.nearestActivityCenter != null,
@@ -245,15 +269,32 @@ private suspend fun zoomToCluster(
     cameraState: CameraPositionState,
     cluster: ExploreCluster,
 ) {
-    val span = max(cluster.maxLatitude - cluster.minLatitude, cluster.maxLongitude - cluster.minLongitude)
     cameraState.animate(
         CameraUpdateFactory.newCameraPosition(
             CameraPosition.fromLatLngZoom(
                 LatLng((cluster.minLatitude + cluster.maxLatitude) / 2, (cluster.minLongitude + cluster.maxLongitude) / 2),
-                zoomForDelta(span.coerceAtLeast(0.004) * 1.4),
+                clusterZoom(cluster),
             ),
         ),
     )
+}
+
+/** The zoom a cluster tap moves to: the cluster with a margin, at least 0.004° across. */
+private fun clusterZoom(cluster: ExploreCluster): Float {
+    val span = max(cluster.maxLatitude - cluster.minLatitude, cluster.maxLongitude - cluster.minLongitude)
+    return zoomForDelta(span.coerceAtLeast(0.004) * 1.4)
+}
+
+/**
+ * Whether zooming in can split [cluster]: its posts fall in more than one
+ * bucket at the smallest cluster radius. Approximate-area posts from one
+ * 0.005° cell share a displayed point (`backend/utils/locationPrivacy.js`),
+ * so a cluster of only those never splits.
+ */
+private fun zoomCanSplit(cluster: ExploreCluster): Boolean {
+    fun bucket(degrees: Double) = floor(degrees / FeedMapViewModel.MIN_CLUSTER_RADIUS)
+    return bucket(cluster.minLatitude) != bucket(cluster.maxLatitude) ||
+        bucket(cluster.minLongitude) != bucket(cluster.maxLongitude)
 }
 
 @Composable
@@ -560,47 +601,114 @@ private fun PreviewCard(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
     ) {
-        Box(
-            modifier =
-                Modifier
-                    .size(44.dp)
-                    .clip(RoundedCornerShape(Radii.md))
-                    .background(entity.kind.color),
-            contentAlignment = Alignment.Center,
-        ) {
-            PantopusIconImage(
-                icon = entity.kind.glyph,
-                contentDescription = null,
-                size = 20.dp,
-                tint = PantopusColors.appTextInverse,
-            )
+        PostSummary(entity)
+    }
+}
+
+/**
+ * The posts of a tapped cluster that zooming can't split, in the preview
+ * card's slot. Each row opens its post, as the preview card does.
+ */
+@Composable
+private fun ClusterPostsCard(
+    posts: List<ExploreEntity>,
+    onOpenPost: (String) -> Unit,
+    onClose: () -> Unit,
+) {
+    CardSurface(tag = "pulseMapClusterCard") {
+        Column {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    if (posts.size == 1) "1 post in this area" else "${posts.size} posts in this area",
+                    modifier = Modifier.weight(1f).semantics { heading() },
+                    style = PantopusTextStyle.caption.copy(fontSize = 13.sp, fontWeight = FontWeight.Bold),
+                    color = PantopusColors.appText,
+                )
+                // Shifted into the card's padding so the X lines up with the rows' chevrons.
+                Box(
+                    modifier =
+                        Modifier
+                            .offset(x = Spacing.s3)
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .clickable(onClick = onClose)
+                            .testTag("pulseMapClusterCardClose")
+                            .semantics { contentDescription = "Close" },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    PantopusIconImage(
+                        icon = PantopusIcon.X,
+                        contentDescription = null,
+                        size = 16.dp,
+                        tint = PantopusColors.appTextMuted,
+                    )
+                }
+            }
+            // About three and a half rows, so a longer list shows that it scrolls.
+            Column(modifier = Modifier.heightIn(max = 212.dp).verticalScroll(rememberScrollState())) {
+                posts.forEachIndexed { index, post ->
+                    if (index > 0) HorizontalDivider(color = PantopusColors.appBorderSubtle, thickness = 1.dp)
+                    Row(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable { onOpenPost(post.id) }
+                                .padding(vertical = Spacing.s2)
+                                .testTag("pulseMapClusterRow_${post.id}"),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
+                    ) {
+                        PostSummary(post)
+                    }
+                }
+            }
         }
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(Spacing.s1),
-        ) {
-            Text(
-                entity.title,
-                style = PantopusTextStyle.caption.copy(fontSize = 13.sp, fontWeight = FontWeight.SemiBold),
-                color = PantopusColors.appText,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                "${entity.metaLead} · ${entity.distanceLabel}",
-                style = PantopusTextStyle.caption.copy(fontSize = 11.sp),
-                color = PantopusColors.appTextSecondary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
+    }
+}
+
+/** A post's tile, title, meta line and chevron, as the preview card and the cluster list show them. */
+@Composable
+private fun RowScope.PostSummary(entity: ExploreEntity) {
+    Box(
+        modifier =
+            Modifier
+                .size(44.dp)
+                .clip(RoundedCornerShape(Radii.md))
+                .background(entity.kind.color),
+        contentAlignment = Alignment.Center,
+    ) {
         PantopusIconImage(
-            icon = PantopusIcon.ChevronRight,
+            icon = entity.kind.glyph,
             contentDescription = null,
-            size = 16.dp,
-            tint = PantopusColors.appTextMuted,
+            size = 20.dp,
+            tint = PantopusColors.appTextInverse,
         )
     }
+    Column(
+        modifier = Modifier.weight(1f),
+        verticalArrangement = Arrangement.spacedBy(Spacing.s1),
+    ) {
+        Text(
+            entity.title,
+            style = PantopusTextStyle.caption.copy(fontSize = 13.sp, fontWeight = FontWeight.SemiBold),
+            color = PantopusColors.appText,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            "${entity.metaLead} · ${entity.distanceLabel}",
+            style = PantopusTextStyle.caption.copy(fontSize = 11.sp),
+            color = PantopusColors.appTextSecondary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+    PantopusIconImage(
+        icon = PantopusIcon.ChevronRight,
+        contentDescription = null,
+        size = 16.dp,
+        tint = PantopusColors.appTextMuted,
+    )
 }
 
 /** Google Maps zoom level that frames a latitude span of [delta] degrees. */
