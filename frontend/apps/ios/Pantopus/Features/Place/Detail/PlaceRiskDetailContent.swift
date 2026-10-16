@@ -152,7 +152,7 @@ struct PlaceRiskDetailContent: View {
             ? "policies written across your county over the last \(nfip.windowMonths) months\(sampled) — "
             + "your census tract has too few to compare. "
             : "policies written in your census tract over the last \(nfip.windowMonths) months\(sampled). "
-        return "Real NFIP premiums for the \(nfip.policyCount) " + scope
+        return "Real NFIP premiums for the \(PlacePresentation.grouped(nfip.policyCount)) " + scope
             + "A benchmark, not a quote — premiums vary house to house."
     }
 

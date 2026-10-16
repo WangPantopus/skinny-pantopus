@@ -293,7 +293,7 @@ private fun NfipBlock(
                 "policies written in your census tract over the last ${nfip.windowMonths} months$sampled. "
             }
         Text(
-            "Real NFIP premiums for the ${nfip.policyCount} " + scope +
+            "Real NFIP premiums for the ${PlacePresentation.grouped(nfip.policyCount)} " + scope +
                 "A benchmark, not a quote — premiums vary house to house.",
             fontSize = 12.sp,
             lineHeight = 16.sp,
