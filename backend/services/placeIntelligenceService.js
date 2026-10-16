@@ -45,6 +45,7 @@ const { getDensityBucket } = require('./place/densityReader');
 const { resolveHouse } = require('./place/houseShape');
 const { getSystemsLedger } = require('./homeSystemsService');
 const nfipPremiumService = require('./nfipPremiumService');
+const { isConnecticutPlanningRegion } = require('../data/connecticutTowns');
 const exemptionCheckService = require('./exemptionCheckService');
 const realRentService = require('./realRentService');
 const { locationFromCoordinates, inferTimezone } = require('./context/locationResolver');
@@ -688,6 +689,18 @@ function nfipPayload(benchmark, scope) {
   };
 }
 
+// The tract to read NFIP premiums for. OpenFEMA still files Connecticut
+// policies under the eight old counties (09001–09015), but the geocoder
+// now places a Connecticut home in a planning region (09110–09190). The
+// 2022 change kept the tract codes, so the home's town names the old county
+// and the tract keeps its six digits. Null when the town can't be read.
+async function nfipTractId(home, tractId) {
+  const id = String(tractId);
+  if (!isConnecticutPlanningRegion(id.slice(0, 5))) return id;
+  const legacy = await placeSectionAdapters.connecticutLegacyCounty(home);
+  return legacy ? `${legacy.county_fips}${id.slice(5)}` : null;
+}
+
 async function composeNeighborhood(home) {
   const ll = homeLatLng(home);
   let profile = null;
@@ -721,14 +734,15 @@ async function composeNeighborhood(home) {
     // and thin tracts degrade to today's zone-only card.
     if (profile.tract_id) {
       try {
-        const nfip = await nfipPremiumService.getTractBenchmark(profile.tract_id);
+        const tractId = await nfipTractId(home, profile.tract_id);
+        const nfip = tractId ? await nfipPremiumService.getTractBenchmark(tractId) : { status: 'unavailable' };
         if (nfip.status === 'ready') {
           floodData.nfip = nfipPayload(nfip, 'tract');
         } else if (nfip.status === 'suppressed') {
           // Too few policies in the tract to compare: the county's, labeled
           // county-wide. A separate field, so builds that call every
           // benchmark "your census tract" never show a county one.
-          const county = await nfipPremiumService.getCountyBenchmark(String(profile.tract_id).slice(0, 5));
+          const county = await nfipPremiumService.getCountyBenchmark(tractId.slice(0, 5));
           if (county.status === 'ready') floodData.nfip_area = nfipPayload(county, 'county');
         }
       } catch (err) {

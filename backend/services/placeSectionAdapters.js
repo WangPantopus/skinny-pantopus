@@ -1328,6 +1328,8 @@ module.exports = {
   hudFmrRow,
   // The address calendar's county rules (Home has no county column).
   homeCountyFips,
+  // OpenFEMA still files Connecticut flood policies under the old counties.
+  connecticutLegacyCounty,
   // Exported for testing.
   parseCsv,
   districtEq,
