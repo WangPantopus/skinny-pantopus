@@ -731,6 +731,17 @@ export interface PlaceCivicDistrictsData {
   governments?: BallotGovernments | null;
   /** Ballot P0: who runs the state's elections, all year (reference data). */
   election_office?: BallotElectionOffice | null;
+  /** The county's, town's and city's official websites (no officials: no national source). */
+  local_governments?: PlaceLocalGovernment[];
+}
+
+/** A local government's official website (Census Government Units listing, Wikidata). */
+export interface PlaceLocalGovernment {
+  level: 'county' | 'town' | 'city';
+  name: string;
+  url: string;
+  /** The site's host, shown under the name: "traviscountytx.gov". */
+  host: string;
 }
 
 export interface PlaceBallotRace {

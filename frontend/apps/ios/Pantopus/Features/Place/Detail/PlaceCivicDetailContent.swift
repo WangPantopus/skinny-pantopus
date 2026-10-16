@@ -46,6 +46,8 @@ struct PlaceCivicDetailContent: View {
                         }
                         PlaceSourceNote(name: "unitedstates/congress-legislators · OpenStates", asOf: nil)
                     }
+                    PlaceDetailSectionLabel(text: "Local government")
+                    LocalGovernmentCard(governments: data.localGovernments)
                 } else {
                     vm.fallbackCard(districts)
                 }
@@ -261,6 +263,36 @@ private struct ElectionCard: View {
     private var daysAway: String {
         if data.daysUntil <= 0 { return "Today" }
         return data.daysUntil == 1 ? "1 day away" : "\(data.daysUntil) days away"
+    }
+}
+
+/// Pantopus has no national source for county, town and city officials, so it says
+/// so and links to the local governments' own sites instead of naming people.
+private struct LocalGovernmentCard: View {
+    let governments: [PlaceLocalGovernment]
+
+    private var message: String {
+        let lead = "Pantopus lists your federal and state legislators."
+        return governments.isEmpty
+            ? "\(lead) Local officials aren't listed yet."
+            : "\(lead) For local officials, see your local governments' own sites."
+    }
+
+    var body: some View {
+        PlaceDetailCard {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(message)
+                    .font(.system(size: 13.5))
+                    .lineSpacing(2)
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                if !governments.isEmpty {
+                    BallotLinksWell(links: governments.map {
+                        BallotOfficialLink(key: "\($0.level)-\($0.host)", label: $0.name, owner: $0.host, url: $0.url)
+                    })
+                    .padding(.top, Spacing.s2)
+                }
+            }
+        }
     }
 }
 

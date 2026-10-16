@@ -20,6 +20,7 @@ import type {
   PlaceCivicElectionData,
   PlaceBallotRace,
   CivicLevel,
+  PlaceLocalGovernment,
   BallotElectionOffice,
   BallotGovernments,
 } from '@pantopus/types';
@@ -247,6 +248,29 @@ function NoElection({ office }: { office: BallotElectionOffice | null }) {
   );
 }
 
+// Pantopus has no national source for county, town and city officials, so it says
+// so and links to the local governments' own sites instead of naming people.
+function localGovernments(v: unknown): PlaceLocalGovernment[] {
+  if (!Array.isArray(v)) return [];
+  return v.filter((g): g is PlaceLocalGovernment => Boolean(g) && typeof g === 'object'
+    && typeof g.name === 'string' && typeof g.host === 'string' && typeof g.url === 'string' && /^https:\/\/\S+$/.test(g.url));
+}
+
+function LocalGovernment({ governments }: { governments: PlaceLocalGovernment[] }) {
+  return (
+    <div className="bg-app-surface border border-app-border rounded-2xl shadow-sm p-4 flex flex-col gap-3">
+      <div className="text-[13.5px] text-app-text-secondary leading-5">
+        {governments.length
+          ? 'Pantopus lists your federal and state legislators. For local officials, see your local governments’ own sites.'
+          : 'Pantopus lists your federal and state legislators. Local officials aren’t listed yet.'}
+      </div>
+      {governments.length ? (
+        <LinksWell links={governments.map((g) => ({ key: `${g.level}-${g.host}`, label: g.name, owner: g.host, url: g.url }))} />
+      ) : null}
+    </div>
+  );
+}
+
 // ── Ballot leaf — full races, plain language ────────────────
 function BallotRace({ race }: { race: PlaceBallotRace }) {
   return (
@@ -386,6 +410,13 @@ export default function CivicDetail({ intelligence }: { intelligence: PlaceIntel
           <>
             <DetailSectionLabel>Your representatives</DetailSectionLabel>
             <RepsList reps={reps} />
+          </>
+        ) : null}
+
+        {districtsData ? (
+          <>
+            <DetailSectionLabel>Local government</DetailSectionLabel>
+            <LocalGovernment governments={localGovernments(districtsData.local_governments)} />
           </>
         ) : null}
 

@@ -639,6 +639,8 @@ fun PlaceCivicDetailContent(intel: PlaceIntelligence) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { data.representatives.forEach { RepRow(it) } }
                 PlaceSourceNote("unitedstates/congress-legislators · OpenStates")
             }
+            PlaceDetailSectionLabel("Local government")
+            LocalGovernmentCard(data.localGovernments)
         } else {
             PlaceDetailFallbackCard(env)
         }
