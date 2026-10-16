@@ -165,7 +165,7 @@ final class PlaceSectionsDecodingTests: XCTestCase {
         XCTAssertEqual(env.id, .exemptionCheck)
         let d = try XCTUnwrap(env.exemptionCheck)
         XCTAssertEqual(d.filingStatus, .noneOnFile)
-        XCTAssertFalse(d.homesteadOnFile)
+        XCTAssertEqual(d.homesteadOnFile, false)
         let signal = try XCTUnwrap(d.assessmentSignal)
         XCTAssertEqual(signal.stance, .above)
         XCTAssertEqual(signal.ratioPct, 10)

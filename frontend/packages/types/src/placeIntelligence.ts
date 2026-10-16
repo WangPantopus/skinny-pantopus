@@ -353,13 +353,17 @@ export interface PlaceFloodData {
 /**
  * Wave 2 — homestead exemption on the parcel's assessor line.
  * `filing_status` is an honesty ladder: `unknown` (county feed carries
- * no exemption structure) is NEVER presented as "none on file".
+ * no exemption structure) is NEVER presented as "none on file", and
+ * `not_checked` (no parcel line was read; the section is `partial` and
+ * `unavailable_reason` says why) says nothing about the parcel at all —
+ * only the state's program is shown.
  */
 export interface PlaceExemptionCheckData {
-  filing_status: 'on_file' | 'none_on_file' | 'unknown';
+  filing_status: 'on_file' | 'none_on_file' | 'unknown' | 'not_checked';
   /** Labels as the assessor feed reports them, e.g. "Homestead". */
   exemptions: string[];
-  homestead_on_file: boolean;
+  /** Null when not_checked. */
+  homestead_on_file: boolean | null;
   /**
    * Wave 2b — the Over-Assessment Radar: the county's assessed total vs
    * its own market total (±5% stance bands). Null when either total is
@@ -374,11 +378,13 @@ export interface PlaceExemptionCheckData {
   state_program: {
     state: string | null;
     label: string;
-    /** 'application' | 'varies' | 'none_general' */
-    filing: 'application' | 'varies' | 'none_general';
+    filing: 'application' | 'automatic' | 'varies' | 'none_general';
     note: string;
     /** False → the conservative check-your-county default. */
     curated: boolean;
+    /** The state's own page behind `note`; null for the default. */
+    source_name?: string | null;
+    source_url?: string | null;
   };
 }
 
