@@ -1034,25 +1034,30 @@ open class GigComposeViewModel
 
         // MARK: - P1.G Price benchmark
 
-        /** P1.G — category key of the last benchmark fetch (dedupe guard). */
-        private var benchmarkCategoryKey: String? = null
-
         /**
          * P1.G — fetch the completed-task price percentiles for the form's
          * category. Failures are silent and `comparable_count == 0` hides
          * the hint — the budget step renders fine without it.
          */
         fun fetchPriceBenchmark() {
+            _state.update { it.copy(priceBenchmark = null) }
             val category = _state.value.form.category ?: return
-            if (benchmarkCategoryKey == category.key) return
-            benchmarkCategoryKey = category.key
+            val form = _state.value.form
+            val address =
+                when (form.locationMode) {
+                    GigComposeLocationMode.YourAddress -> form.homeAddress
+                    GigComposeLocationMode.APlace -> form.placeAddress
+                    else -> null
+                }
+            val lat = address?.latitude ?: return
+            val lng = address.longitude ?: return
             viewModelScope.launch {
                 val benchmark =
-                    when (val result = repository.priceBenchmark(category.key)) {
+                    when (val result = repository.priceBenchmark(category.key, lat, lng)) {
                         is NetworkResult.Success -> projectBenchmark(category.label, result.data.benchmark)
                         is NetworkResult.Failure -> null
                     }
-                _state.update { it.copy(priceBenchmark = benchmark) }
+                if (_state.value.form == form) _state.update { it.copy(priceBenchmark = benchmark) }
             }
         }
 

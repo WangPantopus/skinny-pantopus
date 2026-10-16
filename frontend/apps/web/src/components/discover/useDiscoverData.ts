@@ -7,6 +7,7 @@ import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import type { DiscoverySearchResult, DiscoverySearchResponse, MapBusinessMarker } from '@pantopus/api';
 import useViewerHome from '@/hooks/useViewerHome';
+import { useAreaPicker } from '@/hooks/useAreaPicker';
 import { DEFAULT_FILTERS } from './DiscoveryFilterPanel';
 import { LS_TRUST_LENS_KEY } from './constants';
 import { queryKeys } from '@/lib/query-keys';
@@ -59,9 +60,11 @@ export function useDiscoverData() {
   const [filters, setFilters] = useState<DiscoveryFilters>(DEFAULT_FILTERS);
   const [filtersCollapsed, setFiltersCollapsed] = useState(true);
 
+  const area = useAreaPicker(() => {});
+
   // ── GPS fallback ──────────────────────────────────────────
-  const [gpsLat, setGpsLat] = useState<number | null>(null);
-  const [gpsLng, setGpsLng] = useState<number | null>(null);
+  const gpsLat = area.userLat;
+  const gpsLng = area.userLng;
 
   // ── Inline chat drawer ───────────────────────────────────
   const [chatTarget, setChatTarget] = useState<{ id: string; name: string } | null>(null);
@@ -110,19 +113,6 @@ export function useDiscoverData() {
     }
   }, [urlQuery, urlScope]);
 
-  // GPS fallback if no home
-  useEffect(() => {
-    if (!navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setGpsLat(pos.coords.latitude);
-        setGpsLng(pos.coords.longitude);
-      },
-      () => {},
-      { enableHighAccuracy: true, timeout: 10000 },
-    );
-  }, []);
-
   // Debounce search query 300ms
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQuery(query), 300);
@@ -130,13 +120,13 @@ export function useDiscoverData() {
   }, [query]);
 
   // Resolve center coordinates
-  const centerLat = viewerHome?.lat ?? gpsLat;
-  const centerLng = viewerHome?.lng ?? gpsLng;
+  const centerLat = measureFrom === 'here' ? gpsLat ?? area.viewingLat : area.viewingLat;
+  const centerLng = measureFrom === 'here' ? gpsLng ?? area.viewingLng : area.viewingLng;
 
   // Map center helpers
   const homeCenter = useMemo<[number, number] | null>(
-    () => (viewerHome ? [viewerHome.lat, viewerHome.lng] : null),
-    [viewerHome],
+    () => (area.viewingLat != null && area.viewingLng != null ? [area.viewingLat, area.viewingLng] : null),
+    [area.viewingLat, area.viewingLng],
   );
   const gpsCenter = useMemo<[number, number] | null>(
     () => (gpsLat != null && gpsLng != null ? [gpsLat, gpsLng] : null),
@@ -147,7 +137,7 @@ export function useDiscoverData() {
   const { uniResults, uniLoading } = useUniversalSearch(debouncedQuery, scope, showUniversalUI);
 
   // Resolve no-location state
-  const noLocation = !homeLoading && centerLat == null && centerLng == null;
+  const noLocation = !homeLoading && area.areaStatus !== 'resolving' && (centerLat == null || centerLng == null);
 
   // ── Fetch businesses via useInfiniteQuery ─────────────────
   // Stable filter object for the query key — each combination caches independently.
@@ -327,6 +317,7 @@ export function useDiscoverData() {
     hasHome,
     noLocation,
     homeCenter,
+    areaLabel: area.viewingLabel,
     gpsCenter,
 
     // Search

@@ -682,10 +682,14 @@ export async function getPriceSuggestion(params: {
   category: string;
   lat?: number;
   lng?: number;
+  radiusMiles?: number;
+  condition?: string;
 }): Promise<{ suggestion: PriceSuggestion | null }> {
   const query = new URLSearchParams({ category: params.category });
   if (params.lat != null) query.set('lat', String(params.lat));
   if (params.lng != null) query.set('lng', String(params.lng));
+  if (params.radiusMiles != null) query.set('radiusMiles', String(params.radiusMiles));
+  if (params.condition) query.set('condition', params.condition);
   return get(`/api/marketplace/price-suggestion?${query.toString()}`);
 }
 

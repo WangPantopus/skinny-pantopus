@@ -90,7 +90,7 @@ export default function CreateListingModal({
   const [deliveryAvailable, setDeliveryAvailable] = useState(false);
   const [openToTrades, setOpenToTrades] = useState(false);
   const [isNegotiable, setIsNegotiable] = useState(false);
-  const [priceSuggestion, setPriceSuggestion] = useState<{ low: number; high: number } | null>(null);
+  const [priceSuggestion, setPriceSuggestion] = useState<{ low: number; high: number; basis?: string } | null>(null);
 
   // Draft auto-save
   const { saveDraft, clearDraft, draft: existingDraft, hasDraft } = useListingDraft();
@@ -140,17 +140,19 @@ export default function CreateListingModal({
     } catch { /* ignore parse errors */ }
   }, []);
 
-  // Fetch price suggestion when category changes
+  // Clear on every comparison change; a late response cannot restore another area's hint.
   useEffect(() => {
-    if (!category || category === 'other' || category === 'all') { setPriceSuggestion(null); return; }
+    let cancelled = false;
+    setPriceSuggestion(null);
+    if (!category || category === 'other' || category === 'all' || !userLocation
+      || !selectedType || !['sell_item', 'vehicle_sale'].includes(selectedType)) return;
     api.listings.getPriceSuggestion({
-      category,
-      lat: userLocation?.latitude,
-      lng: userLocation?.longitude,
+      category, lat: userLocation.latitude, lng: userLocation.longitude, condition: condition || undefined,
     }).then(({ suggestion }) => {
-      if (suggestion) setPriceSuggestion({ low: suggestion.low, high: suggestion.high });
+      if (!cancelled) setPriceSuggestion(suggestion);
     }).catch(() => {});
-  }, [category, userLocation?.latitude, userLocation?.longitude]);
+    return () => { cancelled = true; };
+  }, [category, condition, selectedType, userLocation?.latitude, userLocation?.longitude]);
 
   // Apply Snap & Sell (FAB) bootstrap once when parent passes it
   useEffect(() => {
@@ -377,6 +379,7 @@ export default function CreateListingModal({
                   {priceSuggestion && (
                     <p className="text-xs text-app-text-muted mt-1">
                       Suggested: ${priceSuggestion.low}&ndash;${priceSuggestion.high}
+                      {priceSuggestion.basis && <span className="block">{priceSuggestion.basis}</span>}
                     </p>
                   )}
                   <label className="flex items-center gap-2 mt-2">

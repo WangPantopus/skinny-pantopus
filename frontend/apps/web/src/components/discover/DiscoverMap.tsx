@@ -210,7 +210,6 @@ interface DiscoverMapProps {
   onSelectPost?: (marker: MapMarker) => void;
 }
 
-const DISCOVER_DEFAULT_CENTER: [number, number] = [45.5231, -122.6765];
 
 export default function DiscoverMap({
   homeCenter,
@@ -225,7 +224,7 @@ export default function DiscoverMap({
 }: DiscoverMapProps) {
   const mapCenter = useMemo(() => {
     if (measureFrom === 'here' && gpsCenter) return gpsCenter;
-    return homeCenter ?? gpsCenter ?? DISCOVER_DEFAULT_CENTER;
+    return homeCenter ?? gpsCenter;
   }, [homeCenter, gpsCenter, measureFrom]);
 
   const [bounds, setBounds] = useState<Bounds | null>(null);
@@ -410,10 +409,12 @@ export default function DiscoverMap({
   };
   const viewCenter = bounds
     ? { latitude: (bounds.south + bounds.north) / 2, longitude: (bounds.west + bounds.east) / 2 }
-    : { latitude: mapCenter[0], longitude: mapCenter[1] };
+    : mapCenter ? { latitude: mapCenter[0], longitude: mapCenter[1] } : null;
   const handleFlyToNearest = useCallback((target: NearestActivityCenter) => {
     mapRef.current?.flyTo([target.latitude, target.longitude], 12, { duration: 1.2 });
   }, []);
+
+  if (!mapCenter) return <div className="flex h-full items-center justify-center p-6 text-sm text-app-text-secondary">Choose a location to discover nearby activity.</div>;
 
   return (
     <div className="relative w-full h-full">
@@ -575,7 +576,7 @@ export default function DiscoverMap({
       {/* Nearest activity prompt (when all layers are empty) */}
       {!postsError && !bizError && !gigsError && !isLoading && !belowZoomGate && allEmpty && bounds && (
         <NearestActivityPrompt
-          viewCenter={viewCenter}
+          viewCenter={viewCenter!}
           nearest={nearestActivity}
           contentLabel={launchFeatures.businessDirectory ? 'businesses' : 'posts'}
           onFlyTo={handleFlyToNearest}

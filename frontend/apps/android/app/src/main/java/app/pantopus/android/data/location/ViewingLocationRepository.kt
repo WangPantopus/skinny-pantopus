@@ -26,6 +26,13 @@ class ViewingLocationRepository
         private val api: ViewingLocationApi,
         private val store: ScreenStore,
     ) {
+        /** Selected area, home, then saved address; a failed read never means no location. */
+        suspend fun resolve(): NetworkResult<ViewingLocationPayload> =
+            when (val result = safeApiCall { api.resolve() }) {
+                is NetworkResult.Success -> NetworkResult.Success(ViewingLocationPayload(viewingLocation = result.data.viewingLocation))
+                is NetworkResult.Failure -> result
+            }
+
         /**
          * `GET /api/location` through the screens' store (Instant Screens; kind You, fresh 10 minutes; [force] reads
          * now): the Nearby context bar, Pulse and the map share one copy. A failed read answers with the copy it holds,

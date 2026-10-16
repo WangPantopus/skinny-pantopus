@@ -129,6 +129,8 @@ export default function ListingDetailPage() {
 
         <PriceContext
           category={listing.category}
+          condition={listing.condition}
+          listingType={listing.listing_type}
           latitude={listing.latitude ?? listing.location?.latitude}
           longitude={listing.longitude ?? listing.location?.longitude}
           currentPrice={Number(listing.price) || undefined}

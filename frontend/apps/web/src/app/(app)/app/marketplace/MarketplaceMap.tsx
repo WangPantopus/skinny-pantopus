@@ -204,9 +204,9 @@ export default function MarketplaceMap({
   const [mapBounds, setMapBounds] = useState<Bounds | null>(null);
   const mapRef = useRef<L.Map | null>(null);
 
-  const center = useMemo<[number, number]>(() => {
+  const center = useMemo<[number, number] | null>(() => {
     if (userLocation) return [userLocation.latitude, userLocation.longitude];
-    return [45.5152, -122.6784];
+    return null;
   }, [userLocation]);
 
   // Debounce bounds changes to avoid rapid-fire fetches
@@ -325,12 +325,14 @@ export default function MarketplaceMap({
     ? { latitude: (mapBounds.south + mapBounds.north) / 2, longitude: (mapBounds.west + mapBounds.east) / 2 }
     : center
       ? { latitude: center[0], longitude: center[1] }
-      : { latitude: 45.5152, longitude: -122.6784 };
+      : null;
   const showNearestPrompt = !loading && !belowZoomGate && listings.length === 0 && mapReady;
 
   const handleFlyToNearest = useCallback((target: NearestActivityCenter) => {
     mapRef.current?.flyTo([target.latitude, target.longitude], 12, { duration: 1.2 });
   }, []);
+
+  if (!center) return <div className="flex h-full min-h-[400px] items-center justify-center p-6 text-sm text-app-text-secondary">Choose a location to see nearby listings.</div>;
 
   // ── Render ─────────────────────────────────────────────────
   return (
@@ -438,7 +440,7 @@ export default function MarketplaceMap({
 
       {showNearestPrompt && (
         <NearestActivityPrompt
-          viewCenter={viewCenter}
+          viewCenter={viewCenter!}
           nearest={nearestActivityCenter}
           contentLabel="listings"
           onFlyTo={handleFlyToNearest}

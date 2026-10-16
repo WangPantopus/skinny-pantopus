@@ -195,10 +195,6 @@ final class GigComposeViewModel: WizardModel, WizardDraftSaving {
     /// P15.5 — in-flight photo uploads keyed by attachment id.
     private var uploadTasks: [String: Task<Void, Never>] = [:]
 
-    /// G — the category the current `priceBenchmark` was fetched for, so
-    /// re-entering the budget step doesn't refetch the same category.
-    private var benchmarkCategory: GigComposeCategory?
-
     /// P6c — id of the draft this wizard already stashed in the queue,
     /// so repeated offline submits replace rather than duplicate, and a
     /// later successful post removes it.
@@ -1070,37 +1066,41 @@ extension GigComposeViewModel {
     // MARK: - G. Price benchmark
 
     /// Fetch the low/median/high benchmark for the chosen category
-    /// (`GET /api/gigs/price-benchmark`), geo-scoped to the cached
-    /// device location when one exists. Failures are silent — the hint
+    /// (`GET /api/gigs/price-benchmark`), scoped to the task address.
+    /// Failures are silent — the hint
     /// simply doesn't render — and a benchmark with no comparables is
     /// treated as absent.
     func loadPriceBenchmark() async {
         guard let category = form.category else {
             priceBenchmark = nil
-            benchmarkCategory = nil
             return
         }
-        if category == benchmarkCategory, priceBenchmark != nil { return }
-        benchmarkCategory = category
+        let requestedForm = form
         do {
-            let coordinate = location.cachedCoordinate()
+            let address = form.locationMode == .yourAddress
+                ? form.homeAddress
+                : form.locationMode == .aPlace ? form.placeAddress : nil
+            guard let latitude = address?.latitude, let longitude = address?.longitude else {
+                priceBenchmark = nil
+                return
+            }
+            priceBenchmark = nil
             let response: GigPriceBenchmarkResponse = try await api.request(
                 GigsEndpoints.priceBenchmark(
                     category: category.rawValue,
-                    lat: coordinate?.latitude,
-                    lng: coordinate?.longitude
+                    lat: latitude,
+                    lng: longitude
                 )
             )
-            guard form.category == category else { return }
+            guard form == requestedForm else { return }
             if let benchmark = response.benchmark, (benchmark.comparableCount ?? 0) > 0 {
                 priceBenchmark = benchmark
             } else {
                 priceBenchmark = nil
             }
         } catch {
-            guard form.category == category else { return }
+            guard form == requestedForm else { return }
             priceBenchmark = nil
-            benchmarkCategory = nil
         }
     }
 
