@@ -2,8 +2,8 @@
 //  CancelClaimView.swift
 //  Pantopus
 //
-//  Destructive confirmation to cancel an ownership claim. Mirrors Android
-//  `CancelClaimScreen`.
+//  Destructive confirmation to cancel an ownership claim or a renter's
+//  residency document. Mirrors Android `CancelClaimScreen`.
 //
 
 import SwiftUI
@@ -55,11 +55,12 @@ public struct CancelClaimView: View {
                             .foregroundStyle(Theme.Color.error)
                             .accessibilityIdentifier("cancelClaimLoadError")
                     case .noClaim:
-                        Text("No open ownership claim for this home.")
+                        // No claim, so no kind to name (ownership or residency).
+                        Text("No open claim for this home.")
                             .pantopusTextStyle(.small)
                             .foregroundStyle(Theme.Color.appTextSecondary)
                     case .ready, .submitting:
-                        Text("Cancel this ownership claim?")
+                        Text(viewModel.isResidency ? "Cancel this residency claim?" : "Cancel this ownership claim?")
                             .font(.system(size: 20, weight: .bold))
                             .foregroundStyle(Theme.Color.appText)
                             .accessibilityAddTraits(.isHeader)

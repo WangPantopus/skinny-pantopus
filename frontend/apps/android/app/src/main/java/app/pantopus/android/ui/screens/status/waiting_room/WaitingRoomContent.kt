@@ -72,11 +72,14 @@ data class WaitingRoomNotice(
                 isRetry = true,
             )
 
-        /** No claim row for this home — the manage actions would be no-ops. */
+        /**
+         * No claim row for this home — the manage actions would be no-ops. With
+         * no claim there is no kind to name, so the copy fits ownership and residency.
+         */
         val NoClaim =
             WaitingRoomNotice(
                 headline = "No claim in review",
-                body = "We couldn't find an ownership claim for this home.",
+                body = "We couldn't find a claim for this home.",
                 ctaLabel = "Back to home",
                 isRetry = false,
             )
@@ -89,6 +92,19 @@ data class WaitingRoomNotice(
             WaitingRoomNotice(
                 headline = "This claim isn't in review",
                 body = "Your ownership claim has been decided. Check My Claims for the outcome.",
+                ctaLabel = "Back to home",
+                isRetry = false,
+            )
+
+        /**
+         * [ClaimDecided] for a renter's residency document. Usually the renter
+         * withdrew it (document approval waits on identity confirmation), so it
+         * says closed rather than decided.
+         */
+        val ResidencyClaimDecided =
+            WaitingRoomNotice(
+                headline = "This claim isn't in review",
+                body = "Your residency claim is closed. Check My Claims for the outcome.",
                 ctaLabel = "Back to home",
                 isRetry = false,
             )
@@ -158,6 +174,22 @@ data class WaitingRoomContent(
             )
 
         /**
+         * What the room waits for. A person reviews the documents (no county-records
+         * check), and no review time is promised while identity confirmation is undecided.
+         */
+        private fun waitCopy(
+            needsDocuments: Boolean,
+            residency: Boolean,
+        ): String =
+            when {
+                !needsDocuments -> "Your documents are waiting for a Pantopus reviewer."
+                residency ->
+                    "Upload a lease or utility bill with your name and this address so a Pantopus reviewer " +
+                        "can check that you live here."
+                else -> "Upload a deed, closing disclosure or property tax bill so a Pantopus reviewer can check ownership."
+            }
+
+        /**
          * While an ownership claim waits, the claimant can still prove they live
          * here by mail (founder decision, 2026-10-06); ownership stays in review.
          */
@@ -176,7 +208,8 @@ data class WaitingRoomContent(
          * the "We'll notify you when it's decided" pill (no review time is promised).
          * A claim started from Add Home has no documents yet ([needsDocuments]),
          * so the room asks for them instead. Mail verification is offered until
-         * the person's address is verified.
+         * the person's address is verified. [residency] marks a renter's
+         * residency document, which asks for a lease or utility bill instead.
          */
         fun active(
             address: String = SAMPLE_ADDRESS,
@@ -185,15 +218,9 @@ data class WaitingRoomContent(
             reviewCaption: String? = "Started 9h ago",
             needsDocuments: Boolean = false,
             addressVerified: Boolean = false,
+            residency: Boolean = false,
         ): WaitingRoomContent {
-            // A person reviews ownership documents (no county-records check), and no
-            // review time is promised while identity confirmation is undecided.
-            val wait =
-                if (needsDocuments) {
-                    "Upload a deed, closing disclosure or property tax bill so a Pantopus reviewer can check ownership."
-                } else {
-                    "Your documents are waiting for a Pantopus reviewer."
-                }
+            val wait = waitCopy(needsDocuments = needsDocuments, residency = residency)
             val meanwhile =
                 if (addressVerified) {
                     "Your address is verified, so you can use your Home meanwhile."

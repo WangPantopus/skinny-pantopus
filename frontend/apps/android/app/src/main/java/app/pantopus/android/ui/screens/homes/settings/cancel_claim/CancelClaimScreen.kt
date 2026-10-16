@@ -74,6 +74,10 @@ class CancelClaimViewModel
         private val _completed = MutableStateFlow(false)
         val completed: StateFlow<Boolean> = _completed.asStateFlow()
 
+        /** The open claim is a renter's residency document (`claim_type` "resident"). */
+        private val _isResidency = MutableStateFlow(false)
+        val isResidency: StateFlow<Boolean> = _isResidency.asStateFlow()
+
         private var claimId: String? = null
         private val session = scopeFactory.create(viewModelScope)
         private var generation = 0
@@ -92,6 +96,7 @@ class CancelClaimViewModel
             }
             val revision = ++generation
             claimId = null
+            _isResidency.value = false
             _state.value = CancelClaimUiState.Loading
             _submitError.value = null
             viewModelScope.launch {
@@ -105,6 +110,7 @@ class CancelClaimViewModel
                             _state.value = CancelClaimUiState.NoClaim
                         } else {
                             claimId = claim.id
+                            _isResidency.value = claim.claimType == "resident"
                             _state.value = CancelClaimUiState.Ready
                         }
                     }
@@ -157,6 +163,7 @@ fun CancelClaimScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val submitError by viewModel.submitError.collectAsStateWithLifecycle()
     val completed by viewModel.completed.collectAsStateWithLifecycle()
+    val isResidency by viewModel.isResidency.collectAsStateWithLifecycle()
     val ready = state is CancelClaimUiState.Ready
     val submitting = state is CancelClaimUiState.Submitting
     val loadError = state as? CancelClaimUiState.Error
@@ -183,7 +190,7 @@ fun CancelClaimScreen(
             onClose = onBack,
             onCommit = viewModel::submit,
         ) {
-            CancelClaimBody(state = state, submitError = submitError)
+            CancelClaimBody(state = state, submitError = submitError, isResidency = isResidency)
         }
     }
 }
@@ -193,6 +200,7 @@ fun CancelClaimScreen(
 private fun CancelClaimBody(
     state: CancelClaimUiState,
     submitError: String?,
+    isResidency: Boolean,
 ) {
     Column(
         modifier =
@@ -220,15 +228,16 @@ private fun CancelClaimBody(
                     fontSize = 14.sp,
                     modifier = Modifier.testTag("cancelClaimLoadError"),
                 )
+            // No claim, so no kind to name (ownership or residency).
             is CancelClaimUiState.NoClaim ->
                 Text(
-                    text = "No open ownership claim for this home.",
+                    text = "No open claim for this home.",
                     fontSize = 14.sp,
                     color = PantopusColors.appTextSecondary,
                 )
             is CancelClaimUiState.Ready, is CancelClaimUiState.Submitting -> {
                 Text(
-                    text = "Cancel this ownership claim?",
+                    text = if (isResidency) "Cancel this residency claim?" else "Cancel this ownership claim?",
                     modifier = Modifier.semantics { heading() },
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,

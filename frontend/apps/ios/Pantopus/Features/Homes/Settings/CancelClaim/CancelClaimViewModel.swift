@@ -28,6 +28,8 @@ public final class CancelClaimViewModel {
     public private(set) var shouldDismissAfterCancel = false
     /// Submit/load failure copy shown above the confirmation while still retryable.
     public private(set) var errorMessage: String?
+    /// The open claim is a renter's residency document (`claim_type` "resident").
+    public private(set) var isResidency = false
 
     private var claimId: String?
     private let api: APIClient
@@ -58,6 +60,7 @@ public final class CancelClaimViewModel {
         generation += 1
         let revision = generation
         claimId = nil
+        isResidency = false
         phase = .loading
         errorMessage = nil
         Task {
@@ -70,6 +73,7 @@ public final class CancelClaimViewModel {
                 guard revision == generation else { return }
                 if let claim = response.claims.first(where: { $0.homeId == homeId && Self.withdrawable($0) }) {
                     claimId = claim.id
+                    isResidency = claim.claimType == "resident"
                     phase = .ready
                 } else {
                     phase = .noClaim

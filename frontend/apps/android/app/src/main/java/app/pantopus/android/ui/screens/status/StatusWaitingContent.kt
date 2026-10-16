@@ -111,6 +111,7 @@ data class StatusWaitingContent(
             approved: Boolean = false,
             submittedOn: String? = null,
             decidedOn: String? = null,
+            residency: Boolean = false,
         ): StatusWaitingContent {
             val chip = homeName?.takeIf { it.isNotBlank() }
             val submittedCaption = submittedOn?.takeIf { it.isNotBlank() }
@@ -118,9 +119,13 @@ data class StatusWaitingContent(
             if (approved) {
                 return StatusWaitingContent(
                     halo = StatusHalo(tone = HaloCircleTone.Success, icon = PantopusIcon.BadgeCheck),
-                    headline = "You're the owner",
+                    headline = if (residency) "You're a verified resident" else "You're the owner",
                     subcopy =
-                        "Your ownership claim was approved. The Home badge now shows on your profile and household.",
+                        if (residency) {
+                            "Your residency claim was approved. You now have resident access to this Home."
+                        } else {
+                            "Your ownership claim was approved. The Home badge now shows on your profile and household."
+                        },
                     addressChip = chip,
                     statusPill =
                         StatusWaitingPill(
