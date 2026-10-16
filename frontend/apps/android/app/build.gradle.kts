@@ -48,8 +48,8 @@ val sentryDsn = envOr("SENTRY_DSN", "")
 val pantopusEnvDebug = envOr("PANTOPUS_ENV", "local")
 val pantopusEnvRelease = envOr("PANTOPUS_ENV", "production")
 
-// The commit being built, empty outside a git checkout. versionCode and versionName stay the same between builds, so
-// the screens' saved copies use it to tell builds apart (data/store/SavedCopies.kt).
+// The commit being built, empty outside a git checkout. Local builds all keep versionCode 1 and 1.0.0 (only Play uploads
+// get new ones), so the screens' saved copies use it to tell builds apart (data/store/SavedCopies.kt).
 val gitCommit =
     runCatching {
         providers
