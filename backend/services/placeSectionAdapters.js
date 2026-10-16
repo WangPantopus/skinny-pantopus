@@ -892,8 +892,11 @@ const STATE_NAMES = {
 function electionMatchesState(election, stateAbbr) {
   const ocd = String(election.ocdDivisionId || '');
   if (ocd === 'ocd-division/country:us') return true; // national
-  const name = STATE_NAMES[String(stateAbbr || '').toUpperCase()];
-  return Boolean(name && ocd.includes(`state:${stateAbbr.toLowerCase()}`));
+  const code = String(stateAbbr || '').toUpperCase();
+  const name = STATE_NAMES[code];
+  // Washington, D.C.'s division is district:dc, not state:dc.
+  const division = code === 'DC' ? 'district:dc' : `state:${code.toLowerCase()}`;
+  return Boolean(name && ocd.includes(division));
 }
 
 // Ballot P0 (docs/ballot-implementation-plan-2026-09-24.md §5.2): for a

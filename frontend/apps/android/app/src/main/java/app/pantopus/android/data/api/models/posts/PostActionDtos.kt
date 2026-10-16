@@ -66,3 +66,15 @@ data class PlaceEligibilityResponse(
     val reason: String? = null,
     val trustLevel: String? = null,
 )
+
+/** Mirrors the server's audience gate; a stale copy still needs permission before opening the chooser. */
+internal fun permitsExternalPostShare(
+    readScope: String?,
+    visibility: String?,
+    audience: String?,
+    allowExternalShare: Boolean?,
+    moderationState: String?,
+): Boolean =
+    allowExternalShare != false &&
+        (moderationState == null || moderationState == "live") &&
+        if (readScope != null) readScope == "public" else visibility == "public" || audience == "public"
