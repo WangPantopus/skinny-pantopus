@@ -114,8 +114,9 @@ private struct SystemsCard: View {
                                 .font(.system(size: 14.5, weight: .semibold))
                                 .foregroundStyle(Theme.Color.appText)
                             Spacer()
+                            // Verbatim: a localized Text groups the year as a number ("1,938").
                             Text(
-                                system.installedYear.map { "\($0) · \(system.ageYears ?? 0) yrs" }
+                                verbatim: system.installedYear.map { "\($0) · \(system.ageYears ?? 0) yrs" }
                                     ?? "Year unknown"
                             )
                             .font(.system(size: 12.5, weight: .semibold))
