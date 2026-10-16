@@ -57,9 +57,10 @@ struct PlanDetailsForm: View {
         }
     }
 
+    /// The watch-party hint names no team: a picked game fills in the title itself (as on Android).
     private var titlePlaceholder: String {
         switch model.kind {
-        case .watchParty: "Seahawks game on the big screen"
+        case .watchParty: "Give it a short title"
         case .playdate: "Playground morning"
         case .pickupGame: ""
         case .walkCoffee: "Coffee walk around the lake"

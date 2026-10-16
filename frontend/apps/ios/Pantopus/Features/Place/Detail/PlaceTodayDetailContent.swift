@@ -615,6 +615,13 @@ struct AddressCalendarCard: View {
                 }
             }
 
+            if let note = calendar.taxNote {
+                Text(note)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Theme.Color.appTextMuted)
+                    .accessibilityIdentifier("addressCalendar.taxNote")
+            }
+
             if let errorText {
                 Text(errorText)
                     .font(.system(size: 12.5))

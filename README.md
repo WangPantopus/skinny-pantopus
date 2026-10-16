@@ -323,7 +323,7 @@ cd frontend/apps/android && ./gradlew test
 cd frontend/apps/ios
 bundle install           # first time only
 bundle exec fastlane beta        # TestFlight
-bundle exec fastlane release     # App Store
+bundle exec fastlane release version:1.2.3   # App Store review of that TestFlight build
 ```
 
 See `frontend/apps/ios/README.md` and `frontend/apps/ios/fastlane/Fastfile` for the full lane setup (signing, provisioning, screenshots).

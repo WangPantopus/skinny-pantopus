@@ -80,7 +80,7 @@ Then in Xcode:
 | Format in place                 | `make format`                          |
 | Clean build + generated project | `make clean`                           |
 | TestFlight upload               | `make beta` (needs Apple cert setup)   |
-| App Store submission            | `make release`                         |
+| App Store submission            | `make release VERSION=1.2.3`           |
 
 ## Architecture
 
@@ -120,8 +120,17 @@ See `fastlane/Fastfile`. At minimum, before `make beta`:
 
 - [ ] `match` is set up for code signing (`fastlane match init`).
 - [ ] `.env` has the production Stripe key.
-- [ ] `CURRENT_PROJECT_VERSION` and `MARKETING_VERSION` in `project.yml` are bumped.
+- [ ] Release from an `ios-vX.Y.Z` tag instead of editing `project.yml`: the
+      TestFlight workflow names the build X.Y.Z and gives it the next build
+      number. A local `make beta` keeps `project.yml`'s `MARKETING_VERSION`.
 - [ ] `make test` passes locally.
+
+To send version X.Y.Z for App Store review, run `make release VERSION=X.Y.Z`
+once its TestFlight build has finished processing. It uploads the text under
+`fastlane/metadata/` and the screenshots under `fastlane/screenshots/`, then
+submits TestFlight's newest build of X.Y.Z. It doesn't rebuild or sign, so of
+the release secrets it needs only the App Store Connect API key
+(`APP_STORE_CONNECT_*` in `.env`).
 
 ## CI
 

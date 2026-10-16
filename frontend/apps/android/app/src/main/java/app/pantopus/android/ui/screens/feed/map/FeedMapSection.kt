@@ -19,11 +19,15 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
@@ -31,6 +35,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -53,8 +58,10 @@ import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
+import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
+import com.google.android.gms.maps.model.LatLngBounds
 import com.google.android.gms.maps.model.MapStyleOptions
 import com.google.maps.android.compose.CameraPositionState
 import com.google.maps.android.compose.GoogleMap
@@ -63,6 +70,7 @@ import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.MarkerComposable
 import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
+import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.ln
 import kotlin.math.max
@@ -104,60 +112,26 @@ fun FeedMapSection(
                 )
         }
 
-    // Region → camera. Guarded so the debounced region commit that follows a
-    // user pan doesn't bounce the camera back onto itself.
-    LaunchedEffect(region) {
-        val current = cameraState.position.target
-        val drifted =
-            abs(current.latitude - region.latitude) > region.latitudeDelta * 0.05 ||
-                abs(current.longitude - region.longitude) > region.longitudeDelta * 0.05
-        if (drifted) {
-            cameraState.position =
-                CameraPosition.fromLatLngZoom(
-                    LatLng(region.latitude, region.longitude),
-                    zoomForDelta(region.latitudeDelta),
-                )
-        }
-    }
+    val scope = rememberCoroutineScope()
 
-    // Camera → region. Only fires once the gesture settles.
-    LaunchedEffect(cameraState.isMoving) {
-        if (cameraState.isMoving) return@LaunchedEffect
-        val bounds = cameraState.projection?.visibleRegion?.latLngBounds ?: return@LaunchedEffect
-        val northeast = bounds.northeast
-        val southwest = bounds.southwest
-        viewModel.cameraDidSettle(
-            FeedMapRegion(
-                latitude = (northeast.latitude + southwest.latitude) / 2,
-                longitude = (northeast.longitude + southwest.longitude) / 2,
-                latitudeDelta = northeast.latitude - southwest.latitude,
-                longitudeDelta = northeast.longitude - southwest.longitude,
-            ),
-        )
-    }
+    // The map's size in pixels.
+    var mapSize by remember { mutableStateOf(IntSize.Zero) }
+    FeedMapCameraEffect(
+        cameraState = cameraState,
+        region = region,
+        mapSize = mapSize,
+        viewportDirty = viewportDirty,
+        onSettle = viewModel::cameraDidSettle,
+    )
 
-    Box(modifier = modifier.fillMaxSize().testTag("pulseFeedMap")) {
+    Box(modifier = modifier.fillMaxSize().onSizeChanged { mapSize = it }.testTag("pulseFeedMap")) {
         FeedMapLayer(
             markers = (state as? FeedMapUiState.Loaded)?.markers.orEmpty(),
             selectedId = (state as? FeedMapUiState.Loaded)?.selectedId,
             userCoordinate = (state as? FeedMapUiState.Loaded)?.userCoordinate,
             cameraState = cameraState,
             onPinTap = viewModel::selectEntity,
-            onClusterTap = { cluster ->
-                cameraState.position =
-                    CameraPosition.fromLatLngZoom(
-                        LatLng(
-                            (cluster.minLatitude + cluster.maxLatitude) / 2,
-                            (cluster.minLongitude + cluster.maxLongitude) / 2,
-                        ),
-                        zoomForDelta(
-                            max(
-                                cluster.maxLatitude - cluster.minLatitude,
-                                cluster.maxLongitude - cluster.minLongitude,
-                            ).coerceAtLeast(0.004) * 1.4,
-                        ),
-                    )
-            },
+            onClusterTap = { cluster -> scope.launch { zoomToCluster(cameraState, cluster) } },
         )
         if (viewportDirty) {
             SearchThisAreaPill(
@@ -201,6 +175,85 @@ fun FeedMapSection(
             }
         }
     }
+}
+
+/**
+ * Keeps the camera and the view-model's region in step. Region → camera
+ * frames the region to the map's shape (one side exact, the other wider), as
+ * MapKit does on iOS, so the settle that follows isn't read as a move.
+ * Camera → region reports each settle once the camera has framed the region.
+ */
+@Composable
+private fun FeedMapCameraEffect(
+    cameraState: CameraPositionState,
+    region: FeedMapRegion,
+    mapSize: IntSize,
+    viewportDirty: Boolean,
+    onSettle: (FeedMapRegion) -> Unit,
+) {
+    // The map size the camera last framed the region at.
+    var framedSize by remember { mutableStateOf(IntSize.Zero) }
+
+    // Guarded so the debounced region commit that follows a user pan doesn't
+    // bounce the camera back onto itself; a new map size reframes only while
+    // nobody has moved the map.
+    LaunchedEffect(region, mapSize) {
+        if (mapSize.width == 0 || mapSize.height == 0) return@LaunchedEffect
+        val current = cameraState.position.target
+        val drifted =
+            abs(current.latitude - region.latitude) > region.latitudeDelta * 0.05 ||
+                abs(current.longitude - region.longitude) > region.longitudeDelta * 0.05
+        // The seed zoom only approximates the region, so always frame once.
+        val unframed = framedSize == IntSize.Zero
+        val resizedUnmoved = mapSize != framedSize && !viewportDirty && !cameraState.isMoving
+        if (drifted || unframed || resizedUnmoved) {
+            cameraState.move(
+                CameraUpdateFactory.newLatLngBounds(
+                    LatLngBounds(LatLng(region.south, region.west), LatLng(region.north, region.east)),
+                    mapSize.width,
+                    mapSize.height,
+                    0,
+                ),
+            )
+            framedSize = mapSize
+        }
+    }
+
+    // Only fires once the gesture settles.
+    LaunchedEffect(cameraState.isMoving) {
+        if (cameraState.isMoving || framedSize == IntSize.Zero) return@LaunchedEffect
+        val bounds = cameraState.projection?.visibleRegion?.latLngBounds ?: return@LaunchedEffect
+        val northeast = bounds.northeast
+        val southwest = bounds.southwest
+        onSettle(
+            FeedMapRegion(
+                latitude = (northeast.latitude + southwest.latitude) / 2,
+                longitude = (northeast.longitude + southwest.longitude) / 2,
+                latitudeDelta = northeast.latitude - southwest.latitude,
+                longitudeDelta = northeast.longitude - southwest.longitude,
+            ),
+        )
+    }
+}
+
+/**
+ * Zooms in on a tapped cluster. Animated, so [FeedMapCameraEffect] reports
+ * the settle and "Search this area" appears: an instant move starts and
+ * settles within one frame, too fast for the effect to see.
+ */
+private suspend fun zoomToCluster(
+    cameraState: CameraPositionState,
+    cluster: ExploreCluster,
+) {
+    val span = max(cluster.maxLatitude - cluster.minLatitude, cluster.maxLongitude - cluster.minLongitude)
+    cameraState.animate(
+        CameraUpdateFactory.newCameraPosition(
+            CameraPosition.fromLatLngZoom(
+                LatLng((cluster.minLatitude + cluster.maxLatitude) / 2, (cluster.minLongitude + cluster.maxLongitude) / 2),
+                zoomForDelta(span.coerceAtLeast(0.004) * 1.4),
+            ),
+        ),
+    )
 }
 
 @Composable

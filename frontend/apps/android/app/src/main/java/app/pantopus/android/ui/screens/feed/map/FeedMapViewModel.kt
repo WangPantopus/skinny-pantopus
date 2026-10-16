@@ -62,6 +62,24 @@ data class FeedMapRegion(
             abs(longitudeDelta - other.longitudeDelta) > lonThreshold
     }
 
+    /**
+     * The map frames a requested region to its own shape: the centre and one
+     * side of the span stay, the other side widens. True when this settled
+     * viewport is [requested] framed that way (within the same 10% jitter),
+     * so nobody moved the map.
+     */
+    fun isMapFit(requested: FeedMapRegion): Boolean {
+        val latThreshold = max(requested.latitudeDelta * 0.1, 0.0005)
+        val lonThreshold = max(requested.longitudeDelta * 0.1, 0.0005)
+        val keepsLatitude = abs(latitudeDelta - requested.latitudeDelta) <= latThreshold
+        val keepsLongitude = abs(longitudeDelta - requested.longitudeDelta) <= lonThreshold
+        return abs(latitude - requested.latitude) <= latThreshold &&
+            abs(longitude - requested.longitude) <= lonThreshold &&
+            latitudeDelta >= requested.latitudeDelta - latThreshold &&
+            longitudeDelta >= requested.longitudeDelta - lonThreshold &&
+            (keepsLatitude || keepsLongitude)
+    }
+
     companion object {
         /** RN default region (`src/constants/feed.ts` DEFAULT_REGION). */
         val Fallback = FeedMapRegion(40.7484, -73.9857, 0.12, 0.12)
@@ -241,9 +259,16 @@ class FeedMapViewModel
          * Camera settled on a new viewport. Marks the viewport dirty (so the
          * "Search this area" pill appears) and debounces the follow-up region
          * commit — the refetch itself waits for the explicit tap, matching RN.
+         * With nothing pending, settling on [region] as the map framed it
+         * (opening the map, Recenter, a new area) isn't a move.
          */
         fun cameraDidSettle(next: FeedMapRegion) {
-            if (!next.changedSignificantly(pendingRegion ?: _region.value)) return
+            val pending = pendingRegion
+            if (pending != null) {
+                if (!next.changedSignificantly(pending)) return
+            } else if (next.isMapFit(_region.value)) {
+                return
+            }
             pendingRegion = next
             _viewportDirty.value = true
             selectEntity(null)

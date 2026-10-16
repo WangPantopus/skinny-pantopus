@@ -261,6 +261,7 @@ function HouseholdCalendar({ homeId, data }: AddressCalendarCardProps) {
           </ul>
         </>
       )}
+      {calendar.tax_note ? <p className="text-[12.5px] text-app-text-muted leading-[18px] pt-2">{calendar.tax_note}</p> : null}
     </div>
   );
 }

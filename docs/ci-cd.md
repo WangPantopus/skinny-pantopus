@@ -185,6 +185,22 @@ read-only repository permissions and keep deployment secrets out of PR jobs.
   `APP_STORE_CONNECT_KEY_CONTENT` (base64 `.p8`) and `APPLE_TEAM_ID`.
   The signing repository also needs `MATCH_GIT_BASIC_AUTHORIZATION` (base64
   `username:token`) or your supported private-repository authentication.
+  `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` and `SENTRY_PROJECT` are optional. With
+  all three set, the run uploads the build's dSYMs to Sentry before the
+  TestFlight upload, and a failed Sentry upload stops the run there. Leave
+  them unset while Sentry is off for the pilot ([founder decision
+  B](compliance/appstore-privacy-labels.md#diagnostics)): the workflow writes
+  no `SENTRY_DSN` into the build, so the app sends no crash reports to
+  symbolicate.
+  Each upload's build number is one more than TestFlight's newest upload, of
+  any version. An `ios-vX.Y.Z` tag sets the version (`MARKETING_VERSION`) to
+  X.Y.Z, and a run from any other tag stops before signing; a run from a
+  branch keeps `project.yml`'s 1.0.0. Nobody edits `project.yml` for a release.
+  No workflow submits for App Store review. From `frontend/apps/ios`,
+  `make release VERSION=X.Y.Z` (`fastlane release version:X.Y.Z`) submits
+  TestFlight's newest build of X.Y.Z, with the metadata and screenshots under
+  `fastlane/`, without rebuilding; a CI run on an `ios-vX.Y.Z` tag would take the
+  version from the tag.
 - Android: `android-v*` tags or manual dispatch use `android-release`. Configure
   `ANDROID_KEYSTORE_BASE64`, `PANTOPUS_KEYSTORE_PASSWORD`, `PANTOPUS_KEY_ALIAS`,
   `PANTOPUS_KEY_PASSWORD`, `PLAY_STORE_SERVICE_ACCOUNT_JSON`,

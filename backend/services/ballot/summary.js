@@ -478,9 +478,11 @@ function electionOfficeFor(stateValue) {
   // In a sentence a state office takes "the" ("the Texas Secretary of State").
   const phrase = state.election_office_phrase || `the ${state.election_office}`;
   // Washington, D.C. has no counties: its Board of Elections runs every election.
+  // Elsewhere a county runs local elections in most states, and a town or
+  // city clerk does in New England, Michigan and Wisconsin: "local" fits both.
   const note = state.code === 'DC'
     ? `Until then, ${phrase} has upcoming election dates.`
-    : `Until then, ${phrase} and your county election office have upcoming election dates.`;
+    : `Until then, ${phrase} and your local election office have upcoming election dates.`;
   return { name: state.election_office, phrase, note, links: picked };
 }
 
