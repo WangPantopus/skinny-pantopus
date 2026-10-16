@@ -37,6 +37,9 @@ def app_store_export_options
   { provisioningProfiles: APP_STORE_TARGETS.values.to_h { |id| [id, app_store_profile_name(id)] } }
 end
 
+# App Store Connect takes one to three period-separated integers.
+APP_STORE_VERSION = /\d+(?:\.\d+){0,2}/
+
 # A run on the ios-v1.2.3 tag names the build 1.2.3, so a release never edits
 # project.yml's MARKETING_VERSION. Any other run (a branch, a local `make beta`)
 # gets nil and keeps project.yml's value.
@@ -44,9 +47,19 @@ def tag_marketing_version
   return nil unless ENV["GITHUB_REF_TYPE"] == "tag"
 
   tag = ENV["GITHUB_REF_NAME"].to_s
-  # App Store Connect takes one to three period-separated integers.
-  tag[/\Aios-v(\d+(?:\.\d+){0,2})\z/, 1] ||
+  tag[/\Aios-v(#{APP_STORE_VERSION})\z/, 1] ||
     UI.user_error!("A tag build needs a tag like ios-v1.2.3 (up to three numbers), not '#{tag}'")
+end
+
+# The version `release` submits: `fastlane release version:1.2.3`, else the
+# ios-v1.2.3 tag of a CI run. There is no project.yml fallback, because tags
+# name the TestFlight builds.
+def release_version(option)
+  version = option.nil? ? tag_marketing_version : option.to_s
+  UI.user_error!("Say which version to submit: `fastlane release version:1.2.3` or `make release VERSION=1.2.3`") if version.nil?
+  UI.user_error!("A version has up to three numbers, like 1.2.3, not '#{version}'") unless version.match?(/\A#{APP_STORE_VERSION}\z/)
+
+  version
 end
 
 platform :ios do
@@ -121,27 +134,29 @@ platform :ios do
     )
   end
 
-  desc "Build, upload metadata + screenshots, and submit to App Store review"
-  lane :release do
-    setup_ci if is_ci
+  # Like Android's `release`, this promotes a build that is already uploaded
+  # instead of rebuilding, so nothing here signs or builds.
+  desc "Submit TestFlight's newest build of a version for App Store review, with metadata + screenshots (release version:1.2.3)"
+  lane :release do |options|
+    version = release_version(options[:version])
     api_key = appstore_api_key
-    app_store_signing(api_key: api_key)
 
-    build_app(
-      project: "Pantopus.xcodeproj",
-      scheme: "Pantopus",
-      configuration: "Release",
-      export_method: "app-store",
-      export_options: app_store_export_options,
-      clean: true
-    )
-
-    upload_dsyms_to_sentry
+    # TestFlight's newest upload of this version, so run this once that build
+    # has finished processing. initial_build_number 0 comes back when there is
+    # no upload of the version.
+    build_number = latest_testflight_build_number(version: version, initial_build_number: 0, api_key: api_key)
+    UI.user_error!("TestFlight has no build of #{version}. Push the ios-v#{version} tag first, so `beta` uploads one.") if build_number.to_s == "0"
+    UI.message("Submitting version #{version}, build #{build_number}")
 
     # Push every text file under fastlane/metadata/<locale>/ + the
-    # PNGs under fastlane/screenshots/ before submitting.
+    # screenshots under fastlane/screenshots/ before submitting. deliver
+    # creates or renames the editable App Store version to app_version and
+    # selects the uploaded build instead of uploading a binary.
     upload_to_app_store(
       api_key: api_key,
+      app_version: version,
+      build_number: build_number.to_s,
+      skip_binary_upload: true,
       submit_for_review: true,
       automatic_release: false,
       force: true,

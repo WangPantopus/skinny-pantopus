@@ -28,7 +28,7 @@ help:
 	@echo "  format         Run SwiftFormat in-place"
 	@echo "  clean          Remove build artifacts and generated project"
 	@echo "  beta           Fastlane: upload to TestFlight"
-	@echo "  release        Fastlane: submit to App Store"
+	@echo "  release        Fastlane: submit the TestFlight build of VERSION=x.y.z to App Store review"
 
 # Write Config/Secrets.xcconfig from .env so Info.plist variable substitutions
 # (StripePublishableKey, SentryDSN, …) resolve at build time.
@@ -124,5 +124,6 @@ clean:
 beta:
 	bundle exec fastlane beta
 
+# Submits TestFlight's newest build of VERSION for review: make release VERSION=1.2.3
 release:
-	bundle exec fastlane release
+	bundle exec fastlane release $(if $(VERSION),version:$(VERSION))
