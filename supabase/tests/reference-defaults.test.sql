@@ -12,7 +12,7 @@ DO $$ BEGIN
   IF (SELECT count(*) FROM public."HomeRolePermission") <> 31
     OR (SELECT count(*) FROM public."PostCategoryTTL") <> 20
     OR (SELECT count(*) FROM public."AddressCalendarRule") <> 106
-    OR (SELECT count(*) FROM public."CountyRadonZone") <> 3128
+    OR (SELECT count(*) FROM public."CountyRadonZone") <> 3143
     OR (SELECT count(*) FROM public."HudFmr") <> 3223 THEN
     RAISE EXCEPTION 'Required static references were not installed';
   END IF;

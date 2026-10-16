@@ -400,7 +400,8 @@ private struct HeatColdCard: View {
                         .font(.system(size: 11.5))
                         .foregroundStyle(Theme.Color.appTextMuted)
                 } else {
-                    Text("NWS HeatRisk covers the contiguous US. The freeze forecast above still applies here.")
+                    // The server says where heat came from instead (Alaska, Hawaii, a HeatRisk outage).
+                    Text(data.heatNote ?? "NWS HeatRisk covers the contiguous US. The freeze forecast above still applies here.")
                         .font(.system(size: 12.5))
                         .foregroundStyle(Theme.Color.appTextMuted)
                 }

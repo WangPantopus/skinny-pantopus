@@ -1373,6 +1373,9 @@ public struct PlaceHeatColdData: Decodable, Sendable, Hashable {
     /// The home-conditioned instruction. Empty when there is nothing to do.
     public let guidance: String
     public let sourceNote: String
+    /// Where the heat reading came from when it isn't HeatRisk (Alaska, Hawaii,
+    /// a HeatRisk outage). Nil from servers that predate it.
+    public let heatNote: String?
 
     enum CodingKeys: String, CodingKey {
         case mode, freeze, headline, guidance
@@ -1381,6 +1384,7 @@ public struct PlaceHeatColdData: Decodable, Sendable, Hashable {
         case peakLevel = "peak_level"
         case peakDate = "peak_date"
         case sourceNote = "source_note"
+        case heatNote = "heat_note"
     }
 }
 

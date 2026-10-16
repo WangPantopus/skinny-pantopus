@@ -110,6 +110,9 @@ function normaliseObservation(obs) {
     category: CATEGORY_MAP[idx] || obs.aqiCategoryName || 'Unknown',
     pollutant: POLLUTANT_NAMES[parameter.toUpperCase()] || parameter || 'Unknown',
     reporting_area: obs.reportingAreaName || '',
+    // The monitor the reading came from and how far AirNow looked for it.
+    site_name: obs.siteName || '',
+    lookup_boundary: obs.lookupBoundary || '',
     color: COLOR_MAP[idx] || '#999999',
     observed_at: observedAt(obs),
   };
@@ -203,6 +206,17 @@ async function fetchAQI(lat, lng) {
     if (!res.ok) {
       logger.warn('AirNow API error', { status: res.status });
       return failed();
+    }
+
+    // No monitor within AirNow's 50 miles is a 200 whose body is a
+    // WebServiceError ("No observations were found for all monitors within
+    // 50 miles"), not an empty list. That is an answer, not a failure: the
+    // address has no reading, which reads "no monitor" instead of an error.
+    const noObservations = raw && !Array.isArray(raw) && Array.isArray(raw.WebServiceError)
+      && raw.WebServiceError.some((e) => /no observations/i.test(String((e && e.Message) || '')));
+    if (noObservations) {
+      await setCache(PROVIDER, placeKey, { raw: [], normalized: null }, TTL_MINUTES);
+      return { aqi: null, source: 'live', fetchedAt: new Date().toISOString() };
     }
 
     if (!Array.isArray(raw)) {

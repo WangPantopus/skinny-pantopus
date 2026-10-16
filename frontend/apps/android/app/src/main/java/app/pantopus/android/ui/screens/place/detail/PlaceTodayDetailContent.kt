@@ -1289,7 +1289,8 @@ private fun TodayAirAlertsSunSections(
         val data = env.airQuality
         if (data != null && env.isLive()) {
             AqiCard(data)
-            PlaceSourceNote("AirNow · EPA", PlacePresentation.fmtTime(env.asOf))
+            // The server names the monitor, or says the reading is a model estimate.
+            PlaceSourceNote(env.source.orEmpty().ifBlank { "AirNow · EPA" }, PlacePresentation.fmtTime(env.asOf))
         } else {
             PlaceDetailFallbackCard(env)
         }

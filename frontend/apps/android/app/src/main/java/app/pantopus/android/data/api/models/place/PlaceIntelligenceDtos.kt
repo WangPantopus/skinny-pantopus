@@ -1035,6 +1035,8 @@ data class PlaceHeatColdData(
     /** The home-conditioned instruction. Empty when there is nothing to do. */
     val guidance: String = "",
     @Json(name = "source_note") val sourceNote: String = "",
+    /** Where the heat reading came from when it isn't HeatRisk (Alaska, Hawaii, a HeatRisk outage). */
+    @Json(name = "heat_note") val heatNote: String? = null,
 )
 
 /**
