@@ -164,7 +164,8 @@ async function connecticutLegacyCounty(home) {
 // tract is read as `<old county><tract>` (the 2022 change kept the tract
 // codes), and a tract too thin to compare falls back to that old county,
 // labeled county-wide: what the Place flood section shows a Connecticut
-// home. No town, no benchmark. Elsewhere it's the tract alone, as before.
+// home. No town, no benchmark. Other states read the tract alone (the
+// Place flood section falls back to the county in every state).
 // Cache reads only. Resolves to { scope, county_name, data } or null.
 async function nfipBenchmarkAt({ lat, lng, tractId }, { enqueue }) {
   const id = String(tractId || '');
