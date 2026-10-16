@@ -126,6 +126,7 @@ class PlaceSectionEnvelopeAdapterFactory : JsonAdapter.Factory {
                         ?.copy(
                             governments = BallotGovernments.decodeIn(moshi, data),
                             electionOffice = BallotElectionOffice.decodeIn(moshi, data),
+                            localGovernments = PlaceLocalGovernment.decodeIn(moshi, data),
                         )?.let(PlaceSectionData::CivicDistricts)
                 PlaceSectionId.CIVIC_ELECTION ->
                     parse(PlaceCivicElectionData::class.java)

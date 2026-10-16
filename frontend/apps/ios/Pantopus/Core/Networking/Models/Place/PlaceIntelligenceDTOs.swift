@@ -1007,10 +1007,13 @@ public struct PlaceCivicDistrictsData: Decodable, Sendable, Hashable {
     public let governments: BallotGovernments?
     /// Ballot P0: who runs the state's elections, all year; nil when not sent.
     public let electionOffice: BallotElectionOffice?
+    /// The county's, town's and city's official websites; empty when not sent.
+    public let localGovernments: [PlaceLocalGovernment]
 
     private enum CodingKeys: String, CodingKey {
         case districts, representatives, governments
         case electionOffice = "election_office"
+        case localGovernments = "local_governments"
     }
 
     public init(from decoder: Decoder) throws {
@@ -1020,7 +1023,17 @@ public struct PlaceCivicDistrictsData: Decodable, Sendable, Hashable {
         // A malformed Ballot field never blanks the districts.
         governments = try? c.decodeIfPresent(BallotGovernments.self, forKey: .governments)
         electionOffice = try? c.decodeIfPresent(BallotElectionOffice.self, forKey: .electionOffice)
+        localGovernments = (try? c.decodeIfPresent([PlaceLocalGovernment].self, forKey: .localGovernments)) ?? []
     }
+}
+
+/// A local government's official website (Census Government Units listing, Wikidata).
+public struct PlaceLocalGovernment: Decodable, Sendable, Hashable {
+    public let level: String
+    public let name: String
+    public let url: String
+    /// The site's host, shown under the name: "traviscountytx.gov".
+    public let host: String
 }
 
 public enum BallotRaceType: String, Sendable, Hashable {
@@ -1274,6 +1287,9 @@ public struct PlaceAddressCalendarData: Decodable, Sendable, Hashable {
     /// `expected_version`, so a change saved meanwhile on another device is
     /// not undone. Omitted by older servers.
     public var pickupVersion: String?
+    /// Where property-tax dates are set when the home has no tax rule and
+    /// its state sets none. Omitted by older servers.
+    public var taxNote: String?
 
     public var pickupSetupMessage: String? {
         let kinds = ["garbage", "recycling", "yard_waste", "bulk_pickup"]
@@ -1289,6 +1305,7 @@ public struct PlaceAddressCalendarData: Decodable, Sendable, Hashable {
         case ruleCount = "rule_count"
         case pickupSchedule = "pickup_schedule"
         case pickupVersion = "pickup_version"
+        case taxNote = "tax_note"
     }
 }
 

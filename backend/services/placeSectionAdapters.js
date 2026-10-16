@@ -29,7 +29,7 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 const { encodeGeohash } = require('../utils/geohash');
 const { serializePlaceSection } = require('../serializers/placeIntelligenceSerializer');
-const { readThrough } = require('./placeSectionCache');
+const { readThrough, writeRow } = require('./placeSectionCache');
 const { geocodeToTract } = require('./ai/neighborhoodProfileService');
 const { fetchHeatRisk } = require('./external/heatRisk');
 const { fetchHeatIndexDays } = require('./external/nwsHeatIndex');
@@ -38,6 +38,7 @@ const ballotSummary = require('./ballot/summary');
 const ballotGovernments = require('./ballot/governments');
 const ballotReference = require('./ballot/referenceData');
 const { isConnecticutPlanningRegion, legacyCountyForTown } = require('../data/connecticutTowns');
+const LOCAL_GOVERNMENTS = require('../data/localGovernments.json');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 8000;
@@ -814,6 +815,8 @@ function ordinal(n) {
 // Districts", "2024 State Legislative Districts - Upper") — match by
 // suffix pattern, not exact key. Returns the display list PLUS the raw
 // district codes the representative lookups key on.
+const DC_STATE_FIPS = '11';
+
 function districtsFromGeographies(geo) {
   const find = (re) => {
     const key = Object.keys(geo).find((k) => re.test(k));
@@ -840,7 +843,10 @@ function districtsFromGeographies(geo) {
     });
   }
   const sldu = find(/State Legislative Districts - Upper/);
-  if (sldu && sldu.NAME) {
+  if (sldu && sldu.NAME && String((state && state.STATE) || '') === DC_STATE_FIPS) {
+    // Washington, D.C. has no state legislature: this Census layer holds its council wards.
+    out.push({ level: 'city', office_label: 'Council ward', name: sldu.NAME });
+  } else if (sldu && sldu.NAME) {
     codes.sldu = String(sldu.BASENAME || '').trim() || null;
     out.push({ level: 'state', office_label: 'State Senate', name: sldu.NAME });
   }
@@ -850,11 +856,25 @@ function districtsFromGeographies(geo) {
     out.push({ level: 'state', office_label: 'State House', name: sldl.NAME });
   }
   const county = find(/^Counties$/);
-  if (county && county.NAME) out.push({ level: 'county', office_label: 'County', name: county.NAME });
+  // Connecticut's county-equivalents are planning regions (LSAD PL), not governments.
+  if (county && county.NAME) out.push({ level: 'county', office_label: county.LSADC === 'PL' ? 'Planning region' : 'County', name: county.NAME });
   const place = find(/^Incorporated Places$/);
   if (place && place.NAME) {
     out.push({ level: 'city', office_label: 'City', name: place.NAME.replace(/\s+(city|town|village|borough)$/i, '') });
   }
+  // New England towns and many townships are governments too: Census county
+  // subdivisions with an active government (FUNCSTAT A), keyed state + COUSUB.
+  const town = find(/^County Subdivisions$/);
+  const townGeoid = town && town.FUNCSTAT === 'A' && /^\d{2}$/.test(String(town.STATE || '')) && /^\d{5}$/.test(String(town.COUSUB || ''))
+    ? `${town.STATE}${town.COUSUB}`
+    : null;
+  // The county, town and city governments by Census code, for their official sites.
+  codes.local = [
+    county && county.GEOID && county.NAME ? { level: 'county', geoid: String(county.GEOID), name: ballotGovernments.placeName(county.NAME) } : null,
+    townGeoid && town.NAME ? { level: 'town', geoid: townGeoid, name: ballotGovernments.placeName(town.NAME) } : null,
+    place && place.GEOID && place.NAME ? { level: 'city', geoid: String(place.GEOID), name: ballotGovernments.placeName(place.NAME) } : null,
+  ].filter(Boolean);
+  codes.dc = String((state && state.STATE) || '') === DC_STATE_FIPS;
   const school = find(/Unified School Districts$/);
   if (school && school.NAME) out.push({ level: 'school', office_label: 'School district', name: school.NAME });
 
@@ -1006,6 +1026,52 @@ async function composeCivicGovernments(home) {
   }
 }
 
+// Pantopus has no national source for city and county officials, so the Civic
+// page links to each local government's own site instead of naming people:
+// the official websites in data/localGovernments.json (Census Government Units
+// listing and Wikidata, each opened and kept only when it is the government's
+// own live site), by the county, town and place the point sits in.
+// Washington, D.C. is one government, named as such.
+const LOCAL_GOVERNMENT_TABLES = {
+  county: LOCAL_GOVERNMENTS.counties,
+  town: LOCAL_GOVERNMENTS.towns,
+  city: LOCAL_GOVERNMENTS.places,
+};
+
+function localGovernmentLinks(codes) {
+  if (!codes || !Array.isArray(codes.local)) return [];
+  const out = [];
+  for (const item of codes.local) {
+    const table = item && Object.hasOwn(LOCAL_GOVERNMENT_TABLES, item.level) ? LOCAL_GOVERNMENT_TABLES[item.level] : null;
+    const url = table && Object.hasOwn(table, String(item.geoid)) ? table[item.geoid] : null;
+    if (typeof url !== 'string' || out.some((g) => g.url === url)) continue;
+    let host;
+    try { host = new URL(url).hostname.replace(/^www\./, ''); } catch { continue; }
+    out.push({ level: item.level, name: codes.dc ? 'District of Columbia' : item.name, url, host });
+  }
+  return out;
+}
+
+// Rows cached before the codes carried the local governments would show no
+// links until their 90-day refresh. Serve such a row as it is and add the
+// codes in the background (one geocoder call), so the next load has them.
+const upgradingLocalCodes = new Set();
+
+function upgradeLocalCodes(cacheKey, payload, fetchedAt, ll) {
+  if (upgradingLocalCodes.has(cacheKey)) return;
+  upgradingLocalCodes.add(cacheKey);
+  ballotGovernments.sharedGeographies(ll.lat, ll.lng)
+    .then((geo) => {
+      if (!geo) return null;
+      const { codes } = districtsFromGeographies(geo);
+      // The row keeps its own fetched_at, so it expires when it would have.
+      return writeRow(cacheKey, 'civic_districts', { ...payload, codes: { ...payload.codes, local: codes.local, dc: codes.dc } },
+        90 * DAY_MS, fetchedAt || new Date().toISOString());
+    })
+    .catch((err) => logger.warn('placeSections: civic local codes upgrade failed', { error: err.message }))
+    .finally(() => upgradingLocalCodes.delete(cacheKey));
+}
+
 async function composeCivicDistricts(home, { ballot = false } = {}) {
   const ll = homeLatLng(home);
   if (!ll) return [serializePlaceSection('civic_districts', { status: 'unavailable' })];
@@ -1014,9 +1080,10 @@ async function composeCivicDistricts(home, { ballot = false } = {}) {
   // Ballot opt-in controls only the additional governments presentation.
   const showGovernments = Boolean(ballot) && ballotReference.isSupportedState(home.state);
   const governmentsPromise = showGovernments ? composeCivicGovernments(home) : Promise.resolve(null);
+  const cacheKey = ballotGovernments.pointCacheKey(ll.lat, ll.lng);
   try {
     const { payload, fetchedAt, stale } = await readThrough({
-      cacheKey: ballotGovernments.pointCacheKey(ll.lat, ll.lng),
+      cacheKey,
       sectionId: 'civic_districts',
       ttlMs: 90 * DAY_MS,
       fetch: async () => {
@@ -1040,6 +1107,8 @@ async function composeCivicDistricts(home, { ballot = false } = {}) {
         : Promise.resolve(payload.representatives || []),
       governmentsPromise,
     ]);
+    const localGovernments = localGovernmentLinks(payload.codes);
+    if (payload.codes && !Array.isArray(payload.codes.local)) upgradeLocalCodes(cacheKey, payload, fetchedAt, ll);
     // Ballot opt-in: who runs this state's elections, for the Civic page's
     // Election block when Pantopus has no next date (reference data only).
     const electionOffice = ballot ? ballotSummary.electionOfficeFor(home.state) : null;
@@ -1048,10 +1117,13 @@ async function composeCivicDistricts(home, { ballot = false } = {}) {
       asOf: fetchedAt,
       status: stale ? 'stale' : 'ready',
       source: 'U.S. Census Bureau · unitedstates/congress-legislators · OpenStates',
-      coverage: representatives.length ? 'full' : 'partial',
+      // Federal and state legislators only: city and county officials are
+      // never included (no national source), so the list is always partial.
+      coverage: 'partial',
       data: {
         districts: payload.districts,
         representatives,
+        local_governments: localGovernments,
         ...(governments ? { governments } : {}),
         ...(electionOffice ? { election_office: electionOffice } : {}),
       },
@@ -1326,6 +1398,10 @@ module.exports = {
   // The anonymous preview leads with a dollar figure and needs the raw
   // HUD row for a county it has geocoded, without a Home row.
   hudFmrRow,
+  // The address calendar's county rules (Home has no county column).
+  homeCountyFips,
+  // OpenFEMA still files Connecticut flood policies under the old counties.
+  connecticutLegacyCounty,
   // Exported for testing.
   parseCsv,
   districtEq,

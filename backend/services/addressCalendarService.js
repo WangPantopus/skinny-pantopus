@@ -59,16 +59,68 @@ function scopeKeysFor(home) {
   return keys;
 }
 
+const RULE_COLUMNS = 'id, scope_type, scope_key, kind, title, detail, rrule, dtstart, until, all_day, lead_days, source, source_url, confidence, params';
+
 async function loadRules(home) {
   const scopes = scopeKeysFor(home);
   if (!scopes.length) return [];
   const { data, error } = await supabaseAdmin
     .from('AddressCalendarRule')
-    .select('id, scope_type, scope_key, kind, title, detail, rrule, dtstart, until, all_day, lead_days, source, source_url, confidence, params')
+    .select(RULE_COLUMNS)
     .in('scope_key', scopes.map((s) => s.scope_key));
   if (error) throw new Error(error.message);
   const wanted = new Set(scopes.map((s) => `${s.scope_type}|${s.scope_key}`));
   return (data || []).filter((r) => wanted.has(`${r.scope_type}|${r.scope_key}`));
+}
+
+// States where no statewide property-tax date exists: the town, city,
+// county or school district sets it, so the calendar says where to look
+// instead of inventing a date. Each line paraphrases its state's own
+// statute or tax department (checked 2026-10-15):
+//   AK Alaska Stat. 29.45.240 · IL 35 ILCS 200/21-15 · ME 36 M.R.S. § 505 ·
+//   NH RSA 76:13, 76:15-a · NY Dept. of Taxation and Finance, property tax
+//   bills · OH Ohio Rev. Code 323.12, 323.17 · PA 72 P.S. § 5511.10 ·
+//   RI Gen. Laws § 44-5-7 · VA Code § 58.1-3916 · VT 32 V.S.A. § 4773.
+const LOCAL_TAX_DATE_GUIDANCE = {
+  AK: 'In Alaska, your borough or city sets its own property tax due dates — check your tax statement.',
+  IL: 'In Illinois, each property tax installment is due on the date printed on your county tax bill.',
+  ME: 'In Maine, each city or town sets its own property tax due dates — check your tax bill or town office.',
+  NH: 'In New Hampshire, your town or city sets its property tax due dates — check your tax bill or town office.',
+  NY: 'In New York, your school district and your town, city or county bill separately — check the due date on each bill.',
+  OH: 'In Ohio, your county treasurer sets the property tax due dates — check your tax bill.',
+  PA: 'In Pennsylvania, your county, municipality and school district bill separately — check each bill or your local tax collector.',
+  RI: 'In Rhode Island, each city or town sets its own property tax due dates — check your tax bill or town hall.',
+  VA: 'In Virginia, each county, city or town sets its own property tax due dates — check your tax bill or local treasurer.',
+  VT: 'In Vermont, each town sets its own property tax due dates — check your tax bill or town office.',
+};
+
+function taxDateGuidance(state) {
+  return LOCAL_TAX_DATE_GUIDANCE[String(state || '').trim().toUpperCase()] || null;
+}
+
+// County rules. Home has no county column, so the county comes from the
+// home's coordinates (the cached Census lookup the Place sections share)
+// and county rows are keyed `ST:<5-digit county FIPS>`, e.g. `NE:31055`
+// (county names differ between sources; FIPS codes don't). Best effort:
+// without coordinates or a lookup there are simply no county rules.
+async function loadCountyRules(home) {
+  const state = String((home && home.state) || '').trim().toUpperCase();
+  if (!state) return [];
+  try {
+    // Lazy: the adapters module is large and only this lookup needs it.
+    const fips = await require('./placeSectionAdapters').homeCountyFips(home);
+    if (!fips) return [];
+    const { data, error } = await supabaseAdmin
+      .from('AddressCalendarRule')
+      .select(RULE_COLUMNS)
+      .eq('scope_type', 'county')
+      .eq('scope_key', `${state}:${fips}`);
+    if (error) throw new Error(error.message);
+    return data || [];
+  } catch (err) {
+    logger.warn('addressCalendar: county rules unavailable', { homeId: home.id, error: err.message });
+    return [];
+  }
 }
 
 // Narrowest scope wins per kind: a household's pickup day replaces the
@@ -153,7 +205,9 @@ function pickupScheduleVersion(rules, homeId) {
 async function composeForHome(home, { now = new Date(), windowDays = WINDOW_DAYS, rules: suppliedRules = null } = {}) {
   const today = localToday(home, now);
   const end = isoDate(new Date(noonUtc(today).getTime() + windowDays * 86400000));
-  const loaded = suppliedRules || await loadRules(home);
+  const base = suppliedRules || await loadRules(home);
+  const baseIds = new Set(base.map((r) => r.id));
+  const loaded = [...base, ...(await loadCountyRules(home)).filter((r) => !baseIds.has(r.id))];
   const hasHouseholdPickup = loaded.some((r) => r.scope_type === 'home' && PICKUP_KINDS.has(r.kind));
   // Once the household sets its schedule, unknown pickup kinds must not
   // silently fall back to a guessed city week (including briefing signals).
@@ -217,6 +271,9 @@ async function composeForHome(home, { now = new Date(), windowDays = WINDOW_DAYS
     window_days: windowDays,
     rule_count: rules.length,
     today,
+    // No property-tax rule here and the state sets none: say where the
+    // dates are set instead of showing nothing (or an invented date).
+    tax_note: rules.some((r) => r.kind === 'property_tax') ? null : taxDateGuidance(home.state),
   };
 }
 
@@ -430,5 +487,6 @@ module.exports = {
   expandRule,
   scopeKeysFor,
   localToday,
+  taxDateGuidance,
   WINDOW_DAYS,
 };
