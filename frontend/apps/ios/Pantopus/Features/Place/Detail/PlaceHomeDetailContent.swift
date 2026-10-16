@@ -22,14 +22,21 @@ struct PlaceHomeDetailContent: View {
         return env.yourHome
     }
 
+    private func factsSource(_ env: PlaceSectionEnvelope) -> String {
+        if let source = env.source, !source.isEmpty { return source }
+        return "County public records · estimate model"
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if let env = vm.section(.yourHome, in: intel) {
                 if let data = home {
                     PlaceDetailSectionLabel(text: "Property")
                     FactsCard(data: data)
+                    // The server names where the facts came from: county records,
+                    // or the details the household entered.
                     PlaceSourceNote(
-                        name: "County public records · estimate model",
+                        name: factsSource(env),
                         asOf: PlacePresentation.fmtMonthYear(env.asOf)
                     )
 
@@ -40,10 +47,12 @@ struct PlaceHomeDetailContent: View {
                         if let assessed = data.assessedValue {
                             AssessmentCard(assessed: assessed)
                         }
-                        PlaceSourceNote(
-                            name: "County public records · estimate model",
-                            asOf: PlacePresentation.fmtMonthYear(env.asOf)
-                        )
+                        if data.estimatedValue != nil || data.assessedValue != nil {
+                            PlaceSourceNote(
+                                name: "County public records · estimate model",
+                                asOf: PlacePresentation.fmtMonthYear(env.asOf)
+                            )
+                        }
 
                         PlaceDetailSectionLabel(text: "Equity")
                         EquityCalculator(estimatedValue: data.estimatedValue)
