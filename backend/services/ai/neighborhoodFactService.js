@@ -824,31 +824,33 @@ async function generateNeighborhoodFacts(geohash, options = {}) {
     ...communityQuestions,
   ];
 
-  // 6. Deterministically select 5-8 facts with priority ordering:
-  //    property > seasonal > safety > local_resources > home_value > moving > community
-  //    Use weekly rotation seed to vary which facts from each category are shown
-  const seed = `${geohash}:select:${week}:${year}`;
-  const selected = deterministicPick(allCandidates, seed, 8);
-
-  // Sort by type priority for display order
+  // 6. Order the facts so categories mix: the first fact of each category,
+  //    by priority, then the second of each, and so on, keeping up to 8:
+  //    property > seasonal > safety and local_resources > home_value > moving > community
+  //    The cold-start feed shows the first 3, so a home's cell gets one property
+  //    tip, one seasonal tip and a safety or local-resource tip, not three
+  //    property tips. The weekly seed decides which fact of each category comes
+  //    first, and whether the safety or the local-resource tip does.
   const TYPE_PRIORITY = {
     property_tip: 0,
     seasonal_tip: 1,
     safety_tip: 2,
-    local_resource: 3,
-    home_value: 4,
-    moving_tip: 5,
-    community_question: 6,
+    local_resource: 2,
+    home_value: 3,
+    moving_tip: 4,
+    community_question: 5,
   };
-  const byPriority = (a, b) => (TYPE_PRIORITY[a.type] ?? 99) - (TYPE_PRIORITY[b.type] ?? 99);
-  selected.sort(byPriority);
-
-  // Fallback: if deterministicPick returned fewer than 5, use priority-sorted candidates
-  if (selected.length < 5) {
-    const sorted = [...allCandidates].sort(byPriority);
-    return sorted.slice(0, 8);
+  const seed = `${geohash}:select:${week}:${year}`;
+  const ordered = deterministicOrder(allCandidates, seed);
+  const round = new Map();
+  const seenOfType = {};
+  for (const fact of ordered) {
+    seenOfType[fact.type] = (seenOfType[fact.type] || 0) + 1;
+    round.set(fact, seenOfType[fact.type]);
   }
-  return selected;
+  ordered.sort((a, b) => round.get(a) - round.get(b)
+    || (TYPE_PRIORITY[a.type] ?? 99) - (TYPE_PRIORITY[b.type] ?? 99));
+  return ordered.slice(0, 8);
 }
 
 module.exports = { generateNeighborhoodFacts };
