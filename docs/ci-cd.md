@@ -191,8 +191,11 @@ read-only repository permissions and keep deployment secrets out of PR jobs.
   `PANTOPUS_API_BASE_URL`, `PANTOPUS_SOCKET_URL`, `STRIPE_PUBLISHABLE_KEY`,
   `MAPS_API_KEY` and `GOOGLE_SERVICES_JSON` (the Firebase config for
   `app.pantopus.android`; the committed `app/google-services.json` is a build
-  placeholder, so the release job refuses to run without the real one). Commit a new increasing `versionCode` before each new upload;
-  tags do not change the app version. Store acceptance/signing must be verified
+  placeholder, so the release job refuses to run without the real one). Each
+  upload takes the next free `versionCode`: one more than the highest on Play's
+  tracks or the workflow's run number, whichever is higher. An `android-vX.Y.Z`
+  tag sets `versionName` to X.Y.Z; a run from a branch keeps 1.0.0. Nobody edits
+  `app/build.gradle.kts` for a release. Store acceptance/signing must be verified
   with the actual accounts before the first release.
 - Optional repository secrets `SLACK_WEBHOOK_URL` / `DISCORD_WEBHOOK_URL` send
   production deployment outcomes. A disabled deployment is not a success alert.

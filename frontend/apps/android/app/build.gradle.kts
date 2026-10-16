@@ -60,8 +60,10 @@ android {
         applicationId = "app.pantopus.android"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0.0"
+        // Play refuses a versionCode it already has, so fastlane's `beta` lane passes the next free one and the
+        // android-vX.Y.Z tag's version name (fastlane/Fastfile). Every other build keeps 1 and 1.0.0.
+        versionCode = providers.gradleProperty("pantopus.versionCode").orNull?.toInt() ?: 1
+        versionName = providers.gradleProperty("pantopus.versionName").orNull ?: "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
