@@ -193,7 +193,7 @@ describe('Place group-detail — degrades section-by-section', () => {
       sec('civic_election', { status: 'unavailable', data: null }),
     ]);
     render(<CivicDetail intelligence={offSeason} />);
-    expect(screen.getByText('No upcoming election')).toBeInTheDocument();
+    expect(screen.getByText('No election on our calendar yet')).toBeInTheDocument();
   });
 
   it('Identity locks the residency letter until the address is verified (T3)', () => {

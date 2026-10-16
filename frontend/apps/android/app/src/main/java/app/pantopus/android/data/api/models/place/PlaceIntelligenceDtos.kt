@@ -843,6 +843,12 @@ data class PlaceCivicDistrictsData(
      * `PlaceJsonAdapters`, so a malformed field never fails this section.
      */
     @Transient val governments: BallotGovernments? = null,
+    /**
+     * Ballot P0: who runs the state's elections, all year; null when not
+     * sent. Read separately by [BallotElectionOffice.decodeIn], like
+     * [governments].
+     */
+    @Transient val electionOffice: BallotElectionOffice? = null,
 )
 
 enum class BallotRaceType {
