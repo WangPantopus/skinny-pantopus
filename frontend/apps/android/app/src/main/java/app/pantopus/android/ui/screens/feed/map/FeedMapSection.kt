@@ -21,6 +21,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -69,6 +70,7 @@ import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.MarkerComposable
 import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
+import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.ln
 import kotlin.math.max
@@ -110,6 +112,8 @@ fun FeedMapSection(
                 )
         }
 
+    val scope = rememberCoroutineScope()
+
     // The map's size in pixels.
     var mapSize by remember { mutableStateOf(IntSize.Zero) }
     FeedMapCameraEffect(
@@ -127,21 +131,7 @@ fun FeedMapSection(
             userCoordinate = (state as? FeedMapUiState.Loaded)?.userCoordinate,
             cameraState = cameraState,
             onPinTap = viewModel::selectEntity,
-            onClusterTap = { cluster ->
-                cameraState.position =
-                    CameraPosition.fromLatLngZoom(
-                        LatLng(
-                            (cluster.minLatitude + cluster.maxLatitude) / 2,
-                            (cluster.minLongitude + cluster.maxLongitude) / 2,
-                        ),
-                        zoomForDelta(
-                            max(
-                                cluster.maxLatitude - cluster.minLatitude,
-                                cluster.maxLongitude - cluster.minLongitude,
-                            ).coerceAtLeast(0.004) * 1.4,
-                        ),
-                    )
-            },
+            onClusterTap = { cluster -> scope.launch { zoomToCluster(cameraState, cluster) } },
         )
         if (viewportDirty) {
             SearchThisAreaPill(
@@ -244,6 +234,26 @@ private fun FeedMapCameraEffect(
             ),
         )
     }
+}
+
+/**
+ * Zooms in on a tapped cluster. Animated, so [FeedMapCameraEffect] reports
+ * the settle and "Search this area" appears: an instant move starts and
+ * settles within one frame, too fast for the effect to see.
+ */
+private suspend fun zoomToCluster(
+    cameraState: CameraPositionState,
+    cluster: ExploreCluster,
+) {
+    val span = max(cluster.maxLatitude - cluster.minLatitude, cluster.maxLongitude - cluster.minLongitude)
+    cameraState.animate(
+        CameraUpdateFactory.newCameraPosition(
+            CameraPosition.fromLatLngZoom(
+                LatLng((cluster.minLatitude + cluster.maxLatitude) / 2, (cluster.minLongitude + cluster.maxLongitude) / 2),
+                zoomForDelta(span.coerceAtLeast(0.004) * 1.4),
+            ),
+        ),
+    )
 }
 
 @Composable
