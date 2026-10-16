@@ -150,7 +150,10 @@ function formatPropertyType(raw) {
 //   portland_metro  Oregon Metro's district, Portland's side of the river (utils/geo)
 // and, nationally, from the climate regions in seasonalClimate.json (the
 // hazard seasons each region has, and the hurricane season's coastal boxes):
-//   hurricane_coast  inside the hurricane season's coastal boxes
+//   hurricane_coast  inside the hurricane season's coastal boxes: the Gulf and
+//                    Atlantic shores and their large bays and sounds to about
+//                    50 km inland (80 at a box's corner), up to 42.5°N, plus
+//                    all of Florida and Hawaii
 //   tornado          regions with a tornado season
 //   winter_storm     regions with a winter storm or blizzard season
 //   extreme_heat     regions with a heat season
