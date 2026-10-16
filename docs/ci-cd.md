@@ -185,6 +185,10 @@ read-only repository permissions and keep deployment secrets out of PR jobs.
   `APP_STORE_CONNECT_KEY_CONTENT` (base64 `.p8`) and `APPLE_TEAM_ID`.
   The signing repository also needs `MATCH_GIT_BASIC_AUTHORIZATION` (base64
   `username:token`) or your supported private-repository authentication.
+  Each upload's build number is one more than TestFlight's newest upload, of
+  any version. An `ios-vX.Y.Z` tag sets the version (`MARKETING_VERSION`) to
+  X.Y.Z, and a run from any other tag stops before signing; a run from a
+  branch keeps `project.yml`'s 1.0.0. Nobody edits `project.yml` for a release.
 - Android: `android-v*` tags or manual dispatch use `android-release`. Configure
   `ANDROID_KEYSTORE_BASE64`, `PANTOPUS_KEYSTORE_PASSWORD`, `PANTOPUS_KEY_ALIAS`,
   `PANTOPUS_KEY_PASSWORD`, `PLAY_STORE_SERVICE_ACCOUNT_JSON`,
