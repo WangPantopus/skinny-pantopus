@@ -45,7 +45,13 @@ class SavedCopies
         constructor(
             @ApplicationContext context: Context,
             moshi: Moshi,
-        ) : this(File(context.cacheDir, "screen-store"), moshi, "${BuildConfig.VERSION_NAME}+${BuildConfig.VERSION_CODE}")
+        ) : this(
+            File(context.cacheDir, "screen-store"),
+            moshi,
+            // Version name and code stay the same between builds; the commit doesn't. An older build's copy may lack
+            // fields this build reads, and revalidating it (a 304) would keep it.
+            "${BuildConfig.VERSION_NAME}+${BuildConfig.VERSION_CODE}+${BuildConfig.GIT_COMMIT}",
+        )
 
         private val envelopes = moshi.adapter(Envelope::class.java)
 

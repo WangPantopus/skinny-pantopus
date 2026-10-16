@@ -48,6 +48,20 @@ val sentryDsn = envOr("SENTRY_DSN", "")
 val pantopusEnvDebug = envOr("PANTOPUS_ENV", "local")
 val pantopusEnvRelease = envOr("PANTOPUS_ENV", "production")
 
+// The commit being built, empty outside a git checkout. versionCode and versionName stay the same between builds, so
+// the screens' saved copies use it to tell builds apart (data/store/SavedCopies.kt).
+val gitCommit =
+    runCatching {
+        providers
+            .exec {
+                commandLine("git", "rev-parse", "HEAD")
+                workingDir = projectDir
+                isIgnoreExitValue = true
+            }.standardOutput.asText
+            .get()
+            .trim()
+    }.getOrDefault("")
+
 android {
     namespace = "app.pantopus.android"
     // Google Play requires new apps and updates to target Android 16 (API 36)
@@ -76,6 +90,7 @@ android {
         buildConfigField("String", "STRIPE_PUBLISHABLE_KEY", "\"$stripeKey\"")
         buildConfigField("String", "SENTRY_DSN", "\"$sentryDsn\"")
         buildConfigField("String", "PANTOPUS_ENV", "\"$pantopusEnvDebug\"")
+        buildConfigField("String", "GIT_COMMIT", "\"$gitCommit\"")
 
         // PostHog product analytics — matches iOS. Empty key disables the
         // vendor (analytics no-ops in dev / CI); host defaults to EU Cloud.
