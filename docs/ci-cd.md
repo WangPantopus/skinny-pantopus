@@ -185,6 +185,13 @@ read-only repository permissions and keep deployment secrets out of PR jobs.
   `APP_STORE_CONNECT_KEY_CONTENT` (base64 `.p8`) and `APPLE_TEAM_ID`.
   The signing repository also needs `MATCH_GIT_BASIC_AUTHORIZATION` (base64
   `username:token`) or your supported private-repository authentication.
+  `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` and `SENTRY_PROJECT` are optional. With
+  all three set, the run uploads the build's dSYMs to Sentry before the
+  TestFlight upload, and a failed Sentry upload stops the run there. Leave
+  them unset while Sentry is off for the pilot ([founder decision
+  B](compliance/appstore-privacy-labels.md#diagnostics)): the workflow writes
+  no `SENTRY_DSN` into the build, so the app sends no crash reports to
+  symbolicate.
   Each upload's build number is one more than TestFlight's newest upload, of
   any version. An `ios-vX.Y.Z` tag sets the version (`MARKETING_VERSION`) to
   X.Y.Z, and a run from any other tag stops before signing; a run from a

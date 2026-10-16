@@ -61,6 +61,11 @@ jobs:
       - name: Fastlane beta
         env:
           MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
+          # Optional: with all three set, the lane uploads the build's dSYMs
+          # to Sentry; with any of them unset it skips that step.
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
           FASTLANE_HIDE_CHANGELOG: "true"
           LC_ALL: en_US.UTF-8
           LANG: en_US.UTF-8
