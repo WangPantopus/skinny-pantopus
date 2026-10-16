@@ -156,7 +156,7 @@ function askBeforeYouSign({ flood, nfip, radon, water, rentBand, askingRent }) {
       asks.push({
         id: 'flood_premium_benchmark',
         question: 'Ask to see the current flood policy and its declarations page.',
-        because: `Real NFIP policies in this census tract run a median of $${nfip.premium_median.toLocaleString('en-US')} a year. A quote for this address could differ, but a number far below that is worth asking about. ${nfipPremiumService.OPENFEMA_NOTICE}`,
+        because: `Real NFIP policies ${nfip.scope === 'county' ? 'across this county' : 'in this census tract'} run a median of $${nfip.premium_median.toLocaleString('en-US')} a year. A quote for this address could differ, but a number far below that is worth asking about. ${nfipPremiumService.OPENFEMA_NOTICE}`,
         source: 'FEMA · OpenFEMA NFIP policies',
       });
     }
@@ -398,8 +398,14 @@ async function getScoutReport(place, { askingRent, yearBuilt, bedrooms } = {}) {
       // Flip this to false the moment Scout becomes reachable without an
       // account: at that point it is drive-by traffic again, and it would
       // sit in the same FIFO warm queue ahead of tracts people live in.
-      const benchmark = await nfipPremiumService.getTractBenchmark(tract.tractId, { enqueue: true });
-      if (benchmark && benchmark.status === 'ready') nfip = benchmark.data;
+      //
+      // A Connecticut tract too thin to compare reads its old county
+      // instead (nfipBenchmarkAt), and `scope` says so.
+      const benchmark = await placeSectionAdapters.nfipBenchmarkAt(
+        { lat: place.lat, lng: place.lng, tractId: tract.tractId },
+        { enqueue: true },
+      );
+      if (benchmark) nfip = { ...benchmark.data, scope: benchmark.scope };
     }
   } catch (err) {
     logger.warn('scout: flood/nfip failed', { error: err.message });
@@ -428,8 +434,13 @@ async function getScoutReport(place, { askingRent, yearBuilt, bedrooms } = {}) {
         premium_median: nfip.premium_median,
         premium_p75: nfip.premium_p75,
         policy_count: nfip.policy_count,
-        scope: 'census tract',
-        note: 'Real policies near this address. A benchmark, not a quote.',
+        scope: nfip.scope === 'county' ? 'county' : 'census tract',
+        note: nfip.scope === 'county'
+          // Usually a capped sample of the county's policies. FEMA's terms
+          // want its notice wherever OpenFEMA figures are shown.
+          ? `This census tract has too few policies to compare, so these are ${nfip.coverage === 'partial' ? 'a sample of ' : ''}`
+            + `the county's from the last ${nfip.window_months} months. A benchmark, not a quote. ${nfipPremiumService.OPENFEMA_NOTICE}`
+          : 'Real policies near this address. A benchmark, not a quote.',
       }
       : null,
     environment: { radon, water },
