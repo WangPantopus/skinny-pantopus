@@ -210,20 +210,26 @@ platform :ios do
   # present, so dev / CI lanes without secrets still pass.
   desc "Upload build dSYMs to Sentry for release symbolication"
   private_lane :upload_dsyms_to_sentry do
-    auth_token = ENV["SENTRY_AUTH_TOKEN"]
-    org = ENV["SENTRY_ORG"]
-    project = ENV["SENTRY_PROJECT"]
+    auth_token = ENV["SENTRY_AUTH_TOKEN"].to_s.strip
+    org = ENV["SENTRY_ORG"].to_s.strip
+    project = ENV["SENTRY_PROJECT"].to_s.strip
 
-    if [auth_token, org, project].any? { |v| v.to_s.strip.empty? }
+    if [auth_token, org, project].any?(&:empty?)
       UI.important("Sentry dSYM upload skipped — set SENTRY_AUTH_TOKEN, SENTRY_ORG and SENTRY_PROJECT to enable.")
       next
     end
 
-    sentry_upload_dsym(
+    # build_app sets this only when it zipped the archive's dSYMs. Without a
+    # path, the plugin would search the whole app folder instead.
+    dsym_path = lane_context[SharedValues::DSYM_OUTPUT_PATH]
+    UI.user_error!("build_app left no dSYM zip to upload to Sentry") if dsym_path.to_s.empty?
+
+    # fastlane-plugin-sentry 2.0 replaced sentry_upload_dsym with this action.
+    sentry_debug_files_upload(
       auth_token: auth_token,
       org_slug: org,
       project_slug: project,
-      dsym_path: lane_context[SharedValues::DSYM_OUTPUT_PATH]
+      path: [dsym_path]
     )
   end
 
