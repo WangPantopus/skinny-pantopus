@@ -71,6 +71,10 @@ jobs:
               - '.dockerignore'
               - 'docker-compose*.yml'
               - 'backend/**'
+              # Backend tests and the PostgREST contract read these files outside backend/.
+              - 'frontend/packages/ui-utils/src/marketplace-contract.ts'
+              - 'frontend/apps/web/src/lib/identityLabels.ts'
+              - 'scripts/db/contract-images.cjs'
               - 'package.json'
               - 'pnpm-lock.yaml'
               - 'pnpm-workspace.yaml'
@@ -79,6 +83,10 @@ jobs:
               - 'frontend/apps/web/**'
               - 'frontend/packages/**'
               - 'frontend/tsconfig.base.json'
+              # Web tests read the native color tokens and run the association-file generator.
+              - 'frontend/apps/ios/Pantopus/Resources/Assets.xcassets/Colors/{Neutral,Semantic,Identity}/**'
+              - 'frontend/apps/android/app/src/main/java/app/pantopus/android/ui/theme/Color.kt'
+              - 'tools/gen-association-files.mjs'
               - 'package.json'
               - 'pnpm-lock.yaml'
               - 'pnpm-workspace.yaml'
@@ -212,6 +220,11 @@ jobs:
       # eslint config are not linted.
       - name: Lint
         run: pnpm --filter=@pantopus/web lint
+
+      # The backend's legacy UI terms gate also scans src/lib, and a web-only
+      # change doesn't start the backend job.
+      - name: Legacy UI terms gate
+        run: node backend/scripts/ci/check-legacy-ui-terms.js
 
       # Fails only on type errors that are not in tsc-baseline.json. The
       # baseline is empty, so today this is a plain `tsc --noEmit` gate;
