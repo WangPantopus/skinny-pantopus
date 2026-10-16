@@ -43,7 +43,13 @@ struct PlaceDetailView: View {
                     viewModel.showVerify = false
                     viewModel.onStartVerify?(method)
                 },
-                onClose: { viewModel.showVerify = false }
+                onClose: { viewModel.showVerify = false },
+                onOpenDocumentStatus: viewModel.onOpenVerificationStatus.map { open in
+                    {
+                        viewModel.showVerify = false
+                        open()
+                    }
+                }
             )
             .presentationDetents([.large])
             .presentationDragIndicator(.hidden)

@@ -63,6 +63,8 @@ public final class WaitingRoomViewModel {
 
     private let seedState: WaitingRoomState
     private var claimId: String?
+    /// The claim is a renter's residency document (`claim_type` "resident").
+    private var claimIsResidency = false
     private let api: APIClient
     private let authority: HomeDashboardAccess
     private let logger = Logger(label: "app.pantopus.ios.WaitingRoom")
@@ -98,10 +100,12 @@ public final class WaitingRoomViewModel {
             )
             guard let claim = claimsResponse.claims.first(where: { $0.homeId == homeId }) else {
                 claimId = nil
+                claimIsResidency = false
                 try await applyVerificationFallback()
                 return
             }
             claimId = claim.id
+            claimIsResidency = claim.claimType == "resident"
             guard claim.status == Self.underReviewStatus else {
                 if Self.approvedStatuses.contains(claim.status) {
                     // A18.2 "You're the owner". Dates come straight off the
@@ -231,7 +235,10 @@ public final class WaitingRoomViewModel {
     public func handleInlineAction(_ action: WaitingRoomInlineAction) {
         switch action.actionKey {
         case "update_evidence":
-            if let claimId {
+            // A residency document is updated in the residency document flow, never the ownership one.
+            if claimIsResidency {
+                pendingNav = .uploadProof(homeId: homeId)
+            } else if let claimId {
                 pendingNav = .updateEvidence(homeId: homeId, claimId: claimId)
             }
         case "cancel_claim":

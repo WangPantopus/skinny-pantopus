@@ -115,7 +115,8 @@ export default function HomesPage() {
             const cityLine = [h.city, h.state, h.zipcode].filter(Boolean).join(', ');
             return { claim, addressLine, cityLine };
           } catch {
-            return { claim, addressLine: 'Home', cityLine: 'Ownership verification in progress' };
+            return { claim, addressLine: 'Home',
+              cityLine: claim.claim_type === 'resident' ? 'Residency verification in progress' : 'Ownership verification in progress' };
           }
         }),
       );
@@ -282,7 +283,11 @@ export default function HomesPage() {
                 <h2 className="text-xs font-bold uppercase tracking-wide text-app-text-secondary mb-3">Verification in progress</h2>
                 <div className="space-y-4">
                   {pendingClaims.map(({ claim, addressLine, cityLine }) => {
+                    // A renter's residency document has its own status page; an ownership claim continues its evidence.
+                    const residency = claim.claim_type === 'resident';
                     const q = claim.id ? `?claimId=${encodeURIComponent(claim.id)}` : '';
+                    const href = residency ? `/app/homes/${claim.home_id}/verify-residency/submitted`
+                      : `/app/homes/${claim.home_id}/claim-owner/evidence${q}`;
                     const busy = deletingClaimId === claim.id;
                     return (
                       <div
@@ -293,13 +298,13 @@ export default function HomesPage() {
                           role="button"
                           tabIndex={0}
                           className="flex-1 min-w-0 cursor-pointer text-left"
-                          onKeyDown={(e) => { if (e.key === 'Enter') router.push(`/app/homes/${claim.home_id}/claim-owner/evidence${q}`); }}
-                          onClick={() => router.push(`/app/homes/${claim.home_id}/claim-owner/evidence${q}`)}
+                          onKeyDown={(e) => { if (e.key === 'Enter') router.push(href); }}
+                          onClick={() => router.push(href)}
                         >
                           <div className="text-base font-semibold text-app-text">{addressLine}</div>
                           <div className="text-sm text-app-text-secondary">{cityLine}</div>
                           <div className="mt-2 inline-flex items-center rounded-full bg-violet-100 dark:bg-violet-900/50 px-2.5 py-1 text-xs font-semibold text-violet-800 dark:text-violet-200">
-                            Ownership claim · Under review
+                            {residency ? 'Residency claim · Under review' : 'Ownership claim · Under review'}
                           </div>
                           <p className="mt-2 text-xs text-app-text-secondary">
                             You are not a member of this home yet. Continue your claim or wait for review.
@@ -330,10 +335,14 @@ export default function HomesPage() {
                     const privateSetup = h.access_kind === 'private_setup';
                     const verification = h.access_kind === 'verification';
                     const unit = !verification ? h.address2?.trim() : undefined;
-                    const ownership = h.ownership_status === 'pending' || !!h.pending_claim_id;
+                    // A renter's residency document is a residency request with its own status page, not an ownership claim.
+                    const residencyDocument = !!h.pending_claim_id && h.pending_claim_type === 'resident';
+                    const ownershipClaim = !!h.pending_claim_id && !residencyDocument;
+                    const ownership = h.ownership_status === 'pending' || ownershipClaim;
                     const destination = privateSetup ? `/app/homes/${h.id}/tasks`
-                      : verification ? ownership ? `/app/homes/${h.id}/claim-owner/evidence${h.pending_claim_id ? `?claimId=${encodeURIComponent(h.pending_claim_id)}` : ''}`
-                        : `/app/homes/${h.id}/residency` : `/app/homes/${h.id}/dashboard`;
+                      : verification ? ownership ? `/app/homes/${h.id}/claim-owner/evidence${ownershipClaim ? `?claimId=${encodeURIComponent(h.pending_claim_id as string)}` : ''}`
+                        : residencyDocument ? `/app/homes/${h.id}/verify-residency/submitted`
+                          : `/app/homes/${h.id}/residency` : `/app/homes/${h.id}/dashboard`;
                     const action = privateSetup ? 'Home tasks' : verification ? 'Check status' : 'Dashboard';
                     const occ = privateSetup ? 'Private setup' : verification ? (ownership ? 'Ownership verification pending' : 'Residency verification pending')
                       : ({ owner: 'Owner', admin: 'Administrator', manager: 'Manager', member: 'Member', lease_resident: 'Resident', restricted_member: 'Restricted member', guest: 'Guest', service_provider: 'Service provider' } as Record<string, string>)[h.role_base || ''] || 'Home access';

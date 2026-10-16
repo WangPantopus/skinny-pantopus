@@ -3387,14 +3387,19 @@ public struct HubTabRoot: View {
             placeDashboard(homeId: homeId, isActive: path.last == route && rootTabs.selected == owningTab)
         case let .placeDetail(homeId, group):
             PlaceDetailView(
-                viewModel: PlaceDetailViewModel(homeId: homeId, group: group) { method in
-                    // A locked section's "Verify address" opens the same doors as the dashboard's verify sheet.
-                    switch method {
-                    case .document: push(.verifyResidency(homeId: homeId))
-                    case .mail: push(.postcardVerification(homeId: homeId))
-                    case .landlord: push(.verifyLandlord(homeId: homeId))
-                    }
-                }
+                viewModel: PlaceDetailViewModel(
+                    homeId: homeId,
+                    group: group,
+                    onStartVerify: { method in
+                        // A locked section's "Verify address" opens the same doors as the dashboard's verify sheet.
+                        switch method {
+                        case .document: push(.verifyResidency(homeId: homeId))
+                        case .mail: push(.postcardVerification(homeId: homeId))
+                        case .landlord: push(.verifyLandlord(homeId: homeId))
+                        }
+                    },
+                    onOpenVerificationStatus: { push(.waitingRoom(homeId: homeId)) }
+                )
             ) { pop() }
         case let .placePulse(homeId):
             PlacePulseView(
@@ -3469,6 +3474,8 @@ public struct HubTabRoot: View {
                     case .landlord: path.append(.verifyLandlord(homeId: homeId))
                     }
                 },
+                // A residency document already in review: its status, not a second upload.
+                onOpenVerificationStatus: { path.append(.waitingRoom(homeId: homeId)) },
                 onComposeMessage: { address in
                     path.append(.neighborCompose(homeId: homeId, address: address, recipient: nil))
                 },
