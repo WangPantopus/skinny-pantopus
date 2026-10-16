@@ -35,7 +35,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.security.SecureScreenEffect
 import app.pantopus.android.ui.components.EmptyState
-import app.pantopus.android.ui.components.OfflineBanner
+import app.pantopus.android.ui.components.OfflineBannerHost
 import app.pantopus.android.ui.screens.shared.feed.FeedSkeletonCard
 import app.pantopus.android.ui.screens.wallet.components.ActivityRow
 import app.pantopus.android.ui.theme.PantopusColors
@@ -51,6 +51,7 @@ fun WalletActivityListScreen(
     viewModel: WalletActivityListViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val online by viewModel.isOnline.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { viewModel.load() }
 
     SecureScreenEffect()
@@ -63,7 +64,7 @@ fun WalletActivityListScreen(
                 .testTag("walletActivityList"),
     ) {
         TopBar(title = viewModel.title, onBack = onBack)
-        OfflineBanner()
+        OfflineBannerHost(isOffline = !online) {}
         when (val ui = state) {
             WalletActivityListUiState.Loading ->
                 Column(
