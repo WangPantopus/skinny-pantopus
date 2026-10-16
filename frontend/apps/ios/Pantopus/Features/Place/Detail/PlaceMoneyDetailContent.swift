@@ -138,12 +138,16 @@ struct PlaceMoneyDetailContent: View {
 
             if let exemption = vm.section(.exemptionCheck, in: intel) {
                 PlaceDetailSectionLabel(text: "Property-tax exemption")
-                if let data = exemption.exemptionCheck, exemption.status == .ready || exemption.status == .stale {
-                    ExemptionCheckCard(data: data)
+                // A partial section is the not_checked card: the state's program
+                // without a parcel reading.
+                let notChecked = exemption.status == .partial && exemption.exemptionCheck?.filingStatus == .notChecked
+                if let data = exemption.exemptionCheck, exemption.status == .ready || exemption.status == .stale || notChecked {
+                    ExemptionCheckCard(data: data, reason: notChecked ? exemption.unavailableReason : nil)
                 } else {
                     vm.fallbackCard(exemption)
                 }
-                if exemption.access != .locked {
+                // not_checked links its state's page inside the card instead.
+                if exemption.access != .locked, !notChecked {
                     PlaceSourceNote(name: "County records · ATTOM", asOf: nil)
                 }
             }
@@ -239,11 +243,14 @@ private struct BillBenchmarkCard: View {
 // The honesty ladder as a card: on_file (green, nothing to chase) ·
 // none_on_file (amber — the "exemptions aren't automatic" hook) ·
 // unknown (neutral — the county feed doesn't report it; never dressed
-// as either). Plus the Over-Assessment Radar line when the county
-// reports both of its own totals.
+// as either) · not_checked (neutral — no parcel line was read; the
+// reason, then the state's program). Plus the Over-Assessment Radar
+// line when the county reports both of its own totals.
 
 private struct ExemptionCheckCard: View {
     let data: PlaceExemptionCheckData
+    /// Why the parcel wasn't checked (not_checked only).
+    var reason: String?
 
     var body: some View {
         PlaceDetailCard {
@@ -267,6 +274,18 @@ private struct ExemptionCheckCard: View {
                         .font(.system(size: 12.5))
                         .lineSpacing(2)
                         .foregroundStyle(Theme.Color.appTextSecondary)
+                    if let raw = data.stateProgram.sourceURL, let url = URL(string: raw) {
+                        Link(destination: url) {
+                            HStack(spacing: 4) {
+                                Text(data.stateProgram.sourceName.map { "Official page: \($0)" } ?? "Official page")
+                                    .font(.system(size: 12, weight: .semibold))
+                                Icon(.externalLink, size: 12, strokeWidth: 2, color: Theme.Color.primaryInk)
+                            }
+                            .foregroundStyle(Theme.Color.primaryInk)
+                        }
+                        .padding(.top, 2)
+                        .accessibilityIdentifier("place.money.exemption.stateProgramLink")
+                    }
                 }
                 .padding(Spacing.s3)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -283,6 +302,7 @@ private struct ExemptionCheckCard: View {
         case .onFile: PlaceChipModel(tone: .success, text: "On file", icon: .badgeCheck)
         case .noneOnFile: PlaceChipModel(tone: .warning, text: "Nothing on file", icon: .alertCircle)
         case .unknown: PlaceChipModel(tone: .neutral, text: "Not reported")
+        case .notChecked: PlaceChipModel(tone: .neutral, text: "Not checked")
         }
     }
 
@@ -294,6 +314,9 @@ private struct ExemptionCheckCard: View {
             "No exemption appears on the county's record for this parcel. Exemptions usually aren't automatic — if this is your primary residence, it's worth checking whether one applies."
         case .unknown:
             "This county's assessor feed doesn't report exemption status to our data provider. Your tax bill or the assessor's site will say."
+        case .notChecked:
+            reason
+                ?? "We couldn't check the county record for this parcel, so we can't tell what's on file. Your tax bill or the assessor's site will say."
         }
     }
 

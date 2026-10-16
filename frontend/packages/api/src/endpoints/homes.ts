@@ -296,8 +296,10 @@ export interface MyHome extends Omit<Home, 'location' | 'address' | 'city' | 'st
   /** HomeOwner status — distinguishes verified owners from pending. */
   ownership_status?: 'verified' | 'pending' | 'rejected' | null;
   verification_tier?: string | null;
-  /** Deep-link target for an in-progress ownership claim. */
+  /** Deep-link target for an in-progress claim. */
   pending_claim_id?: string | null;
+  /** That claim's kind: 'resident' (a renter's residency document) or 'owner'; older servers omit it. */
+  pending_claim_type?: string | null;
   can_delete_home?: boolean;
 }
 

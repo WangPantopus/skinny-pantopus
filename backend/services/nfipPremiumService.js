@@ -31,6 +31,18 @@
  * policy effective dates) and coverage — a tract with more than
  * FETCH_ROW_CAP all-time rows gets stats over an arbitrary subset and
  * is marked `coverage: 'partial'`. Never presented as a quote.
+ *
+ * Re-probed 2026-10-15: the bare censusGeoid range above (and any shape
+ * without a date filter) now times out at 90 s, so tract warms were
+ * failing everywhere. The fast shape today is propertyState + a
+ * censusGeoid prefix + policyEffectiveDate: a Clark County, WA tract in
+ * ~3 s, the whole county in under 1 s, 2,000 Harris County, TX rows in
+ * ~8 s. Both tracts and counties use it; the state comes from the
+ * geoid's state FIPS prefix.
+ *
+ * County fallback (nationwide): a tract under the floor falls back to
+ * its county, labeled as county-wide. County rows share this cache and
+ * warm queue under `county:<5-digit FIPS>`.
  */
 
 const supabaseAdmin = require('../config/supabaseAdmin');
@@ -38,6 +50,8 @@ const logger = require('../utils/logger');
 const { readRow, writeRow } = require('./placeSectionCache');
 
 const OPENFEMA_BASE = 'https://www.fema.gov/api/open/v3/NfipPolicies';
+// FEMA's terms require this sentence wherever OpenFEMA data is shown.
+const OPENFEMA_NOTICE = "This product uses the Federal Emergency Management Agency's OpenFEMA API, but is not endorsed by FEMA.";
 const SECTION_ID = '_nfip_tract';
 const TTL_MS = 90 * 24 * 60 * 60 * 1000; // benchmark refresh cycle
 const PENDING_TTL_MS = 90 * 24 * 60 * 60 * 1000; // marker lives until the job replaces it
@@ -65,19 +79,57 @@ function cacheKeyFor(tractId) {
   return `tract:${tractId}`;
 }
 
+function countyKeyFor(countyFips) {
+  return `county:${countyFips}`;
+}
+
 function isValidTract(tractId) {
   return /^\d{11}$/.test(String(tractId || ''));
+}
+
+function isValidCounty(countyFips) {
+  return /^\d{5}$/.test(String(countyFips || ''));
+}
+
+// Two-digit state FIPS → the USPS code OpenFEMA's propertyState uses.
+const STATE_BY_FIPS = {
+  '01': 'AL', '02': 'AK', '04': 'AZ', '05': 'AR', '06': 'CA', '08': 'CO', '09': 'CT', '10': 'DE',
+  '11': 'DC', '12': 'FL', '13': 'GA', '15': 'HI', '16': 'ID', '17': 'IL', '18': 'IN', '19': 'IA',
+  '20': 'KS', '21': 'KY', '22': 'LA', '23': 'ME', '24': 'MD', '25': 'MA', '26': 'MI', '27': 'MN',
+  '28': 'MS', '29': 'MO', '30': 'MT', '31': 'NE', '32': 'NV', '33': 'NH', '34': 'NJ', '35': 'NM',
+  '36': 'NY', '37': 'NC', '38': 'ND', '39': 'OH', '40': 'OK', '41': 'OR', '42': 'PA', '44': 'RI',
+  '45': 'SC', '46': 'SD', '47': 'TN', '48': 'TX', '49': 'UT', '50': 'VT', '51': 'VA', '53': 'WA',
+  '54': 'WV', '55': 'WI', '56': 'WY', '72': 'PR',
+};
+
+/** A queue row's target: { kind: 'tract' | 'county', id }. */
+function queueTarget(row) {
+  const key = String((row && row.cache_key) || '');
+  if (key.startsWith('tract:')) {
+    const id = key.slice('tract:'.length);
+    return isValidTract(id) ? { kind: 'tract', id } : null;
+  }
+  if (key.startsWith('county:')) {
+    const id = key.slice('county:'.length);
+    return isValidCounty(id) ? { kind: 'county', id } : null;
+  }
+  return null;
 }
 
 // ── The slow fetch (job context only) ────────────────────────
 
 /**
- * All policies for a tract, one unordered request. censusGeoid is the
- * 12-digit block group, so the tract's rows are the ge/le range over
- * its 10 possible last digits.
+ * The benchmark window's policies for a tract (11 digits) or county (5),
+ * one unordered request in the fast shape (see the header): the state,
+ * the geoid prefix and the window's start date.
  */
-async function fetchTractPolicies(tractId) {
-  const filter = `censusGeoid ge '${tractId}0' and censusGeoid le '${tractId}9'`;
+async function fetchPolicies(geoidPrefix, now = new Date()) {
+  const state = STATE_BY_FIPS[String(geoidPrefix).slice(0, 2)];
+  if (!state) throw new Error(`OpenFEMA: no state for ${geoidPrefix}`);
+  const windowStart = new Date(now);
+  windowStart.setMonth(windowStart.getMonth() - WINDOW_MONTHS);
+  const filter = `propertyState eq '${state}' and startswith(censusGeoid,'${geoidPrefix}')`
+    + ` and policyEffectiveDate ge '${windowStart.toISOString().slice(0, 10)}'`;
   const params = new URLSearchParams({
     $filter: filter,
     $top: String(FETCH_ROW_CAP),
@@ -96,6 +148,9 @@ async function fetchTractPolicies(tractId) {
     clearTimeout(timer);
   }
 }
+
+const fetchTractPolicies = (tractId, now) => fetchPolicies(tractId, now);
+const fetchCountyPolicies = (countyFips, now) => fetchPolicies(countyFips, now);
 
 function quantile(sorted, q) {
   if (!sorted.length) return null;
@@ -183,6 +238,29 @@ async function getTractBenchmark(tractId, { enqueue = true } = {}) {
     // race between instances just writes the same marker twice.
     const nowIso = new Date().toISOString();
     await writeRow(cacheKeyFor(tractId), SECTION_ID, { pending: true, requested_at: nowIso }, PENDING_TTL_MS, nowIso);
+  }
+  return { status: 'pending' };
+}
+
+/**
+ * The county-wide benchmark, from cache only — the fallback for a tract
+ * under the floor. Same statuses and queue as getTractBenchmark.
+ *
+ * @param {string} countyFips 5-digit county FIPS
+ */
+async function getCountyBenchmark(countyFips, { enqueue = true } = {}) {
+  if (!isValidCounty(countyFips)) return { status: 'pending' };
+
+  const row = await readRow(countyKeyFor(countyFips), SECTION_ID);
+  const payload = row && row.payload;
+  if (payload && !payload.pending) {
+    if (payload.suppressed) return { status: 'suppressed' };
+    return { status: 'ready', data: payload, fetchedAt: row.fetched_at };
+  }
+
+  if (!payload && enqueue) {
+    const nowIso = new Date().toISOString();
+    await writeRow(countyKeyFor(countyFips), SECTION_ID, { pending: true, requested_at: nowIso }, PENDING_TTL_MS, nowIso);
   }
   return { status: 'pending' };
 }
@@ -275,8 +353,10 @@ async function warmPendingTracts({ limit = 3 } = {}) {
   let failed = 0;
   let deadLettered = 0;
   for (const row of candidates.slice(0, limit)) {
-    const tractId = String(row.cache_key || '').replace(/^tract:/, '');
-    if (!isValidTract(tractId)) continue;
+    const target = queueTarget(row);
+    if (!target) continue;
+    const tractId = target.id; // a tract or county id; the log key stays `tractId`
+    const keyFor = target.kind === 'county' ? countyKeyFor : cacheKeyFor;
 
     const claim = await claimCandidate(row, nowIso);
     if (!claim) continue; // another instance owns this tract this round
@@ -295,7 +375,7 @@ async function warmPendingTracts({ limit = 3 } = {}) {
     // to the tract.
     if (claim.attempts > MAX_WARM_ATTEMPTS) {
       await writeRow(
-        cacheKeyFor(tractId),
+        keyFor(tractId),
         SECTION_ID,
         {
           suppressed: true,
@@ -313,15 +393,16 @@ async function warmPendingTracts({ limit = 3 } = {}) {
     }
 
     try {
-      const rows = await fetchTractPolicies(tractId);
+      const rows = await fetchPolicies(tractId);
       const benchmark = computeBenchmark(rows);
       const fetchedIso = new Date().toISOString();
       // Indeterminate (capped fetch, thin window) retries on the short
       // cycle; everything else settles for the full benchmark TTL.
       const ttl = benchmark.indeterminate ? INDETERMINATE_TTL_MS : TTL_MS;
-      await writeRow(cacheKeyFor(tractId), SECTION_ID, benchmark, ttl, fetchedIso);
+      await writeRow(keyFor(tractId), SECTION_ID, benchmark, ttl, fetchedIso);
       warmed += 1;
       logger.info('nfipWarm: tract warmed', {
+        kind: target.kind,
         tractId,
         rows: rows.length,
         suppressed: Boolean(benchmark.suppressed),
@@ -340,10 +421,13 @@ async function warmPendingTracts({ limit = 3 } = {}) {
 
 module.exports = {
   getTractBenchmark,
+  getCountyBenchmark,
   warmPendingTracts,
+  OPENFEMA_NOTICE,
   // Exported for testing.
   computeBenchmark,
   fetchTractPolicies,
+  fetchCountyPolicies,
   isValidTract,
   K_MIN,
   WINDOW_MONTHS,

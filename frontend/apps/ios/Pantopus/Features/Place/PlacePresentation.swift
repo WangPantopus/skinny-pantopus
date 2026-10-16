@@ -379,6 +379,9 @@ enum PlacePresentation {
                 )
             case .unknown:
                 return .init(value: "Not reported by this county")
+            case .notChecked:
+                // No parcel line was read: point at the state's program instead.
+                return .init(value: d.stateProgram.label)
             }
         case .civicDistricts:
             guard let d = env.civicDistricts else { return .init() }

@@ -392,7 +392,7 @@ async function fetchMoneyLeadCached(lat, lng, resolveTract) {
         lead = {
           kind: 'flood_premium',
           headline: `Flood policies near here run $${low.toLocaleString('en-US')}–$${high.toLocaleString('en-US')} a year`,
-          detail: `Across ${nfip.data.policy_count} real NFIP policies in this census tract. A benchmark, not a quote.`,
+          detail: `Across ${nfip.data.policy_count} real NFIP policies in this census tract. A benchmark, not a quote. ${nfipPremiumService.OPENFEMA_NOTICE}`,
           low,
           high,
           scope: 'census tract',

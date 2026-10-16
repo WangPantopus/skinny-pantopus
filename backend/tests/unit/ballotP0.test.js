@@ -445,7 +445,7 @@ describe('the /start teaser composed from a point', () => {
 });
 
 describe('outside the pilot: official links only', () => {
-  it('shows the election date and Vote.gov, never a count or a deadline', () => {
+  it('shows the election date and the state’s own official pages, never a count or a deadline', () => {
     const s = summary.composeSummary({ stateValue: 'TX', governmentsResult: CAMAS_GOVERNMENTS, now: pacificNoon('2026-09-24') });
     expect(s).toMatchObject({
       coverage: 'links_only',
@@ -456,9 +456,14 @@ describe('outside the pilot: official links only', () => {
       deadlines: [],
       governments: null,
       primary_action: null,
-      source_line: 'Election date: federal law',
+      source_line: 'Election date: federal law · Links: Texas Secretary of State',
+      checked_at: '2026-10-15',
     });
-    expect(s.official_links).toEqual([{ key: 'registration', label: 'Registration and deadlines', owner: 'Vote.gov', url: 'https://vote.gov/' }]);
+    expect(s.official_links).toEqual([
+      { key: 'registration', label: 'Check registration and polling place', owner: 'Texas Secretary of State', url: 'https://teamrv-mvp.sos.texas.gov/MVP/mvp.do' },
+      { key: 'absentee', label: 'Voting by mail', owner: 'Texas Secretary of State', url: 'https://www.votetexas.gov/voting-by-mail/index.html' },
+      { key: 'ballot_tracking', label: 'Track your mail ballot', owner: 'Texas Secretary of State', url: 'https://www.votetexas.gov/voting-by-mail/track-my-ballot.html' },
+    ]);
   });
 
   it('hides after the election and for territories', () => {
@@ -670,7 +675,7 @@ describe('the Place sections take Ballot only when the request opted in', () => 
 
   it('keeps the pre-Ballot behavior unless the request opted in', async () => {
     const [plain] = await placeSectionAdapters.composeCivicElection(HOME);
-    expect(plain).toMatchObject({ id: 'civic_election', status: 'unavailable', unavailable_reason: 'Election data is not configured yet.' });
+    expect(plain).toMatchObject({ id: 'civic_election', status: 'unavailable', unavailable_reason: 'Pantopus doesn’t have your next election date yet.' });
     const [no] = await placeSectionAdapters.composeCivicElection(HOME, { ballot: false });
     expect(no.status).toBe('unavailable');
     expect(global.fetch).not.toHaveBeenCalled();
