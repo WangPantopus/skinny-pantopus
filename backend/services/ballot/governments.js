@@ -82,12 +82,19 @@ function geoidOf(row, parts) {
   return /^\d+$/.test(joined) ? joined : null;
 }
 
-// "Camas city" → "City of Camas"; "Yacolt town" → "Town of Yacolt".
+// "Camas city" → "City of Camas"; "Yacolt town" → "Town of Yacolt". Towns,
+// townships and consolidated governments read the same way: "Bloomfield
+// charter township" → "Charter Township of Bloomfield", "Nashville-Davidson
+// metropolitan government (balance)" → "Metropolitan Government of
+// Nashville-Davidson". Census writes the kind in lowercase, so "Carson City"
+// stays as it is.
+const PLACE_KINDS = /^(.*?\S)\s+(city|town|village|borough|municipality|charter township|township|plantation|corporation|unified government|consolidated government|metropolitan government|metro government)$/;
+
 function placeName(raw) {
-  const name = String(raw || '').trim();
-  const m = /^(.*\S)\s+(city|town|village|borough)$/i.exec(name);
+  const name = String(raw || '').trim().replace(/\s+\(balance\)$/, '').replace(/ urban county$/, ' Urban County');
+  const m = PLACE_KINDS.exec(name);
   if (!m) return name;
-  const kind = m[2].charAt(0).toUpperCase() + m[2].slice(1).toLowerCase();
+  const kind = m[2].replace(/\b[a-z]/g, (c) => c.toUpperCase());
   return `${kind} of ${m[1]}`;
 }
 

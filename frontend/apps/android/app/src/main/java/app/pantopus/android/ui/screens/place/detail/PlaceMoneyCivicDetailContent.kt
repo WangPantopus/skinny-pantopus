@@ -639,6 +639,8 @@ fun PlaceCivicDetailContent(intel: PlaceIntelligence) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { data.representatives.forEach { RepRow(it) } }
                 PlaceSourceNote("unitedstates/congress-legislators · OpenStates")
             }
+            PlaceDetailSectionLabel("Local government")
+            LocalGovernmentCard(data.localGovernments)
         } else {
             PlaceDetailFallbackCard(env)
         }
@@ -656,7 +658,7 @@ fun PlaceCivicDetailContent(intel: PlaceIntelligence) {
             // No date on Pantopus's calendar is not "no election": local, special
             // and runoff elections can be on the way. Point at the office that runs them.
             val office = intel.section(PlaceSectionId.CIVIC_DISTRICTS)?.civicDistricts?.electionOffice
-            val until = office?.note ?: "Until then, your state and county election offices have upcoming election dates."
+            val until = office?.note ?: "Until then, your state and local election offices have upcoming election dates."
             PlaceDetailCard {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(

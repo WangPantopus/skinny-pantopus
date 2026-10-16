@@ -214,6 +214,7 @@ export type {
   PlaceCivicDistrict,
   PlaceCivicRepresentative,
   PlaceCivicDistrictsData,
+  PlaceLocalGovernment,
   PlaceBallotRace,
   PlacePollingPlace,
   PlaceCivicElectionData,

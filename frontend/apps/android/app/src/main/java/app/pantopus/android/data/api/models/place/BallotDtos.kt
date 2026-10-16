@@ -68,7 +68,7 @@ data class BallotElectionOffice(
     val name: String,
     /** The office as it reads in a sentence: "the Texas Secretary of State". */
     @Json(name = "phrase") val sentencePhrase: String? = null,
-    /** "Until then, the Texas Secretary of State and your county election office have upcoming election dates." */
+    /** "Until then, the Texas Secretary of State and your local election office have upcoming election dates." */
     val note: String? = null,
     val links: List<BallotOfficialLink> = emptyList(),
 ) {

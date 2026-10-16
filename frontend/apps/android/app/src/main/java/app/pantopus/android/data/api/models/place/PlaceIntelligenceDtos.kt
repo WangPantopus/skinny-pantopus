@@ -2,6 +2,8 @@ package app.pantopus.android.data.api.models.place
 
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
+import com.squareup.moshi.Moshi
+import com.squareup.moshi.Types
 
 /**
  * The Place Intelligence section-envelope contract. Mirrors the web
@@ -860,7 +862,38 @@ data class PlaceCivicDistrictsData(
      * [governments].
      */
     @Transient val electionOffice: BallotElectionOffice? = null,
+    /**
+     * The county's, town's and city's official websites; empty when the server
+     * has none, null when this copy didn't carry the field (a saved copy). Read
+     * separately by [PlaceLocalGovernment.decodeIn], like [governments].
+     */
+    @Transient val localGovernments: List<PlaceLocalGovernment>? = null,
 )
+
+/** A local government's official website (Census Government Units listing, Wikidata). */
+@JsonClass(generateAdapter = true)
+data class PlaceLocalGovernment(
+    val level: String,
+    val name: String,
+    val url: String,
+    /** The site's host, shown under the name: "traviscountytx.gov". */
+    val host: String,
+) {
+    companion object {
+        /** A section's `local_governments` field, or null when absent or malformed. */
+        fun decodeIn(
+            moshi: Moshi,
+            data: Any?,
+        ): List<PlaceLocalGovernment>? =
+            (data as? Map<*, *>)?.get("local_governments")?.let { raw ->
+                runCatching {
+                    moshi
+                        .adapter<List<PlaceLocalGovernment>>(Types.newParameterizedType(List::class.java, PlaceLocalGovernment::class.java))
+                        .fromJsonValue(raw)
+                }.getOrNull()
+            }
+    }
+}
 
 enum class BallotRaceType {
     @Json(name = "office")
