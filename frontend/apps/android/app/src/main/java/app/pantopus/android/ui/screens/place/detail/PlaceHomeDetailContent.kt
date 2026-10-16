@@ -65,7 +65,9 @@ fun PlaceHomeDetailContent(intel: PlaceIntelligence) {
 
             PlaceDetailSectionLabel("Property")
             FactsCard(data)
-            PlaceSourceNote("County public records · estimate model", asOf)
+            // The server names where the facts came from: county records, or
+            // the details the household entered.
+            PlaceSourceNote(env.source?.takeIf { it.isNotBlank() } ?: "County public records · estimate model", asOf)
 
             ValueSection(intel.valueAccess, data, asOf)
         } else {
@@ -102,7 +104,9 @@ private fun ValueSection(
             PlaceDetailSectionLabel("Value")
             ValueCard(data)
             data.assessedValue?.let { AssessmentCard(it) }
-            PlaceSourceNote("County public records · estimate model", asOf)
+            if (data.estimatedValue != null || data.assessedValue != null) {
+                PlaceSourceNote("County public records · estimate model", asOf)
+            }
 
             PlaceDetailSectionLabel("Equity")
             EquityCalculator(data.estimatedValue)
