@@ -86,6 +86,7 @@
       "consolidated_counties": { "06075": "City of San Francisco" },
       "election_office": "California Secretary of State",
       "election_office_phrase": "the California Secretary of State",
+      "election_office_url": "https://www.sos.ca.gov/elections",
       "official_links": [
         { "key": "registration", "label": "Register or update online", "owner": "Secretary of State", "url": "https://registertovote.ca.gov/", "phases": ["far", "in_season"] },
         { "key": "ballot_tracking", "label": "Track your ballot", "owner": "Where’s My Ballot?", "url": "https://wheresmyballot.sos.ca.gov/", "phases": ["in_season", "election_day", "after"] },
@@ -109,6 +110,7 @@
       "consolidated_counties": { "08014": "City of Broomfield", "08031": "City of Denver" },
       "election_office": "Colorado Secretary of State",
       "election_office_phrase": "the Colorado Secretary of State",
+      "election_office_url": "https://www.sos.state.co.us/pubs/elections/main.html",
       "official_links": [
         { "key": "registration", "label": "Check or update registration", "owner": "Go Vote Colorado", "url": "https://www.coloradosos.gov/voter/pages/pub/home.xhtml", "phases": ["far", "in_season"] },
         { "key": "ballot_tracking", "label": "Track your ballot", "owner": "BallotTrax", "url": "https://ballottrax.coloradosos.gov/voter/", "phases": ["in_season", "election_day", "after"] },
@@ -217,6 +219,7 @@
       "dependent_schools": true,
       "election_office": "Hawaii Office of Elections",
       "election_office_phrase": "the Hawaii Office of Elections",
+      "election_office_url": "https://elections.hawaii.gov/",
       "official_links": [
         { "key": "registration", "label": "Register or update online", "owner": "Office of Elections", "url": "https://olvr.hawaii.gov/", "phases": ["far", "in_season"] },
         { "key": "drop_boxes", "label": "Drop boxes and voter service centers", "owner": "Office of Elections", "url": "https://elections.hawaii.gov/voter-service-centers-and-places-of-deposit/", "phases": ["in_season", "election_day"] },
@@ -509,6 +512,7 @@
       ],
       "election_office": "Nevada Secretary of State",
       "election_office_phrase": "the Nevada Secretary of State",
+      "election_office_url": "https://www.nvsos.gov/elections",
       "official_links": [
         { "key": "registration", "label": "Check or update registration", "owner": "Secretary of State", "url": "https://registertovote.nv.gov/", "phases": ["far", "in_season"] },
         { "key": "ballot_tracking", "label": "Track your ballot", "owner": "Secretary of State", "url": "https://www.nvsos.gov/sos/elections/voters/tracking", "phases": ["in_season", "election_day", "after"] },
@@ -668,6 +672,7 @@
       ],
       "election_office": "Oregon Secretary of State",
       "election_office_phrase": "the Oregon Secretary of State",
+      "election_office_url": "https://sos.oregon.gov/elections/pages/default.aspx",
       "official_links": [
         { "key": "registration", "label": "Register or update online", "owner": "Secretary of State", "url": "https://sos.oregon.gov/elections/pages/registration.aspx", "phases": ["far", "in_season"] },
         { "key": "ballot_tracking", "label": "Track your ballot", "owner": "My Vote", "url": "https://sos.oregon.gov/elections/pages/myvote.aspx", "phases": ["in_season", "election_day", "after"] },
@@ -792,6 +797,7 @@
       "dependent_schools": false,
       "election_office": "Utah Lieutenant Governor",
       "election_office_phrase": "the Utah Lieutenant Governor’s office",
+      "election_office_url": "https://vote.utah.gov/",
       "official_links": [
         { "key": "registration", "label": "Check or update registration", "owner": "Lieutenant Governor", "url": "https://vote.utah.gov/voter-registration-portal/", "phases": ["far", "in_season"] },
         { "key": "ballot_tracking", "label": "Track your ballot", "owner": "Lieutenant Governor", "url": "https://vote.utah.gov/track-my-ballot/", "phases": ["in_season", "election_day", "after"] },
@@ -813,6 +819,7 @@
       "dependent_schools": false,
       "election_office": "Vermont Secretary of State",
       "election_office_phrase": "the Vermont Secretary of State",
+      "election_office_url": "https://sos.vermont.gov/elections",
       "official_links": [
         { "key": "registration", "label": "Check or update registration", "owner": "Secretary of State", "url": "https://sos.vermont.gov/elections/voters/registration", "phases": ["far", "in_season"] },
         { "key": "ballot_tracking", "label": "Track your ballot", "owner": "My Voter Page", "url": "https://mvp.vermont.gov/", "phases": ["in_season", "election_day", "after"] },
@@ -853,6 +860,7 @@
       "dependent_schools": false,
       "election_office": "Washington Secretary of State",
       "election_office_phrase": "the Washington Secretary of State",
+      "election_office_url": "https://www.sos.wa.gov/elections",
       "official_links": [
         { "key": "registration", "label": "Check or update registration", "owner": "Secretary of State", "url": "https://www.sos.wa.gov/elections/voters/voter-registration/register-vote-washington", "phases": ["far", "in_season"] },
         { "key": "ballot_tracking", "label": "Track your ballot", "owner": "VoteWA", "url": "https://voter.votewa.gov/WhereToVote.aspx", "phases": ["in_season", "election_day", "after"] },

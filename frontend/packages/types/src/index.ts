@@ -250,6 +250,7 @@ export type {
   BallotGovernmentLevel,
   BallotDeadline,
   BallotOfficialLink,
+  BallotElectionOffice,
   BallotGovernment,
   BallotGovernments,
   BallotPrimaryAction,

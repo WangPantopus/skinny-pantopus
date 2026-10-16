@@ -16,6 +16,7 @@
 import { Calendar, ExternalLink } from 'lucide-react';
 import type {
   BallotDeadline,
+  BallotElectionOffice,
   BallotGovernments,
   BallotMoverPrompt,
   BallotOfficialLink,
@@ -73,6 +74,14 @@ export function ballotGovernments(v: unknown): BallotGovernments | null {
     return g && text(g.level) && text(g.name) ? (g as unknown as BallotGovernments['items'][number]) : null;
   });
   return items.length ? ({ ...o, count, items } as unknown as BallotGovernments) : null;
+}
+
+/** Who runs the state's elections (civic_districts.election_office), or null. */
+export function ballotElectionOffice(v: unknown): BallotElectionOffice | null {
+  const o = record(v);
+  if (!o || !text(o.name)) return null;
+  const links = listOf(o.links, readLink);
+  return links.length ? { name: o.name as string, phrase: text(o.phrase) ?? `the ${o.name as string}`, note: text(o.note), links } : null;
 }
 
 function readAction(v: unknown): BallotPrimaryAction | null {
