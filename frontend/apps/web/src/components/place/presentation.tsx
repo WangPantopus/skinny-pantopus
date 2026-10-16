@@ -392,6 +392,8 @@ const SECTION_CONFIG: Record<PlaceSectionId, SectionConfig> = {
       const d = data as PlaceExemptionCheckData;
       if (d.filing_status === 'on_file') return { value: 'Exemption on file' };
       if (d.filing_status === 'none_on_file') return { value: 'Nothing on file — worth checking' };
+      // No parcel line was read: point at the state's program instead.
+      if (d.filing_status === 'not_checked') return { value: d.state_program.label };
       return { value: 'Not reported by this county' };
     },
   },

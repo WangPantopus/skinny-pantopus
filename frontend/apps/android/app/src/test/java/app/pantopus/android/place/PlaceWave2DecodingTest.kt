@@ -9,7 +9,6 @@ import app.pantopus.android.data.api.models.place.PlaceSectionId
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -58,7 +57,7 @@ class PlaceWave2DecodingTest {
         assertEquals(PlaceSectionId.EXEMPTION_CHECK, env.sectionId)
         val d = assertNotNull(env.exemptionCheck).let { env.exemptionCheck!! }
         assertEquals(ExemptionFilingStatus.NONE_ON_FILE, d.filingStatus)
-        assertFalse(d.homesteadOnFile)
+        assertEquals(false, d.homesteadOnFile)
         val signal = assertNotNull(d.assessmentSignal).let { d.assessmentSignal!! }
         assertEquals(AssessmentStance.ABOVE, signal.stance)
         assertEquals(10.0, signal.ratioPct, 0.0)

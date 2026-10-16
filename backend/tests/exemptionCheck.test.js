@@ -83,10 +83,11 @@ describe('programForState', () => {
   });
 
   test('everything else gets the conservative default', () => {
-    const p = programForState('VT');
+    const p = programForState('GU');
     expect(p.curated).toBe(false);
     expect(p.filing).toBe('varies');
     expect(p.note).toContain('county assessor');
+    expect(p.source_url).toBeNull();
   });
 });
 
@@ -138,11 +139,15 @@ describe('getExemptionCheck', () => {
   });
 
   test('no parcel match and no key degrade honestly', async () => {
+    // Nothing is said about the parcel; the state's program still shows.
+    const notChecked = { filing_status: 'not_checked', homestead_on_file: null, exemptions: [] };
     detailMock.mockResolvedValue({ attomPayload: null, source: 'unavailable', unavailableReason: 'ATTOM_UNAVAILABLE' });
-    expect((await getExemptionCheck(HOME))).toMatchObject({ status: 'unavailable', unavailableReason: 'ATTOM_UNAVAILABLE' });
+    const unreachable = await getExemptionCheck(HOME);
+    expect(unreachable).toMatchObject({ status: 'partial', unavailableReason: 'ATTOM_UNAVAILABLE', data: notChecked });
+    expect(unreachable.data.state_program).toMatchObject({ state: 'TX', curated: true });
 
     delete process.env.ATTOM_API_KEY;
-    expect((await getExemptionCheck(HOME))).toMatchObject({ status: 'unavailable', unavailableReason: 'ATTOM_NOT_CONFIGURED' });
+    expect((await getExemptionCheck(HOME))).toMatchObject({ status: 'partial', unavailableReason: 'ATTOM_NOT_CONFIGURED', data: notChecked });
     // Without a key the service must not even try the provider.
     expect(detailMock).toHaveBeenCalledTimes(1);
   });

@@ -436,9 +436,23 @@ function buildProfileFromAttomResponses(home, { detailData, avmData, trendData }
     else if (current < previous * 0.98) zipMedianSalePriceTrend = 'down';
   }
 
+  // Facts the county record lacked that the household's own entries fill
+  // in; the section's source label says so (placeIntelligenceService).
+  const householdFields = [
+    ['year_built', sl.year_built, home.year_built],
+    ['sqft', sl.sqft, home.sq_ft],
+    ['bedrooms', roomPick.bedrooms, home.bedrooms],
+    ['bathrooms', roomPick.bathrooms, home.bathrooms],
+    ['lot_sqft', sl.lot_sq_ft, home.lot_sq_ft],
+    ['property_type', sl.raw_property_type, home.home_type],
+  ].filter(([, county, own]) => county == null && own != null).map(([field]) => field);
+
   return {
     home_id: home.id,
     address_summary: `${home.city}, ${home.state} ${home.zipcode}`,
+    // False when ATTOM answered only with a value model or the ZIP trend.
+    county_record: Boolean(detailData?.property?.[0]),
+    household_fields: householdFields,
     year_built: sl.year_built ?? home.year_built ?? null,
     sqft: sl.sqft ?? home.sq_ft ?? null,
     bedrooms: roomPick.bedrooms ?? home.bedrooms ?? null,
@@ -466,6 +480,11 @@ function buildFallbackProfile(home) {
   return {
     home_id: home.id,
     address_summary: `${home.city}, ${home.state} ${home.zipcode}`,
+    county_record: false,
+    household_fields: [
+      ['year_built', 'year_built'], ['sqft', 'sq_ft'], ['bedrooms', 'bedrooms'],
+      ['bathrooms', 'bathrooms'], ['lot_sqft', 'lot_sq_ft'], ['property_type', 'home_type'],
+    ].filter(([, column]) => home[column]).map(([field]) => field),
     year_built: home.year_built || null,
     sqft: home.sq_ft || null,
     bedrooms: home.bedrooms || null,

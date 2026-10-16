@@ -21,6 +21,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -142,6 +145,27 @@ fun PlaceSourceNote(
             Text(asOf, fontSize = 12.sp, color = PantopusColors.appTextMuted)
         }
     }
+}
+
+/** A tappable link to an official page, e.g. the source behind a section's guidance. */
+@Composable
+fun PlaceExternalLink(
+    text: String,
+    url: String,
+    testTag: String,
+) {
+    val uri = LocalUriHandler.current
+    Text(
+        text,
+        fontSize = 12.sp,
+        fontWeight = FontWeight.SemiBold,
+        color = PantopusColors.primary600,
+        modifier =
+            Modifier
+                .padding(top = 2.dp)
+                .clickable(role = Role.Button) { uri.openUri(url) }
+                .testTag(testTag),
+    )
 }
 
 @Composable
