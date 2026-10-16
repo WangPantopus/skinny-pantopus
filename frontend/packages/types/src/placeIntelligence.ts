@@ -817,7 +817,7 @@ export interface BallotElectionOffice {
   name: string;
   /** The office as it reads in a sentence: "the Texas Secretary of State". */
   phrase: string;
-  /** "Until then, the Texas Secretary of State and your county election office have upcoming election dates." */
+  /** "Until then, the Texas Secretary of State and your local election office have upcoming election dates." */
   note?: string | null;
   links: BallotOfficialLink[];
 }

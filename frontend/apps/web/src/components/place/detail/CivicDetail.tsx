@@ -237,7 +237,7 @@ function NoElection({ office }: { office: BallotElectionOffice | null }) {
       <div className="text-base font-bold text-app-text -tracking-[0.01em]">No election on our calendar yet</div>
       <div className="text-[13.5px] text-app-text-secondary leading-5 mt-1 max-w-[280px]">
         We&apos;ll show your next election here once we have its date.{' '}
-        {office?.note ?? 'Until then, your state and county election offices have upcoming election dates.'}
+        {office?.note ?? 'Until then, your state and local election offices have upcoming election dates.'}
       </div>
       {office ? (
         <div className="mt-3 w-full text-left">

@@ -302,7 +302,7 @@ private struct NoElectionCard: View {
     let office: BallotElectionOffice?
 
     private var message: String {
-        let until = office?.note ?? "Until then, your state and county election offices have upcoming election dates."
+        let until = office?.note ?? "Until then, your state and local election offices have upcoming election dates."
         return "We'll show your next election here once we have its date. \(until)"
     }
 
