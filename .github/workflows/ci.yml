@@ -96,6 +96,8 @@ jobs:
               - '.github/workflows/android-*.yml'
             seeder:
               - 'pantopus-seeder/**'
+              # The seeder reads and packages the backend's climate catalog.
+              - 'backend/services/ai/seasonalClimate.json'
               - '.github/workflows/ci.yml'
 
   # ─── Backend: privacy gates + Jest ─────────────────────────────────────────
