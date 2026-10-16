@@ -38,3 +38,4 @@ function ensureContractImage(kind) {
 }
 
 module.exports = { ensureContractImage };
+
