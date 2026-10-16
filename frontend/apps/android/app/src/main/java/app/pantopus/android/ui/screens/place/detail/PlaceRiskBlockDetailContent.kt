@@ -189,8 +189,9 @@ private fun HeatColdCard(data: PlaceHeatColdData) {
                 color = PantopusColors.appTextMuted,
             )
         } else {
+            // The server says where heat came from instead (Alaska, Hawaii, a HeatRisk outage).
             Text(
-                "NWS HeatRisk covers the contiguous US. The freeze forecast above still applies here.",
+                data.heatNote ?: "NWS HeatRisk covers the contiguous US. The freeze forecast above still applies here.",
                 fontSize = 12.5.sp,
                 color = PantopusColors.appTextMuted,
             )

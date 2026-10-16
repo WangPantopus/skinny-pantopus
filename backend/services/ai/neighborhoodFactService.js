@@ -20,7 +20,8 @@ const supabaseAdmin = require('../../config/supabaseAdmin');
 const { decodeGeohashBbox } = require('../../utils/geohash');
 const { isInCascadiaRegion, isInClarkCountyWA, isInOregonMetro } = require('../../utils/geo');
 const logger = require('../../utils/logger');
-const { getSeasonalContext } = require('./seasonalEngine');
+const { getSeasonalContext, REGIONS } = require('./seasonalEngine');
+const SEASONAL_CLIMATE = require('./seasonalClimate.json');
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 
@@ -141,13 +142,22 @@ function formatPropertyType(raw) {
 
 // ── Static fact templates ───────────────────────────────────────────────
 //
-// Written for the Portland–Vancouver pilot. A tip with `where` is only true
-// in that region, so only cells whose centre is there are offered it:
+// A tip with `where` is only true in that region, so only cells whose centre
+// is there are offered it:
 //   pnw             the Pacific Northwest climate region (seasonalEngine)
 //   cascadia        Washington and Oregon west of 121°W (utils/geo)
 //   clark_county    Clark County, Washington (utils/geo)
 //   portland_metro  Oregon Metro's district, Portland's side of the river (utils/geo)
-// A tip without `where` holds anywhere.
+// and, nationally, from the climate regions in seasonalClimate.json (the
+// hazard seasons each region has, and the hurricane season's coastal boxes):
+//   hurricane_coast  inside the hurricane season's coastal boxes
+//   tornado          regions with a tornado season
+//   winter_storm     regions with a winter storm or blizzard season
+//   extreme_heat     regions with a heat season
+//   wildfire         regions with a wildfire season
+//   quake            California, Alaska and Hawaii (Cascadia has its own tip)
+// A tip without `where` holds anywhere. National tips are Ready.gov, EPA,
+// USFA, 811 or DOE guidance, checked October 15, 2026.
 
 /**
  * Safety tips — weather/climate-related for PNW.
@@ -188,6 +198,71 @@ const SAFETY_TIPS = [
     source: 'PNW Safety',
     where: 'pnw',
   },
+  // ready.gov/floods
+  {
+    title: 'Flood Insurance Takes Time',
+    body: 'Homeowner’s insurance doesn’t cover flooding, and a flood policy typically takes up to 30 days to start. Buy it well before a storm, not when one is forecast.',
+    source: 'Ready.gov',
+    cta: 'Ask neighbors about flood coverage',
+  },
+  // epa.gov/radon/health-risk-radon
+  {
+    title: 'Test for Radon',
+    body: 'Radon is the number one cause of lung cancer among non-smokers, and you can’t see or smell it. A home test is the only way to know your own level.',
+    source: 'EPA',
+  },
+  // usfa.fema.gov/prevention/home-fires/prepare-for-fire/smoke-alarms
+  {
+    title: 'Smoke Alarm Check',
+    body: 'Put smoke alarms on every level of your home, test them every month, and replace each alarm when it’s 10 years old.',
+    source: 'U.S. Fire Administration',
+  },
+  // ready.gov/hurricanes
+  {
+    title: 'Know Your Evacuation Zone',
+    body: 'If you live in a hurricane evacuation zone you may have to leave quickly, so look yours up now. Before a storm, clear drains and gutters, bring in outdoor furniture and consider hurricane shutters.',
+    source: 'Ready.gov',
+    cta: 'Share your plan with neighbors',
+    where: 'hurricane_coast',
+  },
+  // ready.gov/tornadoes
+  {
+    title: 'Pick Your Tornado Spot',
+    body: 'Choose your shelter before a warning: a FEMA safe room or storm shelter is best. The next best is a small, interior, windowless room or basement on the lowest level.',
+    source: 'Ready.gov',
+    where: 'tornado',
+  },
+  // ready.gov/winter-weather
+  {
+    title: 'Winter Storm Prep',
+    body: 'Keep the cold out with insulation, caulking and weather stripping, and learn how to keep pipes from freezing. If the power goes out, run generators and grills only outdoors, away from windows.',
+    source: 'Ready.gov',
+    cta: 'Find weatherproofing help',
+    where: 'winter_storm',
+  },
+  // ready.gov/heat
+  {
+    title: 'Heat Wave Plan',
+    body: 'Know where you can go to cool off, like a library or a cooling center your health department lists. A fan alone won’t prevent heat illness, and never leave people or pets in a closed car.',
+    source: 'Ready.gov',
+    cta: 'Check on neighbors in a heat wave',
+    where: 'extreme_heat',
+  },
+  // ready.gov/wildfires
+  {
+    title: 'Wildfire Buffer',
+    body: 'Keep a fire-resistant zone free of leaves, debris and flammable materials for at least 30 feet around your home.',
+    source: 'Ready.gov',
+    cta: 'Find yard cleanup help',
+    where: 'wildfire',
+  },
+  // ready.gov/earthquakes
+  {
+    title: 'Earthquake Ready',
+    body: 'Secure bookcases, refrigerators, water heaters and TVs, and keep heavy or breakable things on low shelves. When shaking starts: drop, cover and hold on.',
+    source: 'Ready.gov',
+    where: 'quake',
+  },
 ];
 
 /**
@@ -225,6 +300,19 @@ const LOCAL_RESOURCE_TIPS = [
     source: 'Local Resources',
     cta: 'Share with neighbors who might qualify',
   },
+  // epa.gov/recycle/how-do-i-recycle-common-recyclables
+  {
+    title: 'Recycling Rules Are Local',
+    body: 'What goes in the bin depends on your local program, and some plastics aren’t accepted at all. Check your city’s or hauler’s list before you toss it in.',
+    source: 'EPA',
+  },
+  // call811.com
+  {
+    title: 'Call 811 Before You Dig',
+    body: '811 is the free national before-you-dig service. Contact it a few business days before planting a tree, setting a fence post or any digging, and buried lines get marked.',
+    source: '811',
+    cta: 'Ask neighbors about yard projects',
+  },
 ];
 
 /**
@@ -258,6 +346,12 @@ const MOVING_TIPS = [
     body: 'The best way to find reliable contractors is through verified neighbors. Post a question \u2014 someone nearby has a recommendation.',
     source: 'Moving Tips',
     cta: 'Ask for a recommendation',
+  },
+  // usps.com/manage/forward.htm
+  {
+    title: 'Forward Your Mail',
+    body: 'Moving? Submit a permanent change of address with USPS and verify your identity; allow at least 7\u201310 business days for it to take effect.',
+    source: 'USPS',
   },
 ];
 
@@ -451,12 +545,28 @@ function generateSeasonalFacts(geohash, seasonalCtx, neighborhoodPreview, week, 
 /**
  * The regions a cell's centre is in, for the tips that are only true there.
  */
+const HURRICANE_BOXES = (SEASONAL_CLIMATE.overlay_regions && SEASONAL_CLIMATE.overlay_regions.hurricane_season) || [];
+const QUAKE_REGIONS = new Set(['california', 'alaska', 'hawaii']);
+
+function inBoxes(latitude, longitude, boxes) {
+  return Number.isFinite(latitude) && Number.isFinite(longitude) && boxes.some((b) =>
+    latitude >= b.lat[0] && latitude <= b.lat[1] && longitude >= b.lng[0] && longitude <= b.lng[1]);
+}
+
 function cellRegions({ latitude, longitude }, climateRegion) {
+  // The hazard seasons the climate region has, as seasonalEngine sees it.
+  const seasons = (climateRegion && REGIONS[climateRegion] && REGIONS[climateRegion].overlays) || {};
   return {
     pnw: climateRegion === 'pacific_northwest',
     cascadia: isInCascadiaRegion(latitude, longitude),
     clark_county: isInClarkCountyWA(latitude, longitude),
     portland_metro: isInOregonMetro(latitude, longitude),
+    hurricane_coast: Boolean(seasons.hurricane_season) && inBoxes(latitude, longitude, HURRICANE_BOXES),
+    tornado: Boolean(seasons.tornado_season),
+    winter_storm: Boolean(seasons.winter_storm_season || seasons.blizzard_season),
+    extreme_heat: Boolean(seasons.heat_season),
+    wildfire: Boolean(seasons.wildfire_season),
+    quake: QUAKE_REGIONS.has(climateRegion),
   };
 }
 

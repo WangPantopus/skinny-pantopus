@@ -432,12 +432,17 @@ function buildTodayEnvelopes({
       access: 'available',
       asOf: observed ? aqi.observed_at : asOf,
       ...(observed && Date.now() - observedMs > AQI_STALE_MS ? { status: 'stale' } : {}),
+      // Names the monitor (it can be miles away) or the model estimate.
+      ...(aqi.source_label ? { source: aqi.source_label } : {}),
+      ...(aqi.is_estimate ? { coverage: 'partial' } : {}),
       data: {
         index: aqi.index,
         category,
         category_label: aqi.category || AQI_CATEGORY_LABELS[category],
         dominant_pollutant: mapDominantPollutant(aqi.dominant_pollutant ?? aqi.pollutant),
-        health_message: AQI_HEALTH_MESSAGES[category],
+        health_message: aqi.is_estimate
+          ? `${AQI_HEALTH_MESSAGES[category]} No monitor reports near this address, so this is NOAA's forecast model estimate.`
+          : AQI_HEALTH_MESSAGES[category],
       },
     }));
   } else if (aqiMissing === 'error') {
@@ -578,7 +583,14 @@ async function composeTodayForPoint(lat, lng, { budgetMs = null } = {}) {
       }
     : null;
   const aqi = a && a.aqi != null
-    ? { index: a.aqi, category: a.category, dominant_pollutant: a.pollutant, observed_at: a.observed_at ?? null }
+    ? {
+      index: a.aqi,
+      category: a.category,
+      dominant_pollutant: a.pollutant,
+      observed_at: a.observed_at ?? null,
+      source_label: a.source_label ?? null,
+      is_estimate: a.is_estimate === true,
+    }
     : null;
   const aqiMissing = !a || a.source === 'error' || a.source === 'unavailable' ? 'error' : 'no_reading';
   const alerts = al && al.source !== 'error' && Array.isArray(al.alerts)
@@ -615,12 +627,17 @@ async function composeTodayForPoint(lat, lng, { budgetMs = null } = {}) {
 // Promise.all, so both calls always missed and every request made two full
 // provider round-trips. The hub payload is now fetched ONCE in
 // composeHomeIntelligence and passed down.
+// The weather section's provider, as the Heat & cold card credits it.
+const WEATHER_SOURCE_LABELS = { WEATHERKIT: 'Apple Weather', OPEN_METEO: 'Open-Meteo' };
+
 async function composeHeatCold(home, hub) {
+  const provider = hub && hub.meta && hub.meta.section_providers && hub.meta.section_providers.weather;
   const weather = hub && hub.weather
     ? {
       hourly: mapWeatherHours(hub.weather.hourly),
       daily: mapWeatherDays(hub.weather.daily),
       timezone: (hub.location && hub.location.timezone) || null,
+      source_label: WEATHER_SOURCE_LABELS[provider] || null,
     }
     : null;
 
