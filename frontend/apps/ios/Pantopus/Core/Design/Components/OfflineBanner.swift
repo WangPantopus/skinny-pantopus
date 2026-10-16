@@ -2,14 +2,15 @@
 //  OfflineBanner.swift
 //  Pantopus
 //
-//  Top-of-screen banner shown when the app is offline but cached data
-//  is still visible underneath. Use the `.offlineBanner(...)` modifier
-//  on every list / detail screen so the chrome stays consistent (P15).
+//  Top-of-screen banner shown while the app is offline. It says only
+//  that: the screen underneath may show a saved copy or its error
+//  state. Use the `.offlineBanner(...)` modifier on every list / detail
+//  screen so the chrome stays consistent (P15).
 //
 
 import SwiftUI
 
-/// Dismissible amber banner: "You're offline. Showing last known data."
+/// Dismissible amber banner: "You're offline."
 public struct OfflineBanner: View {
     private let onDismiss: () -> Void
 
@@ -20,7 +21,7 @@ public struct OfflineBanner: View {
     public var body: some View {
         HStack(spacing: Spacing.s2) {
             Icon(.wifiOff, size: 18, color: Theme.Color.warning)
-            Text("You're offline. Showing last known data.")
+            Text("You're offline.")
                 .pantopusTextStyle(.caption)
                 .foregroundStyle(Theme.Color.appText)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -37,7 +38,7 @@ public struct OfflineBanner: View {
             Rectangle().fill(Theme.Color.warningSolid.opacity(0.3)).frame(height: 1)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("You're offline. Showing last known data.")
+        .accessibilityLabel("You're offline.")
         .accessibilityIdentifier("offlineBanner")
     }
 }

@@ -42,9 +42,10 @@ import app.pantopus.android.ui.theme.rememberReduceMotion
 const val OFFLINE_BANNER_TAG = "offlineBanner"
 
 /**
- * Top-of-screen banner shown when the app is offline but cached data
- * is still visible underneath. Wrap any list/detail screen with
- * [OfflineBannerHost] so the banner slot stays consistent (P15).
+ * Top-of-screen banner shown while the app is offline. It says only
+ * that: the screen underneath may show a saved copy or its error
+ * state. Wrap any list/detail screen with [OfflineBannerHost] so the
+ * banner slot stays consistent (P15).
  */
 @Composable
 fun OfflineBanner(
@@ -73,7 +74,7 @@ fun OfflineBanner(
                 tint = PantopusColors.warning,
             )
             Text(
-                text = "You're offline. Showing last known data.",
+                text = "You're offline.",
                 style = PantopusTextStyle.caption,
                 color = PantopusColors.appText,
                 modifier = Modifier.weight(1f),
