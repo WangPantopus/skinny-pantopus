@@ -16,6 +16,7 @@ import app.pantopus.android.data.api.models.wallet.WalletWithdrawResponse
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.connect.ConnectRepository
+import app.pantopus.android.data.network.NetworkMonitor
 import app.pantopus.android.data.wallet.WalletRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -43,6 +44,7 @@ import org.junit.Test
 class WalletPayoutViewModelTest {
     private val repository: WalletRepository = mockk()
     private val connectRepository: ConnectRepository = mockk()
+    private val networkMonitor: NetworkMonitor = mockk(relaxed = true)
 
     @Before
     fun setUp() {
@@ -68,7 +70,7 @@ class WalletPayoutViewModelTest {
             }
     }
 
-    private fun vm() = WalletViewModel(repository, connectRepository)
+    private fun vm() = WalletViewModel(repository, connectRepository, networkMonitor)
 
     // MARK: - Gating
 

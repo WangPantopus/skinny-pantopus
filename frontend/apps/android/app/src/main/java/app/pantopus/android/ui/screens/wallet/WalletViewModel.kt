@@ -9,6 +9,7 @@ import app.pantopus.android.data.api.models.wallet.WalletWithdrawalRecoveryDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.connect.ConnectRepository
+import app.pantopus.android.data.network.NetworkMonitor
 import app.pantopus.android.data.wallet.WalletRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -40,6 +41,7 @@ class WalletViewModel
     constructor(
         private val repository: WalletRepository,
         private val connectRepository: ConnectRepository,
+        networkMonitor: NetworkMonitor,
     ) : ViewModel() {
         private var fixture: WalletContent? = null
 
@@ -77,6 +79,9 @@ class WalletViewModel
         /** Drives the pull-to-refresh indicator. */
         private val _refreshing = MutableStateFlow(false)
         val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
+        /** Drives the offline banner under the top bar. */
+        val isOnline: StateFlow<Boolean> = networkMonitor.isOnline
 
         fun load() = loadInternal(showLoading = true)
 

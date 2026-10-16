@@ -71,6 +71,7 @@ import app.pantopus.android.ui.components.BalanceHero
 import app.pantopus.android.ui.components.BalanceHeroSplitCell
 import app.pantopus.android.ui.components.BalanceHeroTone
 import app.pantopus.android.ui.components.EmptyState
+import app.pantopus.android.ui.components.OfflineBannerHost
 import app.pantopus.android.ui.components.ToastController
 import app.pantopus.android.ui.components.ToastHost
 import app.pantopus.android.ui.screens.wallet.components.ActivityRow
@@ -114,6 +115,7 @@ fun WalletScreen(
     val action by viewModel.action.collectAsStateWithLifecycle()
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val withdrawError by viewModel.withdrawError.collectAsStateWithLifecycle()
+    val online by viewModel.isOnline.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val toastController = remember { ToastController() }
     var showWithdrawSheet by remember { mutableStateOf(false) }
@@ -193,6 +195,7 @@ fun WalletScreen(
             ) {
                 WalletScreenContent(
                     state = state,
+                    isOffline = !online,
                     onBack = onBack,
                     onOpenHistory = onOpenHistory,
                     onWithdraw = {
@@ -496,6 +499,7 @@ private fun PayoutResultMarker(action: WalletAction) {
 @Composable
 internal fun WalletScreenContent(
     state: WalletUiState,
+    isOffline: Boolean = false,
     onBack: () -> Unit = {},
     onOpenHistory: () -> Unit = {},
     onWithdraw: () -> Unit = {},
@@ -514,6 +518,7 @@ internal fun WalletScreenContent(
                 .testTag("wallet"),
     ) {
         WalletTopBar(onBack = onBack, onOpenHistory = onOpenHistory)
+        OfflineBannerHost(isOffline = isOffline) {}
         when (val current = state) {
             WalletUiState.Loading -> LoadingBody()
             is WalletUiState.Populated ->

@@ -10,6 +10,7 @@ import app.pantopus.android.data.api.models.wallet.WalletTransactionsResponse
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.connect.ConnectRepository
+import app.pantopus.android.data.network.NetworkMonitor
 import app.pantopus.android.data.wallet.WalletRepository
 import io.mockk.coEvery
 import io.mockk.mockk
@@ -36,6 +37,7 @@ import org.junit.Test
 class WalletViewModelTest {
     private val repository: WalletRepository = mockk()
     private val connectRepository: ConnectRepository = mockk()
+    private val networkMonitor: NetworkMonitor = mockk(relaxed = true)
 
     @Before fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
@@ -53,13 +55,13 @@ class WalletViewModelTest {
 
     @Test
     fun initial_state_is_loading() {
-        val vm = WalletViewModel(repository, connectRepository)
+        val vm = WalletViewModel(repository, connectRepository, networkMonitor)
         assertEquals(WalletUiState.Loading, vm.state.value)
     }
 
     @Test
     fun load_resolves_to_populated_for_populated_fixture() {
-        val vm = WalletViewModel(repository, connectRepository)
+        val vm = WalletViewModel(repository, connectRepository, networkMonitor)
         vm.setFixture(WalletSampleData.populated)
         vm.load()
         val state = vm.state.value
@@ -71,7 +73,7 @@ class WalletViewModelTest {
 
     @Test
     fun load_resolves_to_hold_when_state_present() {
-        val vm = WalletViewModel(repository, connectRepository)
+        val vm = WalletViewModel(repository, connectRepository, networkMonitor)
         vm.setFixture(WalletSampleData.onHold)
         vm.load()
         val state = vm.state.value
@@ -108,7 +110,7 @@ class WalletViewModelTest {
                     WalletPendingReleaseResponse(totalPendingCents = 18_600L, inReviewCount = 2, releasingSoonCount = 1),
                 )
 
-            val vm = WalletViewModel(repository, connectRepository)
+            val vm = WalletViewModel(repository, connectRepository, networkMonitor)
             vm.load()
 
             val state = vm.state.value
@@ -126,7 +128,7 @@ class WalletViewModelTest {
             coEvery { repository.balance() } returns
                 NetworkResult.Failure(NetworkError.Server(500, "boom"))
 
-            val vm = WalletViewModel(repository, connectRepository)
+            val vm = WalletViewModel(repository, connectRepository, networkMonitor)
             vm.load()
 
             assertTrue(vm.state.value is WalletUiState.Error)
