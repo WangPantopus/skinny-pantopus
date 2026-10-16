@@ -59,6 +59,8 @@ import app.pantopus.android.ui.theme.PantopusIcon
 fun PlaceDetailScreen(
     onBack: () -> Unit,
     onStartVerify: ((PlaceVerifyMethod) -> Unit)? = null,
+    // The status of a residency document already in review (the Waiting Room).
+    onOpenVerificationStatus: (() -> Unit)? = null,
     viewModel: PlaceDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -126,6 +128,13 @@ fun PlaceDetailScreen(
                 onStartVerify(method)
             },
             onDismiss = { showVerify = false },
+            onOpenDocumentStatus =
+                onOpenVerificationStatus?.let { open ->
+                    {
+                        showVerify = false
+                        open()
+                    }
+                },
         )
     }
 }

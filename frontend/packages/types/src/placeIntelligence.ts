@@ -318,6 +318,8 @@ export type FloodRiskLevel = 'minimal' | 'moderate' | 'high';
  * A benchmark, never a quote — Risk Rating 2.0 varies within a tract.
  */
 export interface PlaceFloodNfipData {
+  /** Where the policies were written; 'county' only under `nfip_area`. */
+  scope?: 'tract' | 'county';
   policy_count: number;
   premium_p25: number;
   premium_median: number;
@@ -348,18 +350,28 @@ export interface PlaceFloodData {
    * to zone-only.
    */
   nfip?: PlaceFloodNfipData;
+  /**
+   * The county-wide benchmark, sent only when the tract has too few
+   * policies to compare (never alongside `nfip`). Its own field so builds
+   * that describe `nfip` as "your census tract" never show county numbers.
+   */
+  nfip_area?: PlaceFloodNfipData;
 }
 
 /**
  * Wave 2 — homestead exemption on the parcel's assessor line.
  * `filing_status` is an honesty ladder: `unknown` (county feed carries
- * no exemption structure) is NEVER presented as "none on file".
+ * no exemption structure) is NEVER presented as "none on file", and
+ * `not_checked` (no parcel line was read; the section is `partial` and
+ * `unavailable_reason` says why) says nothing about the parcel at all —
+ * only the state's program is shown.
  */
 export interface PlaceExemptionCheckData {
-  filing_status: 'on_file' | 'none_on_file' | 'unknown';
+  filing_status: 'on_file' | 'none_on_file' | 'unknown' | 'not_checked';
   /** Labels as the assessor feed reports them, e.g. "Homestead". */
   exemptions: string[];
-  homestead_on_file: boolean;
+  /** Null when not_checked. */
+  homestead_on_file: boolean | null;
   /**
    * Wave 2b — the Over-Assessment Radar: the county's assessed total vs
    * its own market total (±5% stance bands). Null when either total is
@@ -374,11 +386,13 @@ export interface PlaceExemptionCheckData {
   state_program: {
     state: string | null;
     label: string;
-    /** 'application' | 'varies' | 'none_general' */
-    filing: 'application' | 'varies' | 'none_general';
+    filing: 'application' | 'automatic' | 'varies' | 'none_general';
     note: string;
     /** False → the conservative check-your-county default. */
     curated: boolean;
+    /** The state's own page behind `note`; null for the default. */
+    source_name?: string | null;
+    source_url?: string | null;
   };
 }
 
@@ -434,6 +448,15 @@ export interface PlaceHeatColdData {
   guidance: string;
   /** Which forecast the headline came from. */
   source_note: string;
+  /** Where the heat half came from: NWS HeatRisk, the NWS heat index forecast, or neither. */
+  heat_source?: 'heatrisk' | 'heat_index' | null;
+  /**
+   * Shown instead of the HeatRisk scale when heat isn't from HeatRisk (Alaska,
+   * Hawaii, a HeatRisk outage). Absent from servers that predate it.
+   */
+  heat_note?: string | null;
+  /** The week's highest NWS heat index, when the heat half came from it. */
+  heat_index_peak?: { date: string; max_f: number; label: string | null } | null;
 }
 
 /** ASCE 7 seismic design categories (A lowest demand → E highest). */
@@ -485,12 +508,20 @@ export interface PlaceLeadRadonData {
   disclaimer: string;
 }
 
-/** Launch layer #7 — Drinking-water system (EPA SDWIS; coverage ~80%). */
+/** Launch layer #7 — Drinking-water system (EPA service areas + SDWIS). */
 export interface PlaceDrinkingWaterData {
   /** e.g. "Portland Water Bureau". */
   utility_name: string;
   /** Public Water System id. */
   pws_id: string | null;
+  /**
+   * How the system was found: the EPA service area that contains the
+   * address, or (when that map can't be reached) EPA's county records, which
+   * can name the wrong system. Absent from responses cached before it existed.
+   */
+  match?: 'service_area' | 'county';
+  /** EPA estimated this service area rather than taking it from records. */
+  estimated_area?: boolean;
   recent_health_violations: boolean;
   violation_count: number;
   summary: string;
@@ -698,6 +729,8 @@ export interface PlaceCivicDistrictsData {
   representatives: PlaceCivicRepresentative[];
   /** Ballot P0 (`ballot_p0`): the governments view's data, all year. */
   governments?: BallotGovernments | null;
+  /** Ballot P0: who runs the state's elections, all year (reference data). */
+  election_office?: BallotElectionOffice | null;
 }
 
 export interface PlaceBallotRace {
@@ -766,6 +799,16 @@ export interface BallotOfficialLink {
   label: string;
   owner: string;
   url: string;
+}
+
+/** The office that runs a state's elections and its own pages. */
+export interface BallotElectionOffice {
+  name: string;
+  /** The office as it reads in a sentence: "the Texas Secretary of State". */
+  phrase: string;
+  /** "Until then, the Texas Secretary of State and your county election office have upcoming election dates." */
+  note?: string | null;
+  links: BallotOfficialLink[];
 }
 
 export interface BallotGovernment {

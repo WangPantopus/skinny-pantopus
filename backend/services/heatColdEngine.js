@@ -4,7 +4,9 @@
 // Crosses two forecasts with the home's own facts and emits an
 // instruction rather than a reading:
 //
-//   heat  NWS HeatRisk (0–4, CONUS, 7 days) — services/external/heatRisk.js
+//   heat  NWS HeatRisk (0–4, CONUS, 7 days) — services/external/heatRisk.js;
+//         where it has no reading (Alaska, Hawaii, the territories) or is
+//         down, the NWS heat index forecast — services/external/nwsHeatIndex.js
 //   cold  the hourly/daily temperature forecast already fetched for the
 //         `weather` section, so the freeze half costs no new provider call
 //
@@ -22,6 +24,8 @@
 // and the card says so plainly.
 // ============================================================
 
+const { heatIndexClass } = require('./external/nwsHeatIndex');
+
 const HOUR_MS = 60 * 60 * 1000;
 
 // Freezing, °F. Pipe damage is the failure people actually pay for.
@@ -30,6 +34,12 @@ const FREEZE_F = 32;
 const HARD_FREEZE_F = 28;
 // HeatRisk level at which the card leads with heat.
 const HEAT_NOTABLE_LEVEL = 2;
+// Without HeatRisk, the heat index at which the card leads with heat: NWS's
+// "Danger" class. Absolute heat index runs hot in Hawaii every summer, so the
+// lower classes are stated, not led with.
+const HEAT_INDEX_NOTABLE_F = 103;
+// The heat index where NWS's classes begin ("Caution").
+const HEAT_INDEX_CAUTION_F = 80;
 // Nights at or above this don't let a house shed the day's heat.
 const WARM_NIGHT_F = 75;
 // Older homes more often have exposed or poorly insulated pipe runs.
@@ -207,22 +217,46 @@ function heatGuidance({ level, yearBuilt, warmNight }) {
 }
 
 /**
+ * What the card says about where its heat reading came from, when it isn't
+ * HeatRisk. The apps show it in place of the HeatRisk scale.
+ */
+function heatNote({ heatCovered, heatRiskFailed, heatIndexAnswered }) {
+  if (heatCovered) return null;
+  if (heatRiskFailed) {
+    return heatIndexAnswered
+      ? 'NWS HeatRisk is unavailable right now, so heat comes from the NWS heat index forecast.'
+      : 'Heat risk is temporarily unavailable. The freeze forecast above still applies.';
+  }
+  return heatIndexAnswered
+    ? "NWS HeatRisk doesn't cover this area, so heat comes from the NWS heat index forecast."
+    : "NWS HeatRisk doesn't cover this area. The freeze forecast above still applies here.";
+}
+
+/**
  * Compose the heat/cold outlook.
  *
  * @param {object}  input
  * @param {object}  [input.heatRisk]  services/external/heatRisk fetchHeatRisk result.
- * @param {object}  [input.weather]   { hourly: [{time, temp_f}], daily: [{date, low_f, high_f}] }
+ * @param {boolean} [input.heatRiskFailed]  HeatRisk was asked and didn't answer.
+ * @param {object}  [input.heatIndex] services/external/nwsHeatIndex fetchHeatIndexDays
+ *                                    result, asked for when HeatRisk has no reading.
+ * @param {object}  [input.weather]   { hourly: [{time, temp_f}], daily: [{date, low_f, high_f}],
+ *                                      source_label: 'Apple Weather' | 'Open-Meteo' }
  * @param {object}  [input.home]      { year_built, home_type }
  * @param {string}  [input.timezone]
  * @param {Date}    [input.now]
  * @returns {object|null} PlaceHeatColdData, or null when nothing can be said.
  */
-function buildHeatColdOutlook({ heatRisk, weather, home, timezone, now = new Date() } = {}) {
+function buildHeatColdOutlook({
+  heatRisk, heatRiskFailed = false, heatIndex = null, weather, home, timezone, now = new Date(),
+} = {}) {
   const hours = forwardHours(weather && weather.hourly, now);
   const daily = Array.isArray(weather && weather.daily) ? weather.daily : [];
   const todayStr = daily[0] ? daily[0].date : null;
   const yearBuilt = num(home && home.year_built);
   const homeType = home && home.home_type;
+  // The freeze half reads the weather section's forecast: name its provider.
+  const forecastNote = `${(weather && weather.source_label) || 'Weather'} forecast`;
 
   const heatDays = (heatRisk && heatRisk.covered && Array.isArray(heatRisk.days)) ? heatRisk.days : [];
   const heatCovered = Boolean(heatRisk && heatRisk.covered);
@@ -230,6 +264,25 @@ function buildHeatColdOutlook({ heatRisk, weather, home, timezone, now = new Dat
     (acc, d) => (!acc || d.level > acc.level ? d : acc),
     null,
   );
+
+  // Without HeatRisk, the NWS heat index forecast stands in for the heat half.
+  const heatIndexAnswered = !heatCovered && Boolean(heatIndex && Array.isArray(heatIndex.days));
+  const heatIndexDays = heatIndexAnswered ? heatIndex.days : [];
+  const indexPeak = heatIndexDays.reduce((acc, d) => (!acc || d.max_f > acc.max_f ? d : acc), null);
+  const indexClass = indexPeak ? heatIndexClass(indexPeak.max_f) : null;
+
+  // Every branch carries the same heat fields.
+  const heat = {
+    heat_days: heatDays,
+    heat_covered: heatCovered,
+    heat_source: heatCovered ? 'heatrisk' : (heatIndexAnswered ? 'heat_index' : null),
+    heat_note: heatNote({ heatCovered, heatRiskFailed, heatIndexAnswered }),
+    heat_index_peak: indexPeak
+      ? { date: indexPeak.date, max_f: indexPeak.max_f, label: indexClass ? indexClass.label : null }
+      : null,
+    peak_level: peak ? peak.level : null,
+    peak_date: peak ? peak.date : null,
+  };
 
   // A freeze beyond the hourly horizon still deserves a heads-up — and it
   // must be the NEXT freezing day, not the coldest one in the week. The
@@ -244,7 +297,7 @@ function buildHeatColdOutlook({ heatRisk, weather, home, timezone, now = new Dat
   const upcomingFreeze = freeze ? null : nextFreezingDay(daily, clearedToday);
 
   // Nothing usable at all — no forecast and no coverage.
-  if (heatDays.length === 0 && hours.length === 0 && daily.length === 0) return null;
+  if (heatDays.length === 0 && heatIndexDays.length === 0 && hours.length === 0 && daily.length === 0) return null;
 
   // ── Cold leads when a freeze is actually in the hourly window: it is
   // the more imminent and the more expensive of the two to ignore.
@@ -253,10 +306,7 @@ function buildHeatColdOutlook({ heatRisk, weather, home, timezone, now = new Dat
     const when = clockLabel(freeze.starts, timezone);
     return {
       mode: 'cold',
-      heat_days: heatDays,
-      heat_covered: heatCovered,
-      peak_level: peak ? peak.level : null,
-      peak_date: peak ? peak.date : null,
+      ...heat,
       freeze: {
         starts: freeze.starts,
         ends: freeze.ends,
@@ -265,24 +315,21 @@ function buildHeatColdOutlook({ heatRisk, weather, home, timezone, now = new Dat
       },
       headline: `${hard ? 'Hard freeze' : 'Freeze'}, ${freeze.min_temp_f}°F for ${freeze.hours} hour${freeze.hours === 1 ? '' : 's'}${when ? ` starting ${when}` : ''}.`,
       guidance: coldGuidance({ yearBuilt, homeType }),
-      source_note: 'National Weather Service forecast',
+      source_note: forecastNote,
     };
   }
 
   if (upcomingFreeze) {
     return {
       mode: 'cold',
-      heat_days: heatDays,
-      heat_covered: heatCovered,
-      peak_level: peak ? peak.level : null,
-      peak_date: peak ? peak.date : null,
+      ...heat,
       freeze: null,
       headline: coldColderLater(upcomingFreeze, cold)
         ? `Freezing ${dayName(upcomingFreeze.date, todayStr, timezone)} — low near ${Math.round(upcomingFreeze.low_f)}°F, `
           + `and colder ${dayName(cold.date, todayStr, timezone)} at ${Math.round(cold.low_f)}°F.`
         : `Freezing ${dayName(upcomingFreeze.date, todayStr, timezone)} — low near ${Math.round(upcomingFreeze.low_f)}°F.`,
       guidance: coldGuidance({ yearBuilt, homeType }),
-      source_note: 'National Weather Service forecast',
+      source_note: forecastNote,
     };
   }
 
@@ -307,10 +354,7 @@ function buildHeatColdOutlook({ heatRisk, weather, home, timezone, now = new Dat
       : dayName((first || peak).date, todayStr, timezone);
     return {
       mode: 'heat',
-      heat_days: heatDays,
-      heat_covered: heatCovered,
-      peak_level: peak.level,
-      peak_date: peak.date,
+      ...heat,
       freeze: null,
       headline: `${peak.label} heat risk, ${span}.`,
       guidance: heatGuidance({ level: peak.level, yearBuilt, warmNight: warmestNight(daily) }),
@@ -318,19 +362,42 @@ function buildHeatColdOutlook({ heatRisk, weather, home, timezone, now = new Dat
     };
   }
 
+  // ── Without HeatRisk, heat leads at NWS's "Danger" heat index.
+  if (indexPeak && indexPeak.max_f >= HEAT_INDEX_NOTABLE_F) {
+    return {
+      mode: 'heat',
+      ...heat,
+      freeze: null,
+      headline: `${indexClass.label}: heat index near ${indexPeak.max_f}°F ${dayName(indexPeak.date, todayStr, timezone)}.`,
+      guidance: [indexClass.meaning, heatGuidance({ level: 3, yearBuilt, warmNight: warmestNight(daily) })]
+        .filter(Boolean).join(' '),
+      source_note: 'NWS heat index forecast',
+    };
+  }
+
   // ── Nothing to act on. Say that, rather than manufacturing urgency.
+  let headline = 'No freeze in the forecast.';
+  let guidance = '';
+  if (heatCovered) {
+    headline = 'No heat or freeze risk in the next week.';
+  } else if (heatIndexAnswered) {
+    if (indexPeak && indexPeak.max_f >= HEAT_INDEX_CAUTION_F) {
+      headline = `Heat index up to ${indexPeak.max_f}°F ${dayName(indexPeak.date, todayStr, timezone)}; no freeze in the forecast.`;
+      guidance = `NWS calls that ${indexClass.label.toLowerCase()}: ${indexClass.meaning.charAt(0).toLowerCase()}${indexClass.meaning.slice(1)}`;
+    } else {
+      headline = 'No heat or freeze risk in the next week.';
+    }
+  }
+  let sourceNote = forecastNote;
+  if (heatCovered) sourceNote = 'NWS HeatRisk (experimental)';
+  else if (heatIndexAnswered) sourceNote = 'NWS heat index forecast';
   return {
     mode: 'none',
-    heat_days: heatDays,
-    heat_covered: heatCovered,
-    peak_level: peak ? peak.level : null,
-    peak_date: peak ? peak.date : null,
+    ...heat,
     freeze: null,
-    headline: heatCovered
-      ? 'No heat or freeze risk in the next week.'
-      : 'No freeze in the forecast.',
-    guidance: '',
-    source_note: heatCovered ? 'NWS HeatRisk (experimental)' : 'National Weather Service forecast',
+    headline,
+    guidance,
+    source_note: sourceNote,
   };
 }
 

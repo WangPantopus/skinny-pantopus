@@ -93,10 +93,14 @@ router.get('/mine', async (req, res) => {
   }
 });
 
-// GET /api/plans/games: the next 14 days' games from the checked list (H2's game chips).
+// GET /api/plans/games: the next 14 days' games from the checked list (H2's game chips),
+// for teams near one of the viewer's places (homes, saved places, a fresh fix, or the point
+// the app is looking from).
 router.get('/games', async (req, res) => {
   try {
-    return res.json({ games: planGames.upcomingGames() });
+    const viewer = await loadViewer(req.user, { point: pointFromQuery(req.query), gps: gpsFromQuery(req.query) });
+    const near = viewer.origin ? [...viewer.locations, viewer.origin] : viewer.locations;
+    return res.json({ games: planGames.upcomingGames(Date.now(), { near }) });
   } catch (err) {
     return serverError(res, err, 'games', req);
   }

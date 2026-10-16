@@ -56,6 +56,8 @@ export interface OwnershipClaim {
   status: ClaimState;
   claim_phase_v2?: ClaimPhaseV2 | null;
   routing_classification?: ClaimRoutingClassification | null;
+  /** Whether any documents are attached; null when the server couldn't tell. */
+  has_evidence?: boolean | null;
   created_at: string;
   updated_at: string;
 }

@@ -675,7 +675,7 @@ describe('the Place sections take Ballot only when the request opted in', () => 
 
   it('keeps the pre-Ballot behavior unless the request opted in', async () => {
     const [plain] = await placeSectionAdapters.composeCivicElection(HOME);
-    expect(plain).toMatchObject({ id: 'civic_election', status: 'unavailable', unavailable_reason: 'Election data is not configured yet.' });
+    expect(plain).toMatchObject({ id: 'civic_election', status: 'unavailable', unavailable_reason: 'Pantopus doesn’t have your next election date yet.' });
     const [no] = await placeSectionAdapters.composeCivicElection(HOME, { ballot: false });
     expect(no.status).toBe('unavailable');
     expect(global.fetch).not.toHaveBeenCalled();

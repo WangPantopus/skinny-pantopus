@@ -408,6 +408,9 @@ async function getHubToday(userId, options = {}) {
     index: aqi.aqi,
     category: aqi.category,
     is_noteworthy: aqi.is_noteworthy,
+    // Which monitor, or that it's a model estimate (aqiProvider).
+    source_label: aqi.source_label ?? null,
+    is_estimate: aqi.is_estimate === true,
     ...(detail ? { dominant_pollutant: aqi.pollutant ?? null, observed_at: aqi.observed_at ?? null } : {}),
   } : null;
 

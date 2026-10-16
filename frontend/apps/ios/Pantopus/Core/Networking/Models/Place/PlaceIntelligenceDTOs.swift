@@ -458,6 +458,9 @@ public struct PlaceFloodData: Decodable, Sendable, Hashable {
     public let plainMeaning: String
     /// Wave 2 — the tract's NFIP premium benchmark, when warmed.
     public let nfip: PlaceFloodNfipData?
+    /// The county-wide benchmark, sent only when the tract has too few
+    /// policies (never alongside `nfip`).
+    public let nfipArea: PlaceFloodNfipData?
 
     private enum CodingKeys: String, CodingKey {
         case zone
@@ -467,6 +470,7 @@ public struct PlaceFloodData: Decodable, Sendable, Hashable {
         case insuranceRequired = "insurance_required"
         case plainMeaning = "plain_meaning"
         case nfip
+        case nfipArea = "nfip_area"
     }
 }
 
@@ -864,13 +868,15 @@ public struct PlaceRealRentData: Decodable, Sendable, Hashable {
 // MARK: - Exemption check (Wave 2)
 
 /// The honesty ladder: `unknown` (county feed carries no exemption
-/// structure) is NEVER presented as "none on file". Falls back to
-/// `.unknown` so a server-side vocabulary addition cannot break an
-/// older build.
+/// structure) is NEVER presented as "none on file", and `notChecked`
+/// (no parcel line was read; the section is partial) says nothing about
+/// the parcel — only the state's program. Falls back to `.unknown` so a
+/// server-side vocabulary addition cannot break an older build.
 public enum ExemptionFilingStatus: String, Decodable, Sendable, Hashable {
     case onFile = "on_file"
     case noneOnFile = "none_on_file"
     case unknown
+    case notChecked = "not_checked"
 
     public init(from decoder: Decoder) throws {
         let raw = try decoder.singleValueContainer().decode(String.self)
@@ -911,18 +917,32 @@ public struct PlaceAssessmentSignal: Decodable, Sendable, Hashable {
 public struct PlaceExemptionStateProgram: Decodable, Sendable, Hashable {
     public let state: String?
     public let label: String
-    /// "application" | "varies" | "none_general".
+    /// "application" | "automatic" | "varies" | "none_general".
     public let filing: String
     public let note: String
     /// False → the conservative check-your-county default.
     public let curated: Bool
+    /// The state's own page behind `note`; nil for the default.
+    public let sourceName: String?
+    public let sourceURL: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case state
+        case label
+        case filing
+        case note
+        case curated
+        case sourceName = "source_name"
+        case sourceURL = "source_url"
+    }
 }
 
 public struct PlaceExemptionCheckData: Decodable, Sendable, Hashable {
     public let filingStatus: ExemptionFilingStatus
     /// Labels as the assessor feed reports them, e.g. "Homestead".
     public let exemptions: [String]
-    public let homesteadOnFile: Bool
+    /// Nil when not checked.
+    public let homesteadOnFile: Bool?
     public let assessmentSignal: PlaceAssessmentSignal?
     public let stateProgram: PlaceExemptionStateProgram
 
@@ -985,9 +1005,12 @@ public struct PlaceCivicDistrictsData: Decodable, Sendable, Hashable {
     /// Ballot P0 (`ballot_p0`): the governments view's data, all year; nil
     /// when not sent.
     public let governments: BallotGovernments?
+    /// Ballot P0: who runs the state's elections, all year; nil when not sent.
+    public let electionOffice: BallotElectionOffice?
 
     private enum CodingKeys: String, CodingKey {
         case districts, representatives, governments
+        case electionOffice = "election_office"
     }
 
     public init(from decoder: Decoder) throws {
@@ -996,6 +1019,7 @@ public struct PlaceCivicDistrictsData: Decodable, Sendable, Hashable {
         representatives = try c.decode([PlaceCivicRepresentative].self, forKey: .representatives)
         // A malformed Ballot field never blanks the districts.
         governments = try? c.decodeIfPresent(BallotGovernments.self, forKey: .governments)
+        electionOffice = try? c.decodeIfPresent(BallotElectionOffice.self, forKey: .electionOffice)
     }
 }
 
@@ -1345,6 +1369,9 @@ public struct PlaceHeatColdData: Decodable, Sendable, Hashable {
     /// The home-conditioned instruction. Empty when there is nothing to do.
     public let guidance: String
     public let sourceNote: String
+    /// Where the heat reading came from when it isn't HeatRisk (Alaska, Hawaii,
+    /// a HeatRisk outage). Nil from servers that predate it.
+    public let heatNote: String?
 
     enum CodingKeys: String, CodingKey {
         case mode, freeze, headline, guidance
@@ -1353,6 +1380,7 @@ public struct PlaceHeatColdData: Decodable, Sendable, Hashable {
         case peakLevel = "peak_level"
         case peakDate = "peak_date"
         case sourceNote = "source_note"
+        case heatNote = "heat_note"
     }
 }
 

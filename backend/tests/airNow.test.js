@@ -229,6 +229,8 @@ describe('AirNow Connector', () => {
         category: 'Good',
         pollutant: 'PM2.5',
         reporting_area: 'Vancouver',
+        site_name: 'Vancouver-NE 84th Ave',
+        lookup_boundary: '50 Miles',
         color: '#00E400',
         observed_at: '2026-03-07T22:00:00.000Z',
       });
@@ -241,6 +243,8 @@ describe('AirNow Connector', () => {
         category: 'Unhealthy',
         pollutant: 'PM2.5',
         reporting_area: 'Portland',
+        site_name: '',
+        lookup_boundary: '',
         color: '#FF0000',
         observed_at: '2026-08-15T17:00:00.000Z',
       });

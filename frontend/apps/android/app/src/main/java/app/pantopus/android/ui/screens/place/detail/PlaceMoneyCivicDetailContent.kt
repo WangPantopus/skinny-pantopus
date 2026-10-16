@@ -53,11 +53,13 @@ import app.pantopus.android.data.api.models.place.PlaceRentBandData
 import app.pantopus.android.data.api.models.place.PlaceSectionAccess
 import app.pantopus.android.data.api.models.place.PlaceSectionEnvelope
 import app.pantopus.android.data.api.models.place.PlaceSectionId
+import app.pantopus.android.data.api.models.place.PlaceSectionStatus
 import app.pantopus.android.data.api.models.place.PlaceTier
 import app.pantopus.android.data.api.models.place.RecordWatch
 import app.pantopus.android.data.api.models.place.RecordWatchEvaluation
 import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.screens.ballot.BallotGovernmentsSheet
+import app.pantopus.android.ui.screens.ballot.BallotLinksWell
 import app.pantopus.android.ui.screens.place.PlacePresentation
 import app.pantopus.android.ui.screens.place.components.PlaceChevron
 import app.pantopus.android.ui.screens.place.components.PlaceChip
@@ -124,9 +126,10 @@ fun PlaceMoneyDetailContent(
     }
     intel.section(PlaceSectionId.EXEMPTION_CHECK)?.let { env ->
         PlaceDetailSectionLabel("Property-tax exemption")
-        val data = env.exemptionCheck
-        if (data != null && env.isLive()) ExemptionCheckCard(data) else PlaceDetailFallbackCard(env)
-        SourceNoteUnlessLocked(env, "County records · ATTOM")
+        val data = env.exemptionCheck?.takeIf { env.isLive() || env.exemptionNotChecked }
+        if (data != null) ExemptionCheckCard(data, reason = env.unavailableReason) else PlaceDetailFallbackCard(env)
+        // not_checked links its state's page inside the card instead.
+        if (!env.exemptionNotChecked) SourceNoteUnlessLocked(env, "County records · ATTOM")
     }
     // Rate watch, deed alerts and the property-tax check are the owner's, like the exemption check.
     if (intel.ownerTools) OwnerTools(intel, viewModel)
@@ -350,13 +353,21 @@ private fun RateColumn(
     }
 }
 
+/** A partial exemption section is the not_checked card: the state's program without a parcel reading. */
+private val PlaceSectionEnvelope.exemptionNotChecked: Boolean
+    get() = status == PlaceSectionStatus.PARTIAL && exemptionCheck?.filingStatus == ExemptionFilingStatus.NOT_CHECKED
+
 // Wave 2 — the honesty ladder as a card: ON_FILE (green, nothing to
 // chase) · NONE_ON_FILE (amber — the "exemptions aren't automatic"
 // hook) · UNKNOWN (neutral — the county feed doesn't report it; never
-// dressed as either). Plus the Over-Assessment Radar line when the
-// county reports both of its own totals.
+// dressed as either) · NOT_CHECKED (neutral — no parcel line was read;
+// the reason, then the state's program). Plus the Over-Assessment Radar
+// line when the county reports both of its own totals.
 @Composable
-private fun ExemptionCheckCard(data: PlaceExemptionCheckData) {
+private fun ExemptionCheckCard(
+    data: PlaceExemptionCheckData,
+    reason: String? = null,
+) {
     val chip =
         when (data.filingStatus) {
             ExemptionFilingStatus.ON_FILE ->
@@ -364,6 +375,7 @@ private fun ExemptionCheckCard(data: PlaceExemptionCheckData) {
             ExemptionFilingStatus.NONE_ON_FILE ->
                 PlaceChipModel(PlaceChipTone.WARNING, "Nothing on file", PantopusIcon.AlertCircle)
             ExemptionFilingStatus.UNKNOWN -> PlaceChipModel(PlaceChipTone.NEUTRAL, "Not reported")
+            ExemptionFilingStatus.NOT_CHECKED -> PlaceChipModel(PlaceChipTone.NEUTRAL, "Not checked")
         }
     val lead =
         when (data.filingStatus) {
@@ -375,6 +387,11 @@ private fun ExemptionCheckCard(data: PlaceExemptionCheckData) {
             ExemptionFilingStatus.UNKNOWN ->
                 "This county's assessor feed doesn't report exemption status to our data provider. " +
                     "Your tax bill or the assessor's site will say."
+            ExemptionFilingStatus.NOT_CHECKED ->
+                reason ?: (
+                    "We couldn't check the county record for this parcel, so we can't tell what's on file. " +
+                        "Your tax bill or the assessor's site will say."
+                )
         }
     PlaceDetailCard {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -410,6 +427,13 @@ private fun ExemptionCheckCard(data: PlaceExemptionCheckData) {
                     lineHeight = 17.sp,
                     color = PantopusColors.appTextSecondary,
                 )
+                data.stateProgram.sourceUrl?.let { url ->
+                    PlaceExternalLink(
+                        data.stateProgram.sourceName?.let { "Official page: $it" } ?: "Official page",
+                        url,
+                        testTag = "place.money.exemption.stateProgramLink",
+                    )
+                }
             }
             data.assessmentSignal?.let { AssessmentSignalBlock(it) }
         }
@@ -629,15 +653,25 @@ fun PlaceCivicDetailContent(intel: PlaceIntelligence) {
             // With Ballot on, the section is state reference data and names its source; the legacy county label is the fallback.
             PlaceSourceNote(env.source.orEmpty().ifEmpty { "Official county elections" })
         } else {
+            // No date on Pantopus's calendar is not "no election": local, special
+            // and runoff elections can be on the way. Point at the office that runs them.
+            val office = intel.section(PlaceSectionId.CIVIC_DISTRICTS)?.civicDistricts?.electionOffice
+            val until = office?.note ?: "Until then, your state and county election offices have upcoming election dates."
             PlaceDetailCard {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("No upcoming election", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
                     Text(
-                        "We'll show the date here as soon as one is set.",
+                        "No election on our calendar yet",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = PantopusColors.appText,
+                    )
+                    Text(
+                        "We'll show your next election here once we have its date. $until",
                         fontSize = 13.5.sp,
                         lineHeight = 18.sp,
                         color = PantopusColors.appTextSecondary,
                     )
+                    if (office != null) BallotLinksWell(office.links, modifier = Modifier.padding(top = Spacing.s2))
                 }
             }
         }

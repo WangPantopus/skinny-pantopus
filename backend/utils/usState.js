@@ -185,4 +185,16 @@ function resolveUsState(raw) {
   return null;
 }
 
-module.exports = { resolveUsState, STATE_CODES };
+// The full name for a two-letter code (the first name listed for it), or null.
+const STATE_NAME_BY_CODE = {};
+for (const [name, code] of Object.entries(STATE_NAME_TO_CODE)) {
+  if (!STATE_NAME_BY_CODE[code]) {
+    STATE_NAME_BY_CODE[code] = name.replace(/\b[a-z]/g, (c) => c.toUpperCase()).replace(/ Of /g, ' of ');
+  }
+}
+
+function stateName(code) {
+  return STATE_NAME_BY_CODE[String(code || '').trim().toUpperCase()] || null;
+}
+
+module.exports = { resolveUsState, STATE_CODES, stateName };

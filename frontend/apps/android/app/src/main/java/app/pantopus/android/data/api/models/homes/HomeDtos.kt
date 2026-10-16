@@ -76,8 +76,25 @@ data class MyHome(
     val address2: String? = null,
     /** The person's default Home: the one they chose while they can still open it, else the server's pick. */
     @Json(name = "is_default") val isDefault: Boolean? = null,
+    /**
+     * The pending claim's kind: "resident" (a renter's residency document) or "owner". Older servers don't send it;
+     * null reads as ownership, as before.
+     */
+    @Json(name = "pending_claim_type") val pendingClaimType: String? = null,
 ) {
     val hasSharedAccess: Boolean get() = accessKind == "shared" && hasHomeAccess == true
+
+    /** An ownership claim is filed here (not a renter's residency document). */
+    val hasPendingOwnershipClaim: Boolean get() = pendingClaimId != null && pendingClaimType != "resident"
+
+    /** What a filed claim waits on, by its kind; null with no claim. */
+    val pendingClaimReviewLabel: String?
+        get() =
+            when {
+                pendingClaimId == null -> null
+                hasPendingOwnershipClaim -> "Ownership in review"
+                else -> "Residency in review"
+            }
 
     /** A Home the Place tab can open: shared with access, or the person's own private setup. */
     val isOpenablePlace: Boolean get() = hasValidListContext && (hasSharedAccess || accessKind == "private_setup")

@@ -149,7 +149,7 @@ final class PlaceSwitcherViewModel {
     /// (`verification_tier` is the evidence strength, never "verified").
     static func subtitle(for home: MyHome) -> String {
         if home.accessKind == "verification" {
-            return home.pendingClaimId != nil ? "Ownership in review" : "Verification in progress"
+            return home.pendingClaimReviewLabel ?? "Verification in progress"
         }
         let status = if home.accessKind == "private_setup" {
             "Private setup"
