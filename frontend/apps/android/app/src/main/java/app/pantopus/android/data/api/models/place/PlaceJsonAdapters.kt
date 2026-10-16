@@ -182,8 +182,8 @@ class PlaceSectionEnvelopeAdapterFactory : JsonAdapter.Factory {
                 is PlaceSectionData.RentBand -> writeValue(writer, payload.value)
                 is PlaceSectionData.RealRent -> writeValue(writer, payload.value)
                 is PlaceSectionData.ExemptionCheck -> writeValue(writer, payload.value)
-                is PlaceSectionData.CivicDistricts -> writeValue(writer, payload.value)
-                is PlaceSectionData.CivicElection -> writeValue(writer, payload.value)
+                is PlaceSectionData.CivicDistricts -> writeValue(writer, payload.value, payload.value.separateFields())
+                is PlaceSectionData.CivicElection -> writeValue(writer, payload.value, payload.value.ballotCard?.encode(moshi).orEmpty())
                 is PlaceSectionData.AddressCalendar -> writeValue(writer, payload.value)
             }
             writer.endObject()
@@ -195,6 +195,28 @@ class PlaceSectionEnvelopeAdapterFactory : JsonAdapter.Factory {
         ) {
             writer.jsonValue(moshi.adapter(T::class.java).toJsonValue(value))
         }
+
+        /**
+         * [writeValue] plus [separate]: the `@Transient` fields [decodePayload] reads on their own, which the generated
+         * adapter skips. Without them the phone's saved copy (`SavedCopies`) loses those fields, and the server's 304
+         * for an unchanged reply keeps that copy on screen.
+         */
+        private inline fun <reified T> writeValue(
+            writer: JsonWriter,
+            value: T,
+            separate: Map<String, Any?>,
+        ) {
+            @Suppress("UNCHECKED_CAST")
+            val fields = moshi.adapter(T::class.java).toJsonValue(value) as Map<String, Any?>
+            writer.jsonValue(fields + separate.filterValues { it != null })
+        }
+
+        /** The Ballot fields [decodePayload] reads with `decodeIn`, under their wire keys. */
+        private fun PlaceCivicDistrictsData.separateFields(): Map<String, Any?> =
+            mapOf(
+                "governments" to governments?.let { moshi.adapter(BallotGovernments::class.java).toJsonValue(it) },
+                "election_office" to electionOffice?.let { moshi.adapter(BallotElectionOffice::class.java).toJsonValue(it) },
+            )
     }
 }
 

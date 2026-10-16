@@ -204,6 +204,42 @@ data class BallotSummary(
         }
     }
 
+    /**
+     * The card as the section fields [decode] reads, for the phone's saved copy: `PlaceJsonAdapters` writes them beside
+     * the election's own fields, so the card is still there after a relaunch. Absent fields are left out.
+     */
+    fun encode(moshi: Moshi): Map<String, Any?> {
+        fun <T> json(
+            type: Class<T>,
+            value: T?,
+        ): Any? = value?.let { moshi.adapter(type).toJsonValue(it) }
+
+        fun <T> jsonList(
+            type: Class<T>,
+            values: List<T>,
+        ): Any? = moshi.adapter<List<T>>(Types.newParameterizedType(List::class.java, type)).toJsonValue(values)
+
+        return mapOf(
+            "coverage" to coverage.wire,
+            "phase" to phase.wire,
+            "today" to today,
+            "title" to title,
+            "subtitle" to subtitle,
+            "chip" to chip,
+            "line" to line,
+            "note" to note,
+            "how_it_works" to howItWorks,
+            "deadlines" to jsonList(BallotDeadline::class.java, deadlines),
+            "election_day_notice" to json(BallotNotice::class.java, electionDayNotice),
+            "primary_action" to json(BallotPrimaryAction::class.java, primaryAction),
+            "official_links" to jsonList(BallotOfficialLink::class.java, officialLinks),
+            "governments" to json(BallotGovernments::class.java, governments),
+            "ballot_week" to json(BallotWeek::class.java, ballotWeek),
+            "mover_prompt" to json(BallotMoverPrompt::class.java, moverPrompt),
+            "source_line" to sourceLine,
+        ).filterValues { it != null }
+    }
+
     /** One field at a time: a malformed field is null, never an error. */
     private class Fields(
         private val moshi: Moshi,
