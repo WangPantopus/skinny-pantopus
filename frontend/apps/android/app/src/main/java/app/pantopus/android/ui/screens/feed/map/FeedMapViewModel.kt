@@ -14,6 +14,7 @@ import app.pantopus.android.data.postsmap.PostsMapRepository
 import app.pantopus.android.data.saved_places.SavedPlacesRepository
 import app.pantopus.android.data.store.StoreKind
 import app.pantopus.android.ui.components.RefreshNotice
+import app.pantopus.android.ui.screens.explore.ExploreCluster
 import app.pantopus.android.ui.screens.explore.ExploreEntity
 import app.pantopus.android.ui.screens.explore.ExploreKind
 import app.pantopus.android.ui.screens.explore.ExploreMapViewModel
@@ -109,8 +110,13 @@ sealed interface FeedMapUiState {
          * (`backend/routes/posts.js:1854`).
          */
         val nearestActivityCenter: FeedMapRegion? = null,
+        /** Posts of the tapped cluster shown as a list (one zooming can't split). */
+        val clusterPostIds: Set<String> = emptySet(),
     ) : FeedMapUiState {
         val isEmpty: Boolean get() = entities.isEmpty()
+
+        /** The listed cluster's posts, nearest first. */
+        val clusterPosts: List<ExploreEntity> get() = entities.filter { it.id in clusterPostIds }
     }
 
     data class Error(val message: String) : FeedMapUiState
@@ -334,9 +340,16 @@ class FeedMapViewModel
             launchRead { fetchMarkers(next, force = true) }
         }
 
+        /** Shows a pin's preview card, or none for null; either way a cluster's list closes. */
         fun selectEntity(id: String?) {
             val current = _state.value as? FeedMapUiState.Loaded ?: return
-            _state.value = current.copy(selectedId = id)
+            _state.value = current.copy(selectedId = id, clusterPostIds = emptySet())
+        }
+
+        /** Lists [cluster]'s posts in the preview card's place. */
+        fun showClusterPosts(cluster: ExploreCluster) {
+            val current = _state.value as? FeedMapUiState.Loaded ?: return
+            _state.value = current.copy(selectedId = null, clusterPostIds = cluster.entityIds.toSet())
         }
 
         private suspend fun fetchMarkers(
@@ -392,8 +405,9 @@ class FeedMapViewModel
             keepSelection: Boolean,
         ) {
             val anchor = userCoordinate ?: UserCoordinate(target.latitude, target.longitude, 0.0)
-            val selected = if (keepSelection) (_state.value as? FeedMapUiState.Loaded)?.selectedId else null
+            val previous = (_state.value as? FeedMapUiState.Loaded)?.takeIf { keepSelection }
             val entities = ExploreMapViewModel.projectMarkers(data.markers, anchor).filter { it.kind == ExploreKind.Post }
+            val ids = entities.mapTo(HashSet()) { it.id }
             val hint =
                 data.nearestActivityCenter?.let {
                     FeedMapRegion(it.latitude, it.longitude, target.latitudeDelta, target.longitudeDelta)
@@ -405,13 +419,14 @@ class FeedMapViewModel
                     entities = entities.sortedBy { it.distanceMiles },
                     markers = ExploreMapViewModel.cluster(entities, clusterRadius(target)),
                     userCoordinate = userCoordinate,
-                    selectedId = selected.takeIf { id -> entities.any { it.id == id } },
+                    selectedId = previous?.selectedId?.takeIf { it in ids },
                     nearestActivityCenter = hint,
+                    clusterPostIds = previous?.clusterPostIds.orEmpty().filterTo(HashSet()) { it in ids },
                 )
         }
 
         /** Widen the cluster radius as the camera zooms out and vice versa. */
-        private fun clusterRadius(target: FeedMapRegion): Double = (target.latitudeDelta * 0.08).coerceIn(0.0005, 0.05)
+        private fun clusterRadius(target: FeedMapRegion): Double = (target.latitudeDelta * 0.08).coerceIn(MIN_CLUSTER_RADIUS, 0.05)
 
         companion object {
             /**
@@ -419,5 +434,8 @@ class FeedMapViewModel
              * `REGION_DEBOUNCE_MS` (`src/hooks/feed/useFeedMap.ts:13`).
              */
             const val REGION_DEBOUNCE_MS = 350L
+
+            /** The smallest cluster radius, in degrees, however far the map zooms in. */
+            const val MIN_CLUSTER_RADIUS = 0.0005
         }
     }
