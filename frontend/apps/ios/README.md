@@ -120,7 +120,9 @@ See `fastlane/Fastfile`. At minimum, before `make beta`:
 
 - [ ] `match` is set up for code signing (`fastlane match init`).
 - [ ] `.env` has the production Stripe key.
-- [ ] `CURRENT_PROJECT_VERSION` and `MARKETING_VERSION` in `project.yml` are bumped.
+- [ ] Release from an `ios-vX.Y.Z` tag instead of editing `project.yml`: the
+      TestFlight workflow names the build X.Y.Z and gives it the next build
+      number. A local `make beta` keeps `project.yml`'s `MARKETING_VERSION`.
 - [ ] `make test` passes locally.
 
 ## CI

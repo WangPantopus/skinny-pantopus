@@ -37,16 +37,28 @@ def app_store_export_options
   { provisioningProfiles: APP_STORE_TARGETS.values.to_h { |id| [id, app_store_profile_name(id)] } }
 end
 
+# A run on the ios-v1.2.3 tag names the build 1.2.3, so a release never edits
+# project.yml's MARKETING_VERSION. Any other run (a branch, a local `make beta`)
+# gets nil and keeps project.yml's value.
+def tag_marketing_version
+  return nil unless ENV["GITHUB_REF_TYPE"] == "tag"
+
+  tag = ENV["GITHUB_REF_NAME"].to_s
+  # App Store Connect takes one to three period-separated integers.
+  tag[/\Aios-v(\d+(?:\.\d+){0,2})\z/, 1] ||
+    UI.user_error!("A tag build needs a tag like ios-v1.2.3 (up to three numbers), not '#{tag}'")
+end
+
 platform :ios do
   before_all do
     # Materialize Config/Secrets.xcconfig from .env so the per-configuration
     # xcconfig `#include? "Secrets.xcconfig"` resolves the real Stripe key
     # (and Sentry DSN). Without this, Release builds fall back to the
     # committed pk_live_REPLACE_ME placeholder. The CI workflow writes .env
-    # from repository secrets before this lane runs.
+    # from repository secrets before this lane runs. `make bootstrap` does that,
+    # then runs XcodeGen (fastlane has no xcodegen action).
     app_root = File.expand_path("..", __dir__)
-    sh("make", "-C", app_root, "env-to-xcconfig")
-    xcodegen(spec: "project.yml")
+    sh("make", "-C", app_root, "bootstrap")
   end
 
   desc "Run unit + UI tests on simulator"
@@ -78,13 +90,16 @@ platform :ios do
 
   desc "Build and upload to TestFlight (via match for signing)"
   lane :beta do
+    version = tag_marketing_version
     setup_ci if is_ci
     api_key = appstore_api_key
     app_store_signing(api_key: api_key)
 
-    increment_build_number(
-      build_number: latest_testflight_build_number(initial_build_number: 0, api_key: api_key) + 1
-    )
+    # Without `version:` this is TestFlight's newest upload of any version, so
+    # build numbers keep rising when a tag starts a new version.
+    build_number = latest_testflight_build_number(initial_build_number: 0, api_key: api_key) + 1
+    increment_build_number(build_number: build_number)
+    UI.message("Version #{version || 'from project.yml'}, build #{build_number}")
 
     build_app(
       project: "Pantopus.xcodeproj",
@@ -92,6 +107,8 @@ platform :ios do
       configuration: "Release",
       export_method: "app-store",
       export_options: app_store_export_options,
+      # Sets CFBundleShortVersionString for the app and its widget extension.
+      xcargs: ("MARKETING_VERSION=#{version}" if version),
       clean: true
     )
 
