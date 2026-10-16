@@ -688,7 +688,9 @@ function RealRentSection({ section, homeId }: { section: PlaceSection | null; ho
 // ── Exemption check (Wave 2) — the honesty ladder as a card ──
 // on_file (green, nothing to do) · none_on_file (amber — THE hook:
 // exemptions aren't automatic) · unknown (neutral — the county feed
-// doesn't report exemption status; never dressed as either).
+// doesn't report exemption status; never dressed as either) ·
+// not_checked (neutral — no parcel line was read, so the card says why
+// and shows only the state's program).
 
 const EXEMPTION_STATES: Record<PlaceExemptionCheckData['filing_status'], {
   chip: string; variant: ChipVariant; icon: typeof BadgeCheck; lead: (d: PlaceExemptionCheckData) => string;
@@ -711,10 +713,17 @@ const EXEMPTION_STATES: Record<PlaceExemptionCheckData['filing_status'], {
     icon: CircleHelp,
     lead: () => 'This county’s assessor feed doesn’t report exemption status to our data provider, so we can’t tell what’s on file. Your tax bill or the assessor’s site will say.',
   },
+  not_checked: {
+    chip: 'Not checked',
+    variant: 'neutral',
+    icon: CircleHelp,
+    lead: () => 'We couldn’t check the county record for this parcel, so we can’t tell what’s on file. Your tax bill or the assessor’s site will say.',
+  },
 };
 
-function ExemptionCard({ data }: { data: PlaceExemptionCheckData }) {
+function ExemptionCard({ data, reason }: { data: PlaceExemptionCheckData; reason?: string | null }) {
   const state = EXEMPTION_STATES[data.filing_status] ?? EXEMPTION_STATES.unknown;
+  const notChecked = data.filing_status === 'not_checked';
   const Icon = state.icon;
   return (
     <div className="bg-app-surface border border-app-border rounded-2xl shadow-sm p-[18px]">
@@ -727,15 +736,27 @@ function ExemptionCard({ data }: { data: PlaceExemptionCheckData }) {
             <span className="text-[15.5px] font-semibold text-app-text -tracking-[0.01em]">Homestead exemption</span>
             <Chip label={state.chip} variant={state.variant} />
           </div>
-          <div className="text-[12.5px] text-app-text-muted mt-0.5">From the county assessor&apos;s parcel record</div>
+          <div className="text-[12.5px] text-app-text-muted mt-0.5">
+            {notChecked ? 'Your state’s program' : <>From the county assessor&apos;s parcel record</>}
+          </div>
         </div>
       </div>
       <div className="text-[13.5px] text-app-text-strong leading-[20px] mt-3 pt-3 border-t border-app-border-subtle">
-        {state.lead(data)}
+        {notChecked && reason ? reason : state.lead(data)}
       </div>
       <div className="mt-2.5 px-3.5 py-3 bg-app-surface-muted border border-app-border-subtle rounded-[11px]">
         <div className="text-[12.5px] font-semibold text-app-text">{data.state_program.label}</div>
         <div className="text-[12.5px] text-app-text-secondary leading-[18px] mt-0.5">{data.state_program.note}</div>
+        {data.state_program.source_url ? (
+          <a
+            href={data.state_program.source_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-block mt-1.5 text-[12px] text-app-text-muted underline hover:text-app-text-secondary"
+          >
+            {data.state_program.source_name ? `Official page: ${data.state_program.source_name}` : 'Official page'}
+          </a>
+        ) : null}
       </div>
       {data.assessment_signal && (
         <div className="mt-2.5 pt-2.5 border-t border-app-border-subtle">
@@ -947,8 +968,10 @@ export default function MoneyDetail({ intelligence, homeId }: { intelligence: Pl
   const billReady = bill && (bill.status === 'ready' || bill.status === 'stale' || bill.status === 'partial') && bill.data;
   const incReady = incentives && (incentives.status === 'ready' || incentives.status === 'stale' || incentives.status === 'partial') && incentives.data;
   const rentReady = rent && (rent.status === 'ready' || rent.status === 'stale' || rent.status === 'partial') && rent.data;
+  // A partial exemption section is the not_checked card: the state's program
+  // without a parcel reading.
   const exemptionReady = exemption && exemption.access === 'available'
-    && (exemption.status === 'ready' || exemption.status === 'stale') && exemption.data;
+    && (exemption.status === 'ready' || exemption.status === 'stale' || exemption.status === 'partial') && exemption.data;
   // Rate watch, deed alerts and the property-tax check are the owner's, like
   // the exemption check. Older servers send no viewer and keep them for all.
   const ownerTools = !intelligence.viewer || intelligence.viewer.role === 'owner';
@@ -1018,7 +1041,7 @@ export default function MoneyDetail({ intelligence, homeId }: { intelligence: Pl
               // ownership is reviewed, nothing here can speed it up.
               <LockedCard icon={Landmark} title="Homestead exemption" reason={exemption.unavailable_reason ?? 'Available once your ownership is confirmed.'} cta="Verify address" onCta={verifyByMail} />
             ) : exemptionReady ? (
-              <ExemptionCard data={exemption.data as PlaceExemptionCheckData} />
+              <ExemptionCard data={exemption.data as PlaceExemptionCheckData} reason={exemption.unavailable_reason} />
             ) : (
               <SectionCard
                 icon={Landmark}
@@ -1028,7 +1051,8 @@ export default function MoneyDetail({ intelligence, homeId }: { intelligence: Pl
                 onRetry={() => window.location.reload()}
               />
             )}
-            {exemption.source && exemptionReady ? <SourceNote name={exemption.source} /> : null}
+            {/* not_checked links its state's page inside the card instead. */}
+            {exemption.source && exemptionReady && exemption.status !== 'partial' ? <SourceNote name={exemption.source} /> : null}
           </>
         ) : null}
 

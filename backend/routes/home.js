@@ -17,6 +17,7 @@ const { computeAddressHash } = require('../utils/normalizeAddress');
 const homeAuthorityService = require('../services/homeAuthorityService');
 const homeListService = require('../services/homeListService');
 const homeCreateService = require('../services/homeCreateService');
+const { ensureRegionCoverage } = require('../services/seederProvisioningService');
 const homeDetailService = require('../services/homeDetailService');
 const homeResidencyService = require('../services/homeResidencyService');
 const homeResidencyReviewService = require('../services/homeResidencyReviewService');
@@ -1300,6 +1301,15 @@ router.post('/', verifyToken, (req, res, next) => {
       await recordCreateHomeOutcomeSafe({ ...prepared.audit, address_id: prepared.home.address_id, outcome: 'created',
         code: 'HOME_CREATED', status_code: 201,
         message: 'Home and private setup saved; verification remains required.' });
+      // A home outside every content region starts one, as a new viewing area
+      // does (location.js); in the background, so the response doesn't wait.
+      ensureRegionCoverage({
+        latitude: Number(prepared.home.map_center_lat),
+        longitude: Number(prepared.home.map_center_lng),
+        city: prepared.home.city,
+        state: prepared.home.state,
+        userId: actorId,
+      }).catch(() => {});
       if (result.ownership_claim_id) {
         try {
           const { notifyOwnershipVerificationNeeded } = require('../services/notificationService');

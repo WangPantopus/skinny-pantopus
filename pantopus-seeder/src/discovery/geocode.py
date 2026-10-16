@@ -124,6 +124,14 @@ _STATE_ABBREVS: dict[str, str] = {
 }
 
 
+_STATE_NAMES: dict[str, str] = {abbr: name for name, abbr in _STATE_ABBREVS.items()}
+
+
+def state_name(abbr: str) -> str:
+    """The lowercase full name for a state abbreviation, or '' when unknown."""
+    return _STATE_NAMES.get((abbr or "").upper(), "")
+
+
 def _state_abbreviation(state: str) -> str:
     """Convert a full state name to its abbreviation. Returns as-is if already abbreviated."""
     if not state:
