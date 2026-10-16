@@ -189,6 +189,11 @@ read-only repository permissions and keep deployment secrets out of PR jobs.
   any version. An `ios-vX.Y.Z` tag sets the version (`MARKETING_VERSION`) to
   X.Y.Z, and a run from any other tag stops before signing; a run from a
   branch keeps `project.yml`'s 1.0.0. Nobody edits `project.yml` for a release.
+  No workflow submits for App Store review. From `frontend/apps/ios`,
+  `make release VERSION=X.Y.Z` (`fastlane release version:X.Y.Z`) submits
+  TestFlight's newest build of X.Y.Z, with the metadata and screenshots under
+  `fastlane/`, without rebuilding; a CI run on an `ios-vX.Y.Z` tag would take the
+  version from the tag.
 - Android: `android-v*` tags or manual dispatch use `android-release`. Configure
   `ANDROID_KEYSTORE_BASE64`, `PANTOPUS_KEYSTORE_PASSWORD`, `PANTOPUS_KEY_ALIAS`,
   `PANTOPUS_KEY_PASSWORD`, `PLAY_STORE_SERVICE_ACCOUNT_JSON`,
