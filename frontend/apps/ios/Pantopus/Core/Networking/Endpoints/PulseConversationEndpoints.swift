@@ -90,6 +90,33 @@ public extension PulseEndpoints {
         Endpoint(method: .put, path: "/api/pulse/follows", body: FollowTopicRequest(targetId: topic, areaId: areaId))
     }
 
+    /// `GET /api/pulse/preferences/summary` — every follow, mute and alert,
+    /// each with the request that undoes it (contract §2.9). Route
+    /// `backend/routes/pulse.js:148`.
+    static func preferencesSummary() -> Endpoint {
+        Endpoint(method: .get, path: "/api/pulse/preferences/summary")
+    }
+
+    /// The server's undo for one preferences item (contract §2.9): the
+    /// follow's `DELETE`, the alert's `PUT` with `notify: off`, or
+    /// `DELETE /api/posts/mute` with its body. Only those requests are sent;
+    /// any other descriptor answers nil and its row offers no undo. Routes
+    /// `backend/routes/pulse.js` (follows) and `backend/routes/posts.js:2246`.
+    static func undo(_ undo: PulseUndoDTO) -> Endpoint? {
+        guard let parts = URLComponents(string: undo.path), parts.scheme == nil, parts.host == nil else { return nil }
+        let method: Endpoint.Method
+        switch (undo.method.uppercased(), parts.path) {
+        case ("DELETE", "/api/pulse/follows"), ("DELETE", "/api/posts/mute"): method = .delete
+        case ("PUT", "/api/pulse/follows"): method = .put
+        default: return nil
+        }
+        var query: [String: String] = [:]
+        for item in parts.queryItems ?? [] {
+            if let value = item.value { query[item.name] = value }
+        }
+        return Endpoint(method: method, path: parts.path, query: query, body: undo.body)
+    }
+
     /// `GET /api/pulse/posts/:id/why` — only the reader's own choices
     /// (contract §2.9), read with the page's view, topic and area. Route
     /// `backend/routes/pulse.js:123` in PR 2322.
