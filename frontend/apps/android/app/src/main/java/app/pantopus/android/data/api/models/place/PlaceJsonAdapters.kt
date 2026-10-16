@@ -4,6 +4,7 @@ import com.squareup.moshi.JsonAdapter
 import com.squareup.moshi.JsonReader
 import com.squareup.moshi.JsonWriter
 import com.squareup.moshi.Moshi
+import com.squareup.moshi.Types
 import com.squareup.moshi.adapters.EnumJsonAdapter
 import java.lang.reflect.Type
 
@@ -212,12 +213,16 @@ class PlaceSectionEnvelopeAdapterFactory : JsonAdapter.Factory {
             writer.jsonValue(fields + separate.filterValues { it != null })
         }
 
-        /** The Ballot fields [decodePayload] reads with `decodeIn`, under their wire keys. */
-        private fun PlaceCivicDistrictsData.separateFields(): Map<String, Any?> =
-            mapOf(
+        /** The Ballot and local-government fields [decodePayload] reads with `decodeIn`, under their wire keys. */
+        private fun PlaceCivicDistrictsData.separateFields(): Map<String, Any?> {
+            val localGovernmentList = Types.newParameterizedType(List::class.java, PlaceLocalGovernment::class.java)
+            val localGovernmentAdapter = moshi.adapter<List<PlaceLocalGovernment>>(localGovernmentList)
+            return mapOf(
                 "governments" to governments?.let { moshi.adapter(BallotGovernments::class.java).toJsonValue(it) },
                 "election_office" to electionOffice?.let { moshi.adapter(BallotElectionOffice::class.java).toJsonValue(it) },
+                "local_governments" to localGovernments?.let(localGovernmentAdapter::toJsonValue),
             )
+        }
     }
 }
 
