@@ -28,6 +28,7 @@ struct PlaceDetailView: View {
         .background(Theme.Color.appBg)
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
+        .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .task { await viewModel.load() }
         // The home or today's conditions changed: the open page re-reads, its copy staying shown.
         .refreshesOnStoreChange(

@@ -92,6 +92,7 @@ struct PlaceDashboardView: View {
         }
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
+        .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .task(id: isActive) {
             guard isActive else { viewModel.discardTemporaryCopy()
                 return

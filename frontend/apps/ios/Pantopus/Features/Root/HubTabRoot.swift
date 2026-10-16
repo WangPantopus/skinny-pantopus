@@ -1295,6 +1295,7 @@ public struct HubTabRoot: View {
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("place.firstRun")
             .toolbar(.hidden, for: .navigationBar)
+            .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
             .onAppear { Self.placeRootViewed("first_run") }
             .task { await refreshPlaceUnread() }
             .refreshesOnStoreChange { await refreshPlaceUnread() }
@@ -1305,11 +1306,13 @@ public struct HubTabRoot: View {
             PlaceDashboardSkeleton()
                 .background(Theme.Color.appBg)
                 .toolbar(.hidden, for: .navigationBar)
+                .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         case let .error(message):
             placeRootBar(
                 ErrorState(headline: "Couldn't load your place", message: message) {
                     await resolvePlaceRoot()
                 }
+                .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
             )
         }
     }
