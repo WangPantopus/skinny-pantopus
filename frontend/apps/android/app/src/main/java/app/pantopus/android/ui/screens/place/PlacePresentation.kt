@@ -424,6 +424,8 @@ object PlacePresentation {
                             chip = PlaceChipModel(PlaceChipTone.WARNING, "Not filed", PantopusIcon.AlertCircle),
                         )
                     ExemptionFilingStatus.UNKNOWN -> PlaceSectionReading(value = "Not reported by this county")
+                    // No parcel line was read: point at the state's program instead.
+                    ExemptionFilingStatus.NOT_CHECKED -> PlaceSectionReading(value = d.stateProgram.label)
                 }
             }
             PlaceSectionId.CIVIC_DISTRICTS -> {
