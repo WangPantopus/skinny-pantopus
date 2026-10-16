@@ -246,7 +246,8 @@ struct PlaceTodayDetailContent: View {
             PlaceDetailSectionLabel(text: "Air quality")
             if let data = aqi.airQuality, aqi.status == .ready || aqi.status == .stale {
                 AqiCard(data: data)
-                PlaceSourceNote(name: "AirNow · EPA", asOf: PlacePresentation.fmtTime(aqi.asOf))
+                // The server names the monitor, or says the reading is a model estimate.
+                PlaceSourceNote(name: aqi.source ?? "AirNow · EPA", asOf: PlacePresentation.fmtTime(aqi.asOf))
             } else {
                 vm.fallbackCard(aqi)
             }

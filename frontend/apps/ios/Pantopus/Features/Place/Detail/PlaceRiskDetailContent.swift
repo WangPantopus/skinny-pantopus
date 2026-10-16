@@ -102,8 +102,10 @@ struct PlaceRiskDetailContent: View {
                             .pantopusTextStyle(.caption)
                             .foregroundStyle(Theme.Color.appTextMuted)
                     }
-                    if let nfip = env.flood?.nfip {
-                        nfipBlock(nfip)
+                    // The tract's benchmark, else the county's (sent only when the
+                    // tract is too thin to compare).
+                    if let nfip = env.flood?.nfip ?? env.flood?.nfipArea {
+                        nfipBlock(nfip, countyWide: env.flood?.nfip == nil)
                     }
                 }
             }
@@ -112,10 +114,11 @@ struct PlaceRiskDetailContent: View {
         }
     }
 
-    /// Wave 2 — what flood policies in this tract actually cost. Absent
-    /// while the benchmark warms or sits below the 10-policy floor, so
-    /// the card degrades to zone-only. A benchmark, never a quote.
-    private func nfipBlock(_ nfip: PlaceFloodNfipData) -> some View {
+    /// Wave 2 — what flood policies in this tract actually cost, or across
+    /// the county when the tract sits below the 10-policy floor. Absent
+    /// while the benchmark warms, so the card degrades to zone-only. A
+    /// benchmark, never a quote.
+    private func nfipBlock(_ nfip: PlaceFloodNfipData, countyWide: Bool) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Divider()
             Text("What flood policies near you cost")
@@ -131,18 +134,25 @@ struct PlaceRiskDetailContent: View {
                     .font(.system(size: 12.5))
                     .foregroundStyle(Theme.Color.appTextSecondary)
             }
-            Text(nfipCaption(nfip))
+            Text(nfipCaption(nfip, countyWide: countyWide))
                 .pantopusTextStyle(.caption)
                 .lineSpacing(2)
+                .foregroundStyle(Theme.Color.appTextMuted)
+            // FEMA's required notice wherever OpenFEMA data is shown.
+            Text("This product uses the Federal Emergency Management Agency's OpenFEMA API, but is not endorsed by FEMA.")
+                .pantopusTextStyle(.caption)
                 .foregroundStyle(Theme.Color.appTextMuted)
         }
         .padding(.top, 2)
     }
 
-    private func nfipCaption(_ nfip: PlaceFloodNfipData) -> String {
+    private func nfipCaption(_ nfip: PlaceFloodNfipData, countyWide: Bool) -> String {
         let sampled = nfip.coverage == "partial" ? " (sampled)" : ""
-        return "Real NFIP premiums for the \(nfip.policyCount) policies written in your census tract "
-            + "over the last \(nfip.windowMonths) months\(sampled). "
+        let scope = countyWide
+            ? "policies written across your county over the last \(nfip.windowMonths) months\(sampled) — "
+            + "your census tract has too few to compare. "
+            : "policies written in your census tract over the last \(nfip.windowMonths) months\(sampled). "
+        return "Real NFIP premiums for the \(PlacePresentation.grouped(nfip.policyCount)) " + scope
             + "A benchmark, not a quote — premiums vary house to house."
     }
 
@@ -390,7 +400,8 @@ private struct HeatColdCard: View {
                         .font(.system(size: 11.5))
                         .foregroundStyle(Theme.Color.appTextMuted)
                 } else {
-                    Text("NWS HeatRisk covers the contiguous US. The freeze forecast above still applies here.")
+                    // The server says where heat came from instead (Alaska, Hawaii, a HeatRisk outage).
+                    Text(data.heatNote ?? "NWS HeatRisk covers the contiguous US. The freeze forecast above still applies here.")
                         .font(.system(size: 12.5))
                         .foregroundStyle(Theme.Color.appTextMuted)
                 }

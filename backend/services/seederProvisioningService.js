@@ -42,6 +42,7 @@ function haversineM(lat1, lng1, lat2, lng2) {
 
 // Keep the existing export for callers; the implementation uses timezone polygons.
 const { timezoneFromCoordinates: timezoneFromLng } = require('../utils/timezone');
+const { stateName } = require('../utils/usState');
 
 /**
  * Create a URL-safe region slug from city + state.
@@ -135,6 +136,10 @@ async function provisionInstantRegion({ latitude, longitude, city, state }) {
   const newsQuery = city
     ? `${city} ${state || ''} local news`.trim()
     : `${latitude.toFixed(2)} ${longitude.toFixed(2)} local news`;
+  // Wikipedia's "On This Day" keeps only events naming one of these, as the
+  // pilot's source does ("Oregon,Washington,Portland,Vancouver"). With no
+  // place name it would post the world's history, so the region gets none.
+  const historyKeywords = [city, stateName(state)].filter(Boolean).join(',');
 
   // Check if region already exists (race condition guard)
   const { data: existing } = await supabaseAdmin
@@ -176,6 +181,7 @@ async function provisionInstantRegion({ latitude, longitude, city, state }) {
           `usgs_earthquakes:${regionId}`,
           `google_news:${regionId}`,
           `seasonal:${regionId}`,
+          ...(historyKeywords ? [`on_this_day:${regionId}`] : []),
         ],
         lat: latitude,
         lng: longitude,
@@ -237,6 +243,17 @@ async function provisionInstantRegion({ latitude, longitude, city, state }) {
       active: true,
       priority: 2,
     },
+    // Local history: keyless (Wikimedia REST); each post links its article.
+    ...(historyKeywords ? [{
+      source_id: `on_this_day:${regionId}`,
+      source_type: 'on_this_day',
+      url: historyKeywords,
+      category: 'history',
+      display_name: 'On This Day (Wikipedia)',
+      region: regionId,
+      active: true,
+      priority: 2,
+    }] : []),
   ];
 
   for (const src of sources) {

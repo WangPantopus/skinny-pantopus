@@ -18,7 +18,7 @@ from src.discovery.cluster import (
     UserPoint,
     find_candidates,
 )
-from src.discovery.geocode import reverse_geocode
+from src.discovery.geocode import reverse_geocode, state_name
 from src.discovery.timezone import timezone_from_coords
 from src.utils.coordinates import parse_valid_coordinates
 
@@ -199,6 +199,10 @@ def _provision_region(
         region_id, display_name, candidate.lat, candidate.lng, timezone, candidate.user_count,
     )
 
+    # Wikipedia's "On This Day" keeps only events naming one of these, as the
+    # pilot's source does; with no place name the region gets none.
+    history_keywords = ",".join(k for k in (geo.get("city"), state_name(geo.get("state", ""))) if k)
+
     # Create seeder_config row
     active_source_ids = [
         f"nws_alerts:{region_id}",
@@ -206,6 +210,8 @@ def _provision_region(
         f"google_news:{region_id}",
         f"seasonal:{region_id}",
     ]
+    if history_keywords:
+        active_source_ids.append(f"on_this_day:{region_id}")
     try:
         supabase.table("seeder_config").upsert({
             "region": region_id,
@@ -268,6 +274,18 @@ def _provision_region(
             "priority": 2,
         },
     ]
+    # Local history: keyless (Wikimedia REST); each post links its article.
+    if history_keywords:
+        sources.append({
+            "source_id": f"on_this_day:{region_id}",
+            "source_type": "on_this_day",
+            "url": history_keywords,
+            "category": "history",
+            "display_name": "On This Day (Wikipedia)",
+            "region": region_id,
+            "active": True,
+            "priority": 2,
+        })
 
     for src in sources:
         try:

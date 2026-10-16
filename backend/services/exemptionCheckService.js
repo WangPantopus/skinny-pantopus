@@ -17,9 +17,13 @@
  *   unknown      — ATTOM has the parcel but reports no exemption
  *                  structure at all (county doesn't feed it). Never
  *                  dressed as either of the above.
+ *   not_checked  — we never read a parcel line (no ATTOM key, no
+ *                  parcel match, provider unreachable). Nothing is said
+ *                  about the parcel; the household still gets its
+ *                  state's program, which doesn't depend on the parcel.
  * No savings claims, no eligibility determinations — the state program
  * table (data/homesteadPrograms.js) is deliberately conservative and
- * points at the county assessor.
+ * cites each state's own page.
  *
  * ATTOM's exemption reporting varies by county AND by response
  * vintage, so extraction is defensive across the shapes seen in
@@ -128,16 +132,46 @@ function assessmentSignal(assessment) {
   };
 }
 
+function stateProgramPayload(home) {
+  const program = programForState(home.state);
+  return {
+    state: String(home.state || '').trim().toUpperCase() || null,
+    label: program.label,
+    filing: program.filing,
+    note: program.note,
+    curated: program.curated,
+    source_name: program.source_name,
+    source_url: program.source_url,
+  };
+}
+
+// No parcel line was read: say nothing about the parcel, keep the state's
+// program. `homestead_on_file` is null, not false — nothing was checked
+// (builds that predate not_checked can't decode the null and keep their
+// unavailable card).
+function notChecked(home, unavailableReason) {
+  return {
+    status: 'partial',
+    unavailableReason,
+    data: {
+      filing_status: 'not_checked',
+      exemptions: [],
+      homestead_on_file: null,
+      assessment_signal: null,
+      state_program: stateProgramPayload(home),
+    },
+  };
+}
+
 /**
  * The exemption check for a home.
  * @returns {Promise<{status: string, data?: object, unavailableReason?: string}>}
- *   status 'ready' with data, or 'unavailable' with a reason key the
- *   composer maps to honest copy.
+ *   status 'ready' with the parcel's ladder, 'partial' (not_checked, with
+ *   a reason key the composer maps to honest copy) when no parcel line
+ *   was read, or 'error'.
  */
 async function getExemptionCheck(home) {
-  if (!process.env.ATTOM_API_KEY) {
-    return { status: 'unavailable', unavailableReason: 'ATTOM_NOT_CONFIGURED' };
-  }
+  if (!process.env.ATTOM_API_KEY) return notChecked(home, 'ATTOM_NOT_CONFIGURED');
 
   let result;
   try {
@@ -148,12 +182,9 @@ async function getExemptionCheck(home) {
   }
   const payload = result && result.attomPayload;
   const property = payload?.property?.[0] || payload?.full_response?.property?.[0] || null;
-  if (!property) {
-    return { status: 'unavailable', unavailableReason: result?.unavailableReason || 'NO_PARCEL_MATCH' };
-  }
+  if (!property) return notChecked(home, result?.unavailableReason || 'NO_PARCEL_MATCH');
 
   const extracted = extractExemptions(property.assessment);
-  const program = programForState(home.state);
 
   const filing_status = !extracted.reported
     ? 'unknown'
@@ -169,13 +200,7 @@ async function getExemptionCheck(home) {
       // Wave 2b: assessed vs the county's own market value (null when
       // either total is missing from the feed).
       assessment_signal: assessmentSignal(property.assessment),
-      state_program: {
-        state: String(home.state || '').trim().toUpperCase() || null,
-        label: program.label,
-        filing: program.filing,
-        note: program.note,
-        curated: program.curated,
-      },
+      state_program: stateProgramPayload(home),
     },
   };
 }
