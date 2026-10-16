@@ -20,12 +20,13 @@ import type {
   PlaceCivicElectionData,
   PlaceBallotRace,
   CivicLevel,
+  BallotElectionOffice,
   BallotGovernments,
 } from '@pantopus/types';
 import { Landmark, Check, Mail, Vote, Phone, Globe, ChevronRight, CalendarCheck, Info, Layers } from 'lucide-react';
 import Chip from '@/components/archetypes/primitives/Chip';
 import GovernmentsSheet from '@/components/ballot/GovernmentsSheet';
-import { ballotGovernments } from '@/components/ballot/BallotCard';
+import { ballotElectionOffice, ballotGovernments, LinksWell } from '@/components/ballot/BallotCard';
 import { SectionCard, DetailHeader, DetailSectionLabel, SourceNote, InfoNote } from '@/components/archetypes/place';
 import { findPlaceSection, detailAddress } from './sections';
 import { statusToState } from './format';
@@ -224,14 +225,24 @@ function BallotPreview({ data, onOpen }: { data: PlaceCivicElectionData; onOpen:
   );
 }
 
-function NoElection() {
+// No date on Pantopus's calendar is not "no election": local, special and
+// runoff elections can be on the way. Point at the office that runs them.
+function NoElection({ office }: { office: BallotElectionOffice | null }) {
   return (
     <div className="bg-app-surface border border-app-border rounded-2xl shadow-sm px-[18px] py-[22px] flex flex-col items-center text-center">
       <span className="w-12 h-12 rounded-[13px] bg-app-surface-sunken flex items-center justify-center mb-3">
         <CalendarCheck size={24} strokeWidth={2} className="text-app-text-muted" />
       </span>
-      <div className="text-base font-bold text-app-text -tracking-[0.01em]">No upcoming election</div>
-      <div className="text-[13.5px] text-app-text-secondary leading-5 mt-1 max-w-[280px]">There&apos;s nothing on your ballot right now. We&apos;ll show the date here as soon as one is set.</div>
+      <div className="text-base font-bold text-app-text -tracking-[0.01em]">No election on our calendar yet</div>
+      <div className="text-[13.5px] text-app-text-secondary leading-5 mt-1 max-w-[280px]">
+        We&apos;ll show your next election here once we have its date.{' '}
+        {office?.note ?? 'Until then, your state and county election offices have upcoming election dates.'}
+      </div>
+      {office ? (
+        <div className="mt-3 w-full text-left">
+          <LinksWell links={office.links} />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -345,6 +356,7 @@ export default function CivicDetail({ intelligence }: { intelligence: PlaceIntel
   const districtsData = districtsReady ? (districtsEnv!.data as PlaceCivicDistrictsData) : null;
   const reps = districtsData?.representatives ?? [];
   const governments = ballotGovernments(districtsData?.governments);
+  const electionOffice = ballotElectionOffice(districtsData?.election_office);
 
   const electionReady = electionEnv && (electionEnv.status === 'ready' || electionEnv.status === 'stale' || electionEnv.status === 'partial') && electionEnv.data;
   // With Ballot on, the section keeps a past election for the week after it
@@ -385,7 +397,7 @@ export default function CivicDetail({ intelligence }: { intelligence: PlaceIntel
             <BallotPreview data={electionData} onOpen={() => setBallotOpen(true)} />
           </div>
         ) : (
-          <NoElection />
+          <NoElection office={electionOffice} />
         )}
         {electionData && electionEnv?.source ? <SourceNote name={electionEnv.source} asOf={electionData.name} /> : null}
 

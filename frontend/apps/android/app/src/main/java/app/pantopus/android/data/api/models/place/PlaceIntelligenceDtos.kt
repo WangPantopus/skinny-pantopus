@@ -728,7 +728,9 @@ data class PlaceRealRentData(
 
 /**
  * The honesty ladder: UNKNOWN (county feed carries no exemption
- * structure) is NEVER presented as "none on file". Registered with the
+ * structure) is NEVER presented as "none on file", and NOT_CHECKED (no
+ * parcel line was read; the section is partial) says nothing about the
+ * parcel — only the state's program. Registered with the
  * unknown-fallback factory so a server-side vocabulary addition cannot
  * break an older build.
  */
@@ -738,6 +740,9 @@ enum class ExemptionFilingStatus {
 
     @Json(name = "none_on_file")
     NONE_ON_FILE,
+
+    @Json(name = "not_checked")
+    NOT_CHECKED,
 
     UNKNOWN,
 }
@@ -773,11 +778,14 @@ data class PlaceAssessmentSignal(
 data class PlaceExemptionStateProgram(
     val state: String? = null,
     val label: String,
-    /** "application" | "varies" | "none_general". */
+    /** "application" | "automatic" | "varies" | "none_general". */
     val filing: String,
     val note: String,
     /** False → the conservative check-your-county default. */
     val curated: Boolean = false,
+    /** The state's own page behind [note]; null for the default. */
+    @Json(name = "source_name") val sourceName: String? = null,
+    @Json(name = "source_url") val sourceUrl: String? = null,
 )
 
 @JsonClass(generateAdapter = true)
@@ -785,7 +793,8 @@ data class PlaceExemptionCheckData(
     @Json(name = "filing_status") val filingStatus: ExemptionFilingStatus = ExemptionFilingStatus.UNKNOWN,
     /** Labels as the assessor feed reports them, e.g. "Homestead". */
     val exemptions: List<String> = emptyList(),
-    @Json(name = "homestead_on_file") val homesteadOnFile: Boolean = false,
+    /** Null when not checked. */
+    @Json(name = "homestead_on_file") val homesteadOnFile: Boolean? = null,
     @Json(name = "assessment_signal") val assessmentSignal: PlaceAssessmentSignal? = null,
     @Json(name = "state_program") val stateProgram: PlaceExemptionStateProgram,
 )
@@ -845,6 +854,12 @@ data class PlaceCivicDistrictsData(
      * `PlaceJsonAdapters`, so a malformed field never fails this section.
      */
     @Transient val governments: BallotGovernments? = null,
+    /**
+     * Ballot P0: who runs the state's elections, all year; null when not
+     * sent. Read separately by [BallotElectionOffice.decodeIn], like
+     * [governments].
+     */
+    @Transient val electionOffice: BallotElectionOffice? = null,
 )
 
 enum class BallotRaceType {

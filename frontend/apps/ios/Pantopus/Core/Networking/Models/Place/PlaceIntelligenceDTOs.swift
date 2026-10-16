@@ -868,13 +868,15 @@ public struct PlaceRealRentData: Decodable, Sendable, Hashable {
 // MARK: - Exemption check (Wave 2)
 
 /// The honesty ladder: `unknown` (county feed carries no exemption
-/// structure) is NEVER presented as "none on file". Falls back to
-/// `.unknown` so a server-side vocabulary addition cannot break an
-/// older build.
+/// structure) is NEVER presented as "none on file", and `notChecked`
+/// (no parcel line was read; the section is partial) says nothing about
+/// the parcel — only the state's program. Falls back to `.unknown` so a
+/// server-side vocabulary addition cannot break an older build.
 public enum ExemptionFilingStatus: String, Decodable, Sendable, Hashable {
     case onFile = "on_file"
     case noneOnFile = "none_on_file"
     case unknown
+    case notChecked = "not_checked"
 
     public init(from decoder: Decoder) throws {
         let raw = try decoder.singleValueContainer().decode(String.self)
@@ -915,18 +917,32 @@ public struct PlaceAssessmentSignal: Decodable, Sendable, Hashable {
 public struct PlaceExemptionStateProgram: Decodable, Sendable, Hashable {
     public let state: String?
     public let label: String
-    /// "application" | "varies" | "none_general".
+    /// "application" | "automatic" | "varies" | "none_general".
     public let filing: String
     public let note: String
     /// False → the conservative check-your-county default.
     public let curated: Bool
+    /// The state's own page behind `note`; nil for the default.
+    public let sourceName: String?
+    public let sourceURL: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case state
+        case label
+        case filing
+        case note
+        case curated
+        case sourceName = "source_name"
+        case sourceURL = "source_url"
+    }
 }
 
 public struct PlaceExemptionCheckData: Decodable, Sendable, Hashable {
     public let filingStatus: ExemptionFilingStatus
     /// Labels as the assessor feed reports them, e.g. "Homestead".
     public let exemptions: [String]
-    public let homesteadOnFile: Bool
+    /// Nil when not checked.
+    public let homesteadOnFile: Bool?
     public let assessmentSignal: PlaceAssessmentSignal?
     public let stateProgram: PlaceExemptionStateProgram
 
@@ -989,9 +1005,12 @@ public struct PlaceCivicDistrictsData: Decodable, Sendable, Hashable {
     /// Ballot P0 (`ballot_p0`): the governments view's data, all year; nil
     /// when not sent.
     public let governments: BallotGovernments?
+    /// Ballot P0: who runs the state's elections, all year; nil when not sent.
+    public let electionOffice: BallotElectionOffice?
 
     private enum CodingKeys: String, CodingKey {
         case districts, representatives, governments
+        case electionOffice = "election_office"
     }
 
     public init(from decoder: Decoder) throws {
@@ -1000,6 +1019,7 @@ public struct PlaceCivicDistrictsData: Decodable, Sendable, Hashable {
         representatives = try c.decode([PlaceCivicRepresentative].self, forKey: .representatives)
         // A malformed Ballot field never blanks the districts.
         governments = try? c.decodeIfPresent(BallotGovernments.self, forKey: .governments)
+        electionOffice = try? c.decodeIfPresent(BallotElectionOffice.self, forKey: .electionOffice)
     }
 }
 

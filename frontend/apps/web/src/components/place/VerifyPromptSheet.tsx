@@ -29,6 +29,8 @@ import {
   Mailbox,
   Award,
   Clock,
+  Hourglass,
+  ChevronRight,
 } from 'lucide-react';
 import BottomSheet from '@/components/ui/BottomSheet';
 import { IconTile } from '@/components/archetypes/place';
@@ -122,6 +124,35 @@ export default function VerifyPromptSheet({ open, onClose, homeId, address }: Ve
   // door joins once the Home has one (or the person already has a request).
   const [landlordHomeId, setLandlordHomeId] = useState<string | null>(null);
   const methods = landlordHomeId === homeId ? METHODS : METHODS.filter((m) => m.id !== 'landlord');
+  // A residency document the person sent that waits on a reviewer: the document
+  // door says so (and links to its status) instead of offering another upload.
+  const [documentHomeId, setDocumentHomeId] = useState<string | null>(null);
+  const documentInReview = documentHomeId === homeId;
+  const choices = documentInReview ? methods.filter((m) => m.id !== 'document') : methods;
+
+  useEffect(() => {
+    if (documentInReview && selected === 'document') setSelected('mail');
+  }, [documentInReview, selected]);
+
+  // The person's own claims, as the Waiting Room reads them: a residency document
+  // for this Home under review (a claim with no document yet isn't). An
+  // unreadable list keeps the upload door.
+  useEffect(() => {
+    if (!open) return;
+    let canceled = false;
+    (async () => {
+      try {
+        const { claims } = await api.homeOwnership.getMyOwnershipClaims();
+        if (canceled) return;
+        const inReview = (claims ?? []).some((c) => c.home_id?.toLowerCase() === homeId.toLowerCase()
+          && c.claim_type === 'resident' && c.status === 'under_review' && c.has_evidence !== false);
+        setDocumentHomeId(inReview ? homeId : null);
+      } catch {
+        // Keep the upload door.
+      }
+    })();
+    return () => { canceled = true; };
+  }, [open, homeId]);
 
   useEffect(() => {
     if (!open) return;
@@ -140,9 +171,15 @@ export default function VerifyPromptSheet({ open, onClose, homeId, address }: Ve
   }, [open, homeId]);
 
   const handleStart = () => {
-    const method = methods.find((m) => m.id === selected) ?? methods[0];
+    const method = choices.find((m) => m.id === selected) ?? choices[0];
     onClose();
     router.push(method.href(homeId));
+  };
+
+  // The residency document's status page (the one its upload ends on).
+  const openDocumentStatus = () => {
+    onClose();
+    router.push(`/app/homes/${homeId}/verify-residency/submitted?return=place`);
   };
 
   const footer = (
@@ -201,6 +238,28 @@ export default function VerifyPromptSheet({ open, onClose, homeId, address }: Ve
         <Overline>Choose how</Overline>
         <div className="bg-app-surface border border-app-border rounded-2xl shadow-sm overflow-hidden">
           {methods.map((m, i) => {
+            if (m.id === 'document' && documentInReview) {
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={openDocumentStatus}
+                  data-testid="place-verify-document-in-review"
+                  className={`w-full flex items-center gap-3 px-3.5 py-3 text-left transition-colors hover:bg-app-hover ${
+                    i > 0 ? 'border-t border-app-border-subtle' : ''
+                  }`}
+                >
+                  <IconTile icon={Hourglass} tone="muted" size={34} />
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-[14.5px] font-semibold text-app-text -tracking-[0.01em]">Document under review</span>
+                    <span className="block text-[12.5px] text-app-text-secondary mt-0.5 leading-[17px]">
+                      A person is reviewing your document. You&apos;ll get a notification when it&apos;s decided.
+                    </span>
+                  </span>
+                  <ChevronRight size={18} strokeWidth={2.25} aria-hidden className="shrink-0 text-app-text-muted" />
+                </button>
+              );
+            }
             const isSelected = selected === m.id;
             return (
               <button

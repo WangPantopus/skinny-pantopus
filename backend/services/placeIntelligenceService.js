@@ -119,14 +119,15 @@ function sectionApplies(id, viewer) {
 }
 
 // The viewer's own pending ownership of this Home (a pending owner row or an
-// ownership claim still in progress). A failed read counts as none.
+// ownership claim still in progress). A renter's residency document is not
+// one: it never makes them an owner. A failed read counts as none.
 async function hasPendingOwnership(homeId, userId) {
   try {
     const [owners, claims] = await Promise.all([
       supabaseAdmin.from('HomeOwner').select('id').eq('home_id', homeId).eq('subject_type', 'user')
         .eq('subject_id', userId).eq('owner_status', 'pending').limit(1),
       supabaseAdmin.from('HomeOwnershipClaim').select('id, state, claim_phase_v2, merged_into_claim_id')
-        .eq('home_id', homeId).eq('claimant_user_id', userId),
+        .eq('home_id', homeId).eq('claimant_user_id', userId).neq('claim_type', 'resident'),
     ]);
     if ((owners.data || []).length) return true;
     return (claims.data || []).some((claim) => (claimsConfig.flags.v2ReadPaths
@@ -763,6 +764,23 @@ async function composeDensity(home) {
   }
 }
 
+// Where the your_home facts came from, said plainly: the household's own
+// entries are never labeled as county records. Profiles cached before
+// `county_record` existed keep the default label.
+function yourHomeProvenance(profile) {
+  if (profile.source === 'fallback') return { source: 'Details you entered', coverage: 'partial' };
+  const ownFacts = Array.isArray(profile.household_fields) && profile.household_fields.length > 0;
+  if (profile.county_record === false) {
+    // ATTOM answered with a value model or the ZIP trend only.
+    return {
+      source: ownFacts ? 'Details you entered · value estimate from ATTOM' : 'Value estimate · ATTOM',
+      coverage: 'partial',
+    };
+  }
+  if (ownFacts) return { source: 'County records · ATTOM, with details you entered', coverage: 'partial' };
+  return {};
+}
+
 async function composeYourHome(home, tier) {
   const access = bandAccess('B', tier);
   if (access === 'locked') {
@@ -772,11 +790,12 @@ async function composeYourHome(home, tier) {
     })];
   }
   // Band B is ATTOM-paid — without a key there is no exact data (area teaser only).
+  // The gap is ours, not the area's, so the copy doesn't blame the area.
   if (!process.env.ATTOM_API_KEY) {
     return [serializePlaceSection('your_home', {
       access,
       status: 'unavailable',
-      unavailableReason: "Exact property details aren't available for your area yet.",
+      unavailableReason: "We can't read county property records yet, so exact details and value aren't shown here.",
     })];
   }
 
@@ -798,6 +817,7 @@ async function composeYourHome(home, tier) {
     // 'cache_stale' = ATTOM was unreachable and an expired row served
     // instead (database-first resilience) — surfaced as a stale envelope.
     status: result.source === 'cache_stale' ? 'stale' : 'ready',
+    ...yourHomeProvenance(profile),
     data: {
       year_built: profile.year_built ?? null,
       sqft: profile.sqft ?? null,
@@ -969,13 +989,15 @@ async function composeHomeSystems(home, tier) {
 // ════════════════════════════════════════════════════════════
 // Band B like your_home: the answer lives on the exact parcel's
 // assessor record. The service returns an honesty ladder
-// (on_file / none_on_file / unknown); this maps its unavailable
-// reasons onto the designed copy.
+// (on_file / none_on_file / unknown, or not_checked when no parcel line
+// was read); this maps its reasons onto the designed copy. Each reason
+// says why the parcel wasn't checked — never that the area has no
+// records, since a missing provider key is ours, not the county's.
 const EXEMPTION_UNAVAILABLE_COPY = {
-  ATTOM_NOT_CONFIGURED: "Exemption records aren't available for your area yet.",
-  ATTOM_UNAVAILABLE: "County exemption records aren't reachable right now.",
-  NO_PARCEL_MATCH: "We couldn't match this address to a county parcel record.",
-  NO_PROPERTY_FOUND: "We couldn't match this address to a county parcel record.",
+  ATTOM_NOT_CONFIGURED: "We can't read county exemption records yet, so we can't tell what's on file for this parcel.",
+  ATTOM_UNAVAILABLE: "County exemption records aren't reachable right now, so we can't tell what's on file.",
+  NO_PARCEL_MATCH: "We couldn't match this address to a county parcel record, so we can't tell what's on file.",
+  NO_PROPERTY_FOUND: "We couldn't match this address to a county parcel record, so we can't tell what's on file.",
 };
 
 // Real Rent Benchmark (Wave 3) — what verified neighbors on this
@@ -1076,6 +1098,17 @@ async function composeExemptionCheck(home, tier) {
   }
   try {
     const result = await exemptionCheckService.getExemptionCheck(home);
+    if (result.status === 'partial') {
+      // not_checked: only the state's program is shown, so it is the source.
+      return [serializePlaceSection('exemption_check', {
+        access,
+        status: 'partial',
+        data: result.data,
+        source: result.data.state_program.source_name || null,
+        coverage: 'partial',
+        unavailableReason: EXEMPTION_UNAVAILABLE_COPY[result.unavailableReason] || null,
+      })];
+    }
     if (result.status !== 'ready') {
       return [serializePlaceSection('exemption_check', {
         access,

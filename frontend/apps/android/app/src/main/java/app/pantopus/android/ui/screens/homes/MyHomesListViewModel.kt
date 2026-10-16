@@ -50,18 +50,20 @@ sealed interface MyHomesListEvent {
 
 enum class PendingVerification { Owner, Residency }
 
+/** A renter's residency document is a residency request, not an ownership one. */
 fun pendingVerificationFor(home: MyHome): PendingVerification? =
     if (home.accessKind != "verification") {
         null
-    } else if (home.ownershipStatus == "pending" || home.pendingClaimId != null) {
+    } else if (home.ownershipStatus == "pending" || home.hasPendingOwnershipClaim) {
         PendingVerification.Owner
     } else {
         PendingVerification.Residency
     }
 
 /**
- * An ownership claim is already filed for this Home. Its status lives in the
- * Waiting Room (which also offers "Update evidence"), not a blank upload.
+ * A claim (ownership, or a renter's residency document) is already filed for
+ * this Home. Its status lives in the Waiting Room (which also offers "Update
+ * evidence"), not a blank upload.
  */
 private fun showsClaimStatus(
     home: MyHome,
@@ -80,10 +82,11 @@ private fun myHomeChips(
                 RowChip("Private setup", PantopusIcon.Home, RowChip.Tint.Status(StatusChipVariant.Warning)),
             )
         }
-        // Ownership requests already say "Verification in progress".
-        if (home.accessKind != "verification" && home.pendingClaimId != null) {
+        // Requests already say "Verification in progress".
+        val review = home.pendingClaimReviewLabel
+        if (home.accessKind != "verification" && review != null) {
             add(
-                RowChip("Ownership in review", PantopusIcon.Clock, RowChip.Tint.Status(StatusChipVariant.Warning)),
+                RowChip(review, PantopusIcon.Clock, RowChip.Tint.Status(StatusChipVariant.Warning)),
             )
         }
         if (home.hasSharedAccess && home.ownershipStatus == "verified") {
@@ -109,18 +112,18 @@ private fun myHomeChips(
         }
     }
 
-/** A resident (e.g. address-verified by mail) whose ownership claim still waits. */
+/** A resident (e.g. address-verified by mail) whose ownership claim or residency document still waits. */
 private fun claimStatusFooter(
-    homeId: String,
+    home: MyHome,
     onClick: () -> Unit,
 ): RowFooter =
     RowFooter(
         listOf(
             RowFooterAction(
-                title = "Check ownership claim",
+                title = if (home.hasPendingOwnershipClaim) "Check ownership claim" else "Check residency status",
                 icon = PantopusIcon.ArrowRight,
                 variant = CompactButtonVariant.Ghost,
-                testTag = "myHomes.row_$homeId.claim",
+                testTag = "myHomes.row_${home.id}.claim",
                 onClick = onClick,
             ),
         ),
@@ -488,9 +491,9 @@ class MyHomesListViewModel
                 "private_setup" -> onOpenTasks?.invoke(home.id)
                 "verification" ->
                     when {
-                        pendingVerificationFor(home) != PendingVerification.Owner -> onVerifyResidency?.invoke(home.id)
                         showsClaimStatus(home, onOpenWaitingRoom) -> onOpenWaitingRoom?.invoke(home.id)
-                        else -> onUploadOwnershipEvidence?.invoke(home.id)
+                        pendingVerificationFor(home) == PendingVerification.Owner -> onUploadOwnershipEvidence?.invoke(home.id)
+                        else -> onVerifyResidency?.invoke(home.id)
                     }
             }
         }
@@ -538,7 +541,7 @@ class MyHomesListViewModel
                 wrapChips = true,
                 footer =
                     if (home.accessKind == "shared" && showsClaimStatus(home, onOpenWaitingRoom)) {
-                        claimStatusFooter(home.id) { if (current(revision)) onOpenWaitingRoom?.invoke(home.id) }
+                        claimStatusFooter(home) { if (current(revision)) onOpenWaitingRoom?.invoke(home.id) }
                     } else {
                         footerTitle?.let { homeFooter(home, it, revision) }
                     },

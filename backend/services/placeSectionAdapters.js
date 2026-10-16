@@ -856,13 +856,21 @@ async function composeCivicDistricts(home, { ballot = false } = {}) {
         : Promise.resolve(payload.representatives || []),
       governmentsPromise,
     ]);
+    // Ballot opt-in: who runs this state's elections, for the Civic page's
+    // Election block when Pantopus has no next date (reference data only).
+    const electionOffice = ballot ? ballotSummary.electionOfficeFor(home.state) : null;
 
     return [serializePlaceSection('civic_districts', {
       asOf: fetchedAt,
       status: stale ? 'stale' : 'ready',
       source: 'U.S. Census Bureau · unitedstates/congress-legislators · OpenStates',
       coverage: representatives.length ? 'full' : 'partial',
-      data: { districts: payload.districts, representatives, ...(governments ? { governments } : {}) },
+      data: {
+        districts: payload.districts,
+        representatives,
+        ...(governments ? { governments } : {}),
+        ...(electionOffice ? { election_office: electionOffice } : {}),
+      },
     })];
   } catch (err) {
     logger.warn('placeSections: civic_districts failed', { homeId: home.id, error: err.message });
@@ -892,8 +900,11 @@ const STATE_NAMES = {
 function electionMatchesState(election, stateAbbr) {
   const ocd = String(election.ocdDivisionId || '');
   if (ocd === 'ocd-division/country:us') return true; // national
-  const name = STATE_NAMES[String(stateAbbr || '').toUpperCase()];
-  return Boolean(name && ocd.includes(`state:${stateAbbr.toLowerCase()}`));
+  const code = String(stateAbbr || '').toUpperCase();
+  const name = STATE_NAMES[code];
+  // Washington, D.C.'s division is district:dc, not state:dc.
+  const division = code === 'DC' ? 'district:dc' : `state:${code.toLowerCase()}`;
+  return Boolean(name && ocd.includes(division));
 }
 
 // Ballot P0 (docs/ballot-implementation-plan-2026-09-24.md §5.2): for a
@@ -926,7 +937,7 @@ async function composeCivicElection(home, { ballot = false } = {}) {
   if (!apiKey) {
     return [serializePlaceSection('civic_election', {
       status: 'unavailable',
-      unavailableReason: 'Election data is not configured yet.',
+      unavailableReason: 'Pantopus doesn’t have your next election date yet.',
     })];
   }
   try {
@@ -952,7 +963,7 @@ async function composeCivicElection(home, { ballot = false } = {}) {
     if (!payload) {
       return [serializePlaceSection('civic_election', {
         status: 'unavailable',
-        unavailableReason: 'No upcoming election on the calendar for your area.',
+        unavailableReason: 'Pantopus doesn’t have your next election date yet.',
       })];
     }
     const daysUntil = Math.max(0, Math.ceil((Date.parse(payload.date) - Date.now()) / DAY_MS));

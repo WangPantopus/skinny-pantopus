@@ -142,7 +142,7 @@ private fun line1For(home: MyHome): String =
  */
 private fun subtitleFor(home: MyHome): String {
     if (home.accessKind == "verification") {
-        return if (home.pendingClaimId != null) "Ownership in review" else "Verification in progress"
+        return home.pendingClaimReviewLabel ?: "Verification in progress"
     }
     val verified =
         home.ownershipStatus.equals("verified", ignoreCase = true) ||
