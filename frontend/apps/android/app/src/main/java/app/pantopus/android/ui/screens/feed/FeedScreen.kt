@@ -50,6 +50,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -177,8 +178,9 @@ fun FeedScreen(
         }
     var showsSearch by remember { mutableStateOf(false) }
     var showsIntentPicker by remember { mutableStateOf(false) }
-    // List / Map segment — mirrors RN `FeedHeader.tsx:35-52`.
-    var viewMode by remember { mutableStateOf(FeedViewMode.List) }
+    // List / Map segment — mirrors RN `FeedHeader.tsx:35-52`. Saved, so coming back from a post opened on the map (or
+    // an activity recreation) shows the map again, as on iOS.
+    var viewMode by rememberSaveable { mutableStateOf(FeedViewMode.List) }
     // The quiet-state card belongs to the Nearby posts, not the Connections surface.
     val topCard = quietStateCard?.takeIf { activeSurface == FeedSurface.Pulse }
     // A pull or a retry on the Nearby posts reads the quiet-state card's meter again too, as the Nearby tab's pull did.
