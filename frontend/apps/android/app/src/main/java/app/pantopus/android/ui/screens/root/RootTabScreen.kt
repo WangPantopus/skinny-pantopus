@@ -3129,6 +3129,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onBack = { navController.popBackStack() },
                         // A locked section's "Verify address" opens the dashboard's verify sheet and its real flows.
                         onStartVerify = { method -> navController.openPlaceVerify(method, homeId) },
+                        onOpenVerificationStatus = { navController.navigate(ChildRoutes.waitingRoom(homeId)) },
                     )
                 }
                 composable(
@@ -7219,6 +7220,8 @@ private fun PlaceDashboardDestination(
         onAddPlace = { navController.navigate(ChildRoutes.ADD_HOME) },
         // Wedge v2 D3: each door is a real flow, never a status mock-up.
         onStartVerify = { method, _ -> navController.openPlaceVerify(method, homeId) },
+        // A residency document already in review: its status, not a second upload.
+        onOpenVerificationStatus = { navController.navigate(ChildRoutes.waitingRoom(homeId)) },
         onOpenPulse = { navController.navigate(ChildRoutes.placePulse(homeId)) },
         onComposeMessage = { address -> navController.navigate(ChildRoutes.neighborCompose(homeId, address)) },
         onOpenInbox = { navController.navigate(ChildRoutes.NEIGHBOR_INBOX) },

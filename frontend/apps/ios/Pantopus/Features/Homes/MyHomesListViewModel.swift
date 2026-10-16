@@ -229,9 +229,10 @@ final class MyHomesListViewModel: ListOfRowsDataSource {
     }
 
     enum PendingVerification: Equatable { case owner, residency }
+    /// A renter's residency document is a residency request, not an ownership one.
     static func pendingVerification(for entry: MyHome) -> PendingVerification? {
         guard entry.accessKind == "verification" else { return nil }
-        return entry.ownershipStatus == "pending" || entry.pendingClaimId != nil ? .owner : .residency
+        return entry.ownershipStatus == "pending" || entry.hasPendingOwnershipClaim ? .owner : .residency
     }
 
     private func open(_ entry: MyHome, revision: Int) {
@@ -240,7 +241,7 @@ final class MyHomesListViewModel: ListOfRowsDataSource {
         case "shared": onOpenHome(entry.id)
         case "private_setup": onOpenTasks?(entry.id)
         case "verification":
-            if Self.pendingVerification(for: entry) == .owner, showsClaimStatus(entry) {
+            if showsClaimStatus(entry) {
                 onOpenWaitingRoom?(entry.id)
             } else if Self.pendingVerification(for: entry) == .owner {
                 onUploadOwnershipEvidence?(entry.id)
@@ -261,9 +262,9 @@ final class MyHomesListViewModel: ListOfRowsDataSource {
         let subtitle = [unit, roleLabel(for: entry), locality].compactMap { $0 }.joined(separator: " · ")
         var chips: [RowChip] = []
         if entry.accessKind == "private_setup" { chips.append(.init(text: "Private setup", icon: .home, tint: .status(.warning))) }
-        // Ownership requests already say "Verification in progress".
-        if entry.accessKind != "verification", entry.pendingClaimId != nil {
-            chips.append(.init(text: "Ownership in review", icon: .clock, tint: .status(.warning)))
+        // Requests already say "Verification in progress".
+        if entry.accessKind != "verification", let review = entry.pendingClaimReviewLabel {
+            chips.append(.init(text: review, icon: .clock, tint: .status(.warning)))
         }
         if entry.hasSharedAccess, entry.ownershipStatus == "verified" { chips.append(.init(
             text: "Ownership verified",
@@ -348,17 +349,18 @@ final class MyHomesListViewModel: ListOfRowsDataSource {
 // MARK: - Row footers
 
 extension MyHomesListViewModel {
-    /// An ownership claim is already filed for this Home. Its status lives in
-    /// the Waiting Room (which also offers "Update evidence"), not a blank upload.
+    /// A claim (ownership, or a renter's residency document) is already filed
+    /// for this Home. Its status lives in the Waiting Room (which also offers
+    /// "Update evidence"), not a blank upload.
     private func showsClaimStatus(_ entry: MyHome) -> Bool {
         entry.pendingClaimId != nil && onOpenWaitingRoom != nil
     }
 
     private func footer(for entry: MyHome, pending: PendingVerification?, revision: Int) -> RowFooter? {
-        // A resident (e.g. address-verified by mail) whose ownership claim still waits.
+        // A resident (e.g. address-verified by mail) whose ownership claim or residency document still waits.
         if entry.accessKind == "shared", showsClaimStatus(entry) {
             let action = RowFooterAction(
-                title: "Check ownership claim",
+                title: entry.hasPendingOwnershipClaim ? "Check ownership claim" : "Check residency status",
                 icon: .arrowRight,
                 variant: .ghost,
                 identifier: "myHomes.row_\(entry.id).claim"

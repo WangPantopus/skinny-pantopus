@@ -57,6 +57,8 @@ final class PlaceDashboardViewModel {
     let onDefaultHomeChanged: () -> Void
     /// Begin verification with the chosen method + address (pushes B2).
     let onStartVerify: (PlaceVerifyMethod, String) -> Void
+    /// The status of a residency document already in review (the Waiting Room).
+    let onOpenVerificationStatus: () -> Void
     /// W7 — compose a verified-neighbor heads-up (carries the address for
     /// the composer header). Surfaced only for verified (T4) residents.
     let onComposeMessage: (String) -> Void
@@ -82,6 +84,7 @@ final class PlaceDashboardViewModel {
         onManageHomes: @escaping () -> Void = {},
         onDefaultHomeChanged: @escaping () -> Void = {},
         onStartVerify: @escaping (PlaceVerifyMethod, String) -> Void = { _, _ in },
+        onOpenVerificationStatus: @escaping () -> Void = {},
         onComposeMessage: @escaping (String) -> Void = { _ in },
         onOpenInbox: @escaping () -> Void = {},
         onOpenPrivacyMirror: @escaping () -> Void = {},
@@ -99,6 +102,7 @@ final class PlaceDashboardViewModel {
         self.onManageHomes = onManageHomes
         self.onDefaultHomeChanged = onDefaultHomeChanged
         self.onStartVerify = onStartVerify
+        self.onOpenVerificationStatus = onOpenVerificationStatus
         self.onComposeMessage = onComposeMessage
         self.onOpenInbox = onOpenInbox
         self.onOpenPrivacyMirror = onOpenPrivacyMirror

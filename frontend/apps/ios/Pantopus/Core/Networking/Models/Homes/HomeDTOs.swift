@@ -76,6 +76,9 @@ public struct MyHome: Decodable, Sendable, Hashable, Identifiable {
     public let verificationTier: String?
     public let isPrimaryOwner: Bool?
     public let pendingClaimId: String?
+    /// The pending claim's kind: "resident" (a renter's residency document) or
+    /// "owner". Older servers don't send it; nil reads as ownership, as before.
+    public let pendingClaimType: String?
     /// Parsed PostGIS point from `GET /api/homes/my-homes`.
     public let location: HomeLocation?
     /// Current server-computed deletion eligibility, including explicit denies,
@@ -91,6 +94,17 @@ public struct MyHome: Decodable, Sendable, Hashable, Identifiable {
 
     public var hasSharedAccess: Bool {
         accessKind == "shared" && hasHomeAccess == true
+    }
+
+    /// An ownership claim is filed here (not a renter's residency document).
+    public var hasPendingOwnershipClaim: Bool {
+        pendingClaimId != nil && pendingClaimType != "resident"
+    }
+
+    /// What a filed claim waits on, by its kind; nil with no claim.
+    public var pendingClaimReviewLabel: String? {
+        guard pendingClaimId != nil else { return nil }
+        return hasPendingOwnershipClaim ? "Ownership in review" : "Residency in review"
     }
 
     public var hasValidListContext: Bool {
@@ -132,6 +146,7 @@ public struct MyHome: Decodable, Sendable, Hashable, Identifiable {
         verificationTier = try container.decodeIfPresent(String.self, forKey: .verificationTier)
         isPrimaryOwner = try container.decodeIfPresent(Bool.self, forKey: .isPrimaryOwner)
         pendingClaimId = try container.decodeIfPresent(String.self, forKey: .pendingClaimId)
+        pendingClaimType = try container.decodeIfPresent(String.self, forKey: .pendingClaimType)
         location = try container.decodeIfPresent(HomeLocation.self, forKey: .location)
         canDeleteHome = try container.decodeIfPresent(Bool.self, forKey: .canDeleteHome)
         isDefault = try container.decodeIfPresent(Bool.self, forKey: .isDefault)
@@ -144,6 +159,7 @@ public struct MyHome: Decodable, Sendable, Hashable, Identifiable {
         case verificationTier = "verification_tier"
         case isPrimaryOwner = "is_primary_owner"
         case pendingClaimId = "pending_claim_id"
+        case pendingClaimType = "pending_claim_type"
         case location
         case canDeleteHome = "can_delete_home"
         case isDefault = "is_default"

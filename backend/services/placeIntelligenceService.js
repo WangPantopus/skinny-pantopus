@@ -119,14 +119,15 @@ function sectionApplies(id, viewer) {
 }
 
 // The viewer's own pending ownership of this Home (a pending owner row or an
-// ownership claim still in progress). A failed read counts as none.
+// ownership claim still in progress). A renter's residency document is not
+// one: it never makes them an owner. A failed read counts as none.
 async function hasPendingOwnership(homeId, userId) {
   try {
     const [owners, claims] = await Promise.all([
       supabaseAdmin.from('HomeOwner').select('id').eq('home_id', homeId).eq('subject_type', 'user')
         .eq('subject_id', userId).eq('owner_status', 'pending').limit(1),
       supabaseAdmin.from('HomeOwnershipClaim').select('id, state, claim_phase_v2, merged_into_claim_id')
-        .eq('home_id', homeId).eq('claimant_user_id', userId),
+        .eq('home_id', homeId).eq('claimant_user_id', userId).neq('claim_type', 'resident'),
     ]);
     if ((owners.data || []).length) return true;
     return (claims.data || []).some((claim) => (claimsConfig.flags.v2ReadPaths
@@ -768,6 +769,23 @@ async function composeDensity(home) {
   }
 }
 
+// Where the your_home facts came from, said plainly: the household's own
+// entries are never labeled as county records. Profiles cached before
+// `county_record` existed keep the default label.
+function yourHomeProvenance(profile) {
+  if (profile.source === 'fallback') return { source: 'Details you entered', coverage: 'partial' };
+  const ownFacts = Array.isArray(profile.household_fields) && profile.household_fields.length > 0;
+  if (profile.county_record === false) {
+    // ATTOM answered with a value model or the ZIP trend only.
+    return {
+      source: ownFacts ? 'Details you entered · value estimate from ATTOM' : 'Value estimate · ATTOM',
+      coverage: 'partial',
+    };
+  }
+  if (ownFacts) return { source: 'County records · ATTOM, with details you entered', coverage: 'partial' };
+  return {};
+}
+
 async function composeYourHome(home, tier) {
   const access = bandAccess('B', tier);
   if (access === 'locked') {
@@ -777,11 +795,12 @@ async function composeYourHome(home, tier) {
     })];
   }
   // Band B is ATTOM-paid — without a key there is no exact data (area teaser only).
+  // The gap is ours, not the area's, so the copy doesn't blame the area.
   if (!process.env.ATTOM_API_KEY) {
     return [serializePlaceSection('your_home', {
       access,
       status: 'unavailable',
-      unavailableReason: "Exact property details aren't available for your area yet.",
+      unavailableReason: "We can't read county property records yet, so exact details and value aren't shown here.",
     })];
   }
 
@@ -803,6 +822,7 @@ async function composeYourHome(home, tier) {
     // 'cache_stale' = ATTOM was unreachable and an expired row served
     // instead (database-first resilience) — surfaced as a stale envelope.
     status: result.source === 'cache_stale' ? 'stale' : 'ready',
+    ...yourHomeProvenance(profile),
     data: {
       year_built: profile.year_built ?? null,
       sqft: profile.sqft ?? null,
