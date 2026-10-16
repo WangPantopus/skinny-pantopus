@@ -108,19 +108,21 @@ public final class WaitingRoomViewModel {
             claimIsResidency = claim.claimType == "resident"
             guard claim.status == Self.underReviewStatus else {
                 if Self.approvedStatuses.contains(claim.status) {
-                    // A18.2 "You're the owner". Dates come straight off the
+                    // A18.2 "You're the owner" (a verified resident for a
+                    // residency document). Dates come straight off the
                     // claim row — never the design's sample dates.
                     let approvedAddress = await homeContext(claimed: claim.home).address
                     let approvedContent = StatusWaitingContent.claimSubmitted(
                         homeName: approvedAddress,
                         approved: true,
                         submittedOn: Self.dayCaption(claim.createdAt),
-                        decidedOn: Self.dayCaption(claim.updatedAt)
+                        decidedOn: Self.dayCaption(claim.updatedAt),
+                        residency: claimIsResidency
                     )
                     phase = .approved(approvedContent)
                     return
                 }
-                phase = .notice(.claimDecided)
+                phase = .notice(claimIsResidency ? .residencyClaimDecided : .claimDecided)
                 return
             }
             let ref = String(claim.id.prefix(Self.claimRefLength)).uppercased()
@@ -140,7 +142,8 @@ public final class WaitingRoomViewModel {
                         submittedOn: Self.dayCaption(claim.createdAt),
                         reviewCaption: nil,
                         needsDocuments: claim.hasEvidence == false,
-                        addressVerified: home.addressVerified
+                        addressVerified: home.addressVerified,
+                        residency: claimIsResidency
                     )
             phase = .loaded
         } catch {

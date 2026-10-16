@@ -94,10 +94,11 @@ public struct WaitingRoomNotice: Sendable, Hashable {
         isRetry: true
     )
 
-    /// No claim row for this home — the manage actions would be no-ops.
+    /// No claim row for this home — the manage actions would be no-ops. With
+    /// no claim there is no kind to name, so the copy fits ownership and residency.
     public static let noClaim = WaitingRoomNotice(
         headline: "No claim in review",
-        body: "We couldn't find an ownership claim for this home.",
+        body: "We couldn't find a claim for this home.",
         ctaLabel: "Back to home",
         isRetry: false
     )
@@ -107,6 +108,16 @@ public struct WaitingRoomNotice: Sendable, Hashable {
     public static let claimDecided = WaitingRoomNotice(
         headline: "This claim isn't in review",
         body: "Your ownership claim has been decided. Check My Claims for the outcome.",
+        ctaLabel: "Back to home",
+        isRetry: false
+    )
+
+    /// `claimDecided` for a renter's residency document. Usually the renter
+    /// withdrew it (document approval waits on identity confirmation), so it
+    /// says closed rather than decided.
+    public static let residencyClaimDecided = WaitingRoomNotice(
+        headline: "This claim isn't in review",
+        body: "Your residency claim is closed. Check My Claims for the outcome.",
         ctaLabel: "Back to home",
         isRetry: false
     )
@@ -233,19 +244,24 @@ public extension WaitingRoomContent {
     /// "We'll notify you when it's decided" pill (no review time is promised).
     /// A claim started from Add Home has no documents yet (`needsDocuments`),
     /// so the room asks for them instead. Mail verification is offered until
-    /// the person's address is verified.
+    /// the person's address is verified. `residency` marks a renter's
+    /// residency document, which asks for a lease or utility bill instead.
     static func active(
         address: String = sampleAddress,
         claimRef: String = sampleClaimRef,
         submittedOn: String? = "Oct 24",
         reviewCaption: String? = "Started 9h ago",
         needsDocuments: Bool = false,
-        addressVerified: Bool = false
+        addressVerified: Bool = false,
+        residency: Bool = false
     ) -> WaitingRoomContent {
-        // A person reviews ownership documents (no county-records check), and no
+        // A person reviews the documents (no county-records check), and no
         // review time is promised while identity confirmation is undecided.
+        let requested = residency
+            ? "Upload a lease or utility bill with your name and this address so a Pantopus reviewer can check that you live here."
+            : "Upload a deed, closing disclosure or property tax bill so a Pantopus reviewer can check ownership."
         let wait = needsDocuments
-            ? "Upload a deed, closing disclosure or property tax bill so a Pantopus reviewer can check ownership."
+            ? requested
             : "Your documents are waiting for a Pantopus reviewer."
         let meanwhile = addressVerified
             ? "Your address is verified, so you can use your Home meanwhile."

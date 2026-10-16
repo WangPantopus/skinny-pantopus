@@ -231,11 +231,14 @@ public extension StatusWaitingContent {
     /// purpose**: the design frames show sample dates, but the app must never
     /// print a date it can't source from the API, so a nil argument drops the
     /// caption (and the date fragment of the pill) rather than inventing one.
+    /// `residency` marks a renter's residency document: approval makes them a
+    /// verified resident (`lease_resident`), never the owner.
     static func claimSubmitted(
         homeName: String?,
         approved: Bool = false,
         submittedOn: String? = nil,
-        decidedOn: String? = nil
+        decidedOn: String? = nil,
+        residency: Bool = false
     ) -> StatusWaitingContent {
         let chip = homeName?.isEmpty == false ? homeName : nil
         let submittedCaption = submittedOn?.isEmpty == false ? submittedOn : nil
@@ -243,8 +246,10 @@ public extension StatusWaitingContent {
         if approved {
             return StatusWaitingContent(
                 halo: StatusHalo(tone: .success, icon: .badgeCheck),
-                headline: "You're the owner",
-                subcopy: "Your ownership claim was approved. The Home badge now shows on your profile and household.",
+                headline: residency ? "You're a verified resident" : "You're the owner",
+                subcopy: residency
+                    ? "Your residency claim was approved. You now have resident access to this Home."
+                    : "Your ownership claim was approved. The Home badge now shows on your profile and household.",
                 addressChip: chip,
                 statusPill: StatusWaitingPill(
                     text: decidedCaption.map { "Approved · \($0)" } ?? "Approved",

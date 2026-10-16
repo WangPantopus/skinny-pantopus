@@ -134,7 +134,8 @@ class WaitingRoomViewModel
             claimIsResidency = claim.claimType == "resident"
             if (claim.status != UNDER_REVIEW_STATUS) {
                 if (claim.status in APPROVED_STATUSES) {
-                    // A18.2 "You're the owner". Dates come straight off the
+                    // A18.2 "You're the owner" (a verified resident for a
+                    // residency document). Dates come straight off the
                     // claim row — never the design's sample dates.
                     _phase.value =
                         WaitingRoomPhase.Approved(
@@ -143,11 +144,15 @@ class WaitingRoomViewModel
                                 approved = true,
                                 submittedOn = dayCaption(claim.createdAt),
                                 decidedOn = dayCaption(claim.updatedAt),
+                                residency = claimIsResidency,
                             ),
                         )
                     return
                 }
-                _phase.value = WaitingRoomPhase.Notice(WaitingRoomNotice.ClaimDecided)
+                _phase.value =
+                    WaitingRoomPhase.Notice(
+                        if (claimIsResidency) WaitingRoomNotice.ResidencyClaimDecided else WaitingRoomNotice.ClaimDecided,
+                    )
                 return
             }
             val ref = claim.id.take(CLAIM_REF_LENGTH).uppercase()
@@ -167,6 +172,7 @@ class WaitingRoomViewModel
                         reviewCaption = null,
                         needsDocuments = claim.hasEvidence == false,
                         addressVerified = home.addressVerified,
+                        residency = claimIsResidency,
                     )
                 }
             _phase.value = WaitingRoomPhase.Loaded
