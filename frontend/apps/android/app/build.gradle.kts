@@ -48,6 +48,20 @@ val sentryDsn = envOr("SENTRY_DSN", "")
 val pantopusEnvDebug = envOr("PANTOPUS_ENV", "local")
 val pantopusEnvRelease = envOr("PANTOPUS_ENV", "production")
 
+// The commit being built, empty outside a git checkout. Local builds all keep versionCode 1 and 1.0.0 (only Play uploads
+// get new ones), so the screens' saved copies use it to tell builds apart (data/store/SavedCopies.kt).
+val gitCommit =
+    runCatching {
+        providers
+            .exec {
+                commandLine("git", "rev-parse", "HEAD")
+                workingDir = projectDir
+                isIgnoreExitValue = true
+            }.standardOutput.asText
+            .get()
+            .trim()
+    }.getOrDefault("")
+
 android {
     namespace = "app.pantopus.android"
     // Google Play requires new apps and updates to target Android 16 (API 36)
@@ -60,8 +74,10 @@ android {
         applicationId = "app.pantopus.android"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0.0"
+        // Play refuses a versionCode it already has, so fastlane's `beta` lane passes the next free one and the
+        // android-vX.Y.Z tag's version name (fastlane/Fastfile). Every other build keeps 1 and 1.0.0.
+        versionCode = providers.gradleProperty("pantopus.versionCode").orNull?.toInt() ?: 1
+        versionName = providers.gradleProperty("pantopus.versionName").orNull ?: "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
@@ -76,6 +92,7 @@ android {
         buildConfigField("String", "STRIPE_PUBLISHABLE_KEY", "\"$stripeKey\"")
         buildConfigField("String", "SENTRY_DSN", "\"$sentryDsn\"")
         buildConfigField("String", "PANTOPUS_ENV", "\"$pantopusEnvDebug\"")
+        buildConfigField("String", "GIT_COMMIT", "\"$gitCommit\"")
 
         // PostHog product analytics — matches iOS. Empty key disables the
         // vendor (analytics no-ops in dev / CI); host defaults to EU Cloud.

@@ -21,8 +21,11 @@ const val SAVED_PAGES_MAX_BYTES = 20L * 1024 * 1024
 /** …and nothing older than 7 days is read (a saved household copy is shown for at most 7 days, contract §5). */
 private const val MAX_AGE_MS = 7L * 24 * 60 * 60 * 1000
 
-/** The envelope's format. A file written in another format is deleted instead of read. */
-private const val SCHEMA = 2
+/**
+ * The envelope's format. A file written in another format is deleted instead of read. 3: Place copies keep their Ballot
+ * fields; a schema-2 copy lost them, and revalidating it with its ETag (a 304) would keep showing it without them.
+ */
+private const val SCHEMA = 3
 
 /**
  * The screens' store on the phone (Instant Screens contract §6 "Saved copy", §5 "At rest on Android"): one file per
@@ -45,7 +48,13 @@ class SavedCopies
         constructor(
             @ApplicationContext context: Context,
             moshi: Moshi,
-        ) : this(File(context.cacheDir, "screen-store"), moshi, "${BuildConfig.VERSION_NAME}+${BuildConfig.VERSION_CODE}")
+        ) : this(
+            File(context.cacheDir, "screen-store"),
+            moshi,
+            // Version name and code stay the same between builds; the commit doesn't. An older build's copy may lack
+            // fields this build reads, and revalidating it (a 304) would keep it.
+            "${BuildConfig.VERSION_NAME}+${BuildConfig.VERSION_CODE}+${BuildConfig.GIT_COMMIT}",
+        )
 
         private val envelopes = moshi.adapter(Envelope::class.java)
 

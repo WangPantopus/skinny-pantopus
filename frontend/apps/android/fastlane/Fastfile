@@ -19,14 +19,17 @@ platform :android do
   end
 
   desc "Assemble a signed release AAB"
-  lane :build_release do
+  lane :build_release do |options|
+    # fastlane runs actions from frontend/apps/android, the Gradle project itself.
     gradle(
       task: "bundleRelease",
-      project_dir: "..",
       properties: {
         # Fail the build if prod config (https URL + pk_live_ key) is missing,
         # so a release artifact can never ship localhost/test values.
         "pantopus.requireProdConfig" => "true",
+        # `beta` passes these; without them the AAB keeps app/build.gradle.kts's 1 and 1.0.0.
+        "pantopus.versionCode" => options[:version_code]&.to_s,
+        "pantopus.versionName" => options[:version_name],
         "android.injected.signing.store.file" => ENV["PANTOPUS_KEYSTORE_FILE"],
         "android.injected.signing.store.password" => ENV["PANTOPUS_KEYSTORE_PASSWORD"],
         "android.injected.signing.key.alias" => ENV["PANTOPUS_KEY_ALIAS"],
@@ -37,11 +40,22 @@ platform :android do
 
   desc "Upload the AAB to the Play Internal track"
   lane :beta do
-    build_release
+    # Play refuses a versionCode it has seen before. Use one more than the highest
+    # code on Play's tracks, or than this GitHub run's number if that is higher: a
+    # discarded draft's code is gone from the tracks but stays taken, and the run
+    # number moves past it. (The iOS lane takes TestFlight's latest build + 1.)
+    play_codes = %w[internal alpha beta production].flat_map do |track|
+      google_play_track_version_codes(track: track, package_name: PACKAGE_NAME, json_key: JSON_KEY_PATH)
+    end
+    version_code = [*play_codes, ENV["GITHUB_RUN_NUMBER"].to_i].max + 1
+    # A run on the android-v1.2.3 tag names the build 1.2.3.
+    version_name = ENV["GITHUB_REF_NAME"].to_s[/\Aandroid-v(.+)\z/, 1] if ENV["GITHUB_REF_TYPE"] == "tag"
+    UI.message("versionCode #{version_code}, versionName #{version_name || 'from app/build.gradle.kts'}")
+    build_release(version_code: version_code, version_name: version_name)
     upload_to_play_store(
       track: "internal",
       package_name: PACKAGE_NAME,
-      aab: "../app/build/outputs/bundle/release/app-release.aab",
+      aab: "app/build/outputs/bundle/release/app-release.aab",
       json_key: JSON_KEY_PATH,
       release_status: "draft",
       skip_upload_metadata: true,
