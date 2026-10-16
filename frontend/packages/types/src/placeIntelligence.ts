@@ -736,6 +736,17 @@ export interface PlaceCivicDistrictsData {
   governments?: BallotGovernments | null;
   /** Ballot P0: who runs the state's elections, all year (reference data). */
   election_office?: BallotElectionOffice | null;
+  /** The county's, town's and city's official websites (no officials: no national source). */
+  local_governments?: PlaceLocalGovernment[];
+}
+
+/** A local government's official website (Census Government Units listing, Wikidata). */
+export interface PlaceLocalGovernment {
+  level: 'county' | 'town' | 'city';
+  name: string;
+  url: string;
+  /** The site's host, shown under the name: "traviscountytx.gov". */
+  host: string;
 }
 
 export interface PlaceBallotRace {
@@ -811,7 +822,7 @@ export interface BallotElectionOffice {
   name: string;
   /** The office as it reads in a sentence: "the Texas Secretary of State". */
   phrase: string;
-  /** "Until then, the Texas Secretary of State and your county election office have upcoming election dates." */
+  /** "Until then, the Texas Secretary of State and your local election office have upcoming election dates." */
   note?: string | null;
   links: BallotOfficialLink[];
 }
