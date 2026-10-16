@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
+import app.pantopus.android.data.network.NetworkMonitor
 import app.pantopus.android.data.wallet.WalletRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,9 +31,12 @@ class WalletActivityListViewModel
     @Inject
     constructor(
         private val repository: WalletRepository,
+        networkMonitor: NetworkMonitor,
     ) : ViewModel() {
         private val _state = MutableStateFlow<WalletActivityListUiState>(WalletActivityListUiState.Loading)
         val state: StateFlow<WalletActivityListUiState> = _state.asStateFlow()
+
+        val isOnline: StateFlow<Boolean> = networkMonitor.isOnline
 
         val title: String = "Activity"
 
