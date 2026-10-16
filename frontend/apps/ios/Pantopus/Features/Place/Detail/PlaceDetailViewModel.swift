@@ -36,6 +36,8 @@ final class PlaceDetailViewModel {
     let group: PlaceDetailGroup
     /// The host's real verification flows (the dashboard's verify sheet doors).
     let onStartVerify: ((PlaceVerifyMethod) -> Void)?
+    /// The status of a residency document already in review (the Waiting Room).
+    let onOpenVerificationStatus: (() -> Void)?
     /// A locked section's "Verify address" shows the verify sheet.
     var showVerify = false
 
@@ -50,7 +52,8 @@ final class PlaceDetailViewModel {
         group: PlaceDetailGroup,
         api: APIClient = .shared,
         savedPlaceId: String? = nil,
-        onStartVerify: ((PlaceVerifyMethod) -> Void)? = nil
+        onStartVerify: ((PlaceVerifyMethod) -> Void)? = nil,
+        onOpenVerificationStatus: (() -> Void)? = nil
     ) {
         self.homeId = homeId
         self.savedPlaceId = savedPlaceId
@@ -58,6 +61,7 @@ final class PlaceDetailViewModel {
         self.api = api
         sessionScope = HomeClaimSessionScope(api: api)
         self.onStartVerify = onStartVerify
+        self.onOpenVerificationStatus = onOpenVerificationStatus
     }
 
     /// Guests and service providers can't verify this address (server `verify_available`).

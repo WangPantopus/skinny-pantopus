@@ -401,28 +401,34 @@ export default function AdminReviewClaimsPage() {
               ) : (
                 <div className="space-y-2">
                   {claimDetail.evidence.map((ev: EvidenceItem) => (
-                    <div key={ev.id} className="flex items-center gap-3 bg-app-surface border border-app-border rounded-xl p-3">
-                      <div className="w-10 h-10 rounded-lg bg-violet-100 flex items-center justify-center flex-shrink-0">
-                        {ev.mime_type?.startsWith('image/') ? <ImageIcon className="w-5 h-5 text-violet-600" /> : <FileText className="w-5 h-5 text-violet-600" />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-app-text">{EVIDENCE_LABELS[ev.evidence_type] || ev.evidence_type}</p>
-                        <p className="text-xs text-app-text-secondary truncate">{ev.file_name || 'Document'}</p>
-                        <p className="text-xs text-app-text-secondary">
-                          {ev.availability_code === 'CLAIM_EVIDENCE_PRIVATE_REUPLOAD_REQUIRED'
-                            ? 'A private copy must be uploaded before review.'
-                            : ev.eligible_for_review ? 'Verified evidence' : 'Pending verification'}
-                        </p>
-                        {ev.file_size && <p className="text-[11px] text-app-text-muted">{(ev.file_size / 1024).toFixed(0)} KB &middot; {formatDate(ev.created_at)}</p>}
+                    // The details keep their own row; the document and its review open below them at full width,
+                    // so an open preview never squeezes the type, file name, size and date.
+                    <div key={ev.id} className="bg-app-surface border border-app-border rounded-xl p-3 space-y-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-violet-100 flex items-center justify-center flex-shrink-0">
+                          {ev.mime_type?.startsWith('image/') ? <ImageIcon className="w-5 h-5 text-violet-600" /> : <FileText className="w-5 h-5 text-violet-600" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-app-text">{EVIDENCE_LABELS[ev.evidence_type] || ev.evidence_type}</p>
+                          <p className="text-xs text-app-text-secondary truncate" title={ev.file_name || undefined}>{ev.file_name || 'Document'}</p>
+                          <p className="text-xs text-app-text-secondary">
+                            {ev.availability_code === 'CLAIM_EVIDENCE_PRIVATE_REUPLOAD_REQUIRED'
+                              ? 'A private copy must be uploaded before review.'
+                              : ev.eligible_for_review ? 'Verified evidence' : 'Pending verification'}
+                          </p>
+                          {ev.file_size && <p className="text-[11px] text-app-text-muted">{(ev.file_size / 1024).toFixed(0)} KB &middot; {formatDate(ev.created_at)}</p>}
+                        </div>
                       </div>
                       {ev.available === true && claimDetail.claim_session && (
-                        <ClaimEvidenceReview key={`${ev.id}:${claimDetail.claim.review_token}`}
-                          scope={claimDetail.claim_session} evidenceId={ev.id} reviewToken={claimDetail.claim.review_token} platformAdmin alreadyVerified={ev.eligible_for_review === true}
-                          onVerified={async () => {
-                            const request = detailGeneration.current;
-                            const refreshed = await api.admin.getClaimDetail(claimDetail.claim.id, claimDetail.claim_session.session_scope);
-                            if (request === detailGeneration.current) setClaimDetail(refreshed);
-                          }} />
+                        <div className="min-w-0">
+                          <ClaimEvidenceReview key={`${ev.id}:${claimDetail.claim.review_token}`}
+                            scope={claimDetail.claim_session} evidenceId={ev.id} reviewToken={claimDetail.claim.review_token} platformAdmin alreadyVerified={ev.eligible_for_review === true}
+                            onVerified={async () => {
+                              const request = detailGeneration.current;
+                              const refreshed = await api.admin.getClaimDetail(claimDetail.claim.id, claimDetail.claim_session.session_scope);
+                              if (request === detailGeneration.current) setClaimDetail(refreshed);
+                            }} />
+                        </div>
                       )}
                     </div>
                   ))}

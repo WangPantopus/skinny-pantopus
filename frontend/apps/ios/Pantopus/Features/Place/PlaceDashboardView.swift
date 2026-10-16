@@ -142,7 +142,11 @@ struct PlaceDashboardView: View {
                     showVerify = false
                     viewModel.onStartVerify(method, verifyAddress)
                 },
-                onClose: { showVerify = false }
+                onClose: { showVerify = false },
+                onOpenDocumentStatus: {
+                    showVerify = false
+                    viewModel.onOpenVerificationStatus()
+                }
             )
             .presentationDetents([.large])
             .presentationDragIndicator(.hidden)

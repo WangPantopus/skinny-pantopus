@@ -92,12 +92,17 @@ struct PlaceVerifySheet: View {
     var homeId: String?
     var onStart: (PlaceVerifyMethod) -> Void
     var onClose: () -> Void
+    /// Opens the status of a residency document already in review (the Waiting Room).
+    var onOpenDocumentStatus: (() -> Void)?
 
     /// Mail leads: a postcard finishes on its own, while documents wait for a person to review them.
     @State private var selected: PlaceVerifyMethod = .mail
     /// A landlord request can only be answered by a verified landlord, so that
     /// door joins once the Home has one (or the person already has a request).
     @State private var doors: [PlaceVerifyMethod] = [.mail, .document]
+    /// A residency document the person sent waits on a reviewer: the document
+    /// door says so instead of offering another upload.
+    @State private var documentInReview = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -118,6 +123,7 @@ struct PlaceVerifySheet: View {
         .padding(.bottom, 30)
         .background(Theme.Color.appSurface)
         .task(id: homeId) { await loadLandlordDoor() }
+        .task(id: homeId) { await loadDocumentReview() }
     }
 
     private func loadLandlordDoor() async {
@@ -127,6 +133,23 @@ struct PlaceVerifySheet: View {
             TenantEndpoints.homeStatus(homeId: homeId)
         ), status.matches(homeId: homeId), status.offersLandlordConfirmation else { return }
         doors = [.mail, .document, .landlord]
+    }
+
+    /// The person's own claims, as the Waiting Room reads them: a residency
+    /// document for this Home that is under review (a claim with no document
+    /// yet isn't). An unreadable list keeps the upload door.
+    private func loadDocumentReview() async {
+        guard let homeId else { return }
+        guard let response: MyOwnershipClaimsResponse = try? await APIClient.shared.request(
+            HomesEndpoints.myOwnershipClaims()
+        ) else { return }
+        let inReview = response.claims.contains { claim in
+            claim.homeId.caseInsensitiveCompare(homeId) == .orderedSame && claim.claimType == "resident"
+                && claim.status == "under_review" && claim.hasEvidence != false
+        }
+        guard inReview else { return }
+        documentInReview = true
+        if selected == .document { selected = .mail }
     }
 
     private var header: some View {
@@ -176,23 +199,45 @@ struct PlaceVerifySheet: View {
             overline("Choose how")
             VStack(spacing: 0) {
                 ForEach(Array(doors.enumerated()), id: \.offset) { index, m in
-                    Button { selected = m } label: {
-                        row(
-                            icon: m.icon,
-                            label: m.label,
-                            sub: m.sub,
-                            tone: .sky,
-                            trailing: AnyView(radio(selected: selected == m))
-                        )
+                    if m == .document, documentInReview {
+                        documentReviewRow
+                    } else {
+                        Button { selected = m } label: {
+                            row(
+                                icon: m.icon,
+                                label: m.label,
+                                sub: m.sub,
+                                tone: .sky,
+                                trailing: AnyView(radio(selected: selected == m))
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        // A radio choice, so VoiceOver says which method is selected.
+                        .accessibilityAddTraits(selected == m ? .isSelected : [])
                     }
-                    .buttonStyle(.plain)
-                    // A radio choice, so VoiceOver says which method is selected.
-                    .accessibilityAddTraits(selected == m ? .isSelected : [])
                     if index < doors.count - 1 { divider }
                 }
             }
             .placeCard()
         }
+    }
+
+    /// The document door while the person's residency document waits on a
+    /// reviewer: where it stands and the way to its status, not a second upload.
+    private var documentReviewRow: some View {
+        Button { onOpenDocumentStatus?() } label: {
+            row(
+                icon: .hourglass,
+                label: "Document under review",
+                sub: "A person is reviewing your document. You'll get a notification when it's decided.",
+                tone: .muted,
+                trailing: onOpenDocumentStatus == nil ? nil : AnyView(PlaceChevron())
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(onOpenDocumentStatus == nil)
+        .accessibilityHint(onOpenDocumentStatus == nil ? "" : "Opens its status")
+        .accessibilityIdentifier("place.verifySheet.documentInReview")
     }
 
     private var calmNote: some View {

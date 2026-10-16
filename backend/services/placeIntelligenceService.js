@@ -119,14 +119,15 @@ function sectionApplies(id, viewer) {
 }
 
 // The viewer's own pending ownership of this Home (a pending owner row or an
-// ownership claim still in progress). A failed read counts as none.
+// ownership claim still in progress). A renter's residency document is not
+// one: it never makes them an owner. A failed read counts as none.
 async function hasPendingOwnership(homeId, userId) {
   try {
     const [owners, claims] = await Promise.all([
       supabaseAdmin.from('HomeOwner').select('id').eq('home_id', homeId).eq('subject_type', 'user')
         .eq('subject_id', userId).eq('owner_status', 'pending').limit(1),
       supabaseAdmin.from('HomeOwnershipClaim').select('id, state, claim_phase_v2, merged_into_claim_id')
-        .eq('home_id', homeId).eq('claimant_user_id', userId),
+        .eq('home_id', homeId).eq('claimant_user_id', userId).neq('claim_type', 'resident'),
     ]);
     if ((owners.data || []).length) return true;
     return (claims.data || []).some((claim) => (claimsConfig.flags.v2ReadPaths
