@@ -1,6 +1,6 @@
 {
   "version": "2026-09-24",
-  "notes": "Ballot reference data (docs/ballot-implementation-plan-2026-09-24.md §5.1). 'supported' states carry person-checked dates and links; every other state is 'links_only' and shows the election date plus Vote.gov. Territories are absent on purpose: Ballot hides there. Release check 1: a person opens every url below before ballot_p0 is enabled. Per supported state: fips (the state's FIPS code, so a boundary lookup that lands in another state is refused); timezone_overrides (a county or place that keeps another clock than the state: dates and cutoffs are read on the voter's local clock); consolidated_counties (a county that is one government with its city: counted once, under the given name); dependent_schools (the state or a county runs the schools, so they are not counted as a separate government).",
+  "notes": "Ballot reference data (docs/ballot-implementation-plan-2026-09-24.md §5.1). 'supported' states carry person-checked dates and links; every other state is 'links_only': the election date plus its own election office's official pages (registration, mail or absentee voting, polling places, ballot tracking), with no dates. Vote.gov in links_only below is the fallback for a state without its own links. Territories are absent on purpose: Ballot hides there. Release check 1: a person opens every url below before ballot_p0 is enabled. Per supported state: fips (the state's FIPS code, so a boundary lookup that lands in another state is refused); timezone_overrides (a county or place that keeps another clock than the state: dates and cutoffs are read on the voter's local clock); consolidated_counties (a county that is one government with its city: counted once, under the given name); dependent_schools (the state or a county runs the schools, so they are not counted as a separate government).",
   "links_only": {
     "official_links": [
       { "key": "registration", "label": "Registration and deadlines", "owner": "Vote.gov", "url": "https://vote.gov/", "phases": ["far", "in_season", "election_day"] }
@@ -9,10 +9,73 @@
     "source_line": "Election date: federal law"
   },
   "states": {
-    "AL": { "name": "Alabama", "timezone": "America/Chicago", "coverage": "links_only" },
-    "AK": { "name": "Alaska", "timezone": "America/Anchorage", "coverage": "links_only" },
-    "AZ": { "name": "Arizona", "timezone": "America/Phoenix", "coverage": "links_only" },
-    "AR": { "name": "Arkansas", "timezone": "America/Chicago", "coverage": "links_only" },
+    "AL": {
+      "name": "Alabama",
+      "timezone": "America/Chicago",
+      "coverage": "links_only",
+      "election_office": "Alabama Secretary of State",
+      "official_links": [
+        { "key": "registration", "label": "Check registration, polling place and ballot", "owner": "Alabama Secretary of State", "url": "https://myinfo.alabamavotes.gov/voterview", "phases": ["far", "in_season", "election_day"] },
+        { "key": "absentee", "label": "Absentee voting", "owner": "Alabama Secretary of State", "url": "https://www.sos.alabama.gov/alabama-votes/voter/absentee-voting?m=voters", "phases": ["far", "in_season"] },
+        { "key": "election_information", "label": "Election information", "owner": "Alabama Secretary of State", "url": "https://www.sos.alabama.gov/alabama-votes", "phases": ["far", "election_day"] }
+      ],
+      "checked": {
+        "at": "2026-10-15",
+        "by": "Nationwide civic lane, each link opened",
+        "method": "Links from the U.S. Election Assistance Commission's Register and Vote in Your State page for Alabama (https://www.eac.gov/voters/register-and-vote-in-your-state), each opened on 2026-10-15: 3 by a script that followed redirects and read the page title, 0 in a browser because the state's bot check blocks scripts. No dates or deadlines: the state stays links-only."
+      }
+    },
+    "AK": {
+      "name": "Alaska",
+      "timezone": "America/Anchorage",
+      "coverage": "links_only",
+      "election_office": "Alaska Division of Elections",
+      "official_links": [
+        { "key": "registration", "label": "Check registration and ballot status", "owner": "Alaska Division of Elections", "url": "https://myvoterportal.alaska.gov/", "phases": ["far", "in_season"] },
+        { "key": "absentee", "label": "Absentee and early voting", "owner": "Alaska Division of Elections", "url": "https://www.elections.alaska.gov/voter-information/absentee-and-early-voting/", "phases": ["far", "in_season"] },
+        { "key": "polling_places", "label": "Find your polling place", "owner": "Alaska Division of Elections", "url": "https://www.elections.alaska.gov/election-polls/", "phases": ["in_season", "election_day"] },
+        { "key": "election_information", "label": "Election information", "owner": "Alaska Division of Elections", "url": "https://www.elections.alaska.gov/", "phases": ["far", "election_day"] }
+      ],
+      "checked": {
+        "at": "2026-10-15",
+        "by": "Nationwide civic lane, each link opened",
+        "method": "Links from the U.S. Election Assistance Commission's Register and Vote in Your State page for Alaska (https://www.eac.gov/voters/register-and-vote-in-your-state), each opened on 2026-10-15: 3 by a script that followed redirects and read the page title, 1 in a browser because the state's bot check blocks scripts. No dates or deadlines: the state stays links-only. Alaska's early-voting page (Core/AKVoteEarly.php, listed by the EAC) sits behind a human check, so the Division of Elections' own Absentee and Early Voting page is used instead."
+      }
+    },
+    "AZ": {
+      "name": "Arizona",
+      "timezone": "America/Phoenix",
+      "coverage": "links_only",
+      "election_office": "Arizona Secretary of State",
+      "official_links": [
+        { "key": "registration", "label": "Check your registration", "owner": "Arizona Secretary of State", "url": "https://my.arizona.vote/WhereToVote.aspx?s=individual", "phases": ["far", "in_season"] },
+        { "key": "absentee", "label": "Early voting and ballots by mail", "owner": "Arizona Secretary of State", "url": "https://azsos.gov/elections/voters/early-voting", "phases": ["far", "in_season"] },
+        { "key": "polling_places", "label": "Find your polling place", "owner": "Arizona Secretary of State", "url": "https://my.arizona.vote/WhereToVote.aspx?s=address", "phases": ["in_season", "election_day"] },
+        { "key": "ballot_tracking", "label": "Track your ballot", "owner": "Arizona Secretary of State", "url": "https://my.arizona.vote/AbsenteeTracker.aspx", "phases": ["in_season", "election_day"] },
+        { "key": "election_information", "label": "Election information", "owner": "Arizona Secretary of State", "url": "https://azsos.gov/elections", "phases": ["far", "election_day"] }
+      ],
+      "checked": {
+        "at": "2026-10-15",
+        "by": "Nationwide civic lane, each link opened",
+        "method": "Links from the U.S. Election Assistance Commission's Register and Vote in Your State page for Arizona (https://www.eac.gov/voters/register-and-vote-in-your-state), each opened on 2026-10-15: 0 by a script that followed redirects and read the page title, 5 in a browser because the state's bot check blocks scripts. No dates or deadlines: the state stays links-only."
+      }
+    },
+    "AR": {
+      "name": "Arkansas",
+      "timezone": "America/Chicago",
+      "coverage": "links_only",
+      "election_office": "Arkansas Secretary of State",
+      "official_links": [
+        { "key": "registration", "label": "Check registration, polling place and ballot", "owner": "Arkansas Secretary of State", "url": "https://www.voterview.ar-nova.org/voterview", "phases": ["far", "in_season", "election_day"] },
+        { "key": "absentee", "label": "Absentee voting", "owner": "Arkansas Secretary of State", "url": "https://www.sos.arkansas.gov/elections/voter-information/absentee-voting", "phases": ["far", "in_season"] },
+        { "key": "election_information", "label": "Election information", "owner": "Arkansas Secretary of State", "url": "https://www.sos.arkansas.gov/elections", "phases": ["far", "election_day"] }
+      ],
+      "checked": {
+        "at": "2026-10-15",
+        "by": "Nationwide civic lane, each link opened",
+        "method": "Links from the U.S. Election Assistance Commission's Register and Vote in Your State page for Arkansas (https://www.eac.gov/voters/register-and-vote-in-your-state), each opened on 2026-10-15: 3 by a script that followed redirects and read the page title, 0 in a browser because the state's bot check blocks scripts. No dates or deadlines: the state stays links-only."
+      }
+    },
     "CA": {
       "name": "California",
       "timezone": "America/Los_Angeles",
@@ -23,6 +86,7 @@
       "consolidated_counties": { "06075": "City of San Francisco" },
       "election_office": "California Secretary of State",
       "election_office_phrase": "the California Secretary of State",
+      "election_office_url": "https://www.sos.ca.gov/elections",
       "official_links": [
         { "key": "registration", "label": "Register or update online", "owner": "Secretary of State", "url": "https://registertovote.ca.gov/", "phases": ["far", "in_season"] },
         { "key": "ballot_tracking", "label": "Track your ballot", "owner": "Where’s My Ballot?", "url": "https://wheresmyballot.sos.ca.gov/", "phases": ["in_season", "election_day", "after"] },
@@ -46,6 +110,7 @@
       "consolidated_counties": { "08014": "City of Broomfield", "08031": "City of Denver" },
       "election_office": "Colorado Secretary of State",
       "election_office_phrase": "the Colorado Secretary of State",
+      "election_office_url": "https://www.sos.state.co.us/pubs/elections/main.html",
       "official_links": [
         { "key": "registration", "label": "Check or update registration", "owner": "Go Vote Colorado", "url": "https://www.coloradosos.gov/voter/pages/pub/home.xhtml", "phases": ["far", "in_season"] },
         { "key": "ballot_tracking", "label": "Track your ballot", "owner": "BallotTrax", "url": "https://ballottrax.coloradosos.gov/voter/", "phases": ["in_season", "election_day", "after"] },
@@ -59,11 +124,91 @@
         "method": "Dates and links from the state's official pages, and county pages where the state's own page wasn't found, as returned by web search on Sep 24. The build container could not open coloradosos.gov or sos.state.co.us directly."
       }
     },
-    "CT": { "name": "Connecticut", "timezone": "America/New_York", "coverage": "links_only" },
-    "DE": { "name": "Delaware", "timezone": "America/New_York", "coverage": "links_only" },
-    "DC": { "name": "District of Columbia", "timezone": "America/New_York", "coverage": "links_only" },
-    "FL": { "name": "Florida", "timezone": "America/New_York", "coverage": "links_only" },
-    "GA": { "name": "Georgia", "timezone": "America/New_York", "coverage": "links_only" },
+    "CT": {
+      "name": "Connecticut",
+      "timezone": "America/New_York",
+      "coverage": "links_only",
+      "election_office": "Connecticut Secretary of the State",
+      "official_links": [
+        { "key": "registration", "label": "Check registration and polling place", "owner": "Connecticut Secretary of the State", "url": "https://portaldir.ct.gov/sots/LookUp.aspx", "phases": ["far", "in_season", "election_day"] },
+        { "key": "absentee", "label": "Absentee voting", "owner": "Connecticut Secretary of the State", "url": "https://portal.ct.gov/sots/election-services/voter-information/absentee-voting", "phases": ["far", "in_season"] },
+        { "key": "election_information", "label": "Election information", "owner": "Connecticut Secretary of the State", "url": "https://portal.ct.gov/SOTS/Common-Elements/V5-Template---Redesign/Elections--Voting--Home-Page", "phases": ["far", "election_day"] }
+      ],
+      "checked": {
+        "at": "2026-10-15",
+        "by": "Nationwide civic lane, each link opened",
+        "method": "Links from the U.S. Election Assistance Commission's Register and Vote in Your State page for Connecticut (https://www.eac.gov/voters/register-and-vote-in-your-state), each opened on 2026-10-15: 3 by a script that followed redirects and read the page title, 0 in a browser because the state's bot check blocks scripts. No dates or deadlines: the state stays links-only."
+      }
+    },
+    "DE": {
+      "name": "Delaware",
+      "timezone": "America/New_York",
+      "coverage": "links_only",
+      "election_office": "Delaware Department of Elections",
+      "official_links": [
+        { "key": "registration", "label": "Check registration and ballot status", "owner": "Delaware Department of Elections", "url": "https://ivote.de.gov/VoterView", "phases": ["far", "in_season"] },
+        { "key": "absentee", "label": "Absentee voting", "owner": "Delaware Department of Elections", "url": "https://elections.delaware.gov/voter/absentee/index.html", "phases": ["far", "in_season"] },
+        { "key": "polling_places", "label": "Find polling places and early voting", "owner": "Delaware Department of Elections", "url": "https://gis.elections.delaware.gov/apps/5bc1fa9352464944be601441655e36a0/explore", "phases": ["in_season", "election_day"] },
+        { "key": "election_information", "label": "Election information", "owner": "Delaware Department of Elections", "url": "https://elections.delaware.gov/index.html", "phases": ["far", "election_day"] }
+      ],
+      "checked": {
+        "at": "2026-10-15",
+        "by": "Nationwide civic lane, each link opened",
+        "method": "Links from the U.S. Election Assistance Commission's Register and Vote in Your State page for Delaware (https://www.eac.gov/voters/register-and-vote-in-your-state), each opened on 2026-10-15: 1 by a script that followed redirects and read the page title, 3 in a browser because the state's bot check blocks scripts. No dates or deadlines: the state stays links-only."
+      }
+    },
+    "DC": {
+      "name": "District of Columbia",
+      "timezone": "America/New_York",
+      "coverage": "links_only",
+      "election_office": "DC Board of Elections",
+      "official_links": [
+        { "key": "registration", "label": "Check your registration", "owner": "DC Board of Elections", "url": "https://apps.dcboe.org/vrs", "phases": ["far", "in_season"] },
+        { "key": "absentee", "label": "Vote by mail", "owner": "DC Board of Elections", "url": "https://www.dcboe.org/voters/casting-your-vote/mail-ballot-request", "phases": ["far", "in_season"] },
+        { "key": "polling_places", "label": "Find a vote center", "owner": "DC Board of Elections", "url": "https://dcboe.org/voters/find-out-where-to-vote/vote-center-locator-tool", "phases": ["in_season", "election_day"] },
+        { "key": "ballot_tracking", "label": "Track your ballot", "owner": "DC Board of Elections", "url": "https://votedc.ballottrax.net/voter/", "phases": ["in_season", "election_day"] },
+        { "key": "election_information", "label": "Election information", "owner": "DC Board of Elections", "url": "https://dcboe.org/", "phases": ["far", "election_day"] }
+      ],
+      "checked": {
+        "at": "2026-10-15",
+        "by": "Nationwide civic lane, each link opened",
+        "method": "Links from the U.S. Election Assistance Commission's Register and Vote in Your State page for District of Columbia (https://www.eac.gov/voters/register-and-vote-in-your-state), each opened on 2026-10-15: 5 by a script that followed redirects and read the page title, 0 in a browser because the state's bot check blocks scripts. No dates or deadlines: the state stays links-only."
+      }
+    },
+    "FL": {
+      "name": "Florida",
+      "timezone": "America/New_York",
+      "coverage": "links_only",
+      "election_office": "Florida Division of Elections",
+      "official_links": [
+        { "key": "registration", "label": "Check your registration", "owner": "Florida Division of Elections", "url": "https://registration.dos.fl.gov/CheckVoterStatus", "phases": ["far", "in_season"] },
+        { "key": "absentee", "label": "Vote by mail", "owner": "Florida Division of Elections", "url": "https://dos.fl.gov/elections/for-voters/voting/vote-by-mail/", "phases": ["far", "in_season"] },
+        { "key": "polling_places", "label": "Find your precinct and polling place", "owner": "Florida Division of Elections", "url": "https://dos.fl.gov/elections/for-voters/check-your-voter-status-and-polling-place/voter-precinct-lookup/", "phases": ["in_season", "election_day"] },
+        { "key": "ballot_tracking", "label": "Track your mail ballot", "owner": "Florida Division of Elections", "url": "https://dos.fl.gov/elections/for-voters/check-your-voter-status-and-polling-place/vote-by-mail-ballot-information-and-status-lookup/", "phases": ["in_season", "election_day"] },
+        { "key": "election_information", "label": "Election information", "owner": "Florida Division of Elections", "url": "https://dos.fl.gov/elections/for-voters/", "phases": ["far", "election_day"] }
+      ],
+      "checked": {
+        "at": "2026-10-15",
+        "by": "Nationwide civic lane, each link opened",
+        "method": "Links from the U.S. Election Assistance Commission's Register and Vote in Your State page for Florida (https://www.eac.gov/voters/register-and-vote-in-your-state), each opened on 2026-10-15: 4 by a script that followed redirects and read the page title, 1 in a browser because the state's bot check blocks scripts. No dates or deadlines: the state stays links-only."
+      }
+    },
+    "GA": {
+      "name": "Georgia",
+      "timezone": "America/New_York",
+      "coverage": "links_only",
+      "election_office": "Georgia Secretary of State",
+      "official_links": [
+        { "key": "registration", "label": "Check registration, polling place and ballot", "owner": "Georgia Secretary of State", "url": "https://mvp.sos.ga.gov/s/", "phases": ["far", "in_season", "election_day"] },
+        { "key": "absentee", "label": "Absentee and early voting", "owner": "Georgia Secretary of State", "url": "https://sos.ga.gov/how-to-guide/how-guide-voting", "phases": ["far", "in_season"] },
+        { "key": "election_information", "label": "Election information", "owner": "Georgia Secretary of State", "url": "https://sos.ga.gov/elections-division-georgia-secretary-states-office", "phases": ["far", "election_day"] }
+      ],
+      "checked": {
+        "at": "2026-10-15",
+        "by": "Nationwide civic lane, each link opened",
+        "method": "Links from the U.S. Election Assistance Commission's Register and Vote in Your State page for Georgia (https://www.eac.gov/voters/register-and-vote-in-your-state), each opened on 2026-10-15: 0 by a script that followed redirects and read the page title, 3 in a browser because the state's bot check blocks scripts. No dates or deadlines: the state stays links-only."
+      }
+    },
     "HI": {
       "name": "Hawaii",
       "timezone": "Pacific/Honolulu",
@@ -74,6 +219,7 @@
       "dependent_schools": true,
       "election_office": "Hawaii Office of Elections",
       "election_office_phrase": "the Hawaii Office of Elections",
+      "election_office_url": "https://elections.hawaii.gov/",
       "official_links": [
         { "key": "registration", "label": "Register or update online", "owner": "Office of Elections", "url": "https://olvr.hawaii.gov/", "phases": ["far", "in_season"] },
         { "key": "drop_boxes", "label": "Drop boxes and voter service centers", "owner": "Office of Elections", "url": "https://elections.hawaii.gov/voter-service-centers-and-places-of-deposit/", "phases": ["in_season", "election_day"] },
@@ -86,22 +232,273 @@
         "method": "Dates and links from the state's official pages, and county pages where the state's own page wasn't found, as returned by web search on Sep 24. The build container could not open elections.hawaii.gov or olvr.hawaii.gov directly."
       }
     },
-    "ID": { "name": "Idaho", "timezone": "America/Boise", "coverage": "links_only" },
-    "IL": { "name": "Illinois", "timezone": "America/Chicago", "coverage": "links_only" },
-    "IN": { "name": "Indiana", "timezone": "America/Indiana/Indianapolis", "coverage": "links_only" },
-    "IA": { "name": "Iowa", "timezone": "America/Chicago", "coverage": "links_only" },
-    "KS": { "name": "Kansas", "timezone": "America/Chicago", "coverage": "links_only" },
-    "KY": { "name": "Kentucky", "timezone": "America/New_York", "coverage": "links_only" },
-    "LA": { "name": "Louisiana", "timezone": "America/Chicago", "coverage": "links_only" },
-    "ME": { "name": "Maine", "timezone": "America/New_York", "coverage": "links_only" },
-    "MD": { "name": "Maryland", "timezone": "America/New_York", "coverage": "links_only" },
-    "MA": { "name": "Massachusetts", "timezone": "America/New_York", "coverage": "links_only" },
-    "MI": { "name": "Michigan", "timezone": "America/Detroit", "coverage": "links_only" },
-    "MN": { "name": "Minnesota", "timezone": "America/Chicago", "coverage": "links_only" },
-    "MS": { "name": "Mississippi", "timezone": "America/Chicago", "coverage": "links_only" },
-    "MO": { "name": "Missouri", "timezone": "America/Chicago", "coverage": "links_only" },
-    "MT": { "name": "Montana", "timezone": "America/Denver", "coverage": "links_only" },
-    "NE": { "name": "Nebraska", "timezone": "America/Chicago", "coverage": "links_only" },
+    "ID": {
+      "name": "Idaho",
+      "timezone": "America/Boise",
+      "coverage": "links_only",
+      "election_office": "Idaho Secretary of State",
+      "official_links": [
+        { "key": "registration", "label": "Check registration and ballot status", "owner": "Idaho Secretary of State", "url": "https://elections.sos.idaho.gov/ElectionLink/ElectionLink/VoterSearch.aspx", "phases": ["far", "in_season"] },
+        { "key": "absentee", "label": "Absentee voting", "owner": "Idaho Secretary of State", "url": "https://voteidaho.gov/casting-your-ballot/#absentee-voting", "phases": ["far", "in_season"] },
+        { "key": "polling_places", "label": "Find your polling place", "owner": "Idaho Secretary of State", "url": "https://elections.sos.idaho.gov/ElectionLink/ElectionLink/ViewPollingLocation.aspx", "phases": ["in_season", "election_day"] },
+        { "key": "election_information", "label": "Election information", "owner": "Idaho Secretary of State", "url": "https://voteidaho.gov/", "phases": ["far", "election_day"] }
+      ],
+      "checked": {
+        "at": "2026-10-15",
+        "by": "Nationwide civic lane, each link opened",
+        "method": "Links from the U.S. Election Assistance Commission's Register and Vote in Your State page for Idaho (https://www.eac.gov/voters/register-and-vote-in-your-state), each opened on 2026-10-15: 4 by a script that followed redirects and read the page title, 0 in a browser because the state's bot check blocks scripts. No dates or deadlines: the state stays links-only."
+      }
+    },
+    "IL": {
+      "name": "Illinois",
+      "timezone": "America/Chicago",
+      "coverage": "links_only",
+      "election_office": "Illinois State Board of Elections",
+      "official_links": [
+        { "key": "registration", "label": "Check your registration", "owner": "Illinois State Board of Elections", "url": "https://ova.elections.il.gov/RegistrationLookup.aspx", "phases": ["far", "in_season"] },
+        { "key": "absentee", "label": "Vote by mail", "owner": "Illinois State Board of Elections", "url": "https://www.elections.il.gov/ElectionOperations/VotingByMail.aspx", "phases": ["far", "in_season"] },
+        { "key": "polling_places", "label": "Find your polling place", "owner": "Illinois State Board of Elections", "url": "https://ova.elections.il.gov/PollingPlaceLookup.aspx", "phases": ["in_season", "election_day"] },
+        { "key": "election_information", "label": "Election information", "owner": "Illinois State Board of Elections", "url": "https://www.elections.il.gov/", "phases": ["far", "election_day"] }
+      ],
+      "checked": {
+        "at": "2026-10-15",
+        "by": "Nationwide civic lane, each link opened",
+        "method": "Links from the U.S. Election Assistance Commission's Register and Vote in Your State page for Illinois (https://www.eac.gov/voters/register-and-vote-in-your-state), each opened on 2026-10-15: 4 by a script that followed redirects and read the page title, 0 in a browser because the state's bot check blocks scripts. No dates or deadlines: the state stays links-only."
+      }
+    },
+    "IN": {
+      "name": "Indiana",
+      "timezone": "America/Indiana/Indianapolis",
+      "coverage": "links_only",
+      "election_office": "Indiana Election Division",
+      "official_links": [
+        { "key": "registration", "label": "Check registration, polling place and ballot", "owner": "Indiana Election Division", "url": "https://indianavoters.in.gov/", "phases": ["far", "in_season", "election_day"] },
+        { "key": "absentee", "label": "Absentee voting", "owner": "Indiana Election Division", "url": "https://www.in.gov/sos/elections/voter-information/ways-to-vote/absentee-voting/", "phases": ["far", "in_season"] },
+        { "key": "election_information", "label": "Election information", "owner": "Indiana Election Division", "url": "https://www.in.gov/sos/elections/", "phases": ["far", "election_day"] }
+      ],
+      "checked": {
+        "at": "2026-10-15",
+        "by": "Nationwide civic lane, each link opened",
+        "method": "Links from the U.S. Election Assistance Commission's Register and Vote in Your State page for Indiana (https://www.eac.gov/voters/register-and-vote-in-your-state), each opened on 2026-10-15: 3 by a script that followed redirects and read the page title, 0 in a browser because the state's bot check blocks scripts. No dates or deadlines: the state stays links-only."
+      }
+    },
+    "IA": {
+      "name": "Iowa",
+      "timezone": "America/Chicago",
+      "coverage": "links_only",
+      "election_office": "Iowa Secretary of State",
+      "official_links": [
+        { "key": "registration", "label": "Check your registration", "owner": "Iowa Secretary of State", "url": "https://apps.sos.iowa.gov/elections/voterreg/regtovote/search.aspx", "phases": ["far", "in_season"] },
+        { "key": "absentee", "label": "Absentee voting", "owner": "Iowa Secretary of State", "url": "https://sos.iowa.gov/voters/absentee-voting", "phases": ["far", "in_season"] },
+        { "key": "polling_places", "label": "Find your polling place", "owner": "Iowa Secretary of State", "url": "https://apps.sos.iowa.gov/elections/voterreg/pollingplace/search.aspx", "phases": ["in_season", "election_day"] },
+        { "key": "ballot_tracking", "label": "Track your absentee ballot", "owner": "Iowa Secretary of State", "url": "https://apps.sos.iowa.gov/elections/absenteeballotstatus/absentee/search", "phases": ["in_season", "election_day"] },
+        { "key": "election_information", "label": "Election information", "owner": "Iowa Secretary of State", "url": "https://sos.iowa.gov/elections-voting", "phases": ["far", "election_day"] }
+      ],
+      "checked": {
+        "at": "2026-10-15",
+        "by": "Nationwide civic lane, each link opened",
+        "method": "Links from the U.S. Election Assistance Commission's Register and Vote in Your State page for Iowa (https://www.eac.gov/voters/register-and-vote-in-your-state), each opened on 2026-10-15: 2 by a script that followed redirects and read the page title, 3 in a browser because the state's bot check blocks scripts. No dates or deadlines: the state stays links-only. The EAC's election-information link (sos.iowa.gov/elections/voterinformation/index.html) returns 404; the Secretary of State's Elections & Voting page is used instead."
+      }
+    },
+    "KS": {
+      "name": "Kansas",
+      "timezone": "America/Chicago",
+      "coverage": "links_only",
+      "election_office": "Kansas Secretary of State",
+      "official_links": [
+        { "key": "registration", "label": "Check registration, polling place and ballot", "owner": "Kansas Secretary of State", "url": "https://myvoteinfo.voteks.org/voterview/", "phases": ["far", "in_season", "election_day"] },
+        { "key": "absentee", "label": "Advance voting by mail or in person", "owner": "Kansas Secretary of State", "url": "https://sos.ks.gov/elections/voter-information.html", "phases": ["far", "in_season"] },
+        { "key": "election_information", "label": "Election information", "owner": "Kansas Secretary of State", "url": "https://sos.ks.gov/elections/elections.html", "phases": ["far", "election_day"] }
+      ],
+      "checked": {
+        "at": "2026-10-15",
+        "by": "Nationwide civic lane, each link opened",
+        "method": "Links from the U.S. Election Assistance Commission's Register and Vote in Your State page for Kansas (https://www.eac.gov/voters/register-and-vote-in-your-state), each opened on 2026-10-15: 2 by a script that followed redirects and read the page title, 1 in a browser because the state's bot check blocks scripts. No dates or deadlines: the state stays links-only."
+      }
+    },
+    "KY": {
+      "name": "Kentucky",
+      "timezone": "America/New_York",
+      "coverage": "links_only",
+      "election_office": "Kentucky State Board of Elections",
+      "official_links": [
+        { "key": "registration", "label": "Check registration, polling place and ballot", "owner": "Kentucky State Board of Elections", "url": "https://vrsws.sos.ky.gov/VIC/", "phases": ["far", "in_season", "election_day"] },
+        { "key": "absentee", "label": "Absentee voting", "owner": "Kentucky State Board of Elections", "url": "https://elect.ky.gov/Voters/Pages/Absentee-Voting-By-Mail.aspx", "phases": ["far", "in_season"] },
+        { "key": "election_information", "label": "Election information", "owner": "Kentucky State Board of Elections", "url": "https://elect.ky.gov/Pages/default.aspx", "phases": ["far", "election_day"] }
+      ],
+      "checked": {
+        "at": "2026-10-15",
+        "by": "Nationwide civic lane, each link opened",
+        "method": "Links from the U.S. Election Assistance Commission's Register and Vote in Your State page for Kentucky (https://www.eac.gov/voters/register-and-vote-in-your-state), each opened on 2026-10-15: 2 by a script that followed redirects and read the page title, 1 in a browser because the state's bot check blocks scripts. No dates or deadlines: the state stays links-only."
+      }
+    },
+    "LA": {
+      "name": "Louisiana",
+      "timezone": "America/Chicago",
+      "coverage": "links_only",
+      "election_office": "Louisiana Secretary of State",
+      "official_links": [
+        { "key": "registration", "label": "Check registration, polling place and ballot", "owner": "Louisiana Secretary of State", "url": "https://voterportal.sos.la.gov/", "phases": ["far", "in_season", "election_day"] },
+        { "key": "absentee", "label": "Absentee voting", "owner": "Louisiana Secretary of State", "url": "https://www.sos.la.gov/elections-voting/ways-to-vote#vote-absentee", "phases": ["far", "in_season"] },
+        { "key": "election_information", "label": "Election information", "owner": "Louisiana Secretary of State", "url": "https://www.sos.la.gov/elections-voting", "phases": ["far", "election_day"] }
+      ],
+      "checked": {
+        "at": "2026-10-15",
+        "by": "Nationwide civic lane, each link opened",
+        "method": "Links from the U.S. Election Assistance Commission's Register and Vote in Your State page for Louisiana (https://www.eac.gov/voters/register-and-vote-in-your-state), each opened on 2026-10-15: 3 by a script that followed redirects and read the page title, 0 in a browser because the state's bot check blocks scripts. No dates or deadlines: the state stays links-only."
+      }
+    },
+    "ME": {
+      "name": "Maine",
+      "timezone": "America/New_York",
+      "coverage": "links_only",
+      "election_office": "Maine Secretary of State",
+      "official_links": [
+        { "key": "registration", "label": "Check registration and polling place", "owner": "Maine Secretary of State", "url": "https://www.maine.gov/portal/government/edemocracy/voter_lookup.php", "phases": ["far", "in_season", "election_day"] },
+        { "key": "absentee", "label": "Absentee voting", "owner": "Maine Secretary of State", "url": "https://www.maine.gov/sos/elections-voting/absentee-voting", "phases": ["far", "in_season"] },
+        { "key": "ballot_tracking", "label": "Request or track an absentee ballot", "owner": "Maine Secretary of State", "url": "https://absenteeballotrequest.sos.maine.gov/", "phases": ["in_season", "election_day"] },
+        { "key": "election_information", "label": "Election information", "owner": "Maine Secretary of State", "url": "https://www.maine.gov/sos/elections-voting", "phases": ["far", "election_day"] }
+      ],
+      "checked": {
+        "at": "2026-10-15",
+        "by": "Nationwide civic lane, each link opened",
+        "method": "Links from the U.S. Election Assistance Commission's Register and Vote in Your State page for Maine (https://www.eac.gov/voters/register-and-vote-in-your-state), each opened on 2026-10-15: 4 by a script that followed redirects and read the page title, 0 in a browser because the state's bot check blocks scripts. No dates or deadlines: the state stays links-only."
+      }
+    },
+    "MD": {
+      "name": "Maryland",
+      "timezone": "America/New_York",
+      "coverage": "links_only",
+      "election_office": "Maryland State Board of Elections",
+      "official_links": [
+        { "key": "registration", "label": "Check registration, polling place and ballot", "owner": "Maryland State Board of Elections", "url": "https://voterservices.elections.maryland.gov/VoterSearch", "phases": ["far", "in_season", "election_day"] },
+        { "key": "absentee", "label": "Mail-in voting", "owner": "Maryland State Board of Elections", "url": "https://elections.maryland.gov/voting/absentee.html", "phases": ["far", "in_season"] },
+        { "key": "election_information", "label": "Election information", "owner": "Maryland State Board of Elections", "url": "https://elections.maryland.gov/", "phases": ["far", "election_day"] }
+      ],
+      "checked": {
+        "at": "2026-10-15",
+        "by": "Nationwide civic lane, each link opened",
+        "method": "Links from the U.S. Election Assistance Commission's Register and Vote in Your State page for Maryland (https://www.eac.gov/voters/register-and-vote-in-your-state), each opened on 2026-10-15: 2 by a script that followed redirects and read the page title, 1 in a browser because the state's bot check blocks scripts. No dates or deadlines: the state stays links-only."
+      }
+    },
+    "MA": {
+      "name": "Massachusetts",
+      "timezone": "America/New_York",
+      "coverage": "links_only",
+      "election_office": "Massachusetts Secretary of the Commonwealth",
+      "official_links": [
+        { "key": "registration", "label": "Check your registration", "owner": "Massachusetts Secretary of the Commonwealth", "url": "https://www.sec.state.ma.us/VoterRegistrationSearch/MyVoterRegStatus.aspx", "phases": ["far", "in_season"] },
+        { "key": "absentee", "label": "Vote by mail", "owner": "Massachusetts Secretary of the Commonwealth", "url": "https://www.sec.state.ma.us/divisions/elections/voting-information/vote-by-mail.htm", "phases": ["far", "in_season"] },
+        { "key": "polling_places", "label": "Find your polling place", "owner": "Massachusetts Secretary of the Commonwealth", "url": "https://www.sec.state.ma.us/WhereDoIVoteMA/WhereDoIVote", "phases": ["in_season", "election_day"] },
+        { "key": "ballot_tracking", "label": "Track your ballot", "owner": "Massachusetts Secretary of the Commonwealth", "url": "https://www.sec.state.ma.us/WhereDoIVoteMA/TrackMyBallot", "phases": ["in_season", "election_day"] },
+        { "key": "election_information", "label": "Election information", "owner": "Massachusetts Secretary of the Commonwealth", "url": "https://www.sec.state.ma.us/divisions/elections/elections-and-voting.htm", "phases": ["far", "election_day"] }
+      ],
+      "checked": {
+        "at": "2026-10-15",
+        "by": "Nationwide civic lane, each link opened",
+        "method": "Links from the U.S. Election Assistance Commission's Register and Vote in Your State page for Massachusetts (https://www.eac.gov/voters/register-and-vote-in-your-state), each opened on 2026-10-15: 0 by a script that followed redirects and read the page title, 5 in a browser because the state's bot check blocks scripts. No dates or deadlines: the state stays links-only."
+      }
+    },
+    "MI": {
+      "name": "Michigan",
+      "timezone": "America/Detroit",
+      "coverage": "links_only",
+      "election_office": "Michigan Secretary of State",
+      "official_links": [
+        { "key": "registration", "label": "Check registration, polling place and ballot", "owner": "Michigan Secretary of State", "url": "https://mvic.sos.state.mi.us/Voter/Index", "phases": ["far", "in_season", "election_day"] },
+        { "key": "absentee", "label": "Absentee voting", "owner": "Michigan Secretary of State", "url": "https://www.michigan.gov/sos/elections/voting/absentee-voting", "phases": ["far", "in_season"] },
+        { "key": "election_information", "label": "Election information", "owner": "Michigan Secretary of State", "url": "https://mvic.sos.state.mi.us/", "phases": ["far", "election_day"] }
+      ],
+      "checked": {
+        "at": "2026-10-15",
+        "by": "Nationwide civic lane, each link opened",
+        "method": "Links from the U.S. Election Assistance Commission's Register and Vote in Your State page for Michigan (https://www.eac.gov/voters/register-and-vote-in-your-state), each opened on 2026-10-15: 1 by a script that followed redirects and read the page title, 2 in a browser because the state's bot check blocks scripts. No dates or deadlines: the state stays links-only."
+      }
+    },
+    "MN": {
+      "name": "Minnesota",
+      "timezone": "America/Chicago",
+      "coverage": "links_only",
+      "election_office": "Minnesota Secretary of State",
+      "official_links": [
+        { "key": "registration", "label": "Check your registration", "owner": "Minnesota Secretary of State", "url": "https://mnvotes.sos.mn.gov/voterstatuscheck/index", "phases": ["far", "in_season"] },
+        { "key": "absentee", "label": "Absentee and early voting", "owner": "Minnesota Secretary of State", "url": "https://www.sos.mn.gov/elections-voting/other-ways-to-vote/", "phases": ["far", "in_season"] },
+        { "key": "polling_places", "label": "Find your polling place", "owner": "Minnesota Secretary of State", "url": "https://pollfinder.sos.mn.gov/", "phases": ["in_season", "election_day"] },
+        { "key": "ballot_tracking", "label": "Track your ballot", "owner": "Minnesota Secretary of State", "url": "https://mnvotes.sos.mn.gov/abstatus/index", "phases": ["in_season", "election_day"] }
+      ],
+      "checked": {
+        "at": "2026-10-15",
+        "by": "Nationwide civic lane, each link opened",
+        "method": "Links from the U.S. Election Assistance Commission's Register and Vote in Your State page for Minnesota (https://www.eac.gov/voters/register-and-vote-in-your-state), each opened on 2026-10-15: 2 by a script that followed redirects and read the page title, 2 in a browser because the state's bot check blocks scripts. No dates or deadlines: the state stays links-only. The Secretary of State's general elections page answered a bot check, so it is left out; the four pages above opened."
+      }
+    },
+    "MS": {
+      "name": "Mississippi",
+      "timezone": "America/Chicago",
+      "coverage": "links_only",
+      "election_office": "Mississippi Secretary of State",
+      "official_links": [
+        { "key": "registration", "label": "Check your registration", "owner": "Mississippi Secretary of State", "url": "https://www.msegov.com/sos/voter_registration/amiregistered/Search", "phases": ["far", "in_season"] },
+        { "key": "absentee", "label": "Absentee voting", "owner": "Mississippi Secretary of State", "url": "https://www.sos.ms.gov/yall-vote/absentee-voting-information", "phases": ["far", "in_season"] },
+        { "key": "polling_places", "label": "Find your polling place", "owner": "Mississippi Secretary of State", "url": "https://myelectionday.sos.state.ms.us/VoterOutreach/Pages/VOSearch.aspx", "phases": ["in_season", "election_day"] },
+        { "key": "ballot_tracking", "label": "Track your absentee ballot", "owner": "Mississippi Secretary of State", "url": "https://myelectionday.sos.state.ms.us/VoterOutreach/Pages/VoterRegistrationCheck.aspx", "phases": ["in_season", "election_day"] },
+        { "key": "election_information", "label": "Election information", "owner": "Mississippi Secretary of State", "url": "https://www.sos.ms.gov/yall-vote", "phases": ["far", "election_day"] }
+      ],
+      "checked": {
+        "at": "2026-10-15",
+        "by": "Nationwide civic lane, each link opened",
+        "method": "Links from the U.S. Election Assistance Commission's Register and Vote in Your State page for Mississippi (https://www.eac.gov/voters/register-and-vote-in-your-state), each opened on 2026-10-15: 4 by a script that followed redirects and read the page title, 1 in a browser because the state's bot check blocks scripts. No dates or deadlines: the state stays links-only."
+      }
+    },
+    "MO": {
+      "name": "Missouri",
+      "timezone": "America/Chicago",
+      "coverage": "links_only",
+      "election_office": "Missouri Secretary of State",
+      "official_links": [
+        { "key": "registration", "label": "Check your registration", "owner": "Missouri Secretary of State", "url": "https://voteroutreach.sos.mo.gov/portal", "phases": ["far", "in_season"] },
+        { "key": "absentee", "label": "Absentee voting", "owner": "Missouri Secretary of State", "url": "https://www.sos.mo.gov/elections/govotemissouri/howtovote#Absentee", "phases": ["far", "in_season"] },
+        { "key": "polling_places", "label": "Where to vote", "owner": "Missouri Secretary of State", "url": "https://www.sos.mo.gov/elections/goVoteMissouri/howtovote#Locations", "phases": ["in_season", "election_day"] },
+        { "key": "election_information", "label": "Election information", "owner": "Missouri Secretary of State", "url": "https://s1.sos.mo.gov/elections", "phases": ["far", "election_day"] }
+      ],
+      "checked": {
+        "at": "2026-10-15",
+        "by": "Nationwide civic lane, each link opened",
+        "method": "Links from the U.S. Election Assistance Commission's Register and Vote in Your State page for Missouri (https://www.eac.gov/voters/register-and-vote-in-your-state), each opened on 2026-10-15: 3 by a script that followed redirects and read the page title, 1 in a browser because the state's bot check blocks scripts. No dates or deadlines: the state stays links-only."
+      }
+    },
+    "MT": {
+      "name": "Montana",
+      "timezone": "America/Denver",
+      "coverage": "links_only",
+      "election_office": "Montana Secretary of State",
+      "official_links": [
+        { "key": "registration", "label": "Check registration, polling place and ballot", "owner": "Montana Secretary of State", "url": "https://voterportal.mt.gov/WhereToVote.aspx", "phases": ["far", "in_season", "election_day"] },
+        { "key": "absentee", "label": "Absentee voting", "owner": "Montana Secretary of State", "url": "https://sosmt.gov/elections/absentee/", "phases": ["far", "in_season"] },
+        { "key": "election_information", "label": "Election information", "owner": "Montana Secretary of State", "url": "https://sosmt.gov/elections/", "phases": ["far", "election_day"] }
+      ],
+      "checked": {
+        "at": "2026-10-15",
+        "by": "Nationwide civic lane, each link opened",
+        "method": "Links from the U.S. Election Assistance Commission's Register and Vote in Your State page for Montana (https://www.eac.gov/voters/register-and-vote-in-your-state), each opened on 2026-10-15: 1 by a script that followed redirects and read the page title, 2 in a browser because the state's bot check blocks scripts. No dates or deadlines: the state stays links-only."
+      }
+    },
+    "NE": {
+      "name": "Nebraska",
+      "timezone": "America/Chicago",
+      "coverage": "links_only",
+      "election_office": "Nebraska Secretary of State",
+      "official_links": [
+        { "key": "registration", "label": "Check registration, polling place and ballot", "owner": "Nebraska Secretary of State", "url": "https://www.votercheck.necvr.ne.gov/VoterView", "phases": ["far", "in_season", "election_day"] },
+        { "key": "absentee", "label": "Early voting by mail", "owner": "Nebraska Secretary of State", "url": "https://sos.nebraska.gov/elections/early-voting", "phases": ["far", "in_season"] },
+        { "key": "election_information", "label": "Election information", "owner": "Nebraska Secretary of State", "url": "https://sos.nebraska.gov/elections/general-voter-information", "phases": ["far", "election_day"] }
+      ],
+      "checked": {
+        "at": "2026-10-15",
+        "by": "Nationwide civic lane, each link opened",
+        "method": "Links from the U.S. Election Assistance Commission's Register and Vote in Your State page for Nebraska (https://www.eac.gov/voters/register-and-vote-in-your-state), each opened on 2026-10-15: 3 by a script that followed redirects and read the page title, 0 in a browser because the state's bot check blocks scripts. No dates or deadlines: the state stays links-only."
+      }
+    },
     "NV": {
       "name": "Nevada",
       "timezone": "America/Los_Angeles",
@@ -115,6 +512,7 @@
       ],
       "election_office": "Nevada Secretary of State",
       "election_office_phrase": "the Nevada Secretary of State",
+      "election_office_url": "https://www.nvsos.gov/elections",
       "official_links": [
         { "key": "registration", "label": "Check or update registration", "owner": "Secretary of State", "url": "https://registertovote.nv.gov/", "phases": ["far", "in_season"] },
         { "key": "ballot_tracking", "label": "Track your ballot", "owner": "Secretary of State", "url": "https://www.nvsos.gov/sos/elections/voters/tracking", "phases": ["in_season", "election_day", "after"] },
@@ -127,14 +525,141 @@
         "method": "Dates and links from the state's official pages, and county pages where the state's own page wasn't found, as returned by web search on Sep 24. The build container could not open nvsos.gov or nv.gov directly."
       }
     },
-    "NH": { "name": "New Hampshire", "timezone": "America/New_York", "coverage": "links_only" },
-    "NJ": { "name": "New Jersey", "timezone": "America/New_York", "coverage": "links_only" },
-    "NM": { "name": "New Mexico", "timezone": "America/Denver", "coverage": "links_only" },
-    "NY": { "name": "New York", "timezone": "America/New_York", "coverage": "links_only" },
-    "NC": { "name": "North Carolina", "timezone": "America/New_York", "coverage": "links_only" },
-    "ND": { "name": "North Dakota", "timezone": "America/Chicago", "coverage": "links_only" },
-    "OH": { "name": "Ohio", "timezone": "America/New_York", "coverage": "links_only" },
-    "OK": { "name": "Oklahoma", "timezone": "America/Chicago", "coverage": "links_only" },
+    "NH": {
+      "name": "New Hampshire",
+      "timezone": "America/New_York",
+      "coverage": "links_only",
+      "election_office": "New Hampshire Secretary of State",
+      "official_links": [
+        { "key": "registration", "label": "Check registration, polling place and ballot", "owner": "New Hampshire Secretary of State", "url": "https://app.sos.nh.gov/viphome", "phases": ["far", "in_season", "election_day"] },
+        { "key": "absentee", "label": "Absentee ballots", "owner": "New Hampshire Secretary of State", "url": "https://www.sos.nh.gov/elections/absentee-ballots", "phases": ["far", "in_season"] },
+        { "key": "election_information", "label": "Election information", "owner": "New Hampshire Secretary of State", "url": "https://www.sos.nh.gov/elections", "phases": ["far", "election_day"] }
+      ],
+      "checked": {
+        "at": "2026-10-15",
+        "by": "Nationwide civic lane, each link opened",
+        "method": "Links from the U.S. Election Assistance Commission's Register and Vote in Your State page for New Hampshire (https://www.eac.gov/voters/register-and-vote-in-your-state), each opened on 2026-10-15: 0 by a script that followed redirects and read the page title, 3 in a browser because the state's bot check blocks scripts. No dates or deadlines: the state stays links-only. The voter information lookup (app.sos.nh.gov/viphome) opens behind the state's own slider check; it is the page the EAC lists."
+      }
+    },
+    "NJ": {
+      "name": "New Jersey",
+      "timezone": "America/New_York",
+      "coverage": "links_only",
+      "election_office": "New Jersey Division of Elections",
+      "official_links": [
+        { "key": "registration", "label": "Check your registration", "owner": "New Jersey Division of Elections", "url": "https://voter.svrs.nj.gov/registration-check", "phases": ["far", "in_season"] },
+        { "key": "absentee", "label": "Vote by mail", "owner": "New Jersey Division of Elections", "url": "https://www.nj.gov/state/elections/vote-by-mail.shtml", "phases": ["far", "in_season"] },
+        { "key": "polling_places", "label": "Find your polling place", "owner": "New Jersey Division of Elections", "url": "https://voter.svrs.nj.gov/polling-place-search", "phases": ["in_season", "election_day"] },
+        { "key": "ballot_tracking", "label": "Track your mail ballot", "owner": "New Jersey Division of Elections", "url": "https://www.nj.gov/state/elections/vote-track-my-ballot.shtml", "phases": ["in_season", "election_day"] },
+        { "key": "election_information", "label": "Election information", "owner": "New Jersey Division of Elections", "url": "https://www.nj.gov/state/elections/index.shtml", "phases": ["far", "election_day"] }
+      ],
+      "checked": {
+        "at": "2026-10-15",
+        "by": "Nationwide civic lane, each link opened",
+        "method": "Links from the U.S. Election Assistance Commission's Register and Vote in Your State page for New Jersey (https://www.eac.gov/voters/register-and-vote-in-your-state), each opened on 2026-10-15: 3 by a script that followed redirects and read the page title, 2 in a browser because the state's bot check blocks scripts. No dates or deadlines: the state stays links-only."
+      }
+    },
+    "NM": {
+      "name": "New Mexico",
+      "timezone": "America/Denver",
+      "coverage": "links_only",
+      "election_office": "New Mexico Secretary of State",
+      "official_links": [
+        { "key": "registration", "label": "Check registration and polling place", "owner": "New Mexico Secretary of State", "url": "https://voterportal.servis.sos.state.nm.us/WhereToVote.aspx", "phases": ["far", "in_season", "election_day"] },
+        { "key": "absentee", "label": "Absentee and early voting", "owner": "New Mexico Secretary of State", "url": "https://www.sos.nm.gov/voting-and-elections/absentee-and-early-voting/", "phases": ["far", "in_season"] },
+        { "key": "ballot_tracking", "label": "Track your ballot", "owner": "New Mexico Secretary of State", "url": "https://www.sos.nm.gov/trackmyballot", "phases": ["in_season", "election_day"] },
+        { "key": "election_information", "label": "Election information", "owner": "New Mexico Secretary of State", "url": "https://www.sos.nm.gov/", "phases": ["far", "election_day"] }
+      ],
+      "checked": {
+        "at": "2026-10-15",
+        "by": "Nationwide civic lane, each link opened",
+        "method": "Links from the U.S. Election Assistance Commission's Register and Vote in Your State page for New Mexico (https://www.eac.gov/voters/register-and-vote-in-your-state), each opened on 2026-10-15: 3 by a script that followed redirects and read the page title, 1 in a browser because the state's bot check blocks scripts. No dates or deadlines: the state stays links-only."
+      }
+    },
+    "NY": {
+      "name": "New York",
+      "timezone": "America/New_York",
+      "coverage": "links_only",
+      "election_office": "New York State Board of Elections",
+      "official_links": [
+        { "key": "registration", "label": "Check registration, polling place and ballot", "owner": "New York State Board of Elections", "url": "https://voterlookup.elections.ny.gov/", "phases": ["far", "in_season", "election_day"] },
+        { "key": "absentee", "label": "Request a mail or absentee ballot", "owner": "New York State Board of Elections", "url": "https://elections.ny.gov/request-ballot", "phases": ["far", "in_season"] },
+        { "key": "election_information", "label": "Election information", "owner": "New York State Board of Elections", "url": "https://elections.ny.gov/", "phases": ["far", "election_day"] }
+      ],
+      "checked": {
+        "at": "2026-10-15",
+        "by": "Nationwide civic lane, each link opened",
+        "method": "Links from the U.S. Election Assistance Commission's Register and Vote in Your State page for New York (https://www.eac.gov/voters/register-and-vote-in-your-state), each opened on 2026-10-15: 0 by a script that followed redirects and read the page title, 3 in a browser because the state's bot check blocks scripts. No dates or deadlines: the state stays links-only."
+      }
+    },
+    "NC": {
+      "name": "North Carolina",
+      "timezone": "America/New_York",
+      "coverage": "links_only",
+      "election_office": "North Carolina State Board of Elections",
+      "official_links": [
+        { "key": "registration", "label": "Check your registration", "owner": "North Carolina State Board of Elections", "url": "https://vt.ncsbe.gov/RegLkup/", "phases": ["far", "in_season"] },
+        { "key": "absentee", "label": "Vote by mail", "owner": "North Carolina State Board of Elections", "url": "https://www.ncsbe.gov/voting/vote-mail", "phases": ["far", "in_season"] },
+        { "key": "polling_places", "label": "Find your Election Day polling place", "owner": "North Carolina State Board of Elections", "url": "https://vt.ncsbe.gov/PPLkup/", "phases": ["in_season", "election_day"] },
+        { "key": "ballot_tracking", "label": "Track your mail ballot", "owner": "North Carolina State Board of Elections", "url": "https://northcarolina.ballottrax.net/voter/", "phases": ["in_season", "election_day"] },
+        { "key": "election_information", "label": "Election information", "owner": "North Carolina State Board of Elections", "url": "https://www.ncsbe.gov/", "phases": ["far", "election_day"] }
+      ],
+      "checked": {
+        "at": "2026-10-15",
+        "by": "Nationwide civic lane, each link opened",
+        "method": "Links from the U.S. Election Assistance Commission's Register and Vote in Your State page for North Carolina (https://www.eac.gov/voters/register-and-vote-in-your-state), each opened on 2026-10-15: 5 by a script that followed redirects and read the page title, 0 in a browser because the state's bot check blocks scripts. No dates or deadlines: the state stays links-only."
+      }
+    },
+    "ND": {
+      "name": "North Dakota",
+      "timezone": "America/Chicago",
+      "coverage": "links_only",
+      "election_office": "North Dakota Secretary of State",
+      "official_links": [
+        { "key": "absentee", "label": "Absentee and mail voting", "owner": "North Dakota Secretary of State", "url": "https://www.sos.nd.gov/elections/voter/voting-north-dakota/how-do-i-vote/absentee-voting", "phases": ["far", "in_season"] },
+        { "key": "polling_places", "label": "Find where to vote", "owner": "North Dakota Secretary of State", "url": "https://vip.sos.nd.gov/WhereToVote.aspx", "phases": ["in_season", "election_day"] },
+        { "key": "ballot_tracking", "label": "Track your ballot", "owner": "North Dakota Secretary of State", "url": "https://vip.sos.nd.gov/AbsenteeTracker.aspx", "phases": ["in_season", "election_day"] },
+        { "key": "election_information", "label": "Election information", "owner": "North Dakota Secretary of State", "url": "https://www.sos.nd.gov/elections", "phases": ["far", "election_day"] }
+      ],
+      "checked": {
+        "at": "2026-10-15",
+        "by": "Nationwide civic lane, each link opened",
+        "method": "Links from the U.S. Election Assistance Commission's Register and Vote in Your State page for North Dakota (https://www.eac.gov/voters/register-and-vote-in-your-state), each opened on 2026-10-15: 4 by a script that followed redirects and read the page title, 0 in a browser because the state's bot check blocks scripts. No dates or deadlines: the state stays links-only. North Dakota has no voter registration, so there is no registration link."
+      }
+    },
+    "OH": {
+      "name": "Ohio",
+      "timezone": "America/New_York",
+      "coverage": "links_only",
+      "election_office": "Ohio Secretary of State",
+      "official_links": [
+        { "key": "registration", "label": "Check registration and polling place", "owner": "Ohio Secretary of State", "url": "https://voterlookup.ohiosos.gov/voterlookup.aspx", "phases": ["far", "in_season", "election_day"] },
+        { "key": "absentee", "label": "Absentee voting", "owner": "Ohio Secretary of State", "url": "https://www.ohiosos.gov/elections/frequently-asked-questions#absentee-voting", "phases": ["far", "in_season"] },
+        { "key": "ballot_tracking", "label": "Track your ballot", "owner": "Ohio Secretary of State", "url": "https://www.ohiosos.gov/directories/ballot-tracking", "phases": ["in_season", "election_day"] },
+        { "key": "election_information", "label": "Election information", "owner": "Ohio Secretary of State", "url": "https://www.ohiosos.gov/elections", "phases": ["far", "election_day"] }
+      ],
+      "checked": {
+        "at": "2026-10-15",
+        "by": "Nationwide civic lane, each link opened",
+        "method": "Links from the U.S. Election Assistance Commission's Register and Vote in Your State page for Ohio (https://www.eac.gov/voters/register-and-vote-in-your-state), each opened on 2026-10-15: 0 by a script that followed redirects and read the page title, 4 in a browser because the state's bot check blocks scripts. No dates or deadlines: the state stays links-only."
+      }
+    },
+    "OK": {
+      "name": "Oklahoma",
+      "timezone": "America/Chicago",
+      "coverage": "links_only",
+      "election_office": "Oklahoma State Election Board",
+      "official_links": [
+        { "key": "registration", "label": "Check registration, polling place and ballot", "owner": "Oklahoma State Election Board", "url": "https://okvoterportal.okelections.gov/", "phases": ["far", "in_season", "election_day"] },
+        { "key": "absentee", "label": "Absentee voting", "owner": "Oklahoma State Election Board", "url": "https://oklahoma.gov/elections/voters/absentee-voting.html", "phases": ["far", "in_season"] },
+        { "key": "election_information", "label": "Election information", "owner": "Oklahoma State Election Board", "url": "https://oklahoma.gov/elections.html", "phases": ["far", "election_day"] }
+      ],
+      "checked": {
+        "at": "2026-10-15",
+        "by": "Nationwide civic lane, each link opened",
+        "method": "Links from the U.S. Election Assistance Commission's Register and Vote in Your State page for Oklahoma (https://www.eac.gov/voters/register-and-vote-in-your-state), each opened on 2026-10-15: 3 by a script that followed redirects and read the page title, 0 in a browser because the state's bot check blocks scripts. No dates or deadlines: the state stays links-only."
+      }
+    },
     "OR": {
       "name": "Oregon",
       "timezone": "America/Los_Angeles",
@@ -147,6 +672,7 @@
       ],
       "election_office": "Oregon Secretary of State",
       "election_office_phrase": "the Oregon Secretary of State",
+      "election_office_url": "https://sos.oregon.gov/elections/pages/default.aspx",
       "official_links": [
         { "key": "registration", "label": "Register or update online", "owner": "Secretary of State", "url": "https://sos.oregon.gov/elections/pages/registration.aspx", "phases": ["far", "in_season"] },
         { "key": "ballot_tracking", "label": "Track your ballot", "owner": "My Vote", "url": "https://sos.oregon.gov/elections/pages/myvote.aspx", "phases": ["in_season", "election_day", "after"] },
@@ -160,12 +686,108 @@
         "method": "Dates and links from the state's official pages, and county pages where the state's own page wasn't found, as returned by web search on Sep 24. The build container could not open sos.oregon.gov or oregonvotes.gov directly."
       }
     },
-    "PA": { "name": "Pennsylvania", "timezone": "America/New_York", "coverage": "links_only" },
-    "RI": { "name": "Rhode Island", "timezone": "America/New_York", "coverage": "links_only" },
-    "SC": { "name": "South Carolina", "timezone": "America/New_York", "coverage": "links_only" },
-    "SD": { "name": "South Dakota", "timezone": "America/Chicago", "coverage": "links_only" },
-    "TN": { "name": "Tennessee", "timezone": "America/Chicago", "coverage": "links_only" },
-    "TX": { "name": "Texas", "timezone": "America/Chicago", "coverage": "links_only" },
+    "PA": {
+      "name": "Pennsylvania",
+      "timezone": "America/New_York",
+      "coverage": "links_only",
+      "election_office": "Pennsylvania Department of State",
+      "official_links": [
+        { "key": "registration", "label": "Check your registration", "owner": "Pennsylvania Department of State", "url": "https://www.pavoterservices.pa.gov/pages/voterregistrationstatus.aspx", "phases": ["far", "in_season"] },
+        { "key": "absentee", "label": "Mail-in and absentee ballots", "owner": "Pennsylvania Department of State", "url": "https://www.pa.gov/agencies/vote/voter-support/mail-in-and-absentee-ballot", "phases": ["far", "in_season"] },
+        { "key": "polling_places", "label": "Find your polling place", "owner": "Pennsylvania Department of State", "url": "https://www.pavoterservices.pa.gov/Pages/PollingPlaceInfo.aspx", "phases": ["in_season", "election_day"] },
+        { "key": "ballot_tracking", "label": "Track your ballot", "owner": "Pennsylvania Department of State", "url": "https://www.pavoterservices.pa.gov/Pages/BallotTracking.aspx", "phases": ["in_season", "election_day"] },
+        { "key": "election_information", "label": "Election information", "owner": "Pennsylvania Department of State", "url": "https://www.pa.gov/agencies/vote", "phases": ["far", "election_day"] }
+      ],
+      "checked": {
+        "at": "2026-10-15",
+        "by": "Nationwide civic lane, each link opened",
+        "method": "Links from the U.S. Election Assistance Commission's Register and Vote in Your State page for Pennsylvania (https://www.eac.gov/voters/register-and-vote-in-your-state), each opened on 2026-10-15: 5 by a script that followed redirects and read the page title, 0 in a browser because the state's bot check blocks scripts. No dates or deadlines: the state stays links-only."
+      }
+    },
+    "RI": {
+      "name": "Rhode Island",
+      "timezone": "America/New_York",
+      "coverage": "links_only",
+      "election_office": "Rhode Island Secretary of State",
+      "official_links": [
+        { "key": "registration", "label": "Check registration and ballot status", "owner": "Rhode Island Secretary of State", "url": "https://vote.sos.ri.gov/Home/UpdateVoterRecord?ActiveFlag=0", "phases": ["far", "in_season"] },
+        { "key": "absentee", "label": "Vote by mail", "owner": "Rhode Island Secretary of State", "url": "https://vote.sos.ri.gov/Voter/VotebyMail?ActiveFlag=4", "phases": ["far", "in_season"] },
+        { "key": "polling_places", "label": "Find your polling place", "owner": "Rhode Island Secretary of State", "url": "https://vote.sos.ri.gov/Home/PollingPlaces?ActiveFlag=2", "phases": ["in_season", "election_day"] },
+        { "key": "election_information", "label": "Election information", "owner": "Rhode Island Board of Elections", "url": "https://elections.ri.gov/", "phases": ["far", "election_day"] }
+      ],
+      "checked": {
+        "at": "2026-10-15",
+        "by": "Nationwide civic lane, each link opened",
+        "method": "Links from the U.S. Election Assistance Commission's Register and Vote in Your State page for Rhode Island (https://www.eac.gov/voters/register-and-vote-in-your-state), each opened on 2026-10-15: 0 by a script that followed redirects and read the page title, 4 in a browser because the state's bot check blocks scripts. No dates or deadlines: the state stays links-only."
+      }
+    },
+    "SC": {
+      "name": "South Carolina",
+      "timezone": "America/New_York",
+      "coverage": "links_only",
+      "election_office": "South Carolina Election Commission",
+      "official_links": [
+        { "key": "registration", "label": "Check registration and polling place", "owner": "South Carolina Election Commission", "url": "https://vrems.scvotes.sc.gov/Voter/Login", "phases": ["far", "in_season", "election_day"] },
+        { "key": "absentee", "label": "Absentee voting", "owner": "South Carolina Election Commission", "url": "https://scvotes.gov/voters/absentee-voting/", "phases": ["far", "in_season"] },
+        { "key": "ballot_tracking", "label": "Track your absentee ballot", "owner": "South Carolina Election Commission", "url": "https://vrems.scvotes.sc.gov/Voter/Login?PageMode=AbsenteeInfo", "phases": ["in_season", "election_day"] },
+        { "key": "election_information", "label": "Election information", "owner": "South Carolina Election Commission", "url": "https://www.scvotes.gov/", "phases": ["far", "election_day"] }
+      ],
+      "checked": {
+        "at": "2026-10-15",
+        "by": "Nationwide civic lane, each link opened",
+        "method": "Links from the U.S. Election Assistance Commission's Register and Vote in Your State page for South Carolina (https://www.eac.gov/voters/register-and-vote-in-your-state), each opened on 2026-10-15: 4 by a script that followed redirects and read the page title, 0 in a browser because the state's bot check blocks scripts. No dates or deadlines: the state stays links-only."
+      }
+    },
+    "SD": {
+      "name": "South Dakota",
+      "timezone": "America/Chicago",
+      "coverage": "links_only",
+      "election_office": "South Dakota Secretary of State",
+      "official_links": [
+        { "key": "registration", "label": "Check registration, polling place and ballot", "owner": "South Dakota Secretary of State", "url": "https://vip.sdsos.gov/viplogin.aspx", "phases": ["far", "in_season", "election_day"] },
+        { "key": "absentee", "label": "Absentee voting", "owner": "South Dakota Secretary of State", "url": "https://sdsos.gov/elections-voting/voting/absentee-voting.aspx", "phases": ["far", "in_season"] },
+        { "key": "election_information", "label": "Election information", "owner": "South Dakota Secretary of State", "url": "https://sdsos.gov/elections-voting/", "phases": ["far", "election_day"] }
+      ],
+      "checked": {
+        "at": "2026-10-15",
+        "by": "Nationwide civic lane, each link opened",
+        "method": "Links from the U.S. Election Assistance Commission's Register and Vote in Your State page for South Dakota (https://www.eac.gov/voters/register-and-vote-in-your-state), each opened on 2026-10-15: 3 by a script that followed redirects and read the page title, 0 in a browser because the state's bot check blocks scripts. No dates or deadlines: the state stays links-only."
+      }
+    },
+    "TN": {
+      "name": "Tennessee",
+      "timezone": "America/Chicago",
+      "coverage": "links_only",
+      "election_office": "Tennessee Secretary of State",
+      "official_links": [
+        { "key": "registration", "label": "Check registration and ballot status", "owner": "Tennessee Secretary of State", "url": "https://tnmap.tn.gov/voterlookup/", "phases": ["far", "in_season"] },
+        { "key": "absentee", "label": "Absentee voting", "owner": "Tennessee Secretary of State", "url": "https://sos.tn.gov/elections/services/absentee-voting", "phases": ["far", "in_season"] },
+        { "key": "polling_places", "label": "Find your polling place with GoVoteTN", "owner": "Tennessee Secretary of State", "url": "https://sos.tn.gov/elections/services/download-the-govotetn-app", "phases": ["in_season", "election_day"] },
+        { "key": "election_information", "label": "Election information", "owner": "Tennessee Secretary of State", "url": "https://sos.tn.gov/elections", "phases": ["far", "election_day"] }
+      ],
+      "checked": {
+        "at": "2026-10-15",
+        "by": "Nationwide civic lane, each link opened",
+        "method": "Links from the U.S. Election Assistance Commission's Register and Vote in Your State page for Tennessee (https://www.eac.gov/voters/register-and-vote-in-your-state), each opened on 2026-10-15: 4 by a script that followed redirects and read the page title, 0 in a browser because the state's bot check blocks scripts. No dates or deadlines: the state stays links-only."
+      }
+    },
+    "TX": {
+      "name": "Texas",
+      "timezone": "America/Chicago",
+      "coverage": "links_only",
+      "election_office": "Texas Secretary of State",
+      "official_links": [
+        { "key": "registration", "label": "Check registration and polling place", "owner": "Texas Secretary of State", "url": "https://teamrv-mvp.sos.texas.gov/MVP/mvp.do", "phases": ["far", "in_season", "election_day"] },
+        { "key": "absentee", "label": "Voting by mail", "owner": "Texas Secretary of State", "url": "https://www.votetexas.gov/voting-by-mail/index.html", "phases": ["far", "in_season"] },
+        { "key": "ballot_tracking", "label": "Track your mail ballot", "owner": "Texas Secretary of State", "url": "https://www.votetexas.gov/voting-by-mail/track-my-ballot.html", "phases": ["in_season", "election_day"] },
+        { "key": "election_information", "label": "Election information", "owner": "Texas Secretary of State", "url": "https://www.votetexas.gov/", "phases": ["far", "election_day"] }
+      ],
+      "checked": {
+        "at": "2026-10-15",
+        "by": "Nationwide civic lane, each link opened",
+        "method": "Links from the U.S. Election Assistance Commission's Register and Vote in Your State page for Texas (https://www.eac.gov/voters/register-and-vote-in-your-state), each opened on 2026-10-15: 4 by a script that followed redirects and read the page title, 0 in a browser because the state's bot check blocks scripts. No dates or deadlines: the state stays links-only."
+      }
+    },
     "UT": {
       "name": "Utah",
       "timezone": "America/Denver",
@@ -175,6 +797,7 @@
       "dependent_schools": false,
       "election_office": "Utah Lieutenant Governor",
       "election_office_phrase": "the Utah Lieutenant Governor’s office",
+      "election_office_url": "https://vote.utah.gov/",
       "official_links": [
         { "key": "registration", "label": "Check or update registration", "owner": "Lieutenant Governor", "url": "https://vote.utah.gov/voter-registration-portal/", "phases": ["far", "in_season"] },
         { "key": "ballot_tracking", "label": "Track your ballot", "owner": "Lieutenant Governor", "url": "https://vote.utah.gov/track-my-ballot/", "phases": ["in_season", "election_day", "after"] },
@@ -196,6 +819,7 @@
       "dependent_schools": false,
       "election_office": "Vermont Secretary of State",
       "election_office_phrase": "the Vermont Secretary of State",
+      "election_office_url": "https://sos.vermont.gov/elections",
       "official_links": [
         { "key": "registration", "label": "Check or update registration", "owner": "Secretary of State", "url": "https://sos.vermont.gov/elections/voters/registration", "phases": ["far", "in_season"] },
         { "key": "ballot_tracking", "label": "Track your ballot", "owner": "My Voter Page", "url": "https://mvp.vermont.gov/", "phases": ["in_season", "election_day", "after"] },
@@ -209,7 +833,24 @@
         "method": "Dates and links from the state's official pages, and county pages where the state's own page wasn't found, as returned by web search on Sep 24. The build container could not open sos.vermont.gov or mvp.vermont.gov directly. Re-read on 2026-10-06 against the Secretary of State's 2026 Elections Calendar v1.2 (p. 23) and 17 V.S.A. § 2537a: mailing starts no later than 43 days before the election (Sep 21) and is completed by Oct 1, so the data says ballots are mailed by Oct 1."
       }
     },
-    "VA": { "name": "Virginia", "timezone": "America/New_York", "coverage": "links_only" },
+    "VA": {
+      "name": "Virginia",
+      "timezone": "America/New_York",
+      "coverage": "links_only",
+      "election_office": "Virginia Department of Elections",
+      "official_links": [
+        { "key": "registration", "label": "Check your registration", "owner": "Virginia Department of Elections", "url": "https://vote.elections.virginia.gov/VoterInformation/Lookup/status", "phases": ["far", "in_season"] },
+        { "key": "absentee", "label": "Early and absentee voting", "owner": "Virginia Department of Elections", "url": "https://www.elections.virginia.gov/casting-a-ballot/early-absentee/", "phases": ["far", "in_season"] },
+        { "key": "polling_places", "label": "Find your polling place", "owner": "Virginia Department of Elections", "url": "https://vote.elections.virginia.gov/VoterInformation/Lookup/polling", "phases": ["in_season", "election_day"] },
+        { "key": "ballot_tracking", "label": "Check your ballot status", "owner": "Virginia Department of Elections", "url": "https://www.elections.virginia.gov/citizen-portal/", "phases": ["in_season", "election_day"] },
+        { "key": "election_information", "label": "Election information", "owner": "Virginia Department of Elections", "url": "https://www.elections.virginia.gov/", "phases": ["far", "election_day"] }
+      ],
+      "checked": {
+        "at": "2026-10-15",
+        "by": "Nationwide civic lane, each link opened",
+        "method": "Links from the U.S. Election Assistance Commission's Register and Vote in Your State page for Virginia (https://www.eac.gov/voters/register-and-vote-in-your-state), each opened on 2026-10-15: 5 by a script that followed redirects and read the page title, 0 in a browser because the state's bot check blocks scripts. No dates or deadlines: the state stays links-only."
+      }
+    },
     "WA": {
       "name": "Washington",
       "timezone": "America/Los_Angeles",
@@ -219,6 +860,7 @@
       "dependent_schools": false,
       "election_office": "Washington Secretary of State",
       "election_office_phrase": "the Washington Secretary of State",
+      "election_office_url": "https://www.sos.wa.gov/elections",
       "official_links": [
         { "key": "registration", "label": "Check or update registration", "owner": "Secretary of State", "url": "https://www.sos.wa.gov/elections/voters/voter-registration/register-vote-washington", "phases": ["far", "in_season"] },
         { "key": "ballot_tracking", "label": "Track your ballot", "owner": "VoteWA", "url": "https://voter.votewa.gov/WhereToVote.aspx", "phases": ["in_season", "election_day", "after"] },
@@ -241,8 +883,56 @@
         "method": "Dates match the review's reading of the Secretary of State page (Sep 23), the RCW sections cited per deadline, and Secretary of State pages found by search on Sep 24. The build container could not open sos.wa.gov, votewa.gov or clark.wa.gov directly."
       }
     },
-    "WV": { "name": "West Virginia", "timezone": "America/New_York", "coverage": "links_only" },
-    "WI": { "name": "Wisconsin", "timezone": "America/Chicago", "coverage": "links_only" },
-    "WY": { "name": "Wyoming", "timezone": "America/Denver", "coverage": "links_only" }
+    "WV": {
+      "name": "West Virginia",
+      "timezone": "America/New_York",
+      "coverage": "links_only",
+      "election_office": "West Virginia Secretary of State",
+      "official_links": [
+        { "key": "registration", "label": "Check registration and polling place", "owner": "West Virginia Secretary of State", "url": "https://apps.sos.wv.gov/Elections/voter/amiregisteredtovote", "phases": ["far", "in_season", "election_day"] },
+        { "key": "absentee", "label": "Absentee voting", "owner": "West Virginia Secretary of State", "url": "https://sos.wv.gov/absentee-voting-information", "phases": ["far", "in_season"] },
+        { "key": "ballot_tracking", "label": "Track your absentee ballot", "owner": "West Virginia Secretary of State", "url": "https://apps.sos.wv.gov/Elections/Voter/AbsenteeBallotTracking", "phases": ["in_season", "election_day"] },
+        { "key": "election_information", "label": "Election information", "owner": "West Virginia Secretary of State", "url": "https://sos.wv.gov/elections", "phases": ["far", "election_day"] }
+      ],
+      "checked": {
+        "at": "2026-10-15",
+        "by": "Nationwide civic lane, each link opened",
+        "method": "Links from the U.S. Election Assistance Commission's Register and Vote in Your State page for West Virginia (https://www.eac.gov/voters/register-and-vote-in-your-state), each opened on 2026-10-15: 4 by a script that followed redirects and read the page title, 0 in a browser because the state's bot check blocks scripts. No dates or deadlines: the state stays links-only."
+      }
+    },
+    "WI": {
+      "name": "Wisconsin",
+      "timezone": "America/Chicago",
+      "coverage": "links_only",
+      "election_office": "Wisconsin Elections Commission",
+      "official_links": [
+        { "key": "registration", "label": "Check registration and ballot status", "owner": "Wisconsin Elections Commission", "url": "https://myvote.wi.gov/en-us/My-Voter-Info", "phases": ["far", "in_season"] },
+        { "key": "absentee", "label": "Vote absentee", "owner": "Wisconsin Elections Commission", "url": "https://myvote.wi.gov/en-us/Vote-Absentee-Guide", "phases": ["far", "in_season"] },
+        { "key": "polling_places", "label": "Find your polling place", "owner": "Wisconsin Elections Commission", "url": "https://myvote.wi.gov/en-us/Find-My-Polling-Place", "phases": ["in_season", "election_day"] },
+        { "key": "election_information", "label": "Election information", "owner": "Wisconsin Elections Commission", "url": "https://elections.wi.gov/elections", "phases": ["far", "election_day"] }
+      ],
+      "checked": {
+        "at": "2026-10-15",
+        "by": "Nationwide civic lane, each link opened",
+        "method": "Links from the U.S. Election Assistance Commission's Register and Vote in Your State page for Wisconsin (https://www.eac.gov/voters/register-and-vote-in-your-state), each opened on 2026-10-15: 0 by a script that followed redirects and read the page title, 4 in a browser because the state's bot check blocks scripts. No dates or deadlines: the state stays links-only."
+      }
+    },
+    "WY": {
+      "name": "Wyoming",
+      "timezone": "America/Denver",
+      "coverage": "links_only",
+      "election_office": "Wyoming Secretary of State",
+      "official_links": [
+        { "key": "registration", "label": "Registering to vote", "owner": "Wyoming Secretary of State", "url": "https://sos.wyo.gov/Elections/State/RegisteringToVote.aspx", "phases": ["far", "in_season"] },
+        { "key": "absentee", "label": "Absentee voting", "owner": "Wyoming Secretary of State", "url": "https://sos.wyo.gov/Elections/State/AbsenteeVoting.aspx", "phases": ["far", "in_season"] },
+        { "key": "polling_places", "label": "Find your polling place", "owner": "Wyoming Secretary of State", "url": "https://myelectionday.sos.wyo.gov/WYVOTES/Pages/VOSearch.aspx", "phases": ["in_season", "election_day"] },
+        { "key": "election_information", "label": "Election information", "owner": "Wyoming Secretary of State", "url": "https://sos.wyo.gov/Elections/Default.aspx", "phases": ["far", "election_day"] }
+      ],
+      "checked": {
+        "at": "2026-10-15",
+        "by": "Nationwide civic lane, each link opened",
+        "method": "Links from the U.S. Election Assistance Commission's Register and Vote in Your State page for Wyoming (https://www.eac.gov/voters/register-and-vote-in-your-state), each opened on 2026-10-15: 4 by a script that followed redirects and read the page title, 0 in a browser because the state's bot check blocks scripts. No dates or deadlines: the state stays links-only."
+      }
+    }
   }
 }

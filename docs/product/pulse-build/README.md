@@ -1,5 +1,22 @@
 # Pulse build: start here
 
+> **Paused on October 15, 2026 (founder decision).**
+> - **The switch:** the redesign is behind the launch-cut key `pulse_redesign`, cut 11 in [`docs/launch-scope-flags-2026-10-01.md`](../../launch-scope-flags-2026-10-01.md). It is off unless listed.
+> - **What launches:** the October 13 Pulse, with four tabs (Place · Today · Nearby · Messages) and the feed that opens from Nearby, with its composer and post page. Nothing was removed.
+> - **What stays on regardless:** crime and suspicion Heads-ups stay refused, businesses don't start feed posts, and the privacy fixes made during the build stay on.
+> - **What is paused with the build:** the October 13 "no feature flag" decision and the October 14 "all of it in the launch build" decision below.
+>
+> **To resume:**
+> 1. Read the dated "Paused" note at the top of your stream's [status file](status/) and the handoff it names.
+> 2. List `pulse_redesign` in your local settings: the backend's `LAUNCH_FEATURES`, the web's `NEXT_PUBLIC_LAUNCH_FEATURES`, and `PANTOPUS_LAUNCH_FEATURES` for iOS and Android. Without it, every `/api/pulse` route and Pulse-mode posting answer 403 `PULSE_REDESIGN_UNAVAILABLE`, and the apps show the October 13 Pulse.
+> 3. Rebase the open drafts onto master. PB renames its unmerged migrations to sort after master's newest.
+> 4. Continue from the handoff. Keep both states working until the redesign ships: new screens stay behind the key, and the October 13 Pulse keeps working with it off.
+> 5. Put new redesign-only notification types and jobs behind the key as you add them:
+>    - notification types go in the map in `backend/utils/featureFlags.js`;
+>    - jobs call `skipForLaunchCut('pulse_redesign', …)`;
+>    - routes under `/api/pulse` are already gated.
+> 6. To switch it on for people, the founder lists `pulse_redesign` on the hosted backend first, then ships web and app builds with it listed.
+
 Pulse is the calm, place-based conversation space designed in [PR 625](https://github.com/WangPantopus/skinny-pantopus/pull/625) (merged: the design is [`docs/product/pulse-product-design-2026-09-27.md`](../pulse-product-design-2026-09-27.md) and the five wireframes are in [`docs/product/pulse-screens/`](../pulse-screens/)). On October 13, 2026 the founder decided to build all of it, now, without a feature flag; on October 14 the founder confirmed **everything in the design, all of it in the launch build**. This folder is the build kit: what to build, the API and data contract, the delivery order, how to verify, the coverage check, and one brief per stream.
 
 **Read in this order:** [`AGENTS.md`](../../../AGENTS.md) → this file → your stream brief in [`streams/`](streams/) → the design ([`pulse-product-design-2026-09-27.md`](../pulse-product-design-2026-09-27.md), and look at the five wireframes) → [`01-build-spec.md`](01-build-spec.md) → [`02-contract.md`](02-contract.md) → [`03-delivery-plan.md`](03-delivery-plan.md) → [`04-verification.md`](04-verification.md) → [`05-scenarios.md`](05-scenarios.md) → [`06-coverage.md`](06-coverage.md). The design explains why; the build spec says exactly what; where they differ, the build spec wins. The coverage file lists every requirement of the design and the slice that builds it: when you finish a slice, read its rows and check nothing was left out.

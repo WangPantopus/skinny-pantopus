@@ -704,6 +704,8 @@ export interface PlaceCivicDistrictsData {
   representatives: PlaceCivicRepresentative[];
   /** Ballot P0 (`ballot_p0`): the governments view's data, all year. */
   governments?: BallotGovernments | null;
+  /** Ballot P0: who runs the state's elections, all year (reference data). */
+  election_office?: BallotElectionOffice | null;
 }
 
 export interface PlaceBallotRace {
@@ -772,6 +774,16 @@ export interface BallotOfficialLink {
   label: string;
   owner: string;
   url: string;
+}
+
+/** The office that runs a state's elections and its own pages. */
+export interface BallotElectionOffice {
+  name: string;
+  /** The office as it reads in a sentence: "the Texas Secretary of State". */
+  phrase: string;
+  /** "Until then, the Texas Secretary of State and your county election office have upcoming election dates." */
+  note?: string | null;
+  links: BallotOfficialLink[];
 }
 
 export interface BallotGovernment {

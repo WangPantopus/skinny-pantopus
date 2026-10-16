@@ -96,6 +96,15 @@ Sessions you start for one job (Instant Screens, Nearby Plans, single fixes) wor
 - [x] The stylized home picture and the Place tab are no longer parked and are for everyone now: the Today sky draws the household's own house from its county record (PR 2202), and the Place tab is the person's place, with the legacy Hub removed (PR 2189). Both merged October 13.
 - [x] Production keeps releasing from every master merge once you enable it; there is no release branch. Until you enable it, production deploys stay off (`BACKEND_DEPLOY_ENABLED` is false in the GitHub `production` environment).
 
+**Made by the founder on October 15 (Pulse).**
+
+- [x] The Pulse redesign pauses for launch. Nothing is removed. It goes behind a new launch-cut key, `pulse_redesign` (cut 11 in the [launch-scope flags](docs/launch-scope-flags-2026-10-01.md)), which is off unless listed.
+  - The apps ship the October 13 Pulse: four tabs (Place · Today · Nearby · Messages) and the feed that opens from Nearby, with its composer and post page.
+  - While the key is off, this replaces the October 13 "no feature flag" and five-tab lines and the October 14 "all of it in the launch build".
+  - iOS, Android and the server each gate their own code; the server gate merges last.
+  - The build resumes after launch from each stream's paused note ([README](docs/product/pulse-build/README.md)).
+- [x] Whatever the key says: crime and suspicion Heads-ups stay refused, businesses still don't start posts in the neighborhood feed, and the privacy fixes made during the Pulse build stay on.
+
 **Still open. The brief builds the default until you decide.**
 
 - [ ] Confirm the September 26 promise and pilot shape: "Know what matters for your home, and stay on top of it"; first-time homeowners in Vancouver, Camas and Washougal; five households, then 30 to 50, for eight weeks each. Default: as written.
@@ -361,6 +370,8 @@ Decided October 12 (section 0) and built by three founder-started sessions: back
 ## Pulse (added October 13)
 
 Decided October 13 (section 0). The [build kit](docs/product/pulse-build/README.md) has the spec, the API and data contract, the delivery plan, the verification kit and one brief per stream. Six sessions work in parallel: PB backend and data, PI iOS, PA Android, PS safety and composer checks, PC channels and public web, PV verification and release. Each keeps its status in `docs/product/pulse-build/status/`; PV keeps the [board](docs/product/pulse-build/status/BOARD.md). There is no flag: slices merge in the order the kit sets, and you choose when to deploy (backend, then web, then app builds) and cut builds.
+
+**Paused October 15 (section 0):** the redesign is behind the launch-cut key `pulse_redesign`, off for launch, and the apps ship the October 13 Pulse. The three running streams (PB, PI, PA) stop after their switch PRs and leave their open PRs as drafts. Everything below resumes after launch.
 
 - [x] Share leak fix: [PR 2252](https://github.com/WangPantopus/skinny-pantopus/pull/2252), merged October 14 at 04:12 UTC, before the streams' first slices.
 - [x] "New tables" is ticked in the kit's README: you approved all eleven tables on October 14 (PR 2304, section 0).

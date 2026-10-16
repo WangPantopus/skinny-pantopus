@@ -87,7 +87,7 @@ async function state(homeId, actorId) {
 }
 
 async function readClaims(homeId, actorId) {
-  const claims = await rows(db.from('HomeOwnershipClaim').select('id, home_id, state, claim_phase_v2, merged_into_claim_id')
+  const claims = await rows(db.from('HomeOwnershipClaim').select('id, home_id, claim_type, state, claim_phase_v2, merged_into_claim_id')
     .eq('home_id', homeId).eq('claimant_user_id', actorId).order('created_at', { ascending: false }).order('id'));
   if (claims.some(claim => !uuid(claim.id) || claim.home_id !== homeId || typeof claim.state !== 'string')) throw failure();
   return claims;
@@ -118,6 +118,8 @@ function materialize(opening, claims, homeCard) {
     role_base: mode === 'shared' ? access.effective_role_base : null,
     ownership_status: owner?.owner_status || null, verification_tier: owner?.verification_tier || null,
     is_primary_owner: owner?.is_primary_owner === true, pending_claim_id: pending?.id || null,
+    // 'resident' is a renter's residency document, 'owner' an ownership claim: the apps name the review by it.
+    pending_claim_type: pending?.claim_type || null,
     can_delete_home: null, // read() sets it from the final recheck
   };
 }

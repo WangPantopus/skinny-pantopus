@@ -31,10 +31,23 @@
  *
  * To add games: append rows with the official page as `source`, times in UTC (Pacific is
  * UTC-7 until Nov 1, 2026, then UTC-8 until Mar 14, 2027). GET /api/plans/games serves the
- * ones that start within 14 days and have at least 30 minutes left.
+ * ones that start within 14 days and have at least 30 minutes left, and only to people
+ * whose home, saved place or location is near the team's home venue (TEAMS below, see
+ * services/plans/planGames.js); everyone else gets the plain invitation. A new team needs
+ * a TEAMS entry too.
  */
 
 const CHECKED_AT = '2026-10-14';
+
+// Each team's home venue (approximate coordinates), for the distance filter.
+const TEAMS = {
+  seahawks: { venue: 'Lumen Field, Seattle', latitude: 47.5952, longitude: -122.3316 },
+  trail_blazers: { venue: 'Moda Center, Portland', latitude: 45.5316, longitude: -122.6668 },
+  timbers: { venue: 'Providence Park, Portland', latitude: 45.5215, longitude: -122.6917 },
+  huskies: { venue: 'Husky Stadium, Seattle', latitude: 47.6503, longitude: -122.3016 },
+  ducks: { venue: 'Autzen Stadium, Eugene', latitude: 44.0583, longitude: -123.0685 },
+  cougars: { venue: 'Martin Stadium, Pullman', latitude: 46.7319, longitude: -117.1601 },
+};
 
 const GAMES = [
   { id: 'timbers-2026-10-14-lag', team: 'timbers', label: 'Timbers', opponent: 'LA Galaxy', home: false,
@@ -151,4 +164,4 @@ const GAMES = [
     starts_at: '2026-12-30T03:00:00Z', ends_at: '2026-12-30T05:30:00Z', source: 'https://www.nba.com/blazers/schedule' },
 ];
 
-module.exports = { CHECKED_AT, GAMES };
+module.exports = { CHECKED_AT, GAMES, TEAMS };

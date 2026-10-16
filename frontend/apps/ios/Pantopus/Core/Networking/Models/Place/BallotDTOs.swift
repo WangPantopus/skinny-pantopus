@@ -68,6 +68,29 @@ public struct BallotOfficialLink: Decodable, Sendable, Hashable {
     public let url: String
 }
 
+/// Who runs the state's elections (`civic_districts.election_office`).
+public struct BallotElectionOffice: Decodable, Sendable, Hashable {
+    public let name: String
+    /// The office as it reads in a sentence: "the Texas Secretary of State".
+    public let phrase: String
+    /// "Until then, the Texas Secretary of State and your county election
+    /// office have upcoming election dates." Written by the server.
+    public let note: String?
+    public let links: [BallotOfficialLink]
+
+    private enum CodingKeys: String, CodingKey {
+        case name, phrase, note, links
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        name = try c.decode(String.self, forKey: .name)
+        phrase = (try? c.decodeIfPresent(String.self, forKey: .phrase)) ?? "the \(name)"
+        note = try? c.decodeIfPresent(String.self, forKey: .note)
+        links = try c.decode([BallotOfficialLink].self, forKey: .links)
+    }
+}
+
 public struct BallotGovernment: Decodable, Sendable, Hashable {
     public let level: String
     public let name: String

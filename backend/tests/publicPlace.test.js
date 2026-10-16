@@ -906,7 +906,7 @@ describe('the Ballot P0 teaser', () => {
     }
   });
 
-  it('outside the pilot: the election date and Vote.gov, never a count', async () => {
+  it('outside the pilot: the election date and the state’s own registration lookup, never a count', async () => {
     enableGlobally();
     geo.forwardGeocode.mockResolvedValue({
       latitude: 30.2672, longitude: -97.7431, city: 'Austin', state: 'TX', zipcode: '78701', address: '100 Congress Ave',
@@ -918,7 +918,8 @@ describe('the Ballot P0 teaser', () => {
       headline: 'The general election is November 3.',
       governments: null,
       next_deadline: null,
-      primary_action: { kind: 'link', label: 'Check your registration', url: 'https://vote.gov/' },
+      primary_action: { kind: 'link', label: 'Check your registration', url: 'https://teamrv-mvp.sos.texas.gov/MVP/mvp.do' },
+      source_line: 'Election date: federal law · Links: Texas Secretary of State',
     });
   });
 });

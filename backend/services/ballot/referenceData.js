@@ -182,6 +182,9 @@ function validateReferenceData(statesDoc = STATES_DOC, electionsDoc = ELECTIONS_
     if (typeof entry.name !== 'string' || !entry.name) errors.push(`${at}: name is required`);
     if (!isTimezone(entry.timezone)) errors.push(`${at}: timezone ${entry.timezone} is not valid`);
     if (!COVERAGE.includes(entry.coverage)) errors.push(`${at}: coverage must be ${COVERAGE.join('|')}`);
+    // The office's own elections page, kept between elections (a supported
+    // state's election-information link is about one election).
+    if (entry.election_office_url != null && !isHttps(entry.election_office_url)) errors.push(`${at}: election_office_url must be https`);
     if (entry.coverage === 'supported') {
       if (!['all_mail', 'mail_or_in_person', 'in_person_with_absentee'].includes(entry.voting_method)) {
         errors.push(`${at}: voting_method is required for a supported state`);
@@ -201,6 +204,13 @@ function validateReferenceData(statesDoc = STATES_DOC, electionsDoc = ELECTIONS_
         validateLinks(county.official_links, `${at}.counties.${geoid}`, errors);
       }
       if (!entry.checked || !isIsoDate(entry.checked.at)) errors.push(`${at}: checked.at date is required`);
+    } else if (entry.official_links != null) {
+      // A links-only state may carry its own election office's pages (still
+      // no dates): the same link rules, the office that owns them, and the
+      // day a person checked them.
+      validateLinks(entry.official_links, at, errors);
+      if (typeof entry.election_office !== 'string' || !entry.election_office) errors.push(`${at}: election_office is required with official_links`);
+      if (!entry.checked || !isIsoDate(entry.checked.at)) errors.push(`${at}: checked.at date is required with official_links`);
     }
   }
 
@@ -214,6 +224,8 @@ function validateReferenceData(statesDoc = STATES_DOC, electionsDoc = ELECTIONS_
     ids.add(election.id);
     if (!isIsoDate(election.date)) errors.push(`${at}: date must be YYYY-MM-DD`);
     if (typeof election.name !== 'string' || !election.name) errors.push(`${at}: name is required`);
+    // A links-only card cites it as the date's authority ("Election date: …").
+    if (typeof election.source !== 'string' || !election.source) errors.push(`${at}: source is required`);
     if (election.applies_to !== 'all_states' && !Array.isArray(election.applies_to)) {
       errors.push(`${at}: applies_to must be "all_states" or a list of states`);
     }
@@ -395,6 +407,9 @@ function currentElection(value, { now = new Date(), timezone = null } = {}) {
     .filter((e) => electionAppliesTo(e, state.code))
     .map((e) => ({ election: e, daysUntil: daysBetween(today, e.date), afterDays: afterDaysFor(e, state) }))
     .filter(({ daysUntil, afterDays }) => phaseFor(daysUntil, afterDays) !== null)
+    // A links-only card is gone once its election passes, so the week after
+    // one must not hide the next (Louisiana: Oct 9 primary, Nov 20 general).
+    .filter(({ daysUntil, afterDays }) => state.coverage === 'supported' || phaseFor(daysUntil, afterDays) !== 'after')
     .sort((a, b) => a.election.date.localeCompare(b.election.date));
   if (!candidates.length) return null;
   const { election, daysUntil, afterDays } = candidates[0];
