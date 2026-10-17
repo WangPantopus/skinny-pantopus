@@ -239,7 +239,8 @@ class PlanDetailViewModel
 
         fun openAsk() {
             val plan = (_ui.value.state as? PlanDetailUiState.Ready)?.plan ?: return
-            val mine = plan.myRequest
+            // Only a request still waiting fills the sheet ("Change who's coming"); a withdrawn or declined one starts fresh.
+            val mine = plan.myRequest?.takeIf { plan.standing == PlanViewerStanding.REQUESTED }
             _ui.update {
                 it.copy(
                     askOpen = true,
