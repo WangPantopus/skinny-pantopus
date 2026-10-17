@@ -8,7 +8,7 @@
 //  three tabs sharing a single `ListOfRows` shell:
 //
 //    - **My trains** — `GET /api/support-trains/me/support-trains`
-//      (`role` filter omitted so both organizer + helper rows surface).
+//      (`role` filter omitted so organizer, recipient and helper rows surface).
 //    - **Nearby** — `GET /api/support-trains/nearby` with the caller's
 //      location.
 //    - **Invitations** — projected client-side from `me/support-trains`
@@ -149,7 +149,7 @@ public final class SupportTrainsViewModel: ListOfRowsDataSource {
         }
     }
 
-    /// The trains you organize, help with or were invited to.
+    /// The trains you organize, receive, help with or were invited to.
     private static var mineEndpoint: Endpoint {
         SupportTrainsEndpoints.mine()
     }
@@ -398,6 +398,7 @@ private extension SupportTrainsViewModel {
         switch role ?? "" {
         case "organizer": "You organize"
         case "co_organizer": "You co-organize"
+        case "recipient": "For you"
         case "helper": "Helper"
         default: nil
         }
