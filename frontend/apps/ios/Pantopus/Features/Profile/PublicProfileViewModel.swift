@@ -665,7 +665,7 @@ public final class PublicProfileViewModel {
             )
             blockState = .succeeded
             // Blocked lists, the profile's block count and chats change.
-            ScreenStore.shared.markStale(topics: [ScreenTopic.profileMe, ScreenTopic.chats])
+            store.markStale(topics: [ScreenTopic.profileMe, ScreenTopic.chats, ScreenTopic.posts])
             // RN flips `connectionState` to 'blocked' on the same success,
             // which is what drops the Connect / Follow row
             // (`src/app/user/[id].tsx:322`).
@@ -700,6 +700,7 @@ public final class PublicProfileViewModel {
             isBlockedByViewer = false
             connection = .none
             toastMessage = "User unblocked"
+            store.markStale(topics: [ScreenTopic.profileMe, ScreenTopic.chats, ScreenTopic.posts])
             profileChanged()
             await fetch(force: true)
         } catch let error as APIError {
@@ -1060,8 +1061,8 @@ public final class PublicProfileViewModel {
 
         let welcome = isNew
             ? NeighborWelcome(
-                title: "Be the welcome wagon",
-                body: "\(firstName(profile.displayName)) just moved in. A quick hello goes a long way."
+                title: "Say hello",
+                body: "Send \(firstName(profile.displayName)) a friendly hello."
             )
             : nil
 
@@ -1084,7 +1085,8 @@ public final class PublicProfileViewModel {
 
     private func neighborVerifications(_ profile: PublicProfile, isNew: Bool) -> [NeighborVerification] {
         let tile: NeighborVerification.Tile = isNew ? .success : .primary
-        let trailing: NeighborVerification.Trailing = isNew ? .status("Recent") : .check
+        // Review count says nothing about when an email or address was verified.
+        let trailing: NeighborVerification.Trailing = .check
         var items: [NeighborVerification] = []
         // Only what the payload shows: verified residency (method unknown) and
         // the account's confirmed email. No server field records an ID check.

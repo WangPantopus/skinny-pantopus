@@ -440,7 +440,7 @@ struct PublicProfilePostsFeed: View {
     var hiddenByBlock = false
 
     var body: some View {
-        if posts.isEmpty {
+        if hiddenByBlock || posts.isEmpty {
             emptyState
                 .padding(.horizontal, Spacing.s4)
         } else {

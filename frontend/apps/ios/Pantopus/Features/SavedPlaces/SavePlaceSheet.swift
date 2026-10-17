@@ -271,7 +271,7 @@ public final class SavedPlacesStore {
         }
     }
 
-    // MARK: Matching ("saved if it matches by geocode_place_id, else lat/lng")
+    // MARK: Matching (provider ID or the saved coordinate)
 
     private static func matchKey(geocodePlaceId: String?, latitude: Double, longitude: Double) -> String {
         if let gid = geocodePlaceId, !gid.isEmpty { return "gid:\(gid)" }
@@ -279,9 +279,12 @@ public final class SavedPlacesStore {
     }
 
     public func savedId(geocodePlaceId: String?, latitude: Double, longitude: Double) -> String? {
-        let key = Self.matchKey(geocodePlaceId: geocodePlaceId, latitude: latitude, longitude: longitude)
+        let coordinate = Self.matchKey(geocodePlaceId: nil, latitude: latitude, longitude: longitude)
         return saved.first { dto in
-            Self.matchKey(geocodePlaceId: dto.geocodePlaceId, latitude: dto.latitude, longitude: dto.longitude) == key
+            if let geocodePlaceId, !geocodePlaceId.isEmpty, dto.geocodePlaceId == geocodePlaceId { return true }
+            // The server may fill geocode_place_id from source_id (for example,
+            // a post ID). Coordinates still identify the same saved point.
+            return Self.matchKey(geocodePlaceId: nil, latitude: dto.latitude, longitude: dto.longitude) == coordinate
         }?.id
     }
 
