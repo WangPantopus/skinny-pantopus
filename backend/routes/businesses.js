@@ -4776,6 +4776,31 @@ router.get('/invoices/:invoiceId', verifyToken, async (req, res) => {
       return res.status(404).json({ error: 'Invoice not found', code: 'NOT_FOUND' });
     }
 
+    // Opening the recipient detail is the view event. A conditional update must
+    // never turn a concurrently paid or voided invoice back into a payable one.
+    if (invoice.status === 'sent') {
+      const { error: viewError } = await supabaseAdmin
+        .from('BusinessInvoice')
+        .update({ status: 'viewed' })
+        .eq('id', invoiceId)
+        .eq('recipient_user_id', userId)
+        .eq('status', 'sent');
+      if (viewError) {
+        logger.error('Record invoice view error', { error: viewError.message });
+        return res.status(500).json({ error: 'Failed to open invoice', code: 'INTERNAL_ERROR' });
+      }
+      const { data: current, error: currentError } = await supabaseAdmin
+        .from('BusinessInvoice')
+        .select('status')
+        .eq('id', invoiceId)
+        .eq('recipient_user_id', userId)
+        .single();
+      if (currentError || !current) {
+        return res.status(500).json({ error: 'Failed to open invoice', code: 'INTERNAL_ERROR' });
+      }
+      invoice.status = current.status;
+    }
+
     res.json({ invoice });
   } catch (err) {
     logger.error('Get received invoice error', { error: err.message });
