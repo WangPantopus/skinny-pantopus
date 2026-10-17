@@ -31,8 +31,7 @@ final class DeepLinkRouter {
         /// While the Pulse redesign is off (launch cut #11) only `/nearby`
         /// resolves here, and it opens the Nearby tab, as on October 13.
         case pulse
-        /// `/plans`: the Plans tab, while the `plans` switch is on (Nearby
-        /// while the Pulse redesign is off).
+        /// `/plans`: the Plans tab, while the `plans` switch is on.
         case plans
         case notifications
         case supportTrain(id: String)
@@ -218,7 +217,7 @@ final class DeepLinkRouter {
         /// `persona_follow`. Opens "Your audience" (requests and members).
         case creatorAudienceMembers
         /// `/plans/:id` — a Nearby Plan (share links, plan pushes). Opens in
-        /// the Nearby stack; dropped while the `plans` flag is off.
+        /// the Plans tab's stack; dropped while the `plans` flag is off.
         case plan(id: String)
         /// `/plans/:id/requests` — the host's requests (H10).
         case planRequests(id: String)

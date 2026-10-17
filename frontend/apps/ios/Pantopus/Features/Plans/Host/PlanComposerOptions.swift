@@ -2,10 +2,11 @@
 //  PlanComposerOptions.swift
 //  Pantopus
 //
-//  The choices the host composer offers (boards H2 to H5) and their words:
-//  sports, levels, walk kinds, paces, kids' age bands, and what "extra gear"
-//  is called for each sport. The values sent are recorded in the Plans
-//  coordination folder (QUESTIONS.md) for the backend to match.
+//  The choices the host composer offers (boards H2 to H5, and the study
+//  group) and their words: sports, levels, walk kinds, paces, study styles,
+//  kids' age bands, and what "extra gear" is called for each sport. The
+//  values sent are recorded in the Plans coordination folder (QUESTIONS.md)
+//  for the backend to match.
 //
 
 import Foundation
@@ -42,6 +43,17 @@ enum PlanComposerOptions {
         ("easy", "Easy"),
         ("brisk", "Brisk")
     ]
+
+    /// A study group's "How you'll study".
+    static let studyStyles: [(value: String, label: String)] = [
+        ("quiet", "Quiet study"),
+        ("together", "Work through it together")
+    ]
+
+    /// "Quiet study", "Work through it together"; nil for a style this build doesn't know.
+    static func studyStyleLabel(_ value: String?) -> String? {
+        studyStyles.first { $0.value == value }?.label
+    }
 
     static func sportLabel(_ value: String?) -> String {
         sports.first { $0.value == value }?.label ?? "Pickup game"

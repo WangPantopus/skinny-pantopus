@@ -44,8 +44,12 @@ struct PlanRowModel: Identifiable, Equatable {
             parts.append(PlanFormat.dayPartPhrase(card.dayPart, day: card.startsOnDate, now: now, calendar: calendar))
             parts.append(area)
         }
+        let study = card.kind == .studyGroup ? PlanCardLines.study(card.details) : []
         if card.kind == .playdate, let ages = PlanRowModel.ages(card.details?.kidsAgeBands) {
             parts.append(ages)
+        } else if !study.isEmpty {
+            // A study group says what it studies ("Spanish · Quiet study"), as a playdate says the ages.
+            parts.append(contentsOf: study)
         } else if let distance {
             parts.append(distance)
         }
@@ -126,7 +130,8 @@ struct PlanRowModel: Identifiable, Equatable {
         return .text("\(card.spotsLeft) spot\(card.spotsLeft == 1 ? "" : "s")")
     }
 
-    /// "Watch party, Seahawks game, Sunday 1:25 PM, about 1 mile, 3 spots left".
+    /// "Watch party, Seahawks game, Sunday 1:25 PM, about 1 mile, 3 spots left";
+    /// a study group adds its subject and style ("Spanish, Quiet study").
     static func spoken(_ card: PlanCardDTO, now: Date = Date()) -> String {
         let calendar = PlanFormat.calendar(for: card.timezone)
         var parts = [card.kind.spokenTitle, card.title]
@@ -140,6 +145,7 @@ struct PlanRowModel: Identifiable, Equatable {
         }
         parts.append(card.area.label)
         if let distance = PlanFormat.spokenDistance(card.distanceBand) { parts.append(distance) }
+        if card.kind == .studyGroup { parts.append(contentsOf: PlanCardLines.study(card.details)) }
         parts.append(card.isFull ? "full" : "\(card.spotsLeft) spot\(card.spotsLeft == 1 ? "" : "s") left")
         return parts.joined(separator: ", ")
     }

@@ -185,6 +185,7 @@ struct PlanTypePicker: View {
         case .playdate: "Kids play, parents meet"
         case .pickupGame: "Need players, now or later"
         case .walkCoffee: "Walks, dog walks, coffee"
+        case .studyGroup: "Study together at a library or café"
         }
     }
 }

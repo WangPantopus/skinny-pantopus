@@ -2,12 +2,14 @@
 //  PlansTabRoot.swift
 //  Pantopus
 //
-//  The Plans tab (Pulse S3), present only while the `plans` switch is on
-//  (`RootTabView` adds and removes it at runtime). The same Plans screens
-//  the Nearby tab used to open on: the map (board F1) with its list sheet
-//  (F2), the plan screens pushed on this stack, and the host composer as a
-//  full-screen cover. Plan links, pushes and Today's plan cards arrive
-//  through `PlansNavigator`.
+//  The Plans tab (Pulse S3; with the Pulse redesign off too, founder decision
+//  2026-10-17), present only while the `plans` switch is on (`RootTabView`
+//  adds and removes it at runtime). The same Plans screens the Nearby tab
+//  used to open on: the map (board F1) with its list sheet (F2), the plan
+//  screens pushed on this stack, and the host composer as a full-screen
+//  cover. Plan links, pushes and Today's plan cards arrive through
+//  `PlansNavigator`. With the redesign off, the list has no "More nearby"
+//  rows: Pulse and Connections are on the Nearby tab beside it.
 //
 
 import SwiftUI
@@ -64,15 +66,18 @@ public struct PlansTabRoot: View {
 
     /// What the Plans map can open.
     private var plansActions: PlansMapActions {
-        PlansMapActions(
+        var actions = PlansMapActions(
             openPlan: { card, id, intent in
                 if let card { PlansStoreReads.seed(card) }
                 plansPath.append(.plan(id: id, intent: intent))
             },
-            host: { start in hostRequest = PlansHostRequest(start: start) },
-            openPulse: { rootTabs.selected = .pulse },
-            openConnections: { DeepLinkRouter.shared.handle(path: "/connections") }
+            host: { start in hostRequest = PlansHostRequest(start: start) }
         )
+        if LaunchFeatures.pulseRedesign {
+            actions.openPulse = { rootTabs.selected = .pulse }
+            actions.openConnections = { DeepLinkRouter.shared.handle(path: "/connections") }
+        }
+        return actions
     }
 
     /// A plan link, a push or a Today card asked for a Plans screen.
