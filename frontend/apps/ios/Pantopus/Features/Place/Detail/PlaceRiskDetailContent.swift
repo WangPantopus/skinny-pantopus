@@ -55,7 +55,8 @@ struct PlaceRiskDetailContent: View {
             }
 
             PlaceDetailSectionLabel(text: "Emergency plan")
-            EmergencyChecklist()
+            EmergencyChecklist(homeId: vm.homeId)
+                .id(vm.homeId)
             PlaceSourceNote(name: "Ready.gov · American Red Cross", asOf: nil)
 
             PlaceDetailSectionLabel(text: "Fridge card")
@@ -262,7 +263,14 @@ private struct EmergencyChecklist: View {
         )
     ]
 
-    @State private var checked: Set<String> = []
+    private let storageKey: String
+    @State private var checked: Set<String>
+
+    init(homeId: String) {
+        let accountId: String = if case let .signedIn(user) = AuthManager.shared.state { user.id } else { "guest" }
+        storageKey = "place.emergencyChecklist.\(accountId).\(homeId)"
+        _checked = State(initialValue: Set(UserDefaults.standard.stringArray(forKey: storageKey) ?? []))
+    }
 
     private var total: Int {
         Self.groups.reduce(0) { $0 + $1.items.count }
@@ -280,6 +288,9 @@ private struct EmergencyChecklist: View {
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Theme.Color.home)
                 }
+                Text("Saved on this device for this home · not shared with household members")
+                    .pantopusTextStyle(.small)
+                    .foregroundStyle(Theme.Color.appTextMuted)
                 GeometryReader { proxy in
                     ZStack(alignment: .leading) {
                         Capsule().fill(Theme.Color.appSurfaceSunken).frame(height: 6)
@@ -306,6 +317,7 @@ private struct EmergencyChecklist: View {
     private func checkRow(_ item: String) -> some View {
         Button {
             if checked.contains(item) { checked.remove(item) } else { checked.insert(item) }
+            UserDefaults.standard.set(checked.sorted(), forKey: storageKey)
         } label: {
             HStack(spacing: 10) {
                 ZStack {
@@ -323,6 +335,7 @@ private struct EmergencyChecklist: View {
             }
         }
         .buttonStyle(.plain)
+        .accessibilityValue(checked.contains(item) ? "Ready" : "Not ready")
     }
 }
 
