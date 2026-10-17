@@ -2,7 +2,7 @@
 //  PlansDestination.swift
 //  Pantopus
 //
-//  The screen for each Plans route on the Nearby stack, and the plan's
+//  The screen for each Plans route on the Plans tab's stack, and the plan's
 //  chat (board A4) on top of the existing chat screen.
 //
 

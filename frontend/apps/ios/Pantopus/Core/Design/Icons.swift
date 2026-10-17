@@ -451,6 +451,7 @@ public enum PantopusIcon: String, CaseIterable, Sendable {
     case planPlaydate = "plan-playdate"
     case planPickup = "plan-pickup"
     case planWalk = "plan-walk"
+    case planStudy = "plan-study"
     /// The outlined location arrow (Plans: "Show my location", Directions).
     case locationArrow = "location-arrow"
 
@@ -815,11 +816,13 @@ public enum PantopusIcon: String, CaseIterable, Sendable {
         case .calendarSearch: "magnifyingglass"
         case .gitMerge: "arrow.triangle.merge"
         // Nearby Plans: watch party, playdate (an adult and a child), pickup
-        // game (a ball) and walk & coffee.
+        // game (a ball), walk & coffee and study group (an open book, Lucide
+        // `book-open`).
         case .planWatch: "tv"
         case .planPlaydate: "figure.and.child.holdinghands"
         case .planPickup: "tennisball"
         case .planWalk: "cup.and.saucer"
+        case .planStudy: "book"
         case .locationArrow: "location"
         }
     }

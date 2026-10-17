@@ -372,8 +372,9 @@ private extension PlanPlacePicker {
 
 /// Which public places suit a plan: the kind's own places first (courts and
 /// parks for a pickup game, playgrounds for a playdate, trails for a walk,
-/// bars and restaurants for a watch party), nearest first within each, the
-/// rest after; never a bar for a playdate.
+/// bars and restaurants for a watch party, libraries and cafés for a study
+/// group), nearest first within each, the rest after; never a bar for a
+/// playdate.
 enum PlanPlaceFit {
     static func ordered(_ places: [PlanPlaceOptionDTO], for kind: PlanKind) -> [PlanPlaceOptionDTO] {
         let preferred = preferredCategories(kind)
@@ -397,6 +398,7 @@ enum PlanPlaceFit {
         case .playdate: ["playground", "park", "library", "community_center"]
         case .pickupGame: ["court", "park", "playground", "community_center"]
         case .walkCoffee: ["trail", "park", "cafe"]
+        case .studyGroup: ["library", "cafe", "community_center"]
         }
     }
 }

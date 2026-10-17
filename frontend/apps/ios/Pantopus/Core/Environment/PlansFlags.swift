@@ -9,9 +9,9 @@
 //  `enabled_for_internal_team` and `beta_user_ids`, so pilot testers can have
 //  Plans before everyone else.
 //
-//  Off: Nearby is exactly today's screen, and no Plans entry point, card,
+//  Off: there is no Plans tab, and no Plans entry point, card,
 //  notification or deep link shows. The last answer is remembered per
-//  account, so the right Nearby is there on the first frame after a
+//  account, so the right tab bar is there on the first frame after a
 //  relaunch; a failed check keeps the last answer. A new account starts
 //  from its own answer, never the previous account's.
 //
