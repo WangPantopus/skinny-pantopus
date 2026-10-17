@@ -42,6 +42,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.plans.PlanDto
 import app.pantopus.android.data.api.models.plans.PlanGameDto
 import app.pantopus.android.data.plans.PlanFormat
@@ -226,7 +227,10 @@ internal fun ColumnScope.PlansPeekContent(
 
 private const val PEEK_ROWS = 2
 
-/** The list pulled up (board F2): your plans, today, tomorrow, the rest of the week, then Pulse and Connections. */
+/**
+ * The list pulled up (board F2): your plans, today, tomorrow, the rest of the week, then Pulse and Connections. With the
+ * Pulse redesign off the list ends at the plans: Nearby is its own tab beside Plans, and it has Pulse and Connections.
+ */
 @Composable
 internal fun PlansListContent(
     state: PlansMapUiState,
@@ -271,9 +275,11 @@ internal fun PlansListContent(
             }
         }
         item(key = "more") {
-            SectionTitle("More nearby", top = 14.dp)
-            MoreNearbyRow(PantopusIcon.Megaphone, "Pulse", "Local posts and questions", first = true, onClick = onOpenPulse)
-            MoreNearbyRow(PantopusIcon.Users, "Connections", "Keep up with people you know", first = false, onClick = onOpenConnections)
+            if (LaunchFeatures.pulseRedesign) {
+                SectionTitle("More nearby", top = 14.dp)
+                MoreNearbyRow(PantopusIcon.Megaphone, "Pulse", "Local posts and questions", first = true, onClick = onOpenPulse)
+                MoreNearbyRow(PantopusIcon.Users, "Connections", "Keep up with people you know", first = false, onClick = onOpenConnections)
+            }
             Spacer(modifier = Modifier.height(Spacing.s6))
         }
     }

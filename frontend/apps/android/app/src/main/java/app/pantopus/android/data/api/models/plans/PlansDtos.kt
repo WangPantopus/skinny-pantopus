@@ -58,6 +58,10 @@ data class PlanDetailsDto(
     @Json(name = "walk_kind") val walkKind: String? = null,
     @Json(name = "pace") val pace: String? = null,
     @Json(name = "dogs_welcome") val dogsWelcome: Boolean? = null,
+    /** A study group's subject ("Spanish"), 1 to 60 characters. */
+    @Json(name = "subject") val subject: String? = null,
+    /** A study group's `quiet` or `together` ([app.pantopus.android.data.plans.PlanStudyStyle]). */
+    @Json(name = "study_style") val studyStyle: String? = null,
 )
 
 /**

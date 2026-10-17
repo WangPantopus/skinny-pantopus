@@ -367,16 +367,17 @@ enum PlanOpenIntent: Hashable {
     case view, ask, chat
 }
 
-/// The actions the map hands to the Nearby stack.
+/// The actions the map hands to the Plans tab's stack.
 struct PlansMapActions {
     /// Open a plan (J1 and the screens after it), from its card when one is on screen.
     let openPlan: @MainActor (PlanCardDTO?, String, PlanOpenIntent) -> Void
     /// Start hosting, optionally with a kind (and a game) chosen.
     let host: @MainActor (PlansHostStart?) -> Void
-    /// "More nearby": Pulse.
-    let openPulse: @MainActor () -> Void
+    /// "More nearby": Pulse. Nil drops the "More nearby" rows (the Pulse
+    /// redesign is off, and the Nearby tab beside Plans has them).
+    var openPulse: (@MainActor () -> Void)?
     /// "More nearby": Connections.
-    let openConnections: @MainActor () -> Void
+    var openConnections: (@MainActor () -> Void)?
 }
 
 /// Where the composer starts: a kind, and for a watch party maybe a game.

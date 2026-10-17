@@ -3,9 +3,9 @@
 //  Pantopus
 //
 //  Boards H2 (watch party), H3 (playdate), H4 (pickup game) and H5 (walk &
-//  coffee): the kind's own choices, the title, when, where (with the place
-//  picker, H6), spots, how people get in, the note for people who are in,
-//  and for a watch party the "about" everyone sees.
+//  coffee), and the study group: the kind's own choices, the title, when,
+//  where (with the place picker, H6), spots, how people get in, the note for
+//  people who are in, and for a watch party the "about" everyone sees.
 //
 
 import SwiftUI
@@ -64,6 +64,7 @@ struct PlanDetailsForm: View {
         case .playdate: "Playground morning"
         case .pickupGame: ""
         case .walkCoffee: "Coffee walk around the lake"
+        case .studyGroup: "Spanish practice at the library"
         }
     }
 
@@ -203,7 +204,7 @@ struct PlanDetailsForm: View {
 
     private var spotsTitle: String {
         switch model.kind {
-        case .watchParty: "Spots"
+        case .watchParty, .studyGroup: "Spots"
         case .playdate: "Families"
         case .pickupGame: "Players needed"
         case .walkCoffee: "People"
@@ -212,7 +213,7 @@ struct PlanDetailsForm: View {
 
     private var spotsSubtitle: String {
         switch model.kind {
-        case .watchParty: "People who can join, besides you"
+        case .watchParty, .studyGroup: "People who can join, besides you"
         case .playdate: "Besides yours"
         case .pickupGame: "Shown as \u{201C}need \(model.spots)\u{201D}"
         case .walkCoffee: "Besides you"
@@ -253,6 +254,7 @@ struct PlanDetailsForm: View {
         case .playdate: "Meet by the big slide. We'll bring bubbles."
         case .pickupGame: "Court 3, by the fence."
         case .walkCoffee: "Meet at the trailhead sign. Coffee after."
+        case .studyGroup: "Second floor, the long table by the windows."
         }
     }
 
@@ -351,6 +353,17 @@ struct PlanKindFields: View {
                     onTap: { model.walkKind = $0 },
                     groupLabel: "Kind",
                     identifier: "planWalkKind"
+                )
+            }
+        case .studyGroup:
+            PlanFormField(label: "Subject") {
+                PlanTextInput(placeholder: "Spanish", text: $model.subject, limit: 60, identifier: "planSubject", label: "Subject")
+            }
+            PlanFormField(label: "How you'll study") {
+                PlanSegmented(
+                    options: PlanComposerOptions.studyStyles.map { ($0.value, $0.label) },
+                    selection: $model.studyStyle,
+                    label: "How you'll study"
                 )
             }
         }

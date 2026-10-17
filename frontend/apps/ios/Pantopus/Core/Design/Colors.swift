@@ -405,6 +405,10 @@ public extension Theme.Color {
     static let categoryPlanWalk = SwiftUI.Color("Category/PlanWalk", bundle: Theme.bundle)
     /// Walk & coffee tint — `#fef3c7`, dark `#33290f`.
     static let categoryPlanWalkTint = SwiftUI.Color("Category/PlanWalkTint", bundle: Theme.bundle)
+    /// Plan kind: study group (`cat-plan-study`) — `#db2777`, dark `#f472b6`.
+    static let categoryPlanStudy = SwiftUI.Color("Category/PlanStudy", bundle: Theme.bundle)
+    /// Study group tint — `#fce7f3`, dark `#3a1a2c`.
+    static let categoryPlanStudyTint = SwiftUI.Color("Category/PlanStudyTint", bundle: Theme.bundle)
     /// The glyph on a plan pin or type swatch — white, dark `#0b1220`, so the
     /// glyph keeps its contrast on the lighter dark-mode kind colors.
     static let categoryPlanPinInk = SwiftUI.Color("Category/PlanPinInk", bundle: Theme.bundle)

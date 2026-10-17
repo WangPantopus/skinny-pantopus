@@ -48,13 +48,14 @@ public enum LaunchFeature: String, CaseIterable, Sendable {
     /// hold and mail search. While it is off the Mail tab is "Messages".
     /// Address verification by postcard stays.
     case mailbox
-    /// 11. The Pulse redesign (founder decision, 2026-10-15): the Pulse and
-    /// Plans tabs, the Pulse page with its area picker, topic chips and quiet
-    /// card, post status, the conversation page with its audience picker and
-    /// follow controls, the card controls and the muted-topic preferences.
-    /// While it is off the app is the October 13 Pulse: four tabs (Place ·
-    /// Today · Nearby · Messages), with Pulse, Plans and Connections opened
-    /// from Nearby, the feed and the post page.
+    /// 11. The Pulse redesign (founder decision, 2026-10-15): the Pulse tab,
+    /// the Pulse page with its area picker, topic chips and quiet card, post
+    /// status, the conversation page with its audience picker and follow
+    /// controls, the card controls and the muted-topic preferences. While it
+    /// is off the app is the October 13 Pulse: Place · Today · Nearby ·
+    /// Messages, with Pulse and Connections opened from Nearby, the feed and
+    /// the post page. Plans is a tab either way while the `plans` server
+    /// switch is on (founder decision, 2026-10-17).
     case pulseRedesign = "pulse_redesign"
 }
 

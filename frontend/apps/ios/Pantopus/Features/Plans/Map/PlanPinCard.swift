@@ -198,7 +198,17 @@ enum PlanCardLines {
             case "stroller_walk": "stroller walk"
             default: "walk"
             }
+        case .studyGroup: "study group"
         }
+    }
+
+    /// A study group's subject and style, ["Spanish", "Quiet study"], shown
+    /// as "Spanish · Quiet study" on the plan page and the rows. Empty
+    /// without a subject.
+    static func study(_ details: PlanDetailsDTO?) -> [String] {
+        guard let subject = details?.subject?.trimmingCharacters(in: .whitespacesAndNewlines), !subject.isEmpty else { return [] }
+        // Quiet study unless the plan says otherwise (the server's default).
+        return [subject, PlanComposerOptions.studyStyleLabel(details?.studyStyle ?? "quiet")].compactMap { $0 }
     }
 
     /// "Sam usually answers within an hour", when the server knows.

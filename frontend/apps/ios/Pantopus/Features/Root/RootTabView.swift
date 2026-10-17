@@ -15,7 +15,9 @@
 //
 //  While the Pulse redesign is off (launch cut #11, `LaunchFeatures.pulseRedesign`,
 //  founder decision 2026-10-15) the bar is the October 13 one: Place · Today ·
-//  Nearby · Messages, with Pulse, Plans and Connections opened from Nearby.
+//  Nearby · Messages, with Pulse and Connections opened from Nearby. Plans
+//  is its own tab there too (founder decision 2026-10-17): Place · Today ·
+//  Nearby · Plans · Messages while the `plans` switch is on.
 //
 
 // swiftlint:disable file_length
@@ -69,12 +71,6 @@ public enum RootTab: Hashable, CaseIterable {
     /// redesign is off (launch cut #11), as on October 13.
     static var pulseHome: RootTab {
         LaunchFeatures.pulseRedesign ? .pulse : .nearby
-    }
-
-    /// Where the Plans screens open: the Plans tab, or Nearby while the Pulse
-    /// redesign is off (launch cut #11), as on October 13.
-    static var plansHome: RootTab {
-        LaunchFeatures.pulseRedesign ? .plans : .nearby
     }
 }
 
@@ -168,20 +164,20 @@ public struct RootTabView: View {
                 PulseTabRoot(onAddHome: startAddingHome)
                     .tabItem { tabLabel(.pulse) }
                     .tag(RootTab.pulse)
-
-                // Only while the `plans` switch is on (`onChange` below moves a
-                // reader off it when the switch turns off).
-                if plansFlags.plans {
-                    PlansTabRoot()
-                        .tabItem { tabLabel(.plans) }
-                        .tag(RootTab.plans)
-                }
             } else {
                 // Launch cut #11 (the Pulse redesign) is off: October 13's
-                // Nearby tab, which opens Pulse, Plans and Connections.
+                // Nearby tab, which opens Pulse and Connections.
                 NeighborhoodTabRoot()
                     .tabItem { tabLabel(.nearby) }
                     .tag(RootTab.nearby)
+            }
+
+            // Only while the `plans` switch is on (`onChange` below moves a
+            // reader off it when the switch turns off).
+            if plansFlags.plans {
+                PlansTabRoot()
+                    .tabItem { tabLabel(.plans) }
+                    .tag(RootTab.plans)
             }
 
             MailTabRoot(
@@ -219,8 +215,9 @@ public struct RootTabView: View {
             Task { await plansFlags.refresh(account: signedInUserID) }
         }
         .onChange(of: plansFlags.plans) { _, isOn in
-            // The Plans tab goes with the switch; a reader on it lands on Pulse.
-            if !isOn, model.selected == .plans { model.selected = .pulse }
+            // The Plans tab goes with the switch; a reader on it lands on Pulse
+            // (Nearby while the Pulse redesign is off).
+            if !isOn, model.selected == .plans { model.selected = RootTab.pulseHome }
         }
         .onChange(of: chatBadgeStore.unreadMessages) { _, unread in
             model.messagesBadge = unread
@@ -385,18 +382,12 @@ public struct RootTabView: View {
         } else {
             PlansNavigator.shared.pendingHost = PlansHostRequest(start: nil)
         }
-        model.selected = RootTab.plansHome
+        model.selected = .plans
     }
 
-    /// `/plans`: the Plans tab itself, while the switch is on. With the Pulse
-    /// redesign off (launch cut #11) it opens Nearby, which shows the Plans
-    /// map while that switch is on, as on October 13.
+    /// `/plans`: the Plans tab itself, while the switch is on.
     private func openPlansTab() {
         _ = router.consume()
-        guard LaunchFeatures.pulseRedesign else {
-            model.selected = .nearby
-            return
-        }
         plansFlags.prime(account: signedInUserID)
         guard plansFlags.plans else { return }
         model.selected = .plans
