@@ -202,7 +202,7 @@ enum PlanScreenLines {
         return parts.joined(separator: " · ")
     }
 
-    /// "Casual · extra paddles", "Easy pace · dogs welcome".
+    /// "Casual · extra paddles", "Easy pace · dogs welcome", "Spanish · Quiet study".
     static func details(_ card: PlanCardDTO) -> String? {
         guard let details = card.details else { return nil }
         var parts: [String] = []
@@ -213,6 +213,8 @@ enum PlanScreenLines {
         case .walkCoffee:
             if let pace = details.pace { parts.append("\(pace.capitalized) pace") }
             if details.dogsWelcome == true { parts.append("dogs welcome") }
+        case .studyGroup:
+            parts.append(contentsOf: PlanCardLines.study(details))
         case .watchParty, .playdate:
             break
         }

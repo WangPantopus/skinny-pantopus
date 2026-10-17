@@ -4,8 +4,8 @@
 //
 //  What the Plans sheet holds: the first plans at its lowest stop (F1), the
 //  whole list pulled up (F2: Your plans, then each day, then More nearby
-//  with Pulse and Connections), a tapped pin's card (F3), "Nothing planned
-//  yet" (F4) and "See plans near you" (F5).
+//  with Pulse and Connections while the Pulse redesign is on), a tapped
+//  pin's card (F3), "Nothing planned yet" (F4) and "See plans near you" (F5).
 //
 
 import SwiftUI
@@ -192,7 +192,9 @@ struct PlansListSheet: View {
                             .foregroundStyle(Theme.Color.appTextSecondary)
                             .padding(.top, Spacing.s4)
                     }
-                    moreNearby
+                    if let openPulse = actions.openPulse, let openConnections = actions.openConnections {
+                        moreNearby(openPulse: openPulse, openConnections: openConnections)
+                    }
                 }
                 .padding(.bottom, Spacing.s6)
             }
@@ -267,19 +269,22 @@ struct PlansListSheet: View {
         }
     }
 
-    private var moreNearby: some View {
+    private func moreNearby(
+        openPulse: @escaping @MainActor () -> Void,
+        openConnections: @escaping @MainActor () -> Void
+    ) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Text.planOverline("More nearby")
                 .padding(.top, Spacing.s4)
                 .padding(.bottom, 2)
-            doorRow(title: "Pulse", subtitle: "Local posts and questions", icon: .rss, divider: false, action: actions.openPulse)
+            doorRow(title: "Pulse", subtitle: "Local posts and questions", icon: .rss, divider: false, action: openPulse)
                 .accessibilityIdentifier("plansDoor.pulse")
             doorRow(
                 title: "Connections",
                 subtitle: "Keep up with people you know",
                 icon: .users,
                 divider: true,
-                action: actions.openConnections
+                action: openConnections
             )
             .accessibilityIdentifier("plansDoor.connections")
         }

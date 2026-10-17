@@ -112,7 +112,7 @@ export const fetchPublicBookingByToken = cache(
 /** A Nearby Plans share link: the plan's public card (area only), or `{ kind: 'playdate', city }`. */
 export type PublicPlan = {
   id?: string;
-  kind: 'watch_party' | 'playdate' | 'pickup_game' | 'walk_coffee';
+  kind: 'watch_party' | 'playdate' | 'pickup_game' | 'walk_coffee' | 'study_group';
   title?: string;
   about?: string;
   starts_at?: string | null;

@@ -347,6 +347,8 @@
   --color-cat-plan-pickup-tint: #DCFCE7;
   --color-cat-plan-walk: #A16207;
   --color-cat-plan-walk-tint: #FEF3C7;
+  --color-cat-plan-study: #DB2777;
+  --color-cat-plan-study-tint: #FCE7F3;
 
   /* ── Spacing (px) ────────────────────────────────────────── */
   --spacing-0: 0px;
@@ -644,6 +646,8 @@
     --color-cat-plan-pickup-tint: #13301F;
     --color-cat-plan-walk: #FBBF24;
     --color-cat-plan-walk-tint: #33290F;
+    --color-cat-plan-study: #F472B6;
+    --color-cat-plan-study-tint: #3A1A2C;
     --app-surface: 15 23 42;
     --app-surface-raised: 30 41 59;
     /* A step below --app-surface (it was equal), so sunken fills such as

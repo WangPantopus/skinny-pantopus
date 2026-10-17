@@ -64,6 +64,9 @@ final class PlanComposerModel {
     var walkKind = "walk"
     var pace = "easy"
     var dogsWelcome = false
+    /// Study groups: what they study, and how (`quiet` or `together`).
+    var subject = ""
+    var studyStyle = "quiet"
 
     private(set) var isPosting = false
     var postError: String?
@@ -187,6 +190,8 @@ final class PlanComposerModel {
         case .pickupGame: [.anyoneNearby, .approveEach]
         case .walkCoffee: whereKind == .home ? [.approveEach] : [.verifiedAuto, .approveEach]
         case .watchParty: whereKind == .home ? [.approveEach] : [.approveEach, .verifiedAuto]
+        // Study groups meet in public places; never "anyone nearby".
+        case .studyGroup: [.approveEach, .verifiedAuto]
         }
     }
 
@@ -208,6 +213,7 @@ final class PlanComposerModel {
     /// What's still missing, in a sentence; nil when the draft can be previewed.
     var problem: String? {
         if kind == .playdate, kidsAges.isEmpty { return "Pick the kids' ages." }
+        if kind == .studyGroup, trimmedSubject.isEmpty { return "Add what you're studying." }
         if effectiveTitle.trimmingCharacters(in: .whitespaces).isEmpty { return "Give your plan a title." }
         if whereKind == .publicPlace, place == nil { return "Choose a place." }
         if whereKind == .home, home == nil { return "Add your home to host there, or choose a public place." }
@@ -334,32 +340,13 @@ final class PlanComposerModel {
         return rules
     }
 
-    var details: PlanDetailsDTO {
-        var details = PlanDetailsDTO()
-        switch kind {
-        case .watchParty:
-            if let game { details.game = PlanGameDTO(label: game.label, startsAt: game.startsAt) }
-        case .playdate:
-            details.kidsAgeBands = PlanKidsAgeBand.allCases.filter(kidsAges.contains)
-        case .pickupGame:
-            details.sport = sport
-            details.level = level
-            details.extraGear = extraGear
-        case .walkCoffee:
-            details.walkKind = walkKind
-            details.pace = pace
-            details.dogsWelcome = dogsWelcome
-        }
-        return details
-    }
-
     // MARK: - Defaults
 
     private func applyDefaults() {
         let calendar = Calendar.current
         let nextHour = calendar.nextDate(after: Date(), matching: DateComponents(minute: 0), matchingPolicy: .nextTime) ?? Date()
         switch kind {
-        case .watchParty:
+        case .watchParty, .studyGroup:
             spots = 8
             approval = .approveEach
             start = Self.sensibleStart(for: kind, calendar: calendar)
@@ -391,6 +378,33 @@ final class PlanComposerModel {
 }
 
 extension PlanComposerModel {
+    var details: PlanDetailsDTO {
+        var details = PlanDetailsDTO()
+        switch kind {
+        case .watchParty:
+            if let game { details.game = PlanGameDTO(label: game.label, startsAt: game.startsAt) }
+        case .playdate:
+            details.kidsAgeBands = PlanKidsAgeBand.allCases.filter(kidsAges.contains)
+        case .pickupGame:
+            details.sport = sport
+            details.level = level
+            details.extraGear = extraGear
+        case .walkCoffee:
+            details.walkKind = walkKind
+            details.pace = pace
+            details.dogsWelcome = dogsWelcome
+        case .studyGroup:
+            details.subject = trimmedSubject
+            details.studyStyle = studyStyle
+        }
+        return details
+    }
+
+    /// A study group's subject as it is sent (1 to 60 characters once trimmed).
+    var trimmedSubject: String {
+        subject.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     /// Two hours from now on the hour, unless that falls at night (or, for a
     /// playdate, outside the daytime): then the next sensible time, a playdate
     /// at 10 AM, a walk at 8 AM, a watch party at 7 PM (as on Android).
@@ -400,7 +414,7 @@ extension PlanComposerModel {
         let (earliest, latest, preferred) = switch kind {
         case .playdate: (8, 18, 10)
         case .walkCoffee: (7, 21, 8)
-        case .watchParty, .pickupGame: (8, 21, 19)
+        case .watchParty, .pickupGame, .studyGroup: (8, 21, 19)
         }
         let hour = calendar.component(.hour, from: soon)
         if hour >= earliest, hour < latest { return soon }
@@ -435,6 +449,8 @@ extension PlanComposerModel {
             walkKind = details.walkKind ?? walkKind
             pace = details.pace ?? pace
             dogsWelcome = details.dogsWelcome ?? false
+            subject = details.subject ?? subject
+            studyStyle = details.studyStyle ?? studyStyle
         }
         let rules = Set(card.autoRules ?? [])
         alsoHostedBefore = rules.contains(.hostedBefore)
@@ -469,13 +485,13 @@ private extension PlanComposerModel {
 
     /// The boards' starting titles, as on Android: "Playground morning" (H3),
     /// "Coffee walk" (H5). A watch party starts from its game; a pickup game
-    /// has no title field.
+    /// has no title field; a study group starts empty.
     func startTitle() {
         guard title.isEmpty else { return }
         let starting: String? = switch kind {
         case .playdate: "Playground morning"
         case .walkCoffee: "Coffee walk"
-        case .watchParty, .pickupGame: nil
+        case .watchParty, .pickupGame, .studyGroup: nil
         }
         guard let starting else { return }
         title = starting

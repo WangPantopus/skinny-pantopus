@@ -32,6 +32,7 @@ const KIND_LABEL: Record<Kind, string> = {
   playdate: 'Playdate',
   pickup_game: 'Pickup game',
   walk_coffee: 'Walk & coffee',
+  study_group: 'Study group',
 };
 
 const KIND_TOKEN: Record<Kind, string> = {
@@ -39,6 +40,7 @@ const KIND_TOKEN: Record<Kind, string> = {
   playdate: 'playdate',
   pickup_game: 'pickup',
   walk_coffee: 'walk',
+  study_group: 'study',
 };
 
 function kindColors(kind: Kind): CSSProperties {
@@ -90,6 +92,13 @@ function KindGlyph({ kind, className }: { kind: Kind; className?: string }) {
           <path d="M4 9.5h12v4a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z" />
           <path d="M16 11h1.5a2.5 2.5 0 0 1 0 5H16" />
           <path d="M8 3.5v3M12 3.5v3" />
+        </Icon>
+      );
+    case 'study_group':
+      return (
+        <Icon className={className}>
+          <path d="M2 4h6a4 4 0 0 1 4 4v12a3 3 0 0 0-3-3H2z" />
+          <path d="M22 4h-6a4 4 0 0 0-4 4v12a3 3 0 0 1 3-3h7z" />
         </Icon>
       );
     default:

@@ -8,7 +8,9 @@
 //  Pulse / Tasks / Marketplace present as sheets from the Nearby door;
 //  Messages is a segment of the Mail tab. This is the bar of a build with
 //  the Pulse redesign off (launch cut #11); with it on, the bar is Place ·
-//  Today · Pulse · Plans · Mail.
+//  Today · Pulse · Plans · Mail. Plans shows only while the `plans` server
+//  switch is on (Place · Today · Nearby · Plans · Mail); the stubbed API
+//  leaves it off.
 //
 //  These tests launch the app with `UI_TESTS_SIGNED_IN=1`, which the app
 //  honours by seeding an in-memory signed-in session without hitting the
