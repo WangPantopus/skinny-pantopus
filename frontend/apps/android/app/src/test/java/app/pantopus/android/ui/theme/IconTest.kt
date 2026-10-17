@@ -334,6 +334,7 @@ class IconTest {
             "adult-child",
             "ball",
             "coffee",
+            "book-open",
         )
 
     @Test

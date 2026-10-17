@@ -9,23 +9,27 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Locks [PantopusRoute] down: the October 13 four tabs while the Pulse redesign is off (launch cut 11), and with it on
- * five tabs (Pulse build S3; Plans is drawn only while its switch is on), each in a stable order (the last is Messages
- * while Mailbox is off), unique `path` strings, the legacy Place path preserved, and the off-bar routes still
- * resolvable so existing pushes land (Nearby, Tasks and Marketplace belong to Pulse with the redesign on).
+ * Locks [PantopusRoute] down: the October 13 tabs plus Plans while the Pulse redesign is off (launch cut 11; founder,
+ * 2026-10-17), and with it on five tabs (Pulse build S3); Plans is drawn only while its switch is on. Each in a stable
+ * order (the last is Messages while Mailbox is off), unique `path` strings, the legacy Place path preserved, and the
+ * off-bar routes still resolvable so existing pushes land (Nearby, Tasks and Marketplace belong to Pulse with the
+ * redesign on).
  */
 class PantopusRouteTest {
     @After fun tearDown() {
         LaunchFeatures.overrideForTesting = null
     }
 
-    @Test fun four_launch_tabs_and_five_with_the_redesign() {
+    @Test fun launch_tabs_and_redesign_tabs() {
         // Mailbox is off for launch (contract §9): the last tab reads Messages.
         LaunchFeatures.overrideForTesting = emptySet()
-        // The Pulse redesign is off for launch: the October 13 bar, with Pulse behind Nearby.
-        assertEquals(listOf("Place", "Today", "Nearby", "Messages"), PantopusRoute.entries.map { it.label })
+        // The Pulse redesign is off for launch: the October 13 bar with Plans before Messages, and Pulse behind Nearby.
+        assertEquals(listOf("Place", "Today", "Nearby", "Plans", "Messages"), PantopusRoute.entries.map { it.label })
         assertEquals(PantopusRoute.entries, PantopusRoute.barTabs(plansOn = true))
+        // While the Plans switch is off, the October 13 bar exactly.
+        assertEquals(listOf("Place", "Today", "Nearby", "Messages"), PantopusRoute.barTabs(plansOn = false).map { it.label })
         assertEquals(PantopusRoute.Nearby, PantopusRoute.barTabFor(PantopusRoute.Pulse))
+        assertEquals(PantopusRoute.Plans, PantopusRoute.barTabFor(PantopusRoute.Plans))
         LaunchFeatures.overrideForTesting = setOf(LaunchFeature.PULSE_REDESIGN)
         val entries = PantopusRoute.entries
         assertEquals(5, entries.size)

@@ -121,7 +121,7 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
-/** What the Nearby map opens from it. */
+/** What the Plans map opens from it. */
 data class PlansMapActions(
     val onOpenPlan: (String) -> Unit,
     val onAsk: (String) -> Unit,
@@ -132,8 +132,9 @@ data class PlansMapActions(
 )
 
 /**
- * Nearby on the map (boards F1 to F5): the area pill and the type chips over the map, plan pins on their areas,
- * the Host button, and the list sheet. Shown in place of today's Nearby screen while the `plans` flag is on.
+ * Plans on the map (boards F1 to F5): the area pill and the type chips over the map, plan pins on their areas, the
+ * Host button, and the list sheet. The Plans tab, shown while the `plans` flag is on (beside Nearby, with the Pulse
+ * redesign on or off).
  */
 @Composable
 fun PlansMapScreen(

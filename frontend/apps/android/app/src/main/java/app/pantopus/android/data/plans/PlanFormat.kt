@@ -177,6 +177,7 @@ object PlanFormat {
                     "stroller_walk" -> "stroller walk"
                     else -> "walk"
                 }
+            PlanKind.STUDY_GROUP -> "study group"
             null -> "plan"
         }
 
@@ -290,7 +291,7 @@ object PlanFormat {
     /**
      * The second line of a plan row (board P2, F2): "Happening now · until 10:30 · 1.2 mi",
      * "You're hosting · Sun 1:25 PM", "Today 5:30 PM · under 1 mi", "Sun 1:25 PM · Downtown · about 2 mi",
-     * "This morning · Downtown · ages 2–4".
+     * "This morning · Downtown · ages 2–4", "Today 5:30 PM · Spanish · Quiet study".
      */
     fun rowSubtitle(
         plan: PlanDto,
@@ -318,11 +319,22 @@ object PlanFormat {
                     if (start != null && start.toLocalDate() != today && plan.planState != PlanState.LIVE) {
                         area?.let { parts += it }
                     }
-                    distance?.let { parts += it }
+                    // A study group says what it studies where the others give the distance, as a playdate gives the
+                    // ages (as on iOS).
+                    val study = studyParts(plan)
+                    if (study.isNotEmpty()) parts += study else distance?.let { parts += it }
                 }
             }
         }
         return parts.filter { it.isNotBlank() }.joinToString(" · ")
+    }
+
+    /** A study group's subject and style, ["Spanish", "Quiet study"]; empty without a subject, and for other kinds. */
+    fun studyParts(plan: PlanDto): List<String> {
+        if (plan.planKind != PlanKind.STUDY_GROUP) return emptyList()
+        val details = plan.details ?: return emptyList()
+        val subject = details.subject?.trim()?.takeIf(String::isNotEmpty) ?: return emptyList()
+        return listOf(subject, PlanStudyStyle.from(details.studyStyle).label)
     }
 
     /** "5 going · 3 spots left" for the slot meter's caption; families for playdates. */

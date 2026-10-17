@@ -3,7 +3,10 @@ package app.pantopus.android.data.plans
 import app.pantopus.android.data.api.models.plans.PlanDto
 import app.pantopus.android.data.api.models.plans.PlanPinDto
 
-/** The four kinds of plan (decision D3). [wire] is the API value, [label] the name people see. */
+/**
+ * The kinds of plan (decision D3, and study groups from 2026-10-17), in the order the chips and the host grid show
+ * them. [wire] is the API value, [label] the name people see.
+ */
 enum class PlanKind(
     val wire: String,
     val label: String,
@@ -12,6 +15,7 @@ enum class PlanKind(
     PLAYDATE("playdate", "Playdate"),
     PICKUP_GAME("pickup_game", "Pickup game"),
     WALK_COFFEE("walk_coffee", "Walk & coffee"),
+    STUDY_GROUP("study_group", "Study group"),
     ;
 
     /** The noun used in sentences: "Host your own watch party", "How was Sunday's pickup game?". */
@@ -134,6 +138,21 @@ object PlanCannotAsk {
     const val BLOCKED = "blocked"
     const val TOO_MANY_REQUESTS = "too_many_requests"
     const val ENDED = "ended"
+}
+
+/** How a study group studies (`details.study_style`), with the words the chips and the plan page use. */
+enum class PlanStudyStyle(
+    val wire: String,
+    val label: String,
+) {
+    QUIET("quiet", "Quiet study"),
+    TOGETHER("together", "Work through it together"),
+    ;
+
+    companion object {
+        /** Quiet study unless the plan says otherwise, as the server defaults it. */
+        fun from(wire: String?): PlanStudyStyle = entries.firstOrNull { it.wire == wire } ?: QUIET
+    }
 }
 
 /** Kids' age bands for playdates (wire value to label). [low] and [high] are the ages the band covers. */
