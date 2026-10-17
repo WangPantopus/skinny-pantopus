@@ -180,7 +180,12 @@ final class PlanScreenViewModel {
     /// J3 / J4 "Send request". Returns true when it went through.
     func ask(_ body: AskToJoinBody) async -> Bool {
         await perform {
-            let reply: PlanAskResponse = try await api.request(PlansEndpoints.ask(planId: planId, body))
+            var request = body
+            let location = DeviceLocationProvider.shared
+            if location.canLocateWithoutAsking, let fix = await location.requestCurrent(timeoutSeconds: 4) {
+                request.gps = PlanGPSBody(latitude: fix.latitude, longitude: fix.longitude, timestamp: Date())
+            }
+            let reply: PlanAskResponse = try await api.request(PlansEndpoints.ask(planId: planId, request))
             let wasIn = mode == .going
             plan = reply.plan
             if reply.request.status == .accepted, !wasIn {
