@@ -158,13 +158,13 @@ to the founder. No unchecked hosted or physical-device gate is claimed complete.
 | Piece | State on October 7, 2026 (19:15Z) |
 |---|---|
 | Website `pantopus.com` | Up, on Vercel. The deployment is about four months old (June). Its JavaScript calls `https://api.pantopus.com`. |
-| Production API `api.pantopus.com` | Checked October 14 at 17:00 Pacific (L4): the name resolves straight to the server (DNS only, the same address as `staging-api.pantopus.com`) and serves a Let's Encrypt certificate issued October 9. nginx answers 502 because no production backend runs yet. P1 looks done; the health check waits for P6. |
+| Production API `api.pantopus.com` | Checked October 14 at 17:00 Pacific (L4): the name resolves straight to the server (DNS only, the same address as `staging-api.pantopus.com`) and serves a Let's Encrypt certificate issued October 9. Since October 17 at 00:24 UTC it runs the production API and worker from master `91018743a` (P6, [run 38985891255](https://github.com/WangPantopus/skinny-pantopus/actions/runs/38985891255)); `/health` answers healthy with the database connected. |
 | Staging | `https://staging-api.pantopus.com` runs the API and worker; `https://staging.pantopus.com` is the Vercel project `pantopus-staging`, with production branch `dev`. Both services released `dev 132e45a5f` on October 10: the API and worker deployment completed at 10:24 UTC ([run 38044657594](https://github.com/WangPantopus/skinny-pantopus/actions/runs/38044657594)); Vercel released the web at 09:52 UTC (deployment 6979118646). The backend database and deployment steps ran successfully, rather than skipping. Checked October 11 at 17:36 Pacific: API healthy, hosted checks 9/10 (Android app links await P10). The October 10 Lambda check found no observed errors in active/daily staging jobs and six alarms OK. S10 below distinguishes completed checks from the remaining web and physical-Android checks. |
 | `pantopus.app` | The zone is on Cloudflare with no records, so `pantopus.app`, `api.pantopus.app` and `staging.api.pantopus.app` don't resolve. |
 | April store apps | App Store "Pantopus" (`com.pantopus.app`, version 1.5.0 from May 12) and Google Play `com.pantopus.app`: the Expo app from the older repository. The live website links to both. Their API host was set in Expo's build settings (the old guides used `https://api.pantopus.com`); it can't be read from here. |
 | New native apps | iOS `app.pantopus.ios`, Android `app.pantopus.android`: different app IDs from the April apps, so they're new store listings (decision D2). Not uploaded anywhere yet. |
-| Supabase | The April production project and new `pantopus-production` project (`falmvysvndmwtfxsrxek`) are in the founder's `Pantopus` Free organization. The new project is healthy in Oregon; all 148 canonical migrations were applied and verified on October 9, and the private `home-documents` bucket is configured. Auth transfer, the two 100 MB buckets, the S3 key and managed daily backups are pending. `Pantopus-staging` is separate and was reset to the canonical migrations on October 7 (S2). A separate production organization is optional billing isolation. |
-| GitHub | `staging` releases from `dev` after CI. Checked October 10: `production` has nine secrets, `DB_MIGRATIONS_ENABLED=true`, and `BACKEND_DEPLOY_ENABLED=false`; automatic master runs still skip the production release. The latest inspected master release run [38187756503](https://github.com/WangPantopus/skinny-pantopus/actions/runs/38187756503) skipped its database and API/worker deployment steps; the production health URL still returned 502 on October 11 at 17:36 Pacific. Preparation is not a deployed production service: the founder enables it at the reviewed cutover step. Store signing setup remains separate (section 4). |
+| Supabase | The April production project and new `pantopus-production` project (`falmvysvndmwtfxsrxek`) are in the founder's `Pantopus` Free organization. The new project is healthy in Oregon; all 148 canonical migrations were applied and verified on October 9, the first production release applied the 36 newer ones on October 17 (184 in all), and the private `home-documents` bucket is configured. Auth transfer, the two 100 MB buckets, the S3 key and managed daily backups are pending. `Pantopus-staging` is separate and was reset to the canonical migrations on October 7 (S2). A separate production organization is optional billing isolation. |
+| GitHub | `staging` releases from `dev` after CI. `production` has nine secrets, `DB_MIGRATIONS_ENABLED=true`, and, since October 17 at 00:20 UTC, `BACKEND_DEPLOY_ENABLED=true`: every master merge that changes the backend releases to production after CI, migrations first. Store signing setup remains separate (section 4). |
 | AWS Lambdas | Staging stack `pantopus-seeder-staging` carries the seeder, briefing, home-reminder, weather-alert, mail and job-trigger functions. The founder paused the April `pantopus-seeder-production` stack: all 14 EventBridge rules were independently confirmed `DISABLED` on October 11, and its briefing log has no event after October 8 at 19:14 UTC. Keep them disabled until P8 replaces the old production configuration. The April `pantopus-seeder-dev` functions were deleted; its ten schedules have nothing to run. |
 
 **Reminders run on AWS Lambda.** Morning and evening briefings (the night-before
@@ -724,6 +724,16 @@ container is named `pantopus-backend`, the deploy stops it and keeps it as
 
 **Check:** `curl -s https://api.pantopus.com/health` is healthy, and both
 containers are healthy on the server.
+
+**Status, October 17:** done. At the founder's direction `BACKEND_DEPLOY_ENABLED`
+went to `true` at 00:20 UTC and the first release ran from master `91018743a`
+([run 38985891255](https://github.com/WangPantopus/skinny-pantopus/actions/runs/38985891255)).
+Its dry run listed the 36 migrations newer than the October 9 baseline
+(`20261009085129` to `20261016060442`) and all 36 applied before the rollout;
+the candidate, API and worker passed readiness. At 00:24 UTC `/health` answered
+healthy with the database connected, and `check-hosted.cjs --production` passes
+7/10 (the June web's headers and iOS association wait for P9, Android app links
+for P10). The containers were not inspected on the host.
 
 ### P7. Stripe and Lob webhooks (founder)
 
