@@ -53,6 +53,8 @@ final class DocumentDetailViewModel {
     /// finds the document, it was deleted: finish as deleted instead of showing it as unavailable.
     private var deleteFailed = false
 
+    private(set) var canManage = false
+
     private let homeId: String
     private let documentId: String
     private let api: APIClient
@@ -82,6 +84,7 @@ final class DocumentDetailViewModel {
     }
 
     func clearContent() {
+        canManage = false
         loadId = UUID()
         content = nil
         state = .loading
@@ -115,6 +118,7 @@ final class DocumentDetailViewModel {
                 bytes = try await api.requestData(HomesEndpoints.documentContent(homeId: homeId, documentId: documentId))
             }
             guard requestId == loadId else { return }
+            canManage = response.permissions?.contains("docs.manage") == true
             content = bytes
             state = .loaded(dto)
         } catch {
@@ -157,7 +161,7 @@ final class DocumentDetailViewModel {
     }
 
     func beginReplacement() -> Bool {
-        guard !isMutating, !deleted, case let .loaded(document) = state,
+        guard canManage, !isMutating, !deleted, case let .loaded(document) = state,
               document.fileVersion != nil, document.contentURL != nil else { return false }
         replacementSelection = UUID()
         replacementDocument = document
@@ -186,7 +190,7 @@ final class DocumentDetailViewModel {
     }
 
     func replace() async {
-        guard !isMutating, !deleted, let original = replacementDocument,
+        guard canManage, !isMutating, !deleted, let original = replacementDocument,
               let version = original.fileVersion, let file = replacementFile, let bytes = file.data else { return }
         let previous = replacementAttempt
         let uploadId: String = if let previous, previous.file == file, previous.version == version {
@@ -242,7 +246,7 @@ final class DocumentDetailViewModel {
     }
 
     func delete() async {
-        guard !deleted, !isMutating, case .loaded = state else { return }
+        guard canManage, !deleted, !isMutating, case .loaded = state else { return }
         isMutating = true
         cancelReplacement()
         loadId = UUID()
@@ -315,6 +319,7 @@ public struct DocumentDetailView: View {
                     dto: dto,
                     content: viewModel.content,
                     isMutating: viewModel.isMutating,
+                    canManage: viewModel.canManage,
                     onBack: onBack,
                     onOpenExternally: { Task { await exportFile() } },
                     onShare: { Task { await exportFile() } },
@@ -451,6 +456,7 @@ private struct LoadedShell: View {
     let dto: HomeDocumentDTO
     let content: Data?
     let isMutating: Bool
+    let canManage: Bool
     let onBack: () -> Void
     let onOpenExternally: () -> Void
     let onShare: () -> Void
@@ -497,6 +503,7 @@ private struct LoadedShell: View {
                     isMutating: isMutating,
                     hasFile: content != nil,
                     canReplace: dto.fileVersion != nil,
+                    canManage: canManage,
                     onOpenExternally: onOpenExternally,
                     onShare: onShare,
                     onReplace: onReplace,
@@ -844,6 +851,7 @@ private struct StickyActionFooter: View {
     let isMutating: Bool
     let hasFile: Bool
     let canReplace: Bool
+    let canManage: Bool
     let onOpenExternally: () -> Void
     let onShare: () -> Void
     let onReplace: () -> Void
@@ -867,21 +875,23 @@ private struct StickyActionFooter: View {
                     identifier: "documentDetailShare",
                     action: onShare
                 ).disabled(!hasFile)
-                FooterButton(
-                    icon: .refreshCw,
-                    label: "Replace",
-                    accessibilityLabel: "Replace file",
-                    identifier: "documentDetailReplace",
-                    action: onReplace
-                ).disabled(!canReplace)
-                FooterButton(
-                    icon: .trash2,
-                    label: "Delete",
-                    accessibilityLabel: "Delete document",
-                    identifier: "documentDetailDelete",
-                    tint: Theme.Color.error,
-                    action: onDelete
-                )
+                if canManage {
+                    FooterButton(
+                        icon: .refreshCw,
+                        label: "Replace",
+                        accessibilityLabel: "Replace file",
+                        identifier: "documentDetailReplace",
+                        action: onReplace
+                    ).disabled(!canReplace)
+                    FooterButton(
+                        icon: .trash2,
+                        label: "Delete",
+                        accessibilityLabel: "Delete document",
+                        identifier: "documentDetailDelete",
+                        tint: Theme.Color.error,
+                        action: onDelete
+                    )
+                }
             }
             .padding(.vertical, Spacing.s2)
             .background(Theme.Color.appSurface)

@@ -142,12 +142,17 @@ public struct UnifiedConversation: Decodable, Sendable, Hashable, Identifiable {
     }
 }
 
-/// `GET /api/chat/rooms/:roomId` — only what a chat link needs to find a
-/// direct room's other participant.
+/// `GET /api/chat/rooms/:roomId` — room availability and participants.
 public struct ChatRoomDetailResponse: Decodable, Sendable {
     public struct Room: Decodable, Sendable {
         public let type: String?
+        public let isActive: Bool?
         public let participants: [Participant]?
+
+        private enum CodingKeys: String, CodingKey {
+            case type, participants
+            case isActive = "is_active"
+        }
     }
 
     public struct Participant: Decodable, Sendable {

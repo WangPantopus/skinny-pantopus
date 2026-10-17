@@ -463,8 +463,11 @@ public final class ChatConversationViewModel {
 
     /// Whether the composer's send disc is enabled (text present + not
     /// in flight). Bound by the view.
+    public private(set) var roomClosedNote: String?
+
     public var canSend: Bool {
-        (!composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !queuedAttachments.isEmpty) && !isSending
+        roomClosedNote == nil && (!composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !queuedAttachments.isEmpty) &&
+            !isSending
     }
 
     /// True when another older page can be fetched.
@@ -825,7 +828,7 @@ public final class ChatConversationViewModel {
     /// failure marks the row as failed for the view's retry CTA.
     public func send() async {
         let hasQueuedFiles = queuedAttachments.contains { $0.data != nil }
-        guard canSend || hasQueuedFiles else { return }
+        guard roomClosedNote == nil, canSend || hasQueuedFiles else { return }
         let trimmed = composerText.trimmingCharacters(in: .whitespacesAndNewlines)
         composerText = ""
         isSending = true
@@ -882,7 +885,7 @@ public final class ChatConversationViewModel {
     /// same `clientMessageId` — the backend dedups on it, so a retry
     /// after a lost response can't double-post.
     public func retry(clientId rawId: String) async {
-        guard !isSending else { return }
+        guard roomClosedNote == nil, !isSending else { return }
         let clientId = Self.bareClientId(rawId)
         guard pendingByClientId[clientId] != nil, sendContextsByClientId[clientId] != nil,
               !refusedClientIds.contains(clientId) else { return }
@@ -1748,8 +1751,24 @@ public final class ChatConversationViewModel {
             )
             apply(response: response, kind: kind)
             scheduleMarkRead(for: roomId)
+            if before == nil { await refreshRoomAvailability(roomId: roomId) }
         } catch {
             handleFetchFailure(error, kind: kind)
+        }
+    }
+
+    /// Messages can be opened without a Plan route (Inbox, Search, or a link).
+    /// Read the room's current status so those entry points also become read-only.
+    private func refreshRoomAvailability(roomId: String) async {
+        do {
+            let response: ChatRoomDetailResponse = try await api.request(ChatEndpoints.room(roomId: roomId))
+            roomClosedNote = response.room.isActive == false
+                ? "This chat has closed. Message them directly to keep talking."
+                : nil
+        } catch {
+            // Keep already loaded history and any previously confirmed closure.
+            // The server still checks availability on every send.
+            logger.warning("chat availability refresh failed: \(error)")
         }
     }
 
@@ -1758,6 +1777,11 @@ public final class ChatConversationViewModel {
             let response: ChatMessagesResponse = try await api.request(
                 ChatEndpoints.conversationMessages(otherUserId: otherUserId, before: before, topicId: selectedTopicId)
             )
+            if let roomIds = response.roomIds {
+                // Drop cached history that no longer belongs to this person thread.
+                let allowedRooms = Set(roomIds)
+                messages.removeAll { !allowedRooms.contains($0.roomId) }
+            }
             apply(response: response, kind: kind)
             scheduleMarkRead(for: otherUserId)
         } catch {

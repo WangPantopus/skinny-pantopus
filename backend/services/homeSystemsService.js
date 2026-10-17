@@ -157,7 +157,7 @@ function projectSystem(def, row, yearBuilt, now = new Date()) {
     status: statusFor(age, def),
     life_remaining: remainingFraction(age, def),
     source: effectiveSource,
-    source_label: SOURCE_LABELS[effectiveSource] || SOURCE_LABELS.estimated,
+    source_label: installedYear === null ? 'Year unknown' : (SOURCE_LABELS[effectiveSource] || SOURCE_LABELS.estimated),
     confidence: SOURCE_CONFIDENCE[effectiveSource] || 'low',
     source_ref: (row && row.source_ref) || null,
     note: def.note,
@@ -208,12 +208,12 @@ async function getSystemsLedger(home, { now = new Date() } = {}) {
       // How much of the ledger rests on real evidence rather than a prior.
       confirmed_count: confirmed.length,
       total_count: systems.length,
-      headline: buildHeadline(past, aging, confirmed.length, systems.length),
+      headline: buildHeadline(past, aging, confirmed.length, systems.length, systems.filter((s) => s.status === 'unknown').length),
     },
   };
 }
 
-function buildHeadline(past, aging, confirmedCount, total) {
+function buildHeadline(past, aging, confirmedCount, total, unknownCount = 0) {
   if (past.length > 0) {
     const names = past.map((s) => s.label.toLowerCase());
     const list = names.length === 1
@@ -224,8 +224,11 @@ function buildHeadline(past, aging, confirmedCount, total) {
   if (aging.length > 0) {
     return `${aging.length} system${aging.length === 1 ? '' : 's'} inside the usual replacement window.`;
   }
+  if (unknownCount > 0) {
+    return `${unknownCount} of ${total} installation years unknown — add the years you know to assess typical service life.`;
+  }
   if (confirmedCount === 0) {
-    return `All six estimated from the build year — correct any you know and the record starts building.`;
+    return `All ${total} estimated from the build year — correct any you know and the record starts building.`;
   }
   return `Nothing past its expected life. ${confirmedCount} of ${total} confirmed.`;
 }

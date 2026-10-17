@@ -3499,6 +3499,7 @@ router.get('/:id/documents', verifyToken, async (req, res) => {
     // The apps' "Uploaded by" reads `uploaded_by_name`, the uploader's display name (never the raw user id). Only the
     // name leaves the server, as the Home timeline's `actor_name` does; a deleted account leaves it null.
     res.json({
+      permissions: (access.permissions || []).filter(permission => ['docs.view', 'docs.upload', 'docs.manage'].includes(permission)),
       documents: (data || []).map(({ uploader, ...document }) => ({
         ...serializeHomeDocument(document),
         uploaded_by_name: uploader ? displayNameFromUser(uploader) : null,
