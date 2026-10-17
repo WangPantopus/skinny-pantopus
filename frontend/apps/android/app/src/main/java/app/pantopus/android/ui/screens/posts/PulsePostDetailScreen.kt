@@ -55,6 +55,8 @@ import app.pantopus.android.ui.components.ToastMessage
 import app.pantopus.android.ui.screens.compose.pulse.PulseLostFoundContactPref
 import app.pantopus.android.ui.screens.compose.pulse.PulseLostFoundKind
 import app.pantopus.android.ui.screens.feed.pulse.PostStatusPill
+import app.pantopus.android.ui.screens.feed.pulse.PulseEventDetails
+import app.pantopus.android.ui.screens.feed.pulse.pulseEventDetails
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailShell
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailTopBar
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailTopBarAction
@@ -79,6 +81,13 @@ private val reportReasons =
         "safety" to "Safety concern",
         "other" to "Other",
     )
+
+/**
+ * An Event's when and where ("Sunday, Oct 18 · 7:00–9:00 PM", the place), as the web post page shows them;
+ * null for other posts.
+ */
+internal fun eventDetails(post: PostDetailDto): PulseEventDetails? =
+    pulseEventDetails(post.postType, post.eventDate, post.eventEndDate, post.eventVenue, long = true)
 
 /**
  * "Lost · Contact: Phone 5555550123" for a Lost & Found post, as the web card and post page show it;
@@ -508,6 +517,7 @@ fun PulsePostDetailLoadedContent(
             BodyReactionsBody(
                 body = content.post.content,
                 detailLine = lostFoundDetailLine(content.post),
+                eventDetails = eventDetails(content.post),
                 media = content.media,
                 intent = content.intent,
                 reactions = content.reactions,

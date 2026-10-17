@@ -231,6 +231,8 @@ public struct PostDetailDTO: Decodable, Sendable, Hashable, Identifiable {
     public let moderationState: String?
     /// Event date in ISO-8601 — populated for `event` posts.
     public let eventDate: String?
+    /// When the event ends, when the poster named an end time.
+    public let eventEndDate: String?
     /// Event venue — populated for `event` posts.
     public let eventVenue: String?
     /// `lost` / `found` — populated for `lost_found` posts.
@@ -291,6 +293,7 @@ public struct PostDetailDTO: Decodable, Sendable, Hashable, Identifiable {
         case allowExternalShare = "allow_external_share"
         case moderationState = "moderation_state"
         case eventDate = "event_date"
+        case eventEndDate = "event_end_date"
         case eventVenue = "event_venue"
         case lostFoundType = "lost_found_type"
         case lostFoundContactPref = "lost_found_contact_pref"
@@ -341,6 +344,7 @@ public struct PostDetailDTO: Decodable, Sendable, Hashable, Identifiable {
         allowExternalShare = c.lenient(Bool.self, forKey: .allowExternalShare)
         moderationState = c.lenient(String.self, forKey: .moderationState)
         eventDate = c.lenient(String.self, forKey: .eventDate)
+        eventEndDate = c.lenient(String.self, forKey: .eventEndDate)
         eventVenue = c.lenient(String.self, forKey: .eventVenue)
         lostFoundType = c.lenient(String.self, forKey: .lostFoundType)
         lostFoundContactPref = c.lenient(String.self, forKey: .lostFoundContactPref)
@@ -391,6 +395,7 @@ extension PostDetailDTO {
         allowExternalShare = nil
         moderationState = nil
         eventDate = post.eventDate
+        eventEndDate = post.eventEndDate
         eventVenue = post.eventVenue
         lostFoundType = post.lostFoundType
         lostFoundContactPref = nil

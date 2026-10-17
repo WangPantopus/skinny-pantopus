@@ -1374,6 +1374,13 @@ class PulseFeedViewModel
                 origin = post.origin,
                 title = if (intent == PulseIntent.Event) post.title else null,
                 body = post.content.orEmpty(),
+                event =
+                    pulseEventDetails(
+                        postType = post.postType,
+                        startsAt = post.eventDate,
+                        endsAt = post.eventEndDate,
+                        venue = post.eventVenue,
+                    ),
                 reactions =
                     intent.reactionTemplate(
                         helpfulCount = likeCount,

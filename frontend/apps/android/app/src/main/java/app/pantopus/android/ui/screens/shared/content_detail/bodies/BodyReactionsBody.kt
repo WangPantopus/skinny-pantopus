@@ -61,6 +61,8 @@ import androidx.compose.ui.unit.sp
 import app.pantopus.android.ui.components.AvatarWithIdentityRing
 import app.pantopus.android.ui.components.IdentityPillar
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.screens.feed.pulse.PulseEventDetailRows
+import app.pantopus.android.ui.screens.feed.pulse.PulseEventDetails
 import app.pantopus.android.ui.screens.shared.content_detail.headers.PostIntent
 import app.pantopus.android.ui.screens.shared.media.PostMediaGridStyle
 import app.pantopus.android.ui.screens.shared.media.PostMediaGridWithViewer
@@ -147,6 +149,8 @@ fun BodyReactionsBody(
     mediaLocationBadge: String? = null,
     /** One line of details under the text, such as a Lost & Found post's contact; null for none. */
     detailLine: String? = null,
+    /** An Event's when and where, under the text; null on other posts. */
+    eventDetails: PulseEventDetails? = null,
     selectedReactionEmoji: String? = null,
     onEmojiSelected: ((String) -> Unit)? = null,
     reactionEmojis: List<String> = emptyList(),
@@ -184,6 +188,15 @@ fun BodyReactionsBody(
                 fontSize = 15.sp,
                 color = PantopusColors.appText,
                 lineHeight = 22.sp,
+                modifier = Modifier.padding(horizontal = Spacing.s4),
+            )
+        }
+        eventDetails?.let { event ->
+            PulseEventDetailRows(
+                details = event,
+                page = true,
+                whenTag = "pulsePostDetail-eventWhen",
+                placeTag = "pulsePostDetail-eventPlace",
                 modifier = Modifier.padding(horizontal = Spacing.s4),
             )
         }

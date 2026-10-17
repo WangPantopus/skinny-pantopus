@@ -413,6 +413,12 @@ private struct ErrorLayout: View {
 }
 
 extension PostDetailDTO {
+    /// An Event's when and where ("Sunday, Oct 18 · 7:00–9:00 PM", the place),
+    /// as the web post page shows them; nil for other posts.
+    var eventDetails: PulseEventDetails? {
+        PulseEventDetails(postType: postType, startsAt: eventDate, endsAt: eventEndDate, venue: eventVenue, long: true)
+    }
+
     /// "Lost · Contact: Phone 5555550123" for a Lost & Found post, as the web
     /// card and post page show it; nil for other posts. The contact is stored
     /// as `dm`, `comment`, `phone` or `phone|<digits>`.

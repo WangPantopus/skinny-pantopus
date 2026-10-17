@@ -356,6 +356,7 @@ private fun FeedPost.detailSeed(): PostDetailResponse? {
             allowExternalShare = allowExternalShare,
             moderationState = moderationState,
             eventDate = eventDate,
+            eventEndDate = eventEndDate,
             eventVenue = eventVenue,
             lostFoundType = lostFoundType,
         ),

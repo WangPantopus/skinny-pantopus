@@ -121,6 +121,8 @@ data class PulsePostCardContent(
     val reactions: List<PulseReaction>,
     val attendees: PulseAttendeeStrip?,
     val userHasReacted: Boolean,
+    /** When and where an Event happens; null on other posts. */
+    val event: PulseEventDetails? = null,
     val commentCount: Int = 0,
     val media: List<PostMediaItem> = emptyList(),
     /** Overflow-menu capability set for this viewer. */
@@ -209,6 +211,15 @@ fun PulsePostCard(
                 color = PantopusColors.appTextStrong,
                 maxLines = if (!content.title.isNullOrEmpty()) 2 else 3,
                 overflow = TextOverflow.Ellipsis,
+            )
+        }
+        // An Event's when and where, under its text (as on the web card).
+        content.event?.let { event ->
+            PulseEventDetailRows(
+                details = event,
+                page = false,
+                whenTag = "pulsePostEventWhen_${content.id}",
+                placeTag = "pulsePostEventPlace_${content.id}",
             )
         }
         if (content.media.isNotEmpty()) {
@@ -699,6 +710,8 @@ private fun buildA11yLabel(content: PulsePostCardContent): String {
     if (content.isVisitor) parts.add("Visitor")
     content.title?.takeIf { it.isNotEmpty() }?.let { parts.add(it) }
     if (content.body.isNotEmpty()) parts.add(content.body)
+    content.event?.whenText?.let { parts.add(it) }
+    content.event?.place?.let { parts.add(it) }
     content.status?.let { parts.add(it.spoken) }
     if (content.mediaUrls.isNotEmpty()) {
         parts.add("${content.mediaUrls.size} attached ${if (content.mediaUrls.size == 1) "photo" else "photos"}")

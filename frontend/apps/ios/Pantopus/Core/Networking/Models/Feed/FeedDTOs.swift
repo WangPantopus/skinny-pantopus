@@ -51,6 +51,8 @@ public struct FeedPostDTO: Decodable, Sendable, Hashable, Identifiable {
     public let businessAuthorId: String?
     public let locationName: String?
     public let eventDate: String?
+    /// When an Event ends, when the poster named an end time.
+    public let eventEndDate: String?
     public let eventVenue: String?
     public let lostFoundType: String?
     public let mediaURLs: [String]
@@ -82,6 +84,7 @@ public struct FeedPostDTO: Decodable, Sendable, Hashable, Identifiable {
         case businessAuthorId = "business_author_id"
         case locationName = "location_name"
         case eventDate = "event_date"
+        case eventEndDate = "event_end_date"
         case eventVenue = "event_venue"
         case lostFoundType = "lost_found_type"
         case mediaURLs = "media_urls"
@@ -119,6 +122,7 @@ public struct FeedPostDTO: Decodable, Sendable, Hashable, Identifiable {
         businessAuthorId = c.lenient(String.self, forKey: .businessAuthorId)
         locationName = c.lenient(String.self, forKey: .locationName)
         eventDate = c.lenient(String.self, forKey: .eventDate)
+        eventEndDate = c.lenient(String.self, forKey: .eventEndDate)
         eventVenue = c.lenient(String.self, forKey: .eventVenue)
         lostFoundType = c.lenient(String.self, forKey: .lostFoundType)
         // The four media lists are read side by side, so one is kept whole or not at all.

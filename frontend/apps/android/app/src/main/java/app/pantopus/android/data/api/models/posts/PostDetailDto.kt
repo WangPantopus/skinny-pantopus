@@ -120,6 +120,8 @@ data class PostDetailDto(
     @Json(name = "moderation_state") val moderationState: String? = null,
     val audience: String? = null,
     @Json(name = "event_date") val eventDate: String? = null,
+    /** When the event ends, when the poster named an end time. */
+    @Json(name = "event_end_date") val eventEndDate: String? = null,
     @Json(name = "event_venue") val eventVenue: String? = null,
     @Json(name = "lost_found_type") val lostFoundType: String? = null,
     /** How the owner asked to be contacted: `dm`, `comment`, `phone` or `phone|<digits>`. */
