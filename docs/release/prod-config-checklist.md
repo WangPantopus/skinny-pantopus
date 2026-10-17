@@ -899,7 +899,12 @@ app-link files, robots.txt).
   meets current App Store rules (privacy manifest, account deletion, Sign in
   with Apple, permission strings). The app is iPhone-only (no
   iPad layouts), so App Store Connect needs iPhone screenshots only.
-- [ ] Founder: run **iOS Beta (TestFlight)** (tag `ios-v<version>` or manual run).
+- [x] Founder: run **iOS Beta (TestFlight)** (tag `ios-v<version>` or manual run).
+  October 17: version 2.0.0 (the founder's choice), build 1, from tag `ios-v2.0.0`
+  ([run 39004323686](https://github.com/WangPantopus/skinny-pantopus/actions/runs/39004323686)).
+  App Store Connect processed it at 05:26 UTC and distributed it to internal
+  testers. The first two runs ran out of memory compiling the app as one
+  module; Release now compiles file by file (PR 2416).
 
 **Source check, October 11:** the release workflow selects Xcode 26.2, meeting
 [Apple’s Xcode 26 / iOS 26 SDK minimum](https://developer.apple.com/news/?id=ueeok6yw).
@@ -921,7 +926,11 @@ This does not verify store signing or an uploaded build.
   **variable** (not secret) `PANTOPUS_ALLOW_TEST_PAYMENTS=true`; without it the
   release build refuses anything but `pk_live_`. Delete the variable when live
   payments start. iOS needs no switch: its secret simply carries the matching key.
-- [ ] Founder: run **Android Beta (Play Store)**.
+- [x] Founder: run **Android Beta (Play Store)**.
+  October 17: version 2.0.0, version code 2, from tag `android-v2.0.0`
+  ([run 38988562456](https://github.com/WangPantopus/skinny-pantopus/actions/runs/38988562456)),
+  uploaded to the internal track as a **draft**: roll it out to testers in
+  Play Console.
 
 **Source check, October 11:** `targetSdk=36` meets the
 [current Play target requirement](https://support.google.com/googleplay/android-developer/answer/11926878?hl=en);
