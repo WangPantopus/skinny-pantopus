@@ -61,7 +61,10 @@ import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.google.maps.android.compose.rememberMarkerState
 
-/** H6: choose a public place (or "You're here now" for a pickup game, or your place where it's allowed). */
+/**
+ * H6: choose a public place (or "You're here now" for a pickup game, or your place where it's allowed). Pickup games
+ * and study groups never offer "My place".
+ */
 @Composable
 internal fun PlacePickerStep(
     ui: HostUi,
@@ -87,7 +90,7 @@ internal fun PlacePickerStep(
         onPick = vm::pickPlaceCandidate,
         onHereNow = if (kind == PlanKind.PICKUP_GAME) vm::pickHereNow else null,
         homeRow =
-            if (kind != PlanKind.PICKUP_GAME) {
+            if (kind != PlanKind.PICKUP_GAME && kind != PlanKind.STUDY_GROUP) {
                 { first ->
                     HomeRow(kind = kind, home = ui.home, first = first) {
                         vm.setAtHome(true)
@@ -132,8 +135,8 @@ internal fun PublicPlacePicker(
     val candidate = state.candidate
     val query = state.query.trim()
     val places =
-        remember(state.places, query) {
-            state.places.filter { query.isEmpty() || it.name.orEmpty().contains(query, ignoreCase = true) }
+        remember(state.places, query, kind) {
+            orderedForKind(state.places.filter { query.isEmpty() || it.name.orEmpty().contains(query, ignoreCase = true) }, kind)
         }
     HostStepScaffold(
         title = "Where?",
@@ -155,7 +158,7 @@ internal fun PublicPlacePicker(
             PlanTextArea(
                 value = state.query,
                 onValue = onSearch,
-                placeholder = "Search parks, courts, cafés",
+                placeholder = if (kind == PlanKind.STUDY_GROUP) "Search libraries, cafés" else "Search parks, courts, cafés",
                 label = "Search places",
                 singleLine = true,
             )
@@ -263,6 +266,23 @@ private fun HomeRow(
             onClick = if (homeAllowed) onUseHome else null,
         )
     }
+}
+
+/**
+ * The kind's own public places first, nearest first within each, then the rest, as iOS's `PlanPlaceFit` orders them:
+ * libraries, cafés and community centers for a study group. The other kinds keep the server's nearest-first order.
+ */
+internal fun orderedForKind(
+    places: List<PlanNearbyPlaceDto>,
+    kind: PlanKind,
+): List<PlanNearbyPlaceDto> {
+    val preferred =
+        when (kind) {
+            PlanKind.STUDY_GROUP -> listOf("library", "cafe", "community_center")
+            else -> return places
+        }
+    // A stable sort: places of the same rank keep their distance order.
+    return places.sortedBy { place -> preferred.indexOf(place.category?.lowercase()).takeIf { it >= 0 } ?: preferred.size }
 }
 
 internal fun PlanNearbyPlaceDto.toPicked(): PickedPlace? {

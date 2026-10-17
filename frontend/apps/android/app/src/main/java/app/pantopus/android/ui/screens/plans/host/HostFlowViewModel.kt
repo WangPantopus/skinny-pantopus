@@ -21,6 +21,7 @@ import app.pantopus.android.data.plans.PlanAutoRule
 import app.pantopus.android.data.plans.PlanFormat
 import app.pantopus.android.data.plans.PlanKind
 import app.pantopus.android.data.plans.PlanLocationResolver
+import app.pantopus.android.data.plans.PlanStudyStyle
 import app.pantopus.android.data.plans.PlansEvents
 import app.pantopus.android.data.plans.PlansFeature
 import app.pantopus.android.data.plans.PlansRepository
@@ -101,6 +102,9 @@ data class HostDraft(
     val pace: String = "easy",
     val dogsWelcome: Boolean = false,
     val pickupNow: Boolean = true,
+    /** A study group's subject (required) and how it studies. */
+    val subject: String = "",
+    val studyStyle: PlanStudyStyle = PlanStudyStyle.QUIET,
 )
 
 /** H1 to H8. */
@@ -135,8 +139,8 @@ data class HostUi(
 /**
  * Host a plan (boards H1 to H8). The rules come from the brief: hosting needs a home or GPS within 3 miles (the
  * fix proves you're nearby and never becomes the pin); playdates meet in public places with a verified address
- * and the host approves each family; at home the host approves each person, with "people I've hosted" the only
- * rule allowed; anyone nearby is only for pickup games and walks.
+ * and the host approves each family; study groups meet in public places too; at home the host approves each person,
+ * with "people I've hosted" the only rule allowed; anyone nearby is only for pickup games and walks.
  */
 @HiltViewModel
 class HostFlowViewModel
@@ -225,6 +229,8 @@ class HostFlowViewModel
                             pace = d?.pace ?: "easy",
                             dogsWelcome = d?.dogsWelcome == true,
                             pickupNow = false,
+                            subject = d?.subject.orEmpty(),
+                            studyStyle = PlanStudyStyle.from(d?.studyStyle),
                         ),
                 )
             }
@@ -273,12 +279,15 @@ class HostFlowViewModel
                         )
                     PlanKind.WALK_COFFEE ->
                         HostDraft(kind = kind, spots = 6, approveEach = false, autoRule = PlanAutoRule.VERIFIED, title = "Coffee walk")
+                    // A watch party's defaults (as on iOS), always at a public place.
+                    PlanKind.STUDY_GROUP -> HostDraft(kind = kind, spots = 8)
                 }
+            val hours = if (kind == PlanKind.WATCH_PARTY || kind == PlanKind.STUDY_GROUP) 3L else 1L
             val timed =
                 if (kind == PlanKind.PICKUP_GAME) {
                     draft.copy(start = now.plusMinutes(PICKUP_LEAD_MINUTES), end = now.plusHours(2))
                 } else {
-                    draft.copy(start = start, end = start.plusHours(if (kind == PlanKind.WATCH_PARTY) 3 else 1))
+                    draft.copy(start = start, end = start.plusHours(hours))
                 }
             _ui.update { it.copy(step = HostStep.Details, draft = timed, error = null) }
             // A watch party starts on the soonest game, its chip checked and its title and time filled in (board H2, as on iOS).
@@ -312,6 +321,9 @@ class HostFlowViewModel
         }
 
         fun setTitle(value: String) = edit { it.copy(title = value.take(TITLE_MAX), titleEdited = true) }
+
+        /** A study group's subject: at most 60 characters, as the server allows. */
+        fun setSubject(value: String) = edit { it.copy(subject = value.take(SUBJECT_MAX)) }
 
         /** A game fills in the title and the time (H2). */
         fun pickGame(game: PlanGameDto?) {
@@ -639,6 +651,7 @@ class HostFlowViewModel
                 PlanKind.PLAYDATE -> PlanDetailsDto(kidsAgeBands = draft.kidsAgeBands.toList())
                 PlanKind.PICKUP_GAME -> PlanDetailsDto(sport = draft.sport, level = draft.level, extraGear = draft.extraGear)
                 PlanKind.WALK_COFFEE -> PlanDetailsDto(walkKind = draft.walkKind, pace = draft.pace, dogsWelcome = draft.dogsWelcome)
+                PlanKind.STUDY_GROUP -> PlanDetailsDto(subject = draft.subject.cleanSubject(), studyStyle = draft.studyStyle.wire)
             }
 
         private fun validate(draft: HostDraft): String? {
@@ -646,6 +659,7 @@ class HostFlowViewModel
             val start = draft.start
             val end = draft.end
             val minutes = if (start != null && end != null) Duration.between(start, end).toMinutes() else 0
+            val kindProblem = kindProblem(draft)
             return when {
                 draft.title.isBlank() -> "Give your plan a title."
                 start == null || end == null -> "Pick when it starts and ends."
@@ -653,15 +667,24 @@ class HostFlowViewModel
                 start.isAfter(now.plusDays(MAX_DAYS_AHEAD)) -> "Plans can start up to 14 days from now."
                 minutes < MIN_MINUTES -> "A plan lasts at least 15 minutes."
                 minutes > MAX_MINUTES -> "A plan lasts at most 8 hours."
-                draft.kind == PlanKind.PLAYDATE && draft.kidsAgeBands.isEmpty() -> "Pick the kids' ages."
+                kindProblem != null -> kindProblem
                 draft.atHome && _ui.value.home == null -> "Add your home to host there, or choose a public place."
                 !draft.atHome && draft.place == null -> "Choose a place."
                 else -> null
             }
         }
 
+        /** What the chosen kind still needs: a playdate's kids' ages, a study group's subject; null when nothing. */
+        private fun kindProblem(draft: HostDraft): String? =
+            when (draft.kind) {
+                PlanKind.PLAYDATE -> "Pick the kids' ages.".takeIf { draft.kidsAgeBands.isEmpty() }
+                PlanKind.STUDY_GROUP -> "Add what you're studying.".takeIf { draft.subject.cleanSubject().isEmpty() }
+                else -> null
+            }
+
         private companion object {
             const val TITLE_MAX = 80
+            const val SUBJECT_MAX = 60
             const val PICKUP_LEAD_MINUTES = 15L
             const val DAY_START = 8
             const val WALK_EARLIEST = 7
@@ -697,6 +720,9 @@ class HostFlowViewModel
                 val a = sin(dLat / 2).pow(2) + cos(Math.toRadians(fromLat)) * cos(Math.toRadians(toLat)) * sin(dLng / 2).pow(2)
                 return EARTH_RADIUS_METERS * 2 * atan2(sqrt(a), sqrt(1 - a))
             }
+
+            /** The subject as the server keeps it: trimmed, with runs of spaces made one. */
+            fun String.cleanSubject(): String = trim().replace(Regex("\\s+"), " ")
 
             /** "Sam Rivera" → "Sam R." (first name and last initial, as everyone sees a host). */
             fun shortName(name: String?): String {

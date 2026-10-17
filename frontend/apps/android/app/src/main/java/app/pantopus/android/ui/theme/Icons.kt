@@ -12,6 +12,7 @@ import androidx.compose.material.icons.automirrored.filled.Assignment
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
 import androidx.compose.material.icons.automirrored.filled.Help
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.automirrored.filled.Message
 import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.automirrored.filled.Send
@@ -706,10 +707,12 @@ enum class PantopusIcon(
 
     // Nearby Plans type glyphs (board P1): watch party is [Tv]; playdate is an adult and a child (Material
     // `EscalatorWarning`, SF `figure.and.child.holdinghands`); pickup game is a ball (Material `SportsBaseball`,
-    // SF `tennisball`); walk & coffee is Lucide `coffee` (Material `LocalCafe`, SF `cup.and.saucer`).
+    // SF `tennisball`); walk & coffee is Lucide `coffee` (Material `LocalCafe`, SF `cup.and.saucer`); study group is
+    // an open book, Lucide `book-open` (Material `MenuBook`, SF `book`).
     AdultChild("adult-child"),
     Ball("ball"),
     Coffee("coffee"),
+    BookOpen("book-open"),
     ;
 
     companion object {
@@ -1146,6 +1149,7 @@ internal fun PantopusIcon.source(): IconSource =
         PantopusIcon.AdultChild -> IconSource.Material(Icons.Filled.EscalatorWarning)
         PantopusIcon.Ball -> IconSource.Material(Icons.Filled.SportsBaseball)
         PantopusIcon.Coffee -> IconSource.Material(Icons.Filled.LocalCafe)
+        PantopusIcon.BookOpen -> IconSource.Material(Icons.AutoMirrored.Filled.MenuBook)
     }
 
 /**

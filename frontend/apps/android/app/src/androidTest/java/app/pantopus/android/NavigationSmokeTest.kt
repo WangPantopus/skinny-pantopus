@@ -83,8 +83,8 @@ class NavigationSmokeTest {
                 "tab.${route.path.substringAfterLast('/')}"
             }
         // Place keeps its legacy home path for deep-link compatibility. These builds list no launch keys, so the
-        // Pulse redesign is off: the October 13 bar.
-        check(expectedTags == listOf("tab.home", "tab.today", "tab.nearby", "tab.mail")) {
+        // Pulse redesign is off: the October 13 bar with Plans (drawn while its switch is on).
+        check(expectedTags == listOf("tab.home", "tab.today", "tab.nearby", "tab.plans", "tab.mail")) {
             "PantopusRoute.entries derived testTags drifted: $expectedTags"
         }
     }

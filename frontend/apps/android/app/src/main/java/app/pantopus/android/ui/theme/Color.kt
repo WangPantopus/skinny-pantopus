@@ -399,6 +399,12 @@ object PantopusColors {
     val catPlanWalkDark = Color(0xFFFBBF24)
     val catPlanWalkTintDark = Color(0xFF33290F)
 
+    /** `cat-plan-study` — `#DB2777` (pink-600); study groups. */
+    val catPlanStudy = Color(0xFFDB2777)
+    val catPlanStudyTint = Color(0xFFFCE7F3)
+    val catPlanStudyDark = Color(0xFFF472B6)
+    val catPlanStudyTintDark = Color(0xFF3A1A2C)
+
     /** A plan pin's glyph on its colored head in dark mode — `#0B1220` (light mode uses white). */
     val planPinInkDark = Color(0xFF0B1220)
 

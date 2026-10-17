@@ -56,6 +56,12 @@ val PlanKind.colors: PlanKindColors
                 } else {
                     PlanKindColors(PantopusColors.catPlanWalk, PantopusColors.catPlanWalkTint)
                 }
+            PlanKind.STUDY_GROUP ->
+                if (dark) {
+                    PlanKindColors(PantopusColors.catPlanStudyDark, PantopusColors.catPlanStudyTintDark)
+                } else {
+                    PlanKindColors(PantopusColors.catPlanStudy, PantopusColors.catPlanStudyTint)
+                }
         }
     }
 
@@ -67,9 +73,10 @@ val PlanKind.accentLight: Color
             PlanKind.PLAYDATE -> PantopusColors.catPlanPlaydate
             PlanKind.PICKUP_GAME -> PantopusColors.catPlanPickup
             PlanKind.WALK_COFFEE -> PantopusColors.catPlanWalk
+            PlanKind.STUDY_GROUP -> PantopusColors.catPlanStudy
         }
 
-/** Board P1: the type's glyph (Material Tv, EscalatorWarning, SportsBaseball, LocalCafe). */
+/** Board P1: the type's glyph (Material Tv, EscalatorWarning, SportsBaseball, LocalCafe, MenuBook). */
 val PlanKind.icon: PantopusIcon
     get() =
         when (this) {
@@ -77,6 +84,7 @@ val PlanKind.icon: PantopusIcon
             PlanKind.PLAYDATE -> PantopusIcon.AdultChild
             PlanKind.PICKUP_GAME -> PantopusIcon.Ball
             PlanKind.WALK_COFFEE -> PantopusIcon.Coffee
+            PlanKind.STUDY_GROUP -> PantopusIcon.BookOpen
         }
 
 /** The glyph's ink on a colored pin head or swatch: white in light, near-black in dark. */
