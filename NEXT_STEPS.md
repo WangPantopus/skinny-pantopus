@@ -105,6 +105,13 @@ Sessions you start for one job (Instant Screens, Nearby Plans, single fixes) wor
   - The build resumes after launch from each stream's paused note ([README](docs/product/pulse-build/README.md)).
 - [x] Whatever the key says: crime and suspicion Heads-ups stay refused, businesses still don't start posts in the neighborhood feed, and the privacy fixes made during the Pulse build stay on.
 
+**Made by the founder on October 17 (Plans).** Progress is in the Nearby Plans section below.
+
+- [x] Plans becomes its own tab in the launch build: Place · Today · Nearby · Plans · Messages while `plans` is on for the person, and the four tabs of today while it is off. Nearby stays the October 13 Nearby and no longer opens on the Plans map. The tab keeps the name "Plans". This replaces the October 12 "Nearby opens on the map" line for the launch build; with `pulse_redesign` on, the October 13 five tabs still apply.
+- [x] A fifth kind, the study group: a subject, and quiet study or working through it together. Study groups meet in public places only, never at home. The host approves each person, or the verified-neighbors and hosted-before rules let them in; "anyone nearby" never does. The reason: the terms allow people 13 and older, and sign-up checks for 18 and older only when a birth date is given.
+- [x] Playdates stay off (`plans_playdates`) until address verification works in production and a lawyer has read the rules.
+- [x] The order: the study group server change first (merging it applies its migration to production), then both apps and new store builds, then `plans` on in staging and checked there, then production.
+
 **Still open. The brief builds the default until you decide.**
 
 - [ ] Confirm the September 26 promise and pilot shape: "Know what matters for your home, and stay on top of it"; first-time homeowners in Vancouver, Camas and Washougal; five households, then 30 to 50, for eight weeks each. Default: as written.
@@ -368,7 +375,8 @@ Decided October 12 (section 0) and built by three founder-started sessions: back
 - [x] iOS (PRs 2209, 2222, 2225, 2227, 2238) and Android (PRs 2221, 2224, 2226, 2228) merged October 13. L4's release checks show both apps unchanged while the flag is off. Every journey was then checked on a simulator and an emulator against the design boards, and both apps were brought to the boards' words and behavior in three polish rounds (PRs 2237–2240, 2245, 2249, 2254, 2255, 2257, 2258, 2283, 2284, 2288, 2289 and 2292, all merged October 13–14).
 - [x] "You're here now" for pickup games (board H4) names the public place the host is at, never their own location, and the server refuses a "public" place at the host's home (PR 2331). Before it, Android posted the host's raw location as the place, so a host at home showed the home's exact spot to everyone who got in.
 - [ ] Check the watch-party game list (`backend/data/planGames.js`) again before December 17. PR 2329 refreshed it through December 31 on October 15, and the app offers the next 14 days.
-- [ ] Turn on `plans` for the internal team or beta users once the journeys pass; `plans_playdates` waits for production address verification and a lawyer's read.
+- [ ] Study groups and the Plans tab (decided October 17). The server and web half adds the kind, its rules and the migration that allows it; it merges first, and merging it applies the migration to production. iOS and Android each add the Plans tab to the launch bar and the study group in their own PR, merged after the server PR.
+- [ ] Turn on `plans` (order decided October 17): after the new store builds, staging first (push master to `dev`, set `plans` on in staging's `FeatureFlag` table, check on a phone with a staging build), then production. Still unchecked before production: a Maps SDK for Android key in the store builds' `MAPS_API_KEY` (without it the Android Plans map is blank) and push from production. Every Plans check so far ran against local servers. `plans_playdates` waits for production address verification and a lawyer's read.
 
 ## Pulse (added October 13)
 

@@ -425,7 +425,8 @@ function myRequestView(plan, request, { waitlistPosition = null } = {}) {
 function publicDetails(plan) {
   const details = plan.details && typeof plan.details === 'object' ? plan.details : {};
   const out = {};
-  for (const key of ['game', 'sport', 'level', 'extra_gear', 'kids_age_bands', 'walk_kind', 'pace', 'dogs_welcome']) {
+  for (const key of ['game', 'sport', 'level', 'extra_gear', 'kids_age_bands', 'walk_kind', 'pace', 'dogs_welcome',
+    'subject', 'study_style']) {
     if (details[key] !== undefined && details[key] !== null) out[key] = details[key];
   }
   // A watch party's game time is the plan's time; it is public like the plan's.
