@@ -294,7 +294,16 @@ Supabase dashboard → Authentication:
 
 - URL configuration: Site URL `https://staging.pantopus.com`; redirect URLs
   `https://staging.pantopus.com/auth/callback`, `https://staging.pantopus.com/**`
-  and `pantopus://auth/callback`.
+  and `pantopus://auth/callback**`. The apps' browser sign-in (Google on iOS,
+  Google and Apple on Android) returns to
+  `pantopus://auth/callback?app_nonce=<per-attempt check>`, and Supabase
+  compares that whole address with this list. A plain
+  `pantopus://auth/callback` doesn't match it, so Supabase sends the person
+  to the Site URL instead: the sign-in sheet shows the website and the app
+  never signs in. The `**` covers the query. The web's own callback matches
+  either way. Staging had the plain entry until October 17. After the founder
+  added `pantopus://auth/callback**`, the read-only check in P3's status
+  accepted the apps' address at 06:23 UTC.
 - Email: confirm email **on**; minimum password length **12**; custom SMTP from
   D6 (sender `Pantopus Staging <staging@pantopus.com>`).
 - Rate limits: every sign-in, sign-up, token refresh, password reset and email
@@ -689,9 +698,22 @@ Don't run any of this until L4 has rehearsed it on a copy:
 
 As in S3, with Site URL `https://pantopus.com`, redirect URLs
 `https://pantopus.com/auth/callback`, `https://www.pantopus.com/auth/callback`,
-`https://pantopus.com/**` and `pantopus://auth/callback`, production SMTP sender
-`Pantopus <hello@pantopus.com>`, the same rate limits, and the production Apple
-and Google settings.
+`https://pantopus.com/**` and `pantopus://auth/callback**`, production SMTP
+sender `Pantopus <hello@pantopus.com>`, the same rate limits, and the production
+Apple and Google settings.
+
+**Status, October 17:** the production list had the plain
+`pantopus://auth/callback`, so Continue with Google in the 2.0.0 iPhone build
+ended on `pantopus.com` inside the sign-in sheet and never signed in. Every
+browser sign-in on Android (Google and Apple) had the same problem. Apple on the
+iPhone uses Apple's native sheet, and the web's callback is on `pantopus.com`
+itself, so both worked. A check of Supabase's public `/auth/v1/verify` with a
+deliberately invalid token showed the apps'
+`pantopus://auth/callback?app_nonce=…` replaced by the Site URL while
+`https://pantopus.com/auth/callback` was accepted. After the founder added
+`pantopus://auth/callback**`, the same check accepted the apps' address at
+06:05 UTC, and the founder signed in with Google on the iPhone app. Not checked:
+Android sign-in on a phone.
 
 ### P4. Production Firebase and APNs (founder)
 
