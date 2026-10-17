@@ -141,7 +141,8 @@ public final class SupportTrainsViewModel: ListOfRowsDataSource {
         self.locationRequester = locationRequester
         self.openLocationSettings = openLocationSettings
         // The store's copy of My trains shows in the first frame.
-        if let copy = store.peek(Self.mineEndpoint, as: SupportTrainsListResponse.self) {
+        if let copy = store.peek(Self.mineEndpoint, as: SupportTrainsListResponse.self),
+           (copy.value.total ?? copy.value.supportTrains.count) <= copy.value.supportTrains.count {
             mine = copy.value.supportTrains
             staleNotice = copy.refreshNotice
             loadedOnce = true
@@ -168,7 +169,8 @@ public final class SupportTrainsViewModel: ListOfRowsDataSource {
     }
 
     public func loadMoreIfNeeded() async {
-        // Single-shot feeds — pagination deferred to a follow-up.
+        // My trains and Invitations project the same fully loaded feed; an
+        // invitation on a later page must not look like an empty Invitations tab.
     }
 
     /// Nearby's "Use my location": asks for permission if it hasn't been answered,
@@ -211,8 +213,28 @@ public final class SupportTrainsViewModel: ListOfRowsDataSource {
                 topics: [ScreenTopic.supportTrains],
                 force: force
             )
-            mine = snapshot.value.supportTrains
-            staleNotice = snapshot.refreshNotice
+            var rows = snapshot.value.supportTrains
+            var offset = rows.count
+            var total = snapshot.value.total ?? offset
+            var seen = Set(rows.map(\.id))
+            var notice = snapshot.refreshNotice
+            while offset < total {
+                try Task.checkCancellation()
+                let page = try await store.load(
+                    SupportTrainsEndpoints.mine(offset: offset),
+                    as: SupportTrainsListResponse.self,
+                    kind: .supportTrain,
+                    topics: [ScreenTopic.supportTrains],
+                    force: force
+                )
+                guard !page.value.supportTrains.isEmpty else { break }
+                offset += page.value.supportTrains.count
+                total = page.value.total ?? total
+                rows.append(contentsOf: page.value.supportTrains.filter { seen.insert($0.id).inserted })
+                notice = notice ?? page.refreshNotice
+            }
+            mine = rows
+            staleNotice = notice
             mineFailed = false
             return true
         } catch is CancellationError {
