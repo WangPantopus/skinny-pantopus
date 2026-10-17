@@ -50,6 +50,9 @@ here supersede their earlier status snapshots, not founder decisions.
   Existing draft [PR 2019](https://github.com/WangPantopus/skinny-pantopus/pull/2019)
   prepares the web cutover and is green for its recorded checks. Do not duplicate
   it or merge it before its production API prerequisite and browser checks.
+  On October 17, after P6,
+  [PR 2413](https://github.com/WangPantopus/skinny-pantopus/pull/2413)
+  carried its changes onto master in its place (P9).
 - [x] Verified `pantopus-production` is healthy in Oregon, in a Free
   organization, with **No backups** shown. Storage lists only
   `home-documents` at 25 MB. The saved Auth Site URL and all four redirect URLs
@@ -113,18 +116,22 @@ here supersede their earlier status snapshots, not founder decisions.
    transfer still requires the private export and isolated rehearsal in
    [its runbook](production-auth-transfer.md); there is no approved import
    command yet. The founder's later cutover-before-transfer decision is
-   recorded in PR 2019; its users' login limitation must remain explicit.
+   recorded in P2A's plan decision; its users' login limitation must remain
+   explicit.
 3. **Supply provider credentials (Appendix A and P7).** Enter keys privately
    in the designated backend/GitHub/AWS destinations. Review Census, AirNow,
    Anthropic, Mapbox, SMTP and Stripe test configuration and webhooks. Google
    API enablement alone does not configure the backend. Lob/Smarty/address
    setup stays deferred until ready; enable live postcards only with the real
    return address and live webhook settings. Do not paste any secret into chat.
-4. **Release the web and link domains (P9/P10).** Once the API is healthy,
-   complete the existing PR 2019 cutover with its owning session, verify the
-   Vercel production variables and billing choice, and deploy. Configure DNS
-   and Vercel for both `.app` hosts without redirects. After signing is ready,
-   L4 can regenerate Android associations and re-run the hosted checks.
+4. **Release the web and link domains (P9/P10).** The API has been healthy
+   since October 17 (P6). Verify the Vercel production variables and billing
+   choice, then merge
+   [PR 2413](https://github.com/WangPantopus/skinny-pantopus/pull/2413)
+   (PR 2019's changes on current master): the merge deploys `pantopus.com`.
+   Configure DNS and Vercel for both `.app` hosts without redirects. After
+   signing is ready, L4 can regenerate Android associations and re-run the
+   hosted checks.
 5. **Finish store signing (section 4).** iOS identifiers, capabilities, App
    Group and listing are already done. Still configure App Store Connect API
    access, the private match repo/password, App Store profiles for both targets
@@ -157,7 +164,7 @@ to the founder. No unchecked hosted or physical-device gate is claimed complete.
 
 | Piece | State on October 7, 2026 (19:15Z) |
 |---|---|
-| Website `pantopus.com` | Up, on Vercel. The deployment is about four months old (June). Its JavaScript calls `https://api.pantopus.com`. |
+| Website `pantopus.com` | Up, on Vercel. The deployment is about four months old (June). Its JavaScript calls `https://api.pantopus.com`, which since October 17 is the new production API (P6). On October 10 the Vercel project `pantopus-web` was connected to this repository with root `frontend/apps/web`, `pnpm install --frozen-lockfile`, `pnpm --filter @pantopus/web build`, Node 22 and production branch `master`, with `pantopus.com` and `www.pantopus.com` on Production. Nothing has deployed from `master` yet (P9). |
 | Production API `api.pantopus.com` | Checked October 14 at 17:00 Pacific (L4): the name resolves straight to the server (DNS only, the same address as `staging-api.pantopus.com`) and serves a Let's Encrypt certificate issued October 9. Since October 17 at 00:24 UTC it runs the production API and worker from master `91018743a` (P6, [run 38985891255](https://github.com/WangPantopus/skinny-pantopus/actions/runs/38985891255)); `/health` answers healthy with the database connected. |
 | Staging | `https://staging-api.pantopus.com` runs the API and worker; `https://staging.pantopus.com` is the Vercel project `pantopus-staging`, with production branch `dev`. Both services released `dev 132e45a5f` on October 10: the API and worker deployment completed at 10:24 UTC ([run 38044657594](https://github.com/WangPantopus/skinny-pantopus/actions/runs/38044657594)); Vercel released the web at 09:52 UTC (deployment 6979118646). The backend database and deployment steps ran successfully, rather than skipping. Checked October 11 at 17:36 Pacific: API healthy, hosted checks 9/10 (Android app links await P10). The October 10 Lambda check found no observed errors in active/daily staging jobs and six alarms OK. S10 below distinguishes completed checks from the remaining web and physical-Android checks. |
 | `pantopus.app` | The zone is on Cloudflare with no records, so `pantopus.app`, `api.pantopus.app` and `staging.api.pantopus.app` don't resolve. |
@@ -419,11 +426,13 @@ Vercel → the Pantopus project:
   Cloudflare record to Vercel's CNAME (DNS only). The September staging site on
   the server can then be retired.
 - Automatic deployments: `frontend/apps/web/vercel.json` lets only `dev`
-  deploy. The Hobby plan allows 100 deployments in any 24 hours, and a preview
-  of every pull-request push and every merge to `master` (over 100 merges on
-  October 8 alone) used them up, so the `dev` push that releases staging could
-  not deploy. CI builds the production web app for every web change instead
-  (the "Production build" step).
+  deploy, and `master` from P9. The Hobby plan allows 100 deployments in any
+  24 hours, and a preview of every pull-request push and every merge to
+  `master` (over 100 merges on October 8 alone) used them up, so the `dev` push
+  that releases staging could not deploy. CI builds the production web app for
+  every web change instead (the "Production build" step). Both Vercel projects
+  read this file: `pantopus-web` already builds each `dev` push as a preview,
+  and from P9 this project also builds each `master` push as one.
 
 **Check:** `https://staging.pantopus.com` loads, sign-in works, and the browser's
 network panel shows API calls going to `/api/...` on the same origin (Next.js
@@ -645,9 +654,12 @@ upgrade remain to be done.
 
 **Plan decision, October 9:** stay on Free for now. Defer the two 100 MB
 buckets and April login import until the founder chooses to upgrade. The
-private 25 MB `home-documents` bucket can be prepared on Free. Do not point
-production traffic at the new project while existing logins remain only in
-the April project.
+private 25 MB `home-documents` bucket can be prepared on Free. The founder
+later directed a public backend and web cutover before importing April
+logins, accepting that those accounts cannot sign in to the new project yet.
+Do not report login preservation as complete until the Auth transfer is
+rehearsed, run and verified. The two deferred buckets also leave their upload
+flows unavailable.
 
 **Storage status, October 9:** the founder created `home-documents`. A
 read-only Storage API check confirmed it is private with a 26,214,400-byte
@@ -788,16 +800,44 @@ chose in P2 (with P2A, the new project's `<ref>.supabase.co`, not the April
 Vercel Production environment variables: `NEXT_PUBLIC_API_URL=https://api.pantopus.com`,
 `NEXT_PUBLIC_APP_URL=https://pantopus.com`, `NEXT_PUBLIC_APP_ENV=production`,
 `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` (matching D4), `NEXT_PUBLIC_MAPBOX_TOKEN`,
-`EDGE_PROXY_SECRET` (the value in `hosted-secrets/production.env`, as in S7),
-and, once the new store listings exist, `NEXT_PUBLIC_IOS_APP_STORE_URL`,
-`NEXT_PUBLIC_IOS_APP_STORE_APP_ID` and `NEXT_PUBLIC_ANDROID_PLAY_STORE_URL`
-(today's defaults point at the April apps). Production branch `master`.
-Before this step L4 adds `"master": true` under `git.deploymentEnabled` in
-`frontend/apps/web/vercel.json` (S7); without it `master` never deploys. Keep
-the Vercel account on Pro from here, or production and staging deployments
-share the 100-a-day Hobby limit.
+`EDGE_PROXY_SECRET` (the value in `hosted-secrets/production.env`, as in S7).
+Leave `NEXT_PUBLIC_LAUNCH_FEATURES` empty, as in S7.
+Leave `NEXT_PUBLIC_IOS_APP_STORE_URL`, `NEXT_PUBLIC_IOS_APP_STORE_APP_ID` and
+`NEXT_PUBLIC_ANDROID_PLAY_STORE_URL` unset until the new store listings exist;
+remove any old values pointing to the April apps from the Vercel project. The
+web app no longer falls back to April store links. Regenerate the two landing
+page QR images for the new listings before setting
+`NEXT_PUBLIC_STORE_QR_CODES_READY=true` to reveal that download block.
+Production branch `master`.
+[PR 2413](https://github.com/WangPantopus/skinny-pantopus/pull/2413) adds
+`"master": true` under `git.deploymentEnabled` in
+`frontend/apps/web/vercel.json` (S7); without it `master` never deploys.
+Merging it releases the web, and from then on every `master` merge that
+changes the web deploys to `pantopus.com`. Keep the Vercel account on Pro from
+here, or production and staging deployments share the 100-a-day Hobby limit
+(Hobby is also for non-commercial use only). `pantopus-staging` reads the same
+file, so it also starts a preview build for each `master` push.
 
-**Check:** `https://pantopus.com` shows the new home page; sign-in works;
+**Status, October 10** (read in Vercel for PR 2019): the Production variables
+were `NEXT_PUBLIC_API_URL=https://api.pantopus.com`,
+`NEXT_PUBLIC_APP_URL=https://pantopus.com`, `NEXT_PUBLIC_APP_ENV=production`,
+`NEXT_PUBLIC_MAPBOX_TOKEN`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` and
+`EDGE_PROXY_SECRET`; no store-link variables were set. The Stripe key was a
+`pk_live_` key while D4 says test keys: it must be in the same mode as the
+backend's `STRIPE_SECRET_KEY`, or card entry fails. `EDGE_PROXY_SECRET` can't
+be read back, so the Settings → Security check below confirms it. The account
+was on Hobby, and "Skip deployments when there are no changes to the root
+directory or its dependencies" was turned on that day. `NEXT_PUBLIC_API_URL`
+is read when the web is built (the `/api` and `/socket.io` rewrites in
+`next.config.js`; without it a build forwards to `http://localhost:8000`), so a
+changed variable needs a new deployment. To undo a release, Vercel's Instant
+Rollback returns `pantopus.com` to the previous deployment.
+
+**Check:** `https://pantopus.com` shows the new home page (tab title "Pantopus -
+Know what matters for your home"; June's is "Pantopus - Your real-world
+network") with no App Store or Google Play badges; email, Google and Apple
+sign-in land on `/app/place` without the June callback page's brief "Sign-in
+failed / No authorization code received" card;
 `https://pantopus.com/.well-known/apple-app-site-association` returns JSON;
 the web's Settings → Security page (`/app/settings/security`) shows this
 browser's last address as your own network's, not a Vercel or Amazon one (if it
