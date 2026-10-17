@@ -20,9 +20,10 @@ public struct AskToJoinBody: Encodable, Sendable {
     public let kidsCount: Int?
     public let kidsAgeBands: [PlanKidsAgeBand]?
     public let staysWithKids: Bool?
+    public var gps: PlanGPSBody?
 
     enum CodingKeys: String, CodingKey {
-        case note
+        case note, gps
         case partySize = "party_size"
         case kidsCount = "kids_count"
         case kidsAgeBands = "kids_age_bands"
@@ -34,13 +35,15 @@ public struct AskToJoinBody: Encodable, Sendable {
         note: String?,
         kidsCount: Int? = nil,
         kidsAgeBands: [PlanKidsAgeBand]? = nil,
-        staysWithKids: Bool? = nil
+        staysWithKids: Bool? = nil,
+        gps: PlanGPSBody? = nil
     ) {
         self.partySize = partySize
         self.note = note
         self.kidsCount = kidsCount
         self.kidsAgeBands = kidsAgeBands
         self.staysWithKids = staysWithKids
+        self.gps = gps
     }
 }
 
@@ -196,9 +199,10 @@ public struct UpdatePlanBody: Encodable, Sendable {
     public var spots: Int?
     public var autoRules: [PlanAutoRule]?
     public var guestNote: String?
+    public var gps: PlanGPSBody?
 
     enum CodingKeys: String, CodingKey {
-        case title, about, place, spots
+        case title, about, place, spots, gps
         case startsAt = "starts_at"
         case endsAt = "ends_at"
         case autoRules = "auto_rules"
