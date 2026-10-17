@@ -355,6 +355,16 @@ router.post('/:id/reply', verifyToken, validate(replySchema), async (req, res) =
         metadata: { neighbor_message_id: row.id },
         context: 'personal',
       });
+    } else {
+      // The sender reads this reply in their notification list. Keep that
+      // existing row current without another push, unread badge or timestamp.
+      const { error: notificationError } = await supabaseAdmin
+        .from('Notification')
+        .update({ body: reply.body })
+        .eq('user_id', row.sender_user_id)
+        .eq('type', 'neighbor_message_reply')
+        .contains('metadata', { neighbor_message_id: row.id });
+      if (notificationError) throw notificationError;
     }
 
     return res.json(serializeReceived(updated, access));

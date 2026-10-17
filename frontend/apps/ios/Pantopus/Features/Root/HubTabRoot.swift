@@ -3431,7 +3431,6 @@ public struct HubTabRoot: View {
                     recipient: recipient
                 ),
                 onBack: { pop() },
-                onChangeRecipient: { pop() },
                 onDone: { pop() }
             )
         case .neighborInbox:

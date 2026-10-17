@@ -16,7 +16,6 @@ import SwiftUI
 struct NeighborMessageComposeView: View {
     @State var viewModel: NeighborMessageComposeViewModel
     var onBack: () -> Void
-    var onChangeRecipient: () -> Void
     /// Dismiss back to Place after a successful, calm confirmation.
     var onDone: () -> Void
 
@@ -24,7 +23,7 @@ struct NeighborMessageComposeView: View {
         VStack(spacing: 0) {
             PlaceDetailHeader(
                 title: viewModel.sent ? "Message sent" : "New message",
-                address: "To a verified neighbor on your block",
+                address: "To a home on your block",
                 onBack: onBack
             )
             content
@@ -56,9 +55,10 @@ struct NeighborMessageComposeView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     PlaceDetailSectionLabel(text: "To")
                     if let recipient = viewModel.recipient {
-                        ComposeRecipientCard(recipient: recipient, onChange: onChangeRecipient)
+                        ComposeRecipientCard(recipient: recipient, onChange: viewModel.changeRecipient)
+                            .disabled(viewModel.sending)
                     } else {
-                        ChooseNeighborCard(onBack: onChangeRecipient)
+                        ChooseNeighborCard(viewModel: viewModel)
                     }
                     PrivacyNote()
 
@@ -71,6 +71,7 @@ struct NeighborMessageComposeView: View {
                             ) { viewModel.selectedTemplateId = $0 }
                         }
                     }
+                    .disabled(viewModel.sending)
                     TemplateNote()
 
                     PlaceDetailSectionLabel(text: "How it's delivered")
@@ -81,18 +82,14 @@ struct NeighborMessageComposeView: View {
 
                     PlaceDetailSectionLabel(text: "Good to know")
                     SafetyCard()
-
-                    if let sendError = viewModel.sendError {
-                        NeighborErrorBanner(message: sendError)
-                            .padding(.top, 16)
-                    }
                 }
                 .padding(.horizontal, 16)
-                .padding(.bottom, 132)
+                .padding(.bottom, viewModel.sendError == nil ? 132 : 220)
             }
             SendBar(
                 sending: viewModel.sending,
-                enabled: viewModel.canSend
+                enabled: viewModel.canSend,
+                error: viewModel.sendError
             ) { Task { await viewModel.send() } }
         }
     }
@@ -125,36 +122,6 @@ private struct ComposeRecipientCard: View {
                 .buttonStyle(.plain)
         }
         .padding(14)
-        .placeCard()
-    }
-}
-
-private struct ChooseNeighborCard: View {
-    var onBack: () -> Void
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            PlaceIconTile(icon: .home, tone: .muted, size: 38)
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Recipient selection isn't available yet")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Theme.Color.appText)
-                Text(
-                    "You can preview the notes below, but sending needs a selected recipient. "
-                        + "You can still read received notes in Your inbox on Place."
-                )
-                .font(.system(size: 13))
-                .foregroundStyle(Theme.Color.appTextMuted)
-                .fixedSize(horizontal: false, vertical: true)
-                Button("Back to Place", action: onBack)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Theme.Color.primaryInk)
-                    .buttonStyle(.plain)
-                    .padding(.top, 4)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(16)
         .placeCard()
     }
 }
@@ -397,10 +364,14 @@ private struct SafetyCard: View {
 private struct SendBar: View {
     let sending: Bool
     let enabled: Bool
+    let error: String?
     var onSend: () -> Void
 
     var body: some View {
         VStack(spacing: 10) {
+            if let error {
+                NeighborErrorBanner(message: error)
+            }
             Button(action: onSend) {
                 HStack(spacing: 8) {
                     Icon(.send, size: 18, strokeWidth: 2.25, color: Theme.Color.appTextInverse)
@@ -442,12 +413,12 @@ private struct SentConfirmation: View {
         VStack(spacing: 0) {
             VStack(spacing: 0) {
                 PlaceIconTile(icon: .check, tone: .home, size: 48)
-                Text("Delivered anonymously")
+                Text("Sent anonymously")
                     .font(.system(size: 18, weight: .bold))
                     .kerning(-0.18)
                     .foregroundStyle(Theme.Color.appText)
                     .padding(.top, 12)
-                Text("Your verified neighbor received it as \u{201C}from a verified neighbor nearby\u{201D} — never your name or address.")
+                Text("Your note was submitted without your name or address. Delivery follows the recipient’s messaging controls.")
                     .font(.system(size: 13.5))
                     .lineSpacing(2)
                     .multilineTextAlignment(.center)
