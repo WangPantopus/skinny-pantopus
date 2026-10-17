@@ -201,7 +201,9 @@ internal class PaymentsCardSetup(
         accountId: String,
         error: NetworkError,
     ) {
-        if (error.code == 404) {
+        if (pendingSetupIntentId == null) {
+            retrySetup("Couldn't start card setup. Tap Add payment method to try again.")
+        } else if (error.code == 404) {
             clearTerminalSetup(accountId)
         } else {
             retrySetup("Saving your card hasn't been confirmed. Tap Retry saving card.")
