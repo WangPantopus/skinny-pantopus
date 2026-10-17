@@ -24,6 +24,7 @@ struct BusinessCatalogItemEditorView: View {
     let target: BusinessCatalogEditorTarget
     let categories: [BusinessCatalogCategoryRow]
     let isSaving: Bool
+    let errorMessage: String?
     let onCancel: @MainActor () -> Void
     let onSave: @MainActor (BusinessCatalogItemDraft) async -> Void
 
@@ -34,12 +35,14 @@ struct BusinessCatalogItemEditorView: View {
         target: BusinessCatalogEditorTarget,
         categories: [BusinessCatalogCategoryRow],
         isSaving: Bool,
+        errorMessage: String? = nil,
         onCancel: @escaping @MainActor () -> Void,
         onSave: @escaping @MainActor (BusinessCatalogItemDraft) async -> Void
     ) {
         self.target = target
         self.categories = categories
         self.isSaving = isSaving
+        self.errorMessage = errorMessage
         self.onCancel = onCancel
         self.onSave = onSave
         let seed: BusinessCatalogItemDraft = switch target {
@@ -64,9 +67,17 @@ struct BusinessCatalogItemEditorView: View {
             isDirty: draft != original,
             isSaving: isSaving,
             onClose: onCancel,
-            onCommit: { Task { await onSave(draft) } }
+            onCommit: { Task { await onSave(draft) } },
+            scrollsToTopOnChange: errorMessage
         ) {
             VStack(spacing: Spacing.s5) {
+                if let message = errorMessage ?? (draft != original ? draft.validationError : nil) {
+                    Text(message)
+                        .pantopusTextStyle(.small)
+                        .foregroundStyle(Theme.Color.error)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityIdentifier("businessCatalog.editor.error")
+                }
                 itemGroup
                 if draft.kind != .donation { pricingGroup }
                 placementGroup
@@ -113,6 +124,7 @@ struct BusinessCatalogItemEditorView: View {
                 "Price (cents)",
                 text: $draft.priceCents,
                 placeholder: "1500 = $15.00",
+                state: draft.priceError.map { .error($0) } ?? .default,
                 keyboardType: .numberPad,
                 identifier: "businessCatalog.editor.price"
             )
@@ -120,6 +132,7 @@ struct BusinessCatalogItemEditorView: View {
                 "Max price (cents)",
                 text: $draft.priceMaxCents,
                 placeholder: "For a price range",
+                state: draft.priceMaxError.map { .error($0) } ?? .default,
                 keyboardType: .numberPad,
                 identifier: "businessCatalog.editor.priceMax"
             )
@@ -133,6 +146,7 @@ struct BusinessCatalogItemEditorView: View {
                 "Duration (minutes)",
                 text: $draft.durationMinutes,
                 placeholder: "e.g. 60",
+                state: draft.durationError.map { .error($0) } ?? .default,
                 keyboardType: .numberPad,
                 identifier: "businessCatalog.editor.duration"
             )

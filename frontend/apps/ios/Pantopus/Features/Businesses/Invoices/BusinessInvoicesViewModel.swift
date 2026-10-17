@@ -1,15 +1,3 @@
-//
-//  BusinessInvoicesViewModel.swift
-//  Pantopus
-//
-//  A10.7 owner surface — "Invoices". Paged list of the invoices this
-//  business has billed, plus create and void. The server owns every money
-//  field (`subtotal_cents` / `fee_cents` / `total_cents`); the client only
-//  submits unit price × quantity and formats what comes back.
-//
-//  Mirrors RN `src/components/business/tabs/InvoicesTab.tsx`.
-//
-
 import Foundation
 
 /// Status filter chips, mirroring RN's `FILTER_OPTIONS`.
@@ -151,6 +139,7 @@ public final class BusinessInvoicesViewModel {
     public var recipientQuery: String = ""
     public private(set) var recipientOptions: [InvoiceRecipientDTO] = []
     public private(set) var isSearchingRecipients = false
+    public private(set) var recipientSearchError: String?
     public var dueDate: String = ""
     public var memo: String = ""
     public var lineItems: [InvoiceLineItemDraft] = [InvoiceLineItemDraft()]
@@ -289,6 +278,7 @@ public final class BusinessInvoicesViewModel {
         recipientSearchSequence += 1
         let sequence = recipientSearchSequence
         let query = recipientQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        recipientSearchError = nil
         isSearchingRecipients = true
         recipientSearchTask = Task { [weak self] in
             if !immediately {
@@ -304,6 +294,8 @@ public final class BusinessInvoicesViewModel {
 
     public func selectRecipient(_ person: InvoiceRecipientDTO) {
         recipientSearchTask?.cancel()
+        recipientSearchSequence += 1
+        isSearchingRecipients = false
         recipient = person
         createError = nil
     }
@@ -321,7 +313,11 @@ public final class BusinessInvoicesViewModel {
                 as: InvoiceRecipientsResponse.self
             ).people
         } catch {
-            people = []
+            guard sequence == recipientSearchSequence else { return }
+            recipientOptions = []
+            isSearchingRecipients = false
+            recipientSearchError = (error as? APIError)?.errorDescription ?? "Couldn't load recipients. Try again."
+            return
         }
         // A newer search (or a pick) supersedes this one.
         guard sequence == recipientSearchSequence else { return }
@@ -331,6 +327,9 @@ public final class BusinessInvoicesViewModel {
 
     public func resetDraft() {
         recipientSearchTask?.cancel()
+        recipientSearchSequence += 1
+        recipientSearchError = nil
+        isSearchingRecipients = false
         recipient = nil
         recipientQuery = ""
         recipientOptions = []
@@ -344,31 +343,44 @@ public final class BusinessInvoicesViewModel {
     /// (the sheet dismisses on true). Copy mirrors RN's alerts.
     @discardableResult
     public func createInvoice() async -> Bool {
-        guard seededRows == nil else { return false }
+        guard seededRows == nil, !isCreating else { return false }
         createError = nil
         guard let recipientId = recipient?.id else {
             createError = "Choose who to invoice"
             return false
         }
         var parsed: [CreateBusinessInvoiceLineItem] = []
-        for item in lineItems {
+        for (index, item) in lineItems.enumerated() {
             let description = item.description.trimmingCharacters(in: .whitespacesAndNewlines)
             let amount = item.amount.trimmingCharacters(in: .whitespacesAndNewlines)
-            if description.isEmpty || amount.isEmpty { continue }
+            guard !description.isEmpty, !amount.isEmpty else {
+                createError = "Complete the description and amount for line \(index + 1), or remove it."
+                return false
+            }
             guard let cents = Self.cents(fromDollars: amount), cents > 0 else {
-                createError = "Invalid amount: \(item.amount)"
+                createError = "Enter a positive amount with at most two decimal places, up to $999,999.99."
+                return false
+            }
+            guard let quantity = Int(item.quantity.trimmingCharacters(in: .whitespacesAndNewlines)),
+                  (1...10000).contains(quantity)
+            else {
+                createError = "Quantity for line \(index + 1) must be a whole number from 1 to 10,000."
                 return false
             }
             parsed.append(
                 CreateBusinessInvoiceLineItem(
                     description: description,
                     amountCents: cents,
-                    quantity: max(1, Int(item.quantity.trimmingCharacters(in: .whitespaces)) ?? 1)
+                    quantity: quantity
                 )
             )
         }
         guard !parsed.isEmpty else {
             createError = "At least one line item is required"
+            return false
+        }
+        guard parsed.reduce(0, { $0 + $1.amountCents * $1.quantity }) <= 99_999_999 else {
+            createError = "The invoice total cannot exceed $999,999.99."
             return false
         }
 
@@ -411,26 +423,30 @@ public final class BusinessInvoicesViewModel {
     public func clearAction() {
         action = .idle
     }
+}
 
-    // MARK: - Mapping (pure — unit-test surface)
-
+public extension BusinessInvoicesViewModel {
     /// "125.50" → 12550. Rejects anything that isn't a positive decimal.
-    public static func cents(fromDollars text: String) -> Int? {
-        let cleaned = text.replacingOccurrences(of: "$", with: "")
-            .replacingOccurrences(of: ",", with: "")
-            .trimmingCharacters(in: .whitespaces)
-        guard let value = Double(cleaned), value.isFinite, value > 0 else { return nil }
-        return Int((value * 100).rounded())
+    static func cents(fromDollars text: String) -> Int? {
+        var cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if cleaned.hasPrefix("$") { cleaned.removeFirst() }
+        let pattern = #"^(?:[0-9]+|[0-9]{1,3}(?:,[0-9]{3})+)(?:\.[0-9]{1,2})?$"#
+        guard cleaned.range(of: pattern, options: .regularExpression) != nil else { return nil }
+        let parts = cleaned.replacingOccurrences(of: ",", with: "").split(separator: ".")
+        guard let first = parts.first, let dollars = Int(first), dollars <= 999_999 else { return nil }
+        let fraction = parts.count == 2 ? String(parts[1]) : ""
+        let cents = dollars * 100 + (Int(fraction.padding(toLength: 2, withPad: "0", startingAt: 0)) ?? 0)
+        return cents > 0 ? cents : nil
     }
 
     /// `1250` → `"$12.50"`. Two decimals, matching RN's `formatCents`.
-    public static func money(_ cents: Int) -> String {
+    static func money(_ cents: Int) -> String {
         String(format: "$%.2f", Double(cents) / 100)
     }
 
-    static let voidableStatuses: Set<String> = ["sent", "viewed", "overdue"]
+    internal static let voidableStatuses: Set<String> = ["sent", "viewed", "overdue"]
 
-    public static func row(from dto: BusinessInvoiceDTO) -> BusinessInvoiceRow {
+    static func row(from dto: BusinessInvoiceDTO) -> BusinessInvoiceRow {
         let status = dto.status.lowercased()
         let items = dto.lineItems.enumerated().map { index, item in
             BusinessInvoiceRow.LineItem(
@@ -443,7 +459,7 @@ public final class BusinessInvoicesViewModel {
             id: dto.id,
             recipientName: dto.recipient?.displayName(fallback: "Unknown") ?? "Unknown",
             createdLabel: shortDate(dto.createdAt) ?? "—",
-            dueLabel: shortDate(dto.dueDate).map { "Due \($0)" },
+            dueLabel: shortDate(dto.dueDate, preservingDay: true).map { "Due \($0)" },
             totalLabel: money(dto.totalCents),
             feeLabel: money(dto.feeCents),
             status: status,
@@ -455,7 +471,7 @@ public final class BusinessInvoicesViewModel {
 
     /// ISO-8601 (with or without fractional seconds) or `YYYY-MM-DD` →
     /// a locale-short date.
-    static func shortDate(_ raw: String?) -> String? {
+    internal static func shortDate(_ raw: String?, preservingDay: Bool = false) -> String? {
         guard let raw, !raw.isEmpty else { return nil }
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -471,7 +487,9 @@ public final class BusinessInvoicesViewModel {
             date = plain.date(from: String(raw.prefix(10)))
         }
         guard let date else { return nil }
-        return date.formatted(date: .abbreviated, time: .omitted)
+        return date.formatted(Date.FormatStyle(
+            date: .abbreviated, time: .omitted, timeZone: preservingDay ? .gmt : .current
+        ))
     }
 }
 

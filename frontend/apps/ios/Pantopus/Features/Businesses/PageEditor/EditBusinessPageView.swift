@@ -607,6 +607,8 @@ struct BizField: View {
                 .padding(.vertical, 11)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .disabled(onChange == nil)
+                .accessibilityLabel(a11yLabel)
+                .accessibilityIdentifier(identifier ?? "")
                 trailingIcon
             }
             .frame(minHeight: 44)
@@ -622,9 +624,7 @@ struct BizField: View {
                     .foregroundStyle(Theme.Color.error)
             }
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(a11yLabel)
-        .accessibilityIdentifier(identifier ?? "")
+        .accessibilityElement(children: .contain)
     }
 
     @ViewBuilder private var trailingIcon: some View {
@@ -657,7 +657,6 @@ struct BizField: View {
     private var a11yLabel: String {
         var parts = [label]
         if required { parts.append("required") }
-        if !field.current.isEmpty { parts.append("value: \(field.current)") }
         if field.isDirty { parts.append("unsaved") }
         if case let .error(message) = state { parts.append("error: \(message)") }
         return parts.joined(separator: ", ")
@@ -691,6 +690,9 @@ private struct BizTextarea: View {
                 .foregroundStyle(Theme.Color.appText)
                 .scrollContentBackground(.hidden)
                 .frame(minHeight: 72, alignment: .topLeading)
+                .accessibilityLabel("Description")
+                .accessibilityHint("\(field.current.count) of \(charLimit) characters")
+                .accessibilityIdentifier("editBusinessPage.description")
                 HStack {
                     Spacer()
                     Text("\(field.current.count) / \(charLimit)")
@@ -701,8 +703,7 @@ private struct BizTextarea: View {
             .padding(12)
         }
         .frame(minHeight: 124)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Description, \(field.current.count) of \(charLimit) characters")
+        .accessibilityElement(children: .contain)
     }
 }
 
