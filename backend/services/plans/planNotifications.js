@@ -39,6 +39,7 @@ const ICON_BY_KIND = {
   playdate: '🛝',
   pickup_game: '🏓',
   walk_coffee: '☕',
+  study_group: '📚',
 };
 
 // ── Words ────────────────────────────────────────────────────
@@ -55,6 +56,7 @@ function noun(plan) {
       if (walkKind === 'stroller_walk') return 'stroller walk';
       return 'walk';
     }
+    case 'study_group': return 'study group';
     default: return 'plan';
   }
 }

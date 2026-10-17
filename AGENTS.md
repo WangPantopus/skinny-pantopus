@@ -27,7 +27,10 @@ PRs, screenshots and chat. Preserve unrelated local work.
   redesign, five tabs included, is behind the launch-cut key `pulse_redesign`,
   and the apps keep the October 13 bar (Place · Today · Nearby · Messages) and
   the October 13 Pulse; see
-  [docs/product/pulse-build](docs/product/pulse-build/README.md).
+  [docs/product/pulse-build](docs/product/pulse-build/README.md). On October 17
+  the founder approved adding Plans to that bar while the `plans` flag is on
+  (Place · Today · Nearby · Plans · Messages), with Nearby no longer opening on
+  the Plans map.
 - Keep privacy and functional repairs separate from presentation changes. Never
   restore private fields to reproduce an old screenshot.
 - Migrations are additive and backward compatible. Never edit an applied

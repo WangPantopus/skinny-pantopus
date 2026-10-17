@@ -175,6 +175,12 @@ function normalizeDetails(kind, details) {
     out.pace = oneOf(input.pace, rules.PACES, 'pace') || 'easy';
     const dogs = bool(input.dogs_welcome, 'Dogs welcome');
     if (dogs !== undefined) out.dogs_welcome = dogs;
+  } else if (kind === 'study_group') {
+    const subject = String(input.subject || '').replace(/\s+/g, ' ').trim();
+    if (!subject) fail(422, 'validation', 'Add what you’re studying.');
+    if (subject.length > 60) fail(422, 'validation', 'Keep the subject under 60 characters.');
+    out.subject = subject;
+    out.study_style = oneOf(input.study_style, rules.STUDY_STYLES, 'way to study') || 'quiet';
   }
   return out;
 }
@@ -193,12 +199,14 @@ function cleanText(value, max, label) {
   return text || null;
 }
 
-// Watch parties and walks may be hosted at home (decision D6); pickup games and playdates meet in public.
+// Watch parties and walks may be hosted at home (decision D6); pickup games, playdates and study groups
+// (founder, 2026-10-17) meet in public.
 const AT_HOME_MESSAGES = {
   watch_party: 'That’s at your home. To host there, choose “My place”: only people you accept see your address.',
   walk_coffee: 'That’s at your home. To host there, choose “My porch”: only people you accept see your address.',
   pickup_game: 'That’s at your home. Choose a public place nearby, like a park or a court.',
   playdate: 'That’s at your home. Playdates meet in public places: choose one nearby.',
+  study_group: 'That’s at your home. Study groups meet in public places, like a library or a café.',
   // H11 moves a public plan to another public place only.
   move: 'That’s at your home. Choose another public place nearby.',
 };
@@ -208,6 +216,7 @@ function resolvePlace(viewer, kind, place, { moving = false } = {}) {
   if (!place || typeof place !== 'object') fail(422, 'validation', 'Choose where the plan happens.');
   if (place.kind === 'home') {
     if (kind === 'playdate') fail(422, 'validation', 'Playdates meet in public places.');
+    if (kind === 'study_group') fail(422, 'validation', 'Study groups meet in public places.');
     const home = viewer.homes.find((h) => String(h.id) === String(place.home_id));
     if (!home || !home.trusted) fail(403, 'not_your_home', 'You can host at home only at a home you live in on Pantopus.');
     if (!home.point) fail(422, 'validation', "We couldn't find your home on the map.");
