@@ -201,9 +201,13 @@ targets:
           # AppEnvironment resolves `.staging` from this flag (no DEBUG, so
           # the runtime falls through to `#elseif STAGING`).
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: STAGING
-          SWIFT_COMPILATION_MODE: wholemodule
+          SWIFT_COMPILATION_MODE: singlefile
+        # Optimized, but compiled file by file ("Incremental" in Xcode). As one
+        # whole module the app's ~495k lines need a 6.5–9 GB compiler process;
+        # the 7 GB macos-15 runner has no swap and ground on it for hours
+        # (ios-v2.0.0). Per file: 24 minutes there, under 1 GB per process.
         Release:
-          SWIFT_COMPILATION_MODE: wholemodule
+          SWIFT_COMPILATION_MODE: singlefile
     dependencies:
       - package: Stripe
         product: StripePaymentSheet

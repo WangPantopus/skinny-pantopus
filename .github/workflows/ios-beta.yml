@@ -21,10 +21,10 @@ jobs:
   testflight:
     name: Upload to TestFlight
     runs-on: macos-15
-    # The Release archive compiles the app as one optimized module (wholemodule,
-    # -O). On this 3-core runner it was still compiling after 51 minutes (run
-    # 38988562672, ios-v2.0.0); CI's unoptimized Debug build takes about 18.
-    timeout-minutes: 180
+    # The Release archive compiles file by file (project.yml): about 24 minutes
+    # on this 7 GB runner. As one whole module it needs a 6.5–9 GB compiler
+    # process and never finished here (ios-v2.0.0 runs 38988562672, 38993086079).
+    timeout-minutes: 90
     environment: ios-release
 
     steps:
