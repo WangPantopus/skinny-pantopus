@@ -206,32 +206,17 @@ public final class SupportTrainsViewModel: ListOfRowsDataSource {
 
     private func fetchMine(force: Bool) async -> Bool {
         do {
-            let snapshot = try await store.load(
-                Self.mineEndpoint,
-                as: SupportTrainsListResponse.self,
-                kind: .supportTrain,
-                topics: [ScreenTopic.supportTrains],
-                force: force
-            )
-            var rows = snapshot.value.supportTrains
-            var offset = rows.count
-            var total = snapshot.value.total ?? offset
-            var seen = Set(rows.map(\.id))
-            var notice = snapshot.refreshNotice
-            while offset < total {
-                try Task.checkCancellation()
+            var notice: String?
+            let rows = try await SupportTrainsEndpoints.allMine { endpoint in
                 let page = try await store.load(
-                    SupportTrainsEndpoints.mine(offset: offset),
+                    endpoint,
                     as: SupportTrainsListResponse.self,
                     kind: .supportTrain,
                     topics: [ScreenTopic.supportTrains],
                     force: force
                 )
-                guard !page.value.supportTrains.isEmpty else { break }
-                offset += page.value.supportTrains.count
-                total = page.value.total ?? total
-                rows.append(contentsOf: page.value.supportTrains.filter { seen.insert($0.id).inserted })
                 notice = notice ?? page.refreshNotice
+                return page.value
             }
             mine = rows
             staleNotice = notice

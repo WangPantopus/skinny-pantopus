@@ -95,11 +95,16 @@ final class LogMaintenanceFormViewModel {
         }
     }
 
-    /// Title is required; everything else is optional. The submit
-    /// button activates when the title has at least one non-whitespace
-    /// character — mirrors the backend's `task` validation.
+    /// Title is required; an optional cost must be a complete valid amount.
     var canSubmit: Bool {
-        !title.trimmingCharacters(in: .whitespaces).isEmpty && !isSubmitting && !isLoadingExisting && hasLoadedExisting
+        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && costError == nil && !isSubmitting && !isLoadingExisting && hasLoadedExisting
+    }
+
+    var costError: String? {
+        guard !costText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              Self.parseCost(costText) == nil else { return nil }
+        return "Enter a cost of $0 or more, below $10 billion, with up to two decimal places."
     }
 
     /// Headline for the form shell — switches between Log and Edit.
@@ -466,11 +471,19 @@ final class LogMaintenanceFormViewModel {
     // MARK: - Formatters
 
     static func parseCost(_ text: String) -> Decimal? {
-        let trimmed = text.trimmingCharacters(in: .whitespaces)
-            .replacingOccurrences(of: "$", with: "")
-            .replacingOccurrences(of: ",", with: "")
-        if trimmed.isEmpty { return nil }
-        return Decimal(string: trimmed)
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              trimmed.range(
+                  of: #"^\$?(?:[0-9]+|[0-9]{1,3}(?:,[0-9]{3})+)?(?:\.[0-9]{1,2})?$"#,
+                  options: .regularExpression
+              ) != nil,
+              let value = Decimal(
+                  string: trimmed.replacingOccurrences(of: "$", with: "")
+                      .replacingOccurrences(of: ",", with: ""),
+                  locale: Locale(identifier: "en_US_POSIX")
+              ),
+              value >= 0, value < 10_000_000_000 else { return nil }
+        return value
     }
 
     static func format(cost: Decimal?) -> String {

@@ -350,6 +350,10 @@ private struct DetailGrid: View {
             row(label: "Status", value: task.status.capitalized.replacingOccurrences(of: "_", with: " "))
             divider
             row(label: "Performed by", value: performedByValue)
+            if let completed = task.performedAt.flatMap(MaintenanceListViewModel.parseDate) {
+                divider
+                row(label: "Completed on", value: completed.formatted(date: .abbreviated, time: .omitted))
+            }
             if let contact = task.performerContact, !contact.isEmpty {
                 divider
                 row(label: "Contact", value: contact)

@@ -320,10 +320,10 @@ public final class PrivacySettingsViewModel: GroupedListDataSource {
     private func loadOrganizedLiveTrainCount() async {
         organizedLiveTrainCount = 0
         let live: Set<String> = ["published", "active", "paused"]
-        let response: SupportTrainsListResponse? = try? await api.request(
-            SupportTrainsEndpoints.mine(role: .organizer, limit: 50)
-        )
-        organizedLiveTrainCount = response?.supportTrains.filter { train in
+        let trains = try? await SupportTrainsEndpoints.allMine(role: .organizer) { endpoint in
+            try await api.request(endpoint)
+        }
+        organizedLiveTrainCount = trains?.filter { train in
             train.myRole == "organizer" && live.contains(train.status ?? "")
         }.count ?? 0
     }
