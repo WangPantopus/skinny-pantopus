@@ -88,9 +88,8 @@ public struct UserBlocksResponse: Decodable, Sendable {
 /// rather than nesting it, so there is no `blocked` object here.
 public struct UserBlockEntry: Decodable, Sendable, Hashable, Identifiable {
     public let id: String
-    /// The blocked person. `blocks.js:150` maps the NOT NULL
-    /// `blocked_user_id` column onto this key; it addresses
-    /// `DELETE /api/users/:userId/block`.
+    /// The unblock target: a user ID for ordinary blocks, or an opaque
+    /// anonymous-neighbor handle. Never use it to identify an anonymous sender.
     public let userId: String
     public let username: String?
     public let name: String?

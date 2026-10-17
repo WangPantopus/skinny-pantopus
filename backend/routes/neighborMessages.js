@@ -91,6 +91,21 @@ async function findVerifiedResident(homeId, { excludeUserId } = {}) {
   return candidates[0] || null;
 }
 
+// A sent reply may be edited. Only a block disables replying; expose the
+// viewer's own block state without revealing who the anonymous sender is.
+async function replyAccess(row, userId) {
+  if (!(await isBlocked(userId, row.sender_user_id))) {
+    return { canReply: true, blockedByViewer: false };
+  }
+  const { count, error } = await supabaseAdmin
+    .from('UserBlock')
+    .select('id', { count: 'exact', head: true })
+    .eq('blocker_user_id', userId)
+    .eq('blocked_user_id', row.sender_user_id);
+  if (error) throw Object.assign(new Error('Could not check reply availability. Try again.'), { code: 'BLOCK_CHECK_UNAVAILABLE' });
+  return { canReply: false, blockedByViewer: count > 0 };
+}
+
 // ── Templates catalog (single source of truth for the clients) ──
 router.get('/templates', verifyToken, (_req, res) => {
   res.json({ templates: MESSAGE_TEMPLATES, replies: REPLY_TEMPLATES });
@@ -242,8 +257,7 @@ router.get('/received', verifyToken, async (req, res) => {
 
     const items = await Promise.all(
       (data || []).map(async (row) => {
-        const canReply = !row.reply_template_id && !(await isBlocked(userId, row.sender_user_id));
-        return serializeReceived(row, { canReply });
+        return serializeReceived(row, await replyAccess(row, userId));
       })
     );
     return res.json({ messages: items });
@@ -279,8 +293,7 @@ router.get('/:id', verifyToken, async (req, res) => {
         .update({ read_at: new Date().toISOString() })
         .eq('id', row.id);
     }
-    const canReply = !row.reply_template_id && !(await isBlocked(userId, row.sender_user_id));
-    return res.json(serializeReceived(row, { canReply }));
+    return res.json(serializeReceived(row, await replyAccess(row, userId)));
   } catch (err) {
     if (err.code === 'BLOCK_CHECK_UNAVAILABLE') return res.status(503).json({ error: err.message, code: err.code });
     logger.error('neighborMessages.detail_error', { error: err.message, userId });
@@ -308,15 +321,10 @@ router.post('/:id/reply', verifyToken, validate(replySchema), async (req, res) =
     // Replies are off while either person blocks the other. Only the person
     // who blocked is told why; when the sender blocked the recipient, the
     // recipient gets a neutral answer that does not reveal the block.
-    if (await isBlocked(userId, row.sender_user_id)) {
-      const { count, error: blockReadError } = await supabaseAdmin
-        .from('UserBlock')
-        .select('id', { count: 'exact', head: true })
-        .eq('blocker_user_id', userId)
-        .eq('blocked_user_id', row.sender_user_id);
-      const viewerBlocked = !blockReadError && count > 0;
+    const access = await replyAccess(row, userId);
+    if (!access.canReply) {
       return res.status(403).json({
-        error: viewerBlocked ? "You've blocked this neighbor, so replies are off." : 'Replies to this message are off.',
+        error: access.blockedByViewer ? "You've blocked this neighbor, so replies are off." : 'Replies to this message are off.',
       });
     }
 
@@ -349,7 +357,7 @@ router.post('/:id/reply', verifyToken, validate(replySchema), async (req, res) =
       });
     }
 
-    return res.json(serializeReceived(updated, { canReply: false }));
+    return res.json(serializeReceived(updated, access));
   } catch (err) {
     if (err.code === 'BLOCK_CHECK_UNAVAILABLE') return res.status(503).json({ error: err.message, code: err.code });
     logger.error('neighborMessages.reply_error', { error: err.message, userId });

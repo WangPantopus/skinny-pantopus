@@ -21,8 +21,9 @@ const BLOCK_LABEL = 'On your block';
  * @param {object} row              NeighborMessage row
  * @param {object} [opts]
  * @param {boolean} [opts.canReply] whether a templated reply is still allowed
+ * @param {boolean} [opts.blockedByViewer] whether this viewer blocked the sender
  */
-function serializeReceived(row, { canReply = false } = {}) {
+function serializeReceived(row, { canReply = false, blockedByViewer = false } = {}) {
   if (!row) return null;
   return {
     id: row.id,
@@ -39,6 +40,7 @@ function serializeReceived(row, { canReply = false } = {}) {
         }
       : null,
     can_reply: !!canReply,
+    blocked_by_viewer: !!blockedByViewer,
     not_helpful: !!row.not_helpful,
     reported: !!row.reported_at,
     read_at: row.read_at || null,

@@ -136,14 +136,17 @@ private struct ChooseNeighborCard: View {
         HStack(alignment: .top, spacing: 12) {
             PlaceIconTile(icon: .home, tone: .muted, size: 38)
             VStack(alignment: .leading, spacing: 4) {
-                Text("Choose a neighbor on your block")
+                Text("Recipient selection isn't available yet")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Theme.Color.appText)
-                Text("Open a home on your block to send it a verified heads-up.")
-                    .font(.system(size: 13))
-                    .foregroundStyle(Theme.Color.appTextMuted)
-                    .fixedSize(horizontal: false, vertical: true)
-                Button("Back to your block", action: onBack)
+                Text(
+                    "You can preview the notes below, but sending needs a selected recipient. "
+                        + "You can still read received notes in Your inbox on Place."
+                )
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.Color.appTextMuted)
+                .fixedSize(horizontal: false, vertical: true)
+                Button("Back to Place", action: onBack)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Theme.Color.primaryInk)
                     .buttonStyle(.plain)
