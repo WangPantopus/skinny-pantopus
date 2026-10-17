@@ -154,6 +154,8 @@ public struct BodyReactionsBody: View {
     /// One line of details under the text, such as a Lost & Found post's
     /// contact; nil for none.
     private let detailLine: String?
+    /// An Event's when and where, under the text; nil on other posts.
+    private let eventDetails: PulseEventDetails?
     /// Emoji flair on the active heart reaction (long-press popover pick).
     private let selectedReactionEmoji: String?
     private let onEmojiSelected: (@MainActor (String) -> Void)?
@@ -174,6 +176,7 @@ public struct BodyReactionsBody: View {
         onReactionTap: @escaping @MainActor (PostReactionKind) -> Void,
         mediaLocationBadge: String? = nil,
         detailLine: String? = nil,
+        eventDetails: PulseEventDetails? = nil,
         selectedReactionEmoji: String? = nil,
         onEmojiSelected: (@MainActor (String) -> Void)? = nil,
         composerAvatarURL: URL?,
@@ -204,6 +207,7 @@ public struct BodyReactionsBody: View {
         self.onReactionTap = onReactionTap
         self.mediaLocationBadge = mediaLocationBadge
         self.detailLine = detailLine
+        self.eventDetails = eventDetails
         self.selectedReactionEmoji = selectedReactionEmoji
         self.onEmojiSelected = onEmojiSelected
         self.composerAvatarURL = composerAvatarURL
@@ -233,6 +237,16 @@ public struct BodyReactionsBody: View {
                     .lineSpacing(7) // 15 + 7 ≈ 22pt line height
                     .padding(.horizontal, Spacing.s4)
                     .accessibilityLabel(bodyText)
+            }
+
+            if let eventDetails {
+                PulseEventDetailRows(
+                    details: eventDetails,
+                    style: .page,
+                    whenIdentifier: "pulsePostDetail-eventWhen",
+                    placeIdentifier: "pulsePostDetail-eventPlace"
+                )
+                .padding(.horizontal, Spacing.s4)
             }
 
             if let detailLine {

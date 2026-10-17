@@ -124,6 +124,8 @@ public struct PulsePostCardContent: Sendable, Hashable, Identifiable {
     public let intent: PulseIntent
     public let title: String?
     public let body: String
+    /// When and where an Event happens; nil on other posts.
+    public let event: PulseEventDetails?
     public let reactions: [PulseReaction]
     public let attendees: PulseAttendeeStrip?
     public let userHasReacted: Bool
@@ -164,6 +166,7 @@ public struct PulsePostCardContent: Sendable, Hashable, Identifiable {
         intent: PulseIntent,
         title: String?,
         body: String,
+        event: PulseEventDetails? = nil,
         reactions: [PulseReaction],
         attendees: PulseAttendeeStrip?,
         userHasReacted: Bool,
@@ -185,6 +188,7 @@ public struct PulsePostCardContent: Sendable, Hashable, Identifiable {
         self.intent = intent
         self.title = title
         self.body = body
+        self.event = event
         self.reactions = reactions
         self.attendees = attendees
         self.userHasReacted = userHasReacted
@@ -283,6 +287,9 @@ public struct PulsePostCard: View {
                     .foregroundStyle(Theme.Color.appTextStrong)
                     .lineLimit(content.title?.isEmpty == false ? 2 : 3)
                     .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            if let event = content.event {
+                eventRows(event)
             }
             if !content.media.isEmpty {
                 PostMediaGridView(
@@ -524,10 +531,16 @@ public struct PulsePostCard: View {
         if let status = content.status { parts.append(status.text) }
         if let title = content.title, !title.isEmpty { parts.append(title) }
         if !content.body.isEmpty { parts.append(content.body) }
+        if let when = content.event?.when { parts.append(when) }
+        if let place = content.event?.place { parts.append(place) }
         if !content.media.isEmpty {
             parts.append("\(content.media.count) attached \(content.media.count == 1 ? "photo" : "photos")")
         }
-        return parts.joined(separator: ". ")
+        // A part that already ends a sentence keeps its own mark (as on Android): VoiceOver never hears "7..".
+        return parts.reduce("") { label, part in
+            guard let last = label.last else { return part }
+            return label + (".?!".contains(last) ? " " : ". ") + part
+        }
     }
 }
 
@@ -556,6 +569,16 @@ private extension PulsePostCard {
             .font(.system(size: 10.5))
             .foregroundStyle(Theme.Color.appTextSecondary)
             .lineLimit(1)
+    }
+
+    /// An Event's when and where, under its text (as on the web card).
+    func eventRows(_ event: PulseEventDetails) -> some View {
+        PulseEventDetailRows(
+            details: event,
+            style: .card,
+            whenIdentifier: "pulsePostEventWhen_\(content.id)",
+            placeIdentifier: "pulsePostEventPlace_\(content.id)"
+        )
     }
 
     /// The f9 export's neutral origin chip, without its out-of-scope explainer.

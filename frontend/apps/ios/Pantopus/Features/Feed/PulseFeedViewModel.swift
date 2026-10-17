@@ -1107,6 +1107,12 @@ public final class PulseFeedViewModel {
             intent: intent,
             title: intent == .event ? post.title : nil,
             body: post.content,
+            event: PulseEventDetails(
+                postType: post.postType,
+                startsAt: post.eventDate,
+                endsAt: post.eventEndDate,
+                venue: post.eventVenue
+            ),
             // The backend persists a single like counter; the secondary
             // verb is display-only and has no count source, so it stays 0
             // (comment count lives on the Reply affordance instead).
