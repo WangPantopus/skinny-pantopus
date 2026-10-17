@@ -1,0 +1,53 @@
+# TEMPORARY diagnostic (draft PR, never merged): why the TestFlight archive
+# compile runs for hours on macos-15 with Xcode 26.2. Unsigned Release archive,
+# with swift-frontend memory/CPU and swap printed every minute.
+name: iOS archive probe
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/ios-archive-probe.yml
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: frontend/apps/ios
+
+jobs:
+  archive:
+    name: Release archive (${{ matrix.mode }})
+    runs-on: macos-15
+    timeout-minutes: 110
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [wholemodule, incremental]
+    steps:
+      - uses: actions/checkout@v5
+      - run: sudo xcode-select -switch /Applications/Xcode_26.2.app && xcodebuild -version && sysctl -n hw.ncpu hw.memsize
+      - run: brew install xcodegen
+      - run: make bootstrap
+      - name: Archive with a resource monitor
+        env:
+          MODE: ${{ matrix.mode }}
+        run: |
+          start=$(date +%s)
+          (
+            while sleep 60; do
+              echo "=== monitor +$(( ($(date +%s) - start) / 60 ))m $(sysctl -n vm.swapusage)"
+              ps -axo rss=,pcpu=,etime=,comm= | sort -rn | head -4 | awk '{printf "  rss=%.1fGB cpu=%s%% etime=%s %s\n", $1/1048576, $2, $3, $4}'
+            done
+          ) &
+          monitor=$!
+          set -o pipefail
+          xcodebuild archive -project Pantopus.xcodeproj -scheme Pantopus -configuration Release \
+            -destination generic/platform=iOS -archivePath "$RUNNER_TEMP/Pantopus.xcarchive" \
+            -derivedDataPath "$RUNNER_TEMP/dd" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            SWIFT_COMPILATION_MODE="$MODE" \
+            | grep -E --line-buffered 'SwiftCompile|SwiftEmitModule|CompileSwiftSources|ARCHIVE|error:|\*\*' | cut -c1-200
+          status=$?
+          kill $monitor
+          echo "archive status=$status after $(( ($(date +%s) - start) / 60 )) minutes"
+          exit $status
