@@ -764,32 +764,54 @@ for P10). The containers were not inspected on the host.
   `https://api.pantopus.com/api/v1/webhooks/lob`; its secret in
   `LOB_WEBHOOK_SECRET`.
 
-### P8. Production scheduled jobs (founder runs, L4 prepared)
+### P8. Production scheduled jobs (paused deployment complete; activation pending)
 
 The April stack `pantopus-seeder-production` already exists, so
 `sam deploy --config-env prod` updates it in place: new code, the job trigger,
 the failure alarms and recipient-local reminder schedules. The stack never
 writes secret contents, so the secret `pantopus/seeder/production` keeps its
-April values (the April database and its service key) until you replace them.
+previous values until they are replaced separately.
 The checked-in production deploy configuration now leaves **all schedules
 disabled**. Activation is a separate, explicit parameter change.
 Paused jobs do not reserve Lambda concurrency. Before activation, check
 `aws lambda get-account-settings --region us-west-2`: the account must have
 capacity for one reserved briefing invocation (and one each for home reminders
-and the content poster when all jobs are enabled), above AWS's required unreserved floor. The October
+and the content poster when all jobs are enabled), above AWS's required
+unreserved floor. The October
 17 account limit was only 10, with all 10 required to remain unreserved; AWS
 rejected reserving even one invocation. A quota increase is required before
 activation. Keep the single-run safeguards; do not remove them to bypass the
 quota. The founder authorized an AWS quota/support request for this rollout.
 
-**Read-only check, October 17:** all 14 existing production rules remain
+**Initial read-only check, October 17, before rollout:** all 14 existing production rules were
 disabled. The briefing Lambda was last deployed May 3; its last log event was
 October 8 at 12:14 Pacific. Its secret still points to the April database and
 its internal API key differs from the prepared current-production key. The
 current-production key passed an empty `/api/internal/briefing/timezones`
 lookup against the live API (no users processed). Aggregate reads of the new
 production database found zero notification-preference rows and zero briefing
-deliveries. No hosted configuration or user preferences were changed.
+deliveries. No hosted configuration or user preferences were changed during
+that initial check.
+
+**Paused rollout, October 17, with founder authorization:** the production
+secret now contains the verified current database/API credentials. The SAM
+stack completed its update; all 23 EventBridge rules and the one local-reminder
+Scheduler schedule are disabled. The deployed briefing package matches the
+committed handlers. A live scheduler invocation against the current database
+completed with zero eligible recipients, zero sends and zero failures. This
+checks the deployed runtime and database connection, not physical push delivery.
+The database still has no notification-preference rows. A private rollback copy
+of the prior secret was retained outside Git.
+
+AWS opened a support case for the founder-authorized Lambda quota request;
+approval is pending and the account limit remains 10. Keep all schedules paused
+until capacity permits the briefing's reserved concurrency. The processed AWS
+template was checked for all three modes: paused enables zero schedules and
+reserves zero invocations; briefing-only enables the two briefing rules and
+reserves one; full activation enables 24 schedules and reserves three. Use
+conditional `State`, not conditional `Enabled`, so the SAM transform preserves
+the pause conditions. Actual scheduled delivery on iPhone and Android is still
+unverified, and P8 remains incomplete.
 
 In this order:
 
