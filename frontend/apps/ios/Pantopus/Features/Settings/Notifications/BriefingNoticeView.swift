@@ -7,8 +7,12 @@ struct BriefingNoticeView: View {
         model.sessionScope
     }
 
-    @State private var preferences: NotificationPreferencesDTO?
-    @State private var presented = false
+    private struct Notice: Identifiable {
+        let id = UUID()
+        var preferences: NotificationPreferencesDTO
+    }
+
+    @State private var notice: Notice?
     @State private var managing = false
     @State private var saving = false
     @State private var acknowledged = false
@@ -17,17 +21,17 @@ struct BriefingNoticeView: View {
     var body: some View {
         Color.clear.frame(width: 0, height: 0)
             .task { await load() }
-            .sheet(isPresented: $presented) {
+            .sheet(item: $notice) { shown in
                 if managing {
                     NavigationStack {
-                        NotificationSettingsView { presented = false }
+                        NotificationSettingsView { notice = nil }
                     }
-                } else if let preferences {
+                } else {
                     ScrollView {
                         VStack(alignment: .leading, spacing: Spacing.s4) {
                             Text("Your daily briefings")
                                 .font(.title2.bold())
-                            Text(summary(preferences))
+                            Text(summary(shown.preferences))
                             Text("Times follow your briefing location’s time zone. We only notify you when there’s something useful.")
                             Text(
                                 "Change the times or turn either briefing off in Settings → Notifications. " +
@@ -39,7 +43,7 @@ struct BriefingNoticeView: View {
                                 managing = true
                             }
                             GhostButton(title: "Got it", isEnabled: !saving) {
-                                presented = false
+                                notice = nil
                             }
                         }
                         .padding(Spacing.s6)
@@ -67,8 +71,7 @@ struct BriefingNoticeView: View {
             try Task.checkCancellation()
             try scope.requireCurrent()
             guard response.preferences.dailyBriefingPromptedAt == nil else { return }
-            preferences = response.preferences
-            presented = true
+            notice = Notice(preferences: response.preferences)
         } catch { /* Try again on the next app entry; never block sign-in. */ }
     }
 
@@ -87,11 +90,11 @@ struct BriefingNoticeView: View {
             ], generation: model.store.generation)
             try Task.checkCancellation()
             try scope.requireCurrent()
-            preferences = response.preferences
+            notice?.preferences = response.preferences
             acknowledged = response.preferences.dailyBriefingPromptedAt != nil
             return acknowledged
         } catch {
-            guard scope.isCurrent else { presented = false
+            guard scope.isCurrent else { notice = nil
                 return false
             }
             self.error = "Couldn’t save your briefing settings. You can change them in notification settings."
