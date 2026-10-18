@@ -163,11 +163,11 @@ object StoreKeys {
             type = NotificationPreferences::class.java,
         )
 
-    /** Support Trains the viewer organizes or helps with (first page), for My trains and Invitations. */
+    /** All Support Trains the viewer participates in, for My trains and Invitations. */
     val mySupportTrains =
         StoreKey<SupportTrainsListResponse>(
             "api/activities/support-trains/me/support-trains",
-            mapOf("limit" to "20", "offset" to "0"),
+            mapOf("pages" to "all"),
             kind = StoreKind.SUPPORT_TRAINS,
             topics = setOf("supporttrain:*"),
         )
