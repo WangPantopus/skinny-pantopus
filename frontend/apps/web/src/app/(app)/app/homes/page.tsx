@@ -287,6 +287,7 @@ export default function HomesPage() {
                   {pendingClaims.map(({ claim, addressLine, cityLine }) => {
                     // A renter's residency document has its own status page; an ownership claim continues its evidence.
                     const residency = claim.claim_type === 'resident';
+                    const hasPrivateSetup = homes.some((home) => home.id === claim.home_id && home.access_kind === 'private_setup');
                     const q = claim.id ? `?claimId=${encodeURIComponent(claim.id)}` : '';
                     const href = residency ? `/app/homes/${claim.home_id}/verify-residency${q}`
                       : `/app/homes/${claim.home_id}/claim-owner/evidence${q}`;
@@ -309,7 +310,8 @@ export default function HomesPage() {
                             {residency ? 'Residency claim' : 'Ownership claim'} · {claim.has_evidence === false ? 'Document needed' : claim.has_evidence === true ? 'Under review' : 'Check document status'}
                           </div>
                           <p className="mt-2 text-xs text-app-text-secondary">
-                            This claim does not grant household access. Your private tasks remain available while verification is pending.
+                            This claim does not grant household access.
+                            {hasPrivateSetup ? ' Your private tasks remain available while verification is pending.' : ''}
                           </p>
                           <p className="mt-2 text-sm text-app-text-secondary">Continue →</p>
                         </div>

@@ -100,12 +100,10 @@ router.get('/', verifyToken, async (req, res) => {
             .eq('user_id', userId)
             .eq('is_active', true);
         })(),
-        Promise.resolve(
-          supabaseAdmin
-            .from('UserProfessionalProfile')
-            .select('*', { count: 'exact', head: true })
-            .eq('user_id', userId)
-        ).catch(() => ({ count: 0 })),
+        supabaseAdmin
+          .from('UserSkill')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', userId),
         Promise.resolve(
           supabaseAdmin
             .from('StripeAccount')
@@ -222,7 +220,10 @@ router.get('/', verifyToken, async (req, res) => {
         roleBase: t.role_base,
       }));
 
-    const hasSkills = (skillsResult.count || 0) > 0;
+    if (skillsResult.error || skillsResult.count == null) {
+      return res.status(503).json({ error: 'Could not load your profile setup. Please retry.' });
+    }
+    const hasSkills = skillsResult.count > 0;
     // An account row exists from the moment onboarding starts; the step is done only once Stripe can pay out.
     const hasPayoutAccount = !!stripeResult.data;
     const hasPayoutMethod = !!stripeResult.data?.payouts_enabled;

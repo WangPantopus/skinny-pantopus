@@ -13,6 +13,7 @@ import { confirmStore } from '@/components/ui/confirm-store';
 
 type Props = {
   homeId: string;
+  homeNames?: Record<string, string>;
   leases: landlord.HomeLease[];
   onRefresh: () => void;
   isCurrent: () => boolean;
@@ -72,7 +73,7 @@ const FILTER_OPTIONS: { key: FilterOption; label: string }[] = [
 
 // ── Main component ──────────────────────────────────────────
 
-export default function LeasesTab({ homeId: _homeId, leases, onRefresh, isCurrent }: Props) {
+export default function LeasesTab({ homeId: _homeId, homeNames = {}, leases, onRefresh, isCurrent }: Props) {
   const [filter, setFilter] = useState<FilterOption>('all');
   const [endingId, setEndingId] = useState<string | null>(null);
   const ending = useRef(false);
@@ -103,7 +104,7 @@ export default function LeasesTab({ homeId: _homeId, leases, onRefresh, isCurren
     try {
       // Ending a lease ends its residents' lease-based access at once, so ask first, as UnitsTab's "Mark vacant" does.
       const confirmed = await confirmStore.open({ title: 'End this lease?',
-        description: `This ends the lease for ${lease.primary_resident?.name || 'this tenant'} and its lease-based access. Other active leases and independent Home membership remain.`,
+        description: `This ends the lease for ${lease.primary_resident?.name || 'this tenant'}${homeNames[lease.home_id] ? ` at ${homeNames[lease.home_id]}` : ''} and its lease-based access. Other active leases and independent Home membership remain.`,
         confirmLabel: 'End lease', variant: 'destructive' });
       if (!confirmed || !isCurrent()) return;
       setEndingId(lease.id);
@@ -115,7 +116,7 @@ export default function LeasesTab({ homeId: _homeId, leases, onRefresh, isCurren
       ending.current = false;
       if (isCurrent()) setEndingId(null);
     }
-  }, [onRefresh, isCurrent]);
+  }, [onRefresh, isCurrent, homeNames]);
 
   const formatDate = (iso: string) =>
     // Match the calendar date shown by the existing UTC-based lease editor.
@@ -184,6 +185,7 @@ export default function LeasesTab({ homeId: _homeId, leases, onRefresh, isCurren
                     <p className="font-medium text-app-text text-sm truncate">
                       {lease.primary_resident?.name || 'Unknown tenant'}
                     </p>
+                    {homeNames[lease.home_id] && <p className="text-xs text-app-text-strong">{homeNames[lease.home_id]}</p>}
                     <p className="text-xs text-app-text-secondary">
                       {formatDate(lease.start_at)}
                       {lease.end_at ? ` \u2013 ${formatDate(lease.end_at)}` : ' \u2013 Open'}
