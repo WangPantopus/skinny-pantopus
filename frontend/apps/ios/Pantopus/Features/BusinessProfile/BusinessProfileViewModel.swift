@@ -316,7 +316,10 @@ extension BusinessProfileViewModel {
             ?? detail.locations.first { $0.isPrimary == true }
             ?? detail.locations.first
 
-        let calendar = Calendar.current
+        var calendar = Calendar.current
+        if let identifier = primaryLocation?.timezone, let timeZone = TimeZone(identifier: identifier) {
+            calendar.timeZone = timeZone
+        }
         let now = Date()
         let weekday = calendar.component(.weekday, from: now) - 1
 
@@ -537,6 +540,15 @@ extension BusinessProfileViewModel {
         let minutesNow = calendar.component(.hour, from: now) * 60 + calendar.component(.minute, from: now)
         let byDay = Dictionary(grouping: rows) { max(0, min(6, $0.dayOfWeek)) }
 
+        // Overnight hours belong to the day the business opened, even when
+        // the following day's own schedule is closed.
+        if let previous = byDay[(weekday + 6) % 7]?.first,
+           previous.isClosed != true,
+           let open = minutes(previous.openTime),
+           let close = minutes(previous.closeTime),
+           close < open, minutesNow < close {
+            return openState(closingAt: previous.closeTime)
+        }
         if let today = byDay[weekday]?.first, let state = todayOpenState(today, minutesNow: minutesNow) {
             return state
         }
@@ -550,13 +562,8 @@ extension BusinessProfileViewModel {
         guard today.isClosed != true,
               let openM = minutes(today.openTime),
               let closeM = minutes(today.closeTime) else { return nil }
-        if minutesNow >= openM, minutesNow < closeM {
-            return BusinessOpenState(
-                isOpen: true,
-                statusLabel: "Open now",
-                statusDetail: "Closes \(formatTime(today.closeTime ?? ""))",
-                chipLabel: "Open now"
-            )
+        if minutesNow >= openM, closeM < openM || minutesNow < closeM {
+            return openState(closingAt: today.closeTime)
         }
         if minutesNow < openM {
             return BusinessOpenState(
@@ -567,6 +574,15 @@ extension BusinessProfileViewModel {
             )
         }
         return nil
+    }
+
+    private func openState(closingAt time: String?) -> BusinessOpenState {
+        BusinessOpenState(
+            isOpen: true,
+            statusLabel: "Open now",
+            statusDetail: "Closes \(formatTime(time ?? ""))",
+            chipLabel: "Open now"
+        )
     }
 
     private func nextOpening(byDay: [Int: [BusinessHoursDTO]], weekday: Int) -> BusinessOpenState? {
