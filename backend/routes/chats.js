@@ -1691,8 +1691,11 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
     // A task chat retired when its worker was released or bidding reopened keeps its
     // history for the owner and that worker but takes no new messages; direct messages
     // (with their block checks and business identity) carry the conversation on.
-    if (room.is_active === false) {
-      return res.status(403).json({ error: 'This chat has closed. Message them directly to keep talking.', code: 'ROOM_INACTIVE' });
+    if (await isRoomClosedForWrites(roomId, room)) {
+      return res.status(403).json({
+        error: room.type === 'plan' ? 'This chat has closed.' : 'This chat has closed. Message them directly to keep talking.',
+        code: 'ROOM_INACTIVE',
+      });
     }
 
     // ─── Block check for direct chats ───
@@ -1974,6 +1977,9 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
       ({ data: message, error } = await insertMessage(downgradedPayload));
     }
 
+    if (error?.code === 'PT403' && error.message === 'PLAN_CHAT_CLOSED') {
+      return res.status(403).json({ error: 'This chat has closed.', code: 'ROOM_INACTIVE' });
+    }
     if (error?.code === '23505' && clientMessageId) {
       // A concurrent same-scope insert may have won after the initial lookup.
       const existingMsg = await findRetryMessage();
@@ -2133,6 +2139,9 @@ router.put('/messages/:messageId', verifyToken, messageEditLimiter, async (req, 
       .select()
       .single();
 
+    if (error?.code === 'PT403' && error.message === 'PLAN_CHAT_CLOSED') {
+      return res.status(403).json({ error: 'This chat has closed.', code: 'ROOM_INACTIVE' });
+    }
     if (error) {
       logger.error('Error editing message', { requestId: req.requestId, userId: req.user?.id, messageId, error: error.message });
       return res.status(500).json({ error: 'Failed to edit message' });
