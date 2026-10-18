@@ -1,4 +1,4 @@
--- Backwards compatible: guard new requests, accepts and follows against an
+-- Backwards compatible: yes. Guard new requests, accepts and follows against an
 -- existing personal block. No tables, columns, grants or existing rows change.
 -- Relationship blocks, profile-scope blocks and persona blocks stay distinct.
 BEGIN;
