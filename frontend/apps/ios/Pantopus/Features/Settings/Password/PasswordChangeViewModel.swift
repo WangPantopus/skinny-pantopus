@@ -228,7 +228,7 @@ public final class PasswordChangeViewModel {
         defer { isRequestingReset = false }
         do {
             _ = try await api.request(AuthEndpoints.forgotPassword(email: email), as: AuthMessageResponse.self)
-            toast = "If this email is registered, a reset link is on its way."
+            toast = "Reset link requested. Check your inbox and spam folder."
         } catch {
             formError = FormBannerContent(
                 title: "Couldn't request reset link",
