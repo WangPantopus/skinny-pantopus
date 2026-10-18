@@ -56,7 +56,7 @@ The actual production web build ran in the Mac's browser against a local Node ba
 Raw local fixtures, credentials, mail contents, screenshots and operator logs are excluded from this report and Git. This pass is evidence for the named journeys and repairs, not a claim that every button, feature or external integration has been certified.
 
 
-## Continued pass — October 17–18 (in progress)
+## Continued pass — October 17–18
 
 The same PR is being extended at the founder's request. Production services remain untouched. The isolated Supabase instance now supplies a private Home document bucket and a separate S3-compatible bucket for synthetic public media. These local checks do not establish hosted storage policy or lifecycle behavior.
 
@@ -89,3 +89,49 @@ Further repairs and verification in this continued pass:
 - Shared claim-review notifications incorrectly called residency verification “ownership,” including an approval message that could imply ownership rights. They now describe home verification and direct follow-up/rejection to My Homes. A local reviewer requested more information, inspected the synthetic image, and rejected it with a reason; the applicant received the corrected rejection and followed its link. Approval was correctly refused for the seeded pending-owner history. This does not establish a successful residency-approval journey.
 
 The continued pass used a synthetic local platform reviewer only. Unsupported evidence was refused with an actionable message; a supported PNG upload reached the receipt and reviewer queue. Private evidence preview worked. No real identity documents, provider keys, payments, production changes or notifications to real people were used.
+
+
+## Continued functional checks — October 18
+
+Further verified repairs:
+
+- The Emergency form offered Shutoffs but permanently disabled Save without explaining why. It now requires an explicit water, gas, electrical or breaker-map choice using the existing storage types. A synthetic water shutoff saved under Shutoffs and survived reload. The existing medical-entry test was updated for the new selection; no test was added.
+- Invoice quantity `0` was silently sent as `1`; numeric prefixes were parsed as valid values and incomplete lines were silently omitted. The form now validates whole quantities from 1 to 10,000, positive amounts with at most two decimal places, and complete line items. It preserves invalid drafts and labels each input. Zero, negative, fractional, blank, excessive and text-suffixed quantities, malformed/nonfinite/overprecise amounts, and an incomplete second line were refused. A valid two-line invoice total matched the recipient view after reload. Voiding removed payment controls and the owner’s Void filter showed the saved record. A void or paid invoice now says Invoice Amount instead of Amount Due.
+- Business Legal & Finance accepted malformed email and reported that clearing an optional field succeeded while retaining its old value. The web form now validates email and four-digit tax suffixes, trims input, and sends intentional empty values. A synthetic support email saved, cleared, and remained empty after Refresh. An invited viewer was refused legal details.
+- Restricted-member copy no longer promises chore access that its default permissions do not grant.
+- Starting residency verification during the rejection cooldown previously asked the applicant to keep retrying. The generic refusal now directs them to existing requests or Support without exposing internal claim-policy details.
+
+Additional journeys exercised:
+
+- Account security: wrong-password feedback for step-up, sign out other sessions with the current browser retained, sign out every session, sign-in return navigation, and recorded security activity.
+- Tasks: owner upload of a text file and PNG, saved attachment display, byte-matching protected text downloads by both owner and assigned member, repeat interval validation, valid interval update and pause, and the member’s persisted read-only repeat schedule. Restricted membership denied tasks; restoring the original membership restored access. Automatic background repeat execution remains unverified because delivery workers are disabled.
+- Privacy/account: discoverability saved as Nobody and survived reload; profile block removed interaction actions, the blocked list retained it, and unblock removed it. Browser-data clearing returned its receipt. Account deletion rejected the wrong confirmation word and Cancel preserved the account. Final account deletion and new password entry require user confirmation/handoff and were not performed.
+- Home security: Lockdown confirmed the affected scope, revoked the remaining guest pass, and blocked guest-pass creation. Existing member permissions remained available. The synthetic home was left in Lockdown; disabling or expanding real access was not necessary for this check.
+- Business: empty review filters and analytics loaded, including the existing synthetic follower and public-page views. Invoice notification opened the recipient’s invoice. No payment was made or payment credential entered.
+- Residency: a synthetic pending tenant fixture reached the review queue after the isolated rejection timestamp was advanced beyond its cooldown. Approval was refused with Current identity confirmation is required before approval. The claim was closed with an explicit synthetic-test rejection, and the reviewer’s temporary local admin role was removed. This verifies the guard, not successful identity verification or approval.
+
+Checks after these form repairs: type gate passed with zero errors, ESLint passed with zero errors and 1,032 warnings, and all 123 existing web suites / 2,383 tests passed. Further production-build verification follows before delivery. The previous checkpoint’s complete CI passed.
+
+
+Additional recovery and retained-tool checks:
+
+- A password-reset request rejected a malformed email, returned an enumeration-safe receipt and resend cooldown, and delivered to the local mail catcher. The existing password still signed in; resetting it was not performed.
+- A document-only chat message and its reaction persisted across accounts and reload. The recipient opened the protected document and saw the expected synthetic contents. The file opened in a browser tab rather than triggering a download event. A synthetic report submitted successfully. During a longer disconnected interval, a text message stayed queued; after reconnect it appeared once in each account after reload. This is one observed queued-send case, not a guarantee across every retry/crash sequence.
+- A connection request produced the recipient notification and pending state; acceptance showed Connected in both accounts, removal persisted, and unfollow returned to Follow.
+- The retained package/invoice navigation exposed disabled scheduling links. It now uses the existing launch-cut route filter and retains Payments, Packages, Invoices and My packages. No launch feature was enabled.
+- In the development server, where the existing paid-scheduling flag defaults on, package creation refused missing fields and negative price. A supported inactive package saved; restore, duplicate, archive, rename and session-count edit worked. Editing exposed unsupported Description and Expiry inputs that silently discarded changes. Those inputs are removed; existing persisted fields remain. The final production build keeps paid scheduling off and shows its unavailable state. No flag was enabled. Purchase, Stripe price creation, refunds and credit redemption are unverified without payment setup.
+- The scheduling invoice view reflected the same saved and voided business invoices. Its Share action previously shared the owner-only URL; it now uses the existing recipient invoice URL and reports non-cancel failures, with clipboard fallback. Native OS sharing itself remains unverified.
+
+- Household business linking refused even the owner because the routes tested a nonexistent `hasPermission` result after the permission-scoped `hasAccess` check. Create, update and remove now use the shared helper's actual contract. The web controls follow `vendors.manage`; manual-vendor behavior is unchanged. The owner linked the synthetic business, opened its public profile, removed the link, and both accounts reflected removal after reload. A member could read the link but saw no link-management controls.
+- Home editing refused an out-of-range latitude and negative bedroom count. A nickname and synthetic parking instructions saved and persisted; the member saw the renamed home. The original nickname was restored and parking instructions cleared.
+- Profile image upload, a skill, duplicate-skill handling, invalid website feedback and a valid website save worked. The image, single skill and website persisted in the editor; the other account saw the image and skill after reload.
+
+The final remote-state check still found master at the starting commit. PR #2430 separately owns manager task defaults and canceled-plan write admission; this PR does not duplicate those changes. No hosted service, native app, launch flag or database schema was changed in this continued pass.
+
+## Final local checkpoint
+
+The final production build, type gate (zero errors), ESLint (zero errors, 1,032 existing warnings), all 123 web suites / 2,383 tests, and four relevant Home backend suites / 127 tests passed. The earlier notification/auth/business checks are recorded above. No new unit tests were written; one existing Emergency test was updated for the intended selector behavior. Backend syntax and `git diff --check` passed.
+
+The standalone production server was opened in the browser against the same isolated backend/database. It retained the saved shutoff and exposed the utility selector, completed sign-out/sign-in, refused an unrelated account's invoice read, showed the recipient's void invoice with the correct total and no payment action, kept paid scheduling unavailable, and successfully created a household business link. The synthetic local services remain available for inspection.
+
+This completes the recorded local audit pass. The limitations above remain explicit release-verification work: provider-backed address/identity/OAuth/payment flows, successful ownership/residency approvals and transfers/disputes, delivery-worker behavior, physical devices/other browser engines and assistive technologies. New password entry requires user handoff; permanent account deletion requires confirmation. Those boundaries were not bypassed, and this report does not certify every possible input, race or role combination.

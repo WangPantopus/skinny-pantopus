@@ -62,12 +62,23 @@ export default function LegalTab({ businessId, businessType }: Props) {
   };
 
   const handleSave = async () => {
+    const legalName = form.legal_name.trim();
+    const taxId = form.tax_id_last4.trim();
+    const supportEmail = form.support_email.trim();
+    if (supportEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(supportEmail)) {
+      toast.error('Enter a valid support email address.');
+      return;
+    }
+    if (taxId && !/^\d{4}$/.test(taxId)) {
+      toast.error('Enter exactly four tax ID digits, or leave it blank.');
+      return;
+    }
     setSaving(true);
     try {
       await api.businesses.updateBusinessPrivate(businessId, {
-        legal_name: form.legal_name || undefined,
-        tax_id_last4: form.tax_id_last4 || undefined,
-        support_email: form.support_email || undefined,
+        legal_name: legalName,
+        tax_id_last4: taxId,
+        support_email: supportEmail,
       });
       toast.success('Legal information updated');
       setHasData(true);

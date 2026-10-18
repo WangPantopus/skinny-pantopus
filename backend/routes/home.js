@@ -3752,7 +3752,6 @@ router.post('/:id/businesses', verifyToken, validate(linkBusinessSchema), async 
 
     const access = await checkHomePermission(homeId, userId, 'vendors.manage');
     if (!access.hasAccess) return res.status(403).json({ error: 'No access' });
-    if (!access.hasPermission) return res.status(403).json({ error: 'Missing vendors.manage permission' });
 
     let businessUserId = req.body.business_user_id;
 
@@ -3818,7 +3817,6 @@ router.patch('/:id/businesses/:linkId', verifyToken, async (req, res) => {
 
     const access = await checkHomePermission(homeId, userId, 'vendors.manage');
     if (!access.hasAccess) return res.status(403).json({ error: 'No access' });
-    if (!access.hasPermission) return res.status(403).json({ error: 'Missing vendors.manage permission' });
 
     const allowed = ['kind', 'notes'];
     const updates = {};
@@ -3861,7 +3859,6 @@ router.delete('/:id/businesses/:linkId', verifyToken, async (req, res) => {
 
     const access = await checkHomePermission(homeId, userId, 'vendors.manage');
     if (!access.hasAccess) return res.status(403).json({ error: 'No access' });
-    if (!access.hasPermission) return res.status(403).json({ error: 'Missing vendors.manage permission' });
 
     const { error } = await supabaseAdmin
       .from('HomeBusinessLink')
