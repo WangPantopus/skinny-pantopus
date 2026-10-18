@@ -78,6 +78,8 @@ public struct BizBannerHeader: View {
     private let locality: String
     private let logoInitials: String?
     private let logoIcon: PantopusIcon?
+    private let logoImageURL: URL?
+    private let bannerImageURL: URL?
     private let verified: Bool
     private let status: BizStatusBadge?
     /// Icon on the identity chip. Callers showing an unverified business
@@ -91,6 +93,8 @@ public struct BizBannerHeader: View {
         locality: String,
         logoInitials: String? = nil,
         logoIcon: PantopusIcon? = nil,
+        logoImageURL: URL? = nil,
+        bannerImageURL: URL? = nil,
         verified: Bool = true,
         status: BizStatusBadge? = nil,
         chipIcon: PantopusIcon? = .shieldCheck
@@ -101,6 +105,8 @@ public struct BizBannerHeader: View {
         self.locality = locality
         self.logoInitials = logoInitials
         self.logoIcon = logoIcon
+        self.logoImageURL = logoImageURL
+        self.bannerImageURL = bannerImageURL
         self.verified = verified
         self.status = status
         self.chipIcon = chipIcon
@@ -129,6 +135,7 @@ public struct BizBannerHeader: View {
             endPoint: .bottomTrailing
         )
         .frame(height: 116)
+        .overlay { BusinessHeaderImage(url: bannerImageURL) }
         .overlay(
             LinearGradient(
                 colors: [Color.black.opacity(0), Color.black.opacity(0.18)],
@@ -169,6 +176,10 @@ public struct BizBannerHeader: View {
                 )
                 .frame(width: 68, height: 68)
                 .overlay(logoMonogram)
+                .overlay {
+                    BusinessHeaderImage(url: logoImageURL)
+                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                }
                 .overlay(
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
                         .stroke(Theme.Color.appSurface, lineWidth: 3)
@@ -308,6 +319,29 @@ private extension IdentityPillar {
         case .home: "Home"
         case .business: "Business"
         }
+    }
+}
+
+/// Render stored business artwork inside the existing header bounds. The
+/// underlying gradient/monogram remains visible for missing or failed images.
+@MainActor
+struct BusinessHeaderImage: View {
+    let url: URL?
+
+    var body: some View {
+        GeometryReader { geometry in
+            CachedAsyncImage(url: url) { phase in
+                if let image = phase.image {
+                    image
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: geometry.size.width, height: geometry.size.height)
+                        .clipped()
+                }
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
 

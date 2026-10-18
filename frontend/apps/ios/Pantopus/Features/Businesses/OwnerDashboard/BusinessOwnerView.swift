@@ -246,6 +246,8 @@ struct OwnerEditFrame: View {
                         logoIcon: profile.header.logoIcon,
                         status: bannerStatus,
                         isVerified: content.isVerified,
+                        logoImageURL: profile.header.logoImageURL,
+                        bannerImageURL: profile.header.bannerImageURL,
                         onEdit: onEditPage
                     )
                     .disabled(!content.allows("profile.edit"))

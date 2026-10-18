@@ -341,7 +341,9 @@ extension BusinessProfileViewModel {
             // header. `business.verified` is the account row's flag, not the
             // business's verification, so it never earns the mark on its own.
             isVerified: BusinessCardModel.isVerified(tier: profile?.identityVerificationTier),
-            logoIcon: nil
+            logoIcon: nil,
+            logoImageURL: business.profilePictureURL.flatMap(URL.init(string:)),
+            bannerImageURL: business.coverPhotoURL.flatMap(URL.init(string:))
         )
 
         let scopedHours = scopedHours(
