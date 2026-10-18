@@ -2189,6 +2189,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
     val navDrawerScope = rememberCoroutineScope()
     // Place tapped again on its root: one event, which scrolls the root back to the top.
     val placeReselects = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
+    var ballotHomeId by rememberSaveable { mutableStateOf<String?>(null) }
     // Child screens keep the tab they were opened from lit (they used to fall
     // back to Place, which also swallowed taps on Place from those screens).
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -2707,6 +2708,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     PlaceTabRoot(
                         navController = navController,
                         scrollToTop = placeReselects,
+                        ballotHomeId = ballotHomeId,
+                        onBallotOpened = { ballotHomeId = null },
                         onOpenMenu = { navDrawerScope.launch { navDrawerState.open() } },
                     )
                 }
@@ -2728,8 +2731,12 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     TodayTabScreen(
                         onClaim = { navController.navigate(ChildRoutes.ADD_HOME) },
                         onOpenPlace = { homeId ->
-                            // The ballot card is on this home's Your Place: a link to it, as a push would open it.
-                            placeLinkScope.launch { currentPlaceHost?.let { navController.openPlaceLink(it, homeId, null) } }
+                            placeLinkScope.launch {
+                                currentPlaceHost?.let {
+                                    ballotHomeId = homeId
+                                    navController.openPlaceLink(it, homeId, null)
+                                }
+                            }
                         },
                         plans =
                             PlansTodayActions(
@@ -3064,6 +3071,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     PlaceDashboardDestination(
                         navController = navController,
                         homeId = homeId,
+                        scrollToBallot = ballotHomeId == homeId,
+                        onBallotOpened = { ballotHomeId = null },
                         onOpenMenu = { navDrawerScope.launch { navDrawerState.open() } },
                         onSwitchHome = { id ->
                             currentPlaceHost?.switchHome(id)
@@ -3095,6 +3104,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     val homeId = entry.arguments?.getString(PLACE_DETAIL_HOME_ID_KEY).orEmpty()
                     PlaceDetailScreen(
                         onBack = { navController.popBackStack() },
+                        onOpenBallot = {
+                            ballotHomeId = homeId
+                            navController.popBackStack()
+                        },
                         // A locked section's "Verify address" opens the dashboard's verify sheet and its real flows.
                         onStartVerify = { method -> navController.openPlaceVerify(method, homeId) },
                         onOpenVerificationStatus = { navController.navigate(ChildRoutes.waitingRoom(homeId)) },
@@ -7067,6 +7080,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
 private fun PlaceTabRoot(
     navController: NavHostController,
     scrollToTop: Flow<Unit>,
+    ballotHomeId: String?,
+    onBallotOpened: () -> Unit,
     onOpenMenu: () -> Unit,
     host: HomeTabHostViewModel = hiltViewModel(),
 ) {
@@ -7123,6 +7138,8 @@ private fun PlaceTabRoot(
                         onSwitchHome = host::switchHome,
                         onPlaceUnavailable = host::replaceUnavailable,
                         scrollToTop = scrollToTop,
+                        scrollToBallot = ballotHomeId == current.homeId,
+                        onBallotOpened = onBallotOpened,
                         // A new default changes where Place lands next time, not the Home on screen now.
                         onDefaultHomeChange = { host.switchHome(current.homeId) },
                     )
@@ -7180,6 +7197,8 @@ private fun PlaceDashboardDestination(
     onPlaceUnavailable: (String) -> Unit,
     scrollToTop: Flow<Unit>? = null,
     onDefaultHomeChange: () -> Unit = {},
+    scrollToBallot: Boolean = false,
+    onBallotOpened: () -> Unit = {},
 ) {
     PlaceDashboardScreen(
         homeId = homeId,
@@ -7212,6 +7231,8 @@ private fun PlaceDashboardDestination(
         onManageHomes = { navController.navigate(ChildRoutes.MY_HOMES) },
         onDefaultHomeChange = onDefaultHomeChange,
         scrollToTop = scrollToTop,
+        scrollToBallot = scrollToBallot,
+        onBallotOpened = onBallotOpened,
     )
 }
 

@@ -239,6 +239,8 @@ data class SupportTrainDetailContent(
     val updates: List<TrainUpdateCard> = emptyList(),
     /** False on the retained title/slots while this visit rechecks the mixed private response. */
     val privateDetailsAvailable: Boolean = true,
+    /** A fresh, role-gated helper-detail read failed; no previous helpers' private details are retained. */
+    val helperDetailsUnavailable: Boolean = false,
 ) {
     val isFullyCovered: Boolean get() = typeDates.isFullyCovered
 }
