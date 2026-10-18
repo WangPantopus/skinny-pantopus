@@ -28,6 +28,7 @@ const verifyToken = require('../middleware/verifyToken');
 const requireBusinessSeat = require('../middleware/requireBusinessSeat');
 const validate = require('../middleware/validate');
 const logger = require('../utils/logger');
+const membershipService = require('../services/businessMembershipService');
 const { escapeIlike } = require('../utils/escapeIlike');
 const {
   getSeatForUser,
@@ -151,6 +152,7 @@ router.get('/seats/invite-details', verifyToken, async (req, res) => {
         id, business_user_id, display_name, role_base, invite_status, invite_email, invite_expires_at, created_at
       `)
       .eq('invite_token_hash', tokenHash)
+      .eq('is_active', true)
       .maybeSingle();
 
     if (error) {
@@ -216,6 +218,7 @@ router.post('/seats/accept-invite', verifyToken, validate(acceptInviteSchema), a
       .from('BusinessSeat')
       .select(SEAT_DETAIL)
       .eq('invite_token_hash', tokenHash)
+      .eq('is_active', true)
       .maybeSingle();
 
     if (seatErr) {
@@ -305,27 +308,21 @@ router.post('/seats/accept-invite', verifyToken, validate(acceptInviteSchema), a
       return res.status(500).json({ error: 'Failed to bind seat' });
     }
 
-    // 5) Dual-write: also insert into BusinessTeam for backward compatibility
-    try {
-      await supabaseAdmin
-        .from('BusinessTeam')
-        .upsert({
-          id: seat.id, // use same ID for consistency
-          business_user_id: seat.business_user_id,
-          user_id: userId,
-          role_base: seat.role_base,
-          title: seat.display_name,
-          notes: seat.notes,
-          is_active: true,
-          invited_by: null, // could resolve from invited_by_seat_id but not critical
-          invited_at: seat.created_at,
-          joined_at: now,
-        }, { onConflict: 'id' });
-    } catch (dualWriteErr) {
-      logger.warn('accept-invite dual-write to BusinessTeam failed (non-fatal)', {
-        error: dualWriteErr.message,
-        seatId: seat.id,
-      });
+    // Membership is required by the app's IAM routes. Reuse the service's
+    // reactivation path when a removed teammate accepts a new seat invite.
+    const membership = await membershipService.addMember({
+      businessUserId: seat.business_user_id,
+      userId,
+      roleBase: seat.role_base,
+      displayName: display_name || seat.display_name,
+      notes: seat.notes,
+    });
+    if (membership.error) {
+      await supabaseAdmin.from('SeatBinding').delete().eq('seat_id', seat.id).eq('user_id', userId);
+      await supabaseAdmin.from('BusinessSeat').update({
+        invite_status: 'pending', accepted_at: null, invite_token_hash: tokenHash, updated_at: now,
+      }).eq('id', seat.id).eq('is_active', true);
+      return res.status(500).json({ error: 'Could not join the team. Please try again.' });
     }
 
     // 6) Audit log
@@ -365,6 +362,7 @@ router.post('/seats/decline-invite', verifyToken, validate(declineInviteSchema),
       .from('BusinessSeat')
       .select('id, business_user_id, invite_status')
       .eq('invite_token_hash', tokenHash)
+      .eq('is_active', true)
       .maybeSingle();
 
     if (seatErr) {
@@ -525,6 +523,7 @@ router.post('/:businessId/seats/invite', verifyToken, requireBusinessSeat('team.
         .eq('business_user_id', businessId)
         .ilike('invite_email', escapeIlike(invite_email))
         .eq('invite_status', 'pending')
+        .eq('is_active', true)
         .order('created_at', { ascending: false })
         .limit(1);
       if (error) throw error;
@@ -555,6 +554,7 @@ router.post('/:businessId/seats/invite', verifyToken, requireBusinessSeat('team.
           })
           .eq('id', current.id)
           .eq('invite_status', 'pending')
+          .eq('is_active', true)
           .eq('invite_token_hash', current.invite_token_hash)
           .select(SEAT_LIST);
         if (renewErr) throw renewErr;
@@ -578,6 +578,17 @@ router.post('/:businessId/seats/invite', verifyToken, requireBusinessSeat('team.
       }
       return res.status(409).json({ error: 'This invite just changed. Refresh and try again.' });
     };
+
+    // Older cancellations only deactivated the seat. Retire their pending
+    // status so the existing unique email index permits a fresh invitation.
+    const { error: retireError } = await supabaseAdmin
+      .from('BusinessSeat')
+      .update({ invite_status: 'expired', invite_token_hash: null, updated_at: new Date().toISOString() })
+      .eq('business_user_id', businessId)
+      .ilike('invite_email', escapeIlike(invite_email))
+      .eq('invite_status', 'pending')
+      .eq('is_active', false);
+    if (retireError) throw retireError;
 
     const existingInvite = await findPendingInvite();
     if (existingInvite) return await renewOrRefuse(existingInvite);
@@ -768,7 +779,7 @@ router.delete('/:businessId/seats/:seatId', verifyToken, requireBusinessSeat('te
     // Fetch target seat
     const { data: targetSeat, error: fetchErr } = await supabaseAdmin
       .from('BusinessSeat')
-      .select('id, role_base, is_active, business_user_id')
+      .select('id, role_base, is_active, business_user_id, invite_status')
       .eq('id', seatId)
       .eq('business_user_id', businessId)
       .maybeSingle();
@@ -829,6 +840,8 @@ router.delete('/:businessId/seats/:seatId', verifyToken, requireBusinessSeat('te
       .from('BusinessSeat')
       .update({
         is_active: false,
+        invite_token_hash: null,
+        ...(targetSeat.invite_status === 'pending' ? { invite_status: 'expired' } : {}),
         deactivated_at: now,
         deactivated_reason: isSelf ? 'Self-removal' : 'Removed by team manager',
         updated_at: now,

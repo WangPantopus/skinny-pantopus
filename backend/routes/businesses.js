@@ -1214,7 +1214,7 @@ router.get('/:businessId/dashboard', verifyToken, async (req, res) => {
     const { businessId } = req.params;
     const userId = req.user.id;
 
-    const access = await checkBusinessPermission(businessId, userId);
+    const access = await getUserAccess(businessId, userId);
     if (!access.hasAccess) {
       return res.status(403).json({ error: 'No access to this business' });
     }
@@ -1284,6 +1284,7 @@ router.get('/:businessId/dashboard', verifyToken, async (req, res) => {
         hasAccess: access.hasAccess,
         isOwner: access.isOwner,
         role_base: access.membership?.role_base || null,
+        permissions: access.permissions,
       },
       onboarding: {
         checklist,
@@ -4269,7 +4270,7 @@ router.get('/:businessId/insights', verifyToken, async (req, res) => {
     const userId = req.user.id;
 
     // Permission check
-    const access = await checkBusinessPermission(businessId, userId, 'analytics.view');
+    const access = await checkBusinessPermission(businessId, userId, 'insights.view');
     if (!access.hasAccess) {
       return res.status(403).json({ error: 'You do not have permission to view insights' });
     }
