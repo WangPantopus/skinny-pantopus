@@ -2,7 +2,7 @@
 
 ## Scope and environment
 
-This is the first web-only audit requested by the founder. The branch started from freshly fetched `origin/master` at `5c64fe823f113bf89e7a855486c2e9f2aeef2b43`; master CI and its backend deployment were successful. A second fetch before delivery still resolved master to that commit. Open PRs were checked for overlapping work.
+This is the web-only audit requested by the founder, including the continued pass on October 17–18. The branch started from freshly fetched `origin/master` at `5c64fe823f113bf89e7a855486c2e9f2aeef2b43`; master CI and its backend deployment were successful. A second fetch before delivery still resolved master to that commit. Open PRs were checked for overlapping work.
 
 The actual production web build ran in the Mac's browser against a local Node backend and a new, isolated Supabase database with all repository migrations applied. Four synthetic accounts and three synthetic homes supplied owner, household member, unrelated resident, and unverified private-setup cases. Homes were seeded; this does **not** establish that address onboarding or ownership verification works end to end. The member joined through the real invitation UI. Mail was captured locally, background delivery jobs were disabled, and no hosted database or production configuration was changed.
 
@@ -48,9 +48,44 @@ The actual production web build ran in the Mac's browser against a local Node ba
 
 ## Remaining coverage and observed limitations
 
-- Provider-backed address autocomplete/validation, ownership/residency document review, postcard delivery, property enrichment, uploads, OAuth, payments/payouts and device notifications were not verified end to end. Address suggestions and air-quality data were unavailable with this local configuration. AI drafting failed safely with a working manual fallback. No provider credentials were added to make these paths appear verified.
+- Provider-backed address autocomplete/validation, ownership/residency document review, postcard delivery, property enrichment, OAuth, payments/payouts and device notifications were not verified end to end. Address suggestions and air-quality data were unavailable with this local configuration. AI drafting failed safely with a working manual fallback. No provider credentials were added to make these paths appear verified.
 - Device-GPS personal posting was not exercised; the verified-home posting path was. Other browsers, assistive technologies and physical-device web behavior still need their own checks.
-- The full home sidebar is still displayed on private-setup and refused-home pages, so some links lead to clear permission-denied states. The underlying records were protected in the tested cases; permission-aware navigation remains a separate UX improvement.
+- Home navigation now follows current access; the continued pass below verifies private setup and refused-home cases. Business viewer controls now follow the existing permission endpoint in the main dashboard; write refusals remain enforced by the backend.
 - Administrative/landlord review, ownership transfers/disputes, account deletion, all upload formats, all recurring-task permutations, all payment states and every public/business detail record were not exhaustively exercised. Launch-cut features were checked for being inaccessible, not activated or audited internally.
 
 Raw local fixtures, credentials, mail contents, screenshots and operator logs are excluded from this report and Git. This pass is evidence for the named journeys and repairs, not a claim that every button, feature or external integration has been certified.
+
+
+## Continued pass — October 17–18 (in progress)
+
+The same PR is being extended at the founder's request. Production services remain untouched. The isolated Supabase instance now supplies a private Home document bucket and a separate S3-compatible bucket for synthetic public media. These local checks do not establish hosted storage policy or lifecycle behavior.
+
+Additional repairs verified in the running browser:
+
+- Home sidebar navigation reuses current Home permissions. Private setup shows Overview and Tasks, and Tasks opens its working private collection instead of verification. An unrelated account sees no household tool links; its direct document request remains refused. The verified owner's existing navigation remains available.
+- The main Home Documents panel now offers the same authorized download used by the separate document list. A synthetic file was uploaded through the real backend as a fixture, downloaded with matching bytes in the browser, shared with another account, and denied after link revocation. The web Home Documents UI itself does not offer upload.
+- Business onboarding updates its existing draft when returning to Basic Info. Previously a repeated create could silently discard edited descriptions, or reject changed identifying details. Username/account email become fixed once the draft exists; profile fields remain editable. Blank names and invalid usernames receive direct feedback. A skipped location no longer shows editable hours that cannot save or claims that hours are configured. Revised description and uploaded logo persisted in the business dashboard and public profile after reload.
+- Team invitations correctly require the recipient email. Unsupported title inputs were removed from both invite and edit forms; the server has no corresponding seat field and silently discarded them. Seat display-name edits persisted.
+- Signed-out business invite recipients now sign in and return to the invitation instead of seeing an invalid-token error. The invitation reads the actual nested business name. Acceptance leads to that business's dashboard, and the receipt no longer asserts a fresh seven-day lifetime for an older link. Verified with a second synthetic recipient from signed-out entry through sign-in, named preview, acceptance, and dashboard navigation.
+
+Additional executed journeys:
+
+- Business setup: required fields, malformed email/website feedback, Back/Next editing, skip location/hours, PNG logo upload through local S3 storage, publication, dashboard reload, public profile in a second account.
+- Catalog: rejected negative price, saved positive price, edited name and zero price, and verified public Services listing. An invited viewer's attempted create was rejected; no unauthorized item was created. The repaired dashboard removes unauthorized create/edit/archive actions and retains readable content.
+- Business relationship/messages: follow, customer inquiry, business inbox unread state, business reply, and recipient-side business identity.
+- Business pages: create page, text and FAQ blocks, draft save, publish, public FAQ expansion, second draft hidden from public readers, second publication, and revision-history display. The history drawer is read-only.
+- Team: viewer invitation, acceptance, owner-visible joined seat, rename, and refusal before membership. A second invitation verified the repaired signed-out entry and correct destination.
+
+Existing checks after the initial continued repairs: type gate passed with zero errors; all 123 Jest suites / 2,383 tests passed. No new tests were added. The follow-up production build, type gate and lint passed (zero errors; 1,032 lint warnings). All 123 web suites / 2,383 tests passed again, along with 103 tests in six relevant existing backend suites. Production-browser smoke checks confirmed viewer/owner controls and exhausted guest access.
+
+
+Further repairs and verification in this continued pass:
+
+- Business dashboard controls use the current `/me` permission list for profile/logo/publication, catalog, pages, locations/hours, invoices and settings. The sidebar also reads those permissions. Viewers retained readable data without unsupported write actions; owners retained their actions. Both existing business route prefixes now retain business navigation, including the hours editor.
+- Guest-pass creation now explains invalid durations and view limits before submission and labels the controls. Created a one-view pass, opened it from another account, confirmed exhaustion, created a second pass and confirmed immediate revocation after reload. Expired/exhausted pages no longer offer an empty email link as “Request New Access.”
+- Special hours now explain a missing date or missing open/close times. Weekly saves show a receipt; each closed-day control has a unique label. A fictional location fixture was necessary after the address validator rejected the fictional address. Saved weekly hours and a dated closure persisted after reload. This is not evidence of successful provider-backed location creation.
+- Sign-out could revoke the server session yet leave the browser on a settings error when a concurrent session change interrupted the logout response. It now completes full-page navigation when the server has cleared the session flag, while preserving a newer signed-in session. The applicant reached sign-in and signed back in successfully.
+- A document claim disappeared from My Homes when its private task workspace was already listed. Private-setup claims now remain under Verification in Progress. A claim without evidence is labeled Document needed rather than Under review; unreadable evidence presence stays unknown. The applicant saw the submitted residency claim after reload.
+- Shared claim-review notifications incorrectly called residency verification “ownership,” including an approval message that could imply ownership rights. They now describe home verification and direct follow-up/rejection to My Homes. A local reviewer requested more information, inspected the synthetic image, and rejected it with a reason; the applicant received the corrected rejection and followed its link. Approval was correctly refused for the seeded pending-owner history. This does not establish a successful residency-approval journey.
+
+The continued pass used a synthetic local platform reviewer only. Unsupported evidence was refused with an actionable message; a supported PNG upload reached the receipt and reviewer queue. Private evidence preview worked. No real identity documents, provider keys, payments, production changes or notifications to real people were used.

@@ -9,9 +9,11 @@ interface CatalogTabProps {
   catalog: Record<string, any>[];
   businessId: string;
   onUpdate: () => void;
+  canEdit: boolean;
+  canManage: boolean;
 }
 
-export default function CatalogTab({ catalog: initialCatalog, businessId, onUpdate }: CatalogTabProps) {
+export default function CatalogTab({ catalog: initialCatalog, businessId, onUpdate, canEdit, canManage }: CatalogTabProps) {
   const [items, setItems] = useState<Record<string, any>[]>(initialCatalog);
   const [showAdd, setShowAdd] = useState(false);
   const [addForm, setAddForm] = useState({ name: '', kind: 'service', price_cents: '', description: '' });
@@ -60,17 +62,18 @@ export default function CatalogTab({ catalog: initialCatalog, businessId, onUpda
 
   return (
     <div className="space-y-4">
+      {!canManage && !canEdit && <p className="text-sm text-app-secondary">You have view-only access to this section.</p>}
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-app">Catalog</h2>
-        <button
+        {canManage && <button
           onClick={() => setShowAdd(!showAdd)}
           className="px-3 py-1.5 rounded-lg bg-violet-600 text-white text-sm font-semibold hover:bg-violet-700 transition"
         >
           {showAdd ? 'Cancel' : 'Add item'}
-        </button>
+        </button>}
       </div>
 
-      {showAdd && (
+      {canManage && showAdd && (
         <div className="rounded-xl border border-violet-200 bg-violet-50 p-5 space-y-3">
           <Field label="Name *" value={addForm.name} onChange={(v) => setAddForm({ ...addForm, name: v })} placeholder="e.g. Haircut, Large Pizza" />
           <div>
@@ -105,7 +108,7 @@ export default function CatalogTab({ catalog: initialCatalog, businessId, onUpda
 
       {items.length === 0 ? (
         <div className="rounded-xl border border-app bg-surface p-6 text-center text-app-secondary">
-          No catalog items yet. Add services, products, or menu items.
+          No catalog items yet.{canManage ? ' Add services, products, or menu items.' : ''}
         </div>
       ) : (
         <div className="rounded-xl border border-app bg-surface divide-y divide-app">
@@ -126,16 +129,16 @@ export default function CatalogTab({ catalog: initialCatalog, businessId, onUpda
                 {item.price_cents != null && (
                   <span className="text-sm font-semibold text-app-strong">${(item.price_cents / 100).toFixed(2)}</span>
                 )}
-                <Link
+                {canEdit && <Link
                   href={`/app/business/${businessId}/catalog/${item.id}/edit`}
                   className="text-xs text-violet-600 hover:text-violet-700"
                   aria-label={`Edit ${item.name}`}
                 >
                   Edit
-                </Link>
-                <button onClick={() => removeItem(item.id)} className="text-xs text-red-500 hover:text-red-700">
+                </Link>}
+                {canManage && <button onClick={() => removeItem(item.id)} className="text-xs text-red-500 hover:text-red-700">
                   Archive
-                </button>
+                </button>}
               </div>
             </div>
           ))}

@@ -24,7 +24,7 @@ interface EditSeatModalProps {
 }
 
 export default function EditSeatModal({ open, onClose, businessId, seat, onSuccess }: EditSeatModalProps) {
-  const [form, setForm] = useState({ display_name: '', role_base: 'viewer', title: '' });
+  const [form, setForm] = useState({ display_name: '', role_base: 'viewer' });
   const [saving, setSaving] = useState(false);
   const titleId = useId();
 
@@ -41,7 +41,6 @@ export default function EditSeatModal({ open, onClose, businessId, seat, onSucce
       setForm({
         display_name: seat.display_name || '',
         role_base: seat.role_base || 'viewer',
-        title: seat.title || '',
       });
     }
   }, [seat]);
@@ -63,7 +62,6 @@ export default function EditSeatModal({ open, onClose, businessId, seat, onSucce
       await api.businessSeats.updateSeat(businessId, seat.id, {
         display_name: form.display_name.trim(),
         role_base: form.role_base as 'admin' | 'editor' | 'staff' | 'viewer',
-        title: form.title.trim() || undefined,
       });
       toast.success('Seat updated');
       onSuccess();
@@ -118,12 +116,6 @@ export default function EditSeatModal({ open, onClose, businessId, seat, onSucce
               </select>
             </div>
 
-            <Field
-              label="Title (optional)"
-              value={form.title}
-              onChange={(v) => setForm({ ...form, title: v })}
-              placeholder="e.g. Store Manager"
-            />
           </div>
 
           {/* Footer */}

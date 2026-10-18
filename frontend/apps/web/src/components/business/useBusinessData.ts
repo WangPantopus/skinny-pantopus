@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import type {
@@ -15,6 +16,17 @@ interface BusinessAccess {
   hasAccess: boolean;
   isOwner: boolean;
   role_base: string | null;
+  permissions: string[];
+}
+
+// Shared by the dashboard and sidebar; QueryProvider retires this cache on session changes.
+export function businessAccessQuery(businessId: string) {
+  return {
+    queryKey: ['businesses', 'access', businessId] as const,
+    queryFn: () => api.businessIam.getMyBusinessAccess(businessId),
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+  };
 }
 
 export interface UseBusinessDataReturn {
@@ -34,6 +46,7 @@ export interface UseBusinessDataReturn {
 
 export function useBusinessData(businessId: string): UseBusinessDataReturn {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -43,7 +56,7 @@ export function useBusinessData(businessId: string): UseBusinessDataReturn {
   const [team, setTeam] = useState<Record<string, any>[]>([]);
   const [catalog, setCatalog] = useState<Record<string, any>[]>([]);
   const [pages, setPages] = useState<Record<string, any>[]>([]);
-  const [access, setAccess] = useState<BusinessAccess>({ hasAccess: false, isOwner: false, role_base: null });
+  const [access, setAccess] = useState<BusinessAccess>({ hasAccess: false, isOwner: false, role_base: null, permissions: [] });
   const [onboarding, setOnboarding] = useState<OnboardingStatus | null>(null);
   const [foundingOffer, setFoundingOffer] = useState<FoundingOfferStatus | null>(null);
 
@@ -54,9 +67,10 @@ export function useBusinessData(businessId: string): UseBusinessDataReturn {
       const token = getAuthToken();
       if (!token) { router.push('/login'); return; }
 
-      const [res, foundingRes] = await Promise.all([
+      const [res, foundingRes, currentAccess] = await Promise.all([
         api.businesses.getBusinessDashboard(businessId) as Promise<BusinessDashboardResponse>,
         api.businesses.getFoundingOfferStatus().catch(() => null),
+        queryClient.fetchQuery(businessAccessQuery(businessId)),
       ]);
       setBusiness(res.business);
       setProfile(res.profile);
@@ -64,7 +78,7 @@ export function useBusinessData(businessId: string): UseBusinessDataReturn {
       setTeam(res.team || []);
       setCatalog(res.catalog || []);
       setPages(res.pages || []);
-      setAccess(res.access || { hasAccess: false, isOwner: false, role_base: null });
+      setAccess(currentAccess);
       setOnboarding(res.onboarding || null);
       if (foundingRes) setFoundingOffer(foundingRes);
     } catch (e: unknown) {
@@ -73,7 +87,7 @@ export function useBusinessData(businessId: string): UseBusinessDataReturn {
     } finally {
       setLoading(false);
     }
-  }, [businessId, router]);
+  }, [businessId, queryClient, router]);
 
   useEffect(() => { refresh(); }, [refresh]);
 

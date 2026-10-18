@@ -16,10 +16,14 @@ import MobileTabBar from '@/components/MobileTabBar';
 import { PantopusMark } from '@/components/brand/PantopusMark';
 import UnifiedFAB, { routeHasFab } from '@/components/UnifiedFAB';
 import dynamic from 'next/dynamic';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
 import { setMe, useMe } from '@/lib/me';
 import { primaryHomeQuery } from '@/lib/primaryHome';
+import { myHomesQuery } from '@/lib/myHomes';
+import { showsMyHomesCopy, useAfterRecheck } from '@/lib/householdCopy';
+import { HomePermissionsProvider, useHomePermissions } from '@/components/home/useHomePermissions';
+import { businessAccessQuery } from '@/components/business/useBusinessData';
 import { conversationsQuery } from '@/lib/conversations';
 import type { PostComposerSubmitData } from '@/components/feed/PostComposer';
 import { identityCopy } from '@/lib/identityLabels';
@@ -218,9 +222,9 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const homeId = homeMatch?.[1] || null;
   const isHomeContext = !!homeId;
 
-  const bizMatch = pathname.match(/^\/app\/businesses\/([^/]+)/);
+  const bizMatch = pathname.match(/^\/app\/business(?:es)?\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\/|$)/i);
   const businessId = bizMatch?.[1] || null;
-  const isBusinessContext = !!businessId && businessId !== 'new';
+  const isBusinessContext = !!businessId;
   const showMobileTabs = isMobile && !isBusinessContext;
 
   const currentTab = searchParams.get('tab') || 'overview';
@@ -759,9 +763,22 @@ export function PersonalSidebarContent({ currentPath, showLabels, chatUnread, on
 /* ─────────────────────────────────────────────────────────────
  * Home Sidebar Content
  * ───────────────────────────────────────────────────────────── */
-function HomeSidebarContent({ homeId, currentTab, showLabels, onNavigate }: { homeId: string; currentTab: string; showLabels: boolean; onNavigate: () => void }) {
+type HomeSidebarProps = { homeId: string; currentTab: string; showLabels: boolean; onNavigate: () => void };
+
+function HomeSidebarContent(props: HomeSidebarProps) {
+  return <HomePermissionsProvider key={props.homeId} homeId={props.homeId}><HomeSidebarNavigation {...props} /></HomePermissionsProvider>;
+}
+
+function HomeSidebarNavigation({ homeId, currentTab, showLabels, onNavigate }: HomeSidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const { access, can, needsVerification, loading, error } = useHomePermissions();
+  const homesQuery = useQuery(myHomesQuery());
+  const { data: homes } = useAfterRecheck(homesQuery, showsMyHomesCopy);
+  const privateSetup = !loading && !homesQuery.isError && homes?.homes.some(home =>
+    home.id === homeId && home.access_kind === 'private_setup' && home.has_home_access === false);
+  const shared = !loading && !error && !needsVerification && can('home.view');
+  const verification = !loading && !error && access?.verification_required === true;
 
   const dashPath = `/app/homes/${homeId}/dashboard`;
   const propertyDetailsPath = `/app/homes/${homeId}/property-details`;
@@ -777,8 +794,8 @@ function HomeSidebarContent({ homeId, currentTab, showLabels, onNavigate }: { ho
 
   return (
     <div className="space-y-0.5">
-      <SidebarItem icon={HomeIcons.overview} label="Overview" active={isTabActive('overview')} onClick={() => goTab('overview')} accent="emerald" showLabel={showLabels} />
-      <SidebarItem
+      {(shared || verification || privateSetup) && <SidebarItem icon={HomeIcons.overview} label="Overview" active={isTabActive('overview')} onClick={() => goTab('overview')} accent="emerald" showLabel={showLabels} />}
+      {shared && <SidebarItem
         icon={HomeIcons.propertyDetails}
         label="Property Details"
         active={onPropertyDetails}
@@ -788,14 +805,17 @@ function HomeSidebarContent({ homeId, currentTab, showLabels, onNavigate }: { ho
         }}
         accent="emerald"
         showLabel={showLabels}
-      />
-      <SidebarItem icon={HomeIcons.tasks} label="Tasks" active={isTabActive('tasks')} onClick={() => goTab('tasks')} accent="emerald" showLabel={showLabels} />
-      <SidebarItem icon={HomeIcons.issues} label="Issues" active={isTabActive('issues')} onClick={() => goTab('issues')} accent="emerald" showLabel={showLabels} />
+      />}
+      {((shared && can('tasks.view')) || privateSetup) && <SidebarItem icon={HomeIcons.tasks} label="Tasks" active={isTabActive('tasks') || pathname === `/app/homes/${homeId}/tasks`} onClick={() => {
+        if (privateSetup) { router.push(`/app/homes/${homeId}/tasks`); onNavigate(); }
+        else goTab('tasks');
+      }} accent="emerald" showLabel={showLabels} />}
+      {shared && can('maintenance.view') && <SidebarItem icon={HomeIcons.issues} label="Issues" active={isTabActive('issues')} onClick={() => goTab('issues')} accent="emerald" showLabel={showLabels} />}
       {/* Launch cut #7 (Household extras): Bills and Packages are hidden. */}
-      {launchFeatures.householdExtras ? <SidebarItem icon={HomeIcons.bills} label="Bills" active={isTabActive('bills')} onClick={() => goTab('bills')} accent="emerald" showLabel={showLabels} /> : null}
-      <SidebarItem icon={HomeIcons.members} label="Members" active={isTabActive('members')} onClick={() => goTab('members')} accent="emerald" showLabel={showLabels} />
+      {shared && can('finance.view') && launchFeatures.householdExtras ? <SidebarItem icon={HomeIcons.bills} label="Bills" active={isTabActive('bills')} onClick={() => goTab('bills')} accent="emerald" showLabel={showLabels} /> : null}
+      {shared && can('members.view') && <SidebarItem icon={HomeIcons.members} label="Members" active={isTabActive('members')} onClick={() => goTab('members')} accent="emerald" showLabel={showLabels} />}
       {/* Launch cut #10 (Mailbox): the home's mailbox is hidden. */}
-      {launchFeatures.mailbox ? (
+      {shared && can('mailbox.view') && launchFeatures.mailbox ? (
         <SidebarItem
           icon={HomeIcons.mailbox}
           label="Mailbox"
@@ -808,7 +828,7 @@ function HomeSidebarContent({ homeId, currentTab, showLabels, onNavigate }: { ho
         />
       ) : null}
       {/* Launch cuts #5 + #7: the Home scheduling hub is hidden. */}
-      {webFeatureFlags.scheduling && launchFeatures.publicScheduling && launchFeatures.householdExtras ? (
+      {shared && can('calendar.view') && webFeatureFlags.scheduling && launchFeatures.publicScheduling && launchFeatures.householdExtras ? (
         <SidebarItem
           icon={HomeIcons.scheduling}
           label="Scheduling"
@@ -822,16 +842,16 @@ function HomeSidebarContent({ homeId, currentTab, showLabels, onNavigate }: { ho
         />
       ) : null}
 
-      <SidebarDivider showLabel={showLabels} />
+      {shared && <SidebarDivider showLabel={showLabels} />}
 
-      {launchFeatures.householdExtras ? <SidebarItem icon={HomeIcons.packages} label="Packages" active={isTabActive('packages')} onClick={() => goTab('packages')} showLabel={showLabels} /> : null}
-      <SidebarItem icon={HomeIcons.documents} label="Documents" active={isTabActive('documents')} onClick={() => goTab('documents')} showLabel={showLabels} />
-      <SidebarItem icon={HomeIcons.vendors} label="Vendors" active={isTabActive('vendors')} onClick={() => goTab('vendors')} showLabel={showLabels} />
-      <SidebarItem icon={HomeIcons.emergency} label="Emergency" active={isTabActive('emergency')} onClick={() => goTab('emergency')} showLabel={showLabels} />
+      {shared && can('packages.view') && launchFeatures.householdExtras ? <SidebarItem icon={HomeIcons.packages} label="Packages" active={isTabActive('packages')} onClick={() => goTab('packages')} showLabel={showLabels} /> : null}
+      {shared && can('docs.view') && <SidebarItem icon={HomeIcons.documents} label="Documents" active={isTabActive('documents')} onClick={() => goTab('documents')} showLabel={showLabels} />}
+      {shared && <SidebarItem icon={HomeIcons.vendors} label="Vendors" active={isTabActive('vendors')} onClick={() => goTab('vendors')} showLabel={showLabels} />}
+      {shared && can('sensitive.view') && <SidebarItem icon={HomeIcons.emergency} label="Emergency" active={isTabActive('emergency')} onClick={() => goTab('emergency')} showLabel={showLabels} />}
 
-      <SidebarDivider showLabel={showLabels} />
+      {shared && <SidebarDivider showLabel={showLabels} />}
 
-      <SidebarItem
+      {shared && can('home.edit') && <SidebarItem
         icon={HomeIcons.settings}
         label="Home Settings"
         onClick={() => {
@@ -839,7 +859,7 @@ function HomeSidebarContent({ homeId, currentTab, showLabels, onNavigate }: { ho
           onNavigate();
         }}
         showLabel={showLabels}
-      />
+      />}
       <SidebarItem
         icon={HomeIcons.back}
         label="Pantopus Hub"
@@ -859,6 +879,8 @@ function HomeSidebarContent({ homeId, currentTab, showLabels, onNavigate }: { ho
 function BusinessSidebarContent({ businessId, currentTab, showLabels, onNavigate }: { businessId: string; currentTab: string; showLabels: boolean; onNavigate: () => void }) {
   const router = useRouter();
   const pathname = usePathname();
+  const { data: access } = useQuery(businessAccessQuery(businessId));
+  const can = (permission: string) => access?.hasAccess === true && (access.isOwner || access.permissions.includes(permission));
 
   const dashPath = `/app/businesses/${businessId}/dashboard`;
   const onDash = pathname.startsWith(dashPath);
@@ -876,29 +898,30 @@ function BusinessSidebarContent({ businessId, currentTab, showLabels, onNavigate
 
   return (
     <div className="space-y-0.5">
-      <SidebarItem icon={BusinessIcons.overview} label="Overview" active={isTabActive('overview')} onClick={() => goTab('overview')} accent="violet" showLabel={showLabels} />
-      <SidebarItem icon={BusinessIcons.profile} label="Profile" active={isTabActive('profile')} onClick={() => goTab('profile')} accent="violet" showLabel={showLabels} />
-      <SidebarItem icon={BusinessIcons.locations} label="Locations & Hours" active={isTabActive('locations')} onClick={() => goTab('locations')} accent="violet" showLabel={showLabels} />
-      <SidebarItem icon={BusinessIcons.catalog} label="Catalog" active={isTabActive('catalog')} onClick={() => goTab('catalog')} accent="violet" showLabel={showLabels} />
-      <SidebarItem icon={BusinessIcons.pages} label="Pages" active={isTabActive('pages')} onClick={() => goTab('pages')} accent="violet" showLabel={showLabels} />
+      {access?.hasAccess && <SidebarItem icon={BusinessIcons.overview} label="Overview" active={isTabActive('overview')} onClick={() => goTab('overview')} accent="violet" showLabel={showLabels} />}
+      {access?.hasAccess && <SidebarItem icon={BusinessIcons.profile} label="Profile" active={isTabActive('profile')} onClick={() => goTab('profile')} accent="violet" showLabel={showLabels} />}
+      {access?.hasAccess && <SidebarItem icon={BusinessIcons.locations} label="Locations & Hours" active={isTabActive('locations')} onClick={() => goTab('locations')} accent="violet" showLabel={showLabels} />}
+      {access?.hasAccess && <SidebarItem icon={BusinessIcons.catalog} label="Catalog" active={isTabActive('catalog')} onClick={() => goTab('catalog')} accent="violet" showLabel={showLabels} />}
+      {access?.hasAccess && <SidebarItem icon={BusinessIcons.pages} label="Pages" active={isTabActive('pages')} onClick={() => goTab('pages')} accent="violet" showLabel={showLabels} />}
       {/* Launch cut #4 (Open Gigs): business "Post Task" is hidden. */}
-      {launchFeatures.openGigs ? <SidebarItem icon={BusinessIcons.postTask} label="Post Task" active={pathname.startsWith('/app/gigs/new') || pathname.startsWith('/app/gigs-v2/new')} onClick={() => goPath(`/app/gigs/new?beneficiary=${businessId}`)} accent="violet" showLabel={showLabels} /> : null}
-      <SidebarItem icon={BusinessIcons.chat} label="Business Chat" active={pathname.startsWith(`/app/businesses/${businessId}/chat`)} onClick={() => goPath(`/app/businesses/${businessId}/chat`)} accent="violet" showLabel={showLabels} />
+      {launchFeatures.openGigs && can('gigs.post') ? <SidebarItem icon={BusinessIcons.postTask} label="Post Task" active={pathname.startsWith('/app/gigs/new') || pathname.startsWith('/app/gigs-v2/new')} onClick={() => goPath(`/app/gigs/new?beneficiary=${businessId}`)} accent="violet" showLabel={showLabels} /> : null}
+      {access?.hasAccess && <SidebarItem icon={BusinessIcons.chat} label="Business Chat" active={pathname.startsWith(`/app/businesses/${businessId}/chat`)} onClick={() => goPath(`/app/businesses/${businessId}/chat`)} accent="violet" showLabel={showLabels} />}
 
       <SidebarDivider showLabel={showLabels} />
 
-      <SidebarItem icon={BusinessIcons.team} label="Team" active={isTabActive('team')} onClick={() => goTab('team')} accent="violet" showLabel={showLabels} />
-      <SidebarItem icon={BusinessIcons.reviews} label="Reviews" active={isTabActive('reviews')} onClick={() => goTab('reviews')} accent="violet" showLabel={showLabels} />
-      <SidebarItem icon={BusinessIcons.insights} label="Insights" active={isTabActive('insights')} onClick={() => goTab('insights')} accent="violet" showLabel={showLabels} />
-      <SidebarItem icon={BusinessIcons.payments} label="Payments" active={isTabActive('payments')} onClick={() => goTab('payments')} accent="violet" showLabel={showLabels} />
+      {can('team.view') && <SidebarItem icon={BusinessIcons.team} label="Team" active={isTabActive('team')} onClick={() => goTab('team')} accent="violet" showLabel={showLabels} />}
+      {can('reviews.view') && <SidebarItem icon={BusinessIcons.reviews} label="Reviews" active={isTabActive('reviews')} onClick={() => goTab('reviews')} accent="violet" showLabel={showLabels} />}
+      {can('analytics.view') && <SidebarItem icon={BusinessIcons.insights} label="Insights" active={isTabActive('insights')} onClick={() => goTab('insights')} accent="violet" showLabel={showLabels} />}
+      {access?.isOwner && <SidebarItem icon={BusinessIcons.payments} label="Payments" active={isTabActive('payments')} onClick={() => goTab('payments')} accent="violet" showLabel={showLabels} />}
 
       <SidebarDivider showLabel={showLabels} />
 
-      <SidebarItem icon={BusinessIcons.settings} label="Settings" active={isTabActive('settings')} onClick={() => goTab('settings')} showLabel={showLabels} />
+      {can('profile.edit') && <SidebarItem icon={BusinessIcons.settings} label="Settings" active={isTabActive('settings')} onClick={() => goTab('settings')} showLabel={showLabels} />}
       <SidebarItem icon={BusinessIcons.back} label="Pantopus Hub" onClick={() => goPath('/app/hub')} showLabel={showLabels} />
     </div>
   );
 }
+
 
 /* ─────────────────────────────────────────────────────────────
  * SidebarItem — individual nav row

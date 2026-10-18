@@ -52,9 +52,10 @@ const FILTER_OPTIONS: { key: string | undefined; label: string }[] = [
 
 interface Props {
   businessId: string;
+  canManage: boolean;
 }
 
-export default function InvoicesTab({ businessId }: Props) {
+export default function InvoicesTab({ businessId, canManage }: Props) {
   const [invoices, setInvoices] = useState<BusinessInvoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
@@ -167,10 +168,10 @@ export default function InvoicesTab({ businessId }: Props) {
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-app-text">Invoices</h2>
-        <button onClick={() => setShowCreate(true)}
+        {canManage && <button onClick={() => setShowCreate(true)}
           className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 transition">
           <Plus className="w-4 h-4" /> New Invoice
-        </button>
+        </button>}
       </div>
 
       {/* Filter chips */}
@@ -194,7 +195,7 @@ export default function InvoicesTab({ businessId }: Props) {
         <div className="text-center py-16">
           <FileText className="w-12 h-12 mx-auto text-app-text-muted mb-3" />
           <p className="text-sm text-app-text-secondary">{statusFilter ? `No ${statusFilter} invoices` : 'No invoices yet'}</p>
-          <p className="text-xs text-app-text-muted mt-1">Create an invoice to bill a customer after service delivery.</p>
+          {canManage && <p className="text-xs text-app-text-muted mt-1">Create an invoice to bill a customer after service delivery.</p>}
         </div>
       ) : (
         <div className="space-y-3">
@@ -234,7 +235,7 @@ export default function InvoicesTab({ businessId }: Props) {
                   </div>
                 </div>
 
-                {['sent', 'viewed', 'overdue'].includes(inv.status) && (
+                {canManage && ['sent', 'viewed', 'overdue'].includes(inv.status) && (
                   <button onClick={() => handleVoid(inv.id)} className="text-xs text-red-600 font-medium mt-3 hover:underline">
                     Void Invoice
                   </button>
@@ -246,7 +247,7 @@ export default function InvoicesTab({ businessId }: Props) {
       )}
 
       {/* Create Invoice Modal */}
-      {showCreate && (
+      {canManage && showCreate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="w-full max-w-lg mx-4 bg-app-surface rounded-xl shadow-2xl border border-app-border max-h-[90vh] flex flex-col overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b border-app-border-subtle">
