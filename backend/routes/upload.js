@@ -193,6 +193,18 @@ const upload = multer({
   },
 });
 
+// Nine logical attachments may contain eighteen files when every attachment
+// is a Live Photo (a still plus its companion clip).
+const postMediaUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 100 * 1024 * 1024, files: 18, fieldSize: 4096 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = s3.ALLOWED_IMAGE_TYPES.includes(file.mimetype)
+      || s3.ALLOWED_VIDEO_TYPES.includes(file.mimetype) || file.mimetype === 'application/pdf';
+    cb(allowed ? null : new Error('Choose an image, video, or PDF'), allowed);
+  },
+});
+
 /**
  * Middleware to enforce per-category file size limits after multer accepts the file.
  * Multer's global limit is 100MB (video max), but images should be capped at 10MB
@@ -1008,11 +1020,43 @@ const POST_VIDEO_EXTENSIONS = {
   'video/webm': 'webm',
 };
 
+/** Validate optional slot descriptors before storing anything. Old clients send
+ * files alone; new clients associate a Live Photo's still and clip by index. */
+function postMediaSlots(files, raw) {
+  const slots = raw == null ? files.map((_, fileIndex) => ({ fileIndex })) : JSON.parse(raw);
+  if (!Array.isArray(slots) || !slots.length || slots.length > 9) throw new Error('Choose up to 9 attachments');
+  const used = new Set();
+  const take = (index) => {
+    if (!Number.isInteger(index) || !files[index] || used.has(index)) throw new Error('Invalid attachment pairing');
+    used.add(index);
+    return files[index];
+  };
+  const result = slots.map(slot => {
+    if (!slot || typeof slot !== 'object') throw new Error('Invalid attachment');
+    const file = take(slot.fileIndex);
+    const category = s3.categorizeFile(file.mimetype);
+    if (category !== 'image' && category !== 'video' && file.mimetype !== 'application/pdf') {
+      throw new Error('Choose an image, video, or PDF');
+    }
+    // PDFs must have a PDF signature, including when MIME detection is inconclusive.
+    if (file.mimetype === 'application/pdf' && file.buffer.subarray(0, 5).toString() !== '%PDF-') {
+      throw new Error('This file is not a PDF');
+    }
+    const clip = slot.liveVideoIndex == null ? null : take(slot.liveVideoIndex);
+    if (clip && (category !== 'image' || s3.categorizeFile(clip.mimetype) !== 'video')) {
+      throw new Error('A Live Photo needs both a still image and a video');
+    }
+    return { file, clip, category, type: clip ? 'live_photo' : category };
+  });
+  if (used.size !== files.length) throw new Error('Every uploaded file must belong to an attachment');
+  return result;
+}
+
 /**
  * POST /api/upload/post-media/:postId
- * Upload media files for a feed post (images/videos only, up to 9)
+ * Upload up to nine images, videos, Live Photos or PDFs for a feed post
  */
-router.post('/post-media/:postId', uploadLimiter, verifyToken, upload.array('files', 9), enforceFileSizeLimits, validateAndStripUploads, async (req, res) => {
+router.post('/post-media/:postId', uploadLimiter, verifyToken, postMediaUpload.array('files', 18), enforceFileSizeLimits, validateAndStripUploads, async (req, res) => {
   try {
     const userId = req.user.id;
     const { postId } = req.params;
@@ -1041,20 +1085,25 @@ router.post('/post-media/:postId', uploadLimiter, verifyToken, upload.array('fil
     // Images and videos alike get a content-addressed key under this post and
     // owner, so a re-sent upload is recognised as already attached instead of
     // being appended again.
+    let slots;
+    try {
+      slots = postMediaSlots(files, req.body.media);
+    } catch (error) {
+      return res.status(400).json({ error: error instanceof SyntaxError ? 'Invalid attachment pairing' : error.message });
+    }
     const pending = new Map();
-    for (const file of files) {
-      const category = s3.categorizeFile(file.mimetype);
-      if (category !== 'image' && category !== 'video') {
-        return res.status(400).json({ error: 'Post media only supports images and videos' });
-      }
-      const hash = crypto.createHash('sha256')
-        .update(JSON.stringify([category === 'image' ? 'post-image-v1' : 'post-video-v1', postId, userId, file.mimetype]))
-        .update(file.buffer).digest('hex');
-      const ext = category === 'image'
+    for (const { file, clip, category, type } of slots) {
+      const hashBuilder = crypto.createHash('sha256')
+        .update(JSON.stringify([`post-${clip ? 'live-photo' : category}-v1`, postId, userId, file.mimetype]))
+        .update(file.buffer);
+      if (clip) hashBuilder.update(clip.mimetype).update(clip.buffer);
+      const hash = hashBuilder.digest('hex');
+      const ext = category === 'document' ? 'pdf' : category === 'image'
         ? file.mimetype.split('/')[1].replace(/[^a-z0-9]/g, '')
         : POST_VIDEO_EXTENSIONS[file.mimetype];
       const key = `posts/${postId}/${userId}/media_${hash}.${ext}`;
-      pending.set(key, { file, category, url: s3.getPublicUrl(key) });
+      const clipKey = clip ? `posts/${postId}/${userId}/media_${hash}_live.${POST_VIDEO_EXTENSIONS[clip.mimetype]}` : null;
+      pending.set(key, { file, clip, clipKey, category, type, url: s3.getPublicUrl(key) });
     }
     const existingUrls = new Set(postRecord.media_urls || []);
     const remaining = [...pending.entries()].filter(([, item]) => !existingUrls.has(item.url));
@@ -1076,12 +1125,14 @@ router.post('/post-media/:postId', uploadLimiter, verifyToken, upload.array('fil
     const uploadedUrls = [];
     const uploadedTypes = [];
     const thumbnailUrls = [];
+    const liveUrls = [];
 
-    for (const [key, { file, category }] of remaining) {
+    for (const [key, { file, clip, clipKey, category, type }] of remaining) {
       const { url } = await s3.uploadToS3(file.buffer, key, file.mimetype);
 
       uploadedUrls.push(url);
-      uploadedTypes.push(category === 'video' ? 'video' : 'image');
+      uploadedTypes.push(type);
+      liveUrls.push(clip ? (await s3.uploadToS3(clip.buffer, clipKey, clip.mimetype)).url : '');
 
       // Generate resized variants (non-blocking on failure)
       let thumbnailUrl = '';
@@ -1099,10 +1150,14 @@ router.post('/post-media/:postId', uploadLimiter, verifyToken, upload.array('fil
     }
 
     const newMediaUrls = [...(postRecord.media_urls || []), ...uploadedUrls];
-    const newMediaTypes = [...(postRecord.media_types || []), ...uploadedTypes];
+    const newMediaTypes = [...(postRecord.media_urls || []).map((_, i) => postRecord.media_types?.[i] || 'image'), ...uploadedTypes];
     // Pad media_live_urls so parallel arrays stay aligned
-    const existingLiveUrls = postRecord.media_live_urls || [];
-    const newMediaLiveUrls = [...existingLiveUrls, ...uploadedUrls.map(() => '')];
+    const existing = postRecord.media_urls || [];
+    const oldLive = postRecord.media_live_urls || [];
+    let liveIndex = 0;
+    const existingLiveUrls = existing.map((_, i) => postRecord.media_types?.[i] === 'live_photo'
+      ? (oldLive.length === existing.length ? oldLive[i] : oldLive[liveIndex++]) || '' : '');
+    const newMediaLiveUrls = [...existingLiveUrls, ...liveUrls];
 
     const updatePayload = {
       media_urls: newMediaUrls,
@@ -1111,7 +1166,7 @@ router.post('/post-media/:postId', uploadLimiter, verifyToken, upload.array('fil
       updated_at: new Date().toISOString(),
     };
 
-    const newMediaThumbnails = [...(postRecord.media_thumbnails || []), ...thumbnailUrls];
+    const newMediaThumbnails = [...existing.map((_, i) => postRecord.media_thumbnails?.[i] || ''), ...thumbnailUrls];
     updatePayload.media_thumbnails = newMediaThumbnails;
 
     const { error: updateErr } = await supabaseAdmin

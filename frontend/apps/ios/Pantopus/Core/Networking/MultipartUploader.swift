@@ -338,14 +338,15 @@ public final class MultipartUploader: @unchecked Sendable {
     /// Each part uses the field name `files`, matching the web client.
     public func uploadPostMedia(
         postId: String,
-        files: [MultipartFile]
+        files: [MultipartFile],
+        media: String? = nil
     ) async throws -> PostMediaUploadResponse {
         guard !files.isEmpty else {
             throw APIError.clientError(status: 400, message: "No files provided")
         }
         let boundary = "PantopusBoundary-\(UUID().uuidString)"
         let url = environment.apiBaseURL.appendingPathComponent("/api/upload/post-media/\(postId)")
-        let body = Self.buildBody(boundary: boundary, files: files)
+        let body = Self.buildBody(boundary: boundary, files: files, fields: media.map { ["media": $0] } ?? [:])
         let (data, http) = try await performUpload(to: url, boundary: boundary, body: body)
         switch http.statusCode {
         case 200..<300:

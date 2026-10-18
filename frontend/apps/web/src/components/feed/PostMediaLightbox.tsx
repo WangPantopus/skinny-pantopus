@@ -1,24 +1,6 @@
 'use client';
 
-/**
- * Full-screen media viewer for a post's parallel media arrays.
- *
- * Lifted from the lightbox PostDetailPanel renders inline
- * (components/feed/PostDetailPanel.tsx:550-628) — same overlay, same close
- * / prev / next controls, same `<video controls autoPlay>` branch — with
- * one branch added: a Live Photo slot renders `LivePhotoTile` in its
- * replay-pill variant, which is the web analogue of the "LIVE" pill iOS
- * shows in `PostMediaViewer`
- * (Features/Shared/Media/PostMediaComponents.swift) and Android in
- * `PostMediaViewer` (ui/screens/shared/media/PostMediaComponents.kt).
- *
- * It exists as its own component because AudienceProfileClient — the public
- * Beacon page — has no PostDetailPanel to open: its posts come from
- * GET /api/personas/:handle/posts and are read-only, so there is nothing to
- * comment on or like. Rather than invent a third lightbox, both surfaces
- * should converge here; PostDetailPanel's copy is left alone for now
- * because rewiring its local `lightboxIndex` state is out of scope.
- */
+/** Shared Pulse and Beacon viewer for images, Live Photos, videos, and PDFs. */
 
 import { useCallback, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
@@ -28,7 +10,7 @@ import { resolvePostMediaSlots } from './PostMediaGrid';
 
 interface PostMediaLightboxProps {
   urls: string[];
-  /** Parallel array of media types ('image' | 'video' | 'live_photo'). */
+  /** Parallel array of media types ('image' | 'video' | 'live_photo' | 'document'). */
   mediaTypes?: string[];
   /** Parallel array of Live Photo companion clips (`media_live_urls`). */
   liveUrls?: string[];
@@ -47,7 +29,7 @@ export default function PostMediaLightbox({
   onClose,
 }: PostMediaLightboxProps) {
   const count = urls.length;
-  const isOpen = index !== null && count > 0 && index < count;
+  const isOpen = index !== null && count > 0 && index >= 0 && index < count;
 
   const step = useCallback(
     (delta: number) => {
@@ -149,12 +131,18 @@ export default function PostMediaLightbox({
             showsReplayPill
             className="h-[min(92vh,1080px)] w-[min(96vw,1920px)]"
           />
+        ) : slot.kind === 'document' ? (
+          <object key={index} data={urls[index]} type="application/pdf" aria-label="PDF document"
+            className="h-[85vh] w-[min(90vw,1100px)] bg-white rounded-lg">
+            <p className="p-6">This browser cannot display the PDF. <a href={urls[index]} target="_blank" rel="noopener noreferrer">Open PDF</a></p>
+          </object>
         ) : slot.kind === 'video' ? (
           <video
             key={index}
             src={urls[index]}
             controls
             autoPlay
+            playsInline
             className="max-h-[min(92vh,1080px)] w-auto max-w-full rounded-lg"
           />
         ) : (
