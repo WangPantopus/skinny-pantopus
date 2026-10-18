@@ -145,11 +145,13 @@ public final class BusinessProfileViewModel {
         do {
             let detail = try await loadDetail()
             let publicResponse = await loadPublic(username: detail.business.username)
+            let hours = try await loadHours(from: detail, publicResponse: publicResponse)
             let reviewsResponse = await loadReviewsAndStats()
             await loadNamedPage(username: detail.business.username)
             let content = build(
                 from: detail,
                 publicResponse: publicResponse,
+                hours: hours,
                 reviewsResponse: reviewsResponse
             )
             state = .loaded(content)
@@ -203,6 +205,23 @@ public final class BusinessProfileViewModel {
             logger.debug("Public business fetch skipped (unpublished or error): \(error)")
             return nil
         }
+    }
+
+    /// Draft businesses have no public payload. Read their saved hours through
+    /// the existing authorized endpoint instead of presenting them as unset.
+    private func loadHours(
+        from detail: BusinessDetailResponse,
+        publicResponse: BusinessPublicResponse?
+    ) async throws -> [BusinessHoursDTO] {
+        if let publicResponse { return publicResponse.hours }
+        guard detail.access?.isOwner == true || detail.access?.permissions?.contains("hours.view") == true,
+              let location = detail.profile?.primaryLocation
+              ?? detail.locations.first(where: { $0.isPrimary == true })
+              ?? detail.locations.first else { return [] }
+        let response: BusinessLocationHoursResponse = try await client.request(
+            BusinessesEndpoints.locationHours(businessId: businessId, locationId: location.id)
+        )
+        return response.hours
     }
 
     /// C4 — resolves `GET /api/b/:username/:slug` so the named custom page
@@ -288,6 +307,7 @@ extension BusinessProfileViewModel {
     private func build(
         from detail: BusinessDetailResponse,
         publicResponse: BusinessPublicResponse?,
+        hours: [BusinessHoursDTO],
         reviewsResponse: PublicProfile?
     ) -> BusinessProfileContent {
         let business = detail.business
@@ -325,7 +345,7 @@ extension BusinessProfileViewModel {
         )
 
         let scopedHours = scopedHours(
-            from: publicResponse?.hours ?? [],
+            from: hours,
             primaryLocationId: primaryLocation?.id
         )
         let status = computeOpenState(scopedHours, now: now, calendar: calendar)

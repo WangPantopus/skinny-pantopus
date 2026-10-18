@@ -61,7 +61,7 @@ struct ConfirmStep: View {
         rows.append(
             ReviewSummaryRow(
                 label: "Hours",
-                value: viewModel.hasLocation && !viewModel.hoursSkipped ? "Weekday defaults" : "Not set"
+                value: hoursSummary
             )
         )
         rows.append(
@@ -71,5 +71,14 @@ struct ConfirmStep: View {
             )
         )
         return rows
+    }
+
+    private var hoursSummary: String {
+        guard viewModel.hasLocation, !viewModel.hoursSkipped else { return "Not set" }
+        let rows = viewModel.hours.map { day in
+            let time = day.isClosed ? "Closed" : "\(day.openTime)–\(day.closeTime)"
+            return "\(day.shortLabel): \(time)"
+        }
+        return rows.joined(separator: "\n")
     }
 }

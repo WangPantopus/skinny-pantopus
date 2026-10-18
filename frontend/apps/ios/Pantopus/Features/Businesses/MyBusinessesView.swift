@@ -32,7 +32,7 @@ struct MyBusinessesView: View {
         .navigationBarTitleDisplayMode(.inline)
         .accessibilityIdentifier("myBusinessesContainer")
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
-        .task { await viewModel.load() }
+        .task { await viewModel.refresh() }
         .onAppear { Analytics.track(.screenMyBusinessesViewed) }
     }
 

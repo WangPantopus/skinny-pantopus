@@ -13,7 +13,7 @@ import SwiftUI
 public struct CreateBusinessWizardView: View {
     @State private var viewModel: CreateBusinessWizardViewModel
     @State private var createdBusinessId: String?
-    @State private var showsLogoWarning = false
+    @State private var showsCreationWarning = false
     private let onClose: @MainActor () -> Void
     private let onOpenBusiness: @MainActor (String) -> Void
 
@@ -46,14 +46,14 @@ public struct CreateBusinessWizardView: View {
                 stepName: viewModel.currentStep.rawValue
             ))
         }
-        .alert("Business created", isPresented: $showsLogoWarning) {
+        .alert("Business created", isPresented: $showsCreationWarning) {
             Button("Open business") {
                 guard let businessId = createdBusinessId else { return }
                 createdBusinessId = nil
                 onOpenBusiness(businessId)
             }
         } message: {
-            Text(viewModel.logoUploadWarning ?? "")
+            Text(viewModel.creationWarning ?? "")
         }
         .accessibilityIdentifier("createBusinessWizard")
     }
@@ -82,9 +82,9 @@ public struct CreateBusinessWizardView: View {
         case .dismiss:
             onClose()
         case let .openBusinessDashboard(businessId):
-            if viewModel.logoUploadWarning != nil {
+            if viewModel.creationWarning != nil {
                 createdBusinessId = businessId
-                showsLogoWarning = true
+                showsCreationWarning = true
             } else {
                 onOpenBusiness(businessId)
             }

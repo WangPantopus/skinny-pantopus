@@ -59,10 +59,14 @@ final class CreateBusinessWizardViewModel: WizardModel {
     // Logo (step 3, uploaded after create — the route needs a business id).
     private(set) var logoPick: CreateBusinessLogoPick?
     private(set) var logoSkipped: Bool = false
-    /// Set when create succeeded but the logo upload didn't. RN swallows the
-    /// same failure ("Non-critical — user can upload from dashboard"); we
-    /// surface it as a banner instead of silently dropping the image.
+    /// Acknowledged before leaving the wizard when creation only partly succeeds.
     private(set) var logoUploadWarning: String?
+    private(set) var publishWarning: String?
+
+    var creationWarning: String? {
+        let warnings = [logoUploadWarning, publishWarning].compactMap { $0 }
+        return warnings.isEmpty ? nil : warnings.joined(separator: "\n\n")
+    }
 
     var pendingEvent: CreateBusinessOutboundEvent?
 
@@ -444,6 +448,7 @@ final class CreateBusinessWizardViewModel: WizardModel {
         isCreating = true
         submitError = nil
         logoUploadWarning = nil
+        publishWarning = nil
 
         let locationPayload: CreateBusinessLocationPayload? = hasLocation
             ? CreateBusinessLocationPayload(
@@ -522,9 +527,8 @@ final class CreateBusinessWizardViewModel: WizardModel {
         }
     }
 
-    /// Flip the freshly-created profile live. RN does the same immediately
-    /// after create (`src/app/businesses/new.tsx:244-251`) and treats a
-    /// failure as "still created as draft".
+    /// Creation has already succeeded, so a publish failure must not prompt
+    /// another create. A timeout may happen after publication committed.
     private func publishCreatedBusiness(businessId: String) async {
         do {
             _ = try await api.request(
@@ -532,6 +536,8 @@ final class CreateBusinessWizardViewModel: WizardModel {
                 as: BusinessMutationMessageResponse.self
             )
         } catch {
+            publishWarning = "Your business was created, but publishing couldn't be confirmed. "
+                + "Check its status from the dashboard and try publishing again if it's still a draft."
             logger.error("publish after create failed", metadata: [
                 "error": .string(String(describing: error))
             ])
