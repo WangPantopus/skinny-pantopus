@@ -321,8 +321,8 @@ public final class EditBusinessPageViewModel {
             toastMessage = "Published"
             return
         }
-        if case let .setup(_, _, remaining, _) = content.mode, remaining > 0 {
-            toastMessage = "Finish the remaining sections before publishing."
+        if content.publishRequirementsRemaining > 0 {
+            toastMessage = "Add a business name and category before publishing."
             return
         }
         let saved = await persist(successToast: nil)

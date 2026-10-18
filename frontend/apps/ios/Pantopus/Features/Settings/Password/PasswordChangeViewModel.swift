@@ -11,7 +11,7 @@
 //
 //  Beyond the original three-field form, the reshape adds:
 //  - a live `PasswordStrength` for the new password (drives `StrengthMeter`),
-//  - breach detection against a small sample list of common passwords
+//  - validation against a small list of common passwords
 //    (HIBP is out of scope — see `commonPasswords`),
 //  - a form-level error banner (`FormBannerContent`) shown after the server
 //    rejects a submit,
@@ -21,7 +21,7 @@
 //  - current required when `hasPassword == true`
 //  - new ≥ `minPasswordLength` chars (matches `PASSWORD_MIN_LENGTH` = 12 in
 //    users.js)
-//  - new not on the breach list
+//  - new not on the common-password list
 //  - new ≠ current (server also enforces; we catch early for clarity)
 //  - confirm == new
 //
@@ -56,6 +56,7 @@ public final class PasswordChangeViewModel {
     public private(set) var formState: FormState = .loading
     public private(set) var hasPassword: Bool = true
     public private(set) var isSaving: Bool = false
+    public private(set) var isRequestingReset = false
     public var fields: [FieldKey: FormFieldState] = [
         .current: FormFieldState(id: "current", originalValue: ""),
         .new: FormFieldState(id: "new", originalValue: ""),
@@ -93,9 +94,7 @@ public final class PasswordChangeViewModel {
     /// `backend/routes/users.js`). Also the `12+ characters` strength rule.
     public static let minPasswordLength = 12
 
-    /// Sample list of breached/common passwords. A real integration would
-    /// check Have I Been Pwned's k-anonymity range API; that is out of scope,
-    /// so we ship a hardcoded list good enough to demo the breach state.
+    /// Local common-password list. This does not establish breach exposure.
     static let commonPasswords: Set<String> = [
         "password", "password1", "password123", "12345678", "123456789",
         "qwerty123", "qwertyuiop", "letmein123", "iloveyou1", "admin123",
@@ -110,9 +109,9 @@ public final class PasswordChangeViewModel {
         fields[key]?.value ?? ""
     }
 
-    /// True when the new password matches an entry on the breach list. Drives
-    /// both the per-field error and the `StrengthMeter` breach overlay.
-    public var isNewPasswordBreached: Bool {
+    /// True when the new password matches the local common-password list.
+    /// It must not be passed off as evidence from a breach provider.
+    public var isNewPasswordCommon: Bool {
         let candidate = value(.new)
         guard !candidate.isEmpty else { return false }
         return Self.commonPasswords.contains(candidate.lowercased())
@@ -120,7 +119,7 @@ public final class PasswordChangeViewModel {
 
     /// Live strength for the new password, feeding `StrengthMeter`.
     public var strength: PasswordStrength {
-        PasswordStrength.evaluate(value(.new), breached: isNewPasswordBreached)
+        PasswordStrength.evaluate(value(.new))
     }
 
     /// Current field reads "valid" (green check) once it carries a value and
@@ -134,7 +133,7 @@ public final class PasswordChangeViewModel {
         let newValue = value(.new)
         return !newValue.isEmpty
             && newValue.count >= Self.minPasswordLength
-            && !isNewPasswordBreached
+            && !isNewPasswordCommon
             && fields[.new]?.error == nil
     }
 
@@ -150,7 +149,7 @@ public final class PasswordChangeViewModel {
     public var isValid: Bool {
         let newValue = value(.new)
         guard newValue.count >= Self.minPasswordLength else { return false }
-        guard !isNewPasswordBreached else { return false }
+        guard !isNewPasswordCommon else { return false }
         guard value(.confirm) == newValue else { return false }
         guard !requiresCurrent || !value(.current).isEmpty else { return false }
         if requiresCurrent, value(.current) == newValue { return false }
@@ -213,11 +212,29 @@ public final class PasswordChangeViewModel {
         }
     }
 
-    /// Stub for the "Email me a reset link instead" shortcut on the current
-    /// field. A real implementation would POST to the password-reset route;
-    /// for now we acknowledge the request so the affordance is wired.
-    public func requestResetLink() {
-        toast = "We'll email you a reset link."
+    /// Reuse the normal reset endpoint; only acknowledge an accepted request.
+    public func requestResetLink() async {
+        guard !isRequestingReset, !isSaving else { return }
+        guard let email = accountEmail, !email.isEmpty else {
+            formError = FormBannerContent(
+                title: "Couldn't request reset link",
+                message: "Sign in again so we can confirm your email address."
+            )
+            return
+        }
+        isRequestingReset = true
+        formError = nil
+        toast = nil
+        defer { isRequestingReset = false }
+        do {
+            _ = try await api.request(AuthEndpoints.forgotPassword(email: email), as: AuthMessageResponse.self)
+            toast = "If this email is registered, a reset link is on its way."
+        } catch {
+            formError = FormBannerContent(
+                title: "Couldn't request reset link",
+                message: (error as? APIError)?.errorDescription ?? "Please try again."
+            )
+        }
     }
 
     public func acknowledgeDismiss() {
@@ -232,10 +249,7 @@ public final class PasswordChangeViewModel {
 
     private static let standardBanner = FormBannerContent(
         title: "Couldn't update password",
-        // Sample copy mirroring the design frame. The "two fields" / "three
-        // attempts" counts are static until the backend returns a real
-        // rate-limit signal.
-        message: "Fix the two highlighted fields and try again. Three more attempts before a 15-minute cooldown."
+        message: "Check the highlighted details and try again."
     )
 
     private func inlineError(for key: FieldKey, value: String) -> String? {
@@ -248,7 +262,7 @@ public final class PasswordChangeViewModel {
         case .new:
             if value.isEmpty { return nil }
             if Self.commonPasswords.contains(value.lowercased()) {
-                return "Too common — appeared in 2.3M public records."
+                return "This password is too common. Choose a less predictable one."
             }
             if value.count < Self.minPasswordLength {
                 return "At least \(Self.minPasswordLength) characters"

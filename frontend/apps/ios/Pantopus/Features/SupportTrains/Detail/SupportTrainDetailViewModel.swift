@@ -485,7 +485,7 @@ extension SupportTrainDetailViewModel {
                 contactlessPreferred: dto.contactlessPreferred ?? false
             ),
             viewerRole: viewerRole(dto),
-            exactAddress: dto.address?.singleLineLabel.isEmpty == false
+            exactAddress: dto.address?.address?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
                 ? dto.address?.singleLineLabel
                 : nil,
             deliveryInstructions: dto.deliveryInstructions,

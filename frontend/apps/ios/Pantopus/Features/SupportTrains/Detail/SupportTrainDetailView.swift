@@ -229,6 +229,14 @@ public struct SupportTrainDetailView: View {
                     if let address = content.exactAddress {
                         overline("Delivery address")
                         exactAddressCard(address, instructions: content.deliveryInstructions)
+                    } else if content.viewerRole != .viewer {
+                        overline("Delivery address")
+                        Text(content.viewerRole.isOrganizer
+                            ? "No delivery address is available for this train. Coordinate delivery details with your helpers."
+                            : "Delivery details aren't available yet. Contact the organizer before heading out.")
+                            .pantopusTextStyle(.body)
+                            .foregroundStyle(Theme.Color.appTextSecondary)
+                            .accessibilityIdentifier("supportTrainAddressUnavailable")
                     }
 
                     HostedByRow(content: content.hostedBy, onMessageHost: messageHostAction(content))

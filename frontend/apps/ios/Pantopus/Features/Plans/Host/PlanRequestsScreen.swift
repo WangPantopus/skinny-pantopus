@@ -18,6 +18,8 @@ final class PlanRequestsViewModel {
     private(set) var plan: PlanDetailDTO?
     private(set) var requests: PlanRequestsResponse?
     private(set) var loadFailed = false
+    private(set) var loadError: String?
+    private var isLoading = false
     private(set) var working: Set<String> = []
     var error: String?
     /// "Accepted. They're in." after an answer (as Android's toast).
@@ -34,12 +36,25 @@ final class PlanRequestsViewModel {
     }
 
     func load() async {
-        async let detail = try? PlansStoreReads.detail(id: planId)
-        async let list = try? PlansStoreReads.requests(planId: planId)
-        let (loadedPlan, loadedRequests) = await (detail, list)
-        if let loadedPlan { plan = loadedPlan }
-        if let loadedRequests { requests = loadedRequests }
-        loadFailed = loadedRequests == nil && requests == nil
+        guard !isLoading else { return }
+        isLoading = true
+        defer { isLoading = false }
+        // Requests are sensitive and actionable: never leave an old roster
+        // available while access and current availability are being rechecked.
+        plan = nil
+        requests = nil
+        loadFailed = false
+        loadError = nil
+        do {
+            async let detail = PlansStoreReads.detail(id: planId)
+            async let list = PlansStoreReads.requests(planId: planId)
+            let (loadedPlan, loadedRequests) = try await (detail, list)
+            plan = loadedPlan
+            requests = loadedRequests
+        } catch {
+            loadFailed = true
+            loadError = PlanErrors.sentence(for: error)
+        }
     }
 
     func accept(_ request: PlanRequestViewDTO, confirmedSharing: Bool) async {
@@ -225,6 +240,10 @@ struct PlanRequestsScreen: View {
                 )
             }
         } else if viewModel.loadFailed {
+            Text(viewModel.loadError ?? "Couldn't load requests. Try again.")
+                .planFont(.small)
+                .foregroundStyle(Theme.Color.error)
+                .fixedSize(horizontal: false, vertical: true)
             Button("Try again") { Task { await viewModel.load() } }.planButton(.secondary, size: .small)
         } else {
             Shimmer(width: nil, height: 140, cornerRadius: Radii.xl2)
@@ -232,10 +251,9 @@ struct PlanRequestsScreen: View {
     }
 
     @ViewBuilder private var waitlist: some View {
-        let waiting = viewModel.requests?.waitlisted ?? []
-        if waiting.isEmpty {
+        if let waiting = viewModel.requests?.waitlisted, waiting.isEmpty {
             Text("Waitlist: nobody yet").planFont(.caption).foregroundStyle(Theme.Color.appTextSecondary)
-        } else {
+        } else if let waiting = viewModel.requests?.waitlisted {
             VStack(alignment: .leading, spacing: Spacing.s3) {
                 Text.planOverline("Waitlist")
                 ForEach(waiting) { request in

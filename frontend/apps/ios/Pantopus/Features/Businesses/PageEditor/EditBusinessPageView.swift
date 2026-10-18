@@ -262,7 +262,7 @@ public struct EditBusinessPageLoadedView: View {
     private var stickyMode: EditBusinessStickySaveMode {
         switch content.mode {
         case let .published(count, _): .dirty(count: count)
-        case let .setup(_, _, remaining, _): .setup(remaining: remaining)
+        case .setup: .setup(remaining: content.publishRequirementsRemaining)
         }
     }
 
