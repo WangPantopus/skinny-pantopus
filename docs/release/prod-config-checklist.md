@@ -775,8 +775,8 @@ The checked-in production deploy configuration now leaves **all schedules
 disabled**. Activation is a separate, explicit parameter change.
 Paused jobs do not reserve Lambda concurrency. Before activation, check
 `aws lambda get-account-settings --region us-west-2`: the account must have
-capacity for one reserved briefing invocation (and a second for home reminders
-when all jobs are enabled), above AWS's required unreserved floor. The October
+capacity for one reserved briefing invocation (and one each for home reminders
+and the content poster when all jobs are enabled), above AWS's required unreserved floor. The October
 17 account limit was only 10, with all 10 required to remain unreserved; AWS
 rejected reserving even one invocation. A quota increase is required before
 activation. Keep the single-run safeguards; do not remove them to bypass the

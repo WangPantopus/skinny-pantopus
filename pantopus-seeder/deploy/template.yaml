@@ -100,7 +100,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub pantopus-seeder-poster-${Environment}
-      ReservedConcurrentExecutions: 1
+      ReservedConcurrentExecutions: !If [RunSchedules, 1, !Ref 'AWS::NoValue']
       Handler: src.handlers.poster.handler
       Description: !Sub 'Selects, humanizes, and posts content from the seeder queue [${Environment}]'
       CodeUri: ../build/
