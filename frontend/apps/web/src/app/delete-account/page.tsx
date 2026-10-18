@@ -53,6 +53,7 @@ export default function DeleteAccountPage() {
               'Finish or cancel any task that is in progress, including tasks you’re helping with.',
               'Let any payment that is still being processed or held finish.',
               'If you own a home where other people still live, hand ownership to one of them first.',
+              'Delete your businesses, or transfer ownership and leave each business, before deleting your personal account.',
               `If your account has payment history, contact ${SUPPORT_EMAIL} to close it. We keep records of completed payments where the law requires it.`,
             ]} />
           </PolicySection>

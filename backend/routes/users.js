@@ -5301,6 +5301,10 @@ const ACCOUNT_DELETE_OTHER_ROWS = [
   { table: 'seeder_config', column: 'curator_user_id' },
 ];
 const pairNames = (list) => list.map(({ table, column }) => `${table}.${column}`);
+const businessOwnershipRequired = {
+  error: 'Before deleting your account, delete your businesses or transfer ownership and leave each business.',
+  code: 'BUSINESS_OWNERSHIP_REQUIRED',
+};
 
 router.delete('/account', verifyToken, requireStepUp('delete_account'), requireStrongestStepUpForDeletion, async (req, res) => {
   const userId = req.user.id;
@@ -5308,6 +5312,34 @@ router.delete('/account', verifyToken, requireStepUp('delete_account'), requireS
 
   try {
     // ── 1. Pre-checks ────────────────────────────────────────────
+    // Business accounts have no login of their own. Deleting an owner only
+    // cascades their membership, leaving the business public and unmanaged.
+    // Require an explicit handoff/leave or business deletion first, including
+    // drafts. BusinessTeam is the canonical ownership source during the seat
+    // migration; retired businesses have account_type='individual'.
+    try {
+      const { data: ownerships, error: ownershipError } = await supabaseAdmin
+        .from('BusinessTeam')
+        .select('business_user_id')
+        .eq('user_id', userId)
+        .eq('role_base', 'owner')
+        .eq('is_active', true);
+      if (ownershipError) throw ownershipError;
+      if (ownerships?.length) {
+        const { data: businesses, error: businessError } = await supabaseAdmin
+          .from('User')
+          .select('id')
+          .in('id', ownerships.map((membership) => membership.business_user_id))
+          .eq('account_type', 'business')
+          .limit(1);
+        if (businessError) throw businessError;
+        if (businesses?.length) return res.status(409).json(businessOwnershipRequired);
+      }
+    } catch (err) {
+      logger.warn('Account deletion ownership check unavailable', { userId, code: err.code });
+      return res.status(503).json({ error: 'Account deletion is temporarily unavailable. Please try again.', code: 'ACCOUNT_DELETE_UNAVAILABLE' });
+    }
+
     // Block deletion if user has gigs currently in progress
     const { data: activeGigs, error: activeGigsError } = await supabaseAdmin
       .from('Gig')
@@ -5451,6 +5483,9 @@ router.delete('/account', verifyToken, requireStepUp('delete_account'), requireS
       logger.info('Account deletion refused before any change', {
         userId, sqlstate: dryRun.sqlstate, table: dryRun.table, constraint: dryRun.constraint,
       });
+      if (dryRun.constraint === 'account_deletion_business_ownership') {
+        return res.status(409).json(businessOwnershipRequired);
+      }
       // Constraint, check and guard failures mean records that must stay;
       // anything else (a lock timeout, say) is worth a retry.
       if (!/^(23|P0)/.test(String(dryRun.sqlstate || ''))) {
