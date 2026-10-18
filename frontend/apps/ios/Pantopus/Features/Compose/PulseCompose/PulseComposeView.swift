@@ -8,8 +8,8 @@
 //  submit through `PulseComposeViewModel`.
 //
 
-import PhotosUI
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Entry point for the Pulse compose flow. The `intent` argument
 /// pre-selects which sub-form renders below the intent picker. Pass a
@@ -18,7 +18,8 @@ import SwiftUI
 /// submit pipeline switches to `PATCH /api/posts/:id`.
 public struct PulseComposeView: View {
     @State private var viewModel: PulseComposeViewModel
-    @State private var photosPickerSelection: [PhotosPickerItem] = []
+    @State private var showsDocumentPicker = false
+    @State private var isLoadingMedia = false
     @State private var showsPhotosPicker = false
     @State private var showsPlacePicker = false
     @Environment(\.dismiss) private var dismiss
@@ -78,7 +79,7 @@ public struct PulseComposeView: View {
         FormShell(
             title: viewModel.displayTitle,
             rightActionLabel: viewModel.ctaLabel,
-            isValid: viewModel.isValid,
+            isValid: viewModel.isValid && !isLoadingMedia,
             isDirty: viewModel.isDirty,
             isSaving: viewModel.isSubmitting,
             onClose: closeCompose,
@@ -91,14 +92,34 @@ public struct PulseComposeView: View {
         )
         .formShakeOnChange(of: viewModel.shakeTrigger)
         .accessibilityIdentifier("composePulseShell")
-        .photosPicker(
-            isPresented: $showsPhotosPicker,
-            selection: $photosPickerSelection,
-            maxSelectionCount: pulseComposeMaxPhotos,
-            matching: .images
-        )
-        .onChange(of: photosPickerSelection) { _, newItems in
-            handlePicked(newItems)
+        .sheet(isPresented: $showsPhotosPicker, onDismiss: { isLoadingMedia = false }, content: {
+            PulseMediaPicker(limit: pulseComposeMaxPhotos - viewModel.photos.count) { media, error in
+                media.forEach { viewModel.append(photo: $0) }
+                if let error { viewModel.toast = ToastMessage(text: error, kind: .error) }
+                isLoadingMedia = false
+                showsPhotosPicker = false
+            }
+            .interactiveDismissDisabled()
+        })
+        .fileImporter(isPresented: $showsDocumentPicker, allowedContentTypes: [.pdf], allowsMultipleSelection: true) { result in
+            defer { isLoadingMedia = false }
+            do {
+                for url in try result.get().prefix(pulseComposeMaxPhotos - viewModel.photos.count) {
+                    let access = url.startAccessingSecurityScopedResource()
+                    defer { if access { url.stopAccessingSecurityScopedResource() } }
+                    let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+                    guard size > 0, size <= 25 * 1024 * 1024 else { throw URLError(.dataLengthExceedsMaximum) }
+                    try viewModel.append(photo: PulseComposePhoto(
+                        data: Data(contentsOf: url),
+                        mimeType: "application/pdf",
+                        filename: "document.pdf"
+                    ))
+                }
+            } catch {
+                viewModel.toast = ToastMessage(text: "Couldn't load that PDF. Choose a PDF under 25 MB.", kind: .error)
+            }
+        } onCancellation: {
+            isLoadingMedia = false
         }
         .sheet(isPresented: $showsPlacePicker) {
             PlacePickerSheet(
@@ -198,37 +219,18 @@ public struct PulseComposeView: View {
             onSelectDealExpires: { viewModel.dealExpiresAt = $0 },
             onUpdateField: { viewModel.update($0, to: $1) },
             fieldValue: { viewModel.fields[$0]?.value ?? "" },
-            onPickPhotos: { showsPhotosPicker = true },
+            onPickPhotos: { isLoadingMedia = true
+                showsPhotosPicker = true
+            },
+            onPickDocuments: { isLoadingMedia = true
+                showsDocumentPicker = true
+            },
             onRemovePhoto: { viewModel.remove(photo: $0) },
             onBodyEditingEnded: { Task { await viewModel.runPrecheck() } },
             onDismissPrecheckNudge: { viewModel.precheckNudge = nil },
             onAddLocation: { showsPlacePicker = true },
             onClearLocation: { viewModel.clearPlaceTag() }
         )
-    }
-
-    private func handlePicked(_ items: [PhotosPickerItem]) {
-        guard !items.isEmpty else { return }
-        Task {
-            var loaded: [PulseComposePhoto] = []
-            for item in items.prefix(pulseComposeMaxPhotos) {
-                if let data = try? await item.loadTransferable(type: Data.self) {
-                    // Off-main, failure-silent EXIF read. The capture
-                    // location is ONLY a local place-picker anchor —
-                    // it is never attached to the outgoing post.
-                    let capture = await MediaLocationExtractor.imageLocation(from: data)
-                    loaded.append(PulseComposePhoto(
-                        data: data,
-                        capturedLatitude: capture?.latitude,
-                        capturedLongitude: capture?.longitude
-                    ))
-                }
-            }
-            await MainActor.run {
-                viewModel.setPhotos(loaded)
-                photosPickerSelection = []
-            }
-        }
     }
 }
 

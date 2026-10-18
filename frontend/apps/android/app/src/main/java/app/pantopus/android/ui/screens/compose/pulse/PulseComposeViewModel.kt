@@ -27,6 +27,7 @@ import app.pantopus.android.data.network.NetworkMonitor
 import app.pantopus.android.data.posts.PostPrecheckRepository
 import app.pantopus.android.data.posts.PostsRepository
 import app.pantopus.android.data.posts.PulsePostsRefreshNotifier
+import app.pantopus.android.data.upload.UploadFile
 import app.pantopus.android.data.upload.UploadRepository
 import app.pantopus.android.ui.screens.compose.placepicker.MediaCaptureLocation
 import app.pantopus.android.ui.screens.compose.placepicker.PostPlaceTag
@@ -181,6 +182,7 @@ data class PulseComposePhoto(
     val data: ByteArray,
     val capturedLatitude: Double? = null,
     val capturedLongitude: Double? = null,
+    val mimeType: String = "image/jpeg",
 ) {
     override fun equals(other: Any?): Boolean = other is PulseComposePhoto && other.id == id
 
@@ -643,6 +645,14 @@ class PulseComposeViewModel
                     if (lat != null && lng != null) MediaCaptureLocation(latitude = lat, longitude = lng) else null
                 }
 
+        fun attachmentReadFailed() {
+            _toast.value =
+                PulseComposeToast(
+                    "Couldn't read an attachment. Photos must be under 10 MB, videos under 100 MB, and PDFs under 25 MB.",
+                    isError = true,
+                )
+        }
+
         fun setPhotos(photos: List<PulseComposePhoto>) {
             _photos.value = photos.take(PULSE_COMPOSE_MAX_PHOTOS)
         }
@@ -836,14 +846,14 @@ class PulseComposeViewModel
             if (postId == null || _photos.value.isEmpty()) {
                 return (if (isEditing) "Saved" else "Posted") to false
             }
-            return when (uploadRepo.uploadPostMedia(postId, _photos.value.map { it.data })) {
+            return when (uploadRepo.uploadPostMediaFiles(postId, _photos.value.map { UploadFile("attachment", it.mimeType, it.data) })) {
                 is NetworkResult.Success -> (if (isEditing) "Saved" else "Posted") to false
                 is NetworkResult.Failure ->
                     (
                         if (isEditing) {
-                            "Saved. Photos could not be confirmed. Try again."
+                            "Saved. Attachments could not be confirmed. Try again."
                         } else {
-                            "Post saved. Photos could not be confirmed. Try again."
+                            "Post saved. Attachments could not be confirmed. Try again."
                         }
                     ) to true
             }

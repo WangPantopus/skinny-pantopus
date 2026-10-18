@@ -80,7 +80,7 @@ function postFormReducer(state: PostFormState, action: PostFormAction): PostForm
     case 'RESET':
       return INITIAL_STATE;
     case 'ADD_MEDIA':
-      return { ...state, mediaFiles: [...state.mediaFiles, ...action.files].slice(0, 10) };
+      return { ...state, mediaFiles: [...state.mediaFiles, ...action.files].slice(0, 9) };
     case 'REMOVE_MEDIA':
       return { ...state, mediaFiles: state.mediaFiles.filter((_, i) => i !== action.index) };
     case 'DISMISS_PRECHECK':

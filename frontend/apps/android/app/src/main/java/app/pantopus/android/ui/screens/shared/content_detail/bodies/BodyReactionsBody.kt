@@ -67,6 +67,7 @@ import app.pantopus.android.ui.screens.shared.content_detail.headers.PostIntent
 import app.pantopus.android.ui.screens.shared.media.PostMediaGridStyle
 import app.pantopus.android.ui.screens.shared.media.PostMediaGridWithViewer
 import app.pantopus.android.ui.screens.shared.media.PostMediaItem
+import app.pantopus.android.ui.screens.shared.media.postLinkedText
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -184,7 +185,7 @@ fun BodyReactionsBody(
     ) {
         if (body.isNotEmpty()) {
             Text(
-                text = body,
+                text = postLinkedText(body),
                 fontSize = 15.sp,
                 color = PantopusColors.appText,
                 lineHeight = 22.sp,

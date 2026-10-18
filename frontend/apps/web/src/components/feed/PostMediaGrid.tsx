@@ -5,7 +5,7 @@ import LivePhotoTile from './LivePhotoTile';
 
 /** What the tile at a given slot renders as. */
 export interface PostMediaSlot {
-  kind: 'image' | 'video' | 'live';
+  kind: 'image' | 'video' | 'live' | 'document';
   /** Companion clip — non-empty only when `kind === 'live'`. */
   liveUrl: string;
 }
@@ -36,6 +36,7 @@ export function resolvePostMediaSlots(
   let liveCursor = 0;
   return urls.map((_, i): PostMediaSlot => {
     const type = (mediaTypes?.[i] ?? '').trim().toLowerCase();
+    if (type === 'document') return { kind: 'document', liveUrl: '' };
     if (type === 'video') return { kind: 'video', liveUrl: '' };
     if (type !== 'live_photo') return { kind: 'image', liveUrl: '' };
     const clip = (liveIsAligned ? live[i] : live[liveCursor++]) ?? '';
@@ -88,7 +89,6 @@ function VideoPlayOverlay() {
 export default function PostMediaGrid({ urls, thumbnailUrls, mediaTypes, liveUrls, onPress, compact = false }: PostMediaGridProps) {
   if (!urls || urls.length === 0) return null;
 
-  const displayUrls = urls.map((url, i) => thumbnailUrls?.[i] || url);
   const slots = resolvePostMediaSlots(urls, mediaTypes, liveUrls);
 
   // Single image — aspect-video
@@ -110,8 +110,7 @@ export default function PostMediaGrid({ urls, thumbnailUrls, mediaTypes, liveUrl
         ) : (
           <button type="button" onClick={() => onPress?.(0)} className="w-full block">
             <div className="relative aspect-[4/3] rounded-xl overflow-hidden bg-app-surface-sunken">
-              <FeedMediaImage src={displayUrls[0]} alt="" className="w-full h-full object-cover" loading="lazy" />
-              {slots[0].kind === 'video' && <VideoPlayOverlay />}
+              <PostMediaPreview url={urls[0]} thumbnailUrl={thumbnailUrls?.[0]} slot={slots[0]} />
             </div>
           </button>
         )}
@@ -156,8 +155,7 @@ export default function PostMediaGrid({ urls, thumbnailUrls, mediaTypes, liveUrl
               }
               return (
                 <button key={i} type="button" onClick={() => onPress?.(i)} className={cellClass}>
-                  <FeedMediaImage src={displayUrls[i]} alt="" className="w-full h-full object-cover" loading="lazy" />
-                  {slots[i].kind === 'video' && <VideoPlayOverlay />}
+                  <PostMediaPreview url={urls[i]} thumbnailUrl={thumbnailUrls?.[i]} slot={slots[i]} />
                   {overflowIndicator}
                 </button>
               );
@@ -167,4 +165,25 @@ export default function PostMediaGrid({ urls, thumbnailUrls, mediaTypes, liveUrl
       })}
     </div>
   );
+}
+
+/** A preview that fits the caller's existing tile geometry. */
+export function PostMediaPreview({ url, thumbnailUrl, slot, onPress, imageClassName }: {
+  url: string; thumbnailUrl?: string; slot: PostMediaSlot; onPress?: () => void; imageClassName?: string;
+}) {
+  if (slot.kind === 'document') return (
+    <div className="flex h-full min-h-32 w-full items-center justify-center bg-app-surface-sunken text-app-text" aria-label="PDF document">
+      PDF · Tap to read
+    </div>
+  );
+  if (slot.kind === 'live') return (
+    <LivePhotoTile stillUrl={url} thumbnailUrl={thumbnailUrl} videoUrl={slot.liveUrl} onPress={onPress} className="absolute inset-0 h-full w-full" />
+  );
+  if (slot.kind === 'video') return (
+    <div className="relative h-full min-h-32 w-full bg-gray-900" aria-label="Video">
+      {thumbnailUrl && <FeedMediaImage src={thumbnailUrl} alt="" className="h-full w-full object-cover" loading="lazy" />}
+      <VideoPlayOverlay />
+    </div>
+  );
+  return <FeedMediaImage src={thumbnailUrl || url} alt="" className={imageClassName ?? "h-full w-full object-cover"} loading="lazy" />;
 }
