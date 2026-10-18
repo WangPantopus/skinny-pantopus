@@ -10,9 +10,10 @@
 
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
+const { GeoCache } = require('../utils/geoCache');
 
 const CACHE_TTL_MS = 60_000; // 60 seconds
-const cache = new Map(); // key: "uuid1:uuid2" (sorted) → { blocked: bool, expiresAt: number }
+const cache = new GeoCache(5000); // sorted user pair → blocked boolean
 let revision = 0;
 
 function blockCheckUnavailable() {
@@ -33,8 +34,8 @@ async function isBlocked(userId1, userId2) {
 
   const key = cacheKey(String(userId1), String(userId2));
   const cached = cache.get(key);
-  if (cached && cached.expiresAt > Date.now()) {
-    return cached.blocked;
+  if (cached !== undefined) {
+    return cached;
   }
 
   // A block/unblock can complete while the query is in flight. Never publish
@@ -56,7 +57,7 @@ async function isBlocked(userId1, userId2) {
 
       if (started !== revision) continue;
       const blocked = count > 0;
-      cache.set(key, { blocked, expiresAt: Date.now() + CACHE_TTL_MS });
+      cache.set(key, blocked, CACHE_TTL_MS);
       return blocked;
     } catch (err) {
       logger.error('[blockService] isBlocked error', { error: err.message });
