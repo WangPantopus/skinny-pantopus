@@ -54,6 +54,7 @@ struct PulseMediaPicker: UIViewControllerRepresentable {
     }
 }
 
+@MainActor
 private enum PulsePickedMedia {
     static func load(_ provider: NSItemProvider) async throws -> PulseComposePhoto {
         if provider.canLoadObject(ofClass: PHLivePhoto.self) {

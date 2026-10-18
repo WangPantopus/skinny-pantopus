@@ -646,10 +646,11 @@ class PulseComposeViewModel
                 }
 
         fun attachmentReadFailed() {
-            _toast.value = PulseComposeToast(
-                "Couldn't read an attachment. Photos must be under 10 MB, videos under 100 MB, and PDFs under 25 MB.",
-                isError = true,
-            )
+            _toast.value =
+                PulseComposeToast(
+                    "Couldn't read an attachment. Photos must be under 10 MB, videos under 100 MB, and PDFs under 25 MB.",
+                    isError = true,
+                )
         }
 
         fun setPhotos(photos: List<PulseComposePhoto>) {

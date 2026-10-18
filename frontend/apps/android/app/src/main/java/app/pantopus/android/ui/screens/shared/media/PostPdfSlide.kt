@@ -40,6 +40,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
+import java.util.UUID
 import java.util.concurrent.TimeUnit
 
 private val postPdfClient = OkHttpClient.Builder().callTimeout(30, TimeUnit.SECONDS).build()
@@ -48,7 +49,7 @@ private val postPdfClient = OkHttpClient.Builder().callTimeout(30, TimeUnit.SECO
 @Composable
 internal fun PostPdfSlide(url: String) {
     val context = LocalContext.current
-    val file = remember(url) { File.createTempFile("pulse-pdf-", ".pdf", context.cacheDir) }
+    val file = remember(url) { File(context.cacheDir, "pulse-pdf-${UUID.randomUUID()}.pdf") }
     var pages by remember(url) { mutableIntStateOf(0) }
     var page by remember(url) { mutableIntStateOf(0) }
     var bitmap by remember(url) { mutableStateOf<Bitmap?>(null) }
@@ -83,7 +84,10 @@ internal fun PostPdfSlide(url: String) {
                             }
                         }
                     }
-                    PdfRenderer(ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)).use { it.pageCount }
+                    PdfRenderer(ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)).use {
+                        require(it.pageCount > 0)
+                        it.pageCount
+                    }
                 }
         } catch (cancelled: CancellationException) {
             file.delete()

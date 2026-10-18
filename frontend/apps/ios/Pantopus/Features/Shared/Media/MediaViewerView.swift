@@ -203,7 +203,7 @@ private struct PostPDFSlide: View {
                     data.append(byte)
                 }
                 try Task.checkCancellation()
-                guard let pdf = PDFDocument(data: data), !pdf.isLocked else { throw URLError(.cannotDecodeContentData) }
+                guard let pdf = PDFDocument(data: data), !pdf.isLocked, pdf.pageCount > 0 else { throw URLError(.cannotDecodeContentData) }
                 document = pdf
             } catch is CancellationError {
                 return
