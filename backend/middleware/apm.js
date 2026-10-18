@@ -24,11 +24,16 @@ const CLEANUP_INTERVAL_MS = 60 * 1000; // 1 minute
 const metrics = new Map();
 
 function getRouteKey(req) {
-  // Normalize route: replace UUIDs and numeric IDs with :id
-  let path = req.route?.path || req.path || 'unknown';
-  // Use the baseUrl + route path for accurate route matching
+  // Never retain an unmatched request's literal path: metrics are publicly
+  // readable, and arbitrary URLs may contain private identifiers or codes.
+  // Grouping these requests also prevents a new metric key for every 404.
+  let path = req.route?.path || 'unmatched';
+  // Matched routes use Express's pattern (:id, :code), not the caller's URL.
   if (req.baseUrl && req.route?.path) {
-    path = req.baseUrl + req.route.path;
+    // baseUrl is already interpolated for the home scheduling and persona
+    // subrouters. Hide that parent id even when validation rejects its value.
+    const baseUrl = req.baseUrl.replace(/^(\/api\/(?:homes|personas))\/[^/]+(?=\/|$)/i, '$1/:id');
+    path = baseUrl + req.route.path;
   }
   return `${req.method} ${path}`;
 }

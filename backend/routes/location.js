@@ -39,13 +39,6 @@ const radiusSchema = Joi.object({
 
 // ============ HELPERS ============
 
-/** Extract lat/lng from PostGIS geography column via raw SQL */
-function coordsFromGeo(geoStr) {
-  // geography columns come as WKB hex or GeoJSON depending on driver
-  // supabaseAdmin returns the raw value; we use ST_Y/ST_X in queries instead
-  return null;
-}
-
 /** Shape a UserViewingLocation row into the API response format */
 function formatVL(row) {
   if (!row) return null;
@@ -91,29 +84,17 @@ router.get('/', verifyToken, async (req, res) => {
   const userId = req.user.id;
 
   try {
-    // 1. Current Viewing Location
-    const { data: vlRow } = await supabaseAdmin
-      .from('UserViewingLocation')
-      .select('*')
-      .eq('user_id', userId)
-      .single();
-
-    // 2. Recent Locations (up to 5, newest first)
-    const { data: recentRows } = await supabaseAdmin
-      .from('UserRecentLocation')
-      .select('*')
-      .eq('user_id', userId)
-      .order('used_at', { ascending: false })
-      .limit(5);
-
-    // 3. User's homes with coordinates
-    //    HomeOccupancy → Home; extract lat/lng with ST_Y / ST_X
-    const { data: homeRows } = await supabaseAdmin
-      .rpc('get_user_home_locations', { p_user_id: userId });
-
-    // 4. User's business locations
-    const { data: bizLocRows } = await supabaseAdmin
-      .rpc('get_user_business_locations', { p_user_id: userId });
+    // These reads are independent. A failed read is not an empty account:
+    // preserve the client's current location and let it retry the whole picker.
+    const results = await Promise.all([
+      supabaseAdmin.from('UserViewingLocation').select('*').eq('user_id', userId).maybeSingle(),
+      supabaseAdmin.from('UserRecentLocation').select('*').eq('user_id', userId)
+        .order('used_at', { ascending: false }).order('id', { ascending: false }).limit(5),
+      supabaseAdmin.rpc('get_user_home_locations', { p_user_id: userId }),
+      supabaseAdmin.rpc('get_user_business_locations', { p_user_id: userId }),
+    ]);
+    for (const result of results) if (result.error) throw result.error;
+    const [{ data: vlRow }, { data: recentRows }, { data: homeRows }, { data: bizLocRows }] = results;
 
     res.json({
       viewingLocation: formatVL(vlRow),
@@ -138,7 +119,7 @@ router.get('/', verifyToken, async (req, res) => {
     });
   } catch (err) {
     logger.error('GET /api/location error', { error: err.message, userId });
-    res.status(500).json({ error: 'Failed to fetch location data' });
+    res.status(503).json({ error: 'Could not load locations right now. Please try again.', code: 'LOCATION_UNAVAILABLE' });
   }
 });
 
@@ -152,75 +133,21 @@ router.put('/', verifyToken, validate(setLocationSchema), async (req, res) => {
   const { label, type, latitude, longitude, radiusMiles, isPinned, sourceId, city, state, zipcode } = req.body;
 
   try {
-    // 1. Upsert ViewingLocation
-    const vlData = {
-      user_id: userId,
-      label,
-      type,
-      latitude,
-      longitude,
-      radius_miles: radiusMiles,
-      is_pinned: isPinned,
-      source_id: sourceId || null,
-      city: city || null,
-      state: state || null,
-      zipcode: zipcode || null,
-      updated_at: new Date().toISOString(),
-    };
-
-    const { data: existingVL } = await supabaseAdmin
-      .from('UserViewingLocation')
-      .select('id')
-      .eq('user_id', userId)
-      .single();
-
-    let vlRow;
-    if (existingVL) {
-      // Update
-      const { data, error } = await supabaseAdmin
-        .from('UserViewingLocation')
-        .update(vlData)
-        .eq('user_id', userId)
-        .select('*')
-        .single();
-      if (error) throw error;
-      vlRow = data;
-    } else {
-      // Insert
-      const { data, error } = await supabaseAdmin
-        .from('UserViewingLocation')
-        .insert(vlData)
-        .select('*')
-        .single();
-      if (error) throw error;
-      vlRow = data;
-    }
-
-    // 2. Add to recent locations (dedupe by label + close coordinates)
-    //    Delete any existing recent with same label (case-insensitive)
-    await supabaseAdmin
-      .from('UserRecentLocation')
-      .delete()
-      .eq('user_id', userId)
-      .ilike('label', label);
-
-    // Insert new recent
-    await supabaseAdmin
-      .from('UserRecentLocation')
-      .insert({
-        user_id: userId,
-        label,
-        type,
-        latitude,
-        longitude,
+    // One transaction saves the selected area and its recent entry. The
+    // existing unique user_id key also serializes simultaneous first saves.
+    const { data: vlRow, error } = await supabaseAdmin.rpc('set_user_viewing_location', {
+      p_user_id: userId,
+      p_location: {
+        label, type, latitude, longitude,
         radius_miles: radiusMiles,
+        is_pinned: isPinned,
         source_id: sourceId || null,
         city: city || null,
         state: state || null,
         zipcode: zipcode || null,
-        used_at: new Date().toISOString(),
-      });
-    // The trim trigger handles keeping only 5
+      },
+    });
+    if (error) throw error;
 
     logger.info('Viewing location updated', { userId, label, type, isPinned });
     // Hub Today resolves its area from the viewing location; drop the cached copy.
@@ -232,7 +159,7 @@ router.put('/', verifyToken, validate(setLocationSchema), async (req, res) => {
     res.json({ viewingLocation: formatVL(vlRow) });
   } catch (err) {
     logger.error('PUT /api/location error', { error: err.message, userId });
-    res.status(500).json({ error: 'Failed to update viewing location' });
+    res.status(503).json({ error: 'Could not save this location right now. Please try again.', code: 'LOCATION_UNAVAILABLE' });
   }
 });
 
@@ -250,9 +177,10 @@ router.put('/pin', verifyToken, validate(pinSchema), async (req, res) => {
       .update({ is_pinned: isPinned, updated_at: new Date().toISOString() })
       .eq('user_id', userId)
       .select('*')
-      .single();
+      .maybeSingle();
 
-    if (error || !data) {
+    if (error) throw error;
+    if (!data) {
       return res.status(404).json({ error: 'No viewing location to pin. Set a location first.' });
     }
 
@@ -262,7 +190,7 @@ router.put('/pin', verifyToken, validate(pinSchema), async (req, res) => {
     res.json({ isPinned: data.is_pinned });
   } catch (err) {
     logger.error('PUT /api/location/pin error', { error: err.message, userId });
-    res.status(500).json({ error: 'Failed to update pin status' });
+    res.status(503).json({ error: 'Could not update the pin right now. Please try again.', code: 'LOCATION_UNAVAILABLE' });
   }
 });
 
@@ -280,9 +208,10 @@ router.put('/radius', verifyToken, validate(radiusSchema), async (req, res) => {
       .update({ radius_miles: radiusMiles, updated_at: new Date().toISOString() })
       .eq('user_id', userId)
       .select('*')
-      .single();
+      .maybeSingle();
 
-    if (error || !data) {
+    if (error) throw error;
+    if (!data) {
       return res.status(404).json({ error: 'No viewing location to update. Set a location first.' });
     }
 
@@ -290,7 +219,7 @@ router.put('/radius', verifyToken, validate(radiusSchema), async (req, res) => {
     res.json({ radiusMiles: data.radius_miles });
   } catch (err) {
     logger.error('PUT /api/location/radius error', { error: err.message, userId });
-    res.status(500).json({ error: 'Failed to update radius' });
+    res.status(503).json({ error: 'Could not update the radius right now. Please try again.', code: 'LOCATION_UNAVAILABLE' });
   }
 });
 
@@ -307,6 +236,7 @@ router.get('/recents', verifyToken, async (req, res) => {
       .select('*')
       .eq('user_id', userId)
       .order('used_at', { ascending: false })
+      .order('id', { ascending: false })
       .limit(5);
 
     if (error) throw error;
@@ -314,7 +244,7 @@ router.get('/recents', verifyToken, async (req, res) => {
     res.json({ recentLocations: (rows || []).map(formatRecent) });
   } catch (err) {
     logger.error('GET /api/location/recents error', { error: err.message, userId });
-    res.status(500).json({ error: 'Failed to fetch recent locations' });
+    res.status(503).json({ error: 'Could not load recent locations right now. Please try again.', code: 'LOCATION_UNAVAILABLE' });
   }
 });
 
@@ -325,6 +255,9 @@ router.get('/recents', verifyToken, async (req, res) => {
 router.delete('/recents/:id', verifyToken, async (req, res) => {
   const userId = req.user.id;
   const { id } = req.params;
+  if (Joi.string().uuid().validate(id).error) {
+    return res.status(400).json({ error: 'Invalid recent location id' });
+  }
 
   try {
     const { error } = await supabaseAdmin
@@ -338,7 +271,7 @@ router.delete('/recents/:id', verifyToken, async (req, res) => {
     res.json({ message: 'Recent location removed' });
   } catch (err) {
     logger.error('DELETE /api/location/recents error', { error: err.message, userId });
-    res.status(500).json({ error: 'Failed to remove recent location' });
+    res.status(503).json({ error: 'Could not remove this recent location right now. Please try again.', code: 'LOCATION_UNAVAILABLE' });
   }
 });
 
@@ -359,11 +292,12 @@ router.get('/resolve', verifyToken, async (req, res) => {
 
   try {
     // 1. Check for existing VL
-    const { data: vlRow } = await supabaseAdmin
+    const { data: vlRow, error: locationError } = await supabaseAdmin
       .from('UserViewingLocation')
       .select('*')
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
+    if (locationError) throw locationError;
 
     const validPoint = (row) => row && Number.isFinite(row.latitude) && Number.isFinite(row.longitude)
       && Math.abs(row.latitude) <= 90 && Math.abs(row.longitude) <= 180;
@@ -382,8 +316,9 @@ router.get('/resolve', verifyToken, async (req, res) => {
     }
 
     // 2. Try user's primary home
-    const { data: homeRows } = await supabaseAdmin
+    const { data: homeRows, error: homeError } = await supabaseAdmin
       .rpc('get_user_home_locations', { p_user_id: userId });
+    if (homeError) throw homeError;
 
     if (homeRows && homeRows.length > 0) {
       const home = homeRows.find(validPoint); // primary first, skipping missing points
@@ -408,9 +343,10 @@ router.get('/resolve', verifyToken, async (req, res) => {
 
     // A private saved address is a valid fallback; a profile city label without
     // coordinates is not a map center. Keep the established selected/home order.
-    const { data: places } = await supabaseAdmin.from('SavedPlace')
+    const { data: places, error: placesError } = await supabaseAdmin.from('SavedPlace')
       .select('id, label, latitude, longitude, city, state')
-      .eq('user_id', userId).order('created_at', { ascending: false });
+      .eq('user_id', userId).order('created_at', { ascending: false }).order('id', { ascending: false });
+    if (placesError) throw placesError;
     const saved = (places || []).find(validPoint);
     if (saved) {
       return res.json({ viewingLocation: {
@@ -425,7 +361,7 @@ router.get('/resolve', verifyToken, async (req, res) => {
     res.json({ viewingLocation: null });
   } catch (err) {
     logger.error('GET /api/location/resolve error', { error: err.message, userId });
-    res.status(500).json({ error: 'Failed to resolve location' });
+    res.status(503).json({ error: 'Could not load your location right now. Please try again.', code: 'LOCATION_UNAVAILABLE' });
   }
 });
 
