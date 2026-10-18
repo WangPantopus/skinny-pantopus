@@ -506,6 +506,34 @@ function serializeChatRoomForViewer(room) {
   };
 }
 
+async function loadPlanChatStates(rooms) {
+  const ids = rooms.filter((room) => room.type === 'plan').map((room) => room.id);
+  if (!ids.length) return new Map();
+  const { data, error } = await supabaseAdmin.from('Plan')
+    .select('post_id, chat_room_id, status, chat_closed_at')
+    .in('chat_room_id', ids);
+  if (error) {
+    logger.warn('Plan chat state lookup failed', { error: error.message });
+    throw Object.assign(new Error('Chat status is temporarily unavailable. Please try again.'), { code: 'CHAT_UNAVAILABLE' });
+  }
+  return new Map((data || []).map((plan) => [String(plan.chat_room_id), plan]));
+}
+
+function roomIsActive(room, planStates) {
+  if (room.type !== 'plan') return room.is_active;
+  const plan = planStates.get(String(room.id));
+  // A cancellation can be committed before the later ChatRoom update succeeds.
+  // Reads must reflect the same authoritative state as the write guard.
+  return room.is_active !== false && !!plan && plan.status !== 'cancelled' && !plan.chat_closed_at;
+}
+
+function sendChatReadError(res, error, fallback) {
+  if (error.code === 'CHAT_UNAVAILABLE') {
+    return res.status(503).json({ error: error.message, code: error.code });
+  }
+  return res.status(500).json({ error: fallback });
+}
+
 function serializeChatMessageForViewer(message, options = {}) {
   if (!message) return null;
   const base = options.includeActorIdentity ? message : stripActorIdentity(message);
@@ -676,7 +704,7 @@ router.get('/rooms', verifyToken, async (req, res) => {
     // Batch-fetch other participants and last messages for all rooms (2 queries instead of 2N)
     const allRoomIds = roomList.map(p => p.room.id);
 
-    const [{ data: allOtherParts }, { data: roomPreviews }] = await Promise.all([
+    const [{ data: allOtherParts }, { data: roomPreviews }, planStates] = await Promise.all([
       supabaseAdmin
         .from('ChatParticipant')
         .select('room_id, user:user_id(id, username, name, first_name, middle_name, last_name, profile_picture_url)')
@@ -684,6 +712,7 @@ router.get('/rooms', verifyToken, async (req, res) => {
         .neq('user_id', userId)
         .order('is_active', { ascending: false }),
       supabaseAdmin.rpc('get_room_previews', { p_room_ids: allRoomIds }),
+      loadPlanChatStates(roomList.map((p) => p.room)),
     ]);
 
     // Pick first (active-preferred) participant per room, never a leftover member of an assigned task's gig room
@@ -722,7 +751,7 @@ router.get('/rooms', verifyToken, async (req, res) => {
         description: p.room.description,
         gig_id: p.room.gig_id,
         home_id: p.room.home_id,
-        is_active: p.room.is_active,
+        is_active: roomIsActive(p.room, planStates),
         participant_active: p.is_active,
         created_at: p.room.created_at,
         updated_at: p.room.updated_at,
@@ -761,7 +790,7 @@ router.get('/rooms', verifyToken, async (req, res) => {
 
   } catch (err) {
     logger.error('Chat rooms fetch error', { requestId: req.requestId, userId: req.user?.id, error: err.message });
-    res.status(500).json({ error: 'Failed to fetch chat rooms' });
+    sendChatReadError(res, err, 'Failed to fetch chat rooms');
   }
 });
 
@@ -826,13 +855,14 @@ router.get('/business/:businessUserId/rooms', verifyToken, async (req, res) => {
 
     // Batch-fetch participants and last messages for all rooms (2 queries instead of 2N)
     const allBizRoomIds = roomList.map(p => p.room.id);
-    const [{ data: allBizParts }, { data: bizRoomPreviews }] = await Promise.all([
+    const [{ data: allBizParts }, { data: bizRoomPreviews }, planStates] = await Promise.all([
       supabaseAdmin
         .from('ChatParticipant')
         .select('room_id, user:user_id(id, username, name, first_name, middle_name, last_name)')
         .in('room_id', allBizRoomIds)
         .eq('is_active', true),
       supabaseAdmin.rpc('get_room_previews', { p_room_ids: allBizRoomIds }),
+      loadPlanChatStates(roomList.map((p) => p.room)),
     ]);
 
     // Group participants by room, leaving out leftover members of assigned task gig rooms
@@ -876,7 +906,7 @@ router.get('/business/:businessUserId/rooms', verifyToken, async (req, res) => {
         description: p.room.description,
         gig_id: p.room.gig_id,
         home_id: p.room.home_id,
-        is_active: p.room.is_active,
+        is_active: roomIsActive(p.room, planStates),
         created_at: p.room.created_at,
         updated_at: p.room.updated_at,
         last_message_at: lastMessageAt || p.room.updated_at,
@@ -907,7 +937,7 @@ router.get('/business/:businessUserId/rooms', verifyToken, async (req, res) => {
     });
   } catch (err) {
     logger.error('Business chat rooms fetch error', { requestId: req.requestId, userId: req.user?.id, error: err.message });
-    res.status(500).json({ error: 'Failed to fetch business chat rooms' });
+    sendChatReadError(res, err, 'Failed to fetch business chat rooms');
   }
 });
 
@@ -988,14 +1018,16 @@ router.get('/rooms/:roomId', verifyToken, async (req, res) => {
     }
     // A plan's room names its plan, so the chat can show the plan strip and open it.
     if (room.type === 'plan') {
-      const { data: plan } = await supabaseAdmin.from('Plan').select('post_id').eq('chat_room_id', roomId).maybeSingle();
+      const planStates = await loadPlanChatStates([room]);
+      const plan = planStates.get(String(room.id));
       room.plan_id = plan?.post_id || null;
+      room.is_active = roomIsActive(room, planStates);
     }
     res.json({ room: serializeChatRoomForViewer(room) });
     
   } catch (err) {
     logger.error('Room fetch error', { requestId: req.requestId, userId: req.user?.id, roomId: req.params.roomId, error: err.message });
-    res.status(500).json({ error: 'Failed to fetch room' });
+    sendChatReadError(res, err, 'Failed to fetch room');
   }
 });
 
@@ -2584,7 +2616,7 @@ router.get('/unified-conversations', verifyToken, async (req, res) => {
     // room, including any that end up without a counterpart).
     const mergeableRoomIds = mergeableParticipants.map(p => p.room_id);
     const previewRoomIds = [...mergeableRoomIds, ...groupHomeParticipants.map(p => p.room_id)];
-    const [{ data: otherParts }, { data: allConvMsgs }, { data: allTopics }] = await Promise.all([
+    const [{ data: otherParts }, { data: allConvMsgs }, { data: allTopics }, planByRoom] = await Promise.all([
       mergeableRoomIds.length > 0
         ? supabaseAdmin
           .from('ChatParticipant')
@@ -2606,6 +2638,7 @@ router.get('/unified-conversations', verifyToken, async (req, res) => {
         .or(`conversation_user_id_1.eq.${userId},conversation_user_id_2.eq.${userId}`)
         .eq('status', 'active')
         .order('last_activity_at', { ascending: false }),
+      loadPlanChatStates(groupHomeParticipants.map((p) => p.room)),
     ]);
     let allOtherParticipants = otherParts || [];
     // Leftover members of an assigned task's gig room don't stand in for its counterpart.
@@ -2674,14 +2707,6 @@ router.get('/unified-conversations', verifyToken, async (req, res) => {
       conversations.push(conv);
     }
 
-    // A plan's room names its plan (one read for all of them).
-    const planRoomIds = groupHomeParticipants.filter(p => p.room.type === 'plan').map(p => p.room_id);
-    const planByRoom = new Map();
-    if (planRoomIds.length > 0) {
-      const { data: plans } = await supabaseAdmin.from('Plan').select('post_id, chat_room_id').in('chat_room_id', planRoomIds);
-      for (const plan of plans || []) planByRoom.set(String(plan.chat_room_id), plan.post_id);
-    }
-
     // Step 5: Process group/home rooms using batch-fetched messages
     for (const p of groupHomeParticipants) {
       const roomId = p.room_id;
@@ -2705,7 +2730,10 @@ router.get('/unified-conversations', verifyToken, async (req, res) => {
         last_message_preview: lastMessagePreview,
         topics: [],
         _type: 'room',
-        ...(p.room.type === 'plan' ? { plan_id: planByRoom.get(String(roomId)) || null, is_active: p.room.is_active !== false } : {}),
+        ...(p.room.type === 'plan' ? {
+          plan_id: planByRoom.get(String(roomId))?.post_id || null,
+          is_active: roomIsActive(p.room, planByRoom),
+        } : {}),
       });
     }
 
@@ -2751,7 +2779,7 @@ router.get('/unified-conversations', verifyToken, async (req, res) => {
     });
   } catch (err) {
     logger.error('Unified conversations list error', { requestId: req.requestId, userId: req.user?.id, error: err.message });
-    res.status(500).json({ error: 'Failed to fetch conversations' });
+    sendChatReadError(res, err, 'Failed to fetch conversations');
   }
 });
 
