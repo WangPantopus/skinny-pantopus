@@ -294,9 +294,10 @@ object StoreKeys {
     fun roomMessages(
         roomId: String,
         limit: Int,
+        asBusinessUserId: String? = null,
     ) = StoreKey<ChatMessagesResponse>(
         "api/chat/rooms/$roomId/messages",
-        mapOf("limit" to limit.toString()),
+        mapOf("limit" to limit.toString(), "asBusinessUserId" to asBusinessUserId),
         kind = StoreKind.CONVERSATION,
         topics = setOf("chat:$roomId", StoreTopics.CHATS),
     )

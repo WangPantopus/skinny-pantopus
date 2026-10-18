@@ -222,6 +222,7 @@ data class SendChatMessageBody(
     val replyToId: String? = null,
     val topicId: String? = null,
     val metadata: Map<String, Any>? = null,
+    val asBusinessUserId: String? = null,
 )
 
 /** `POST /messages` envelope. */

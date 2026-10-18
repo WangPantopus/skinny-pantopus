@@ -195,7 +195,7 @@ sealed interface ChatCounterparty {
 
 /** Source-of-truth identifier for the thread. */
 sealed interface ChatThreadMode {
-    data class Room(val id: String) : ChatThreadMode
+    data class Room(val id: String, val asBusinessUserId: String? = null) : ChatThreadMode
 
     data class Person(val otherUserId: String) : ChatThreadMode
 

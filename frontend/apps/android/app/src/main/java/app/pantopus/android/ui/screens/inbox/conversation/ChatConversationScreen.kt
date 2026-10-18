@@ -625,6 +625,7 @@ fun ChatConversationScreen(
             ) {
                 MessageActionSheet(
                     content = target,
+                    canManageMessages = (args.mode as? ChatThreadMode.Room)?.asBusinessUserId == null,
                     onCopy = { actionTarget = null },
                     onReply = {
                         viewModel.beginReply(target.id)
@@ -3548,6 +3549,7 @@ private val ChatBubbleBody.copyableText: String?
 @Composable
 private fun MessageActionSheet(
     content: ChatBubbleContent,
+    canManageMessages: Boolean,
     // Invoked after the text has landed on the clipboard — dismisses the sheet.
     onCopy: () -> Unit,
     onReply: () -> Unit,
@@ -3592,10 +3594,8 @@ private fun MessageActionSheet(
         // for rows with no server id: in-flight optimistic sends
         // (`client_`) and AI-thread local rows (`ai_user_` /
         // `ai_assistant_`), whose edits/deletes can only ever 404.
-        if (content.side == ChatMessageSide.Outgoing &&
-            !content.id.startsWith("client_") &&
-            !content.id.startsWith("ai_")
-        ) {
+        val isPersistedMessage = !content.id.startsWith("client_") && !content.id.startsWith("ai_")
+        if (canManageMessages && content.side == ChatMessageSide.Outgoing && isPersistedMessage) {
             MessageActionRow(label = "Select", icon = PantopusIcon.CheckCircle, onClick = onSelect)
             MessageActionRow(label = "Edit", icon = PantopusIcon.Pencil, onClick = onEdit)
             MessageActionRow(label = "Delete", icon = PantopusIcon.Trash2, destructive = true, onClick = onDelete)

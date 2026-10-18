@@ -1399,6 +1399,7 @@ private object ChildRoutes {
     /** The room a chat link named when it opened as a person thread, so the
      *  link's arrival still completes (empty for every other open). */
     const val CHAT_ARRIVAL_ROOM_KEY = "arrivalRoom"
+    const val CHAT_BUSINESS_ID_KEY = "asBusinessUserId"
     const val CHAT_CONVERSATION =
         "chat/{$CHAT_KIND_KEY}/{$CHAT_ID_KEY}?" +
             "$CHAT_NAME_KEY={$CHAT_NAME_KEY}" +
@@ -1415,7 +1416,8 @@ private object ChildRoutes {
             "&$CHAT_TOPIC_REF_ID_KEY={$CHAT_TOPIC_REF_ID_KEY}" +
             "&$CHAT_TOPIC_TITLE_KEY={$CHAT_TOPIC_TITLE_KEY}" +
             "&$CHAT_GIG_ID_KEY={$CHAT_GIG_ID_KEY}" +
-            "&$CHAT_ARRIVAL_ROOM_KEY={$CHAT_ARRIVAL_ROOM_KEY}"
+            "&$CHAT_ARRIVAL_ROOM_KEY={$CHAT_ARRIVAL_ROOM_KEY}" +
+            "&$CHAT_BUSINESS_ID_KEY={$CHAT_BUSINESS_ID_KEY}"
 
     /** New message contact picker (T6.6b P25). Reached from Chat list
      *  compose button + empty-state CTA. */
@@ -1658,6 +1660,7 @@ private object ChildRoutes {
         displayName: String,
         initials: String,
         verified: Boolean,
+        asBusinessUserId: String? = null,
     ): String {
         fun enc(value: String) = java.net.URLEncoder.encode(value, "UTF-8").replace("+", "%20")
         return "chat/room/${enc(roomId)}?" +
@@ -1672,7 +1675,8 @@ private object ChildRoutes {
             "&$CHAT_SCROLL_TO_KEY=" +
             "&$CHAT_TOPIC_TYPE_KEY=" +
             "&$CHAT_TOPIC_REF_ID_KEY=" +
-            "&$CHAT_TOPIC_TITLE_KEY="
+            "&$CHAT_TOPIC_TITLE_KEY=" +
+            "&$CHAT_BUSINESS_ID_KEY=${enc(asBusinessUserId.orEmpty())}"
     }
 
     /** Build the chat-conversation path for a Chat Search result. Carries
@@ -5020,6 +5024,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 type = NavType.StringType
                                 defaultValue = ""
                             },
+                            navArgument(ChildRoutes.CHAT_BUSINESS_ID_KEY) {
+                                type = NavType.StringType
+                                defaultValue = ""
+                            },
                         ),
                 ) { entry ->
                     val args = entry.arguments ?: return@composable
@@ -5039,6 +5047,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     val topicTitle = args.getString(ChildRoutes.CHAT_TOPIC_TITLE_KEY).orEmpty().takeIf { it.isNotEmpty() }
                     val gigId = args.getString(ChildRoutes.CHAT_GIG_ID_KEY).orEmpty().takeIf { it.isNotEmpty() }
                     val arrivalRoomId = args.getString(ChildRoutes.CHAT_ARRIVAL_ROOM_KEY).orEmpty().takeIf { it.isNotEmpty() }
+                    val asBusinessUserId = args.getString(ChildRoutes.CHAT_BUSINESS_ID_KEY)?.takeIf { it.isNotBlank() }
                     val initialTopic =
                         if (topicType != null && topicTitle != null) {
                             ChatInitialTopic(topicType = topicType, topicRefId = topicRefId, title = topicTitle)
@@ -5048,7 +5057,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     val mode: ChatThreadMode =
                         when (kind) {
                             "ai" -> ChatThreadMode.Ai
-                            "room" -> ChatThreadMode.Room(id)
+                            "room" -> ChatThreadMode.Room(id, asBusinessUserId)
                             "creator" -> ChatThreadMode.Person(otherUserId = id)
                             else -> ChatThreadMode.Person(otherUserId = id)
                         }
@@ -6694,6 +6703,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                     displayName = name,
                                     initials = initialsFromName(name),
                                     verified = false,
+                                    asBusinessUserId = businessId,
                                 ),
                             )
                         },

@@ -359,7 +359,7 @@ internal fun BusinessHoursDayDialog(
         mutableStateOf(initial?.closeLabel?.let { runCatching { LocalTime.parse(it, formatter) }.getOrNull() } ?: LocalTime.of(17, 0))
     }
     var closed by remember(day) { mutableStateOf(day.state == EditBusinessPageHoursRow.State.Closed) }
-    val valid = closed || close.isAfter(open)
+    val valid = closed || close != open
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("${day.dayLabel} hours") },
@@ -392,7 +392,8 @@ internal fun BusinessHoursDayDialog(
                             false,
                         ).show()
                     }) { Text("Closes ${close.format(formatter)}") }
-                    if (!valid) Text("Closing time must be after opening time.", color = PantopusColors.error)
+                    if (close.isBefore(open)) Text("Closes the next day.", color = PantopusColors.appTextSecondary)
+                    if (!valid) Text("Opening and closing times must differ.", color = PantopusColors.error)
                 }
             }
         },

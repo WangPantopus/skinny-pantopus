@@ -871,7 +871,7 @@ class ChatConversationViewModelTest {
 
     @Test fun queued_attachment_uploads_and_sends_file_ids() =
         runTest {
-            coEvery { repo.roomMessages(any(), any(), any(), any(), any()) } returns
+            coEvery { repo.roomMessages(any(), any(), any(), any(), any(), any()) } returns
                 NetworkResult.Success(ChatMessagesResponse(messages = emptyList(), hasMore = false))
             val uploadKeys = mutableListOf<String>()
             coEvery { uploadRepo.uploadChatMedia(eq("r1"), any(), capture(uploadKeys)) } returnsMany
@@ -969,7 +969,7 @@ class ChatConversationViewModelTest {
 
     @Test fun load_maps_gig_offer_metadata_to_rich_card() =
         runTest {
-            coEvery { repo.roomMessages("r1", any(), any(), any(), any()) } returns
+            coEvery { repo.roomMessages("r1", any(), any(), any(), any(), any()) } returns
                 NetworkResult.Success(
                     ChatMessagesResponse(
                         messages =
@@ -1106,7 +1106,7 @@ class ChatConversationViewModelTest {
      */
     @Test fun pre_bid_limit_failure_sets_send_limit_notice() =
         runTest {
-            coEvery { repo.roomMessages(any(), any(), any(), any(), any()) } returns
+            coEvery { repo.roomMessages(any(), any(), any(), any(), any(), any()) } returns
                 NetworkResult.Success(ChatMessagesResponse(messages = emptyList(), hasMore = false))
             coEvery { repo.sendMessage(any<SendChatMessageBody>()) } returns
                 NetworkResult.Failure(
@@ -1142,7 +1142,7 @@ class ChatConversationViewModelTest {
     /** A non-PRE_BID 4xx must not raise the pre-bid banner. */
     @Test fun generic_client_error_does_not_set_send_limit_notice() =
         runTest {
-            coEvery { repo.roomMessages(any(), any(), any(), any(), any()) } returns
+            coEvery { repo.roomMessages(any(), any(), any(), any(), any(), any()) } returns
                 NetworkResult.Success(ChatMessagesResponse(messages = emptyList(), hasMore = false))
             coEvery { repo.sendMessage(any<SendChatMessageBody>()) } returns
                 NetworkResult.Failure(NetworkError.ClientError(400, """{"error":"Invalid payload"}"""))
