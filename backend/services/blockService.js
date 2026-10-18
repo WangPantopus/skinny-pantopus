@@ -121,16 +121,11 @@ async function hasBlocked(blockerId, viewerId) {
  * A filter for Notification queries (lists and counts) that leaves out the notices whose actor
  * (metadata.user_id) is across a block from userId, in either direction: blocks hide people from
  * each other, including what they did before the block. A notice with no actor stays. If the block
- * list can't be read, the notices stay as they are: the person already received them.
+ * list can't be read, refuse the read rather than bringing back a blocked person's notices.
  * @returns {Promise<(query: object) => object>}
  */
 async function notificationBlockFilter(userId) {
-  let blocked;
-  try {
-    blocked = await blockedUserIds(userId);
-  } catch {
-    return (query) => query;
-  }
+  const blocked = await blockedUserIds(userId);
   if (!blocked.size) return (query) => query;
   const ids = [...blocked].join(',');
   return (query) => query.or(`metadata->>user_id.is.null,metadata->>user_id.not.in.(${ids})`);
