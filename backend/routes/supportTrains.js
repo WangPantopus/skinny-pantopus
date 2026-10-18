@@ -472,6 +472,11 @@ router.get('/health', (req, res) => {
 });
 
 // List my Support Train participations
+const participationPaginationSchema = Joi.object({
+  limit: Joi.number().integer().min(1).max(Number.MAX_SAFE_INTEGER).default(20),
+  offset: Joi.number().integer().min(0).max(2147483597).default(0),
+});
+
 router.get(
   '/me/support-trains',
   verifyToken,
@@ -479,8 +484,15 @@ router.get(
     const userId = req.user.id;
     const roleFilter = req.query.role; // 'organizer' | 'recipient' | 'helper'
     const statusFilter = req.query.status;
-    const limit = Math.min(parseInt(req.query.limit, 10) || 20, 50);
-    const offset = parseInt(req.query.offset, 10) || 0;
+    const pagination = participationPaginationSchema.validate({ limit: req.query.limit, offset: req.query.offset });
+    if (pagination.error) {
+      return res.status(400).json({
+        error: 'Invalid pagination. Use a positive whole-number limit and a non-negative offset within the supported range.',
+        code: 'INVALID_PAGINATION',
+      });
+    }
+    const limit = Math.min(pagination.value.limit, 50);
+    const offset = pagination.value.offset;
 
     const results = [];
 
