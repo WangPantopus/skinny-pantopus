@@ -21,11 +21,12 @@ type Props = {
 
 // ── Lease categorization ────────────────────────────────────
 
-type LeaseCategory = 'active' | 'ending_soon' | 'overstay' | 'pending' | 'ended';
+type LeaseCategory = 'active' | 'ending_soon' | 'overstay' | 'pending' | 'ended' | 'canceled';
 
 function categorizeLease(lease: landlord.HomeLease): LeaseCategory {
   if (lease.state === 'pending') return 'pending';
-  if (lease.state === 'ended' || lease.state === 'canceled') return 'ended';
+  if (lease.state === 'canceled') return 'canceled';
+  if (lease.state === 'ended') return 'ended';
 
   if (lease.state === 'active') {
     if (!lease.end_at) return 'active';
@@ -46,6 +47,7 @@ const CATEGORY_CONFIG: Record<LeaseCategory, { label: string; bg: string; text: 
   overstay: { label: 'Overstay', bg: 'bg-red-50', text: 'text-red-700', dot: 'bg-red-500', border: 'border-l-red-500' },
   pending: { label: 'Pending', bg: 'bg-blue-50', text: 'text-blue-700', dot: 'bg-blue-500', border: 'border-l-blue-500' },
   ended: { label: 'Ended', bg: 'bg-app-surface-raised', text: 'text-app-text-secondary', dot: 'bg-gray-400', border: 'border-l-gray-300' },
+  canceled: { label: 'Canceled', bg: 'bg-app-surface-raised', text: 'text-app-text-secondary', dot: 'bg-gray-400', border: 'border-l-gray-300' },
 };
 
 function CategoryBadge({ category }: { category: LeaseCategory }) {
@@ -69,6 +71,7 @@ const FILTER_OPTIONS: { key: FilterOption; label: string }[] = [
   { key: 'overstay', label: 'Overstays' },
   { key: 'pending', label: 'Pending' },
   { key: 'ended', label: 'Ended' },
+  { key: 'canceled', label: 'Canceled' },
 ];
 
 // ── Main component ──────────────────────────────────────────
