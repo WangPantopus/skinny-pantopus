@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -62,13 +62,14 @@ fun MediaViewerDialog(
 
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
     ) {
         Box(
             modifier =
                 Modifier
                     .fillMaxSize()
                     .background(Color.Black)
+                    .systemBarsPadding()
                     .testTag("mediaViewer"),
         ) {
             HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
@@ -110,7 +111,6 @@ fun MediaViewerDialog(
                     modifier =
                         Modifier
                             .align(Alignment.TopStart)
-                            .statusBarsPadding()
                             .padding(Spacing.s3)
                             .background(
                                 Color.Black.copy(alpha = 0.45f),
@@ -125,7 +125,6 @@ fun MediaViewerDialog(
                 modifier =
                     Modifier
                         .align(Alignment.TopEnd)
-                        .statusBarsPadding()
                         .padding(Spacing.s3)
                         .size(36.dp)
                         .background(Color.Black.copy(alpha = 0.45f), CircleShape)

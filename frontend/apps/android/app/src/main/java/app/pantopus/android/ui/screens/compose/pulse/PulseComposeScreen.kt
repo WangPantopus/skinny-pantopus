@@ -184,37 +184,14 @@ fun PulseComposeScreen(
             if (uris.isEmpty()) return@rememberLauncherForActivityResult
             isLoadingMedia = true
             scope.launch {
-                var failed = false
+                val requested = uris.take(PULSE_COMPOSE_MAX_PHOTOS - photos.size)
                 val loaded =
                     withContext(Dispatchers.IO) {
-                        uris.take(PULSE_COMPOSE_MAX_PHOTOS - photos.size).mapNotNull { uri ->
-                            val mime = runCatching { context.contentResolver.getType(uri) }.getOrNull() ?: ""
-                            val maxBytes =
-                                when {
-                                    mime.startsWith("video/") -> 100 * 1024 * 1024
-                                    mime == "application/pdf" -> 25 * 1024 * 1024
-                                    mime.startsWith("image/") -> 10 * 1024 * 1024
-                                    else -> 0
-                                }
-                            val bytes = readBytes(context.contentResolver, uri, maxBytes)
-                            if (bytes == null || bytes.isEmpty()) {
-                                failed = true
-                                null
-                            } else {
-                                val captured = if (mime.startsWith("image/")) MediaLocationExtractor.fromImageBytes(bytes) else null
-                                PulseComposePhoto(
-                                    id = UUID.randomUUID().toString(),
-                                    data = bytes,
-                                    capturedLatitude = captured?.latitude,
-                                    capturedLongitude = captured?.longitude,
-                                    mimeType = mime,
-                                )
-                            }
-                        }
+                        requested.mapNotNull { readAttachment(context.contentResolver, it) }
                     }
                 loaded.forEach(viewModel::appendPhoto)
                 isLoadingMedia = false
-                if (failed) viewModel.attachmentReadFailed()
+                if (loaded.size < requested.size) viewModel.attachmentReadFailed()
             }
         }
 
@@ -350,6 +327,31 @@ fun PulseComposeScreen(
         )
     }
 }
+
+private fun readAttachment(
+    resolver: ContentResolver,
+    uri: Uri,
+): PulseComposePhoto? =
+    runCatching {
+        val mime = resolver.getType(uri) ?: ""
+        val maxBytes =
+            when {
+                mime.startsWith("video/") -> 100 * 1024 * 1024
+                mime == "application/pdf" -> 25 * 1024 * 1024
+                mime.startsWith("image/") -> 10 * 1024 * 1024
+                else -> 0
+            }
+        val bytes = readBytes(resolver, uri, maxBytes)
+        require(bytes != null && bytes.isNotEmpty())
+        val captured = if (mime.startsWith("image/")) MediaLocationExtractor.fromImageBytes(bytes) else null
+        PulseComposePhoto(
+            id = UUID.randomUUID().toString(),
+            data = bytes,
+            capturedLatitude = captured?.latitude,
+            capturedLongitude = captured?.longitude,
+            mimeType = mime,
+        )
+    }.getOrNull()
 
 private fun readBytes(
     resolver: ContentResolver,

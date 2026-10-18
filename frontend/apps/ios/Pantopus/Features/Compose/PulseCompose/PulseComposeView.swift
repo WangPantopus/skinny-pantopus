@@ -118,6 +118,8 @@ public struct PulseComposeView: View {
             } catch {
                 viewModel.toast = ToastMessage(text: "Couldn't load that PDF. Choose a PDF under 25 MB.", kind: .error)
             }
+        } onCancellation: {
+            isLoadingMedia = false
         }
         .sheet(isPresented: $showsPlacePicker) {
             PlacePickerSheet(

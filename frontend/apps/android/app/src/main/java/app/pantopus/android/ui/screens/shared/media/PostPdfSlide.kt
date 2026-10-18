@@ -40,6 +40,8 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
+import java.io.InputStream
+import java.io.OutputStream
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 
@@ -65,29 +67,7 @@ internal fun PostPdfSlide(url: String) {
         try {
             pages =
                 withContext(Dispatchers.IO) {
-                    val request = Request.Builder().url(url).build()
-                    postPdfClient.newCall(request).execute().use { response ->
-                        check(response.isSuccessful)
-                        val body = checkNotNull(response.body)
-                        require(body.contentLength() <= 25 * 1024 * 1024)
-                        body.byteStream().use { input ->
-                            file.outputStream().use { output ->
-                                val buffer = ByteArray(8192)
-                                var total = 0
-                                while (true) {
-                                    val count = input.read(buffer)
-                                    if (count < 0) break
-                                    total += count
-                                    require(total <= 25 * 1024 * 1024)
-                                    output.write(buffer, 0, count)
-                                }
-                            }
-                        }
-                    }
-                    PdfRenderer(ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)).use {
-                        require(it.pageCount > 0)
-                        it.pageCount
-                    }
+                    downloadPdf(url, file)
                 }
         } catch (cancelled: CancellationException) {
             file.delete()
@@ -149,5 +129,41 @@ internal fun PostPdfSlide(url: String) {
                 Button(onClick = { page += 1 }, enabled = page + 1 < pages) { Text("Next") }
             }
         }
+    }
+}
+
+private fun downloadPdf(
+    url: String,
+    file: File,
+): Int {
+    val request = Request.Builder().url(url).build()
+    postPdfClient.newCall(request).execute().use { response ->
+        check(response.isSuccessful)
+        val body = checkNotNull(response.body)
+        require(body.contentLength() <= 25 * 1024 * 1024)
+        body.byteStream().use { input ->
+            file.outputStream().use { output ->
+                copyPdf(input, output)
+            }
+        }
+    }
+    return PdfRenderer(ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)).use {
+        require(it.pageCount > 0)
+        it.pageCount
+    }
+}
+
+private fun copyPdf(
+    input: InputStream,
+    output: OutputStream,
+) {
+    val buffer = ByteArray(8192)
+    var total = 0
+    while (true) {
+        val count = input.read(buffer)
+        if (count < 0) break
+        total += count
+        require(total <= 25 * 1024 * 1024)
+        output.write(buffer, 0, count)
     }
 }

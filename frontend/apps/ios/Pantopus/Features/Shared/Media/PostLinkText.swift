@@ -4,8 +4,7 @@ import SwiftUI
 /// Uses the same URL detector as chat; user text is never interpreted as markup.
 struct PostLinkText: View {
     let text: String
-    @State private var openedURL: URL?
-    @State private var showsBrowser = false
+    @State private var openedLink: BrowserLink?
 
     init(_ text: String) {
         self.text = text
@@ -16,12 +15,11 @@ struct PostLinkText: View {
             .tint(Theme.Color.primary600)
             .environment(\.openURL, OpenURLAction { url in
                 guard ["https", "http"].contains(url.scheme?.lowercased() ?? "") else { return .discarded }
-                openedURL = url
-                showsBrowser = true
+                openedLink = BrowserLink(url: url)
                 return .handled
             })
-            .sheet(isPresented: $showsBrowser) {
-                if let openedURL { PostLinkBrowser(url: openedURL).ignoresSafeArea() }
+            .sheet(item: $openedLink) { link in
+                PostLinkBrowser(url: link.url).ignoresSafeArea()
             }
     }
 
@@ -33,6 +31,13 @@ struct PostLinkText: View {
             }
         }
         return result
+    }
+
+    private struct BrowserLink: Identifiable {
+        let url: URL
+        var id: String {
+            url.absoluteString
+        }
     }
 }
 
