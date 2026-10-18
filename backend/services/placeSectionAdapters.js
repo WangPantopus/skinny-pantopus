@@ -976,7 +976,9 @@ async function fetchStateLegislators(stateAbbr) {
     sectionId: '_state_legislators',
     ttlMs: 7 * DAY_MS,
     fetch: async () => {
-      const res = await fetch(`https://data.openstates.org/people/current/${st}.csv`);
+      const res = await fetch(`https://data.openstates.org/people/current/${st}.csv`, {
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const rows = parseCsv(await res.text());
       if (rows.length < 2) return null;
