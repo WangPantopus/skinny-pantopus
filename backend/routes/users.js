@@ -5201,7 +5201,8 @@ async function requireStrongestStepUpForDeletion(req, res, next) {
   if (req.stepUp?.method !== 'device_key') return next();
   try {
     const { data, error } = await supabaseAdmin.auth.admin.getUserById(req.user.id);
-    if (!error && data?.user && hasPasswordProvider(data.user)) {
+    if (error || !data?.user) throw error || new Error('Account verification unavailable');
+    if (hasPasswordProvider(data.user)) {
       logger.info('auth.stepup.required', { purpose: 'delete_account', reason: 'password_required', userId: req.user.id });
       return res.status(403).json({
         error: 'Please verify your password to delete your account.',
@@ -5213,8 +5214,11 @@ async function requireStrongestStepUpForDeletion(req, res, next) {
     }
     return next();
   } catch (err) {
-    logger.error('auth.stepup.strongest_check_failed', { userId: req.user?.id, error: err.message });
-    return res.status(500).json({ error: 'Step-up verification failed' });
+    logger.warn('auth.stepup.strongest_check_failed', { userId: req.user?.id, code: err.code });
+    return res.status(503).json({
+      error: 'Account verification is temporarily unavailable. Please try again.',
+      code: 'AUTH_UNAVAILABLE',
+    });
   }
 }
 
