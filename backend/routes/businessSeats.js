@@ -360,7 +360,7 @@ router.post('/seats/decline-invite', verifyToken, validate(declineInviteSchema),
 
     const { data: seat, error: seatErr } = await supabaseAdmin
       .from('BusinessSeat')
-      .select('id, business_user_id, invite_status')
+      .select('id, business_user_id, invite_status, invite_email, invite_expires_at')
       .eq('invite_token_hash', tokenHash)
       .eq('is_active', true)
       .maybeSingle();
@@ -376,6 +376,14 @@ router.post('/seats/decline-invite', verifyToken, validate(declineInviteSchema),
 
     if (seat.invite_status !== 'pending') {
       return res.status(410).json({ error: `Invite already ${seat.invite_status}` });
+    }
+
+    // Declining consumes the same recipient-bound token as accepting it.
+    if (seat.invite_email && seat.invite_email.toLowerCase().trim() !== (req.user.email || '').toLowerCase().trim()) {
+      return res.status(403).json({ error: 'This invitation was sent to a different email address' });
+    }
+    if (seat.invite_expires_at && new Date(seat.invite_expires_at) < new Date()) {
+      return res.status(410).json({ error: 'Invite has expired' });
     }
 
     const { error: updateErr } = await supabaseAdmin

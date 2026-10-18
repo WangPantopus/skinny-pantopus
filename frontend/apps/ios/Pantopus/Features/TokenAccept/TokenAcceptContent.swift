@@ -90,6 +90,7 @@ public enum TokenAcceptState: Sendable {
     case accepting(TokenAcceptOffer)
     case accepted(TokenAcceptOffer, message: String)
     case declined
+    case wrongAccount
     case expired(message: String)
     case error(message: String)
 }

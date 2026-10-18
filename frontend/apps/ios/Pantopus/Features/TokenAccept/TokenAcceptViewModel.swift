@@ -100,6 +100,14 @@ public final class TokenAcceptViewModel {
             return
         }
         if case let .success(value) = seat, let id = value.seatId, HomePostalValidation.uuid(id) {
+            if let invitedEmail = value.inviteEmail?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+               !invitedEmail.isEmpty {
+                guard case let .signedIn(user) = auth.state,
+                      user.email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == invitedEmail else {
+                    state = .wrongAccount
+                    return
+                }
+            }
             state = .ready(Self.makeSeatOffer(seat: value, identity: identity))
             return
         }

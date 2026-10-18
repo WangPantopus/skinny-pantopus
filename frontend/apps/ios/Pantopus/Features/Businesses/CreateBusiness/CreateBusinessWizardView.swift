@@ -12,6 +12,8 @@ import SwiftUI
 @MainActor
 public struct CreateBusinessWizardView: View {
     @State private var viewModel: CreateBusinessWizardViewModel
+    @State private var createdBusinessId: String?
+    @State private var showsLogoWarning = false
     private let onClose: @MainActor () -> Void
     private let onOpenBusiness: @MainActor (String) -> Void
 
@@ -44,6 +46,15 @@ public struct CreateBusinessWizardView: View {
                 stepName: viewModel.currentStep.rawValue
             ))
         }
+        .alert("Business created", isPresented: $showsLogoWarning) {
+            Button("Open business") {
+                guard let businessId = createdBusinessId else { return }
+                createdBusinessId = nil
+                onOpenBusiness(businessId)
+            }
+        } message: {
+            Text(viewModel.logoUploadWarning ?? "")
+        }
         .accessibilityIdentifier("createBusinessWizard")
     }
 
@@ -71,7 +82,12 @@ public struct CreateBusinessWizardView: View {
         case .dismiss:
             onClose()
         case let .openBusinessDashboard(businessId):
-            onOpenBusiness(businessId)
+            if viewModel.logoUploadWarning != nil {
+                createdBusinessId = businessId
+                showsLogoWarning = true
+            } else {
+                onOpenBusiness(businessId)
+            }
         }
         viewModel.acknowledgePendingEvent()
     }

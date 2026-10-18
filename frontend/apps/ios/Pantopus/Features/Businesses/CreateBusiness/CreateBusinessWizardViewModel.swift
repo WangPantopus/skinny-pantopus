@@ -418,6 +418,13 @@ final class CreateBusinessWizardViewModel: WizardModel {
         }
         let trimmedAddress = address.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedCity = city.trimmingCharacters(in: .whitespacesAndNewlines)
+        let hasLocationInput = [address, city, state, zip].contains {
+            !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+        if hasLocationInput && trimmedAddress.isEmpty {
+            submitError = "Address is required when adding a location. Complete the address and city, or skip location."
+            return false
+        }
         if !trimmedAddress.isEmpty && trimmedCity.isEmpty {
             submitError = "City is required when adding an address."
             return false
