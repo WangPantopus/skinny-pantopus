@@ -78,7 +78,7 @@ const {
   writeAuditLog,
   BUSINESS_ROLE_RANK,
 } = require('../utils/businessPermissions');
-const { RESERVED_USERNAMES, ENTITY_TYPES, getPublishRequirements } = require('../utils/businessConstants');
+const { RESERVED_USERNAMES, ENTITY_TYPES, VERIFICATION_STATUSES, getPublishRequirements } = require('../utils/businessConstants');
 const { applyEntityTypeSideEffects } = require('../services/businessEntityService');
 const stripeService = require('../stripe/stripeService');
 const { PAYMENT_STATES } = require('../stripe/paymentStateMachine');
@@ -1258,6 +1258,11 @@ router.get('/:businessId/dashboard', verifyToken, async (req, res) => {
       hasHours = (hoursCount || 0) > 0;
     }
 
+    // Self-attestation records the owner's claim; only reviewed verification
+    // completes this step, matching the dashboard's verified badge.
+    const businessVerified = profile?.verification_status === VERIFICATION_STATUSES.DOCUMENT_VERIFIED
+      || profile?.verification_status === VERIFICATION_STATUSES.GOVERNMENT_VERIFIED;
+
     // Build onboarding checklist
     const checklist = [
       { key: 'account_created', done: true, label: 'Create business account', action: null },
@@ -1266,7 +1271,7 @@ router.get('/:businessId/dashboard', verifyToken, async (req, res) => {
       { key: 'logo_uploaded', done: !!profile?.logo_file_id, label: 'Upload a logo', action: '/profile' },
       { key: 'description_written', done: !!(profile?.description && profile.description.length >= 50), label: 'Write a description (50+ chars)', action: '/profile' },
       { key: 'catalog_item_added', done: (catalogItems || []).length > 0, label: 'Add a service or product', action: '/catalog' },
-      { key: 'business_verified', done: !!(profile?.verification_status && profile.verification_status !== 'unverified'), label: 'Verify your business', action: '/settings/verification' },
+      { key: 'business_verified', done: businessVerified, label: 'Verify your business', action: '/settings/verification' },
       { key: 'profile_published', done: profile?.is_published === true, label: 'Publish your profile', action: null },
     ];
 
