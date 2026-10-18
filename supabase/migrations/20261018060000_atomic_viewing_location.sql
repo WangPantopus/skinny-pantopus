@@ -1,6 +1,8 @@
 -- Keep the selected area and recent history together. The existing unique
 -- user_id key serializes saves, including two devices choosing their first
 -- location at once. No new tables or client grants are needed.
+-- Backwards compatible: yes. Additive service-only function; the deployed app can keep
+-- writing the existing tables. Apply this before deploying its new caller.
 CREATE OR REPLACE FUNCTION public.set_user_viewing_location(p_user_id uuid, p_location jsonb)
 RETURNS public."UserViewingLocation"
 LANGUAGE plpgsql
