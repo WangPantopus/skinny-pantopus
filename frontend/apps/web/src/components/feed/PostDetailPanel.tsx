@@ -15,8 +15,10 @@ import CommentThread from './CommentThread';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
 import FeedMediaImage from './FeedMediaImage';
 import LinkPreviewCard from './LinkPreviewCard';
+import PostMetadata from './PostMetadata';
+import { sharePostLink } from './sharePostLink';
 import { formatTimeAgo as timeAgo, getPostTypeConfig, POST_TYPE_ICONS_LUCIDE } from '@pantopus/ui-utils';
-import { buildCanonicalShareUrlForPost, chosenUsername } from '@pantopus/utils';
+import { chosenUsername } from '@pantopus/utils';
 import { removePostFromFeedCaches } from '@/hooks/useFeedData';
 import { usePostDetail } from '@/hooks/usePostDetail';
 import type { Post, PostComment as PostCommentType } from '@pantopus/types';
@@ -291,18 +293,8 @@ export default function PostDetailPanel({
 
   const handleShare = async () => {
     if (!post) return;
-    const url = buildCanonicalShareUrlForPost(post);
-
     try {
-      if (typeof navigator !== 'undefined' && navigator.share) {
-        await navigator.share({
-          title: post.title || 'Post',
-          text: post.content?.slice(0, 120),
-          url,
-        });
-      } else {
-        await navigator.clipboard.writeText(url);
-      }
+      if (!await sharePostLink(post)) return;
 
       const res = await api.posts.sharePost(post.id);
       setPost((prev) => prev ? { ...prev, share_count: res.shareCount } : prev);
@@ -459,10 +451,13 @@ export default function PostDetailPanel({
               )}
 
               <div className="px-5 pb-4">
+                {post.title && <h3 className="mb-2 text-base font-semibold text-app break-words">{post.title}</h3>}
                 <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-app">
                   {post.content}
                 </p>
               </div>
+
+              <PostMetadata post={post} spacing="mx-5 mb-3" />
 
               {post.tags && post.tags.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 px-5 pb-3">
@@ -486,12 +481,14 @@ export default function PostDetailPanel({
                       className="relative block w-full cursor-zoom-in overflow-hidden rounded-xl border-0 bg-transparent p-0 text-left transition hover:opacity-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
                       aria-label={`View ${post.media_types?.[idx] === 'video' ? 'video' : 'image'} ${idx + 1} full size`}
                     >
-                      <FeedMediaImage
-                        src={url}
+                      {post.media_types?.[idx] === 'video' && !post.media_thumbnails?.[idx] ? (
+                        <span className="block aspect-video bg-surface-muted" />
+                      ) : <FeedMediaImage
+                        src={post.media_thumbnails?.[idx] || url}
                         alt=""
                         className="max-h-80 w-full rounded-xl object-cover"
                         loading="lazy"
-                      />
+                      />}
                       {post.media_types?.[idx] === 'video' && (
                         <div className="absolute inset-0 flex items-center justify-center">
                           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-black/50">
@@ -588,7 +585,7 @@ export default function PostDetailPanel({
             className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4"
             role="dialog"
             aria-modal="true"
-            aria-label="Full size image"
+            aria-label="Full size media"
             onClick={() => setLightboxIndex(null)}
           >
             <button
@@ -610,7 +607,7 @@ export default function PostDetailPanel({
                     );
                   }}
                   className="absolute left-2 top-1/2 z-[102] -translate-y-1/2 rounded-full bg-white/10 p-3 text-white transition hover:bg-white/20 md:left-4"
-                  aria-label="Previous image"
+                  aria-label="Previous attachment"
                 >
                   <ChevronLeft className="h-7 w-7" />
                 </button>
@@ -623,7 +620,7 @@ export default function PostDetailPanel({
                     );
                   }}
                   className="absolute right-2 top-1/2 z-[102] -translate-y-1/2 rounded-full bg-white/10 p-3 text-white transition hover:bg-white/20 md:right-4"
-                  aria-label="Next image"
+                  aria-label="Next attachment"
                 >
                   <ChevronRight className="h-7 w-7" />
                 </button>

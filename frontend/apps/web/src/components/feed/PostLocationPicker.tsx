@@ -55,6 +55,7 @@ export default function PostLocationPicker({
   const inputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const debouncedQuery = useDebounced(query, 250);
+  const searching = query.length >= 3 && (loading || query !== debouncedQuery);
 
   // Close on outside click
   useEffect(() => {
@@ -326,7 +327,7 @@ export default function PostLocationPicker({
               placeholder="Search address or place…"
               className="flex-1 text-xs outline-none bg-transparent text-app placeholder:text-app-muted"
             />
-            {loading && (
+            {searching && (
               <div className="w-3.5 h-3.5 border-2 border-app border-t-primary-500 rounded-full animate-spin flex-shrink-0" />
             )}
             <button aria-label="Close"
@@ -341,7 +342,8 @@ export default function PostLocationPicker({
 
           {/* Results */}
           <div className="max-h-48 overflow-y-auto">
-            {searchFailed && query.length >= 3 && !loading && (
+            {searching && <div role="status" className="px-3 py-4 text-center text-xs text-app-muted">Searching…</div>}
+            {searchFailed && query.length >= 3 && !searching && (
               <div className="px-3 py-4 text-center text-xs text-app-muted">
                 Couldn&apos;t search places right now.{' '}
                 <button
@@ -353,13 +355,13 @@ export default function PostLocationPicker({
                 </button>
               </div>
             )}
-            {!searchFailed && suggestions.length === 0 && query.length >= 3 && !loading && (
+            {!searchFailed && suggestions.length === 0 && query.length >= 3 && !searching && (
               <div className="px-3 py-4 text-center text-xs text-app-muted">No results found</div>
             )}
             {suggestions.length === 0 && query.length < 3 && (
               <div className="px-3 py-4 text-center text-xs text-app-muted">Type at least 3 characters…</div>
             )}
-            {suggestions.map((s, idx) => {
+            {!searching && query.length >= 3 && suggestions.map((s, idx) => {
               const suggestionId = typeof s.suggestion_id === 'string' ? s.suggestion_id : null;
               const primaryText = typeof s.primary_text === 'string' ? s.primary_text : (typeof s.label === 'string' ? (s.label as string).split(',')[0] : 'Selected place');
               const secondaryText = typeof s.secondary_text === 'string' ? s.secondary_text : '';

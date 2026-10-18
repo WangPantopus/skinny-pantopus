@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useMemo, useReducer, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import * as api from '@pantopus/api';
@@ -337,20 +337,34 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
     router.push(q ? `/app/discover?q=${encodeURIComponent(q)}` : '/app/discover');
   };
 
+  const creatingFeedPost = useRef(false);
   const handleCreateFeedPost = async (data: PostComposerSubmitData) => {
+    if (creatingFeedPost.current) return false;
+    creatingFeedPost.current = true;
     appDispatch({ type: 'SET_FEED_POSTING', value: true });
     try {
       const { mediaFiles, ...composerData } = data;
       const postData = { ...composerData } as Parameters<typeof api.posts.createPost>[0];
       const res = await api.posts.createPost(postData);
       const newPost = res.post;
+      if (typeof newPost?.id !== 'string' || !newPost.id.trim()) {
+        throw new Error('Post could not be confirmed. Try again.');
+      }
+      void queryClient.invalidateQueries({ queryKey: ['posts', 'mine'], refetchType: 'none' });
       const files = Array.isArray(mediaFiles) ? mediaFiles : [];
 
       if (files.length > 0) {
         try {
-          await api.upload.uploadPostMedia(newPost.id, files);
+          const upload = await api.upload.uploadPostMedia(newPost.id, files);
+          if (!Array.isArray(upload?.media_urls) || upload.media_urls.length === 0 ||
+              !upload.media_urls.every((url) => typeof url === 'string' && url.length > 0) ||
+              !Array.isArray(upload.media_types) || upload.media_types.length !== upload.media_urls.length) {
+            throw new Error('Attachments could not be confirmed.');
+          }
         } catch {
-          toast.warning('Post created, but media failed to attach. You can re-upload from the post.');
+          notifyFeedPostCreated();
+          toast.warning('Post saved. Attachments could not be confirmed. Keep this draft open and try again.');
+          return false;
         }
       }
 
@@ -362,6 +376,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       toast.error(err instanceof Error ? err.message : 'Failed to post.');
       return false;
     } finally {
+      creatingFeedPost.current = false;
       appDispatch({ type: 'SET_FEED_POSTING', value: false });
     }
   };

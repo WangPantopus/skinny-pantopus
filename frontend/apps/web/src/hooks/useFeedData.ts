@@ -404,6 +404,7 @@ export function useFeedData({
       if (typeof newPost?.id !== 'string' || !newPost.id.trim()) {
         throw new Error('Post could not be confirmed. Try again.');
       }
+      void queryClient.invalidateQueries({ queryKey: ['posts', 'mine'], refetchType: 'none' });
 
       const files = Array.isArray(mediaFiles) ? mediaFiles as File[] : [];
       if (files.length > 0) {

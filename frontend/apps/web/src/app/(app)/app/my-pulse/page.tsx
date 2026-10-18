@@ -15,6 +15,7 @@ import ErrorState from '@/components/ui/ErrorState';
 import { Bookmark, Newspaper } from 'lucide-react';
 import { ListArchetype } from '@/components/archetypes';
 import { fetchMe } from '@/lib/me';
+import { FEED_POST_CREATED_EVENT } from '@/lib/feedComposerEvents';
 
 const PAGE_SIZE = 50;
 
@@ -111,6 +112,11 @@ export default function MyPulsePage() {
     if (skipFirstLoad.current) { skipFirstLoad.current = false; return; }
     loadPosts();
   }, [loadPosts, userId]);
+  useEffect(() => {
+    const onCreated = () => { void loadPosts(); };
+    window.addEventListener(FEED_POST_CREATED_EVENT, onCreated);
+    return () => window.removeEventListener(FEED_POST_CREATED_EVENT, onCreated);
+  }, [loadPosts]);
   useEffect(() => {
     if (!loading && !loadError) keepMine({ posts, nextCursor }, mineReadAt.current);
   }, [posts, nextCursor, loading, loadError, keepMine]);
@@ -328,6 +334,12 @@ export default function MyPulsePage() {
               onDelete={handleDelete}
               onEdit={setEditingPost}
               onReport={(id) => setReportPostId(id)}
+              onSolved={(id) => {
+                const solved = (p: Post): Post => p.id === id ? { ...p, state: 'solved' } : p;
+                setPosts((prev) => prev.map(solved));
+                setSaved((prev) => prev.map(solved));
+                patchPostInFeedCaches(queryClient, id, { state: 'solved' });
+              }}
               currentUserId={userId || undefined}
               isLiking={likingIds.has(post.id)}
               showToast={(message) => toast.info(message)}
