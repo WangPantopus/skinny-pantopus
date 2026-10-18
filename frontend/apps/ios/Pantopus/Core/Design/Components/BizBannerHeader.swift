@@ -337,6 +337,8 @@ struct BusinessHeaderImage: View {
                         .scaledToFill()
                         .frame(width: geometry.size.width, height: geometry.size.height)
                         .clipped()
+                } else {
+                    Color.clear
                 }
             }
         }
