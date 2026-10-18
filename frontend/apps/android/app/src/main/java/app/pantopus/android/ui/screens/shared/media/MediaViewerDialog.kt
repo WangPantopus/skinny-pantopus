@@ -82,6 +82,7 @@ fun MediaViewerDialog(
                             // Originals are never written to the disk cache (Instant Screens §6).
                             cacheOnDisk = false,
                         )
+                    PostMediaKind.Document -> PostPdfSlide(url = item.url)
                     PostMediaKind.Video ->
                         ViewerVideoSlide(
                             url = item.url,
@@ -92,6 +93,7 @@ fun MediaViewerDialog(
                             item = item,
                             contentScale = ContentScale.Fit,
                             showsReplayButton = true,
+                            isActive = pagerState.currentPage == page,
                             modifier = Modifier.fillMaxSize(),
                         )
                 }

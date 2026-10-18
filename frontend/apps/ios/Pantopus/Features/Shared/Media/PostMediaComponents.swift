@@ -95,6 +95,7 @@ struct LivePhotoTileView: View {
     /// `.fill` for grid cells, `.fit` for the full-screen viewer.
     let contentMode: ContentMode
     /// Yellow indicator dot (hidden in the viewer, which shows a pill).
+    var isActive = true
     var showsDot = true
     /// Viewer slide: render a LIVE pill that replays the clip once.
     var showsReplayButton = false
@@ -135,6 +136,9 @@ struct LivePhotoTileView: View {
             } else if !isPlayingOnce {
                 stopPlayback()
             }
+        }
+        .onChange(of: isActive) { _, active in
+            if !active { stopPlayback() }
         }
         .onDisappear {
             stopPlayback()
@@ -250,6 +254,18 @@ struct PostMediaTileView: View {
                 .accessibilityElement()
                 .accessibilityLabel("Photo")
                 .accessibilityAddTraits(.isImage)
+        case .document:
+            Button { onTap?() } label: {
+                VStack(spacing: Spacing.s2) {
+                    Icon(.fileText, size: 32, color: Theme.Color.appText)
+                    Text("PDF").font(.headline)
+                    Text("Tap to read").font(.caption)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Theme.Color.appSurfaceSunken)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Open PDF")
         case .video:
             ZStack {
                 if item.thumbnailURL != nil {

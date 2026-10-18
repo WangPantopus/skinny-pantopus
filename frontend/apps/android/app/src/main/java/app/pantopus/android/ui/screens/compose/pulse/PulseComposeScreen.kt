@@ -6,7 +6,6 @@ import android.app.DatePickerDialog
 import android.content.ContentResolver
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -179,37 +178,43 @@ fun PulseComposeScreen(
         }
     }
 
+    var isLoadingMedia by remember { mutableStateOf(false) }
     val photoPicker =
-        rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = PULSE_COMPOSE_MAX_PHOTOS),
-        ) { uris ->
+        rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
             if (uris.isEmpty()) return@rememberLauncherForActivityResult
+            isLoadingMedia = true
             scope.launch {
+                var failed = false
                 val loaded =
                     withContext(Dispatchers.IO) {
-                        uris.take(PULSE_COMPOSE_MAX_PHOTOS).mapNotNull { uri ->
-                            readBytes(context.contentResolver, uri)?.let { bytes ->
-                                // Capture-location anchor (ADDENDUM 2):
-                                // EXIF GPS is read off the picked bytes as
-                                // a LOCAL place-picker anchor only — it is
-                                // never auto-attached to the outgoing post.
-                                // On API 29+ the system photo picker
-                                // redacts location EXIF at read time
-                                // (ACCESS_MEDIA_LOCATION does not apply to
-                                // picker URIs), so this legitimately
-                                // returns null there → no anchor chips;
-                                // API 26-28 bytes still carry GPS.
-                                val captured = MediaLocationExtractor.fromImageBytes(bytes)
+                        uris.take(PULSE_COMPOSE_MAX_PHOTOS - photos.size).mapNotNull { uri ->
+                            val mime = runCatching { context.contentResolver.getType(uri) }.getOrNull() ?: ""
+                            val maxBytes =
+                                when {
+                                    mime.startsWith("video/") -> 100 * 1024 * 1024
+                                    mime == "application/pdf" -> 25 * 1024 * 1024
+                                    mime.startsWith("image/") -> 10 * 1024 * 1024
+                                    else -> 0
+                                }
+                            val bytes = readBytes(context.contentResolver, uri, maxBytes)
+                            if (bytes == null || bytes.isEmpty()) {
+                                failed = true
+                                null
+                            } else {
+                                val captured = if (mime.startsWith("image/")) MediaLocationExtractor.fromImageBytes(bytes) else null
                                 PulseComposePhoto(
                                     id = UUID.randomUUID().toString(),
                                     data = bytes,
                                     capturedLatitude = captured?.latitude,
                                     capturedLongitude = captured?.longitude,
+                                    mimeType = mime,
                                 )
                             }
                         }
                     }
-                viewModel.setPhotos(loaded)
+                loaded.forEach(viewModel::appendPhoto)
+                isLoadingMedia = false
+                if (failed) viewModel.attachmentReadFailed()
             }
         }
 
@@ -244,7 +249,7 @@ fun PulseComposeScreen(
         FormShell(
             title = viewModel.displayTitle,
             rightActionLabel = viewModel.ctaLabel,
-            isValid = viewModel.isValid,
+            isValid = viewModel.isValid && !isLoadingMedia,
             isDirty = viewModel.isDirty,
             isSaving = viewModel.isSubmitting,
             onClose = onBack,
@@ -302,7 +307,7 @@ fun PulseComposeScreen(
                                 onUpdateField = viewModel::update,
                                 onPickPhotos = {
                                     photoPicker.launch(
-                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                                        arrayOf("image/*", "video/*", "application/pdf"),
                                     )
                                 },
                                 onRemovePhoto = viewModel::removePhoto,
@@ -349,9 +354,21 @@ fun PulseComposeScreen(
 private fun readBytes(
     resolver: ContentResolver,
     uri: Uri,
+    maxBytes: Int,
 ): ByteArray? =
     runCatching {
-        resolver.openInputStream(uri)?.use { it.readBytes() }
+        resolver.openInputStream(uri)?.use { stream ->
+            require(maxBytes > 0)
+            val output = java.io.ByteArrayOutputStream()
+            val buffer = ByteArray(8192)
+            while (true) {
+                val count = stream.read(buffer)
+                if (count < 0) break
+                require(output.size() + count <= maxBytes)
+                output.write(buffer, 0, count)
+            }
+            output.toByteArray()
+        }
     }.getOrNull()
 
 @Composable
@@ -1300,9 +1317,9 @@ private fun PhotosSection(
     onPick: () -> Unit,
     onRemove: (String) -> Unit,
 ) {
-    FormFieldGroup("Photos (optional)") {
+    FormFieldGroup("Attachments (optional)") {
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+            Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
                 photos.forEach { photo ->
                     PhotoThumbnail(photo = photo, onRemove = onRemove)
                 }
@@ -1311,7 +1328,7 @@ private fun PhotosSection(
                 }
             }
             Text(
-                text = "Up to $PULSE_COMPOSE_MAX_PHOTOS images. Tap a photo to remove it.",
+                text = "Up to $PULSE_COMPOSE_MAX_PHOTOS photos, videos, or PDFs. Tap an attachment to remove it.",
                 style = PantopusTextStyle.caption,
                 color = PantopusColors.appTextSecondary,
             )
@@ -1324,7 +1341,7 @@ private fun PhotoThumbnail(
     photo: PulseComposePhoto,
     onRemove: (String) -> Unit,
 ) {
-    val bitmap = remember(photo.id) { decodeImage(photo.data) }
+    val bitmap = remember(photo.id) { if (photo.mimeType.startsWith("image/")) decodeImage(photo.data) else null }
     Box(
         modifier =
             Modifier
@@ -1342,6 +1359,9 @@ private fun PhotoThumbnail(
                 contentScale = ContentScale.Crop,
             )
         }
+        if (bitmap == null) {
+            Text(if (photo.mimeType == "application/pdf") "PDF" else "Video", modifier = Modifier.align(Alignment.Center))
+        }
         Box(
             modifier =
                 Modifier
@@ -1354,7 +1374,7 @@ private fun PhotoThumbnail(
         ) {
             PantopusIconImage(
                 icon = PantopusIcon.X,
-                contentDescription = "Remove photo",
+                contentDescription = "Remove attachment",
                 size = 10.dp,
                 strokeWidth = 2.5f,
                 tint = PantopusColors.appTextInverse,
@@ -1378,7 +1398,7 @@ private fun AddPhotoTile(onPick: () -> Unit) {
                 .border(width = 1.dp, color = PantopusColors.appBorderStrong, shape = RoundedCornerShape(Radii.md))
                 .clickable { onPick() }
                 .testTag("composePulseAddPhoto")
-                .semantics { contentDescription = "Add photo" },
+                .semantics { contentDescription = "Add photo, video, or PDF" },
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {

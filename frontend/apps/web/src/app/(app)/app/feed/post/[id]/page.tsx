@@ -15,7 +15,9 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import { CommentThread, EditPostDialog } from '@/components/feed';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
-import FeedMediaImage from '@/components/feed/FeedMediaImage';
+import { PostMediaPreview, resolvePostMediaSlots } from '@/components/feed/PostMediaGrid';
+import PostMediaLightbox from '@/components/feed/PostMediaLightbox';
+import { PostLinkContent } from '@/components/feed/LinkPreviewCard';
 import { formatDistance, formatTimeAgo as timeAgo, getPostTypeConfig, POST_TYPE_ICONS_LUCIDE } from '@pantopus/ui-utils';
 import { buildCanonicalShareUrlForPost, getErrorMessage, chosenUsername } from '@pantopus/utils';
 import Image from 'next/image';
@@ -67,14 +69,6 @@ export default function PostDetailPage() {
 
   // Lightbox
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
-  // Escape closes the media viewer, as it does in the feed's PostMediaLightbox.
-  useEffect(() => {
-    if (lightboxIdx === null) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setLightboxIdx(null); };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [lightboxIdx]);
-
   // ─── Load user ─────────────────────────────────────────────
   useEffect(() => {
     (async () => {
@@ -609,7 +603,7 @@ export default function PostDetailPage() {
           {/* Full content (no truncation) */}
           <div className="px-5 pb-4">
             <p className="text-sm text-app leading-relaxed whitespace-pre-wrap">
-              {post.content}
+              <PostLinkContent content={post.content} />
             </p>
           </div>
 
@@ -714,7 +708,7 @@ export default function PostDetailPage() {
                   } ${post.media_urls!.length === 3 && idx === 0 ? 'row-span-2 aspect-auto' : ''}`}
                   onClick={() => setLightboxIdx(idx)}
                 >
-                  <FeedMediaImage src={url} alt="" className="w-full h-full object-cover" loading="lazy" />
+                  <PostMediaPreview url={url} thumbnailUrl={post.media_thumbnails?.[idx]} slot={resolvePostMediaSlots(post.media_urls!, post.media_types, post.media_live_urls)[idx]} onPress={() => setLightboxIdx(idx)} />
                 </div>
               ))}
             </div>
@@ -881,66 +875,9 @@ export default function PostDetailPage() {
       {/* ─── Media Lightbox ───────────────────────────────── */}
       {/* Rendered into document.body, like the feed's post panel: inside the app's <main> (its own stacking context)
           the viewer stayed under the header and sidebar, and the header covered its close button. */}
-      {lightboxIdx !== null && post.media_urls && typeof document !== 'undefined' && createPortal(
-        <div
-          className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center"
-          onClick={() => setLightboxIdx(null)}
-          role="dialog"
-          aria-modal="true"
-          aria-label="Full size media"
-        >
-          {/* Close */}
-          <button
-            onClick={() => setLightboxIdx(null)}
-            className="absolute top-4 right-4 p-2 text-white/70 hover:text-white transition"
-            aria-label="Close"
-          >
-            <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-
-          {/* Prev */}
-          {lightboxIdx > 0 && (
-            <button
-              onClick={(e) => { e.stopPropagation(); setLightboxIdx(lightboxIdx - 1); }}
-              className="absolute left-4 p-2 text-white/70 hover:text-white transition"
-              aria-label="Previous media"
-            >
-              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-          )}
-
-          {/* Image */}
-          <FeedMediaImage
-            src={post.media_urls[lightboxIdx]}
-            alt=""
-            className="max-w-[90vw] max-h-[85vh] object-contain rounded-lg"
-            onClick={(e) => e.stopPropagation()}
-          />
-
-          {/* Next */}
-          {lightboxIdx < post.media_urls.length - 1 && (
-            <button
-              onClick={(e) => { e.stopPropagation(); setLightboxIdx(lightboxIdx + 1); }}
-              className="absolute right-4 p-2 text-white/70 hover:text-white transition"
-              aria-label="Next media"
-            >
-              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-          )}
-
-          {/* Counter */}
-          {post.media_urls.length > 1 && (
-            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-white/60 text-sm font-medium">
-              {lightboxIdx + 1} / {post.media_urls.length}
-            </div>
-          )}
-        </div>,
+      {post.media_urls && typeof document !== 'undefined' && createPortal(
+        <PostMediaLightbox urls={post.media_urls} mediaTypes={post.media_types} liveUrls={post.media_live_urls}
+          index={lightboxIdx} onIndexChange={setLightboxIdx} onClose={() => setLightboxIdx(null)} />,
         document.body,
       )}
 
