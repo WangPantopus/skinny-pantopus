@@ -26,6 +26,15 @@ const UNREACHABLE = Symbol('auth-unreachable');
 const TOKEN_CACHE_MAX = 500;
 const _tokenCache = new Map();
 
+function invalidateUserCache({ userId } = {}) {
+  if (!userId) return;
+  for (const [token, entry] of _tokenCache) {
+    if (entry.user?.id === userId) _tokenCache.delete(token);
+  }
+}
+authSessionService.authEvents.on('watermark_updated', invalidateUserCache);
+authSessionService.authEvents.on('session_revoked', invalidateUserCache);
+
 function getCached(token) {
   const entry = _tokenCache.get(token);
   if (!entry) return undefined;
@@ -106,6 +115,15 @@ async function optionalAuth(req, _res, next) {
       const state = await authSessionService.getSessionStateCached(claims.id);
       if (state.known && state.revoked) {
         logger.debug('optionalAuth: session revoked, treating as anonymous', { session_id: claims.id });
+        setCache(token, null);
+        req.authRejected = true;
+        return next();
+      }
+    }
+
+    if (typeof claims?.iat === 'number') {
+      const watermark = await authSessionService.getSessionsValidAfter(data.user.id);
+      if (watermark && claims.iat * 1000 < watermark.getTime()) {
         setCache(token, null);
         req.authRejected = true;
         return next();

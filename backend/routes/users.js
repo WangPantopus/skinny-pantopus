@@ -2507,8 +2507,8 @@ router.post('/password', verifyToken, reauthLimiter, reauthAccountLimiter, valid
  * Persistent login: pre-check the session registry before GoTrue rotates
  * (CONTRACT "/refresh" order: resolve session → revoked? → inactivity → bound:
  * verify DPoP against the bound key → legacy rules). A crash inside the
- * registry never fails open in `required` mode and never fails closed in the
- * others (getUser/GoTrue stay the authority for the pair itself).
+ * registry refuses refresh in every binding mode when security state is
+ * unreadable. A retryable failure preserves the client's existing tokens.
  */
 async function preCheckRefresh(req, refreshToken) {
   try {
@@ -2522,10 +2522,7 @@ async function preCheckRefresh(req, refreshToken) {
     });
   } catch (err) {
     logger.error('auth.refresh.precheck_error', { error: err.message, stack: err.stack });
-    if (authPolicy.deviceBindingMode() === 'required' && !isCookieTransport(req)) {
-      return { ok: false, status: 503, code: 'AUTH_UNAVAILABLE', error: 'Could not verify this session right now. Please try again.' };
-    }
-    return { ok: true, session: null, device: null, legacy: true, adopt: false, matchedBy: null };
+    return { ok: false, status: 503, code: 'AUTH_UNAVAILABLE', error: 'Could not verify this session right now. Please try again.' };
   }
 }
 

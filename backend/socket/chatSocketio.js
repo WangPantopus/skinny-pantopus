@@ -312,7 +312,7 @@ module.exports = (io) => {
       next();
     } catch (err) {
       logger.error('Socket auth error', { error: err.message });
-      next(new Error('Authentication failed'));
+      next(new Error(err.authBusy ? 'Authentication unavailable' : 'Authentication failed'));
     }
   });
   
