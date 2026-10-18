@@ -486,11 +486,18 @@ reminders:
      --protocol email --notification-endpoint <your email>
    ```
 
-Task reminders go out at 7:00 and the evening run at 18:00 Pacific, through
-daylight saving (EventBridge Scheduler); briefings follow each person's own time.
+The home-reminder job checks every 15 minutes, all day. Task reminders become
+eligible at 07:00 in each recipient's resolved local time zone; bills also have
+an 18:00 local window. Briefings check every minute for the person's saved
+morning/evening time (defaults 07:30 and 18:00). Both use IANA time zones,
+including Alaska, the Aleutians, Hawaii and Arizona's daylight-saving exceptions.
+The selected home/place supplies the zone; a valid saved device zone is the
+fallback when no location is available. An unknown zone is skipped, never
+silently assigned Pacific time. Failed briefings retry only during the same
+15-minute local slot; daily housekeeping never sends a catch-up briefing.
 
 **Check:** CloudWatch logs for `pantopus-briefing-scheduler-staging` show runs
-every 15 minutes with no errors; `select job_name, last_success, last_failure
+every minute with no errors; `select job_name, last_success, last_failure
 from job_locks` in the staging SQL editor shows the job-trigger runs; the
 CloudWatch alarms list shows six `pantopus-*-errors-staging` alarms in OK; the
 founder's staging phone gets one scheduled reminder (section 5).
@@ -761,9 +768,21 @@ for P10). The containers were not inspected on the host.
 
 The April stack `pantopus-seeder-production` already exists, so
 `sam deploy --config-env prod` updates it in place: new code, the job trigger,
-the failure alarms and the Pacific-time reminder schedules. The stack never
+the failure alarms and recipient-local reminder schedules. The stack never
 writes secret contents, so the secret `pantopus/seeder/production` keeps its
 April values (the April database and its service key) until you replace them.
+The checked-in production deploy configuration now leaves **all schedules
+disabled**. Activation is a separate, explicit parameter change.
+
+**Read-only check, October 17:** all 14 existing production rules remain
+disabled. The briefing Lambda was last deployed May 3; its last log event was
+October 8 at 12:14 Pacific. Its secret still points to the April database and
+its internal API key differs from the prepared current-production key. The
+current-production key passed an empty `/api/internal/briefing/timezones`
+lookup against the live API (no users processed). Aggregate reads of the new
+production database found zero notification-preference rows and zero briefing
+deliveries. No hosted configuration or user preferences were changed.
+
 In this order:
 
 1. Make sure the April schedules are paused (start of section 3). While they
@@ -772,28 +791,58 @@ In this order:
    production project's `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`,
    `PANTOPUS_API_BASE_URL=https://api.pantopus.com`, the production
    `INTERNAL_API_KEY` (in `hosted-secrets/production.env`), a production
-   curator account, `ANTHROPIC_API_KEY`, `AIRNOW_API_KEY` and the WeatherKit keys:
+   curator account, `ANTHROPIC_API_KEY`, `AIRNOW_API_KEY` and optional WeatherKit keys.
+   A private candidate was prepared on the Mac at
+   `~/.config/pantopus/hosted-secrets/seeder-production-prepared-2026-10-17.json`
+   (mode 600), using `production-server-candidate.env`. Its database credential
+   passed read-only checks against the new production, and its internal API key
+   passed the live API check above. Revalidate if production credentials change.
+   The curator fields are deliberately blank: the April curator does not exist
+   in the new database. The founder must supply a production curator before
+   enabling content publishing. Briefings need only the database URL/key,
+   API URL and internal API key; they can be enabled independently below.
    ```bash
-   aws secretsmanager put-secret-value --secret-id pantopus/seeder/production --secret-string file://<private json file>
+   aws secretsmanager put-secret-value --region us-west-2 \
+     --secret-id pantopus/seeder/production --secret-string file://<private json file>
    ```
-3. Deploy as in S8 step 1, ending with `sam deploy --config-env prod`.
-4. Switch the schedules back on. A deploy that doesn't change a schedule leaves
-   it paused:
+3. Build and deploy as in S8 step 1, using `sam build --use-container --config-env prod`
+   and `sam deploy --config-env prod`. This deploy keeps every schedule paused,
+   including the new `pantopus-home-reminders-local-production` Scheduler
+   resource. Review the change set before executing it. Verify the deployed
+   code date, secret target and internal-key authentication while still paused.
+4. Activate **only morning/evening briefings and their housekeeping** first:
    ```bash
-   for r in $(aws cloudformation describe-stack-resources --region us-west-2 --stack-name pantopus-seeder-production \
-       --query "StackResources[?ResourceType=='AWS::Events::Rule'].PhysicalResourceId" --output text); do
-     aws events enable-rule --region us-west-2 --name "$r"
-   done
+   sam deploy --config-env prod \
+     --parameter-overrides Environment=production SchedulesEnabled=false BriefingsEnabled=true
    ```
-5. Subscribe your inbox to `pantopus-job-alarms-production` as in S8 step 4.
+   In the founder's app, enable the desired briefing in notification settings,
+   choose its local time and allow OS notifications. A preference row and a
+   registered push token must exist; neither is created by deploying Lambda.
+   Wait for the actual scheduled delivery on iPhone and Android. Quiet hours,
+   opt-out and a low-signal day intentionally suppress delivery; inspect only
+   aggregate status/skip reasons, never paste raw user or device-token rows.
+5. After the remaining S8 prerequisites (including the production curator) and
+   the other jobs' checks are complete, activate the rest of P8:
+   ```bash
+   sam deploy --config-env prod \
+     --parameter-overrides Environment=production SchedulesEnabled=true BriefingsEnabled=true
+   ```
+   Subscribe your inbox to `pantopus-job-alarms-production` as in S8 step 4.
+   To pause everything, redeploy with `SchedulesEnabled=false BriefingsEnabled=false`.
+   Every later production deploy must explicitly preserve the chosen activation
+   parameters; the checked-in default is paused. Do not enable individual rules
+   by hand and leave their state different from the template.
 
-**Check:** as S8 with `-production` names. Every rule in the stack is
-`ENABLED`; `aws scheduler list-schedules --region us-west-2` lists
-`pantopus-home-reminders-morning-production` and
-`pantopus-home-reminders-evening-production`; and the log of
-`pantopus-briefing-scheduler-production` shows requests to the database you
-chose in P2 (with P2A, the new project's `<ref>.supabase.co`, not the April
-`ankjdyvoduutkhhaxvhx`).
+**Check:** as S8 with `-production` names. After step 4, only the briefing and
+cleanup rules are enabled. After step 5, every rule is enabled and
+`aws scheduler list-schedules --region us-west-2` lists the enabled
+`pantopus-home-reminders-local-production` (every 15 minutes UTC, with recipient
+eligibility evaluated in local time). The briefing scheduler runs every minute
+against the new production database and delivers at most one successful
+morning and one evening brief per recipient's local date. Check summer, winter
+and DST transitions, including Alaska, Adak, Hawaii and Arizona; the AWS region
+`us-west-2` is the hosting region, not a delivery time zone. P8 stays incomplete
+until the hosted and physical-phone checks pass.
 
 ### P9. Production web (founder)
 
