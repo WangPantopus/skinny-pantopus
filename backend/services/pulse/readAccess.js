@@ -9,11 +9,13 @@ const { getPersonaMembershipForUser, getViewerTierRankForPersona } = require('..
 const { haversineMeters } = require('../../utils/trustState');
 const { homeAreaContext } = require('./areas');
 const { scopeAccessForHomes } = require('./readScopes');
+const { checkHomePermission } = require('../../utils/homePermissions');
 
 // The Post columns canReadPost reads; a path that checks a post it selected itself selects these.
 const POST_READ_SELECT = [
   'id',
   'user_id',
+  'home_id',
   'archived_at',
   'archive_reason',
   'post_metadata',
@@ -96,6 +98,7 @@ async function isStaff(userId) {
 // A link opens outside the app only for a post its author made public and left sharing on.
 // Nobody else's Share tap widens who can read a post.
 function isPubliclyShareable(post) {
+  if (post.audience === 'household') return false;
   const isPublic = post.read_scope != null ? post.read_scope === 'public'
     : post.visibility === 'public' || post.audience === 'public';
   return isPublic && post.allow_external_share !== false;
@@ -162,6 +165,16 @@ async function canReadPost(post, userId, scopeAccess) {
     && await isFanBlockedFromPersona(post.identity_context_id, userId)
   ) {
     return false;
+  }
+
+  // Household is an explicit private audience, even if a legacy row carries a
+  // broader distribution target. Use the same current Home policy as its feed;
+  // never infer membership from location or a caller-supplied Home id.
+  if (post.audience === 'household') {
+    const homeId = post.home_id
+      || (post.identity_context_type === 'home' ? post.identity_context_id : null);
+    if (!userId || !homeId) return false;
+    return (await checkHomePermission(homeId, userId)).hasAccess;
   }
 
   if (!userId) {
