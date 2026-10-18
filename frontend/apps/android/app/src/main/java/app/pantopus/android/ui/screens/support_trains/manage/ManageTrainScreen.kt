@@ -572,6 +572,7 @@ private fun OrganizerControls(
 
     ManageHelpersSection(
         rows = ui.helperRows,
+        addressAvailable = content.deliveryAddressAvailable,
         failed = ui.helpersFailed,
         isBusy = ui.isSubmitting,
         onShareAddress = { viewModel.shareExactAddress(it.id) },
@@ -591,8 +592,10 @@ private fun OrganizerControls(
 
     ManageOrganizersSection(
         rows = ui.organizerRows,
+        failed = ui.organizersFailed,
+        onRetry = viewModel::refresh,
         canEdit = content.viewerRole == SupportTrainViewerRole.PRIMARY_ORGANIZER,
-        isBusy = ui.isSubmitting,
+        isBusy = ui.isSubmitting || ui.refreshing,
         onAdd = {
             pickerSession += 1
             showOrganizerPicker = true
