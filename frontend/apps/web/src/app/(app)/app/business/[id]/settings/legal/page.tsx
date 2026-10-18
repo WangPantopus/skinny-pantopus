@@ -96,7 +96,7 @@ export default function BusinessSettingsLegalPage() {
       ]);
       setVerificationData(verRes);
 
-      const priv = (privateRes as { private?: Record<string, unknown> }).private || {};
+      const priv: Partial<api.businesses.BusinessPrivateData> = privateRes.private || {};
       const privLegalName = typeof priv.legal_name === 'string' ? priv.legal_name : '';
       setLegalForm({
         legal_name: privLegalName,
