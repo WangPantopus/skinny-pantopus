@@ -171,11 +171,11 @@ internal fun PlanSpots(
         if (plan.isFull) {
             val noun =
                 if (plan.isPlaydate) {
-                    "families"
+                    if (plan.spots == 1) "family" else "families"
                 } else if (plan.planKind == PlanKind.PICKUP_GAME) {
-                    "players"
+                    if (plan.spots == 1) "player" else "players"
                 } else {
-                    "people"
+                    if (plan.spots == 1) "person" else "people"
                 }
             PlanSpotsCaption(going = "Full", left = "${plan.spots} of ${plan.spots} $noun", note = note, noteMuted = true)
         } else {
