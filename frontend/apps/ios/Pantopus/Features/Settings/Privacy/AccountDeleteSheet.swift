@@ -85,7 +85,8 @@ public struct AccountDeleteSheet: View {
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .multilineTextAlignment(.center)
                     .padding(.top, Spacing.s3)
-                Text("Business profiles are managed separately. Close businesses you own or hand off ownership before deleting your account.")
+                Text("Business profiles are managed separately. "
+                    + "Close businesses you own or hand off ownership before deleting your account.")
                     .pantopusTextStyle(.small)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .multilineTextAlignment(.center)
