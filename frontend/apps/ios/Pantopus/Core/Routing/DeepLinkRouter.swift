@@ -677,6 +677,12 @@ final class DeepLinkRouter {
             }
             return .unknown(url)
         case "invite":
+            // Business share links carry the token in the query; "seat" is
+            // the invitation kind, not the token itself.
+            if segments.dropFirst().first == "seat" {
+                guard segments.count == 2, let token = tokenQuery, !token.isEmpty else { return .unknown(url) }
+                return .invite(token: token)
+            }
             if segments.dropFirst().first == "lease" {
                 guard segments.count == 3, let token = segments.last,
                       token.range(of: "^[a-fA-F0-9]{64}$", options: .regularExpression) != nil else { return .unknown(url) }
