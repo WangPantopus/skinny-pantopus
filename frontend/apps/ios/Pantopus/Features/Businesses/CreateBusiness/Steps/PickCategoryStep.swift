@@ -24,8 +24,7 @@ struct PickCategoryStep: View {
 
         HeadlineBlock(
             "What does your business do?",
-            subtitle: "Pick the closest fit — this shapes your listings, tax setup, and the badges " +
-                "customers see. You can refine the specifics on step 3."
+            subtitle: "Choose the closest fit for your business. You'll add your profile details next."
         )
 
         BusinessSearchField(text: $viewModel.searchText, focused: false)
@@ -228,7 +227,7 @@ private struct StepPreviewMeta: View {
             (
                 Text("Next: ")
                     .foregroundColor(Theme.Color.appTextSecondary)
-                    + Text("legal info")
+                    + Text("basic info")
                     .foregroundColor(Theme.Color.appTextStrong)
                     + Text(" · ")
                     .foregroundColor(Theme.Color.appTextSecondary)
@@ -241,7 +240,7 @@ private struct StepPreviewMeta: View {
             )
             .pantopusTextStyle(.caption)
             Spacer(minLength: Spacing.s2)
-            Text("~6 min")
+            Text("4 steps")
                 .font(.system(size: 10, weight: .semibold, design: .monospaced))
                 .foregroundStyle(Theme.Color.appTextMuted)
         }
@@ -255,7 +254,7 @@ private struct StepPreviewMeta: View {
                 .strokeBorder(Theme.Color.appBorder, lineWidth: 1)
         )
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Next: legal info, profile, confirm. About 6 minutes.")
+        .accessibilityLabel("Next: basic info, profile, confirm. Four steps in total.")
         .accessibilityIdentifier("createBusinessStepPreview")
     }
 }
