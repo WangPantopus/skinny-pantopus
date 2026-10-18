@@ -17,9 +17,10 @@ public struct InviteTeammateWizardView: View {
 
     public init(
         businessId: String,
+        actorRole: BusinessRole = .owner,
         onClose: @escaping (BusinessSeatDTO?, String?) -> Void
     ) {
-        _viewModel = State(initialValue: InviteTeammateWizardViewModel(businessId: businessId))
+        _viewModel = State(initialValue: InviteTeammateWizardViewModel(businessId: businessId, actorRole: actorRole))
         self.onClose = onClose
     }
 
@@ -69,7 +70,7 @@ private struct RoleStep: View {
         HeadlineBlock(InviteTeammateStep.role.title)
         SubcopyBlock(InviteTeammateStep.role.subcopy)
         VStack(spacing: Spacing.s2) {
-            ForEach(BusinessRole.assignableRoles, id: \.self) { role in
+            ForEach(viewModel.assignableRoles, id: \.self) { role in
                 RoleTile(
                     role: role,
                     isSelected: viewModel.form.role == role

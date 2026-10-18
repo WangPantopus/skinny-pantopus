@@ -27,6 +27,8 @@ struct OwnerTopBar: View {
     /// Nil hides the Insights action (no native Insights screen yet).
     var onOpenInsights: (@MainActor () -> Void)?
     let onOpenSettings: @MainActor () -> Void
+    var canEdit = false
+    var roleLabel = "BUSINESS"
 
     var body: some View {
         HStack(spacing: Spacing.s0) {
@@ -38,7 +40,7 @@ struct OwnerTopBar: View {
                     .foregroundStyle(Theme.Color.appText)
                 HStack(spacing: 3) {
                     Icon(.edit2, size: 9, strokeWidth: 2.5, color: Theme.Color.business)
-                    Text("OWNER VIEW")
+                    Text(roleLabel)
                         .font(.system(size: 10, weight: .bold))
                         .tracking(0.4)
                         .foregroundStyle(Theme.Color.business)
@@ -49,6 +51,7 @@ struct OwnerTopBar: View {
                 iconButton(.barChart3, label: "Insights", action: onOpenInsights)
             }
             iconButton(.slidersHorizontal, label: "Settings", action: onOpenSettings)
+                .disabled(!canEdit)
         }
         .padding(.horizontal, Spacing.s2)
         .padding(.vertical, 7)
