@@ -773,6 +773,14 @@ writes secret contents, so the secret `pantopus/seeder/production` keeps its
 April values (the April database and its service key) until you replace them.
 The checked-in production deploy configuration now leaves **all schedules
 disabled**. Activation is a separate, explicit parameter change.
+Paused jobs do not reserve Lambda concurrency. Before activation, check
+`aws lambda get-account-settings --region us-west-2`: the account must have
+capacity for one reserved briefing invocation (and a second for home reminders
+when all jobs are enabled), above AWS's required unreserved floor. The October
+17 account limit was only 10, with all 10 required to remain unreserved; AWS
+rejected reserving even one invocation. A quota increase is required before
+activation. Keep the single-run safeguards; do not remove them to bypass the
+quota. The founder authorized an AWS quota/support request for this rollout.
 
 **Read-only check, October 17:** all 14 existing production rules remain
 disabled. The briefing Lambda was last deployed May 3; its last log event was

@@ -248,7 +248,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub pantopus-briefing-scheduler-${Environment}
-      ReservedConcurrentExecutions: 1
+      ReservedConcurrentExecutions: !If [RunBriefings, 1, !Ref 'AWS::NoValue']
       Handler: src.handlers.briefing.handler
       Description: !Sub 'Finds eligible users and triggers daily briefing delivery [${Environment}]'
       CodeUri: ../build/
@@ -346,7 +346,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub pantopus-home-reminders-${Environment}
-      ReservedConcurrentExecutions: 1
+      ReservedConcurrentExecutions: !If [RunSchedules, 1, !Ref 'AWS::NoValue']
       Handler: src.handlers.home_reminders.handler
       Description: !Sub 'Sends push for bills due, tasks due, and upcoming calendar events [${Environment}]'
       CodeUri: ../build/
