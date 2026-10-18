@@ -4803,10 +4803,19 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 composable(
                     route = ChildRoutes.EDIT_BUSINESS_PAGE,
                     arguments = listOf(navArgument(EDIT_BUSINESS_PAGE_BUSINESS_ID_KEY) { type = NavType.StringType }),
-                ) {
+                ) { backStackEntry ->
+                    val businessId = backStackEntry.arguments?.getString(EDIT_BUSINESS_PAGE_BUSINESS_ID_KEY).orEmpty()
                     EditBusinessPageScreen(
                         onBack = { navController.popBackStack() },
-                        onPreview = { navController.popBackStack() },
+                        onPreview = { navController.navigate(ChildRoutes.businessProfile(businessId)) },
+                        onBusinessClosed = {
+                            if (!navController.popBackStack(ChildRoutes.MY_BUSINESSES, false)) {
+                                if (!navController.popBackStack(ChildRoutes.businessOwner(businessId), true)) {
+                                    navController.popBackStack()
+                                }
+                                navController.navigate(ChildRoutes.MY_BUSINESSES) { launchSingleTop = true }
+                            }
+                        },
                     )
                 }
                 // C4 — public profile opened on a named custom page

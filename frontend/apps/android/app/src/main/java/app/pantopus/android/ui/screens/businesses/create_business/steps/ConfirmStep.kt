@@ -22,9 +22,15 @@ import app.pantopus.android.ui.theme.PantopusTextStyle
 @Composable
 fun ConfirmStep(state: CreateBusinessUiState) {
     BusinessIdentityChip()
-    HeadlineBlock("Confirm and create")
+    HeadlineBlock(if (state.createdBusinessId != null) "Your draft is saved" else "Confirm and create")
     SubcopyBlock(
-        "Publish takes your business live. Save as draft keeps it hidden until you're ready.",
+        if (state.logoUploadWarning != null) {
+            "Retry the logo upload and publish, or open the draft to continue editing."
+        } else if (state.createdBusinessId != null) {
+            "Retry publishing this draft, or open it to continue editing."
+        } else {
+            "Publish takes your business live. Save as draft keeps it hidden until you're ready."
+        },
     )
     ReviewSummaryBlock(rows = summaryRows(state))
     state.logoUploadWarning?.let { warning ->
@@ -73,12 +79,22 @@ private fun summaryRows(state: CreateBusinessUiState): List<ReviewSummaryRow> {
     rows +=
         ReviewSummaryRow(
             "Hours",
-            if (state.hasLocation && !state.hoursSkipped) "Weekday defaults" else "Not set",
+            if (state.hasLocation && !state.hoursSkipped) {
+                state.hours.joinToString("\n") { day ->
+                    "${day.shortLabel}: " + if (day.isClosed) "Closed" else "${day.openTime}–${day.closeTime}"
+                }
+            } else {
+                "Not set"
+            },
         )
     rows +=
         ReviewSummaryRow(
             "Logo",
-            if (state.logoPick != null && !state.logoSkipped) "Selected" else "Not set",
+            when {
+                state.logoUploaded -> "Uploaded"
+                state.logoPick != null && !state.logoSkipped -> "Selected"
+                else -> "Not set"
+            },
         )
     return rows
 }

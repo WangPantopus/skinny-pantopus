@@ -12,6 +12,7 @@ import app.pantopus.android.data.api.models.businesses.BusinessUserDetailDto
 import app.pantopus.android.data.api.models.profile.PublicProfileDto
 import app.pantopus.android.data.api.models.profile.PublicProfileReview
 import app.pantopus.android.ui.screens.businesses.MyBusinessesViewModel
+import app.pantopus.android.ui.screens.businesses.create_business.BusinessCategory
 import app.pantopus.android.ui.screens.saved_places.PendingSavePlace
 import app.pantopus.android.ui.theme.PantopusIcon
 import java.time.Duration
@@ -65,6 +66,8 @@ object BusinessProfileMapper {
                 // the business's verification, so it never earns the mark on its own.
                 isVerified = MyBusinessesViewModel.isVerified(profile?.identityVerificationTier),
                 logoIcon = null,
+                logoUrl = business.profilePictureUrl,
+                bannerUrl = business.coverPhotoUrl,
             )
 
         val scoped = scopedHours(publicResponse?.hours.orEmpty(), primaryLocation?.id)
@@ -175,7 +178,7 @@ object BusinessProfileMapper {
         categories.take(4).mapIndexed { index, name ->
             BusinessCategoryChip(
                 id = name,
-                label = name,
+                label = BusinessCategory.entries.firstOrNull { it.backendSlug == name }?.label ?: name,
                 icon = categoryIcon(name),
                 accent = if (index == 0) categoryAccent(name) else BusinessCategoryAccent.Neutral,
             )
@@ -423,12 +426,10 @@ object BusinessProfileMapper {
         }
         val min = item.priceCents
         val max = item.priceMaxCents
+        val unit = item.priceUnit?.takeIf(String::isNotBlank)?.let { "/$it" }.orEmpty()
         return when {
-            min != null && max != null && max > min -> "${formatDollars(min)} – ${formatDollars(max)}"
-            min != null -> {
-                val unit = item.priceUnit?.let { "/$it" } ?: ""
-                "${formatDollars(min)}$unit"
-            }
+            min != null && max != null && max > min -> "${formatDollars(min)} – ${formatDollars(max)}$unit"
+            min != null -> "${formatDollars(min)}$unit"
             item.kind == "donation" -> "Suggested"
             else -> "Contact"
         }

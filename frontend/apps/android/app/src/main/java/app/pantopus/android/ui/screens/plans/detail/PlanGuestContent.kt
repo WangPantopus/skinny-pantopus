@@ -424,7 +424,7 @@ internal fun PlanNotThisTime(
     val status = PlanRequestStatus.from(plan.viewer?.requestStatus ?: plan.myRequest?.status)
     val (title, subtitle) =
         when (status) {
-            PlanRequestStatus.EXPIRED -> "This one didn't work out" to "It started before ${plan.hostFirst} could answer."
+            PlanRequestStatus.EXPIRED -> "This one didn't work out" to "Joining closed before you got a spot."
             PlanRequestStatus.REMOVED -> "You're no longer on this plan" to "${plan.hostFirst} made a change to who's coming."
             else -> "This one didn't work out" to "${plan.hostFirst} couldn't fit you this time."
         }

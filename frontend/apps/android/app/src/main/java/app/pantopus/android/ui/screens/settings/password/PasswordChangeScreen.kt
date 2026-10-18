@@ -81,6 +81,7 @@ fun PasswordChangeScreen(
     val shouldDismiss by viewModel.shouldDismiss.collectAsStateWithLifecycle()
     val hasPassword by viewModel.hasPassword.collectAsStateWithLifecycle()
     val formError by viewModel.formError.collectAsStateWithLifecycle()
+    val isRequestingReset by viewModel.isRequestingReset.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) { viewModel.load() }
 
@@ -93,8 +94,8 @@ fun PasswordChangeScreen(
 
     LaunchedEffect(shouldDismiss) {
         if (shouldDismiss) {
-            viewModel.acknowledgeDismiss()
             delay(700)
+            viewModel.acknowledgeDismiss()
             onBack()
         }
     }
@@ -120,6 +121,7 @@ fun PasswordChangeScreen(
                     isConfirmValid = viewModel.isConfirmValid,
                     isValid = viewModel.isValid,
                     isSaving = isSaving,
+                    isRequestingReset = isRequestingReset,
                 ),
             onBack = onBack,
             onUpdate = viewModel::update,
@@ -152,6 +154,7 @@ internal data class PasswordChangeLoadedState(
     val isConfirmValid: Boolean,
     val isValid: Boolean,
     val isSaving: Boolean,
+    val isRequestingReset: Boolean = false,
 )
 
 /**
@@ -253,7 +256,7 @@ private fun VerifySection(
             Row(
                 modifier =
                     Modifier
-                        .clickable(onClick = onReset)
+                        .clickable(enabled = !state.isRequestingReset && !state.isSaving, onClick = onReset)
                         .testTag("passwordChangeResetLink"),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
@@ -265,7 +268,7 @@ private fun VerifySection(
                     tint = PantopusColors.primary600,
                 )
                 Text(
-                    text = "Email me a reset link instead",
+                    text = if (state.isRequestingReset) "Requesting reset link…" else "Email me a reset link instead",
                     style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.SemiBold),
                     color = PantopusColors.primary600,
                 )

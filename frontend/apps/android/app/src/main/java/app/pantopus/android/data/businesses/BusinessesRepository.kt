@@ -106,6 +106,9 @@ open class BusinessesRepository
         open suspend fun publishBusiness(businessId: String): NetworkResult<BusinessMutationMessageResponse> =
             safeApiCall { api.publishBusiness(businessId) }
 
+        open suspend fun closeBusiness(businessId: String): NetworkResult<BusinessMutationMessageResponse> =
+            safeApiCall { api.closeBusiness(businessId) }
+
         /** A13.10 — load weekly hours for a location. */
         open suspend fun locationHours(
             businessId: String,

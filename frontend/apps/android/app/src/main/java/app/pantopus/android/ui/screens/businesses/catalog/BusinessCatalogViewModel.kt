@@ -134,7 +134,7 @@ class BusinessCatalogViewModel
             onDone: (Boolean) -> Unit = {},
         ) {
             if (!draft.isValid) {
-                _toast.value = BusinessCatalogToast("Name is required", BusinessCatalogToastKind.Error)
+                _toast.value = BusinessCatalogToast(draft.validationError ?: "Check the item details", BusinessCatalogToastKind.Error)
                 onDone(false)
                 return
             }
@@ -155,7 +155,7 @@ class BusinessCatalogViewModel
             onDone: (Boolean) -> Unit = {},
         ) {
             if (!draft.isValid) {
-                _toast.value = BusinessCatalogToast("Name is required", BusinessCatalogToastKind.Error)
+                _toast.value = BusinessCatalogToast(draft.validationError ?: "Check the item details", BusinessCatalogToastKind.Error)
                 onDone(false)
                 return
             }
@@ -251,6 +251,7 @@ class BusinessCatalogViewModel
                 return
             }
             _isMutating.value = true
+            _toast.value = null
             viewModelScope.launch {
                 try {
                     val result = call()
