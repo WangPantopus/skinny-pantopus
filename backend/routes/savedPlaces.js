@@ -118,11 +118,11 @@ router.post('/', verifyToken, async (req, res) => {
 
     if (error) throw error;
     require('../services/context/providerOrchestrator').clearHubTodayCache(req.user.id);
-    // Insert only: saving an address must never opt a new account into
-    // briefings or overwrite an existing account's notification choices.
+    // New accounts start with both briefings on. Insert only preserves every
+    // existing notification choice, including an explicit opt-out.
     const { error: preferencesError } = await supabaseAdmin
       .from('UserNotificationPreferences')
-      .upsert({ user_id: req.user.id, daily_briefing_enabled: false, evening_briefing_enabled: false },
+      .upsert({ user_id: req.user.id, daily_briefing_enabled: true, evening_briefing_enabled: true },
         { onConflict: 'user_id', ignoreDuplicates: true });
     if (preferencesError) throw preferencesError;
     res.status(201).json({ savedPlace: data });

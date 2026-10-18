@@ -114,15 +114,6 @@ class TodayTabViewModel
         private var active = true
         private val sessionScope = sessionScopes.create(viewModelScope)
         private val keyguard = context.getSystemService(KeyguardManager::class.java)
-        private var promptAttempted = false
-        private var promptConfirmed = false
-        private val _showMorningCard = MutableStateFlow(false)
-        val showMorningCard = _showMorningCard.asStateFlow()
-        private val _preferenceBusy = MutableStateFlow(false)
-        val preferenceBusy = _preferenceBusy.asStateFlow()
-        private val _preferenceError = MutableStateFlow<String?>(null)
-        val preferenceError = _preferenceError.asStateFlow()
-
         private val _pickupPrimerHomeId = MutableStateFlow<String?>(null)
         override val pickupPrimerHomeId = _pickupPrimerHomeId.asStateFlow()
 
@@ -242,7 +233,6 @@ class TodayTabViewModel
         private fun clearHomeCopy(id: String) {
             repo.forgetToday(id)
             _state.value = TodayTabUiState.Loading
-            _showMorningCard.value = false
             _pickupPrimerHomeId.value = null
             if (::todayWidget.isInitialized) todayWidget.clear()
         }
@@ -287,12 +277,7 @@ class TodayTabViewModel
             loadJob?.cancel()
             val version = ++loadVersion
             val shown = _state.value
-            _preferenceBusy.value = false
-            _preferenceError.value = null
             if (shown !is TodayTabUiState.Loaded && shown != TodayTabUiState.NoPlace) {
-                promptAttempted = false
-                promptConfirmed = false
-                _showMorningCard.value = false
                 homeId = null
                 _state.value = TodayTabUiState.Loading
             }
@@ -387,8 +372,6 @@ class TodayTabViewModel
             val allowed = sessionScope.confirmCurrent()
             if (!allowed && version == loadVersion) {
                 _state.value = TodayTabUiState.Error("Your session changed. Reopen Today to continue.")
-                _showMorningCard.value = false
-                _preferenceBusy.value = false
             }
             return active && allowed && version == loadVersion
         }
@@ -439,7 +422,7 @@ class TodayTabViewModel
                         samePlace.afterFailedRead(result.failure.sentence("Couldn't load today."))
                     }
             } else {
-                loadSavedToday(version, place, result, force)
+                loadSavedToday(version, place, result)
             }
         }
 
@@ -447,10 +430,9 @@ class TodayTabViewModel
             version: Long,
             place: SavedPlaceDto,
             copy: Stored<PlaceIntelligence>,
-            force: Boolean,
         ) {
             val intelligence = copy.data ?: return
-            // The copy is visible before checking the optional morning-briefing anchor.
+            // The copy is visible before checking the saved-place anchor.
             val shown =
                 TodayTabUiState.Loaded(
                     intelligence,
@@ -464,16 +446,9 @@ class TodayTabViewModel
             if (!current(version)) return
             _state.value = shown.copy(savedAnchorMatches = matches)
             if (copy.failure == null && ::todayWidget.isInitialized) todayWidget.write(intelligence.todayWidgetSnapshot())
-            if (!matches) return
-            val preferences = preferencesRepository.preferencesStored(force).data
-            if (!current(version)) return
-            if (preferences != null) {
-                promptConfirmed = !preferences.dailyBriefingPromptedAt.isNullOrBlank()
-                _showMorningCard.value = preferences.dailyBriefingPromptedAt == null
-            }
         }
 
-        /** A match already on screen for [place] keeps its chip and briefing card while the anchor is checked again. */
+        /** A match already on screen for [place] keeps its chip while the anchor is checked again. */
         private fun shownAnchor(place: SavedPlaceDto): Boolean =
             (_state.value as? TodayTabUiState.Loaded)?.takeIf { it.savedPlace?.id == place.id }?.savedAnchorMatches == true
 
@@ -487,90 +462,6 @@ class TodayTabViewModel
             val longitude = location?.longitude
             return payload.isRenderable && location?.source == "saved_place" && latitude != null && longitude != null &&
                 abs(latitude - place.latitude) < SAVED_ANCHOR_TOLERANCE && abs(longitude - place.longitude) < SAVED_ANCHOR_TOLERANCE
-        }
-
-        fun markPromptDisplayed(dismissAfterSave: Boolean = false) {
-            if (!_showMorningCard.value || _preferenceBusy.value) return
-            if (promptAttempted && !dismissAfterSave) return
-            val version = loadVersion
-            promptAttempted = true
-            _preferenceBusy.value = true
-            _preferenceError.value = null
-            viewModelScope.launch {
-                if (!current(version)) return@launch
-                val result =
-                    preferencesRepository.updatePreferences(
-                        NotificationPreferencesPatch(dailyBriefingPrompted = true),
-                        dispatchGuard = todayDispatchGuard(null, version),
-                    )
-                if (!current(version)) return@launch
-                if (result is NetworkResult.Success && !result.data.dailyBriefingPromptedAt.isNullOrBlank()) {
-                    promptConfirmed = true
-                    if (dismissAfterSave) _showMorningCard.value = false
-                } else {
-                    _preferenceError.value = "Couldn't save your choice. Try again."
-                }
-                _preferenceBusy.value = false
-            }
-        }
-
-        fun hideMorningCard() {
-            if (!_showMorningCard.value || _preferenceBusy.value) return
-            // Keep the prompt available when its display stamp failed, so a
-            // retry can persist the choice instead of asking again on reentry.
-            if (promptConfirmed) {
-                _showMorningCard.value = false
-            } else {
-                markPromptDisplayed(dismissAfterSave = true)
-            }
-        }
-
-        fun turnOnMorning() {
-            if (_preferenceBusy.value) return
-            val loaded = _state.value as? TodayTabUiState.Loaded ?: return
-            val place = loaded.savedPlace ?: return
-            val version = loadVersion
-            _preferenceBusy.value = true
-            _preferenceError.value = null
-            viewModelScope.launch {
-                if (!current(version)) return@launch
-                val matches = checkSavedAnchor(place)
-                if (!current(version)) return@launch
-                if (!matches) {
-                    _state.value = loaded.copy(savedAnchorMatches = false)
-                    _showMorningCard.value = false
-                    _preferenceBusy.value = false
-                    return@launch
-                }
-                val timezone = ZoneId.systemDefault().id
-                if (timezone !in ZoneId.getAvailableZoneIds()) {
-                    _preferenceError.value = "Couldn't read your time zone. Try again."
-                    _preferenceBusy.value = false
-                    return@launch
-                }
-                val result =
-                    preferencesRepository.updatePreferences(
-                        NotificationPreferencesPatch(
-                            dailyBriefingEnabled = true,
-                            dailyBriefingTimezone = timezone,
-                            dailyBriefingPrompted = true,
-                        ),
-                        dispatchGuard = todayDispatchGuard(null, version),
-                    )
-                if (!current(version)) return@launch
-                when (result) {
-                    is NetworkResult.Success -> {
-                        if (result.data.dailyBriefingEnabled) {
-                            _showMorningCard.value = false
-                        } else {
-                            _preferenceError.value = "Couldn't turn on your morning briefing. Try again."
-                        }
-                    }
-                    is NetworkResult.Failure ->
-                        _preferenceError.value = result.error.displayMessage("Couldn't turn on your morning briefing.")
-                }
-                _preferenceBusy.value = false
-            }
         }
 
         override fun setPickupDay(

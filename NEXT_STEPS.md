@@ -112,6 +112,10 @@ Sessions you start for one job (Instant Screens, Nearby Plans, single fixes) wor
 - [x] Playdates stay off (`plans_playdates`) until address verification works in production and a lawyer has read the rules.
 - [x] The order: the study group server change first (merging it applies its migration to production), then both apps and new store builds, then `plans` on in staging and checked there, then production.
 
+**Made by the founder on October 17 (briefings).**
+
+- [x] Morning and evening briefings default on for new notification preferences. Show a one-time in-app notice with the saved times and a direct route to Settings → Notifications to change times or turn either off. Preserve existing choices, including off settings. This replaces the morning-only opt-in and saved-place-off defaults in WP1; OS notification permission, recipient-local scheduling and useful-signal suppression still apply. Implementation and real-app verification are in progress.
+
 **Still open. The brief builds the default until you decide.**
 
 - [ ] Confirm the September 26 promise and pilot shape: "Know what matters for your home, and stay on top of it"; first-time homeowners in Vancouver, Camas and Washougal; five households, then 30 to 50, for eight weeks each. Default: as written.

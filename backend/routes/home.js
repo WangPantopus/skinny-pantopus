@@ -1363,11 +1363,11 @@ router.put('/default', verifyToken, validate(defaultHomeSchema), async (req, res
     if (!homes.some(home => home.id === homeId && ['shared', 'private_setup'].includes(home.access_kind))) {
       return res.status(404).json({ error: 'You can only make a Home you can open your default.', code: 'DEFAULT_HOME_NOT_OPENABLE' });
     }
-    // Insert only, briefings off: choosing a default must never opt someone into briefings or overwrite
-    // their notification choices (the POST /api/saved-places pattern).
+    // Insert only: new preferences start with both briefings on; choosing a
+    // default home must never overwrite existing notification choices.
     const { error: rowError } = await supabaseAdmin
       .from('UserNotificationPreferences')
-      .upsert({ user_id: userId, daily_briefing_enabled: false, evening_briefing_enabled: false },
+      .upsert({ user_id: userId, daily_briefing_enabled: true, evening_briefing_enabled: true },
         { onConflict: 'user_id', ignoreDuplicates: true });
     if (rowError) throw rowError;
     const { error } = await supabaseAdmin

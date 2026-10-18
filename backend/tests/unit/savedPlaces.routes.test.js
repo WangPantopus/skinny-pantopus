@@ -19,7 +19,7 @@ it('upserts once per account and never creates a household, claim, or membership
     expect(response.status).toBe(201);
   }
   expect(getTable('SavedPlace')).toHaveLength(1);
-  expect(getTable('UserNotificationPreferences')).toEqual([expect.objectContaining({user_id:'u1',daily_briefing_enabled:false,evening_briefing_enabled:false})]);
+  expect(getTable('UserNotificationPreferences')).toEqual([expect.objectContaining({user_id:'u1',daily_briefing_enabled:true,evening_briefing_enabled:true})]);
   const preference = {...getTable('UserNotificationPreferences')[0], daily_briefing_enabled:true, evening_briefing_enabled:true, daily_briefing_timezone:'Asia/Tokyo'};
   seedTable('UserNotificationPreferences', [preference]);
   expect((await request(app).post('/saved-places').set('x-test-user-id','u1').send(place)).status).toBe(201);
