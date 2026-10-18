@@ -1600,6 +1600,9 @@ router.delete('/:businessId', verifyToken, async (req, res) => {
   try {
     const { businessId } = req.params;
     const userId = req.user.id;
+    if (Joi.string().uuid().validate(businessId).error) {
+      return res.status(400).json({ error: 'Invalid business ID' });
+    }
 
     // Authorization and every retirement write share one transaction. A
     // failed write must not report success or strand a partially closed crew.
