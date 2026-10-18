@@ -205,6 +205,12 @@ public struct ChatConversationView: View {
             } else {
                 actionBanner
                 sendLimitBanner
+                if viewModel.isBusinessReply {
+                    Text("Replying as this business")
+                        .font(.footnote)
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                        .accessibilityIdentifier("chatBusinessReplyIdentity")
+                }
                 ChatComposer(
                     text: Binding(
                         get: { viewModel.composerText },
@@ -1184,7 +1190,8 @@ extension ChatConversationView {
         // Excludes in-flight (`client_`) rows and AI-thread local rows
         // (`ai_user_` / `ai_assistant_`) — neither is persisted, so the
         // bulk-delete loop could never delete them server-side.
-        let selectable = bubble.side == .outgoing && !bubble.id.hasPrefix("client_") && !bubble.id.hasPrefix("ai_")
+        let selectable = viewModel.canManageMessage(bubble.id)
+            && !bubble.id.hasPrefix("client_") && !bubble.id.hasPrefix("ai_")
         if isSelecting {
             let isSelected = selectedMessageIds.contains(bubble.id)
             HStack(alignment: .center, spacing: Spacing.s2) {
@@ -1222,6 +1229,7 @@ extension ChatConversationView {
             rowWidth: rowWidth,
             incomingInitials: incomingInitials,
             aiStatus: viewModel.aiStatus,
+            canManage: viewModel.canManageMessage(bubble.id),
             onLockedAction: { upgradePromptPresented = true },
             onReply: { viewModel.beginReply(to: bubble.id) },
             onEdit: { viewModel.beginEdit(messageId: bubble.id) },
@@ -2508,6 +2516,7 @@ private struct ChatBubbleRow: View {
     let incomingInitials: String?
     /// What the assistant is doing while a reply is pending ("Drafting your post…").
     var aiStatus: String?
+    let canManage: Bool
     let onLockedAction: @MainActor () -> Void
     let onReply: @MainActor () -> Void
     let onEdit: @MainActor () -> Void
@@ -2564,7 +2573,7 @@ private struct ChatBubbleRow: View {
             // `client_` rows aren't persisted yet; `ai_`-prefixed rows
             // (AI-thread local messages) are never persisted server-side,
             // so Edit/Delete would PUT/DELETE an id that can't exist.
-            if content.side == .outgoing && !content.id.hasPrefix("client_") && !content.id.hasPrefix("ai_") {
+            if canManage && !content.id.hasPrefix("client_") && !content.id.hasPrefix("ai_") {
                 Button { onBeginSelect() } label: {
                     Text("Select")
                 }

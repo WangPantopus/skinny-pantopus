@@ -487,6 +487,15 @@ public final class ChatConversationViewModel {
     private let locationProvider: any LocationProviding
     private let mode: ChatThreadMode
     private let currentUserId: String
+    private let asBusinessUserId: String?
+    private var sendingIdentityId: String {
+        asBusinessUserId ?? currentUserId
+    }
+
+    public var isBusinessReply: Bool {
+        asBusinessUserId != nil
+    }
+
     /// Topic the thread opened on. Used once, like Android, so "All" stays selected after a refresh.
     private var initialTopic: ChatInitialTopic?
     /// Gig backing a `.room` thread (from the unified-conversations
@@ -584,6 +593,7 @@ public final class ChatConversationViewModel {
         scrollToMessageId: String? = nil,
         initialTopic: ChatInitialTopic? = nil,
         gigId: String? = nil,
+        asBusinessUserId: String? = nil,
         api: APIClient = .shared,
         socket: SocketClient = .shared,
         uploader: MultipartUploader = .shared,
@@ -595,6 +605,11 @@ public final class ChatConversationViewModel {
         self.mode = mode
         self.counterparty = counterparty
         self.currentUserId = currentUserId
+        if case .room = mode {
+            self.asBusinessUserId = asBusinessUserId
+        } else {
+            self.asBusinessUserId = nil
+        }
         composerText = initialComposerText
         self.initialTopic = initialTopic
         self.scrollToMessageId = scrollToMessageId
@@ -631,6 +646,7 @@ public final class ChatConversationViewModel {
         mode = .ai
         self.counterparty = counterparty
         currentUserId = "preview_me"
+        asBusinessUserId = nil
         scrollToMessageId = nil
         initialTopic = nil
         gigId = nil
@@ -924,7 +940,8 @@ public final class ChatConversationViewModel {
                         clientMessageId: clientId,
                         replyToId: sanitizedReplyToId(context.replyToId, roomId: roomId),
                         topicId: context.topicId,
-                        metadata: context.metadata
+                        metadata: context.metadata,
+                        asBusinessUserId: asBusinessUserId
                     )
                 )
             )
@@ -1188,6 +1205,12 @@ public final class ChatConversationViewModel {
         editingMessageId = messageId
         replyingTo = nil
         setComposerTextSilently(text)
+    }
+
+    /// The API permits edits/deletes only for the human sender's own
+    /// messages, not messages sent under a shared business identity.
+    public func canManageMessage(_ messageId: String) -> Bool {
+        messages.contains { $0.id == messageId && $0.userId == currentUserId }
     }
 
     public func cancelMessageAction() {
@@ -1615,7 +1638,7 @@ public final class ChatConversationViewModel {
         ChatMessageDTO(
             id: "client_\(clientId)",
             roomId: roomId,
-            userId: currentUserId,
+            userId: sendingIdentityId,
             messageText: text,
             messageType: messageType,
             metadata: .object(metadata),
@@ -1747,7 +1770,7 @@ public final class ChatConversationViewModel {
     private func fetchRoom(roomId: String, before: String?, kind: FetchKind) async {
         do {
             let response: ChatMessagesResponse = try await api.request(
-                ChatEndpoints.roomMessages(roomId: roomId, before: before)
+                ChatEndpoints.roomMessages(roomId: roomId, before: before, asBusinessUserId: asBusinessUserId)
             )
             apply(response: response, kind: kind)
             scheduleMarkRead(for: roomId)
@@ -1761,7 +1784,9 @@ public final class ChatConversationViewModel {
     /// Read the room's current status so those entry points also become read-only.
     private func refreshRoomAvailability(roomId: String) async {
         do {
-            let response: ChatRoomDetailResponse = try await api.request(ChatEndpoints.room(roomId: roomId))
+            let response: ChatRoomDetailResponse = try await api.request(
+                ChatEndpoints.room(roomId: roomId, asBusinessUserId: asBusinessUserId)
+            )
             roomClosedNote = response.room.isActive == false
                 ? "This chat has closed. Message them directly to keep talking."
                 : nil
@@ -1917,7 +1942,7 @@ public final class ChatConversationViewModel {
             case let .person(otherUserId):
                 ChatEndpoints.markConversationRead(otherUserId: otherUserId)
             default:
-                ChatEndpoints.markRoomRead(roomId: target)
+                ChatEndpoints.markRoomRead(roomId: target, asBusinessUserId: asBusinessUserId)
             }
         do {
             _ = try await api.request(endpoint, as: EmptyResponse.self)
@@ -2237,7 +2262,7 @@ public final class ChatConversationViewModel {
                 rows.append(.systemLine(ChatDayDivider(id: message.id, label: message.messageText ?? "")))
                 continue
             }
-            let side: ChatMessageSide = (message.userId == currentUserId) ? .outgoing : .incoming
+            let side: ChatMessageSide = (message.userId == sendingIdentityId) ? .outgoing : .incoming
             let previousSameSide =
                 index > 0 &&
                 combined[index - 1].userId == message.userId &&
@@ -2263,7 +2288,7 @@ public final class ChatConversationViewModel {
             // stay driven by `hasTail`.
             let showStamp = hasTail || deliveryState == .failed || deliveryState == .refused
                 || deliveryState == .sending
-            let stamp: String? = showStamp ? Self.stampLabel(for: message, currentUserId: currentUserId) : nil
+            let stamp: String? = showStamp ? Self.stampLabel(for: message, currentUserId: sendingIdentityId) : nil
             var body = Self.bodyForMessage(message)
             if message.messageType == "ai_reply" {
                 body = .aiReply(text: message.messageText ?? "", estimate: nil, drafts: aiDraftsByMessageId[message.id] ?? [])
@@ -2328,7 +2353,7 @@ public final class ChatConversationViewModel {
         ChatMessageDTO(
             id: "client_\(clientId)",
             roomId: roomId,
-            userId: currentUserId,
+            userId: sendingIdentityId,
             messageText: text,
             messageType: "text",
             metadata: nil,
@@ -2626,7 +2651,8 @@ extension ChatConversationViewModel {
     private var threadMemoryEndpoint: Endpoint? {
         guard initialTopic == nil, scrollToMessageId == nil else { return nil }
         return switch mode {
-        case let .room(roomId): ChatEndpoints.roomMessages(roomId: roomId, before: nil)
+        case let .room(roomId):
+            ChatEndpoints.roomMessages(roomId: roomId, before: nil, asBusinessUserId: asBusinessUserId)
         case let .person(otherUserId):
             ChatEndpoints.conversationMessages(otherUserId: otherUserId, before: nil, topicId: selectedTopicId)
         case .ai: nil
