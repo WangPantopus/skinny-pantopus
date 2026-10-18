@@ -9,6 +9,12 @@ import type { VerificationStatus } from '@pantopus/api';
 // ---- Status badge helper ----
 function VerificationBadge({ status }: { status: string }) {
   switch (status) {
+    case 'unavailable':
+      return (
+        <span className="inline-flex items-center rounded-full bg-app-surface-sunken px-2.5 py-0.5 text-xs font-medium text-app-text-secondary border border-app-border">
+          Status unavailable
+        </span>
+      );
     case 'self_attested':
       return (
         <span className="inline-flex items-center rounded-full bg-app-surface-sunken px-2.5 py-0.5 text-xs font-medium text-app-text-secondary border border-app-border">
@@ -225,7 +231,7 @@ export default function BusinessSettingsLegalPage() {
     );
   }
 
-  const status = verificationData?.verification_status || 'unverified';
+  const status = verificationData?.verification_status || 'unavailable';
   const evidence = verificationData?.evidence || [];
   const canSelfAttest = verificationData?.can_self_attest || false;
   const canUploadEvidence = verificationData?.can_upload_evidence || false;
@@ -327,7 +333,7 @@ export default function BusinessSettingsLegalPage() {
                 {attesting ? 'Submitting...' : 'Confirm Business Identity'}
               </button>
             </div>
-          ) : status === 'unverified' ? (
+          ) : status === 'unverified' || status === 'unavailable' ? (
             <p className="text-sm text-app-text-secondary">
               {verificationData?.can_self_attest_reason === 'At least one geocoded location is required'
                 ? 'Add and confirm a business location before self-attesting.'
