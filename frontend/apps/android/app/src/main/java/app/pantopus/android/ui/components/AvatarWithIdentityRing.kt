@@ -71,10 +71,8 @@ fun AvatarWithIdentityRing(
             modifier
                 .size(size)
                 .semantics {
-                    // A new account has no name yet; don't read a stray comma.
-                    contentDescription =
-                        listOfNotNull(name.takeIf { it.isNotBlank() }, "${(progress * 100).toInt()}% profile complete")
-                            .joinToString(", ")
+                    // The ring is also used decoratively; it is not a profile-completion measurement.
+                    contentDescription = name.ifBlank { "Profile image" }
                 },
         contentAlignment = Alignment.Center,
     ) {

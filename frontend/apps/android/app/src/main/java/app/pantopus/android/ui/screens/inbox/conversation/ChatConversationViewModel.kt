@@ -1249,7 +1249,7 @@ class ChatConversationViewModel
             _replyingTo.value =
                 ChatReplyPreview(
                     messageId = message.id,
-                    senderName = message.sender?.name ?: if (message.userId == currentUserId) "You" else "Message",
+                    senderName = message.sender?.displayLabel ?: if (message.userId == currentUserId) "You" else "Message",
                     text = message.resolvedText,
                 )
             _editingMessageId.value = null
@@ -2350,14 +2350,8 @@ class ChatConversationViewModel
                     return@forEachIndexed
                 }
                 val side = if (message.userId == currentUserId) ChatMessageSide.Outgoing else ChatMessageSide.Incoming
-                val previousSameSide =
-                    index > 0 &&
-                        combined[index - 1].userId == message.userId &&
-                        dayKey(combined[index - 1].createdAt) == dayKey
-                val nextSameSide =
-                    index + 1 < combined.size &&
-                        combined[index + 1].userId == message.userId &&
-                        dayKey(combined[index + 1].createdAt) == dayKey
+                val previousSameSide = sharesBubbleGroup(message, combined.getOrNull(index - 1))
+                val nextSameSide = sharesBubbleGroup(message, combined.getOrNull(index + 1))
                 val hasTail = !nextSameSide
                 val deliveryState =
                     if (side != ChatMessageSide.Outgoing) {
@@ -2409,6 +2403,12 @@ class ChatConversationViewModel
                             lockedTier = lockedTierOf(message),
                             sentSupportTier = sentSupportTierOf(message),
                             isContinuation = previousSameSide,
+                            senderName =
+                                if (mode is ChatThreadMode.Room && side == ChatMessageSide.Incoming) {
+                                    message.sender?.displayLabel?.takeIf { it.isNotBlank() } ?: "Participant"
+                                } else {
+                                    null
+                                },
                         ),
                     ),
                 )
@@ -2548,7 +2548,7 @@ class ChatConversationViewModel
             val original = allMessages.firstOrNull { it.id == replyToId } ?: return null
             return ChatReplyPreview(
                 messageId = original.id,
-                senderName = original.sender?.name ?: "Message",
+                senderName = original.sender?.displayLabel ?: "Message",
                 text = original.resolvedText,
             )
         }
@@ -2690,6 +2690,14 @@ class ChatConversationViewModel
                 }
             }.getOrDefault(iso)
 
+        /** System notices break message groups even when they carry the same actor id. */
+        private fun sharesBubbleGroup(
+            message: ChatMessageDto,
+            neighbor: ChatMessageDto?,
+        ): Boolean =
+            neighbor != null && neighbor.resolvedType !in setOf("system", "broadcast_reference") &&
+                neighbor.userId == message.userId && dayKey(neighbor.createdAt) == dayKey(message.createdAt)
+
         private fun stampLabel(message: ChatMessageDto): String? =
             runCatching {
                 val time =
@@ -2700,7 +2708,7 @@ class ChatConversationViewModel
                 if (message.userId == currentUserId) {
                     time
                 } else {
-                    val sender = message.sender?.name?.takeIf { it.isNotEmpty() }
+                    val sender = message.sender?.displayLabel?.takeIf { it.isNotEmpty() }
                     sender?.let { "$it · $time" } ?: time
                 }
             }.getOrNull()
