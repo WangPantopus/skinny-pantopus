@@ -161,12 +161,16 @@ async function addCreatedReplyFields(comment, post, viewerId) {
   return { ...comment, ...reply, author: { ...comment.author, ...reply.author } };
 }
 
-async function read(postId, viewerId, { repliesOnly = false, after } = {}) {
+// Local government and Getting around conversations can show residents' replies only (§2.19).
+const RESIDENTS_ONLY_TOPICS = ['local_government', 'getting_around'];
+
+async function read(postId, viewerId, { repliesOnly = false, after, residentsOnly = false } = {}) {
   const context = await contextFor(postId, viewerId);
   // The plan suggested from this conversation, as its reader may see it (contract §2.18).
   const bridge = require('./planBridge');
   const [rows, plan] = await Promise.all([repliesFor(context, after), bridge.forConversation(context.post.id, viewerId)]);
-  const replies = bridge.decorateReplies(rows, plan);
+  const residents = residentsOnly && RESIDENTS_ONLY_TOPICS.includes(context.post.topic);
+  const replies = bridge.decorateReplies(residents ? rows.filter(reply => reply.author.label === 'resident') : rows, plan);
   if (repliesOnly) return { replies };
   const [post] = await postCards([context.post], { viewerId, homes: context.homes,
     areas: context.area ? [context.area] : [], fallbackArea: context.area, blockedIds: context.blocked });

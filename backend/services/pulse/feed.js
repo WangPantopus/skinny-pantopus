@@ -45,19 +45,21 @@ async function contextFor(userId, areaId) {
  * `refine` narrows the candidate query and `keep` filters readable rows (async), both
  * before counting or taking, for callers like PC's digest content (content.js).
  */
-async function scan(context, { view, topic, lower, before, readAt, take = Infinity, countOnly = false, refine, keep, search }) {
+async function scan(context, { view, topic, lower, before, readAt, take = Infinity, countOnly = false, refine, keep,
+  search, ended = false }) {
   if (!context.area || (view === 'following' && !context.follows.length)) return countOnly ? 0 : [];
   const found = [];
   let count = 0;
   let position = before;
   for (;;) {
-    // `search` (contract §2.17) also reads conversations that resolved or ended, never held or
-    // removed ones, nor ones their author or a moderator archived.
-    let query = context.scope.query(search
+    // `search` (contract §2.17) and `ended` (a place page, §2.19) also read conversations that
+    // resolved or ended, never held or removed ones, nor ones their author or a moderator archived.
+    const candidates = search
       ? db.rpc('pulse_search_area_candidates', { p_area_id: context.area.id, p_query: search }).select(SELECT)
-        .eq('moderation_state', 'live').or('archived_at.is.null,archive_reason.in.(expired,resolved)')
-      : legacy.onlyShownPosts(db.rpc('pulse_feed_area_candidates', { p_area_id: context.area.id })
-        .select(SELECT).is('archived_at', null)).eq('state', 'open').is('resolution', null))
+      : db.rpc('pulse_feed_area_candidates', { p_area_id: context.area.id }).select(SELECT);
+    let query = context.scope.query(search || ended
+      ? candidates.eq('moderation_state', 'live').or('archived_at.is.null,archive_reason.in.(expired,resolved)')
+      : legacy.onlyShownPosts(candidates.is('archived_at', null)).eq('state', 'open').is('resolution', null))
       .lte('created_at', readAt)
       .order('created_at', { ascending: false }).order('id', { ascending: false }).limit(BATCH);
     if (topic) query = query.eq('topic', topic);
@@ -140,9 +142,13 @@ async function page(userId, { view, topic, areaId, earlierBefore, limit }) {
     if (!active.length) quiet = { reason: 'empty', card: null };
     else if (view === 'nearby' && active.length < 5) quiet = { reason: 'sparse', card: 'meter' };
   }
+  const groups = groupsFor(cards, context, !!before);
+  // The reader's street group says how many plans are on the street, while Plans is on (§2.19).
+  const street = groups.find(group => group.key === 'street');
+  if (street) street.plans_line = await require('./planBridge').streetPlansLine(userId, street.area_id);
   return {
     view, read_at: readAt, area: areaDto(context.area), areas_available: context.available.map(areaDto), quiet,
-    right_now: before ? null : await rightNow.current(context), groups: groupsFor(cards, context, !!before),
+    right_now: before ? null : await rightNow.current(context), groups,
     end: { caught_up: !overflow || Date.parse(result[limit]?.created_at) <= Date.parse(since), since,
       can_show_earlier: older, earlier_cursor: older ? cursor.encode(last, since, readAt) : null },
   };

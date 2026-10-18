@@ -34,10 +34,8 @@ async function plansFor(user, area) {
     ends_at: plan.ends_at || null, plan }));
 }
 
-/** GET /api/pulse/upcoming */
-async function upcoming(user, { areaId, limit = 20 } = {}) {
-  const context = await feed.contextFor(user.id, areaId);
-  if (!context.area) return { area: null, items: [] };
+/** Events in the next 14 days that `context`'s reader can see in its area, as UpcomingItems. */
+async function eventsFor(context) {
   const now = Date.now();
   const nowIso = new Date(now).toISOString();
   const rows = await feed.scan(context, { view: 'nearby', readAt: nowIso, refine: query => query
@@ -45,15 +43,20 @@ async function upcoming(user, { areaId, limit = 20 } = {}) {
     .or(`event_end_date.gte.${nowIso},and(event_end_date.is.null,event_date.gte.${new Date(now - NO_END_MS).toISOString()})`) });
   const ids = [...new Set(rows.map(row => row.area_id).filter(Boolean))];
   const areas = ids.length ? await checked(openAreas(db.from('PulseArea').select(AREA_SELECT)).in('id', ids)) : [];
-  const [cards, plans] = await Promise.all([
-    postCards(rows, { viewerId: user.id, homes: context.homes, areas, fallbackArea: context.area,
-      blockedIds: context.filters.blockedUserIds }),
-    plansFor(user, context.area),
-  ]);
-  const events = cards.map((card, i) => ({ kind: 'event', starts_at: new Date(rows[i].event_date).toISOString(),
-    ends_at: rows[i].event_end_date ? new Date(rows[i].event_end_date).toISOString() : null, post: card }));
+  const cards = await postCards(rows, { viewerId: context.userId, homes: context.homes, areas,
+    fallbackArea: context.area, blockedIds: context.filters.blockedUserIds });
+  return cards.map((card, i) => ({ kind: 'event', starts_at: new Date(rows[i].event_date).toISOString(),
+    ends_at: rows[i].event_end_date ? new Date(rows[i].event_end_date).toISOString() : null, post: card }))
+    .sort((a, b) => Date.parse(a.starts_at) - Date.parse(b.starts_at));
+}
+
+/** GET /api/pulse/upcoming */
+async function upcoming(user, { areaId, limit = 20 } = {}) {
+  const context = await feed.contextFor(user.id, areaId);
+  if (!context.area) return { area: null, items: [] };
+  const [events, plans] = await Promise.all([eventsFor(context), plansFor(user, context.area)]);
   const items = [...events, ...plans].sort((a, b) => Date.parse(a.starts_at) - Date.parse(b.starts_at)).slice(0, limit);
   return { area: areaDto(context.area), items };
 }
 
-module.exports = { upcoming };
+module.exports = { upcoming, eventsFor };

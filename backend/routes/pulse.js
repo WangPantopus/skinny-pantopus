@@ -18,6 +18,7 @@ const pulseSearch = require('../services/pulse/search');
 const { upcoming } = require('../services/pulse/upcoming');
 const rightNow = require('../services/pulse/rightNow');
 const planBridge = require('../services/pulse/planBridge');
+const places = require('../services/pulse/places');
 const { isPulseTopic } = require('../services/pulse/topics');
 const {
   DAY_MS, askIdsWithReplies, windowDays, endsAt,
@@ -78,7 +79,7 @@ router.post('/feed/seen', verifyToken, async (req, res) => {
 router.get('/posts/:postId', verifyToken, async (req, res) => {
   try {
     res.set('Cache-Control', 'private, no-store');
-    res.json(await conversation.read(req.params.postId, req.user.id));
+    res.json(await conversation.read(req.params.postId, req.user.id, { residentsOnly: req.query.residents_only === '1' }));
   } catch (error) { feedError(res, error); }
 });
 
@@ -88,7 +89,8 @@ router.get('/posts/:postId/replies', verifyToken, async (req, res) => {
       return res.status(400).json({ error: 'Choose a valid time to check for new replies.' });
     }
     res.set('Cache-Control', 'private, no-store');
-    res.json(await conversation.read(req.params.postId, req.user.id, { repliesOnly: true, after: req.query.after }));
+    res.json(await conversation.read(req.params.postId, req.user.id, { repliesOnly: true, after: req.query.after,
+      residentsOnly: req.query.residents_only === '1' }));
   } catch (error) { feedError(res, error); }
 });
 
@@ -258,6 +260,19 @@ router.post('/right-now/:id/update', verifyToken, async (req, res) => {
 
 router.post('/right-now/:id/clear', verifyToken, async (req, res) => {
   try { res.json(await rightNow.clear(req.user.id, req.params.id)); }
+  catch (error) { feedError(res, error); }
+});
+
+// Place pages and dated observations (contract §2.19).
+router.get('/places/:id', verifyToken, async (req, res) => {
+  try {
+    res.set('Cache-Control', 'private, no-store');
+    res.json(await places.page(req.user.id, req.params.id));
+  } catch (error) { feedError(res, error); }
+});
+
+router.post('/places/:id/observations', verifyToken, async (req, res) => {
+  try { res.status(201).json(await places.observe(req.user.id, req.params.id, req.body || {})); }
   catch (error) { feedError(res, error); }
 });
 

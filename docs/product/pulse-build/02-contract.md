@@ -379,6 +379,42 @@ The feed's `right_now` (2.3) and `GET /api/pulse/right-now?area_id=` → `{ "rig
 
 **People I invite** (`audience: invited`, with `invitees`: 1 to 10 user ids of people who took part in the conversation, its author or someone with a live reply, who can read it and aren't across a block from the host). The plan's `join_requirement` is `invited`: only the host and the invited people can see it, open it, ask or be counted; it never appears in discovery, on the map, in the conversation or to anyone else on any path. Each invited person gets a `plan_invited` notification and a request in `invited` state (in `GET /api/plans/mine` → `invited`), which Going turns into `accepted`. The host adds people with `POST /api/plans/:id/invitees` `{ "userIds": [...] }` and removes one with `DELETE /api/plans/:id/invitees/:userId`; removing someone ends their access at once.
 
+### 2.19 Places and areas (S16)
+
+Areas are rows. A town, street, neighborhood or place appears once its `opened_at` arrives, with no app build; the area endpoints, the feed's pill and groups and the composer pick it up. `Area` (2.10) gains `radius_m` (null for an area with a boundary; a number for a labeled radius, whose `title` then says so, for example "Fern Prairie · within 2 mi") and, for places, `place_type`. A drive-time area is a boundary made once from a routing source (its `source` says so); nothing is computed per request.
+
+**Places** are areas of kind `place` with `place_type`: `building`, `hoa`, `school_zone`, `park`, `trail`, `lake`, `library`, `council_district` or `other`. A `building` or `hoa` is **restricted**: its conversation is only for verified homes inside it, and unit numbers appear nowhere.
+
+`GET /api/pulse/places/:id` (signed in) → 
+
+```jsonc
+{
+  "place": { /* Area */ "place_type": "park", "restricted": false,
+             "facts": [{ "label": "Hours", "text": "6am–10pm", "source_label": "City of Camas", "source_url": "https://…", "retrieved_at": "<iso>" }] },
+  "can_read": true,                 // false for a restricted place the reader has no verified home in: show "Only verified residents"
+  "conversations": [ /* PulsePost about the place, newest first, open and resolved, at most 20 */ ],
+  "upcoming": [ /* UpcomingItem (2.15) for events at the place */ ],
+  "official_updates": [ /* PulsePost by Official and curator accounts about the place, newest first, at most 5 */ ],
+  "observations": [{ "id": "uuid", "text": "Trail flooded by the north lot", "created_at": "<iso>", "expires_at": "<iso>",
+                     "author": { "display_name": "Dana", "label": "visitor" } }]
+}
+```
+
+- When `can_read` is false, `conversations`, `official_updates` and `observations` are empty. `404 AREA_NOT_FOUND` for a missing or closed place. Following a place (2.9) grants nothing.
+- **Posting about a place** (Pulse mode, 2.5): `areaId` may be an open place. An unrestricted place takes `readScope` `public` or `verified_town`; a restricted one only `verified_area` with the author's primary home verified inside (`403 NEEDS_VERIFIED_ADDRESS`). The card's `about.label` is the place's name.
+- **Observations:** `POST /api/pulse/places/:id/observations` `{ "text", "clientRequestId"? }` (1 to 280 characters) → `201 { "observation": Observation }`. Anyone signed in with the adult attestation, Visitors included; it counts against the daily limits of section 5 (a Visitor's one post a day, New here's two), passes the composer checks, carries the author's first name and label in the place's area, and ages out after 72 hours. Observations appear only on the place page, never in a feed or search. In a restricted place only verified homes inside can add one. They can be reported like any post.
+
+**Residents only** (Local government and Getting around conversations): `GET /api/pulse/posts/:id?residents_only=1` and `/replies?residents_only=1` return only replies whose author is a `resident` of the post's area, for readers of every label. Other topics ignore the parameter. Clients remember the choice themselves.
+
+**The street's plans line:** while the `plans` switch is on for the reader, the feed's street group gains `plans_line: { "count": 3, "text": "3 plans on your street" }` for open plans the reader can see whose area point lies inside that street; otherwise it is null, and it never appears in another group.
+
+### 2.20 Businesses and officials (S17)
+
+- **Officials.** `User.account_type` gains `official`; staff set it after verifying the account (PS's console). An Official posts and replies under its verified name with the `official` label, may post Heads-ups with the official kinds and a source (section 1), Events and Right now updates (2.16), and cannot remove anyone's replies (only a reply's author can delete it).
+- **Business replies.** A business account replies in Pulse only under an open Ask whose topic is one of its service topics: `BusinessProfile.attributes.pulse_topics` when the business set it, otherwise the topics its categories map to (`backend/services/pulse/businessTopics.js`). Otherwise `403 BUSINESS_REPLY_NOT_ALLOWED`. At most 10 business replies in a rolling week (`429 BUSINESS_WEEKLY_CAP { limit, resets_at }`, with a plain sentence). The reply wears the `business` label. A business still can't start a Pulse post, follow, respond to Known or appear in Known except as residents' recommendations.
+- **Local offers.** `POST /api/businesses/:businessId/offers` `{ "title", "terms", "startsAt", "endsAt", "url"? }` (a verified business's owner or a seat with page permission; title up to 80 characters, terms up to 280, at most 30 days) → `201 { "offer": { "id", "status": "pending" } }`; `GET /api/businesses/:businessId/offers` lists the business's own. Staff approve or reject in the console (PS calls PB's `approveOffer` and `rejectOffer`). `GET /api/pulse/local-offer?area_id=` → `{ "offer": { "id", "business": { "name", "label": "business" }, "title", "terms", "url", "ends_at" } | null }`: one approved, current offer for the town, the same for everyone in it that day (approved offers take turns by day, in a fixed order); the client shows it only in its labeled "Local offers" spot, never in the conversation list. No payment, marketplace offer or Earn path is involved or reachable.
+- The pinned, labeled summary of positions on a Local government conversation is a pin (S24).
+
 ## 3. Outlined (shapes are published by the owner before the first client PR)
 
 | Slice | Endpoints (owner) |
@@ -387,10 +423,10 @@ The feed's `right_now` (2.3) and `GET /api/pulse/right-now?area_id=` → `{ "rig
 | S13 | Digest content and delivery are jobs, not endpoints (PC); preferences above. PC reads content in process from PB's `backend/services/pulse/content.js`: `digestPosts(viewerId, { since, until?, limit?, perGroup?, areaId? })` → `{ area, since, until, total, groups: [{ key, title, area_id, total, items: [PulsePost] }] }`; `unansweredForHelper(viewerId, { minAgeHours?, limit?, excludePostIds?, areaId? })` → `{ posts: [PulsePost] }`; `followRecaps(viewerId, { since, until? })` → `{ since, until, conversations: [{ follow: PulseFollow, post: PulsePost, replies: [PulseReply] }] }`; `getSeenMarker(viewerId, view)` → ISO time or null. They use the feed's own read rules, carry no distance and no media, and never move a marker (PB) |
 | S14 | Frozen in 2.18 (PB) |
 | S15 | `GET /api/public/pulse/areas`, `GET /api/public/pulse/feed?area=`, `GET /api/public/pulse/posts/:id` (public posts only; no distance, no street, first name and label) (PC with PB) |
-| S16–S17 | Place pages, area opening, business and official identities (PB, PS) |
+| S16–S17 | Frozen in 2.19 (places and areas) and 2.20 (businesses and officials) (PB, PS) |
 | S9 (addition) | Narrower audiences are frozen in §2.13 (PB); the endpoint is not live until its implementation merges |
 | S11 (addition) | `GET /api/pulse/rules` → `{ "rules": [...], "review_hours": "…", "appeals_text": "…", "law_enforcement_text": "…" }`; the text is the founder's and counsel's, PS serves it (PS) |
-| S17 (addition) | Local offers: `POST /api/businesses/:businessId/offers`; staff approve in the console; `GET /api/pulse/local-offer?area=` → the one offer to show, or null (PB, PS) |
+| S17 (addition) | Local offers: frozen in 2.20 (PB, PS) |
 | S20 | `POST /api/users/code/start` `{ "email", "firstName" }` → always `{ "ok": true }` (no account enumeration); `POST /api/users/code/verify` `{ "email", "code", "deviceId" }` → the same session body as `POST /api/users/login` plus `is_new`. Codes are 6 digits, valid 10 minutes, single use, 5 tries. Errors: `CODE_INVALID`, `CODE_EXPIRED`, `TOO_MANY_ATTEMPTS`, `CHANNEL_UNAVAILABLE` (text codes, until a provider exists). The `authEndpointLimiter`, DPoP and device rules that cover login cover these (PB) |
 | S21 | The plan create body gains `repeats` (`none`, `weekly`, `biweekly`, `monthly`) and `until`; `POST /api/plans/:id/series/{pause,resume,end}`; the going call gains `scope` (`occurrence` or `series`); `POST\|DELETE /api/plans/:id/co-hosts`; all through the existing Plans services (PB) |
 | S22 | `POST /api/support-trains` accepts an optional `sourcePostId` (stored, never returned); the conversation payload's `support_train` is `{ "line": "…" }` only when the organizer chose to post the line (PB) |
@@ -409,10 +445,11 @@ The feed's `right_now` (2.3) and `GET /api/pulse/right-now?area_id=` → `{ "rig
 | `PostReport` | `comment_id uuid null` (foreign key to `PostComment`, deleted with it): a report about one reply of the post (S9, 2.7). Post reports leave it null |
 | `PostMute` | `area_id uuid null` (the `topic` entity type already exists); its unique index includes `area_id`. Added with `Post_topic_check`'s widening in `20261014031000_pulse_topics.sql` (S4); the foreign key to `PulseArea` comes with that table |
 | `User` | `adult_attested_at timestamptz`; `account_type` check widened with `official` |
+| `PulseArea` | S16: `place_type text` (check: the place types of 2.19), `restricted boolean not null default false`, `facts jsonb not null default '[]'` |
 | `UserFeedPreference` | `pulse_nearby_seen_at timestamptz`, `pulse_following_seen_at timestamptz` (server-only storage finalized before S6; clients use `/feed/seen`, never these columns) |
 | `UserNotificationPreferences` | `digest_enabled boolean`, `digest_time_local time`, `digest_channel text`, `weekly_street_digest_enabled boolean` (PC), `nudge_helper boolean default true` |
 | `Plan` | `source_post_id uuid null` (S14; no foreign key, since `Plan` already references `Post` and a second key would make existing embeds ambiguous; a deleted conversation simply stops linking); `join_requirement` gains `invited` and `PlanRequest.status` gains `invited` (S14, check widenings); S21: `series_id uuid`, `recurrence jsonb`, `co_host_ids uuid[]`, `paused_at timestamptz` |
-| `Post` (later slices) | S23: `merged_into_post_id uuid null`; S24: pinned sources live in `post_metadata.pins` (no column) |
+| `Post` (later slices) | S16: an observation is a `share` row with `distribution_targets: ['place_observation']` and `post_metadata.observation: true` (no feed or search reads it); S17: a local offer is a `deal` row by the business account with `distribution_targets: ['local_offer']`, `moderation_state: held` until staff approve it; S23: `merged_into_post_id uuid null`; S24: pinned sources live in `post_metadata.pins` (no column) |
 | `SupportTrain` | S22: `source_post_id uuid null` |
 | `User` (later slices) | S20/S24: `signup_source text` |
 | `UserNotificationPreferences` (later slices) | S24: `reading_home_ids uuid[]` |
@@ -520,6 +557,9 @@ Labels use the author's **primary** home, as posting and limits do. A second ver
 | 400 | `PLAN_KIND_NOT_OFFERED` | A playdate (or another kind) suggested from a conversation (2.18) |
 | 400 | `PLAN_AT_HOME_NOT_OFFERED` | An "All of {Town}" plan at a home (2.18) |
 | 400 | `INVALID_INVITEES` | `invited` without 1 to 10 people who took part in the conversation and can read it (2.18) |
+| 403 | `BUSINESS_REPLY_NOT_ALLOWED` | A business replying outside an open Ask in one of its service topics (2.20) |
+| 429 | `BUSINESS_WEEKLY_CAP` | The eleventh business reply in a rolling week, `{ limit, resets_at }` (2.20) |
+| 400 | `INVALID_OFFER` | A local offer with a missing title, terms or dates, or longer than 30 days (2.20) |
 
 ## 9. Funnel events
 

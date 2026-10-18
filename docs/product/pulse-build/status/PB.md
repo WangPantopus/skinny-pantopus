@@ -2,9 +2,9 @@
 
 Owner: the PB session. Keep this file current in your own PRs (or a small docs PR): what is done with PR links, what is next, requests to other streams, and anything that needs the founder. Read the other streams' files on `master` before starting a slice that depends on them.
 
-## Current handoff (October 15, 06:20 UTC)
+## Current handoff (October 15, about 08:00 UTC)
 
-[PB handoff, October 15](PB-handoff-2026-10-15.md): what merged today (#2322 with its seven parents; #2339 with #2337 and #2338), the open S8 PRs (#2340 contract, #2341 implementation, both green), the next PB work in order (S8 merge, PC's content helpers and follow alerts, S12, S14, S15–S17, S20, S21–S24) and the live runtime the next session reuses.
+[PB handoff, October 15 late](PB-handoff-2026-10-15-late.md): S8 and PC's content helpers merged; the S12 chain (#2346 → #2347 → #2349 → #2350) is green and only waits for master's queue; S14 (#2351, #2352) and the S16/S17 contract (#2353) are open; S16's code is on `claude/pulse-pb-s16-places` and not yet verified. It lists the merge steps, the order of the remaining work (S16, S17, S15 as a draft under H2, S20 behind H6, S21–S24) and the live runtime the next session reuses. The morning handoff ([PB-handoff-2026-10-15.md](PB-handoff-2026-10-15.md)) is history.
 
 - **Merged:** offer requests and the giver's choice (`OfferClaim`), reply reports into the `PostReport` queue, and narrowing who can read ([#2338](https://github.com/WangPantopus/skinny-pantopus/pull/2338), [#2339](https://github.com/WangPantopus/skinny-pantopus/pull/2339), contract [#2337](https://github.com/WangPantopus/skinny-pantopus/pull/2337)). Checked on iOS (request with a double tap, the giver's list and choice, narrowing to the town and to a synthetic street), on web (inbox, narrowed posts, refused share) and on Android (inbox).
 - **Merged later on October 15:** Pulse-mode creation and edits ([#2340](https://github.com/WangPantopus/skinny-pantopus/pull/2340), [#2341](https://github.com/WangPantopus/skinny-pantopus/pull/2341)); see the next section.
@@ -137,6 +137,8 @@ H2 public exposure/moderation coverage and H6 auth abuse verification remain. H1
 - → PA (radius cap, until the Pulse tab moves to `GET /api/pulse/feed`, which has no radius): the legacy Place feed now reads at most 100 miles, so the radius ladder's last two steps (1,000 mi and Global) read 100 miles, while the suggestion banner still offers them and then says "1 post within 1000 mi". End the ladder at 100, as iOS now does ([PR 2297](https://github.com/WangPantopus/skinny-pantopus/pull/2297): a saved 1,000 mi or Global reads 100 in the banner and the location bar). Zoomed far out, the map can say "No posts in this area" while posts sit in the viewport outside the middle 200 miles; "Show nearest activity" recovers, and a zoom gate like the web's ("Zoom in to see posts") would read better (iOS adds one with S6's page). The web feed has no radius control (its banner is only on Marketplace).
 
 ## Needs founder
+
+- **Only three lanes exist (October 15):** PA, PB and PI. Nobody owns PS's safety work (composer checks, S11 moderation, the console, `interestInReply`, Known drafting, Official and offer approval, the emergency hold), PC's channels work (digest, noise budget, preferences, email and text, public pages) or PV's verification (sweeps, coverage, S20's abuse run), so H2 and H6 can't clear as written. Decided October 15: PB stays on its own slices and leaves this work unowned for now; PB doesn't edit PS- or PC-owned files. S15's public endpoints stay a draft (H2) and S20 a draft (H6) until the founder assigns owners.
 
 - **Resolved October 14:** founder approved all eleven tables and downloading public Census boundaries. [PR 2304](https://github.com/WangPantopus/skinny-pantopus/pull/2304) is merged and records the README tick. No hosted migration or deployment is authorized.
 - Deploy note for S1: deploy the seeder no later than the backend. The backend refuses a curator public-safety alert without a source link; the updated seeder sends one, and an older backend ignores the extra field.
