@@ -25,16 +25,26 @@ export default function SafetyAlertFields({
         <>
           <p className="text-xs font-semibold text-red-700">Alert Type</p>
           <div className="flex flex-wrap gap-1.5">
-            {['theft', 'vandalism', 'suspicious', 'hazard', 'scam', 'other'].map((k) => (
+            {[
+              ['road_hazard', 'Road hazard'],
+              ['power_outage', 'Power outage'],
+              ['weather_damage', 'Weather damage'],
+              ['missing_pet', 'Missing pet'],
+              ['hazard', 'Other hazard'],
+              ['other', 'Other'],
+            ].map(([kind, label]) => (
               <button
-                key={k}
-                onClick={() => onSafetyKindChange(k)}
-                className={`px-3 py-1 text-xs font-medium rounded-full border transition ${safetyKind === k ? 'bg-red-600 text-white border-red-600' : 'border-red-200 text-red-700 hover:bg-red-100'}`}
+                key={kind}
+                type="button"
+                aria-pressed={safetyKind === kind}
+                onClick={() => onSafetyKindChange(kind)}
+                className={`px-3 py-1 text-xs font-medium rounded-full border transition ${safetyKind === kind ? 'bg-red-600 text-white border-red-600' : 'border-red-200 text-red-700 hover:bg-red-100'}`}
               >
-                {k}
+                {label}
               </button>
             ))}
           </div>
+          <p className="text-xs text-red-700">Heads-ups can’t be about crime or suspicious people. In an emergency, call 911.</p>
         </>
       )}
       <textarea

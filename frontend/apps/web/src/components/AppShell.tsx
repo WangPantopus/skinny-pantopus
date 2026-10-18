@@ -211,7 +211,10 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const audienceProfileFlag = audienceFlagState.enabled && launchFeatures.beacon;
 
   // ── Context detection ─────────────────────────────────────
-  const homeMatch = pathname.match(/^\/app\/homes\/([^/]+)/);
+  // Collection routes such as new, find, invite and member-removals do not
+  // identify a home. Offering home tools there produces links with those
+  // words as the home ID and sends people to unavailable records.
+  const homeMatch = pathname.match(/^\/app\/homes\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\/|$)/i);
   const homeId = homeMatch?.[1] || null;
   const isHomeContext = !!homeId;
 

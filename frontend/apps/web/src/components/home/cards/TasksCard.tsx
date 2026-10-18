@@ -235,6 +235,8 @@ export default function TasksCard({
             >
               {/* Checkbox */}
               <button
+                type="button"
+                aria-label={`${task.status === 'done' ? 'Reopen' : task.status === 'open' ? 'Start' : 'Complete'} task: ${task.title}`}
                 onClick={(e) => {
                   e.stopPropagation();
                   const next = task.status === 'done' ? 'open' : task.status === 'open' ? 'in_progress' : 'done';

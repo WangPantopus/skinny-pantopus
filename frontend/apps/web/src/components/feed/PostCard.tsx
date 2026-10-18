@@ -173,7 +173,7 @@ function PostCard({
         <div className="flex items-center gap-2 px-4 py-2 bg-red-50 border-b border-red-100">
           <Siren className="w-3.5 h-3.5" />
           <span className="text-xs font-bold text-red-700 uppercase tracking-wide">
-            Safety Alert{post.safety_alert_kind ? ` · ${post.safety_alert_kind}` : ''}
+            Safety Alert{post.safety_alert_kind ? ` · ${post.safety_alert_kind.replace(/_/g, ' ')}` : ''}
           </span>
         </div>
       )}

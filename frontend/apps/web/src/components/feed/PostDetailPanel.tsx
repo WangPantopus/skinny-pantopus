@@ -506,6 +506,9 @@ export default function PostDetailPanel({
 
               <div className="grid grid-cols-2 gap-2 border-y border-app px-5 py-3 sm:grid-cols-5">
                 <button
+                  type="button"
+                  aria-label={post.userHasLiked ? 'Unlike post' : 'Like post'}
+                  aria-pressed={!!post.userHasLiked}
                   onClick={handleLike}
                   className={`flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium transition ${
                     post.userHasLiked ? 'bg-red-50 text-red-500 hover:bg-red-100' : 'text-app-muted hover-bg-app'
@@ -537,6 +540,8 @@ export default function PostDetailPanel({
                   <span>{post.userHasReposted ? 'Reposted' : 'Repost'}</span>
                 </button>
                 <button
+                  type="button"
+                  aria-label="Share post"
                   onClick={handleShare}
                   className="flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium text-app-muted transition hover-bg-app"
                 >
