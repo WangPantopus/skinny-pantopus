@@ -71,6 +71,17 @@ public struct EditBusinessPageView: View {
             }
             Button("Keep editing", role: .cancel) {}
         }
+        .alert(
+            "Image wasn't updated",
+            isPresented: Binding(
+                get: { viewModel.mediaUploadError != nil },
+                set: { if !$0 { viewModel.mediaUploadError = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) { viewModel.mediaUploadError = nil }
+        } message: {
+            Text(viewModel.mediaUploadError ?? "")
+        }
     }
 
     @ViewBuilder private var content: some View {
