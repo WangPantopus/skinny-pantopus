@@ -220,6 +220,7 @@ export interface VerificationStatus {
   verified_at?: string;
   evidence: VerificationEvidence[];
   can_self_attest: boolean;
+  can_self_attest_reason?: string;
   can_upload_evidence: boolean;
 }
 
