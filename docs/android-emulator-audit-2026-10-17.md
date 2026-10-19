@@ -221,7 +221,7 @@ The founder requested a handoff and all local work committed and pushed to the e
 
 ### Verification status
 
-The first integrated pass containing hours and error-visibility changes passed ktlint/detekt/assembly, then failed Android lint with eight SuspiciousIndentation errors in ChatConversationScreen/ViewModel; source was being edited during that run, so it does not validate the final inbox changes. Investigate a fresh stable-source run before concluding those diagnostics are real. Its log is private `pass10-integration-checks.log`. The handoff check result is recorded below when complete. Update affected existing tests/baselines only when behavior intentionally changed; do not add unit tests or weaken checks.
+The first integrated pass containing hours and error-visibility changes passed ktlint/detekt/assembly, then failed Android lint with eight SuspiciousIndentation errors in ChatConversationScreen/ViewModel; source was being edited during that run, so it does not validate the final inbox changes. Investigate a fresh stable-source run before concluding those diagnostics are real. Its log is private `pass10-integration-checks.log`. The fresh stable-source run below passed; the earlier lint diagnostics did not recur. Update affected existing tests/baselines only when behavior intentionally changed; do not add unit tests or weaken checks.
 
 ### Remaining broader coverage
 
@@ -251,3 +251,5 @@ The existing final check command (Java 17, run from `frontend/apps/android`) is:
 ```
 
 Keep the source stable throughout that run. Install `app/build/outputs/apk/debug/app-debug.apk` only on this audit's emulator and then perform the native acceptance steps above. The private `handoff-final-checks.log` records the fresh checkpoint run; no final native replay has been claimed for that APK.
+
+Final handoff validation: source commit `63f248d3e` passed the complete command above in **9 minutes 48 seconds**, including ktlint, detekt, APK assembly, Android lint, existing debug unit tests and Paparazzi verification. The report contained **549 suites / 5,054 cases: 4,978 passed, 76 existing skips, zero failures/errors**. The earlier eight SuspiciousIndentation diagnostics did not recur on the stable source. `git diff --check` and a private synthetic-credential scan of the tracked diff passed. No new unit tests were added; existing chat mocks were updated for the optional business-identity argument. The new APK has not been replayed in the emulator. PR 2426 is a draft containing the complete committed checkpoint; check its new CI separately, since the earlier green CI belonged to `89ccd2706`.
