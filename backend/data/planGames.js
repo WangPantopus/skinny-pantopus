@@ -7,7 +7,7 @@
  * schedule (TBD/TBA games stay out). `ends_at` is an estimate for a watch party:
  * NFL 3 h 15 min, NBA 2 h 30 min, MLS 2 h, college football 3 h 30 min.
  *
- * Checked 2026-10-14 against:
+ * Checked 2026-10-19 against:
  *   Seahawks       https://www.seahawks.com/schedule/
  *                  (and https://www.nfl.com/schedules/2026/by-team/seattle-seahawks)
  *   Trail Blazers  https://www.nba.com/blazers/schedule
@@ -16,18 +16,17 @@
  *                  (and the MLS match data behind it, https://stats-api.mlssoccer.com)
  *   Huskies        https://gohuskies.com/sports/football/schedule
  *   Ducks          https://goducks.com/sports/football/schedule
- *                  (Oct 17 time: https://goducks.com/news/2026/10/11/football-oregon-vs-nebraska-set-for-8-pm-on-fox)
  *   Cougars        https://wsucougars.com/sports/football/schedule
  *   College times also match each opponent's official schedule page.
  * The list covers games through Dec 31; check again before Dec 17 so the 14-day window
  * stays full, and weekly until then to catch flexed NFL times and add college games as
  * their kickoffs are set (usually 6 or 12 days ahead). Not listed for lack of a set time
- * (TBD at the last check): Ducks at Illinois (Oct 24: 12:00 or 12:30 PT, set Oct 18),
- * Ducks vs Northwestern (Oct 31), Ducks at Ohio State (Nov 7), Ducks vs Michigan (Nov 14),
- * Ducks vs Huskies (Nov 28), Huskies at Nebraska (Oct 31), Huskies vs Penn State (Nov 7),
+ * (TBD at the last check): Ducks vs Northwestern (Oct 31), Ducks at Ohio State (Nov 7),
+ * Ducks vs Michigan (Nov 14), Ducks vs Huskies (Nov 28), Huskies vs Penn State (Nov 7),
  * Huskies at Michigan State (Nov 14), Huskies vs Indiana (Nov 21), Cougars vs Oregon
- * State (Nov 28), the two Blazers games the NBA adds after NBA Cup group play, Timbers
- * playoff games (from Nov 18, if they qualify), and conference title and bowl games.
+ * State (Nov 28) and the Pac-12 title game (Dec 4), the two Blazers games the NBA adds
+ * after NBA Cup group play, Timbers playoff games (from Nov 18, if they qualify), and
+ * conference title and bowl games.
  *
  * To add games: append rows with the official page as `source`, times in UTC (Pacific is
  * UTC-7 until Nov 1, 2026, then UTC-8 until Mar 14, 2027). GET /api/plans/games serves the
@@ -37,7 +36,7 @@
  * a TEAMS entry too.
  */
 
-const CHECKED_AT = '2026-10-14';
+const CHECKED_AT = '2026-10-19';
 
 // Each team's home venue (approximate coordinates), for the distance filter.
 const TEAMS = {
@@ -50,24 +49,12 @@ const TEAMS = {
 };
 
 const GAMES = [
-  { id: 'timbers-2026-10-14-lag', team: 'timbers', label: 'Timbers', opponent: 'LA Galaxy', home: false,
-    starts_at: '2026-10-15T02:30:00Z', ends_at: '2026-10-15T04:30:00Z', source: 'https://www.timbers.com/schedule/' },
-  { id: 'seahawks-2026-10-15-den', team: 'seahawks', label: 'Seahawks', opponent: 'Broncos', home: false,
-    starts_at: '2026-10-16T00:15:00Z', ends_at: '2026-10-16T03:30:00Z', source: 'https://www.seahawks.com/schedule/' },
-  { id: 'huskies-2026-10-16-pur', team: 'huskies', label: 'Huskies', opponent: 'Purdue', home: false,
-    starts_at: '2026-10-17T00:00:00Z', ends_at: '2026-10-17T03:30:00Z', source: 'https://gohuskies.com/sports/football/schedule' },
-  { id: 'blazers-2026-10-16-gsw', team: 'trail_blazers', label: 'Blazers', opponent: 'Warriors', home: false, preseason: true,
-    starts_at: '2026-10-17T02:00:00Z', ends_at: '2026-10-17T04:30:00Z', source: 'https://www.nba.com/blazers/schedule' },
-  { id: 'cougars-2026-10-17-osu', team: 'cougars', label: 'Cougars', opponent: 'Oregon State', home: false,
-    starts_at: '2026-10-17T22:00:00Z', ends_at: '2026-10-18T01:30:00Z', source: 'https://wsucougars.com/sports/football/schedule' },
-  { id: 'timbers-2026-10-17-col', team: 'timbers', label: 'Timbers', opponent: 'Rapids', home: true,
-    starts_at: '2026-10-18T02:30:00Z', ends_at: '2026-10-18T04:30:00Z', source: 'https://www.timbers.com/schedule/' },
-  { id: 'ducks-2026-10-17-neb', team: 'ducks', label: 'Ducks', opponent: 'Nebraska', home: true,
-    starts_at: '2026-10-18T03:00:00Z', ends_at: '2026-10-18T06:30:00Z', source: 'https://goducks.com/news/2026/10/11/football-oregon-vs-nebraska-set-for-8-pm-on-fox' },
   { id: 'blazers-2026-10-21-phx', team: 'trail_blazers', label: 'Blazers', opponent: 'Suns', home: true,
     starts_at: '2026-10-22T02:00:00Z', ends_at: '2026-10-22T04:30:00Z', source: 'https://www.nba.com/blazers/schedule' },
   { id: 'blazers-2026-10-23-sac', team: 'trail_blazers', label: 'Blazers', opponent: 'Kings', home: false,
     starts_at: '2026-10-24T02:00:00Z', ends_at: '2026-10-24T04:30:00Z', source: 'https://www.nba.com/blazers/schedule' },
+  { id: 'ducks-2026-10-24-ill', team: 'ducks', label: 'Ducks', opponent: 'Illinois', home: false,
+    starts_at: '2026-10-24T19:00:00Z', ends_at: '2026-10-24T22:30:00Z', source: 'https://goducks.com/sports/football/schedule' },
   { id: 'cougars-2026-10-24-bsu', team: 'cougars', label: 'Cougars', opponent: 'Boise State', home: true,
     starts_at: '2026-10-24T22:00:00Z', ends_at: '2026-10-25T01:30:00Z', source: 'https://wsucougars.com/sports/football/schedule' },
   { id: 'timbers-2026-10-24-clt', team: 'timbers', label: 'Timbers', opponent: 'Charlotte FC', home: true,
@@ -84,6 +71,8 @@ const GAMES = [
     starts_at: '2026-10-31T19:00:00Z', ends_at: '2026-10-31T21:30:00Z', source: 'https://www.nba.com/blazers/schedule' },
   { id: 'cougars-2026-10-31-sdsu', team: 'cougars', label: 'Cougars', opponent: 'San Diego State', home: false,
     starts_at: '2026-10-31T23:00:00Z', ends_at: '2026-11-01T02:30:00Z', source: 'https://wsucougars.com/sports/football/schedule' },
+  { id: 'huskies-2026-10-31-neb', team: 'huskies', label: 'Huskies', opponent: 'Nebraska', home: false,
+    starts_at: '2026-11-01T00:00:00Z', ends_at: '2026-11-01T03:30:00Z', source: 'https://gohuskies.com/sports/football/schedule' },
   { id: 'timbers-2026-11-01-hou', team: 'timbers', label: 'Timbers', opponent: 'Houston Dynamo', home: true,
     starts_at: '2026-11-02T02:45:00Z', ends_at: '2026-11-02T04:45:00Z', source: 'https://www.timbers.com/schedule/' },
   { id: 'seahawks-2026-11-02-chi', team: 'seahawks', label: 'Seahawks', opponent: 'Bears', home: true,
