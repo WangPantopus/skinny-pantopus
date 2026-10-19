@@ -94,7 +94,8 @@ here supersede their earlier status snapshots, not founder decisions.
   These source checks do not establish a signed release or physical delivery.
 - [x] Opened the staging deletion page in Chrome: it renders the deletion
   instructions. The production URL still serves the old app shell, so the
-  production deletion-page gate stays open until P9.
+  production deletion-page gate stays open until P9. Since P9 on October 17,
+  `https://pantopus.com/delete-account` renders the instructions too.
 
 ### What needs the founder, in dependency order
 
@@ -124,14 +125,12 @@ here supersede their earlier status snapshots, not founder decisions.
    API enablement alone does not configure the backend. Lob/Smarty/address
    setup stays deferred until ready; enable live postcards only with the real
    return address and live webhook settings. Do not paste any secret into chat.
-4. **Release the web and link domains (P9/P10).** The API has been healthy
-   since October 17 (P6). Verify the Vercel production variables and billing
-   choice, then merge
-   [PR 2413](https://github.com/WangPantopus/skinny-pantopus/pull/2413)
-   (PR 2019's changes on current master): the merge deploys `pantopus.com`.
-   Configure DNS and Vercel for both `.app` hosts without redirects. After
-   signing is ready, L4 can regenerate Android associations and re-run the
-   hosted checks.
+4. **Release the web and link domains (P9/P10).** P9 is done: the founder
+   merged [PR 2413](https://github.com/WangPantopus/skinny-pantopus/pull/2413)
+   on October 17 and Vercel released master to `pantopus.com` (see P9's
+   status). Keep the Vercel account on Pro. Configure DNS and Vercel for both
+   `.app` hosts without redirects. After signing is ready, L4 can regenerate
+   Android associations and re-run the hosted checks.
 5. **Finish store signing (section 4).** iOS identifiers, capabilities, App
    Group and listing are already done. Still configure App Store Connect API
    access, the private match repo/password, App Store profiles for both targets
@@ -164,11 +163,11 @@ to the founder. No unchecked hosted or physical-device gate is claimed complete.
 
 | Piece | State on October 7, 2026 (19:15Z) |
 |---|---|
-| Website `pantopus.com` | Up, on Vercel. The deployment is about four months old (June). Its JavaScript calls `https://api.pantopus.com`, which since October 17 is the new production API (P6). On October 10 the Vercel project `pantopus-web` was connected to this repository with root `frontend/apps/web`, `pnpm install --frozen-lockfile`, `pnpm --filter @pantopus/web build`, Node 22 and production branch `master`, with `pantopus.com` and `www.pantopus.com` on Production. Nothing has deployed from `master` yet (P9). |
+| Website `pantopus.com` | Up, on the Vercel project `pantopus-web`, connected to this repository with root `frontend/apps/web`, `pnpm install --frozen-lockfile`, `pnpm --filter @pantopus/web build`, Node 22 and production branch `master`, with `pantopus.com` and `www.pantopus.com` on Production. Since October 17 at 04:29 UTC it serves master `948411142` (P9, [PR 2413](https://github.com/WangPantopus/skinny-pantopus/pull/2413)), replacing the June 11 build, and every master merge that changes the web deploys to production. It forwards `/api` and `/socket.io` to `https://api.pantopus.com`. |
 | Production API `api.pantopus.com` | Checked October 14 at 17:00 Pacific (L4): the name resolves straight to the server (DNS only, the same address as `staging-api.pantopus.com`) and serves a Let's Encrypt certificate issued October 9. Since October 17 at 00:24 UTC it runs the production API and worker from master `91018743a` (P6, [run 38985891255](https://github.com/WangPantopus/skinny-pantopus/actions/runs/38985891255)); `/health` answers healthy with the database connected. |
 | Staging | `https://staging-api.pantopus.com` runs the API and worker; `https://staging.pantopus.com` is the Vercel project `pantopus-staging`, with production branch `dev`. Both services released `dev 132e45a5f` on October 10: the API and worker deployment completed at 10:24 UTC ([run 38044657594](https://github.com/WangPantopus/skinny-pantopus/actions/runs/38044657594)); Vercel released the web at 09:52 UTC (deployment 6979118646). The backend database and deployment steps ran successfully, rather than skipping. Checked October 11 at 17:36 Pacific: API healthy, hosted checks 9/10 (Android app links await P10). The October 10 Lambda check found no observed errors in active/daily staging jobs and six alarms OK. S10 below distinguishes completed checks from the remaining web and physical-Android checks. |
 | `pantopus.app` | The zone is on Cloudflare with no records, so `pantopus.app`, `api.pantopus.app` and `staging.api.pantopus.app` don't resolve. |
-| April store apps | App Store "Pantopus" (`com.pantopus.app`, version 1.5.0 from May 12) and Google Play `com.pantopus.app`: the Expo app from the older repository. The live website links to both. Their API host was set in Expo's build settings (the old guides used `https://api.pantopus.com`); it can't be read from here. |
+| April store apps | App Store "Pantopus" (`com.pantopus.app`, version 1.5.0 from May 12) and Google Play `com.pantopus.app`: the Expo app from the older repository. The June website linked to both; since P9 (October 17) the website shows no store links until the new listings exist. Their API host was set in Expo's build settings (the old guides used `https://api.pantopus.com`); it can't be read from here. |
 | New native apps | iOS `app.pantopus.ios`, Android `app.pantopus.android`: different app IDs from the April apps, so they're new store listings (decision D2). Not uploaded anywhere yet. |
 | Supabase | The April production project and new `pantopus-production` project (`falmvysvndmwtfxsrxek`) are in the founder's `Pantopus` Free organization. The new project is healthy in Oregon; all 148 canonical migrations were applied and verified on October 9, the first production release applied the 36 newer ones on October 17 (184 in all), and the private `home-documents` bucket is configured. Auth transfer, the two 100 MB buckets, the S3 key and managed daily backups are pending. `Pantopus-staging` is separate and was reset to the canonical migrations on October 7 (S2). A separate production organization is optional billing isolation. |
 | GitHub | `staging` releases from `dev` after CI. `production` has nine secrets, `DB_MIGRATIONS_ENABLED=true`, and, since October 17 at 00:20 UTC, `BACKEND_DEPLOY_ENABLED=true`: every master merge that changes the backend releases to production after CI, migrations first. Store signing setup remains separate (section 4). |
@@ -843,6 +842,21 @@ the web's Settings → Security page (`/app/settings/security`) shows this
 browser's last address as your own network's, not a Vercel or Amazon one (if it
 doesn't, `EDGE_PROXY_SECRET` differs between Vercel and the server).
 
+**Status, October 17:** done. The founder merged
+[PR 2413](https://github.com/WangPantopus/skinny-pantopus/pull/2413) at 04:24
+UTC (master `948411142`), and Vercel's production deployment of `pantopus-web`
+finished at 04:29 UTC; `pantopus-staging` built the same commit as a preview.
+The merge changed no backend files, so Deploy Backend skipped its release.
+From 04:30 UTC `pantopus.com` and `www.pantopus.com` served the new home page
+(Next.js 15.5.27) with no store links, `/delete-account` rendered the deletion
+instructions, robots.txt let search engines in, and
+`check-hosted.cjs --production` passed 9/10 (Android app links wait for P10).
+The same replay of the Google and Apple return (the token exchange held 4 s in
+the browser, nothing sent to the API) showed the June build's "Sign-in failed"
+card 707 ms after the token was read and no card on the new build. Not checked:
+a real Google or Apple sign-in, the Settings → Security address check and the
+Stripe key's mode against D4.
+
 ### P10. Domains and app links (founder, L4 regenerates the files)
 
 - Vercel: add `pantopus.app` and `www.pantopus.app` to the same project without
@@ -950,8 +964,8 @@ native access checks; passing data and offline checks alone does not close this 
 - [ ] Founder: enter the App Privacy and Data safety answers
   (`docs/compliance/appstore-privacy-labels.md`, `play-data-safety.md`) and
   create a review account for each store. Play's Delete account URL
-  (`https://pantopus.com/delete-account`) is live after the production web
-  deploy (P9). Nothing is submitted without you.
+  (`https://pantopus.com/delete-account`) has been live since the production
+  web release on October 17 (P9). Nothing is submitted without you.
 
 ## 5. Go-live
 
