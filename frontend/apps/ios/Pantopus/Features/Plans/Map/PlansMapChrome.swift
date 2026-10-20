@@ -13,6 +13,8 @@ import SwiftUI
 struct PlansMapTopBar: View {
     let viewModel: PlansMapViewModel
     let showsPlaydates: Bool
+    /// "Ask Pantopus" about plans, the bar's trailing button.
+    var onAsk: (@MainActor () -> Void)?
     let onAreaTap: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -24,6 +26,7 @@ struct PlansMapTopBar: View {
                 HStack(spacing: Spacing.s2) {
                     areaPill
                     if !viewModel.isEmpty { locateButton }
+                    if let onAsk { askButton(onAsk) }
                 }
                 if !viewModel.isEmpty { chipRow }
             }
@@ -80,6 +83,16 @@ struct PlansMapTopBar: View {
         .buttonStyle(.plain)
         .accessibilityLabel("Show my location")
         .accessibilityIdentifier("plansLocate")
+    }
+
+    private func askButton(_ action: @escaping @MainActor () -> Void) -> some View {
+        AskPantopusButton(accessibilityIdentifier: "plansAskPantopus", action: action) {
+            AskPantopusGlyph()
+                .frame(width: 48, height: 48)
+                .background(Circle().fill(.regularMaterial))
+                .shadow(color: .black.opacity(0.12), radius: 5, x: 0, y: 2)
+                .contentShape(Circle())
+        }
     }
 
     // MARK: - Type chips

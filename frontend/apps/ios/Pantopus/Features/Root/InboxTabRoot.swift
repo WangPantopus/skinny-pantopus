@@ -19,8 +19,9 @@ public enum InboxRoute: Hashable {
     case composeGig(category: String)
     case composeListing
     case composePost(intent: String)
-    /// An assistant draft opened in the Pulse composer with its text.
-    case composePostDraft(intent: String, title: String?, body: String)
+    /// An assistant draft opened in the Pulse composer with its text and
+    /// every other field it carries (event, deal, Lost & Found, Heads Up).
+    case composePostDraft(PulseComposeDraft)
     /// An assistant Support Train card opened in the start wizard with its story.
     case startSupportTrain(story: String)
     /// A person's public profile, opened from a DM header.
@@ -313,9 +314,9 @@ public struct InboxTabRoot: View {
                 if !path.isEmpty { path.removeLast() }
             }
         case let .composePost(intent):
-            postComposer(intent: intent, title: nil, body: nil)
-        case let .composePostDraft(intent, title, body):
-            postComposer(intent: intent, title: title, body: body)
+            postComposer(intent: intent, draft: nil)
+        case let .composePostDraft(draft):
+            postComposer(intent: PulseIntent.from(postType: draft.postType).rawValue, draft: draft)
         case let .startSupportTrain(story):
             supportTrainStart(story: story)
         case let .publicProfile(userId):
@@ -373,11 +374,7 @@ public struct InboxTabRoot: View {
             .composeListing
         case "post":
             if let prefill = draft.prefill {
-                .composePostDraft(
-                    intent: PulseIntent.from(postType: prefill.postType).rawValue,
-                    title: prefill.title,
-                    body: prefill.body
-                )
+                .composePostDraft(prefill.postDraft)
             } else {
                 .composePost(intent: PulseIntent.ask.rawValue)
             }
@@ -417,11 +414,10 @@ public struct InboxTabRoot: View {
 // MARK: - Pantopus AI draft destinations
 
 private extension InboxTabRoot {
-    func postComposer(intent: String, title: String?, body: String?) -> some View {
+    func postComposer(intent: String, draft: PulseComposeDraft?) -> some View {
         PulseComposeFlowView(
             prefillFeedIntent: PulseIntent(rawValue: intent),
-            prefillTitle: title,
-            prefillBody: body,
+            prefillDraft: draft,
             onCancel: { if !path.isEmpty { path.removeLast() } },
             onPosted: { _ in if !path.isEmpty { path.removeLast() } }
         )
