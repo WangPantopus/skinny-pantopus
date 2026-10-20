@@ -149,7 +149,7 @@ class AIChatRepository
         /**
          * One conversation's earlier turns, so a restored thread shows what
          * the assistant remembers. It sends the chat request's card list, so
-         * history holds only the cards this app shows. Route `backend/routes/ai.js:457`.
+         * history holds only the cards this app shows. Route `backend/routes/ai.js:459`.
          */
         suspend fun conversationMessages(id: String): NetworkResult<AIConversationMessagesResponse> =
             safeApiCall { api.conversationMessages(id, AI_CARDS.joinToString(",")) }
