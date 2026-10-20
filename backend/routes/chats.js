@@ -2263,29 +2263,30 @@ router.post('/rooms/:roomId/read', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'Access denied' });
     }
 
+    // Reading for a business also clears the reader's own row in the room, as the conversation read does,
+    // so the same message isn't left unread in their personal inbox.
+    const usersToClear = asBusinessUserId
+      ? Array.from(new Set([String(readTargetUserId), String(userId)]))
+      : [String(readTargetUserId)];
+
     // Update participant's read state directly; with nothing unread there is no row to change (count stays 0)
-    const { data, error } = await supabaseAdmin
+    const { error } = await supabaseAdmin
       .from('ChatParticipant')
       .update({
         unread_count: 0,
         last_read_at: new Date().toISOString()
       })
       .eq('room_id', roomIdStr)
-      .eq('user_id', readTargetUserId)
-      .or(HAS_UNREAD)
-      .select('unread_count')
-      .maybeSingle();
-    
+      .in('user_id', usersToClear)
+      .or(HAS_UNREAD);
+
     if (error) {
       logger.error('Error marking messages read', { requestId: req.requestId, userId: req.user?.id, roomId: roomIdStr, error: error.message });
       return res.status(500).json({ error: 'Failed to mark messages as read' });
     }
 
-    const badgeTargets = asBusinessUserId
-      ? Array.from(new Set([String(readTargetUserId), String(userId)]))
-      : [String(readTargetUserId)];
-    badgeService.emitBadgeUpdateToMany(badgeTargets);
-    res.json({ unreadCount: data?.unread_count ?? 0 });
+    badgeService.emitBadgeUpdateToMany(usersToClear);
+    res.json({ unreadCount: 0 });
     
   } catch (err) {
     logger.error('Mark read error', { requestId: req.requestId, userId: req.user?.id, error: err.message });
