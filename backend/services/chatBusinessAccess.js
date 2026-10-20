@@ -61,8 +61,8 @@ async function actingBusinessInRoom(roomId, actorUserId) {
   return null;
 }
 
-// Until October 2026 opening a business's conversation made the staff member an ordinary member of it
-// (migration 20261020053000 removes those rows). One that comes back, say from an older API during a release,
+// Opening a business's conversation used to make the staff member an ordinary member of it (migration
+// 20261020053000 removes those rows). One that comes back, say from an older API during a release,
 // goes when they next open the conversation for the business: in a direct room, their own row is removed when
 // someone else there is neither the business nor on its team (the customer). A team member's own conversation
 // with their business, where nobody else is, keeps their row.
