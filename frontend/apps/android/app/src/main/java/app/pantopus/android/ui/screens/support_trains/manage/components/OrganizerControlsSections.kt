@@ -423,6 +423,8 @@ fun ManageNudgeSection(
     /** False while the train has no dates: none are open, but none are filled either. */
     hasDates: Boolean = true,
     draft: String?,
+    /** Shown above the editor when the AI draft failed and it holds a simple reminder instead. */
+    draftNote: String? = null,
     isBusy: Boolean,
     onDraft: () -> Unit,
     onEditDraft: (String) -> Unit,
@@ -458,6 +460,14 @@ fun ManageNudgeSection(
                         onClick = onDraft,
                     )
                 } else {
+                    if (draftNote != null) {
+                        Text(
+                            text = draftNote,
+                            color = PantopusColors.error,
+                            fontSize = 12.5.sp,
+                            modifier = Modifier.testTag("manageTrainNudgeDraftNote"),
+                        )
+                    }
                     ManageTextField(
                         value = draft,
                         placeholder = "Reminder message",
