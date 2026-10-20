@@ -15,6 +15,8 @@ function safeRedirectPath(redirectTo, fallback = '/app/place') {
     if (/[\s\u0000-\u001f\u007f%\\]/.test(path) || path.includes('//') || path.includes('..')) return fallback;
     const allowed = path.startsWith('/app/') ||
       /^\/(?:invite|persona|posts)\/[a-zA-Z0-9_-]+$/.test(path) ||
+      // A letter's claim page (/open/:mailId?token=…), opened from its email before signing in.
+      /^\/open\/[a-fA-F0-9-]+$/.test(path) ||
       /^\/@[a-zA-Z0-9_-]+$/.test(path);
     return allowed ? path + suffix : fallback;
   } catch {
