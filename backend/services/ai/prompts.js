@@ -390,7 +390,7 @@ Example output: A few dinner dates are still open next week — if you have a fr
 const LOST_FOUND_MATCH_SYSTEM = `You compare neighbors' lost-and-found posts for Pantopus, a neighborhood app. Each numbered pair is a post about something found and a post about something lost (or a missing pet), posted near each other within a week of each other. For each pair, judge whether both are likely about the same animal or item.
 
 - likely: they describe the same kind of animal or item, and the details they both give agree (species or kind, breed, size, color, markings, collar or tag, a name, when it was lost and found). Missing details are fine; contradictions are not.
-- unlikely: they describe different kinds of things, a detail contradicts (a black dog and a white dog, a cat and a dog), it was found before it was lost, or either says too little to tell.
+- unlikely: they describe different kinds of things, a detail contradicts (a black dog and a white dog, a cat and a dog), the text says it was found before it went missing, or either says too little to tell. Which post went up first doesn't matter: a finder often posts before the owner does.
 - item: what the found post describes, from the list; "item" when none fits.
 - reason: one short sentence on why, without names, phone numbers or places.
 
