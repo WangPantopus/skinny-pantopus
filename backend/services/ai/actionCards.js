@@ -23,10 +23,10 @@ const { canReadPost, POST_READ_SELECT } = require('../pulse/readAccess');
 const homeRecordService = require('../homeRecordService');
 const homeDetailService = require('../homeDetailService');
 const { localDisplayNames } = require('../../utils/identityProfiles');
-const { PLAN_KINDS } = require('./readTools');
+const { planKinds } = require('./readTools');
 const { linkFor } = require('./appGuide');
 const {
-  isUuid, clip, chosenHome, localToUtc, whenLabel, dayLabel, firstNameOf, distanceWords,
+  isUuid, clip, chosenHome, localToUtc, whenLabel, dayPartLabel, dayLabel, firstNameOf, distanceWords,
 } = require('./assistantKit');
 
 const NOTE = 'One short sentence shown under the card: the assumption that matters most or a detail worth adding. Nothing happens until they tap, so write about the card, never as if it were already done. Null when there is nothing to say.';
@@ -34,6 +34,9 @@ const HHMM = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
 const KIND_LABELS = {
   watch_party: 'Watch party', pickup_game: 'Pickup game', walk_coffee: 'Walk & coffee', study_group: 'Study group', playdate: 'Playdate',
 };
+// Kids' age bands as the apps write them (Android KidsAgeBand).
+const AGE_LABELS = { under_2: 'Under 2', '2_3': '2–3', '4_5': '4–5', '6_8': '6–8', '9_12': '9–12' };
+const agesText = (bands) => (Array.isArray(bands) && bands.length ? bands.map((band) => AGE_LABELS[band] || band).join(', ') : null);
 const WHO_GETS_IN = {
   host_approves: { rules: [], text: 'You approve each person' },
   verified_neighbors: { rules: ['verified'], text: 'Verified neighbors get in right away; you approve everyone else' },
@@ -45,19 +48,21 @@ const WHO_GETS_IN = {
 // ─── Definitions ───────────────────────────────────────────────────────────
 
 const nullable = (schema) => ({ ...schema, type: [schema.type, 'null'] });
+const kidsAges = (description) => ({ type: ['array', 'null'], items: { type: 'string', enum: rules.KIDS_AGE_BANDS }, description });
 
-const actionCardDefinitions = [
-  {
+/** draft_plan; with `playdates`, for people who have plans_playdates (the kind, its kids' ages and its rules). */
+function draftPlanDefinition({ playdates = false } = {}) {
+  return {
     name: 'draft_plan',
-    description: 'Draft a new plan (a small meetup on the Plans map) for the person to post with one tap. Kinds: watch_party (a game or show to watch together), pickup_game (a sport), walk_coffee (a walk, dog walk, stroller walk or coffee), study_group (studying together; public places only). Plans start within the next 14 days and last 15 minutes to 8 hours. Pickup games, study groups and walks in public need a public place: give its name and the server finds it near them. Watch parties and walks may be at their own home. Make sensible assumptions (an hour and a half for games, 8 spots) and name the main one in the note.',
+    description: `Draft a new plan (a small meetup on the Plans map) for the person to post with one tap. Kinds: watch_party (a game or show to watch together), ${playdates ? 'playdate (kids play while their parents meet; only for people with a verified address), ' : ''}pickup_game (a sport), walk_coffee (a walk, dog walk, stroller walk or coffee), study_group (studying together; public places only). Plans start within the next 14 days and last 15 minutes to 8 hours. Pickup games, ${playdates ? 'playdates, ' : ''}study groups and walks in public need a public place: give its name and the server finds it near them. Watch parties and walks may be at their own home. ${playdates ? "A playdate needs the ages of the kids it's for (details.kids_age_bands): use what they said, or ask in one short question. Its host approves each family, and its spots count families. " : ''}Make sensible assumptions (an hour and a half for games, 8 spots${playdates ? '; for a playdate, an hour and a half and 4 families' : ''}) and name the main one in the note.`,
     input_schema: {
       type: 'object',
       properties: {
-        kind: { type: 'string', enum: PLAN_KINDS },
+        kind: { type: 'string', enum: planKinds(playdates) },
         title: { type: 'string', description: 'Short title, up to 80 characters, e.g. "Pickleball, need 3".' },
         starts_local: { type: 'string', description: 'Start in their local time, YYYY-MM-DDTHH:MM.' },
         ends_local: { type: 'string', description: 'End in their local time, YYYY-MM-DDTHH:MM.' },
-        spots: { type: 'integer', minimum: 1, maximum: 30, description: 'How many people can join, not counting the host.' },
+        spots: { type: 'integer', minimum: 1, maximum: 30, description: `How many people can join, not counting the host${playdates ? ' (for a playdate, how many families besides theirs)' : ''}.` },
         place_name: nullable({ type: 'string', description: 'A public place near them (a park, court, library, café), or null when at_home.' }),
         at_home: nullable({ type: 'boolean', description: 'True to host at their own home (watch parties and walks only).' }),
         who_gets_in: nullable({ type: 'string', enum: Object.keys(WHO_GETS_IN), description: 'Who gets in without the host approving. Null for the usual: verified neighbors in public, approval at home.' }),
@@ -73,6 +78,7 @@ const actionCardDefinitions = [
             subject: nullable({ type: 'string', description: 'Study groups: what they study, up to 60 characters.' }),
             study_style: nullable({ type: 'string', enum: rules.STUDY_STYLES }),
             game_label: nullable({ type: 'string', description: 'Watch parties: the game or show, e.g. "Seahawks vs. 49ers".' }),
+            ...(playdates ? { kids_age_bands: kidsAges("Playdates: the ages of the kids it's for.") } : {}),
           },
           additionalProperties: false,
         },
@@ -83,7 +89,35 @@ const actionCardDefinitions = [
       required: ['kind', 'title', 'starts_local', 'ends_local', 'spots', 'place_name', 'at_home', 'who_gets_in', 'details', 'about', 'guest_note', 'note'],
       additionalProperties: false,
     },
-  },
+  };
+}
+
+/** draft_plan_ask; with `playdates`, a playdate's ask carries the family's kids and their ages. */
+function draftPlanAskDefinition({ playdates = false } = {}) {
+  const kids = playdates ? {
+    kids_count: nullable({ type: 'integer', minimum: 1, maximum: 8, description: 'Playdates: how many of their kids are coming. Null for other plans.' }),
+    kids_age_bands: kidsAges("Playdates: their kids' ages. Null for other plans."),
+  } : {};
+  return {
+    name: 'draft_plan_ask',
+    description: `Draft asking to join someone else's plan, with an optional short note to the host.${playdates ? " For a playdate their family asks: give how many of their kids are coming and their ages, or ask in one short question. Parents stay with their kids, and the host sees the kids' ages, never their names." : ''}`,
+    input_schema: {
+      type: 'object',
+      properties: {
+        plan_id: { type: 'string' },
+        party_size: { type: 'integer', minimum: 1, maximum: 4, description: 'People coming including them.' },
+        ...kids,
+        ask_note: nullable({ type: 'string', description: 'Up to 280 characters to the host.' }),
+        note: { type: ['string', 'null'], description: NOTE },
+      },
+      required: ['plan_id', 'party_size', ...Object.keys(kids), 'ask_note', 'note'],
+      additionalProperties: false,
+    },
+  };
+}
+
+const actionCardDefinitions = [
+  draftPlanDefinition(),
   {
     name: 'draft_plan_change',
     description: 'Draft a change to a plan the person hosts: the time, the place, spots, title or notes. Only the fields that change. Moving the start more than 30 minutes or changing the place asks everyone who is in "Still coming?".',
@@ -128,21 +162,7 @@ const actionCardDefinitions = [
       additionalProperties: false,
     },
   },
-  {
-    name: 'draft_plan_ask',
-    description: "Draft asking to join someone else's plan, with an optional short note to the host.",
-    input_schema: {
-      type: 'object',
-      properties: {
-        plan_id: { type: 'string' },
-        party_size: { type: 'integer', minimum: 1, maximum: 4, description: 'People coming including them.' },
-        ask_note: nullable({ type: 'string', description: 'Up to 280 characters to the host.' }),
-        note: { type: ['string', 'null'], description: NOTE },
-      },
-      required: ['plan_id', 'party_size', 'ask_note', 'note'],
-      additionalProperties: false,
-    },
-  },
+  draftPlanAskDefinition(),
   {
     name: 'draft_plan_message',
     description: "Draft a message to everyone in a plan's group chat (the host and the people who are in). The chat exists once the host has let someone in.",
@@ -234,6 +254,9 @@ const actionCardDefinitions = [
   },
 ];
 
+// The card tools that differ for people with plans_playdates.
+const playdateCardDefinitions = [draftPlanDefinition({ playdates: true }), draftPlanAskDefinition({ playdates: true })];
+
 const PLAN_CARD_TOOLS = new Set(['draft_plan', 'draft_plan_change', 'draft_plan_cancel', 'show_plan_requests', 'draft_plan_ask', 'draft_plan_message']);
 
 // ─── Envelope ──────────────────────────────────────────────────────────────
@@ -287,10 +310,11 @@ async function planFor(planId, ctx) {
 
 /**
  * The first public place matching `name` near the person, from the place picker's own search
- * (OpenStreetMap, cached for a day per area). { loading: true } when that search has no answer
- * yet (an area seen for the first time, or its servers are slow), so the person can be told.
+ * (OpenStreetMap, cached for a day per area); never a bar for a playdate, as the picker
+ * (PlanPlaceFit). { loading: true } when that search has no answer yet (an area seen for the
+ * first time, or its servers are slow), so the person can be told.
  */
-async function findPublicPlace(name, origin) {
+async function findPublicPlace(name, origin, kind = null) {
   const query = clip(name, 60);
   if (!query || !origin) return null;
   try {
@@ -298,7 +322,8 @@ async function findPublicPlace(name, origin) {
       planPlaces.placesNear({ latitude: origin.latitude, longitude: origin.longitude, q: query }),
       new Promise((resolve) => { setTimeout(() => resolve({ places: [], loading: true }), 9000).unref?.(); }),
     ]);
-    if (result?.places?.length) return result.places[0];
+    const places = (result?.places || []).filter((place) => kind !== 'playdate' || place.category !== 'bar');
+    if (places.length) return places[0];
     return result?.loading ? { loading: true } : null;
   } catch (err) {
     logger.warn('assistant place search failed', { error: err.message });
@@ -314,6 +339,7 @@ function detailsInput(kind, details) {
   if (kind === 'walk_coffee') return { walk_kind: d.walk_kind || undefined, pace: d.pace || undefined, dogs_welcome: d.dogs_welcome ?? undefined };
   if (kind === 'study_group') return { subject: d.subject || undefined, study_style: d.study_style || undefined };
   if (kind === 'watch_party') return d.game_label ? { game: { label: d.game_label } } : {};
+  if (kind === 'playdate') return { kids_age_bands: d.kids_age_bands || undefined };
   return {};
 }
 
@@ -323,13 +349,21 @@ function detailLines(kind, details) {
   if (kind === 'walk_coffee') return [line('Kind', d.walk_kind && d.walk_kind.replace('_', ' ')), line('Pace', d.pace), d.dogs_welcome ? line('Dogs', 'Welcome') : null];
   if (kind === 'study_group') return [line('Subject', d.subject), line('Style', d.study_style === 'together' ? 'Working through it together' : 'Quiet study')];
   if (kind === 'watch_party') return [line('Watching', d.game?.label)];
+  if (kind === 'playdate') return [line('Kids’ ages', agesText(d.kids_age_bands))];
   return [];
 }
 
 async function draftPlan(args, ctx) {
   if (!(await plansOn(ctx))) return { error: "Plans aren't available for this person yet." };
-  if (!PLAN_KINDS.includes(args.kind)) return { error: 'Choose one of the plan kinds.' };
+  if (!rules.KINDS.includes(args.kind)) return { error: 'Choose one of the plan kinds.' };
   const viewer = await loadViewer(userFor(ctx));
+  // A playdate needs plans_playdates and a verified address (planActions checks both again, with the rest).
+  const playdate = args.kind === 'playdate';
+  if (playdate && !viewer.playdatesFlag) return { error: 'Choose one of the plan kinds.' };
+  if (playdate && !viewer.verified) return { error: 'Verify your address to host a playdate.' };
+  if (playdate && !args.details?.kids_age_bands?.length) {
+    return { error: "A playdate needs the ages of the kids it's for. Ask how old the kids are, in one short question." };
+  }
   const startsAt = localToUtc(args.starts_local, ctx.timeZone);
   const endsAt = localToUtc(args.ends_local, ctx.timeZone);
   if (!startsAt || !endsAt) return { error: 'Give the start and end as local times, YYYY-MM-DDTHH:MM.' };
@@ -341,7 +375,7 @@ async function draftPlan(args, ctx) {
     place = { kind: 'home', home_id: home.id };
   } else {
     if (!args.place_name) return { error: 'A public place is needed. Ask where, or suggest a park, court, library or café near them.' };
-    const found = await findPublicPlace(args.place_name, viewer.origin);
+    const found = await findPublicPlace(args.place_name, viewer.origin, args.kind);
     if (found?.loading) return { error: PLACES_LOADING };
     if (!found) return { error: `No public place called "${args.place_name}" was found near them. Ask for another place or a nearby landmark.` };
     place = { kind: 'public', name: found.name, address: found.address || null, latitude: found.latitude, longitude: found.longitude };
@@ -394,16 +428,21 @@ async function draftPlan(args, ctx) {
       line('Kind', KIND_LABELS[checked.kind]),
       line('When', whenLabel(checked.startsAt, checked.endsAt, checked.timezone)),
       line('Where', where),
-      line('Spots', `${checked.spots}`),
-      line('Who gets in', appliedWho.text),
+      line(playdate ? 'Families' : 'Spots', `${checked.spots}`),
+      line('Who gets in', playdate ? 'You approve each family' : appliedWho.text),
       ...detailLines(checked.kind, checked.details),
-      line('Note for guests', checked.guestNote),
+      line(playdate ? 'Note for families' : 'Note for guests', checked.guestNote),
     ],
-    warnings: [
-      checked.place.kind === 'home'
-        ? 'Only people you accept see your address.'
-        : 'Neighbors see only the area until they get in; then they see the exact place.',
-    ],
+    warnings: playdate
+      ? [
+        'Only verified neighbors see playdates. Until you accept a family, they see only the neighborhood and the part of the day.',
+        'Parents stay with their kids the whole time; only kids’ ages are shared, never names.',
+      ]
+      : [
+        checked.place.kind === 'home'
+          ? 'Only people you accept see your address.'
+          : 'Neighbors see only the area until they get in; then they see the exact place.',
+      ],
     actions: [action('confirm', 'Post plan', { method: 'POST', path: '/api/plans', body },
       { label: 'Plan posted', link: linkFor('plan', '{{response.id}}') })],
     expiresAt: checked.startsAt,
@@ -443,7 +482,7 @@ async function draftPlanChange(args, ctx) {
     lines.push(line('Spots', `${args.spots}`));
   }
   if (args.place_name) {
-    const place = await findPublicPlace(args.place_name, viewer.origin);
+    const place = await findPublicPlace(args.place_name, viewer.origin, plan.kind);
     if (place?.loading) return { error: PLACES_LOADING };
     if (!place) return { error: `No public place called "${args.place_name}" was found near them.` };
     patch.place = { kind: 'public', name: place.name, address: place.address || null, latitude: place.latitude, longitude: place.longitude };
@@ -542,22 +581,39 @@ async function draftPlanAsk(args, ctx) {
   if (!plan.viewer.can_ask) {
     return { error: `They can't ask to join this plan (${plan.viewer.cannot_ask_reason || 'not available'}).` };
   }
-  const partySize = Math.min(Math.max(Number(args.party_size) || 1, 1), 4);
   const askNote = clip(args.ask_note, 280);
+  // A playdate is asked for by a family: its kids and their ages, with the parent staying (planActions.cleanAsk).
+  const playdate = plan.kind === 'playdate';
+  const kids = Number(args.kids_count);
+  const ages = Array.isArray(args.kids_age_bands) ? rules.KIDS_AGE_BANDS.filter((band) => args.kids_age_bands.includes(band)) : [];
+  if (playdate && (!Number.isInteger(kids) || kids < 1 || kids > 8 || !ages.length)) {
+    return { error: 'Asking to join a playdate needs how many of their kids are coming (1 to 8) and their ages. Ask them in one short question.' };
+  }
+  const partySize = playdate ? 1 : Math.min(Math.max(Number(args.party_size) || 1, 1), 4);
+  const body = playdate
+    ? { party_size: 1, kids_count: kids, kids_age_bands: ages, stays_with_kids: true, ...(askNote ? { note: askNote } : {}) }
+    : { party_size: partySize, ...(askNote ? { note: askNote } : {}) };
+  const zone = plan.timezone || ctx.timeZone;
   const draft = card('plan_ask', {
     title: `Ask to join "${clip(plan.title, 60)}"`,
     lines: [
-      line('When', plan.starts_at ? whenLabel(plan.starts_at, plan.ends_at, plan.timezone || ctx.timeZone) : null),
+      // A playdate shows its time only to families who are in: the day and its part until then.
+      line('When', plan.starts_at ? whenLabel(plan.starts_at, plan.ends_at, zone) : dayPartLabel(plan.starts_on, plan.day_part)),
       line('Where', plan.area?.label ? `Near ${plan.area.label}` : null),
       line('Host', plan.host?.display_name),
-      line('Coming', partySize > 1 ? `You + ${partySize - 1}` : 'Just you'),
+      line('Coming', playdate ? `You + ${kids} ${kids === 1 ? 'kid' : 'kids'}` : (partySize > 1 ? `You + ${partySize - 1}` : 'Just you')),
+      playdate ? line('Kids’ ages', agesText(ages)) : null,
       line('Your note', askNote),
       line('Getting in', plan.viewer.auto_rule ? 'You get in right away' : 'The host decides'),
     ],
+    warnings: playdate ? [
+      'You stay with your kids the whole time.',
+      `${firstNameOf({ display_name: plan.host?.display_name }) || 'The host'} sees your first name, your verified badge, about how far away you live and your kids’ ages, never their names.`,
+    ] : [],
     actions: [action('confirm', 'Ask to join', {
-      method: 'POST', path: `/api/plans/${plan.id}/requests`, body: { party_size: partySize, ...(askNote ? { note: askNote } : {}) },
+      method: 'POST', path: `/api/plans/${plan.id}/requests`, body,
     }, { label: 'Asked', link: linkFor('plan', plan.id) })],
-    expiresAt: plan.asking_closes_at || plan.starts_at,
+    expiresAt: plan.asking_closes_at || plan.starts_at || (plan.starts_on ? localToUtc(`${plan.starts_on}T23:59`, zone) : null),
   });
   return finished(draft, args.note, 'Tap Ask to join to send it.');
 }
@@ -819,6 +875,7 @@ async function runCardTool(name, args, ctx) {
 
 module.exports = {
   actionCardDefinitions,
+  playdateCardDefinitions,
   runCardTool,
   CARD_EXECUTORS,
   PLAN_CARD_TOOLS,

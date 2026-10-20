@@ -11,6 +11,17 @@
       }
     },
     {
+      "id": "plans-playdate-verified-host",
+      "as": "host",
+      "say": "Set up a playdate at Crown Park on Saturday at 10am for toddlers, 4 families",
+      "expect": {
+        "card": "plan_create",
+        "cardKind": "playdate",
+        "noError": true
+      },
+      "note": "Needs plans_playdates on (20261020082000_plans_on) and host's verified address; with the flag off there is no playdate card."
+    },
+    {
       "id": "plans-old-build-gets-no-card",
       "as": "host",
       "old": true,

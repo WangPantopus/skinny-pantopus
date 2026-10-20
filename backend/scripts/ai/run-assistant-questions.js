@@ -88,6 +88,7 @@ function check(question, got) {
   const types = got.cards.map((c) => c.card);
   if (e.noError && got.errors.length) fails.push(`error ${got.errors.join(',')}`);
   if (e.card && !types.includes(e.card)) fails.push(`no ${e.card} card (got ${types.join(',') || 'none'})`);
+  if (e.cardKind && !got.cards.some((c) => (c.actions || []).some((a) => a.request?.body?.kind === e.cardKind))) fails.push(`no ${e.cardKind} plan card`);
   if (e.then && !got.cards.some((c) => (c.actions || []).some((a) => a.then))) fails.push('card has no follow-up request');
   if (e.noCard && got.cards.length) fails.push(`unexpected card ${types.join(',')}`);
   if (e.noCardType && types.includes(e.noCardType)) fails.push(`unexpected ${e.noCardType} card`);

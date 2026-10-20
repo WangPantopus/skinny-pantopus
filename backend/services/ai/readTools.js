@@ -29,8 +29,14 @@ const {
   OTHERS_WORDS, isUuid, clip, chosenHome, homesOf, whenLabel, dayLabel, todayIn, firstNameOf, distanceWords,
 } = require('./assistantKit');
 
-// Playdates stay off for launch (plans_playdates); the assistant never offers them.
-const PLAN_KINDS = KINDS.filter((kind) => kind !== 'playdate');
+/**
+ * The kinds of plan the tools offer. Playdates follow the person's plans_playdates flag, as the
+ * Plans tab does: the tools list them only for people who have it (agentService's `playdates`
+ * capability), and the plan services decide who sees, hosts and joins one (a verified address).
+ */
+function planKinds(playdates = false) {
+  return playdates ? KINDS : KINDS.filter((kind) => kind !== 'playdate');
+}
 // What the nearby feed accepts from residents (posts.js PLACE types).
 const PLACE_POST_TYPES = ['ask_local', 'recommendation', 'event', 'lost_found', 'alert', 'deal', 'local_update', 'neighborhood_win', 'visitor_guide'];
 // The Today screen's sections (PlaceStoreReads / StoreKeys).
@@ -38,8 +44,9 @@ const TODAY_SECTIONS = ['weather', 'air_quality', 'alerts', 'sunrise_sunset', 'g
 const NEARBY_RADIUS_METERS = 16093; // 10 miles
 const SECTION_DATA_CHARS = 900;
 
-const readToolDefinitions = [
-  {
+/** find_plans, with playdates among its kinds for people who have plans_playdates. */
+function findPlansDefinition({ playdates = false } = {}) {
+  return {
     name: 'find_plans',
     description: "Plans (small meetups on the Plans map): the person's own (hosting, going, asked, waitlisted, recent) or ones nearby. Other people's plans show only their area, never the exact place. Use before drafting a plan change, an ask, a message to guests or answering \"what's on\".",
     input_schema: {
@@ -47,12 +54,16 @@ const readToolDefinitions = [
       properties: {
         scope: { type: 'string', enum: ['mine', 'nearby'], description: '"mine" for plans they host or joined, "nearby" for plans within 5 miles.' },
         window: { type: ['string', 'null'], enum: ['now', 'today', 'week', 'weekend', null], description: 'Nearby only: when. Null means this week.' },
-        kinds: { type: ['array', 'null'], items: { type: 'string', enum: PLAN_KINDS }, description: 'Nearby only: kinds to include, or null for all.' },
+        kinds: { type: ['array', 'null'], items: { type: 'string', enum: planKinds(playdates) }, description: 'Nearby only: kinds to include, or null for all.' },
       },
       required: ['scope', 'window', 'kinds'],
       additionalProperties: false,
     },
-  },
+  };
+}
+
+const readToolDefinitions = [
+  findPlansDefinition(),
   {
     name: 'get_plan',
     description: 'One plan as the person sees it. For the host it includes the people who asked to join and their signals (verified address, distance, plans joined, mutual connections, hosted before, new to Pantopus, note).',
@@ -140,6 +151,9 @@ const readToolDefinitions = [
   },
 ];
 
+// The read tools that differ for people with plans_playdates.
+const playdateReadToolDefinitions = [findPlansDefinition({ playdates: true })];
+
 // ─── Plans ─────────────────────────────────────────────────────────────────
 
 async function plansOn(ctx) {
@@ -204,10 +218,17 @@ async function findPlans(args, ctx) {
     };
   }
   if (!viewer.origin) return { error: 'They have no home, saved place or location yet, so nearby plans can\'t be found.' };
-  const kinds = Array.isArray(args.kinds) ? args.kinds.filter((kind) => PLAN_KINDS.includes(kind)) : [];
+  const asked = Array.isArray(args.kinds) ? args.kinds.filter((kind) => KINDS.includes(kind)) : [];
+  // Playdates only for people who see them on the map (the flag and a verified address), as
+  // GET /api/plans: asking only for kinds they can't see finds nothing, not every plan.
+  const kinds = viewer.seesPlaydates ? asked : asked.filter((kind) => kind !== 'playdate');
+  const unseen = viewer.playdatesFlag && !viewer.seesPlaydates && (!asked.length || asked.includes('playdate'))
+    ? { playdates: 'Playdates are for verified neighbors, so none show until their address is verified.' }
+    : {};
+  if (asked.length && !kinds.length) return { note: OTHERS_WORDS, plans: [], more: false, ...unseen };
   const result = await planService.listNearby(viewer, { point: viewer.origin, window: args.window || 'week', kinds });
-  const items = (result.items || []).filter((card) => card.kind !== 'playdate').slice(0, 12);
-  return { note: OTHERS_WORDS, plans: items.map((card) => planForModel(card, ctx.timeZone)), more: Boolean(result.next_cursor) };
+  const items = (result.items || []).slice(0, 12);
+  return { note: OTHERS_WORDS, plans: items.map((card) => planForModel(card, ctx.timeZone)), more: Boolean(result.next_cursor), ...unseen };
 }
 
 async function getPlan(args, ctx) {
@@ -493,10 +514,11 @@ async function runReadTool(name, args, ctx) {
 
 module.exports = {
   readToolDefinitions,
+  playdateReadToolDefinitions,
   runReadTool,
   READ_EXECUTORS,
   PLAN_TOOLS,
-  PLAN_KINDS,
+  planKinds,
   PLACE_POST_TYPES,
   // For screen context.
   planForModel,
