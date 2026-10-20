@@ -139,11 +139,29 @@ URLs come only from a fixed catalog on the server (section 5.1), never from the 
 
 ### 5.1 Catalog
 
-Filled in from both apps' deep-link routers; see section 9 for the source.
+Every URL here opens on both apps today through their deep-link routers (iOS `Core/Routing/DeepLinkRouter.swift`, Android `core/routing/DeepLinkRouter.kt`), except the one marked **new**, which both apps add in phase 1. The server writes them from `backend/services/ai/appGuide.js`.
 
 | Screen | URL |
 |---|---|
-| (filled in by the backend change from the router survey) | |
+| Today | `pantopus://today` |
+| Place (default home) | `pantopus://place` |
+| One home on Place | `pantopus://place/<homeId>` |
+| A Place section screen | `pantopus://place/<homeId>/<slug>` (slugs: `today`, `your-home`, `risk`, `block`, `money`, `civic`) |
+| Home tools, and the home's tasks | `pantopus://homes/<homeId>/dashboard` (there is no link to the task list itself) |
+| One home task | `pantopus://homes/<homeId>/tasks/<taskId>` |
+| Home members | `pantopus://homes/<homeId>/members` |
+| Enter a postcard code | `pantopus://homes/<homeId>/verify-postcard` |
+| A claim's progress | `pantopus://homes/<homeId>/waiting-room` |
+| Nearby | `pantopus://nearby` |
+| One post | `pantopus://posts/<postId>` |
+| Plans tab | `pantopus://plans` |
+| One plan | `pantopus://plans/<planId>` |
+| Host a plan | `pantopus://plans/new` |
+| Who asked to join (host) | `pantopus://plans/<planId>/requests` |
+| A chat | `pantopus://chat/<roomId>` |
+| Notifications | `pantopus://notifications` |
+| Notification settings | `pantopus://settings/notifications` (**new**: add it to both routers; it opens Settings → Notifications) |
+| One Support Train | `pantopus://support-trains/<trainId>` |
 
 ## 6. Screen context ("Ask about this")
 
