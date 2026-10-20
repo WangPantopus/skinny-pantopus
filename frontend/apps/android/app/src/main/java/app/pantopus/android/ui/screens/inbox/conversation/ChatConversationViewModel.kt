@@ -549,7 +549,7 @@ class ChatConversationViewModel
                 openReplyId = replyId.takeIf { text.isEmpty() }
                 draft?.let { drafts[replyId] = drafts[replyId].orEmpty() + withSavedRuns(it) }
                 if (itemLinks.isNotEmpty()) links[replyId] = links[replyId].orEmpty() + itemLinks
-                item.nudgeId?.let { nudgeReplies.putIfAbsent(it, replyId) }
+                item.nudgeNotificationId?.let { nudgeReplies.putIfAbsent(it, replyId) }
             }
             messages.addAll(restored)
             aiDraftsByMessageId.putAll(drafts)

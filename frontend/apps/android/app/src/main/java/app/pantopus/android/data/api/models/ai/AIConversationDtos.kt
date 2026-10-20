@@ -48,10 +48,20 @@ data class AIConversationMessageDto(
     val draft: AIConversationDraftDto? = null,
     /** The reply's buttons to screens of the app (AI assistant phase 1 contract, section 5). */
     val links: List<AIConversationLinkDto>? = null,
-    /**
-     * The notification id of the brief or nudge this message carries (AI assistant phase 2): `?nudge=` scrolls to it.
-     */
+    /** The brief or nudge whose first item this is (AI assistant phase 2): `?nudge=<id>` scrolls to it. */
+    val nudge: AIConversationNudgeDto? = null,
+    /** The same notification id as a flat field, as an earlier draft of the server sent it. */
     @Json(name = "nudge_id") val nudgeId: String? = null,
+) {
+    /** The notification id of the brief or nudge this item starts, if any. */
+    val nudgeNotificationId: String? get() = nudge?.id ?: nudgeId
+}
+
+/** A brief or nudge Pantopus sent first: its notification's id and its kind (`brief`, `plan_weather`, …). */
+@JsonClass(generateAdapter = true)
+data class AIConversationNudgeDto(
+    val id: String? = null,
+    val kind: String? = null,
 )
 
 @JsonClass(generateAdapter = true)
