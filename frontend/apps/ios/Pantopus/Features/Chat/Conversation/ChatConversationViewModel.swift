@@ -1305,7 +1305,8 @@ public final class ChatConversationViewModel {
                 cleared = listed.conversations.isEmpty
                 // Done, or listed again after its delete went through.
                 if ids.isEmpty { break }
-                for id in ids {
+                // Oldest first, the one on screen last: a failure part-way leaves the thread as the server has it.
+                for id in ids.reversed() {
                     let cardIds = try await aiActionCardIds(conversationId: id)
                     _ = try await api.request(AIEndpoints.deleteConversation(id: id), as: EmptyResponse.self)
                     actionDoneStore.forget(cardIds: cardIds)

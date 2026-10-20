@@ -1361,7 +1361,8 @@ class ChatConversationViewModel
                 // The list holds the newest 50, so a long history takes a few rounds. One listed again after its
                 // delete went through stops it.
                 while (listed.any { it !in deleted } && rounds < AI_DELETE_ROUNDS) {
-                    for (id in listed.filterNot { it in deleted }) {
+                    // Oldest first, the one on screen last: a failure part-way leaves the thread as the server has it.
+                    for (id in listed.filterNot { it in deleted }.asReversed()) {
                         val cardIds = aiActionCardIds(id)
                         aiRepo.deleteConversation(id).orThrow()
                         aiCards.forget(cardIds)

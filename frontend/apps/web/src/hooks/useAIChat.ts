@@ -169,7 +169,8 @@ export function useAIChat() {
         }
         // Listed again after its delete went through: the server kept it.
         if (ids.length === 0) break;
-        for (const id of ids) {
+        // Oldest first, this page's own conversation last: a failure part-way leaves it as the server has it.
+        for (const id of [...ids].reverse()) {
           await api.ai.deleteConversation(id);
           deleted.add(id);
         }
