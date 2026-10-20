@@ -280,15 +280,8 @@ struct PlaceDashboardView: View {
                         .accessibilityIdentifier("place.status")
                 }
                 Spacer(minLength: 0)
-                // Ask, the bell and the menu sit together; the dot shows anything unread.
+                // Bell + menu sit together; the dot shows anything unread.
                 HStack(spacing: 0) {
-                    AskPantopusButton(accessibilityIdentifier: "place.askPantopus") {
-                        askTopic = .place(homeId: viewModel.homeId)
-                    } label: {
-                        AskPantopusGlyph()
-                            .frame(width: 44, height: Spacing.s12)
-                            .contentShape(Rectangle())
-                    }
                     PlaceBellButton(unreadCount: viewModel.unreadCount, action: viewModel.onOpenNotifications)
                     Button(action: onOpenMenu) {
                         Icon(.menu, size: 20, color: Theme.Color.appText)
@@ -300,7 +293,19 @@ struct PlaceDashboardView: View {
                     .accessibilityIdentifier("place.menu")
                 }
             }
-            addressButton(intel.place.label)
+            // Ask sits at the end of the address row, under the bell and menu,
+            // so the title row keeps room for the status chip.
+            HStack(spacing: Spacing.s2) {
+                addressButton(intel.place.label)
+                Spacer(minLength: 0)
+                AskPantopusButton(accessibilityIdentifier: "place.askPantopus") {
+                    askTopic = .place(homeId: viewModel.homeId)
+                } label: {
+                    AskPantopusGlyph()
+                        .frame(width: Spacing.s12, height: 44)
+                        .contentShape(Rectangle())
+                }
+            }
         }
     }
 
