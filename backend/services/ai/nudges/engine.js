@@ -54,7 +54,8 @@ const NUDGE_KINDS = [
   'home_overdue', 'home_paperwork', 'radon_follow_up',
 ];
 const KINDS = ['brief', ...NUDGE_KINDS];
-const SUBJECT_TYPES = ['plan', 'post', 'home', 'task'];
+// The brief is about the person's day: its subject is the person.
+const SUBJECT_TYPES = ['plan', 'post', 'home', 'task', 'person'];
 const TYPES = { brief: 'assistant_brief', nudge: 'assistant_nudge' };
 const typeOf = (kind) => (kind === 'brief' ? TYPES.brief : TYPES.nudge);
 // Per person, per local day.
@@ -114,7 +115,7 @@ function checkTarget({ userId, kind, subject, checkpoint }) {
   if (!isUuid(userId)) throw new TypeError('sendNudge: userId must be a uuid');
   if (!KINDS.includes(kind)) throw new TypeError(`sendNudge: unknown kind ${kind}`);
   if (!subject || !SUBJECT_TYPES.includes(subject.type) || !isUuid(subject.id)) {
-    throw new TypeError('sendNudge: subject must be { type: plan|post|home|task, id: uuid }');
+    throw new TypeError('sendNudge: subject must be { type: plan|post|home|task|person, id: uuid }');
   }
   const point = String(checkpoint ?? '').trim();
   if (!point || point.length > 40 || /[\s:]/.test(point)) {
@@ -219,7 +220,8 @@ async function check(nudge, { now = new Date() } = {}) {
   if (prefs.muted[nudge.kind]) return { ok: false, reason: 'muted' };
   if (nudge.pickup && !(await pickupConfirmed(nudge.userId, nudge.pickup))) return { ok: false, reason: 'unconfirmed_pickup' };
   if (await alreadySent(nudgeKey(nudge))) return { ok: false, reason: 'duplicate' };
-  const window = await heldPushes.pushWindow(nudge.userId, { fallbackTz: DEFAULT_TIMEZONE, now });
+  // The brief goes at the time they chose: only quiet hours of their own hold it.
+  const window = await heldPushes.pushWindow(nudge.userId, { fallbackTz: DEFAULT_TIMEZONE, now, ownOnly: nudge.kind === 'brief' });
   const type = typeOf(nudge.kind);
   if ((await sentToday(nudge.userId, type, window.timeZone)).length >= DAILY_CAP[type]) return { ok: false, reason: 'cap' };
   if (!(await subjectReadable(nudge.subject, nudge.userId))) return { ok: false, reason: 'unreadable' };
@@ -420,7 +422,7 @@ async function deliver(nudge, { window }) {
   }
 
   try {
-    await heldPushes.pushOrHold(row, { send: pushNudge, fallbackTz: window.timeZone });
+    await heldPushes.pushOrHold(row, { send: pushNudge, fallbackTz: window.timeZone, ownOnly: kind === 'brief' });
   } catch (err) {
     // The row and the message stand; only the push is lost.
     logger.warn('nudge.push_failed', { userId, kind, error: err.message });
@@ -455,6 +457,27 @@ async function sendNudge(params) {
     logger.warn('nudge.failed', { userId: nudge.userId, kind: nudge.kind, error: err.message });
     return { sent: false, reason: 'error' };
   }
+}
+
+/**
+ * Send the morning brief (§4): a nudge of kind "brief" about the person's day, at most one a
+ * local day, with up to three cards. Its push is held only by quiet hours they set themselves.
+ * @param {{userId: string, date: string, lines: string[], cards: object[], expiresAt: Date, title?: string}} p
+ *   date: their local date (YYYY-MM-DD), the brief's checkpoint.
+ */
+async function sendBrief({ userId, date, lines, cards = [], expiresAt, title = 'Your Morning Briefing' }) {
+  return sendNudge({
+    userId,
+    kind: 'brief',
+    subject: { type: 'person', id: userId },
+    checkpoint: date,
+    title,
+    // The notification shows the first line (two when they fit); the conversation keeps them all.
+    body: lines.length > 1 && `${lines[0]} ${lines[1]}`.length <= BODY_MAX ? `${lines[0]} ${lines[1]}` : lines[0],
+    message: lines.join('\n'),
+    card: cards,
+    expiresAt,
+  });
 }
 
 /**
@@ -527,6 +550,7 @@ async function fewerLikeThis(userId, notificationId) {
 
 module.exports = {
   sendNudge,
+  sendBrief,
   canNudge,
   nudgeCard,
   fewerLikeThis,
