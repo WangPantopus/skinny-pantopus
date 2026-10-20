@@ -449,6 +449,8 @@ router.get('/:handle/activity', optionalAuth, async (req, res) => {
       .eq('user_id', profile.user_id)
       .eq('show_on_profile', true)
       .not('profile_visibility_scope', 'eq', 'hidden')
+      // A post written for a business is the business's, never its writer's.
+      .or('post_as.is.null,post_as.neq.business')
       .order('created_at', { ascending: false })
       .limit(parseLimit(req.query.limit));
 

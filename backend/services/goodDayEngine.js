@@ -393,6 +393,11 @@ function buildGoodDayTiles({ weather, aqi, timezone, homeType, now = new Date() 
 
 module.exports = {
   buildGoodDayTiles,
+  // The lines the tiles draw, shared with the assistant's weather watch for plans.
+  PRECIP_LIKELY,
+  PRECIP_POSSIBLE,
+  GRILL_MAX_WIND_MPH,
+  AQI_SENSITIVE,
   // Exported for unit testing.
   longestWindow,
   upcomingHours,
