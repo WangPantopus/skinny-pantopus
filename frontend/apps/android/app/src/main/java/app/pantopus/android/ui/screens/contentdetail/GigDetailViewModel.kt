@@ -2355,24 +2355,33 @@ class GigDetailViewModel
                 onReceipt = { silentRefetch() },
             )
 
-        /** Get-or-create the gig chat room, then emit navigation payload. */
+        /**
+         * Get-or-create the gig chat room, then emit navigation payload. A business's owner and staff open its
+         * task's room as the business, headed by the worker (the task before anyone is assigned).
+         */
         fun openGigChat() {
             val gig = rawGig ?: return
             val poster = gig.posterIdentity()
-            val name = poster?.resolvedDisplayName() ?: gig.title
-            val initials = Projection.initialsFromName(name)
-            val verified = poster?.resolvedVerified() == true
             viewModelScope.launch {
                 when (val result = repo.chatRoom(gigId)) {
-                    is NetworkResult.Success ->
+                    is NetworkResult.Success -> {
+                        val asBusinessUserId = result.data.asBusinessUserId?.takeIf { it.isNotBlank() }
+                        val name =
+                            if (asBusinessUserId == null) {
+                                poster?.resolvedDisplayName() ?: gig.title
+                            } else {
+                                result.data.workerName ?: gig.title
+                            }
                         _openChatEvents.emit(
                             GigOpenChatEvent(
                                 roomId = result.data.roomId,
                                 displayName = name,
-                                initials = initials,
-                                verified = verified,
+                                initials = Projection.initialsFromName(name),
+                                verified = asBusinessUserId == null && poster?.resolvedVerified() == true,
+                                asBusinessUserId = asBusinessUserId,
                             ),
                         )
+                    }
                     is NetworkResult.Failure -> Unit
                 }
             }

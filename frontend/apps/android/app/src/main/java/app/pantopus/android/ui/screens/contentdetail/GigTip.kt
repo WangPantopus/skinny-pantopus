@@ -57,6 +57,8 @@ data class GigOpenChatEvent(
     val displayName: String,
     val initials: String,
     val verified: Boolean,
+    /** Open the room as this business (its owner and staff answer its task's room as the business). */
+    val asBusinessUserId: String? = null,
 )
 
 /**

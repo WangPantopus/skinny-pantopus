@@ -50,6 +50,7 @@ const { hasUsableCoordinates } = require('../services/seederProvisioningService'
 const { checkHomePermission } = require('../utils/homePermissions');
 const {
   serializeGigAuthorForViewer,
+  serializeLocalProfileForViewer,
   serializeUserAsLocalIdentity,
   serializeUserIdentityForViewer,
 } = require('../serializers/identitySerializers');
@@ -7829,6 +7830,29 @@ async function openOwnerConversation(userId, gig) {
   return { directRoomId, topicId };
 }
 
+// For the owner and staff of the business that posted a task: they answer its room as the business
+// (services/chatBusinessAccess), so the apps open it with `asBusinessUserId` and, once the task is assigned, head it
+// with the worker's name as the business inbox lists it (routes/chats.js). A failed name read leaves the name out.
+async function taskBusinessChatContext(gig) {
+  const context = { asBusinessUserId: String(gig.user_id) };
+  if (!gig.accepted_by) return context;
+  try {
+    const [{ data: worker }, { data: profile }] = await Promise.all([
+      supabaseAdmin.from('User').select('id, username, name, first_name, middle_name, last_name')
+        .eq('id', gig.accepted_by).maybeSingle(),
+      supabaseAdmin.from('LocalProfile').select('id, user_id, handle, display_name')
+        .eq('user_id', gig.accepted_by).maybeSingle(),
+    ]);
+    const identity = profile && worker
+      ? serializeLocalProfileForViewer({ ...profile, user: worker })
+      : serializeUserAsLocalIdentity(worker);
+    if (identity?.displayName) context.workerName = identity.displayName;
+  } catch (err) {
+    logger.warn('Gig chat-room: worker name unavailable', { gigId: gig.id, error: err?.message });
+  }
+  return context;
+}
+
 /**
  * GET /api/gigs/:gigId/chat-room
  * Get (or create) the gig chat room, ensuring participants exist.
@@ -7838,6 +7862,7 @@ async function openOwnerConversation(userId, gig) {
  * anyone else gets their direct room with the owner and is never added to it.
  * A business owner's staff are never added either: they answer as the business through its
  * own row (services/chatBusinessAccess), so the worker and askers never see who they are.
+ * For them the response adds `asBusinessUserId` and, once assigned, `workerName` (taskBusinessChatContext).
  */
 router.get('/:gigId/chat-room', verifyToken, async (req, res) => {
   const { gigId } = req.params;
@@ -7972,8 +7997,9 @@ router.get('/:gigId/chat-room', verifyToken, async (req, res) => {
     // ─── Unified conversation: also create direct room + task topic ───
     // Not for the owner's staff: theirs would be a conversation with their own business.
     const { topicId } = isOwner ? { topicId: null } : await openOwnerConversation(userId, gig);
+    const businessContext = ownerAccess.viaBusiness && !isAcceptedWorker ? await taskBusinessChatContext(gig) : {};
 
-    return res.json({ roomId, preBidInfo, topicId, gigOwnerId: gig.user_id });
+    return res.json({ roomId, preBidInfo, topicId, gigOwnerId: gig.user_id, ...businessContext });
   } catch (err) {
     logger.error('Gig chat-room: unexpected error', {
       error: err?.message,
