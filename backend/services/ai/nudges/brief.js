@@ -21,6 +21,7 @@ const { DRAFT_MODEL } = require('../../../config/anthropic');
 const { composeForHomeId } = require('../../addressCalendarService');
 const { isFeatureEnabled } = require('../../featureFlagService');
 const { executeTool } = require('../tools');
+const { runReadTool } = require('../readTools');
 const { CARD_EXECUTORS } = require('../actionCards');
 const { complete, describeNow } = require('../llm');
 const { toClaudeSchema } = require('../schemas');
@@ -65,7 +66,9 @@ const OUTPUT_SCHEMA = toClaudeSchema({
 
 // ─── The day, as the person sees it ────────────────────────────────────────
 
-const read = (name, args, ctx) => executeTool(name, args, ctx).catch((err) => ({ error: err.message }));
+// The chat's read tools, without the chat turn's deadlines: nobody is waiting on a brief, and each
+// database request still has its own time limit.
+const read = (name, args, ctx) => runReadTool(name, args, ctx).then((result) => result || { error: `No read tool ${name}` });
 
 /** The household's own pickup days today and tomorrow (the address calendar's "home" rules). */
 async function confirmedPickups(homeId, userId, today, tomorrow) {
@@ -104,7 +107,8 @@ async function openQuestions(userId) {
  * server has it (catch_up_nearby, §6.1), else the feed's last two days of those two kinds.
  */
 async function nearbyNews(ctx) {
-  const caughtUp = await read('catch_up_nearby', { days: null }, ctx);
+  // Through the chat's dispatcher, which knows catch_up_nearby once it exists (#2509).
+  const caughtUp = await executeTool('catch_up_nearby', { days: null }, ctx).catch((err) => ({ error: err.message }));
   if (!caughtUp.error) {
     const posts = (caughtUp.posts || []).filter((post) => ['alert', 'lost_found'].includes(post.type));
     return { since: caughtUp.since || null, posts: posts.slice(0, 5) };
@@ -256,4 +260,9 @@ async function composeBrief(userId, { timeZone, expiresAt }) {
   return { lines, cards, usage: { inputTokens: call.value.inputTokens || 0, outputTokens: call.value.outputTokens || 0 } };
 }
 
-module.exports = { composeBrief, PROMPT_VERSION };
+module.exports = {
+  composeBrief,
+  PROMPT_VERSION,
+  // For scripts that check what the model is given.
+  dayFacts,
+};
