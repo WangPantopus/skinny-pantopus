@@ -27,9 +27,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.layout.boundsInWindow
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -79,16 +76,12 @@ fun TodayTabScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     ReportContentShown("today", state is TodayTabUiState.Loaded || state == TodayTabUiState.NoPlace)
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
-    val showMorningCard by viewModel.showMorningCard.collectAsStateWithLifecycle()
-    val preferenceBusy by viewModel.preferenceBusy.collectAsStateWithLifecycle()
-    val preferenceError by viewModel.preferenceError.collectAsStateWithLifecycle()
     // Coming back keeps what's on screen; the view model reads again only once it is out of date.
     HomeCopyLifecycle(viewModel::load, viewModel::suspendContent)
     RefreshOnStoreChange(viewModel::load)
     // Pull to refresh, like iOS's Today tab (`.refreshable`): it always reads now, with the pull indicator
     // over the content instead of placeholders. The indicator shows only for a pull, not the first load.
     var pulled by remember { mutableStateOf(false) }
-    var visibleFrame by remember { mutableStateOf(Rect.Zero) }
     LaunchedEffect(refreshing) { if (!refreshing) pulled = false }
     val placeNow = rememberMinuteClock(todayPlaceZone(state))
     val nowMs = placeNow.toInstant().toEpochMilli()
@@ -115,7 +108,7 @@ fun TodayTabScreen(
                 pulled = true
                 viewModel.refresh()
             },
-            modifier = Modifier.fillMaxSize().onGloballyPositioned { visibleFrame = it.boundsInWindow() },
+            modifier = Modifier.fillMaxSize(),
         ) {
             when (val current = state) {
                 TodayTabUiState.Loading -> TodayPlaceholders()
@@ -148,9 +141,6 @@ fun TodayTabScreen(
                         }
                         if (current.savedPlace != null) {
                             SavedPlaceReminders(onClaim)
-                        }
-                        if (showMorningCard && current.savedAnchorMatches) {
-                            MorningOptInCard(preferenceBusy, preferenceError, viewModel, visibleFrame)
                         }
                         Spacer(modifier = Modifier.height(96.dp))
                     }
@@ -189,39 +179,6 @@ private fun SavedPlaceReminders(onAddHome: () -> Unit) {
             color = PantopusColors.appTextSecondary,
         )
         GhostButton("Add your home", onClick = onAddHome, modifier = Modifier.fillMaxWidth())
-    }
-}
-
-@Composable
-private fun MorningOptInCard(
-    busy: Boolean,
-    error: String?,
-    viewModel: TodayTabViewModel,
-    visibleFrame: Rect,
-) {
-    var cardFrame by remember { mutableStateOf(Rect.Zero) }
-    val visible = !cardFrame.isEmpty && cardFrame.overlaps(visibleFrame)
-    LaunchedEffect(visible) { if (visible) viewModel.markPromptDisplayed() }
-    Column(
-        modifier =
-            Modifier.padding(top = 12.dp).fillMaxWidth().placeCard().padding(16.dp).testTag("todayMorningOptIn")
-                .onGloballyPositioned { cardFrame = it.boundsInWindow() },
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Text("A morning heads-up?", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
-        Text(
-            "Weather, air and alerts for this address, only when something's worth knowing.",
-            fontSize = 14.sp,
-            lineHeight = 20.sp,
-            color = PantopusColors.appTextSecondary,
-        )
-        if (error != null) {
-            Text(error, fontSize = 13.sp, color = PantopusColors.error)
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            GhostButton("Turn on", onClick = viewModel::turnOnMorning, modifier = Modifier.weight(1f), isLoading = busy)
-            GhostButton("Not now", onClick = viewModel::hideMorningCard, modifier = Modifier.weight(1f), isEnabled = !busy)
-        }
     }
 }
 

@@ -282,7 +282,7 @@ export async function getHubPreferences(): Promise<{ preferences: UserNotificati
  * the stored `daily_briefing_prompted_at` timestamp ("asked once" bookkeeping).
  */
 export async function updateHubPreferences(
-  data: Partial<UserNotificationPreferences> & { daily_briefing_prompted?: boolean },
+  data: Partial<UserNotificationPreferences> & { daily_briefing_prompted?: boolean; device_timezone?: string; expected_user_id?: string },
 ): Promise<{ preferences: UserNotificationPreferences }> {
   return put<{ preferences: UserNotificationPreferences }>('/api/hub/preferences', data);
 }
