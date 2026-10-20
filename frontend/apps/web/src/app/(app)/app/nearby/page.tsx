@@ -209,9 +209,10 @@ export default function NearbyPage() {
   const cellsMap = cellsQuery.data?.state === 'ready' ? <NearbyCellsMap cells={cellsQuery.data} /> : null;
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-4">
+    // The feed's width, so the Pulse | Neighborhood switch stays put between the two segments.
+    <div className="max-w-2xl mx-auto px-4 pt-2 pb-6">
       <h1 className="sr-only">Nearby: Neighborhood</h1>
-      <NearbyTabs active="neighborhood" className="mb-5" />
+      <NearbyTabs active="neighborhood" className="mb-4" />
 
       {meterQuery.isPending ? (
         <div className="space-y-3" aria-hidden="true">
