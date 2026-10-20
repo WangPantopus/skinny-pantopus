@@ -34,7 +34,7 @@ public struct AIConversationsResponse: Decodable, Sendable, Hashable {
     public let conversations: [AIConversationSummaryDTO]
 }
 
-/// `GET /api/ai/conversations/:id/messages` (`backend/routes/ai.js:365`) — a
+/// `GET /api/ai/conversations/:id/messages` (`backend/routes/ai.js:443`) — a
 /// conversation as the thread shows it after a relaunch: the person's
 /// messages, the replies, and the drafts as cards.
 public struct AIConversationMessagesResponse: Decodable, Sendable, Hashable {
