@@ -11,6 +11,7 @@ import app.pantopus.android.data.api.models.businesses.CreateBusinessHoursPayloa
 import app.pantopus.android.data.api.models.businesses.CreateBusinessLocationPayload
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.businesses.BusinessesRepository
 import app.pantopus.android.data.upload.UploadFile
 import app.pantopus.android.data.upload.UploadRepository
@@ -56,6 +57,7 @@ data class CreateBusinessUiState(
     val searchText: String = "",
     val isSubmittingCustom: Boolean = false,
     val isCreating: Boolean = false,
+    val createdBusinessId: String? = null,
     val submitError: String? = null,
     // Basic info
     val businessName: String = "",
@@ -81,6 +83,7 @@ data class CreateBusinessUiState(
      * surface it as a banner instead of silently dropping the image.
      */
     val logoUploadWarning: String? = null,
+    val logoUploaded: Boolean = false,
 ) {
     val isSearchActive: Boolean
         get() = searchText.trim().isNotEmpty()
@@ -147,6 +150,11 @@ open class CreateBusinessWizardViewModel
             get() = computeChrome(_state.value)
 
         override fun onLeading() {
+            if (_state.value.isCreating) return
+            _state.value.createdBusinessId?.let {
+                pendingEvent.value = CreateBusinessOutboundEvent.OpenBusinessDashboard(it)
+                return
+            }
             when (_state.value.currentStep) {
                 CreateBusinessStep.PickCategory ->
                     pendingEvent.value = CreateBusinessOutboundEvent.Dismiss
@@ -157,7 +165,10 @@ open class CreateBusinessWizardViewModel
         }
 
         override fun onDiscard() {
-            pendingEvent.value = CreateBusinessOutboundEvent.Dismiss
+            if (_state.value.isCreating) return
+            pendingEvent.value = _state.value.createdBusinessId?.let {
+                CreateBusinessOutboundEvent.OpenBusinessDashboard(it)
+            } ?: CreateBusinessOutboundEvent.Dismiss
         }
 
         override fun onPrimary() {
@@ -312,6 +323,10 @@ open class CreateBusinessWizardViewModel
             _state.update { it.copy(logoSkipped = false) }
         }
 
+        fun setHoursDay(value: BusinessHoursDay) {
+            _state.update { state -> state.copy(hours = state.hours.map { if (it.dayOfWeek == value.dayOfWeek) value else it }) }
+        }
+
         fun toggleDayClosed(dayOfWeek: Int) {
             _state.update { state ->
                 state.copy(
@@ -393,6 +408,17 @@ open class CreateBusinessWizardViewModel
 
         private fun createBusiness(publish: Boolean) {
             if (_state.value.isCreating) return
+            _state.value.createdBusinessId?.let { businessId ->
+                viewModelScope.launch {
+                    _state.update { it.copy(isCreating = true, submitError = null) }
+                    if (publish && !uploadLogoIfNeeded(businessId)) {
+                        _state.update { it.copy(isCreating = false) }
+                        return@launch
+                    }
+                    finishCreation(businessId, publish)
+                }
+                return
+            }
             if (!validateBasicInfo()) return
             val category = _state.value.selectedCategory
             if (category == null) {
@@ -444,46 +470,84 @@ open class CreateBusinessWizardViewModel
                 when (val result = businessesRepository.createBusinessFull(body)) {
                     is NetworkResult.Success -> {
                         val businessId = result.data.business.id
-                        uploadLogoIfNeeded(businessId)
-                        if (publish) businessesRepository.publishBusiness(businessId)
-                        pendingEvent.value =
-                            CreateBusinessOutboundEvent.OpenBusinessDashboard(
-                                businessId = businessId,
-                            )
-                    }
-                    is NetworkResult.Failure -> {
-                        _state.update {
-                            it.copy(submitError = createErrorMessage(result.error))
+                        _state.update { it.copy(createdBusinessId = businessId) }
+                        if (!uploadLogoIfNeeded(businessId)) {
+                            _state.update { it.copy(isCreating = false) }
+                            return@launch
                         }
+                        finishCreation(businessId, publish)
                     }
+                    is NetworkResult.Failure -> applyCreateFailure(result.error)
                 }
-                _state.update { it.copy(isCreating = false) }
             }
         }
 
+        private fun applyCreateFailure(error: NetworkError) {
+            // A username taken after its availability check must not still read "Available" on Basic info.
+            val unavailable =
+                when (createErrorCode(error)) {
+                    "USERNAME_TAKEN" -> UsernameCheckStatus.Unavailable("taken")
+                    "USERNAME_RESERVED" -> UsernameCheckStatus.Unavailable("reserved")
+                    else -> null
+                }
+            _state.update {
+                it.copy(
+                    isCreating = false,
+                    submitError = createErrorMessage(error),
+                    usernameStatus = unavailable ?: it.usernameStatus,
+                )
+            }
+        }
+
+        private suspend fun finishCreation(
+            businessId: String,
+            publish: Boolean,
+        ) {
+            if (publish) {
+                val result = businessesRepository.publishBusiness(businessId)
+                if (result is NetworkResult.Failure) {
+                    _state.update {
+                        it.copy(
+                            isCreating = false,
+                            submitError =
+                                "Your draft was saved, but publishing failed. " +
+                                    result.error.displayMessage("Please try again."),
+                        )
+                    }
+                    return
+                }
+            }
+            pendingEvent.value = CreateBusinessOutboundEvent.OpenBusinessDashboard(businessId)
+        }
+
         /**
-         * Push the picked logo once the business id exists. RN treats a
-         * failed logo upload as non-critical (the business is already
-         * created), so navigation continues and a warning is surfaced.
+         * Keep the saved draft on review if its logo failed, so the warning
+         * can be read and the owner can retry or explicitly open the draft.
          */
-        private suspend fun uploadLogoIfNeeded(businessId: String) {
+        private suspend fun uploadLogoIfNeeded(businessId: String): Boolean {
             val current = _state.value
-            val pick = current.logoPick?.takeIf { !current.logoSkipped } ?: return
+            val pick = current.logoPick?.takeIf { !current.logoSkipped } ?: return true
             val result =
                 uploadRepository.uploadBusinessMedia(
                     businessId = businessId,
                     type = "logo",
                     file = UploadFile(pick.fileName, pick.mimeType, pick.bytes),
                 )
-            when (result) {
-                is NetworkResult.Success -> _state.update { it.copy(logoPick = null) }
+            return when (result) {
+                is NetworkResult.Success -> {
+                    _state.update { it.copy(logoPick = null, logoUploadWarning = null, logoUploaded = true) }
+                    true
+                }
                 is NetworkResult.Failure ->
-                    _state.update {
-                        it.copy(
-                            logoUploadWarning =
-                                "Your business was created, but the logo didn't upload. " +
-                                    "Add it from the dashboard.",
-                        )
+                    {
+                        _state.update {
+                            it.copy(
+                                logoUploadWarning =
+                                    "Your draft was saved, but the logo didn't upload. " +
+                                        "Retry, or open the draft to add it later.",
+                            )
+                        }
+                        false
                     }
             }
         }
@@ -545,7 +609,7 @@ open class CreateBusinessWizardViewModel
                 secondaryCta =
                     if (state.currentStep == CreateBusinessStep.Confirm) {
                         WizardSecondaryCta(
-                            label = "Save as draft",
+                            label = if (state.createdBusinessId != null) "Open draft" else "Save as draft",
                             testTag = "createBusiness_saveDraft",
                         )
                     } else {
@@ -565,7 +629,12 @@ open class CreateBusinessWizardViewModel
                 // RN's review step publishes ("Publish"), with Save as Draft as
                 // the ghost — native previously created an unpublished business
                 // and called it "Confirm", so nothing ever went live.
-                CreateBusinessStep.Confirm -> "Publish"
+                CreateBusinessStep.Confirm ->
+                    when {
+                        state.logoUploadWarning != null -> "Retry logo and publish"
+                        state.createdBusinessId != null -> "Retry publish"
+                        else -> "Publish"
+                    }
             }
 
         private fun primaryEnabled(state: CreateBusinessUiState): Boolean =
@@ -602,12 +671,14 @@ open class CreateBusinessWizardViewModel
                 else -> "Please choose a valid username."
             }
 
+        private fun createErrorCode(error: NetworkError): String? =
+            (error as? NetworkError.ClientError)?.body?.let { body ->
+                runCatching { JSONObject(body).optString("code").takeIf { it.isNotBlank() } }
+                    .getOrNull()
+            }
+
         private fun createErrorMessage(error: NetworkError): String {
-            val code =
-                (error as? NetworkError.ClientError)?.body?.let { body ->
-                    runCatching { JSONObject(body).optString("code").takeIf { it.isNotBlank() } }
-                        .getOrNull()
-                }
+            val code = createErrorCode(error)
             return when (code) {
                 "EMAIL_IS_PERSONAL" ->
                     "This email is already used by your personal account. " +

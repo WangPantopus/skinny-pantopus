@@ -131,6 +131,7 @@ export default function PropertyDetail({ homeId }: Props) {
   }
 
   const { home, units, leases, pending_requests, occupants, authority } = detail;
+  const homeNames = Object.fromEntries([home, ...units].map((item) => [item.id, item.name || 'Unnamed property']));
   const tierConfig = TIER_CONFIG[authority?.verification_tier || 'weak'] || TIER_CONFIG.weak;
 
   return (
@@ -212,6 +213,7 @@ export default function PropertyDetail({ homeId }: Props) {
         {tab === 'requests' && (
           <RequestsTab
             homeId={homeId}
+            homeNames={homeNames}
             authorityId={authority?.id || ''}
             requests={pending_requests as landlord.TenantRequest[]}
             onRefresh={refreshCurrent}
@@ -221,6 +223,7 @@ export default function PropertyDetail({ homeId }: Props) {
         {tab === 'leases' && (
           <LeasesTab
             homeId={homeId}
+            homeNames={homeNames}
             leases={leases}
             onRefresh={refreshCurrent}
             isCurrent={isCurrent}

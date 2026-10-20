@@ -178,3 +178,89 @@ struct NeighborErrorBanner: View {
             )
     }
 }
+
+// MARK: - Known-address recipient selection
+
+struct ChooseNeighborCard: View {
+    @Bindable var viewModel: NeighborMessageComposeViewModel
+    @FocusState private var searchFocused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Choose a home")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Theme.Color.appText)
+            Text(
+                "Enter the house number and street. Only homes with discovery enabled appear; "
+                    + "sending requires a verified household on your block."
+            )
+            .font(.system(size: 13))
+            .foregroundStyle(Theme.Color.appTextMuted)
+            .fixedSize(horizontal: false, vertical: true)
+            TextField("House number and street", text: $viewModel.recipientQuery)
+                .textContentType(.fullStreetAddress)
+                .autocorrectionDisabled()
+                .submitLabel(.search)
+                .focused($searchFocused)
+                .onSubmit(search)
+                .padding(12)
+                .background(Theme.Color.appBg)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .accessibilityIdentifier("neighbor.recipientQuery")
+            Button(viewModel.recipientSearchState == .loading ? "Searching…" : "Search homes", action: search)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Theme.Color.primaryInk)
+                .disabled(!viewModel.canSearchRecipients)
+                .accessibilityIdentifier("neighbor.searchRecipients")
+            results
+        }
+        .padding(16)
+        .placeCard()
+    }
+
+    @ViewBuilder
+    private var results: some View {
+        switch viewModel.recipientSearchState {
+        case .idle, .loading:
+            EmptyView()
+        case let .error(message):
+            NeighborErrorBanner(message: message)
+        case let .loaded(homes):
+            if homes.isEmpty {
+                Text("No selectable homes found. Check the number and street; private homes and your own household won't appear.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.Color.appTextMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                ForEach(homes) { home in
+                    Button {
+                        searchFocused = false
+                        viewModel.selectRecipient(home)
+                    } label: {
+                        HStack(spacing: 12) {
+                            PlaceIconTile(icon: .home, tone: .home, size: 32)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(home.address ?? "")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundStyle(Theme.Color.appText)
+                                Text([home.city, home.state].compactMap { $0 }.joined(separator: ", "))
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(Theme.Color.appTextMuted)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.vertical, 8)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("neighbor.recipient.\(home.id)")
+                }
+            }
+        }
+    }
+
+    private func search() {
+        searchFocused = false
+        Task { await viewModel.searchRecipients() }
+    }
+}

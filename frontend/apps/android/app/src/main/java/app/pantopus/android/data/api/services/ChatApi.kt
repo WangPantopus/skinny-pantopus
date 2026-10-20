@@ -58,6 +58,7 @@ interface ChatApi {
     @GET("api/chat/rooms/{roomId}")
     suspend fun room(
         @Path("roomId") roomId: String,
+        @Query("asBusinessUserId") asBusinessUserId: String? = null,
     ): ChatRoomDetailResponse
 
     /** `GET /api/chat/rooms/:roomId/messages` — route `chats.js:1340`. */
@@ -67,6 +68,7 @@ interface ChatApi {
         @Query("limit") limit: Int = 60,
         @Query("before") before: String? = null,
         @Query("after") after: String? = null,
+        @Query("asBusinessUserId") asBusinessUserId: String? = null,
     ): ChatMessagesResponse
 
     /** `GET /api/chat/conversations/:otherUserId/messages` — route `chats.js:1157`. */
@@ -84,6 +86,7 @@ interface ChatApi {
         @Path("roomId") roomId: String,
         @Query("limit") limit: Int,
         @Header("If-None-Match") etag: String?,
+        @Query("asBusinessUserId") asBusinessUserId: String? = null,
     ): Response<ChatMessagesResponse>
 
     @GET("api/chat/conversations/{otherUserId}/messages")
@@ -146,6 +149,7 @@ interface ChatApi {
     @POST("api/chat/rooms/{roomId}/read")
     suspend fun markRoomRead(
         @Path("roomId") roomId: String,
+        @Body body: Map<String, String> = emptyMap(),
     ): Unit
 
     /** `POST /api/chat/conversations/:otherUserId/read` — route `chats.js:1265`. */

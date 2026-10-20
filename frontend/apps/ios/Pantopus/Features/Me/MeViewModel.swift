@@ -102,7 +102,9 @@ public final class MeViewModel {
     /// `freshFor`. The reads go through the screen store, which other screens
     /// share (My Homes, the profile, Settings).
     public func load() async {
-        if case .loaded = state, let loadedAt, now().timeIntervalSince(loadedAt) < Self.freshFor { return }
+        // A change elsewhere (a closed business) marks these reads out of date.
+        if case .loaded = state, let loadedAt, now().timeIntervalSince(loadedAt) < Self.freshFor,
+           !store.wasMarked(topics: [ScreenTopic.profileMe], kind: .you, since: loadedAt) { return }
         await fetch(force: false)
     }
 

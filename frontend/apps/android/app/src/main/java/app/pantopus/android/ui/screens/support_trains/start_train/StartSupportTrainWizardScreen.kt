@@ -144,7 +144,6 @@ fun StartSupportTrainWizardScreen(
                     form = form,
                     selectedBeneficiary = selectedBeneficiary,
                     slots = viewModel.generatedSlots(),
-                    onToggleComments = viewModel::toggleAllowComments,
                     onSelectVisibility = viewModel::selectVisibility,
                     launchError = launchError,
                 )
@@ -226,7 +225,7 @@ internal fun WhoAndWhyStep(
                     SearchFailedRow(onRetry = onRetrySearch)
                 } else {
                     Text(
-                        text = "Search neighbors, or type a name to invite them directly.",
+                        text = "Search neighbors, or enter a name for someone who isn't on Pantopus. No invitation is sent from this step.",
                         style = PantopusTextStyle.caption,
                         color = PantopusColors.appTextMuted,
                     )
@@ -357,7 +356,7 @@ private fun ContextNoteField(
                 tint = PantopusColors.appTextMuted,
             )
             Text(
-                text = "Shared only with people you invite",
+                text = "Visible to the audience you choose for this train",
                 style = PantopusTextStyle.caption.copy(fontSize = 10.sp),
                 color = PantopusColors.appTextMuted,
                 modifier = Modifier.weight(1f),
@@ -390,8 +389,8 @@ private fun PrivacyToggleList(
     ) {
         PrivacyToggleRow(
             icon = PantopusIcon.UsersRound,
-            title = "Invite only",
-            subtitle = "Only people you add can see and sign up",
+            title = "My connections",
+            subtitle = "Your connections and people you invite can see and sign up",
             checked = inviteOnly,
             onToggle = onToggleInviteOnly,
             testTag = "startSupportTrainInviteOnly",
@@ -399,7 +398,7 @@ private fun PrivacyToggleList(
         HorizontalDivider(thickness = 1.dp, color = PantopusColors.appBorderSubtle)
         PrivacyToggleRow(
             icon = PantopusIcon.Home,
-            title = "Block-visible",
+            title = "Nearby neighbors",
             // The Tasks list shows block-visible trains to people nearby
             // (about 25 mi); it doesn't check verification or a block.
             subtitle = "People nearby on Pantopus can see and offer",
@@ -485,7 +484,7 @@ private fun InvitePrivacyHint() {
         )
         Text(
             // No invite goes to the recipient, so nothing is waiting on them to accept.
-            text = "Invite-only by default. Other neighbors won't see it on the block.",
+            text = "Visible to your connections by default. You can change the audience before launching.",
             style = PantopusTextStyle.caption,
             color = PantopusColors.appTextStrong,
         )
@@ -612,6 +611,7 @@ internal fun WhatAndWhenStep(
     if (showEndPicker) {
         SimpleDatePickerDialog(
             initialMillis = form.endDateMillis,
+            earliestMillis = form.startDateMillis,
             onSelect = {
                 onEndDate(it)
                 showEndPicker = false
@@ -774,7 +774,6 @@ internal fun ReviewStep(
     form: StartSupportTrainFormState,
     selectedBeneficiary: MailRecipientDto?,
     slots: List<StartSupportTrainSlot>,
-    onToggleComments: (Boolean) -> Unit,
     onSelectVisibility: (StartSupportTrainVisibility) -> Unit,
     launchError: String?,
 ) {
@@ -797,7 +796,7 @@ internal fun ReviewStep(
         Overline("SLOT GRID")
         SlotGrid(slots = slots)
 
-        AllowCommentsToggle(form.allowComments, onToggleComments)
+        HelperNotesInfo()
         VisibilityList(selected = form.visibility, onSelect = onSelectVisibility)
 
         launchError?.let { LaunchErrorBanner(it) }
@@ -942,10 +941,7 @@ private fun SlotRow(slot: StartSupportTrainSlot) {
 }
 
 @Composable
-private fun AllowCommentsToggle(
-    value: Boolean,
-    onToggle: (Boolean) -> Unit,
-) {
+private fun HelperNotesInfo() {
     val shape = RoundedCornerShape(Radii.md)
     Row(
         modifier =
@@ -955,12 +951,12 @@ private fun AllowCommentsToggle(
                 .background(PantopusColors.appSurface)
                 .border(width = 1.dp, color = PantopusColors.appBorder, shape = shape)
                 .padding(Spacing.s3)
-                .testTag("startSupportTrainAllowComments"),
+                .testTag("startSupportTrainHelperNotes"),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "Allow comments",
+                text = "Helper notes",
                 style = PantopusTextStyle.small.copy(fontWeight = FontWeight.SemiBold),
                 color = PantopusColors.appText,
             )
@@ -970,15 +966,6 @@ private fun AllowCommentsToggle(
                 color = PantopusColors.appTextSecondary,
             )
         }
-        Switch(
-            checked = value,
-            onCheckedChange = onToggle,
-            colors =
-                SwitchDefaults.colors(
-                    checkedThumbColor = PantopusColors.appTextInverse,
-                    checkedTrackColor = PantopusColors.primary600,
-                ),
-        )
     }
 }
 
@@ -1171,27 +1158,20 @@ private fun pantopusTextFieldColors() =
         cursorColor = PantopusColors.primary600,
     )
 
-@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 private fun SimpleDatePickerDialog(
     initialMillis: Long,
     onSelect: (Long) -> Unit,
     onDismiss: () -> Unit,
+    earliestMillis: Long? = null,
 ) {
-    val state =
-        androidx.compose.material3.rememberDatePickerState(initialSelectedDateMillis = initialMillis)
-    androidx.compose.material3.DatePickerDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {
-            androidx.compose.material3.TextButton(onClick = {
-                val picked = state.selectedDateMillis
-                if (picked != null) onSelect(picked) else onDismiss()
-            }) { Text("Done") }
-        },
-        dismissButton = {
-            androidx.compose.material3.TextButton(onClick = onDismiss) { Text("Cancel") }
-        },
-    ) {
-        androidx.compose.material3.DatePicker(state = state)
-    }
+    // The wizard stores local calendar days; Material date pickers encode their selection at UTC midnight.
+    val zone = java.time.ZoneId.systemDefault()
+    app.pantopus.android.ui.components.FutureDatePickerDialog(
+        initial = java.time.Instant.ofEpochMilli(initialMillis).atZone(zone).toLocalDate(),
+        earliest = earliestMillis?.let { java.time.Instant.ofEpochMilli(it).atZone(zone).toLocalDate() },
+        onSelect = { onSelect(it.atStartOfDay(zone).toInstant().toEpochMilli()) },
+        onDismiss = onDismiss,
+        confirmLabel = "Done",
+    )
 }

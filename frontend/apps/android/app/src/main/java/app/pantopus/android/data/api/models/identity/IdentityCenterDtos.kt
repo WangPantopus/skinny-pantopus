@@ -8,7 +8,7 @@ import com.squareup.moshi.JsonClass
 /** Envelope from `GET /api/identity-center`. */
 @JsonClass(generateAdapter = true)
 data class IdentityCenterResponse(
-    @Json(name = "private_account") val privateAccount: PrivateAccountDto? = null,
+    @Json(name = "privateAccount") val privateAccount: PrivateAccountDto? = null,
     @Json(name = "local_profile") val localProfile: LocalProfileDto? = null,
     @Json(name = "audience_profile") val audienceProfile: AudienceProfileDto? = null,
     val bridges: BridgesDto? = null,

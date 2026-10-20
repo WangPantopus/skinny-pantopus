@@ -207,14 +207,15 @@ test.each([new Error('Could not save lease dates.'), { message: 'Could not save 
   expect(jest.mocked(post).mock.calls[1]).toEqual(jest.mocked(post).mock.calls[0]);
 });
 
-test('canceling the denial prompt does not cancel the tenant lease', async () => {
+test('canceling the denial dialog does not cancel the tenant lease', async () => {
   openApproval();
   fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-  const prompt = jest.spyOn(window, 'prompt').mockReturnValue(null);
-  try {
-    fireEvent.click(screen.getByRole('button', { name: 'Deny' }));
-    expect(post).not.toHaveBeenCalled();
-  } finally { prompt.mockRestore(); }
+  fireEvent.click(screen.getByRole('button', { name: 'Deny' }));
+  expect(screen.getByRole('dialog', { name: 'Deny lease request?' })).toBeVisible();
+  fireEvent.change(screen.getByLabelText('Reason (optional)'), { target: { value: 'Canceled draft' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  expect(screen.queryByRole('dialog', { name: 'Deny lease request?' })).not.toBeInTheDocument();
+  expect(post).not.toHaveBeenCalled();
 });
 
 
@@ -373,19 +374,16 @@ test('a completed approval for a retired Home cannot refresh over the current pr
   expect(screen.getByText('Current property')).toBeTruthy();
 });
 
-test('a denial prompt cannot submit after the account changes while it is open', async () => {
+test('a denial dialog cannot submit after the account changes while it is open', async () => {
   jest.mocked(get).mockReset().mockResolvedValueOnce(propertyWithRequest('home-a'))
     .mockRejectedValue({ message: 'No verified authority for this property' });
-  const prompt = jest.spyOn(window, 'prompt').mockImplementation(() => {
-    window.dispatchEvent(new StorageEvent('storage', { key: 'pantopus_auth_session_change' }));
-    return 'Old account decision';
-  });
-  try {
-    render(<PropertyDetail homeId="home-a" />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Deny' }));
-    expect(await screen.findByText('No verified authority for this property')).toBeTruthy();
-    expect(post).not.toHaveBeenCalled();
-  } finally { prompt.mockRestore(); }
+  render(<PropertyDetail homeId="home-a" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Deny' }));
+  fireEvent.change(screen.getByLabelText('Reason (optional)'), { target: { value: 'Old account decision' } });
+  act(() => { window.dispatchEvent(new StorageEvent('storage', { key: 'pantopus_auth_session_change' })); });
+  expect(await screen.findByText('No verified authority for this property')).toBeTruthy();
+  expect(screen.queryByRole('dialog', { name: 'Deny lease request?' })).not.toBeInTheDocument();
+  expect(post).not.toHaveBeenCalled();
 });
 
 test('a retired lease-end failure cannot alert or refresh the next account', async () => {

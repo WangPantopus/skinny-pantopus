@@ -71,7 +71,7 @@ final class PlaceFridgeCardViewModel {
             HomesEndpoints.emergencies(homeId: homeId)
         ) else { return }
         let items = response.emergencies
-            .filter { !$0.label.isEmpty }
+            .filter { !$0.label.isEmpty && EmergencyCategory.from(type: $0.type) == .shutoff }
             .prefix(12)
             .map { FridgeCardItem(label: $0.label, note: $0.location ?? "") }
         if !items.isEmpty {

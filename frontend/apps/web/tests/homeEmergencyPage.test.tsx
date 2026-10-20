@@ -66,10 +66,11 @@ test('adding a medical entry saves first_aid with its details through the API an
   render(<EmergencyPage />);
   fireEvent.click(await screen.findByRole('button', { name: /^Add$/ }));
   fireEvent.change(screen.getByPlaceholderText('Title'), { target: { value: 'Insulin' } });
-  // Shutoffs are stored per utility; without an approved utility choice the
-  // form cannot save one, so the submit stays disabled instead of guessing.
+  // A shutoff requires an explicit utility choice before it can be saved.
   fireEvent.click(screen.getByRole('button', { name: 'Shutoffs' }));
   expect(screen.getByRole('button', { name: 'Add Emergency Info' })).toBeDisabled();
+  fireEvent.change(screen.getByRole('combobox', { name: 'Utility or map' }), { target: { value: 'shutoff_water' } });
+  expect(screen.getByRole('button', { name: 'Add Emergency Info' })).toBeEnabled();
   fireEvent.click(screen.getByRole('button', { name: 'Medical' }));
   expect(screen.getByRole('button', { name: 'Add Emergency Info' })).toBeEnabled();
   fireEvent.change(screen.getByPlaceholderText('Phone number (optional)'), { target: { value: '+1 555 0100' } });

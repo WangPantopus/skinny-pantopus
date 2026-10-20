@@ -4,7 +4,7 @@
 //
 //  A13.14 — covers field validation (length, match, current-required
 //  gating), the auth-methods discovery call (hasPassword vs OAuth-only),
-//  the live strength + breach detection added by the reshape, the success
+//  the live strength + common-password validation added by the reshape, the success
 //  path (toast + shouldDismiss), and the error path (current-password field
 //  error + form-level banner).
 //
@@ -88,11 +88,11 @@ final class PasswordChangeViewModelTests: XCTestCase {
         vm.update(.new, to: "Bake-Sourdough-Friday-77")
         XCTAssertEqual(vm.strength.rulesMet, 4)
         XCTAssertTrue(vm.strength.isStrong)
-        XCTAssertFalse(vm.isNewPasswordBreached)
+        XCTAssertFalse(vm.isNewPasswordCommon)
         XCTAssertTrue(vm.isNewValid)
     }
 
-    func testBreachedNewPasswordIsInvalidAndFlagged() async {
+    func testCommonNewPasswordIsInvalidWithoutClaimingBreachExposure() async {
         SequencedURLProtocol.sequence = [
             .status(200, body: "{\"has_password\":true}")
         ]
@@ -101,10 +101,10 @@ final class PasswordChangeViewModelTests: XCTestCase {
         vm.update(.current, to: "old-password-123")
         vm.update(.new, to: "password123")
         vm.update(.confirm, to: "password123")
-        XCTAssertTrue(vm.isNewPasswordBreached)
-        XCTAssertTrue(vm.strength.breached)
+        XCTAssertTrue(vm.isNewPasswordCommon)
+        XCTAssertFalse(vm.strength.breached)
         XCTAssertFalse(vm.isValid)
-        XCTAssertEqual(vm.fields[.new]?.error, "Too common — appeared in 2.3M public records.")
+        XCTAssertEqual(vm.fields[.new]?.error, "This password is too common. Choose a less predictable one.")
     }
 
     func testSaveSuccessSetsToastAndShouldDismiss() async {

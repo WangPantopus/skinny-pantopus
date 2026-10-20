@@ -14,6 +14,7 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.businesses.BusinessFinanceRepository
 import app.pantopus.android.data.files.FilesRepository
 import app.pantopus.android.data.network.NetworkMonitor
+import app.pantopus.android.ui.screens.auth.AuthValidation
 import app.pantopus.android.ui.screens.businesses.invoices.BusinessInvoicesViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -237,15 +238,19 @@ class BusinessLegalViewModel
             var privateRecord: BusinessPrivateDto? = null
             when (val result = repository.privateRecord(businessId)) {
                 is NetworkResult.Success -> privateRecord = result.data.privateRecord
-                is NetworkResult.Failure ->
-                    if (result.error is NetworkError.Forbidden) privateDenied = true
+                is NetworkResult.Failure -> {
+                    if (result.error is NetworkError.Forbidden) {
+                        privateDenied = true
+                    } else {
+                        _state.value = BusinessLegalUiState.Error(result.error.message)
+                        return
+                    }
+                }
             }
 
-            privateRecord?.let {
-                _legalName.value = it.legalName.orEmpty()
-                _taxIdLast4.value = it.taxIdLast4.orEmpty()
-                _supportEmail.value = it.supportEmail.orEmpty()
-            }
+            _legalName.value = privateRecord?.legalName.orEmpty()
+            _taxIdLast4.value = privateRecord?.taxIdLast4.orEmpty()
+            _supportEmail.value = privateRecord?.supportEmail.orEmpty()
 
             _state.value =
                 BusinessLegalUiState.Loaded(
@@ -265,7 +270,7 @@ class BusinessLegalViewModel
 
         /** Digits only, at most four — the server stores nothing longer. */
         fun setTaxIdLast4(value: String) {
-            _taxIdLast4.value = value.filter { it.isDigit() }.take(TAX_ID_DIGITS)
+            _taxIdLast4.value = value.filter { it in '0'..'9' }.take(TAX_ID_DIGITS)
         }
 
         fun setSupportEmail(value: String) {
@@ -280,18 +285,28 @@ class BusinessLegalViewModel
 
         /** `PATCH /private`. Only the three fields this screen owns are sent. */
         fun savePrivateRecord() {
+            val content = (_state.value as? BusinessLegalUiState.Loaded)?.content
+            if (content == null || content.privateAccessDenied || _action.value is BusinessLegalAction.Saving) return
+            val name = _legalName.value.trim()
+            val last4 = _taxIdLast4.value
+            val email = _supportEmail.value.trim()
+            if (last4.isNotEmpty() && !last4.matches(Regex("[0-9]{4}"))) {
+                _action.value = BusinessLegalAction.Failed("Enter exactly four digits for the tax ID suffix, or leave it blank.")
+                return
+            }
+            if (email.isNotEmpty() && AuthValidation.email(email) != null) {
+                _action.value = BusinessLegalAction.Failed("Enter a valid support email address, or leave it blank.")
+                return
+            }
+            _action.value = BusinessLegalAction.Saving
             viewModelScope.launch {
-                _action.value = BusinessLegalAction.Saving
-                val name = _legalName.value.trim()
-                val last4 = _taxIdLast4.value.filter { it.isDigit() }.takeLast(TAX_ID_DIGITS)
-                val email = _supportEmail.value.trim()
                 val result =
                     repository.updatePrivateRecord(
                         businessId,
                         UpdateBusinessPrivateRequest(
-                            legalName = name.ifEmpty { null },
-                            taxIdLast4 = last4.ifEmpty { null },
-                            supportEmail = email.ifEmpty { null },
+                            legalName = name,
+                            taxIdLast4 = last4,
+                            supportEmail = email,
                         ),
                     )
                 when (result) {
@@ -389,6 +404,10 @@ class BusinessLegalViewModel
                         _action.value = BusinessLegalAction.Failed(result.error.message)
                 }
             }
+        }
+
+        fun evidenceReadFailed() {
+            _action.value = BusinessLegalAction.Failed("Choose a readable, nonempty file of 25 MB or less.")
         }
 
         fun clearAction() {

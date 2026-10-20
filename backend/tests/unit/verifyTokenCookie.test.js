@@ -7,7 +7,7 @@
 // (which has a default getUser returning mock-user-id).
 // ============================================================
 
-const { resetTables } = require('../__mocks__/supabaseAdmin');
+const { resetTables, seedTable } = require('../__mocks__/supabaseAdmin');
 
 // The real verifyToken (moduleNameMapper maps ../config/supabase
 // to supabaseAdmin mock, which has auth.getUser built in)
@@ -35,6 +35,8 @@ function mockRes() {
 
 beforeEach(() => {
   resetTables();
+  verifyToken._roleCache.clear();
+  seedTable('User', [{ id: 'mock-user-id', role: 'user', sessions_valid_after: null }]);
 });
 
 describe('verifyToken cookie/bearer extraction (AUTH-3.3)', () => {

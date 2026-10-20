@@ -11,6 +11,12 @@ export function resolveWebNotificationPath(link: string | null | undefined, noti
       return `/app/homes/${home.toLowerCase()}/tasks/${task.toLowerCase()}`;
     }
   }
+  // A claim that was not approved or needs more documents grants no Home
+  // access, so its dashboard link (kept for the native routers) can't show it.
+  // My Homes lists the claim with its next step.
+  if (notification?.type === 'ownership_claim_rejected' || notification?.type === 'ownership_claim_needs_more_info') {
+    return '/app/homes';
+  }
   if (!link) return null;
   const trimmed = link.trim();
   if (!trimmed) return null;

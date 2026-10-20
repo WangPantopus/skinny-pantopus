@@ -169,29 +169,32 @@ router.get(
       const userId = req.user.id;
 
       // Direct user authorities
-      const { data: userAuths } = await supabaseAdmin
+      const { data: userAuths, error: userAuthsError } = await supabaseAdmin
         .from('HomeAuthority')
         .select('*, home:home_id(id, name, address_id, home_type)')
         .eq('subject_type', 'user')
         .eq('subject_id', userId)
         .neq('status', 'revoked');
+      if (userAuthsError) throw userAuthsError;
 
       // Business authorities (find businesses user belongs to)
-      const { data: memberships } = await supabaseAdmin
+      const { data: memberships, error: membershipsError } = await supabaseAdmin
         .from('BusinessTeam')
         .select('business_user_id')
         .eq('user_id', userId)
         .eq('is_active', true);
+      if (membershipsError) throw membershipsError;
 
       let businessAuths = [];
       if (memberships && memberships.length > 0) {
         const bizIds = memberships.map((m) => m.business_user_id);
-        const { data } = await supabaseAdmin
+        const { data, error: businessAuthsError } = await supabaseAdmin
           .from('HomeAuthority')
           .select('*, home:home_id(id, name, address_id, home_type)')
           .eq('subject_type', 'business')
           .in('subject_id', bizIds)
           .neq('status', 'revoked');
+        if (businessAuthsError) throw businessAuthsError;
         businessAuths = data || [];
       }
 
@@ -278,12 +281,13 @@ router.get(
         (l) => l.state === 'pending' && l.source === 'tenant_request',
       );
 
-      // Fetch current occupants
-      const { data: occupants } = await supabaseAdmin
+      // Match the lease summary's scope, without exposing unmanaged units.
+      const { data: occupants, error: occupantsErr } = await supabaseAdmin
         .from('HomeOccupancy')
         .select('id, user_id, role, role_base, verification_status, is_active, start_at')
-        .eq('home_id', homeId)
+        .in('home_id', [homeId, ...managedUnitIds])
         .eq('is_active', true);
+      if (occupantsErr) throw occupantsErr;
 
       res.json({
         actor_id: req.user.id,

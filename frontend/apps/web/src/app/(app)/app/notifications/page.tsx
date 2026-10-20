@@ -238,11 +238,21 @@ export default function NotificationsPage() {
     (updater: (n: Notification) => Notification) => {
       queryClient.setQueryData<InfiniteData<NotificationsPage>>(notifKey, (old) => {
         if (!old) return old;
+        const changedUnread = new Map<string, number>();
+        const updatedPages = old.pages.map((page) => ({
+          ...page,
+          notifications: (page.notifications || []).map((n) => {
+            const updated = updater(n);
+            changedUnread.set(n.id, Number(!updated.is_read) - Number(!n.is_read));
+            return updated;
+          }),
+        }));
+        const delta = [...changedUnread.values()].reduce((sum, change) => sum + change, 0);
         return {
           ...old,
-          pages: old.pages.map((page) => ({
+          pages: updatedPages.map((page) => ({
             ...page,
-            notifications: (page.notifications || []).map(updater),
+            unreadCount: Math.max(0, page.unreadCount + delta),
           })),
         };
       });
@@ -278,7 +288,8 @@ export default function NotificationsPage() {
         if (!firstPage) return old;
         return {
           ...old,
-          pages: [{ ...firstPage, notifications: [notif, ...(firstPage.notifications || [])] }, ...rest],
+          pages: [{ ...firstPage, notifications: [notif, ...(firstPage.notifications || [])] }, ...rest]
+            .map((page) => ({ ...page, unreadCount: page.unreadCount + Number(!notif.is_read) })),
         };
       });
     },
@@ -299,6 +310,7 @@ export default function NotificationsPage() {
     if (!socket) return;
     const handleNewNotification = (notif: Notification) => {
       if (!notificationMatchesZone(notif)) return;
+      if (isLaunchCutNotification(notif, resolveWebNotificationPath(notif.link, notif))) return;
       prependNotification(notif);
     };
     socket.on('notification:new', handleNewNotification);
@@ -361,7 +373,9 @@ export default function NotificationsPage() {
     }, 'Could not confirm notification removal. Please try again.'),
   [runAction, removeNotification]);
 
-  const unreadCount = useMemo(() => notifications.filter((n) => !n.is_read).length, [notifications]);
+  // Every page carries the full scoped count. Loaded rows are only a slice,
+  // so counting them can say "caught up" while older unread notices remain.
+  const unreadCount = notifQuery.data?.pages.at(-1)?.unreadCount ?? 0;
 
   // Filter locally for "read" since API only supports "unread" filter
   const displayedNotifications = useMemo(() => (filter === 'read' ? notifications.filter((n) => n.is_read) : notifications), [filter, notifications]);

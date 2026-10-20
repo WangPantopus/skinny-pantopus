@@ -13,6 +13,7 @@ import app.pantopus.android.data.api.models.businesses.SetBusinessHoursRequest
 import app.pantopus.android.data.api.models.businesses.UpdateBusinessRequest
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.businesses.BusinessesRepository
 import app.pantopus.android.data.network.NetworkMonitor
 import app.pantopus.android.data.upload.UploadFile
@@ -90,6 +91,15 @@ class EditBusinessPageViewModel
         private val _uploadingMedia = MutableStateFlow<EditBusinessMediaKind?>(null)
         val uploadingMedia: StateFlow<EditBusinessMediaKind?> = _uploadingMedia.asStateFlow()
 
+        private val _canClose = MutableStateFlow(false)
+        val canClose: StateFlow<Boolean> = _canClose.asStateFlow()
+        private val _isClosing = MutableStateFlow(false)
+        val isClosing: StateFlow<Boolean> = _isClosing.asStateFlow()
+        private val _closeError = MutableStateFlow<String?>(null)
+        val closeError: StateFlow<String?> = _closeError.asStateFlow()
+        private val _businessClosed = MutableStateFlow(false)
+        val businessClosed: StateFlow<Boolean> = _businessClosed.asStateFlow()
+
         private var localPreviewPersistenceEnabled = false
         private var hasLoadedOnce = false
         private var primaryLocationId: String? = null
@@ -105,6 +115,30 @@ class EditBusinessPageViewModel
         /** Whether the stored phone carried a `+1` the loader stripped. */
         private var loadedPhoneHadCountryCode = false
         private var isSaving = false
+        private var savedHours: EditBusinessPageHoursState? = null
+
+        fun prepareClosure() {
+            _closeError.value = null
+        }
+
+        fun closeBusiness() {
+            if (!_canClose.value || _isClosing.value || _state.value !is EditBusinessPageUiState.Loaded) return
+            if (isSaving || _uploadingMedia.value != null) {
+                _closeError.value = "Wait for the current save or upload to finish, then try again."
+                return
+            }
+            _isClosing.value = true
+            _closeError.value = null
+            viewModelScope.launch {
+                when (val result = businesses.closeBusiness(businessId)) {
+                    is NetworkResult.Success -> _businessClosed.value = true
+                    is NetworkResult.Failure -> {
+                        _closeError.value = result.error.displayMessage("Couldn't close the business. Please try again.")
+                        _isClosing.value = false
+                    }
+                }
+            }
+        }
 
         fun load() {
             if (localPreviewPersistenceEnabled) return
@@ -119,9 +153,73 @@ class EditBusinessPageViewModel
 
         /** Test-only: seed the loaded state directly. */
         fun seedForPreview(content: EditBusinessPageContent) {
+            savedHours = content.hours
             localPreviewPersistenceEnabled = true
             hasLoadedOnce = true
             _state.value = EditBusinessPageUiState.Loaded(content)
+        }
+
+        fun updateHoursDay(
+            id: String,
+            value: EditBusinessPageHoursRow.State,
+        ) {
+            changeHours { rows -> rows.map { row -> if (row.id == id) row.copy(state = value, isDirty = true) else row } }
+        }
+
+        fun applyWeekdayHours() {
+            changeHours { rows ->
+                rows.mapIndexed { index, row ->
+                    row.copy(
+                        state =
+                            if (index in 1..5) {
+                                EditBusinessPageHoursRow.State.Open(
+                                    "9:00 AM",
+                                    "5:00 PM",
+                                )
+                            } else {
+                                EditBusinessPageHoursRow.State.Closed
+                            },
+                        isDirty = true,
+                    )
+                }
+            }
+        }
+
+        private fun changeHours(transform: (List<EditBusinessPageHoursRow>) -> List<EditBusinessPageHoursRow>) {
+            if (isSaving) return
+            if (!localPreviewPersistenceEnabled && primaryLocationId == null) {
+                _toast.value = "Add a business location before setting hours."
+                return
+            }
+            val current = (_state.value as? EditBusinessPageUiState.Loaded)?.content ?: return
+            val rows =
+                when (val hours = current.hours) {
+                    is EditBusinessPageHoursState.Rows -> hours.rows
+                    is EditBusinessPageHoursState.QuickApply -> hours.rows
+                }
+            val next =
+                current.copy(
+                    hours =
+                        EditBusinessPageHoursState.Rows(
+                            transform(rows),
+                            "Tap a day to edit its hours. Save to apply your changes.",
+                        ),
+                )
+            _state.value = EditBusinessPageUiState.Loaded(EditBusinessPageMapper.withRecomputedMode(next))
+        }
+
+        fun reloadServices() {
+            viewModelScope.launch {
+                when (val result = businesses.catalogItems(businessId)) {
+                    is NetworkResult.Success -> {
+                        val current = (_state.value as? EditBusinessPageUiState.Loaded)?.content ?: return@launch
+                        val next = current.copy(services = EditBusinessPageMapper.mapServices(result.data.items))
+                        _state.value = EditBusinessPageUiState.Loaded(EditBusinessPageMapper.withRecomputedMode(next))
+                    }
+                    is NetworkResult.Failure ->
+                        _toast.value = result.error.displayMessage("Couldn't refresh services. Open services to try again.")
+                }
+            }
         }
 
         fun update(
@@ -240,9 +338,8 @@ class EditBusinessPageViewModel
                     _toast.value = "Published"
                     return@launch
                 }
-                val mode = current.content.mode
-                if (mode is EditBusinessPageMode.Setup && mode.remaining > 0) {
-                    _toast.value = "Finish the remaining sections before publishing."
+                if (current.content.missingPublishRequirements > 0) {
+                    _toast.value = "Add a business name and category before publishing."
                     return@launch
                 }
                 if (!persist(successToast = null)) return@launch
@@ -332,6 +429,7 @@ class EditBusinessPageViewModel
         }
 
         private suspend fun applyDetail(detail: BusinessDetailResponse) {
+            _canClose.value = detail.access?.isOwner == true
             if (detail.access?.hasAccess != true) {
                 _state.value = EditBusinessPageUiState.Error(NO_ACCESS_MESSAGE)
                 hasLoadedOnce = false
@@ -356,13 +454,18 @@ class EditBusinessPageViewModel
             val publicPayload = fetchPublicPayload(detail.business.username)
             if (publicPayload != null) {
                 if (catalog == null) catalog = publicPayload.catalog
-                if (hours.isEmpty()) hours = publicPayload.hours
+                if (hours == null) hours = publicPayload.hours
             }
 
-            _state.value =
-                EditBusinessPageUiState.Loaded(
-                    EditBusinessPageMapper.content(detail, hours, catalog.orEmpty()),
-                )
+            if (hours == null || catalog == null) {
+                _state.value = EditBusinessPageUiState.Error("Couldn't load business hours and services. Please try again.")
+                hasLoadedOnce = false
+                return
+            }
+
+            val content = EditBusinessPageMapper.content(detail, hours, catalog)
+            savedHours = content.hours
+            _state.value = EditBusinessPageUiState.Loaded(content)
             hasLoadedOnce = true
         }
 
@@ -373,11 +476,11 @@ class EditBusinessPageViewModel
                 is NetworkResult.Failure -> null
             }
 
-        private suspend fun fetchHours(locationId: String?): List<BusinessHoursDto> {
+        private suspend fun fetchHours(locationId: String?): List<BusinessHoursDto>? {
             if (locationId == null) return emptyList()
             return when (val result = businesses.locationHours(businessId, locationId)) {
                 is NetworkResult.Success -> result.data.hours
-                is NetworkResult.Failure -> emptyList()
+                is NetworkResult.Failure -> null
             }
         }
 
@@ -406,7 +509,9 @@ class EditBusinessPageViewModel
             content: EditBusinessPageContent,
             successToast: String?,
         ): Boolean {
-            _state.value = EditBusinessPageUiState.Loaded(promoteCurrentToOriginal(content))
+            val saved = promoteCurrentToOriginal(content)
+            savedHours = saved.hours
+            _state.value = EditBusinessPageUiState.Loaded(saved)
             if (successToast != null) _toast.value = successToast
             return true
         }
@@ -496,10 +601,10 @@ class EditBusinessPageViewModel
 
         private suspend fun pushHours(content: EditBusinessPageContent): String? {
             val body = EditBusinessPageMapper.hoursPayload(content.hours) ?: return null
-            val locationId = primaryLocationId ?: return null
-            return failureMessage(
-                businesses.setLocationHours(businessId, locationId, SetBusinessHoursRequest(body)),
-            )
+            val locationId = primaryLocationId ?: return "Add a business location before setting hours."
+            val failure = failureMessage(businesses.setLocationHours(businessId, locationId, SetBusinessHoursRequest(body)))
+            if (failure == null) savedHours = content.hours.cleaned()
+            return failure
         }
 
         private fun <T> failureMessage(result: NetworkResult<T>): String? =
@@ -519,19 +624,6 @@ class EditBusinessPageViewModel
             patch.publicPhone?.let {
                 loadedPhoneHadCountryCode = it.trim().startsWith(COUNTRY_CODE_PREFIX)
             }
-        }
-
-        /** Saved state, keeping the media dirt the save couldn't clear. */
-        private fun savedContent(content: EditBusinessPageContent): EditBusinessPageContent {
-            var cleaned = promoteCurrentToOriginal(content)
-            val banner = content.banner
-            if (banner is EditBusinessPageBannerState.Filled && banner.dirty) {
-                cleaned = cleaned.copy(banner = banner)
-            }
-            if (content.gallery.freshAddTile) {
-                cleaned = cleaned.copy(gallery = content.gallery)
-            }
-            return cleaned
         }
 
         private fun buildPatch(content: EditBusinessPageContent): UpdateBusinessRequest {
@@ -608,39 +700,6 @@ class EditBusinessPageViewModel
                 patch.attributes != null ||
                 patch.isPublished != null
 
-        private fun hasUnresolvedMediaDirty(content: EditBusinessPageContent): Boolean {
-            val banner = content.banner
-            if (banner is EditBusinessPageBannerState.Filled && banner.dirty) return true
-            return content.gallery.freshAddTile
-        }
-
-        private fun mediaDirtyCount(content: EditBusinessPageContent): Int {
-            var count = 0
-            val banner = content.banner
-            if (banner is EditBusinessPageBannerState.Filled && banner.dirty) count++
-            if (content.gallery.freshAddTile) count++
-            return count
-        }
-
-        private fun promoteCurrentToOriginal(content: EditBusinessPageContent): EditBusinessPageContent =
-            content.copy(
-                mode = zeroUnsaved(content.mode),
-                banner = content.banner.cleaned(),
-                name = content.name.cleaned(),
-                tagline = content.tagline.cleaned(),
-                category = content.category.cleaned(),
-                price = content.price.cleaned(),
-                description = content.description.cleaned(),
-                hours = content.hours.cleaned(),
-                services = content.services.cleaned(),
-                gallery = content.gallery.cleaned(),
-                phone = content.phone.cleaned(),
-                email = content.email.cleaned(),
-                website = content.website.cleaned(),
-                bookingLink = content.bookingLink?.cleaned(),
-                location = content.location.cleaned(),
-            )
-
         private fun revertToOriginal(content: EditBusinessPageContent): EditBusinessPageContent =
             content.copy(
                 mode = zeroUnsaved(content.mode),
@@ -650,7 +709,7 @@ class EditBusinessPageViewModel
                 category = content.category.reverted(),
                 price = content.price.reverted(),
                 description = content.description.reverted(),
-                hours = content.hours.cleaned(),
+                hours = savedHours ?: content.hours.cleaned(),
                 services = content.services.cleaned(),
                 gallery = content.gallery.cleaned(),
                 phone = content.phone.reverted(),
@@ -659,12 +718,58 @@ class EditBusinessPageViewModel
                 bookingLink = content.bookingLink?.reverted(),
                 location = content.location.reverted(),
             )
+    }
 
-        private fun zeroUnsaved(mode: EditBusinessPageMode): EditBusinessPageMode =
-            when (mode) {
-                is EditBusinessPageMode.Published -> mode.copy(unsavedCount = 0)
-                is EditBusinessPageMode.Setup -> mode
-            }
+/** Saved state, keeping the media dirt the save couldn't clear. */
+private fun savedContent(content: EditBusinessPageContent): EditBusinessPageContent {
+    var cleaned = promoteCurrentToOriginal(content)
+    val banner = content.banner
+    if (banner is EditBusinessPageBannerState.Filled && banner.dirty) {
+        cleaned = cleaned.copy(banner = banner)
+    }
+    if (content.gallery.freshAddTile) {
+        cleaned = cleaned.copy(gallery = content.gallery)
+    }
+    return cleaned
+}
+
+private fun hasUnresolvedMediaDirty(content: EditBusinessPageContent): Boolean {
+    val banner = content.banner
+    if (banner is EditBusinessPageBannerState.Filled && banner.dirty) return true
+    return content.gallery.freshAddTile
+}
+
+private fun mediaDirtyCount(content: EditBusinessPageContent): Int {
+    var count = 0
+    val banner = content.banner
+    if (banner is EditBusinessPageBannerState.Filled && banner.dirty) count++
+    if (content.gallery.freshAddTile) count++
+    return count
+}
+
+private fun promoteCurrentToOriginal(content: EditBusinessPageContent): EditBusinessPageContent =
+    content.copy(
+        mode = zeroUnsaved(content.mode),
+        banner = content.banner.cleaned(),
+        name = content.name.cleaned(),
+        tagline = content.tagline.cleaned(),
+        category = content.category.cleaned(),
+        price = content.price.cleaned(),
+        description = content.description.cleaned(),
+        hours = content.hours.cleaned(),
+        services = content.services.cleaned(),
+        gallery = content.gallery.cleaned(),
+        phone = content.phone.cleaned(),
+        email = content.email.cleaned(),
+        website = content.website.cleaned(),
+        bookingLink = content.bookingLink?.cleaned(),
+        location = content.location.cleaned(),
+    )
+
+private fun zeroUnsaved(mode: EditBusinessPageMode): EditBusinessPageMode =
+    when (mode) {
+        is EditBusinessPageMode.Published -> mode.copy(unsavedCount = 0)
+        is EditBusinessPageMode.Setup -> mode
     }
 
 private fun EditBusinessPageField.cleaned(): EditBusinessPageField =

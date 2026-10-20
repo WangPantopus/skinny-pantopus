@@ -192,9 +192,9 @@ final class EmergencyInfoViewModelTests: XCTestCase {
         XCTAssertEqual(EmergencyCategory.from(type: "evac_plan"), .evac)
         XCTAssertEqual(EmergencyCategory.from(type: "first_aid"), .medical)
         XCTAssertEqual(EmergencyCategory.from(type: "extinguisher"), .medical)
-        // Unknown / "other" falls back to .contact (safest household default).
-        XCTAssertEqual(EmergencyCategory.from(type: "other"), .contact)
-        XCTAssertEqual(EmergencyCategory.from(type: "unknown_value"), .contact)
+        // Records without a contact type stay in the neutral Other group.
+        XCTAssertEqual(EmergencyCategory.from(type: "other"), .other)
+        XCTAssertEqual(EmergencyCategory.from(type: "unknown_value"), .other)
     }
 
     func testCategoryGlyphPerType() {

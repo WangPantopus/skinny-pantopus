@@ -83,7 +83,7 @@ public struct FormBanner: View {
         FormBanner(
             tone: .error,
             title: "Couldn't update password",
-            message: "Fix the two highlighted fields and try again. Three more attempts before a 15-minute cooldown."
+            message: "Check the highlighted details and try again."
         )
         FormBanner(
             tone: .info,

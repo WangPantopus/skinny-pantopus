@@ -8,6 +8,7 @@
 
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
+const { GeoCache } = require('../utils/geoCache');
 const { personaPostVisibleToViewer } = require('../utils/personaPostVisibility');
 const {
   applyLocationPrecision,
@@ -31,7 +32,7 @@ const {
 // In-memory cache for mute/hide filters (60-second TTL)
 // ---------------------------------------------------------------------------
 
-const _filterCache = new Map(); // key: userId, value: { data, expires }
+const _filterCache = new GeoCache(1000); // userId → { data }, including pending read guards
 const FILTER_CACHE_TTL = 60_000; // 60 seconds
 
 // ---------------------------------------------------------------------------
@@ -330,13 +331,13 @@ function displayedPoint(post, viewerUserId, { orEffective = false } = {}) {
 
 async function getMuteAndHideFilters(userId) {
   const cached = _filterCache.get(userId);
-  if (cached && cached.expires > Date.now()) {
+  if (cached?.data) {
     return cached.data;
   }
 
   // A mute/unmute can invalidate this read while its database response is pending.
-  const pendingEntry = { data: null, expires: 0 };
-  _filterCache.set(userId, pendingEntry);
+  const pendingEntry = { data: null };
+  _filterCache.set(userId, pendingEntry, FILTER_CACHE_TTL);
 
   const [
     { data: mutes, error: mutesError },
@@ -409,7 +410,7 @@ async function getMuteAndHideFilters(userId) {
 
   if (_filterCache.get(userId) === pendingEntry) {
     pendingEntry.data = result;
-    pendingEntry.expires = Date.now() + FILTER_CACHE_TTL;
+    _filterCache.set(userId, pendingEntry, FILTER_CACHE_TTL);
   }
   return result;
 }

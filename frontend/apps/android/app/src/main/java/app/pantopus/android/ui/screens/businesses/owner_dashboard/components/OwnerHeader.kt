@@ -25,6 +25,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -32,12 +33,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.pantopus.android.ui.components.BizLogoContent
 import app.pantopus.android.ui.components.BizStatusBadge
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
+import coil.compose.AsyncImage
 
 private val BANNER_HEIGHT = 116.dp
 private val LOGO_SIZE = 68.dp
@@ -177,6 +180,8 @@ fun OwnerHeaderBanner(
     status: BizStatusBadge?,
     onEdit: () -> Unit,
     isVerified: Boolean = true,
+    logoUrl: String? = null,
+    bannerUrl: String? = null,
 ) {
     Column(
         modifier =
@@ -192,6 +197,9 @@ fun OwnerHeaderBanner(
                         .matchParentSize()
                         .background(Brush.linearGradient(listOf(PantopusColors.businessDark, PantopusColors.business))),
             )
+            bannerUrl?.takeIf(String::isNotBlank)?.let { url ->
+                AsyncImage(model = url, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.matchParentSize())
+            }
             Box(
                 modifier =
                     Modifier
@@ -200,6 +208,7 @@ fun OwnerHeaderBanner(
             )
             OwnerLogo(
                 logoIcon = logoIcon,
+                logoUrl = logoUrl,
                 name = name,
                 onEdit = onEdit,
                 modifier = Modifier.align(Alignment.BottomStart).padding(start = 18.dp).offset(y = LOGO_PROTRUDE),
@@ -263,7 +272,7 @@ fun OwnerHeaderBanner(
                     OwnerChip(
                         icon = PantopusIcon.Hourglass,
                         dot = null,
-                        text = "Verification pending",
+                        text = "Not verified",
                         background = PantopusColors.warningBg,
                         foreground = PantopusColors.warning,
                     )
@@ -285,6 +294,7 @@ fun OwnerHeaderBanner(
 @Composable
 private fun OwnerLogo(
     logoIcon: PantopusIcon?,
+    logoUrl: String?,
     name: String,
     onEdit: () -> Unit,
     modifier: Modifier = Modifier,
@@ -301,23 +311,7 @@ private fun OwnerLogo(
                     .border(3.dp, PantopusColors.appSurface, shape),
             contentAlignment = Alignment.Center,
         ) {
-            if (logoIcon != null) {
-                PantopusIconImage(
-                    icon = logoIcon,
-                    contentDescription = null,
-                    size = 30.dp,
-                    strokeWidth = 2f,
-                    tint = PantopusColors.appTextInverse,
-                )
-            } else {
-                Text(
-                    text = deriveInitials(name),
-                    color = PantopusColors.appTextInverse,
-                    fontSize = 26.sp,
-                    fontWeight = FontWeight.Black,
-                    letterSpacing = (-0.5).sp,
-                )
-            }
+            BizLogoContent(logoIcon = logoIcon, initials = deriveInitials(name), imageUrl = logoUrl)
         }
         EditFab(
             icon = PantopusIcon.Pencil,

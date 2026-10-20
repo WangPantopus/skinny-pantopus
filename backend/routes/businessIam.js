@@ -233,16 +233,35 @@ router.post('/:businessId/members/:userId/role', verifyToken, async (req, res) =
     }
 
     const { preset_key, role_base, title } = req.body;
+    let preset = null;
+    if (preset_key) {
+      const { data, error } = await supabaseAdmin
+        .from('BusinessRolePreset')
+        .select('*')
+        .eq('key', preset_key)
+        .single();
+      if (error || !data) {
+        return res.status(400).json({ error: 'Unknown role preset' });
+      }
+      preset = data;
+    }
+    const requestedRole = preset?.role_base || role_base;
 
     // Prevent demoting self from owner
-    if (targetUserId === actorId && access.isOwner && role_base && role_base !== 'owner') {
+    if (targetUserId === actorId && access.isOwner && requestedRole && requestedRole !== 'owner') {
       return res.status(400).json({ error: 'Cannot demote yourself from owner. Transfer ownership instead.' });
     }
 
     // Prevent promoting to owner unless you are owner
-    if (role_base === 'owner' && !access.isOwner) {
+    if (requestedRole === 'owner' && !access.isOwner) {
       logger.warn('auth.denied', { event: 'role_change_denied', actor_id: actorId, target_id: targetUserId, reason: 'non_owner_promote_to_owner', business_id: businessId, ip: req.ip });
       return res.status(403).json({ error: 'Only the owner can promote to owner' });
+    }
+    if (requestedRole && !access.isOwner && targetUserId === actorId) {
+      const assignCheck = assertCanMutateTarget(access.membership?.role_base || 'viewer', requestedRole);
+      if (!assignCheck.allowed) {
+        return res.status(403).json({ error: `Cannot assign role '${requestedRole}': ${assignCheck.reason}` });
+      }
     }
 
     // ── Rank enforcement (AUTH-1.5) ──────────────────────────
@@ -271,7 +290,7 @@ router.post('/:businessId/members/:userId/role', verifyToken, async (req, res) =
         return res.status(403).json({ error: mutateCheck.reason });
       }
 
-      const newRole = role_base || null;
+      const newRole = requestedRole || null;
       if (newRole) {
         const assignCheck = assertCanMutateTarget(actorRoleBase, newRole);
         if (!assignCheck.allowed) {
@@ -283,16 +302,6 @@ router.post('/:businessId/members/:userId/role', verifyToken, async (req, res) =
 
     // If using a preset, apply it
     if (preset_key) {
-      const { data: preset } = await supabaseAdmin
-        .from('BusinessRolePreset')
-        .select('*')
-        .eq('key', preset_key)
-        .single();
-
-      if (!preset) {
-        return res.status(400).json({ error: `Unknown preset: ${preset_key}` });
-      }
-
       // Dual-write role update via membership service (AUTH-2.3)
       const presetRoleResult = await membershipService.updateMemberRole({
         businessUserId: businessId,

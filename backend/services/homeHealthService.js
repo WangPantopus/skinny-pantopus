@@ -7,6 +7,7 @@
  */
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
+const { GeoCache } = require('../utils/geoCache');
 const { getSeasonalContext } = require('./ai/seasonalEngine');
 
 // ── Dimension weights ────────────────────────────────────────────────────────
@@ -136,16 +137,14 @@ function scoreDocuments(count) {
 // ── In-memory health score cache (5-minute TTL) ─────────────────────────────
 
 const HEALTH_CACHE_TTL = 5 * 60 * 1000;
-const healthScoreCache = new Map(); // homeId → { data, ts }
+const healthScoreCache = new GeoCache(1000); // homeId → computed score
 
 function getCachedHealthScore(homeId) {
-  const entry = healthScoreCache.get(homeId);
-  if (entry && Date.now() - entry.ts < HEALTH_CACHE_TTL) return entry.data;
-  return null;
+  return healthScoreCache.get(homeId) ?? null;
 }
 
 function setCachedHealthScore(homeId, data) {
-  healthScoreCache.set(homeId, { data, ts: Date.now() });
+  healthScoreCache.set(homeId, data, HEALTH_CACHE_TTL);
 }
 
 function invalidateHealthScoreCache(homeId) {

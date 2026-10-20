@@ -50,15 +50,20 @@ Five Lambda functions share a common Python package:
 - **Fetcher** (every 2 hours): Pulls content from RSS feeds, NOAA, and a seasonal engine into a `seeder_content_queue` table in Supabase.
 - **Poster** (hourly, self-selects 3 slots/day at ~7am, 12pm, 5pm PT): Picks the best queued item, humanizes it via Claude Sonnet 5.5, and posts to the Pantopus API as the curator account.
 - **Discovery** (daily): Detects user clusters and auto-provisions new seeder regions.
-- **Briefing Scheduler** (every 15 minutes): Finds users whose morning briefing time is now and sends personalized push notifications (see below).
-- **Briefing Cleanup** (daily): Purges old delivery logs, cleans expired context cache, retries failed briefings.
+- **Briefing Scheduler** (every minute): Finds users whose morning or evening briefing time is now and sends personalized push notifications (see below).
+- **Briefing Cleanup** (daily): Purges old delivery logs, cleans expired context cache, and resets stale composing attempts. Failed briefings retry on the minute scheduler only within their original local delivery window.
 
 ## Daily Briefing Scheduler
 
-Two additional Lambda functions handle the daily morning briefing:
+Two additional Lambda functions handle morning and evening briefings:
 
-- **Briefing Scheduler** (every 15 minutes): Queries `UserNotificationPreferences` for users with `daily_briefing_enabled = true` whose preferred briefing time falls within the current 15-minute window (timezone-aware via `zoneinfo.ZoneInfo`). Checks quiet hours and idempotency (`DailyBriefingDelivery` table). For each eligible user, calls the Pantopus backend's internal briefing endpoint (`POST /api/internal/briefing/send`) to compose and send a push notification. Caps at 100 users per invocation.
-- **Briefing Cleanup** (daily): Purges `DailyBriefingDelivery` rows older than 30 days, deletes expired `ContextCache` entries, and retries today's failed briefing deliveries once (marks retried rows with `[RETRY]` prefix to prevent re-retry).
+- **Briefing Scheduler** (every minute): Queries `UserNotificationPreferences` for enabled morning/evening slots. It asks the backend for each person's resolved IANA time zone, then checks the 15 minutes starting at their preferred local time (defaults 07:30 and 18:00), quiet hours and idempotency (`DailyBriefingDelivery`). For each eligible user it calls `POST /api/internal/briefing/send`. Failed attempts can retry on a later minute within that same local slot; sent, skipped and composing attempts cannot. Caps at 100 users per invocation.
+- **Briefing Cleanup** (daily): Purges `DailyBriefingDelivery` rows older than 30 days, deletes expired `ContextCache` entries, and resets stale composing attempts. It never sends notifications.
+
+Delivery uses geographic time-zone boundaries and daylight-saving rules,
+including Alaska, the Aleutians, Hawaii and Arizona. The AWS hosting region
+does not define the user's clock. See [P8](../docs/release/prod-config-checklist.md#p8-production-scheduled-jobs-founder-runs-l4-prepared)
+for the paused production deployment and the separate briefing-only activation.
 
 ### Secrets
 

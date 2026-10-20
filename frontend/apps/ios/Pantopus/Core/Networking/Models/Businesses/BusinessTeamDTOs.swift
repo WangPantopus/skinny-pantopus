@@ -202,6 +202,7 @@ public struct BusinessSeatDTO: Decodable, Sendable, Hashable, Identifiable {
     public let inviteExpiresAt: String?
     public let createdAt: String?
     public let isYou: Bool?
+    public let isActive: Bool?
 
     public init(
         id: String,
@@ -211,7 +212,8 @@ public struct BusinessSeatDTO: Decodable, Sendable, Hashable, Identifiable {
         inviteEmail: String? = nil,
         inviteExpiresAt: String? = nil,
         createdAt: String? = nil,
-        isYou: Bool? = nil
+        isYou: Bool? = nil,
+        isActive: Bool? = nil
     ) {
         self.id = id
         self.displayName = displayName
@@ -221,6 +223,7 @@ public struct BusinessSeatDTO: Decodable, Sendable, Hashable, Identifiable {
         self.inviteExpiresAt = inviteExpiresAt
         self.createdAt = createdAt
         self.isYou = isYou
+        self.isActive = isActive
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -232,6 +235,7 @@ public struct BusinessSeatDTO: Decodable, Sendable, Hashable, Identifiable {
         case inviteExpiresAt = "invite_expires_at"
         case createdAt = "created_at"
         case isYou = "is_you"
+        case isActive = "is_active"
     }
 }
 

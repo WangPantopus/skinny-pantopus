@@ -167,14 +167,22 @@ async function gigRoomRecipients(room, userIds) {
 // false) keeps its history for the owner and that worker but takes no new messages, reactions
 // or edits: edits after the fact would let either side rewrite the record. A failed lookup
 // counts as closed. Deleting one's own message stays allowed.
-async function isRoomClosedForWrites(roomId) {
-  const { data, error } = await supabaseAdmin
+async function isRoomClosedForWrites(roomId, knownRoom = null) {
+  const { data, error } = knownRoom ? { data: knownRoom } : await supabaseAdmin
     .from('ChatRoom')
-    .select('is_active')
+    .select('type, is_active')
     .eq('id', roomId)
     .maybeSingle();
-  if (error) return true;
-  return data?.is_active === false;
+  if (error || data?.is_active === false) return true;
+  if (data?.type !== 'plan') return false;
+  // Cancellation is saved before closeRoom runs. Never reopen writes because
+  // the later room update failed or is still in flight.
+  const { data: plan, error: planError } = await supabaseAdmin
+    .from('Plan')
+    .select('status, chat_closed_at')
+    .eq('chat_room_id', roomId)
+    .maybeSingle();
+  return !!planError || !plan || plan.status === 'cancelled' || !!plan.chat_closed_at;
 }
 
 module.exports = {

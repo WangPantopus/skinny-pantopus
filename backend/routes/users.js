@@ -2250,7 +2250,13 @@ router.post('/reauthenticate', verifyToken, reauthLimiter, reauthAccountLimiter,
     // that just showed its password becomes interactive (design §7.10).
     const sid = currentSessionId(req);
     const stepUp = await safeHook('reauthenticate_step_up', async () => {
-      const sessionRow = await authDeviceService.sessionRowFromRequest(req);
+      // The password was just verified. An unreadable session row only skips
+      // promoting a restored session; it must not withhold the step-up.
+      const sessionRow = await authDeviceService.sessionRowFromRequest(req).catch((err) => {
+        if (!err.authBusy) throw err;
+        logger.warn('auth.reauthenticate.session_unavailable', { userId });
+        return null;
+      });
       if (sessionRow?.context === 'restored') {
         await authDeviceService.promoteSessionToInteractive(sessionRow);
       }
@@ -2507,8 +2513,8 @@ router.post('/password', verifyToken, reauthLimiter, reauthAccountLimiter, valid
  * Persistent login: pre-check the session registry before GoTrue rotates
  * (CONTRACT "/refresh" order: resolve session → revoked? → inactivity → bound:
  * verify DPoP against the bound key → legacy rules). A crash inside the
- * registry never fails open in `required` mode and never fails closed in the
- * others (getUser/GoTrue stay the authority for the pair itself).
+ * registry refuses refresh in every binding mode when security state is
+ * unreadable. A retryable failure preserves the client's existing tokens.
  */
 async function preCheckRefresh(req, refreshToken) {
   try {
@@ -2522,10 +2528,7 @@ async function preCheckRefresh(req, refreshToken) {
     });
   } catch (err) {
     logger.error('auth.refresh.precheck_error', { error: err.message, stack: err.stack });
-    if (authPolicy.deviceBindingMode() === 'required' && !isCookieTransport(req)) {
-      return { ok: false, status: 503, code: 'AUTH_UNAVAILABLE', error: 'Could not verify this session right now. Please try again.' };
-    }
-    return { ok: true, session: null, device: null, legacy: true, adopt: false, matchedBy: null };
+    return { ok: false, status: 503, code: 'AUTH_UNAVAILABLE', error: 'Could not verify this session right now. Please try again.' };
   }
 }
 
@@ -4325,6 +4328,11 @@ router.post('/reset-password', resetPasswordLimiter, validate(resetPasswordSchem
     startSignInCountsAgain(resetEmail);
     return res.json({ message: 'Password reset successful. You can now sign in.' });
   } catch (err) {
+    // Only the recovery-token check reads the session registry, before anything changes.
+    if (err.authBusy) {
+      logger.warn('Reset password unavailable - session registry unreadable', { code: err.code });
+      return res.status(503).json({ error: RESET_BUSY_LINK_KEPT, code: 'AUTH_BUSY' });
+    }
     logger.error('Reset password error', { error: err.message });
     return res.status(500).json({ error: 'Failed to reset password' });
   }
@@ -4577,6 +4585,9 @@ router.post('/:id/follow', verifyToken, async (req, res) => {
       .insert({ follower_id: followerId, following_id: followingId });
 
     if (error) {
+      if (error.code === 'PT403' && error.message === 'PERSONAL_CONNECTION_BLOCKED') {
+        return res.status(403).json({ error: 'Cannot follow this user' });
+      }
       logger.error('Error following user', { error: error.message, followerId, followingId });
       return res.status(500).json({ error: 'Failed to follow user' });
     }
@@ -5201,7 +5212,8 @@ async function requireStrongestStepUpForDeletion(req, res, next) {
   if (req.stepUp?.method !== 'device_key') return next();
   try {
     const { data, error } = await supabaseAdmin.auth.admin.getUserById(req.user.id);
-    if (!error && data?.user && hasPasswordProvider(data.user)) {
+    if (error || !data?.user) throw error || new Error('Account verification unavailable');
+    if (hasPasswordProvider(data.user)) {
       logger.info('auth.stepup.required', { purpose: 'delete_account', reason: 'password_required', userId: req.user.id });
       return res.status(403).json({
         error: 'Please verify your password to delete your account.',
@@ -5213,8 +5225,11 @@ async function requireStrongestStepUpForDeletion(req, res, next) {
     }
     return next();
   } catch (err) {
-    logger.error('auth.stepup.strongest_check_failed', { userId: req.user?.id, error: err.message });
-    return res.status(500).json({ error: 'Step-up verification failed' });
+    logger.warn('auth.stepup.strongest_check_failed', { userId: req.user?.id, code: err.code });
+    return res.status(503).json({
+      error: 'Account verification is temporarily unavailable. Please try again.',
+      code: 'AUTH_UNAVAILABLE',
+    });
   }
 }
 
@@ -5301,6 +5316,10 @@ const ACCOUNT_DELETE_OTHER_ROWS = [
   { table: 'seeder_config', column: 'curator_user_id' },
 ];
 const pairNames = (list) => list.map(({ table, column }) => `${table}.${column}`);
+const businessOwnershipRequired = {
+  error: 'Before deleting your account, close your businesses or transfer ownership and leave each business.',
+  code: 'BUSINESS_OWNERSHIP_REQUIRED',
+};
 
 router.delete('/account', verifyToken, requireStepUp('delete_account'), requireStrongestStepUpForDeletion, async (req, res) => {
   const userId = req.user.id;
@@ -5308,6 +5327,34 @@ router.delete('/account', verifyToken, requireStepUp('delete_account'), requireS
 
   try {
     // ── 1. Pre-checks ────────────────────────────────────────────
+    // Business accounts have no login of their own. Deleting an owner only
+    // cascades their membership, leaving the business public and unmanaged.
+    // Require an explicit handoff/leave or business deletion first, including
+    // drafts. BusinessTeam is the canonical ownership source during the seat
+    // migration; retired businesses have account_type='individual'.
+    try {
+      const { data: ownerships, error: ownershipError } = await supabaseAdmin
+        .from('BusinessTeam')
+        .select('business_user_id')
+        .eq('user_id', userId)
+        .eq('role_base', 'owner')
+        .eq('is_active', true);
+      if (ownershipError) throw ownershipError;
+      if (ownerships?.length) {
+        const { data: businesses, error: businessError } = await supabaseAdmin
+          .from('User')
+          .select('id')
+          .in('id', ownerships.map((membership) => membership.business_user_id))
+          .eq('account_type', 'business')
+          .limit(1);
+        if (businessError) throw businessError;
+        if (businesses?.length) return res.status(409).json(businessOwnershipRequired);
+      }
+    } catch (err) {
+      logger.warn('Account deletion ownership check unavailable', { userId, code: err.code });
+      return res.status(503).json({ error: 'Account deletion is temporarily unavailable. Please try again.', code: 'ACCOUNT_DELETE_UNAVAILABLE' });
+    }
+
     // Block deletion if user has gigs currently in progress
     const { data: activeGigs, error: activeGigsError } = await supabaseAdmin
       .from('Gig')
@@ -5451,6 +5498,9 @@ router.delete('/account', verifyToken, requireStepUp('delete_account'), requireS
       logger.info('Account deletion refused before any change', {
         userId, sqlstate: dryRun.sqlstate, table: dryRun.table, constraint: dryRun.constraint,
       });
+      if (dryRun.constraint === 'account_deletion_business_ownership') {
+        return res.status(409).json(businessOwnershipRequired);
+      }
       // Constraint, check and guard failures mean records that must stay;
       // anything else (a lock timeout, say) is worth a retry.
       if (!/^(23|P0)/.test(String(dryRun.sqlstate || ''))) {

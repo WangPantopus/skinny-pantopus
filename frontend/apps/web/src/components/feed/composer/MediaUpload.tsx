@@ -10,6 +10,19 @@ interface MediaUploadProps {
   onRemoveMedia: (index: number) => void;
 }
 
+// The types, sizes and count the post-media upload accepts. A file it would
+// refuse is never added, so a retry can't fail on the same attachment again.
+const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif', 'image/heic', 'image/heif'];
+const VIDEO_TYPES = ['video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/webm'];
+const PDF_TYPE = 'application/pdf';
+const MAX_ATTACHMENTS = 9;
+
+function sizeLimitMb(type: string) {
+  if (IMAGE_TYPES.includes(type)) return 10;
+  if (VIDEO_TYPES.includes(type)) return 100;
+  return type === PDF_TYPE ? 25 : 0;
+}
+
 export default function MediaUpload({ mediaFiles, onAddMedia, onRemoveMedia }: MediaUploadProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
@@ -24,8 +37,8 @@ export default function MediaUpload({ mediaFiles, onAddMedia, onRemoveMedia }: M
               {/* unoptimized: local blob URL */}
               <AttachmentPreview file={file} />
               <button
-                aria-label="Remove attachment"
-                onClick={() => onRemoveMedia(idx)}
+                aria-label={`Remove attachment ${idx + 1}: ${file.name}`}
+                onClick={() => { setError(null); onRemoveMedia(idx); }}
                 className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-gray-800 text-white rounded-full flex items-center justify-center text-xs"
               >
                 ×
@@ -47,18 +60,25 @@ export default function MediaUpload({ mediaFiles, onAddMedia, onRemoveMedia }: M
         ref={fileInputRef}
         type="file"
         multiple
-        accept="image/*,video/*,application/pdf"
+        accept={[...IMAGE_TYPES, ...VIDEO_TYPES, PDF_TYPE].join(',')}
         className="hidden"
         onChange={(e) => {
           const files = Array.from(e.target.files ?? []);
-          const valid = files.filter(file => {
-            const limit = file.type.startsWith('image/') ? 10 : file.type.startsWith('video/') ? 100 : file.type === 'application/pdf' ? 25 : 0;
-            return file.size > 0 && file.size <= limit * 1024 * 1024;
-          });
-          const remaining = Math.max(0, 9 - mediaFiles.length);
-          setError(valid.length !== files.length ? 'Choose images under 10 MB, videos under 100 MB, or PDFs under 25 MB.' : valid.length > remaining ? 'Up to 9 attachments per post.' : null);
-          onAddMedia(valid.slice(0, remaining));
           e.target.value = '';
+          if (files.length === 0) return;
+          // Existing attachments are always kept; only files the upload accepts are added.
+          const unsupported = files.some(file => sizeLimitMb(file.type) === 0);
+          const valid = files.filter(file => file.size > 0 && file.size <= sizeLimitMb(file.type) * 1024 * 1024);
+          const remaining = Math.max(0, MAX_ATTACHMENTS - mediaFiles.length);
+          setError(unsupported
+            ? 'Some files weren’t added. Choose photos (JPEG, PNG, GIF, WebP, AVIF or HEIC), videos (MP4, MOV, AVI or WebM) or PDFs.'
+            : valid.length !== files.length
+              ? 'Some files weren’t added. Files can’t be empty; photos can be up to 10 MB, videos 100 MB and PDFs 25 MB.'
+              : valid.length > remaining
+                ? `Up to ${MAX_ATTACHMENTS} attachments per post. ${remaining === 0 ? 'Your existing attachments are kept.'
+                  : remaining === 1 ? 'Only the first file was added.' : `Only the first ${remaining} files were added.`}`
+                : null);
+          if (remaining > 0 && valid.length > 0) onAddMedia(valid.slice(0, remaining));
         }}
       />
     </>

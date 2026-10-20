@@ -230,7 +230,7 @@ private fun PreviewMode(
                 tint = PantopusColors.warning,
             )
             Text(
-                text = "Preview mode — changes not saved",
+                text = "Preview mode",
                 style = PantopusTextStyle.small,
                 color = PantopusColors.warning,
             )

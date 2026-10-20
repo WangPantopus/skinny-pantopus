@@ -1,4 +1,5 @@
 const express = require('express');
+const Joi = require('joi');
 const router = express.Router();
 const supabaseAdmin = require('../config/supabaseAdmin');
 const verifyToken = require('../middleware/verifyToken');
@@ -105,7 +106,23 @@ router.post('/:userId/block', verifyToken, async (req, res) => {
 router.delete('/:userId/block', verifyToken, async (req, res) => {
   try {
     const blockerId = req.user.id;
-    const blockedId = req.params.userId;
+    let blockedId = req.params.userId;
+    if (blockedId.startsWith('anonymous:')) {
+      const blockId = blockedId.slice('anonymous:'.length);
+      if (Joi.string().uuid().validate(blockId).error) {
+        return res.status(400).json({ error: 'Invalid block handle' });
+      }
+      const { data: anonymousBlock, error: lookupError } = await supabaseAdmin
+        .from('UserBlock')
+        .select('blocked_user_id')
+        .eq('id', blockId)
+        .eq('blocker_user_id', blockerId)
+        .eq('reason', 'neighbor_message')
+        .maybeSingle();
+      if (lookupError) throw lookupError;
+      if (!anonymousBlock) return res.json({ success: true });
+      blockedId = anonymousBlock.blocked_user_id;
+    }
 
     const { error } = await supabaseAdmin
       .from('UserBlock')
@@ -137,10 +154,7 @@ router.delete('/:userId/block', verifyToken, async (req, res) => {
   }
 });
 
-/**
- * GET /api/users/blocked
- * List all users the current user has blocked.
- */
+// List personal blocks; anonymous notes never expose a sender identity.
 router.get('/blocked', verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
@@ -157,7 +171,17 @@ router.get('/blocked', verifyToken, async (req, res) => {
     }
 
     res.json({
-      blocked: (data || []).map((b) => ({
+      // Keep the existing list/unblock contract, but never expose an anonymous
+      // note's sender. Older clients can still unblock using this opaque handle.
+      blocked: (data || []).map((b) => b.reason === 'neighbor_message' ? {
+        id: b.id,
+        user_id: `anonymous:${b.id}`,
+        username: null,
+        name: 'Anonymous neighbor',
+        profile_picture_url: null,
+        reason: b.reason,
+        created_at: b.created_at,
+      } : ({
         id: b.id,
         user_id: b.blocked_user_id,
         // Only a username the person chose (a made-up one can show part of their email address).

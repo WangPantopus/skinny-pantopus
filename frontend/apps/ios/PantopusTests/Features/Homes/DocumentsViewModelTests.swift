@@ -75,7 +75,7 @@ final class DocumentsViewModelTests: XCTestCase {
             return
         }
         XCTAssertEqual(content.headline, "No documents yet")
-        XCTAssertEqual(content.ctaTitle, "Upload document")
+        XCTAssertNil(content.ctaTitle)
     }
 
     func testErrorResponseRendersErrorState() async {

@@ -6,15 +6,16 @@
  */
 
 import Image from 'next/image';
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import * as api from '@pantopus/api';
 import type { landlord } from '@pantopus/api';
 import { extractApiError } from '@pantopus/ui-utils';
-import { toast } from '@/components/ui/toast-store';
+import ModalShell from '@/components/ui/ModalShell';
 import PrivateClaimEvidencePreview, { prepareEvidencePreview, type EvidencePreview } from '../home/PrivateClaimEvidencePreview';
 
 type Props = {
   homeId: string;
+  homeNames?: Record<string, string>;
   authorityId: string;
   requests: landlord.TenantRequest[];
   onRefresh: () => void;
@@ -25,12 +26,14 @@ type Props = {
 
 function ApproveModal({
   request,
+  homeName,
   authorityId,
   onClose,
   onSuccess,
   isCurrent,
 }: {
   request: landlord.TenantRequest;
+  homeName?: string;
   authorityId: string;
   onClose: () => void;
   onSuccess: () => void;
@@ -78,7 +81,7 @@ function ApproveModal({
       <div className="bg-app-surface rounded-2xl shadow-xl max-w-md w-full mx-4 p-6" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-lg font-semibold text-app-text mb-1">Confirm Lease Dates</h3>
         <p className="text-sm text-app-text-secondary mb-4">
-          Approve {request.primary_resident?.name || 'tenant'}&apos;s request and confirm the lease period.
+          Approve {request.primary_resident?.name || 'tenant'}&apos;s request{homeName ? ` for ${homeName}` : ''} and confirm the lease period.
         </p>
 
         <div className="grid grid-cols-2 gap-3">
@@ -184,6 +187,7 @@ function LeaseFileReview({ homeId, leaseId, fileId, isCurrent }: {
 
 function RequestCard({
   request,
+  homeName,
   authorityId: _authorityId,
   onApprove,
   onDeny,
@@ -191,6 +195,7 @@ function RequestCard({
   isCurrent,
 }: {
   request: landlord.TenantRequest;
+  homeName?: string;
   authorityId: string;
   onApprove: () => void;
   onDeny: () => void;
@@ -230,6 +235,7 @@ function RequestCard({
         </div>
         <div className="min-w-0 flex-1">
           <p className="font-semibold text-app-text">{resident?.name || 'Unknown'}</p>
+          {homeName && <p className="text-sm text-app-text-strong">{homeName}</p>}
           <p className="text-xs text-app-text-secondary">{resident?.email || ''}</p>
         </div>
         <span className="text-xs text-app-text-muted">
@@ -283,20 +289,33 @@ function RequestCard({
 
 // ── Main component ──────────────────────────────────────────
 
-export default function RequestsTab({ homeId: _homeId, authorityId, requests, onRefresh, isCurrent }: Props) {
+export default function RequestsTab({ homeId: _homeId, homeNames = {}, authorityId, requests, onRefresh, isCurrent }: Props) {
   const [approveTarget, setApproveTarget] = useState<landlord.TenantRequest | null>(null);
+  const [denyTarget, setDenyTarget] = useState<landlord.TenantRequest | null>(null);
+  const [denyReason, setDenyReason] = useState('');
+  const [denyError, setDenyError] = useState('');
+  const [denying, setDenying] = useState(false);
+  const denial = useRef({ generation: 0, busy: false });
+  useEffect(() => {
+    const scope = denial.current;
+    return () => { ++scope.generation; };
+  }, []);
 
-  const handleDeny = useCallback(async (leaseId: string) => {
-    if (!isCurrent()) return;
-    const reason = prompt('Reason for denial (optional):');
-    if (reason === null || !isCurrent()) return;
+  const handleDeny = async () => {
+    if (!denyTarget || !isCurrent() || denial.current.busy) return;
+    const generation = denial.current.generation;
+    const current = () => generation === denial.current.generation && isCurrent();
+    denial.current.busy = true; setDenying(true); setDenyError('');
     try {
-      await api.landlord.denyLease(leaseId, authorityId, reason || undefined);
-      if (isCurrent()) onRefresh();
+      await api.landlord.denyLease(denyTarget.id, authorityId, denyReason.trim() || undefined);
+      if (current()) { setDenyTarget(null); onRefresh(); }
     } catch (err: unknown) {
-      if (isCurrent()) toast.error(extractApiError(err, 'Could not deny the lease request. Please retry.'));
+      if (current()) setDenyError(extractApiError(err, 'Could not deny the lease request. Please retry.'));
+    } finally {
+      denial.current.busy = false;
+      if (current()) setDenying(false);
     }
-  }, [authorityId, onRefresh, isCurrent]);
+  };
 
   if (requests.length === 0) {
     return (
@@ -321,9 +340,14 @@ export default function RequestsTab({ homeId: _homeId, authorityId, requests, on
         <RequestCard
           key={req.id}
           request={req}
+          homeName={homeNames[req.home_id]}
           authorityId={authorityId}
           onApprove={() => setApproveTarget(req)}
-          onDeny={() => handleDeny(req.id)}
+          onDeny={() => {
+            if (isCurrent() && !denial.current.busy) {
+              setDenyReason(''); setDenyError(''); setDenyTarget(req);
+            }
+          }}
           onRefresh={onRefresh}
           isCurrent={isCurrent}
         />
@@ -332,11 +356,25 @@ export default function RequestsTab({ homeId: _homeId, authorityId, requests, on
       {approveTarget && (
         <ApproveModal
           request={approveTarget}
+          homeName={homeNames[approveTarget.home_id]}
           authorityId={authorityId}
           onClose={() => setApproveTarget(null)}
           onSuccess={onRefresh}
           isCurrent={isCurrent}
         />
+      )}
+      {denyTarget && (
+        <ModalShell open title="Deny lease request?"
+          subtitle={`This declines ${denyTarget.primary_resident?.name || 'this tenant'}'s pending request${homeNames[denyTarget.home_id] ? ` for ${homeNames[denyTarget.home_id]}` : ''}.`}
+          onClose={() => setDenyTarget(null)} onCancel={() => setDenyTarget(null)} cancelLabel="Cancel"
+          submitLabel="Deny request" onSubmit={() => void handleDeny()} submitting={denying}
+          cancelDisabled={denying} submitDisabled={denying}>
+          <label htmlFor="lease-denial-reason" className="block text-sm font-medium text-app-text-strong mb-1">Reason (optional)</label>
+          <textarea id="lease-denial-reason" value={denyReason} onChange={(event) => setDenyReason(event.target.value)}
+            maxLength={500} rows={3} disabled={denying}
+            className="w-full px-3 py-2 border border-app-border rounded-lg text-sm" />
+          {denyError && <p role="alert" className="mt-3 text-sm text-red-600">{denyError}</p>}
+        </ModalShell>
       )}
     </div>
   );

@@ -83,13 +83,15 @@ public final class InviteTeammateWizardViewModel: WizardModel {
     /// `.submitted`. It is the only way the invitee can join, and the server returns it only here.
     private(set) var inviteLink: String?
 
+    let assignableRoles: [BusinessRole]
     private let businessId: String
     private let api: APIClient
     private var isSubmitting = false
 
-    init(businessId: String, api: APIClient = .shared) {
+    init(businessId: String, api: APIClient = .shared, actorRole: BusinessRole = .owner) {
         self.businessId = businessId
         self.api = api
+        assignableRoles = BusinessRole.assignableRoles.filter { $0.rank < actorRole.rank }
         form = InviteTeammateForm()
     }
 
@@ -129,7 +131,7 @@ public final class InviteTeammateWizardViewModel: WizardModel {
 
     private var primaryEnabled: Bool {
         switch currentStep {
-        case .role: true
+        case .role: assignableRoles.contains(form.role)
         case .identify, .review: isFormValid
         }
     }
@@ -168,6 +170,7 @@ public final class InviteTeammateWizardViewModel: WizardModel {
     // MARK: - Form mutations
 
     public func setRole(_ role: BusinessRole) {
+        guard assignableRoles.contains(role) else { return }
         form.role = role
     }
 

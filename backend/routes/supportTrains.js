@@ -123,12 +123,13 @@ function buildCoarseLocation(home) {
 async function hasSupportTrainAddressGrant(supportTrainId, granteeUserId) {
   if (!supportTrainId || !granteeUserId) return false;
 
-  const { count } = await supabaseAdmin
+  const { count, error } = await supabaseAdmin
     .from('SupportTrainAddressGrant')
     .select('id', { count: 'exact', head: true })
     .eq('support_train_id', supportTrainId)
     .eq('grantee_user_id', granteeUserId);
 
+  if (error) throw Object.assign(new Error('Could not check address access. Please try again.'), { status: 503 });
   return (count || 0) > 0;
 }
 
@@ -171,13 +172,13 @@ function formatAddressLabel(address) {
   return [firstLine, secondLine].filter(Boolean).join('\n');
 }
 
-async function getSupportTrainExactDeliveryDetails(st, supportTrainId) {
-  const [{ data: profile }, homeResult] = await Promise.all([
-    supabaseAdmin
+async function getSupportTrainExactDeliveryDetails(st, supportTrainId, { includeInstructions = true } = {}) {
+  const [profileResult, homeResult] = await Promise.all([
+    includeInstructions ? supabaseAdmin
       .from('SupportTrainRecipientProfile')
       .select('delivery_instructions, special_instructions')
       .eq('support_train_id', supportTrainId)
-      .single(),
+      .maybeSingle() : { data: null, error: null },
     (async () => {
       const locationHomeId = st.recipient_home_id || st.Activity?.home_id || null;
       if (!locationHomeId) return { data: null, error: null };
@@ -185,15 +186,16 @@ async function getSupportTrainExactDeliveryDetails(st, supportTrainId) {
         .from('Home')
         .select('address, address2, city, state, zipcode')
         .eq('id', locationHomeId)
-        .single();
+        .maybeSingle();
     })(),
   ]);
 
-  if (homeResult.error) {
-    logger.warn('Failed to resolve Support Train exact address for guest email', {
+  if (homeResult.error || profileResult.error) {
+    logger.warn('Failed to resolve Support Train exact delivery details', {
       supportTrainId,
-      error: homeResult.error.message,
+      error: (homeResult.error || profileResult.error).message,
     });
+    throw Object.assign(new Error('Could not load the delivery address. Please try again.'), { status: 503 });
   }
 
   let address = null;
@@ -218,8 +220,8 @@ async function getSupportTrainExactDeliveryDetails(st, supportTrainId) {
   return {
     address,
     addressLabel: formatAddressLabel(address),
-    deliveryInstructions: profile?.delivery_instructions || null,
-    specialInstructions: profile?.special_instructions || null,
+    deliveryInstructions: profileResult.data?.delivery_instructions || null,
+    specialInstructions: profileResult.data?.special_instructions || null,
   };
 }
 
@@ -472,15 +474,27 @@ router.get('/health', (req, res) => {
 });
 
 // List my Support Train participations
+const participationPaginationSchema = Joi.object({
+  limit: Joi.number().integer().min(1).max(Number.MAX_SAFE_INTEGER).default(20),
+  offset: Joi.number().integer().min(0).max(2147483597).default(0),
+});
+
 router.get(
   '/me/support-trains',
   verifyToken,
   asyncHandler(async (req, res) => {
     const userId = req.user.id;
-    const roleFilter = req.query.role; // 'organizer' | 'helper'
+    const roleFilter = req.query.role; // 'organizer' | 'recipient' | 'helper'
     const statusFilter = req.query.status;
-    const limit = Math.min(parseInt(req.query.limit, 10) || 20, 50);
-    const offset = parseInt(req.query.offset, 10) || 0;
+    const pagination = participationPaginationSchema.validate({ limit: req.query.limit, offset: req.query.offset });
+    if (pagination.error) {
+      return res.status(400).json({
+        error: 'Invalid pagination. Use a positive whole-number limit and a non-negative offset within the supported range.',
+        code: 'INVALID_PAGINATION',
+      });
+    }
+    const limit = Math.min(pagination.value.limit, 50);
+    const offset = pagination.value.offset;
 
     const results = [];
 
@@ -499,14 +513,16 @@ router.get(
 
       if (statusFilter) orgQuery = orgQuery.eq('status', statusFilter);
 
-      const { data: owned } = await orgQuery;
+      const { data: owned, error: ownedError } = await orgQuery;
+      if (ownedError) throw ownedError;
 
       // Also check co-organizer rows
-      const { data: coOrgRows } = await supabaseAdmin
+      const { data: coOrgRows, error: coOrgError } = await supabaseAdmin
         .from('SupportTrainOrganizer')
         .select('support_train_id, role')
         .eq('user_id', userId)
         .neq('role', 'primary');
+      if (coOrgError) throw coOrgError;
 
       const coOrgIds = (coOrgRows || []).map((r) => r.support_train_id);
       const ownedIds = new Set((owned || []).map((s) => s.id));
@@ -519,7 +535,8 @@ router.get(
           .select('id, status, published_at, created_at, Activity!inner ( title )')
           .in('id', missingIds);
         if (statusFilter) coQuery = coQuery.eq('status', statusFilter);
-        const { data } = await coQuery;
+        const { data, error } = await coQuery;
+        if (error) throw error;
         coOrgTrains = data || [];
       }
 
@@ -550,13 +567,39 @@ router.get(
       }
     }
 
+    // Recipients can already open published trains and see their reservations.
+    // Include them here without exposing an organizer's unpublished draft.
+    if (!roleFilter || roleFilter === 'recipient') {
+      let recipientQuery = supabaseAdmin
+        .from('SupportTrain')
+        .select('id, status, published_at, created_at, Activity!inner ( title )')
+        .eq('recipient_user_id', userId)
+        .not('published_at', 'is', null);
+      if (statusFilter) recipientQuery = recipientQuery.eq('status', statusFilter);
+      const { data: received, error } = await recipientQuery;
+      if (error) throw error;
+      const existingIds = new Set(results.map((r) => r.id));
+      for (const st of received || []) {
+        if (existingIds.has(st.id)) continue;
+        results.push({
+          id: st.id,
+          title: st.Activity?.title || null,
+          status: st.status,
+          published_at: st.published_at,
+          created_at: st.created_at,
+          my_role: 'recipient',
+        });
+      }
+    }
+
     // Fetch helper participations
     if (!roleFilter || roleFilter === 'helper') {
-      const { data: reservations } = await supabaseAdmin
+      const { data: reservations, error: reservationError } = await supabaseAdmin
         .from('SupportTrainReservation')
         .select('support_train_id')
         .eq('user_id', userId)
         .neq('status', 'canceled');
+      if (reservationError) throw reservationError;
 
       const helperTrainIds = [...new Set((reservations || []).map((r) => r.support_train_id))];
       const existingIds = new Set(results.map((r) => r.id));
@@ -568,7 +611,8 @@ router.get(
           .select('id, status, published_at, created_at, Activity!inner ( title )')
           .in('id', newHelperIds);
         if (statusFilter) helperQuery = helperQuery.eq('status', statusFilter);
-        const { data: helperTrains } = await helperQuery;
+        const { data: helperTrains, error } = await helperQuery;
+        if (error) throw error;
 
         for (const st of helperTrains || []) {
           results.push({
@@ -578,6 +622,40 @@ router.get(
             published_at: st.published_at,
             created_at: st.created_at,
             my_role: 'helper',
+          });
+        }
+      }
+    }
+
+    // The Invitations tab consumes pending invitations from this same feed.
+    // Do not list private drafts, ended trains or trains already represented
+    // by an organizer/recipient/helper role.
+    if (!roleFilter && (!statusFilter || statusFilter === 'invited')) {
+      const { data: invitations, error: inviteError } = await supabaseAdmin
+        .from('SupportTrainInvite')
+        .select('support_train_id')
+        .eq('invitee_user_id', userId)
+        .eq('status', 'pending');
+      if (inviteError) throw inviteError;
+      const existingIds = new Set(results.map((r) => r.id));
+      const invitedIds = [...new Set((invitations || []).map((r) => r.support_train_id))]
+        .filter((id) => !existingIds.has(id));
+      if (invitedIds.length) {
+        const { data: invitedTrains, error } = await supabaseAdmin
+          .from('SupportTrain')
+          .select('id, status, published_at, created_at, Activity!inner ( title )')
+          .in('id', invitedIds)
+          .in('status', ['published', 'active'])
+          .not('published_at', 'is', null);
+        if (error) throw error;
+        for (const st of invitedTrains || []) {
+          results.push({
+            id: st.id,
+            title: st.Activity?.title || null,
+            status: 'invited',
+            published_at: st.published_at,
+            created_at: st.created_at,
+            my_role: 'invited',
           });
         }
       }
@@ -3213,12 +3291,21 @@ router.post(
 
     let isOrganizer = st.organizer_user_id === userId;
     if (!isOrganizer) {
-      const { data: orgRow } = await supabaseAdmin
+      const { data: orgRow, error: orgErr } = await supabaseAdmin
         .from('SupportTrainOrganizer')
         .select('role')
         .eq('support_train_id', st.id)
         .eq('user_id', userId)
-        .single();
+        .maybeSingle();
+      // A failed read is not a refusal: a co-organizer must not be told they can't share.
+      if (orgErr) {
+        logger.error('Reveal Support Train address organizer check failed', {
+          supportTrainId: st.id,
+          userId,
+          error: orgErr.message,
+        });
+        throw Object.assign(new Error('Could not check organizer access. Please try again.'), { status: 503 });
+      }
       if (orgRow && (orgRow.role === 'primary' || orgRow.role === 'co_organizer')) {
         isOrganizer = true;
       }
@@ -3258,6 +3345,18 @@ router.post(
       });
     }
 
+    // Both account helpers and email guests need an actual street address.
+    // Check before creating a grant or claiming that a repeated share worked.
+    const delivery = await getSupportTrainExactDeliveryDetails(st, st.id, {
+      includeInstructions: !reservation.user_id,
+    });
+    if (!delivery.address?.address?.trim()) {
+      return res.status(409).json({
+        error: 'ADDRESS_UNAVAILABLE',
+        message: 'This Support Train does not have an exact delivery address to share.',
+      });
+    }
+
     if (!reservation.user_id) {
       // A share emailed moments ago is this same share (a re-sent request or a second tap):
       // answer as it did without emailing the guest again. A later Resend still emails.
@@ -3279,15 +3378,6 @@ router.post(
         .select('slot_date, slot_label, start_time, end_time')
         .eq('id', reservation.slot_id)
         .single();
-      const delivery = await getSupportTrainExactDeliveryDetails(st, st.id);
-
-      if (!delivery.addressLabel) {
-        return res.status(409).json({
-          error: 'ADDRESS_UNAVAILABLE',
-          message: 'This Support Train does not have an exact delivery address to share.',
-        });
-      }
-
       const alreadyShared = !!reservation.guest_address_shared_at;
       const emailResult = await sendGuestReservationAddressEmail({
         toEmail: reservation.guest_email,
