@@ -1357,7 +1357,7 @@ router.get('/rooms/:roomId/pre-bid-status', verifyToken, async (req, res) => {
 
 /**
  * GET /api/chat/conversations/:otherUserId/messages
- * Canonical person-conversation feed across all shared rooms.
+ * Person-conversation feed across shared direct and task rooms.
  */
 router.get('/conversations/:otherUserId/messages', verifyToken, async (req, res) => {
   try {
@@ -1378,7 +1378,8 @@ router.get('/conversations/:otherUserId/messages', verifyToken, async (req, res)
     // Only rooms the caller is still in: a former member reads their history in the room itself.
     const { data: mineRows, error: mineErr } = await supabaseAdmin
       .from('ChatParticipant')
-      .select('room_id')
+      .select('room_id, room:room_id!inner(type)')
+      .in('room.type', ['direct', 'gig'])
       .in('user_id', Array.from(identityUserIds))
       .eq('is_active', true);
 
@@ -1390,7 +1391,8 @@ router.get('/conversations/:otherUserId/messages', verifyToken, async (req, res)
     const { data: otherRows, error: otherErr } = await supabaseAdmin
       .from('ChatParticipant')
       .select('room_id')
-      .eq('user_id', otherUserId);
+      .eq('user_id', otherUserId)
+      .eq('is_active', true);
 
     if (otherErr) {
       logger.error('Error loading target conversation rooms', { requestId: req.requestId, userId, otherUserId, error: otherErr.message });
@@ -1470,7 +1472,7 @@ router.get('/conversations/:otherUserId/messages', verifyToken, async (req, res)
 
 /**
  * POST /api/chat/conversations/:otherUserId/read
- * Mark all shared-room messages with a person as read.
+ * Mark shared direct/task-room messages with a person as read.
  */
 router.post('/conversations/:otherUserId/read', verifyToken, async (req, res) => {
   try {
@@ -1495,8 +1497,10 @@ router.post('/conversations/:otherUserId/read', verifyToken, async (req, res) =>
 
     const { data: mineRows, error: mineErr } = await supabaseAdmin
       .from('ChatParticipant')
-      .select('room_id')
-      .in('user_id', Array.from(identityUserIds));
+      .select('room_id, room:room_id!inner(type)')
+      .in('room.type', ['direct', 'gig'])
+      .in('user_id', Array.from(identityUserIds))
+      .eq('is_active', true);
 
     if (mineErr) {
       logger.error('Error loading actor rooms for conversation read', { requestId: req.requestId, userId, otherUserId, error: mineErr.message });
@@ -1506,7 +1510,8 @@ router.post('/conversations/:otherUserId/read', verifyToken, async (req, res) =>
     const { data: otherRows, error: otherErr } = await supabaseAdmin
       .from('ChatParticipant')
       .select('room_id')
-      .eq('user_id', otherUserId);
+      .eq('user_id', otherUserId)
+      .eq('is_active', true);
 
     if (otherErr) {
       logger.error('Error loading target rooms for conversation read', { requestId: req.requestId, userId, otherUserId, error: otherErr.message });
@@ -2299,29 +2304,30 @@ router.post('/rooms/:roomId/read', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'Access denied' });
     }
 
+    // Reading for a business also clears the reader's own row in the room, as the conversation read does,
+    // so the same message isn't left unread in their personal inbox.
+    const usersToClear = asBusinessUserId
+      ? Array.from(new Set([String(readTargetUserId), String(userId)]))
+      : [String(readTargetUserId)];
+
     // Update participant's read state directly; with nothing unread there is no row to change (count stays 0)
-    const { data, error } = await supabaseAdmin
+    const { error } = await supabaseAdmin
       .from('ChatParticipant')
       .update({
         unread_count: 0,
         last_read_at: new Date().toISOString()
       })
       .eq('room_id', roomIdStr)
-      .eq('user_id', readTargetUserId)
-      .or(HAS_UNREAD)
-      .select('unread_count')
-      .maybeSingle();
-    
+      .in('user_id', usersToClear)
+      .or(HAS_UNREAD);
+
     if (error) {
       logger.error('Error marking messages read', { requestId: req.requestId, userId: req.user?.id, roomId: roomIdStr, error: error.message });
       return res.status(500).json({ error: 'Failed to mark messages as read' });
     }
 
-    const badgeTargets = asBusinessUserId
-      ? Array.from(new Set([String(readTargetUserId), String(userId)]))
-      : [String(readTargetUserId)];
-    badgeService.emitBadgeUpdateToMany(badgeTargets);
-    res.json({ unreadCount: data?.unread_count ?? 0 });
+    badgeService.emitBadgeUpdateToMany(usersToClear);
+    res.json({ unreadCount: 0 });
     
   } catch (err) {
     logger.error('Mark read error', { requestId: req.requestId, userId: req.user?.id, error: err.message });

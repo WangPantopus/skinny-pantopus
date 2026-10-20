@@ -1227,7 +1227,7 @@ router.get('/:businessId/dashboard', verifyToken, async (req, res) => {
     const { businessId } = req.params;
     const userId = req.user.id;
 
-    const access = await checkBusinessPermission(businessId, userId);
+    const access = await getUserAccess(businessId, userId);
     if (!access.hasAccess) {
       return res.status(403).json({ error: 'No access to this business' });
     }
@@ -1302,6 +1302,7 @@ router.get('/:businessId/dashboard', verifyToken, async (req, res) => {
         hasAccess: access.hasAccess,
         isOwner: access.isOwner,
         role_base: access.membership?.role_base || null,
+        permissions: access.permissions,
       },
       onboarding: {
         checklist,
@@ -4262,7 +4263,7 @@ router.get('/:businessId/insights', verifyToken, async (req, res) => {
     const userId = req.user.id;
 
     // Permission check
-    const access = await checkBusinessPermission(businessId, userId, 'analytics.view');
+    const access = await checkBusinessPermission(businessId, userId, 'insights.view');
     if (!access.hasAccess) {
       return res.status(403).json({ error: 'You do not have permission to view insights' });
     }
@@ -4778,6 +4779,31 @@ router.get('/invoices/:invoiceId', verifyToken, async (req, res) => {
 
     if (error || !invoice) {
       return res.status(404).json({ error: 'Invoice not found', code: 'NOT_FOUND' });
+    }
+
+    // Opening the recipient detail is the view event. A conditional update must
+    // never turn a concurrently paid or voided invoice back into a payable one.
+    if (invoice.status === 'sent') {
+      const { error: viewError } = await supabaseAdmin
+        .from('BusinessInvoice')
+        .update({ status: 'viewed' })
+        .eq('id', invoiceId)
+        .eq('recipient_user_id', userId)
+        .eq('status', 'sent');
+      if (viewError) {
+        logger.error('Record invoice view error', { error: viewError.message });
+        return res.status(500).json({ error: 'Failed to open invoice', code: 'INTERNAL_ERROR' });
+      }
+      const { data: current, error: currentError } = await supabaseAdmin
+        .from('BusinessInvoice')
+        .select('status')
+        .eq('id', invoiceId)
+        .eq('recipient_user_id', userId)
+        .single();
+      if (currentError || !current) {
+        return res.status(500).json({ error: 'Failed to open invoice', code: 'INTERNAL_ERROR' });
+      }
+      invoice.status = current.status;
     }
 
     res.json({ invoice });

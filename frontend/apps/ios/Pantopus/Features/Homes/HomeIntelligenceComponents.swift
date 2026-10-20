@@ -335,7 +335,7 @@ struct SeasonalChecklistCard: View {
                     .foregroundStyle(Theme.Color.appText)
                     .lineLimit(1)
                 Spacer(minLength: Spacing.s2)
-                Text("\(checklist.progress.completed)/\(checklist.progress.total) done")
+                Text("\(checklist.progress.completed)/\(checklist.progress.total) reviewed")
                     .pantopusTextStyle(.caption)
                     .fontWeight(.semibold)
                     .foregroundStyle(Theme.Color.appTextSecondary)
@@ -404,7 +404,7 @@ struct SeasonalChecklistCard: View {
             .buttonStyle(.plain)
             .disabled(done || pending || !canEdit)
             .accessibilityIdentifier("homeDashboard_seasonalItemToggle_\(item.id)")
-            .accessibilityLabel(done ? "\(item.title), \(item.status == "skipped" ? "skipped" : "done")" : "Mark \(item.title) complete")
+            .accessibilityLabel(done ? "\(item.title), \(item.status)" : "Mark \(item.title) complete")
 
             VStack(alignment: .leading, spacing: Spacing.s0) {
                 Text(item.title)

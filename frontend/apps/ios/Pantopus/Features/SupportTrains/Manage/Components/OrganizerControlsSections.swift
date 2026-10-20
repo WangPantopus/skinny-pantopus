@@ -231,7 +231,11 @@ struct ManageHelpersSection: View {
                             .foregroundStyle(Theme.Color.appTextSecondary)
                     }
                     HStack(spacing: Spacing.s2) {
-                        if row.canShareAddress {
+                        if row.status != "canceled", !row.hasDeliveryAddress {
+                            Text("Delivery address unavailable")
+                                .font(.system(size: 11.5))
+                                .foregroundStyle(Theme.Color.appTextSecondary)
+                        } else if row.canShareAddress {
                             ManagePillButton(
                                 title: row.isGuest ? "Email address" : "Share address",
                                 icon: .mapPin,

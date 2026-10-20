@@ -29,19 +29,25 @@ public struct BusinessProfileHeader: Sendable, Hashable {
     /// Optional logo glyph (sample frames use `sparkles` / `pawPrint`);
     /// `nil` falls back to initials derived from `displayName`.
     public let logoIcon: PantopusIcon?
+    public let logoImageURL: URL?
+    public let bannerImageURL: URL?
 
     public init(
         displayName: String,
         handle: String?,
         locality: String?,
         isVerified: Bool,
-        logoIcon: PantopusIcon? = nil
+        logoIcon: PantopusIcon? = nil,
+        logoImageURL: URL? = nil,
+        bannerImageURL: URL? = nil
     ) {
         self.displayName = displayName
         self.handle = handle
         self.locality = locality
         self.isVerified = isVerified
         self.logoIcon = logoIcon
+        self.logoImageURL = logoImageURL
+        self.bannerImageURL = bannerImageURL
     }
 }
 

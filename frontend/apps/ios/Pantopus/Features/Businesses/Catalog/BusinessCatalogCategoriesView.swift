@@ -18,6 +18,7 @@ import SwiftUI
 struct BusinessCatalogCategoriesView: View {
     let categories: [BusinessCatalogCategoryRow]
     let isSaving: Bool
+    var errorMessage: String?
     let onClose: @MainActor () -> Void
     let onCreate: @MainActor (String) async -> Bool
     let onRename: @MainActor (String, String) async -> Bool
@@ -31,6 +32,13 @@ struct BusinessCatalogCategoriesView: View {
     var body: some View {
         VStack(spacing: Spacing.s0) {
             ContentDetailTopBar(title: "Categories", onBack: onClose, action: nil)
+            if let errorMessage {
+                Text(errorMessage)
+                    .pantopusTextStyle(.small)
+                    .foregroundStyle(Theme.Color.error)
+                    .padding(Spacing.s4)
+                    .accessibilityIdentifier("businessCatalog.categoriesSheet.error")
+            }
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.s3) {
                     if categories.isEmpty {
@@ -70,9 +78,10 @@ struct BusinessCatalogCategoriesView: View {
                 renameTarget = nil
                 Task { _ = await onRename(id, name) }
             }
+            .disabled(isSaving || !validName(renameText))
             Button("Cancel", role: .cancel) { renameTarget = nil }
         } message: { category in
-            Text("Rename “\(category.name)”.")
+            Text("Rename “\(category.name)”. Use 1 to 100 characters.")
         }
         .confirmationDialog(
             "Delete category",
@@ -147,6 +156,7 @@ struct BusinessCatalogCategoriesView: View {
                 "New category",
                 text: $newName,
                 placeholder: "e.g. Giving, Repairs",
+                state: newName.count > 100 ? .error("Use 100 characters or fewer.") : .default,
                 identifier: "businessCatalog.newCategoryName"
             )
             Button {
@@ -164,10 +174,14 @@ struct BusinessCatalogCategoriesView: View {
                     .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
             }
             .buttonStyle(.plain)
-            .disabled(isSaving || newName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            .opacity(newName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.5 : 1)
+            .disabled(isSaving || !validName(newName))
+            .opacity(validName(newName) ? 1 : 0.5)
             .accessibilityIdentifier("businessCatalog.addCategory")
         }
+    }
+
+    private func validName(_ name: String) -> Bool {
+        (1...100).contains(name.trimmingCharacters(in: .whitespacesAndNewlines).count)
     }
 
     private var renamePresented: Binding<Bool> {

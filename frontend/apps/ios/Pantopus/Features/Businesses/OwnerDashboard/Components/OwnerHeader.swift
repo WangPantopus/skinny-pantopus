@@ -27,6 +27,8 @@ struct OwnerTopBar: View {
     /// Nil hides the Insights action (no native Insights screen yet).
     var onOpenInsights: (@MainActor () -> Void)?
     let onOpenSettings: @MainActor () -> Void
+    var canEdit = false
+    var roleLabel = "BUSINESS"
 
     var body: some View {
         HStack(spacing: Spacing.s0) {
@@ -38,7 +40,7 @@ struct OwnerTopBar: View {
                     .foregroundStyle(Theme.Color.appText)
                 HStack(spacing: 3) {
                     Icon(.edit2, size: 9, strokeWidth: 2.5, color: Theme.Color.business)
-                    Text("OWNER VIEW")
+                    Text(roleLabel)
                         .font(.system(size: 10, weight: .bold))
                         .tracking(0.4)
                         .foregroundStyle(Theme.Color.business)
@@ -49,6 +51,7 @@ struct OwnerTopBar: View {
                 iconButton(.barChart3, label: "Insights", action: onOpenInsights)
             }
             iconButton(.slidersHorizontal, label: "Settings", action: onOpenSettings)
+                .disabled(!canEdit)
         }
         .padding(.horizontal, Spacing.s2)
         .padding(.vertical, 7)
@@ -140,6 +143,8 @@ struct OwnerHeaderBanner: View {
     /// "Business · Verified" only for a verified business; otherwise the
     /// "Verification pending" state the My businesses card uses.
     let isVerified: Bool
+    var logoImageURL: URL?
+    var bannerImageURL: URL?
     /// Opens Edit Business Page (shared by the camera / logo / name fabs).
     let onEdit: @MainActor () -> Void
 
@@ -162,6 +167,7 @@ struct OwnerHeaderBanner: View {
             endPoint: .bottomTrailing
         )
         .frame(height: 116)
+        .overlay { BusinessHeaderImage(url: bannerImageURL) }
         .overlay(
             LinearGradient(
                 colors: [Color.black.opacity(0), Color.black.opacity(0.18)],
@@ -204,6 +210,10 @@ struct OwnerHeaderBanner: View {
                 )
                 .frame(width: 68, height: 68)
                 .overlay(logoMonogram)
+                .overlay {
+                    BusinessHeaderImage(url: logoImageURL)
+                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                }
                 .overlay(
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
                         .stroke(Theme.Color.appSurface, lineWidth: 3)

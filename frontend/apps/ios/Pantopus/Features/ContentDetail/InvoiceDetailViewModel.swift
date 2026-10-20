@@ -235,7 +235,7 @@ public final class InvoiceDetailViewModel {
         if let issued = shortDate(invoice.createdAt) { parts.append("issued \(issued)") }
         if invoice.status == "paid", let paid = shortDate(invoice.paidAt) {
             parts.append("paid \(paid)")
-        } else if let due = shortDate(invoice.dueDate) {
+        } else if let due = shortDate(invoice.dueDate, preservingDay: true) {
             parts.append("due \(due)")
         }
         return parts.joined(separator: " · ")
@@ -249,10 +249,10 @@ public final class InvoiceDetailViewModel {
         case "void":
             return ContentDetailPill(label: "Voided", icon: .xCircle, tone: .error)
         case "overdue":
-            let suffix = shortDate(invoice.dueDate).map { " · due \($0)" } ?? ""
+            let suffix = shortDate(invoice.dueDate, preservingDay: true).map { " · due \($0)" } ?? ""
             return ContentDetailPill(label: "Overdue\(suffix)", icon: .alertCircle, tone: .warning)
         case "viewed", "sent":
-            if let due = shortDate(invoice.dueDate) {
+            if let due = shortDate(invoice.dueDate, preservingDay: true) {
                 return ContentDetailPill(label: "Due \(due)", icon: .clock, tone: .info)
             }
             return ContentDetailPill(label: "Payment requested", icon: .clock, tone: .info)
@@ -376,9 +376,16 @@ public final class InvoiceDetailViewModel {
 
     /// ISO-8601 timestamp → `"Dec 14"`; nil when the value is absent /
     /// unparseable (the caller then omits that clause entirely).
-    static func shortDate(_ raw: String?) -> String? {
+    static func shortDate(_ raw: String?, preservingDay: Bool = false) -> String? {
         guard let raw, !raw.isEmpty else { return nil }
         guard let date = iso8601Fraction.date(from: raw) ?? iso8601Plain.date(from: raw) else { return nil }
+        if preservingDay {
+            let calendarDate = DateFormatter()
+            calendarDate.locale = .current
+            calendarDate.dateFormat = "MMM d"
+            calendarDate.timeZone = .gmt
+            return calendarDate.string(from: date)
+        }
         return shortDateFormatter.string(from: date)
     }
 }

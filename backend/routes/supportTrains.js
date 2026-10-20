@@ -474,15 +474,27 @@ router.get('/health', (req, res) => {
 });
 
 // List my Support Train participations
+const participationPaginationSchema = Joi.object({
+  limit: Joi.number().integer().min(1).max(Number.MAX_SAFE_INTEGER).default(20),
+  offset: Joi.number().integer().min(0).max(2147483597).default(0),
+});
+
 router.get(
   '/me/support-trains',
   verifyToken,
   asyncHandler(async (req, res) => {
     const userId = req.user.id;
-    const roleFilter = req.query.role; // 'organizer' | 'helper'
+    const roleFilter = req.query.role; // 'organizer' | 'recipient' | 'helper'
     const statusFilter = req.query.status;
-    const limit = Math.min(parseInt(req.query.limit, 10) || 20, 50);
-    const offset = parseInt(req.query.offset, 10) || 0;
+    const pagination = participationPaginationSchema.validate({ limit: req.query.limit, offset: req.query.offset });
+    if (pagination.error) {
+      return res.status(400).json({
+        error: 'Invalid pagination. Use a positive whole-number limit and a non-negative offset within the supported range.',
+        code: 'INVALID_PAGINATION',
+      });
+    }
+    const limit = Math.min(pagination.value.limit, 50);
+    const offset = pagination.value.offset;
 
     const results = [];
 
@@ -501,14 +513,16 @@ router.get(
 
       if (statusFilter) orgQuery = orgQuery.eq('status', statusFilter);
 
-      const { data: owned } = await orgQuery;
+      const { data: owned, error: ownedError } = await orgQuery;
+      if (ownedError) throw ownedError;
 
       // Also check co-organizer rows
-      const { data: coOrgRows } = await supabaseAdmin
+      const { data: coOrgRows, error: coOrgError } = await supabaseAdmin
         .from('SupportTrainOrganizer')
         .select('support_train_id, role')
         .eq('user_id', userId)
         .neq('role', 'primary');
+      if (coOrgError) throw coOrgError;
 
       const coOrgIds = (coOrgRows || []).map((r) => r.support_train_id);
       const ownedIds = new Set((owned || []).map((s) => s.id));
@@ -521,7 +535,8 @@ router.get(
           .select('id, status, published_at, created_at, Activity!inner ( title )')
           .in('id', missingIds);
         if (statusFilter) coQuery = coQuery.eq('status', statusFilter);
-        const { data } = await coQuery;
+        const { data, error } = await coQuery;
+        if (error) throw error;
         coOrgTrains = data || [];
       }
 
@@ -552,13 +567,39 @@ router.get(
       }
     }
 
+    // Recipients can already open published trains and see their reservations.
+    // Include them here without exposing an organizer's unpublished draft.
+    if (!roleFilter || roleFilter === 'recipient') {
+      let recipientQuery = supabaseAdmin
+        .from('SupportTrain')
+        .select('id, status, published_at, created_at, Activity!inner ( title )')
+        .eq('recipient_user_id', userId)
+        .not('published_at', 'is', null);
+      if (statusFilter) recipientQuery = recipientQuery.eq('status', statusFilter);
+      const { data: received, error } = await recipientQuery;
+      if (error) throw error;
+      const existingIds = new Set(results.map((r) => r.id));
+      for (const st of received || []) {
+        if (existingIds.has(st.id)) continue;
+        results.push({
+          id: st.id,
+          title: st.Activity?.title || null,
+          status: st.status,
+          published_at: st.published_at,
+          created_at: st.created_at,
+          my_role: 'recipient',
+        });
+      }
+    }
+
     // Fetch helper participations
     if (!roleFilter || roleFilter === 'helper') {
-      const { data: reservations } = await supabaseAdmin
+      const { data: reservations, error: reservationError } = await supabaseAdmin
         .from('SupportTrainReservation')
         .select('support_train_id')
         .eq('user_id', userId)
         .neq('status', 'canceled');
+      if (reservationError) throw reservationError;
 
       const helperTrainIds = [...new Set((reservations || []).map((r) => r.support_train_id))];
       const existingIds = new Set(results.map((r) => r.id));
@@ -570,7 +611,8 @@ router.get(
           .select('id, status, published_at, created_at, Activity!inner ( title )')
           .in('id', newHelperIds);
         if (statusFilter) helperQuery = helperQuery.eq('status', statusFilter);
-        const { data: helperTrains } = await helperQuery;
+        const { data: helperTrains, error } = await helperQuery;
+        if (error) throw error;
 
         for (const st of helperTrains || []) {
           results.push({
@@ -580,6 +622,40 @@ router.get(
             published_at: st.published_at,
             created_at: st.created_at,
             my_role: 'helper',
+          });
+        }
+      }
+    }
+
+    // The Invitations tab consumes pending invitations from this same feed.
+    // Do not list private drafts, ended trains or trains already represented
+    // by an organizer/recipient/helper role.
+    if (!roleFilter && (!statusFilter || statusFilter === 'invited')) {
+      const { data: invitations, error: inviteError } = await supabaseAdmin
+        .from('SupportTrainInvite')
+        .select('support_train_id')
+        .eq('invitee_user_id', userId)
+        .eq('status', 'pending');
+      if (inviteError) throw inviteError;
+      const existingIds = new Set(results.map((r) => r.id));
+      const invitedIds = [...new Set((invitations || []).map((r) => r.support_train_id))]
+        .filter((id) => !existingIds.has(id));
+      if (invitedIds.length) {
+        const { data: invitedTrains, error } = await supabaseAdmin
+          .from('SupportTrain')
+          .select('id, status, published_at, created_at, Activity!inner ( title )')
+          .in('id', invitedIds)
+          .in('status', ['published', 'active'])
+          .not('published_at', 'is', null);
+        if (error) throw error;
+        for (const st of invitedTrains || []) {
+          results.push({
+            id: st.id,
+            title: st.Activity?.title || null,
+            status: 'invited',
+            published_at: st.published_at,
+            created_at: st.created_at,
+            my_role: 'invited',
           });
         }
       }

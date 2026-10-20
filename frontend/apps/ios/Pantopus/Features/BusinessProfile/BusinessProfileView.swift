@@ -283,6 +283,8 @@ struct BusinessProfileLoadedView: View {
                         handle: content.header.handle.map { "@\($0)" } ?? "",
                         locality: content.header.locality ?? "",
                         logoIcon: content.header.logoIcon,
+                        logoImageURL: content.header.logoImageURL,
+                        bannerImageURL: content.header.bannerImageURL,
                         verified: content.header.isVerified,
                         status: bannerStatus,
                         // No shield on the chip for an unverified business.

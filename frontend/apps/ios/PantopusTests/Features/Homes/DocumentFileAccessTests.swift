@@ -15,7 +15,12 @@ final class DocumentFileAccessTests: XCTestCase {
     }
 
     private var documents: String {
-        #"{"documents":[{"id":"doc-1","home_id":"home-1","doc_type":"other","title":"Private file","content_url":"https://untrusted.invalid/file"}]}"#
+        #"""
+        {"permissions":["docs.view","docs.manage"],"documents":[{
+          "id":"doc-1","home_id":"home-1","doc_type":"other","title":"Private file",
+          "content_url":"https://untrusted.invalid/file"
+        }]}
+        """#
     }
 
     func testDownloadUsesAuthenticatedHomePathAndReturnsExactBytes() async {

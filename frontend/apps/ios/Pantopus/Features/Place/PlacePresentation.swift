@@ -282,6 +282,8 @@ enum PlacePresentation {
             if d.summary.agingCount > 0 {
                 return .init(value: "\(d.summary.agingCount) aging", statusDot: Theme.Color.warning)
             }
+            let unknown = d.systems.filter { $0.status == "unknown" }.count
+            if unknown > 0 { return .init(value: "\(unknown) installation years unknown") }
             return .init(value: "All within expected life", statusDot: Theme.Color.home)
         case .heatCold:
             guard let d = env.heatCold else { return .init() }

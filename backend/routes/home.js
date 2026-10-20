@@ -3011,6 +3011,8 @@ const MAINTENANCE_CATEGORY_VALUES = new Set([
   'hvac', 'plumbing', 'electrical', 'roof', 'gutter', 'appliance', 'pest',
   'landscape', 'cleaning', 'painting', 'safety', 'chimney', 'generic'
 ]);
+const maintenanceCostSchema = Joi.number().min(0).max(9999999999.99)
+  .precision(2).strict().allow(null).optional();
 
 /**
  * GET /api/homes/:id/maintenance
@@ -3075,6 +3077,9 @@ router.post('/:id/maintenance', verifyToken, async (req, res) => {
     if (!access.hasAccess) return res.status(403).json({ error: 'No permission to manage maintenance' });
 
     const { task, vendor, cost, recurrence, due_date, status, performed_at, notes, category, performer_contact, clientRequestId } = req.body || {};
+    if (maintenanceCostSchema.validate(cost).error) {
+      return res.status(400).json({ error: 'Cost must be a non-negative amount below $10 billion, with at most two decimal places.' });
+    }
     if (Joi.string().max(4000).allow('', null).optional().validate(notes).error) {
       return res.status(400).json({ error: 'Notes must be text up to 4000 characters' });
     }
@@ -3191,6 +3196,10 @@ router.put('/:id/maintenance/:taskId', verifyToken, async (req, res) => {
     const updates = {};
     for (const key of allowed) {
       if (req.body && req.body[key] !== undefined) updates[key] = req.body[key];
+    }
+
+    if (maintenanceCostSchema.validate(updates.cost).error) {
+      return res.status(400).json({ error: 'Cost must be a non-negative amount below $10 billion, with at most two decimal places.' });
     }
 
     if (Joi.string().max(4000).allow('', null).optional().validate(updates.notes).error) {
@@ -3499,6 +3508,7 @@ router.get('/:id/documents', verifyToken, async (req, res) => {
     // The apps' "Uploaded by" reads `uploaded_by_name`, the uploader's display name (never the raw user id). Only the
     // name leaves the server, as the Home timeline's `actor_name` does; a deleted account leaves it null.
     res.json({
+      permissions: (access.permissions || []).filter(permission => ['docs.view', 'docs.upload', 'docs.manage'].includes(permission)),
       documents: (data || []).map(({ uploader, ...document }) => ({
         ...serializeHomeDocument(document),
         uploaded_by_name: uploader ? displayNameFromUser(uploader) : null,

@@ -27,6 +27,13 @@ import Foundation
 import Observation
 import SwiftUI
 
+extension Notification.Name {
+    /// Posted after an owner closes a business. Popping past its editor and
+    /// dashboard at once doesn't re-run My businesses' `.task`, so the list
+    /// re-reads when it hears this.
+    static let businessClosed = Notification.Name("businessClosed")
+}
+
 @Observable
 @MainActor
 final class MyBusinessesViewModel {

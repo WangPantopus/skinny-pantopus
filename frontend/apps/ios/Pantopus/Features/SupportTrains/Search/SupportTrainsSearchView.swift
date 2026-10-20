@@ -25,10 +25,17 @@ public struct SupportTrainsSearchView: View {
             query: $viewModel.query,
             results: viewModel.results,
             isLoading: viewModel.isLoading,
+            filters: viewModel.errorMessage.map { message in
+                AnyView(RefreshNotice(text: message) {
+                    Task { await viewModel.load() }
+                })
+            },
             emptyState: EmptyStateContent(
                 icon: .search,
-                headline: "No matching trains",
-                subcopy: "Try a different name or train type, or check the spelling."
+                headline: viewModel.errorMessage == nil ? "No matching trains" : "Search unavailable",
+                subcopy: viewModel.errorMessage == nil
+                    ? "Try a different name or train type, or check the spelling."
+                    : "Retry above to load your support trains. Your search is kept."
             ),
             row: { train in
                 ListRowCard(row: viewModel.rowModel(for: train))

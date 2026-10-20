@@ -107,8 +107,11 @@ final class DocumentsViewModel: ListOfRowsDataSource {
         didSet { rebuildState() }
     }
 
+    private(set) var canUpload = false
+
     var fab: FABAction? {
-        FABAction(
+        guard canUpload else { return nil }
+        return FABAction(
             icon: .upload,
             accessibilityLabel: "Upload document",
             variant: .secondaryCreate,
@@ -181,9 +184,11 @@ final class DocumentsViewModel: ListOfRowsDataSource {
             let response: GetHomeDocumentsResponse = try await api.request(
                 HomesEndpoints.documents(homeId: homeId)
             )
+            canUpload = response.permissions?.contains("docs.upload") == true
             documents = response.documents
             rebuildState()
         } catch {
+            canUpload = false
             documents = nil
             state = .error(
                 message: (error as? APIError)?.errorDescription
@@ -200,8 +205,12 @@ final class DocumentsViewModel: ListOfRowsDataSource {
                     icon: .folderLock,
                     headline: "No documents yet",
                     subcopy: "Save leases, insurance and warranties privately. Choose which household members can access each file.",
-                    ctaTitle: "Upload document"
-                ) { [onUpload] in onUpload() }
+                    ctaTitle: canUpload ? "Upload document" : nil
+                ) { [weak self, onUpload] in
+                    Task { @MainActor in
+                        if self?.canUpload == true { onUpload() }
+                    }
+                }
             )
             return
         }
