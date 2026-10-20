@@ -2699,6 +2699,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
         drawerState = navDrawerState,
         gesturesEnabled = navDrawerState.isOpen,
         drawerContent = {
+            // Back closes an open side menu, as on every Android app, instead of navigating the screen under it.
+            // Composed after the NavHost (the drawer sits above the content), so it is asked first.
+            androidx.activity.compose.BackHandler(enabled = navDrawerState.isOpen) { navDrawerScope.launch { navDrawerState.close() } }
             NavigationDrawer(
                 context = NavigationDrawerContext.Personal(name = currentHandle),
                 onSelect = { destination ->
