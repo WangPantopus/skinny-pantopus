@@ -23,13 +23,15 @@ struct PlansMapView: View {
     /// tap (which clears a selection) and must not undo the pin's.
     @State private var pinTappedAt: Date?
     @State private var flags = PlansFlags.shared
+    /// The assistant, opened from the header about plans.
+    @State private var askTopic: AIAskTopic?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    let actions: PlansMapActions
+    private let tabActions: PlansMapActions
 
     init(viewModel: PlansMapViewModel = PlansMapViewModel(), actions: PlansMapActions) {
         _viewModel = State(initialValue: viewModel)
-        self.actions = actions
+        tabActions = actions
     }
 
     var body: some View {
@@ -43,7 +45,8 @@ struct PlansMapView: View {
                 if viewModel.sheetStop != .full {
                     PlansMapTopBar(
                         viewModel: viewModel,
-                        showsPlaydates: flags.playdates && viewModel.showsPlaydateFilter
+                        showsPlaydates: flags.playdates && viewModel.showsPlaydateFilter,
+                        onAsk: actions.ask
                     ) { showsAreaPicker = true }
                         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { chromeHeight = $0 }
                         .transition(.opacity)
@@ -76,6 +79,7 @@ struct PlansMapView: View {
                 .presentationDetents([.medium, .large])
                 .presentationBackground(Theme.Color.appSurface)
         }
+        .askPantopus($askTopic)
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("plansMap")
@@ -367,6 +371,15 @@ enum PlanOpenIntent: Hashable {
     case view, ask, chat
 }
 
+extension PlansMapView {
+    /// The tab's actions, with Ask opening the assistant over the map.
+    private var actions: PlansMapActions {
+        var actions = tabActions
+        actions.ask = { askTopic = .plans() }
+        return actions
+    }
+}
+
 /// The actions the map hands to the Plans tab's stack.
 struct PlansMapActions {
     /// Open a plan (J1 and the screens after it), from its card when one is on screen.
@@ -378,6 +391,8 @@ struct PlansMapActions {
     var openPulse: (@MainActor () -> Void)?
     /// "More nearby": Connections.
     var openConnections: (@MainActor () -> Void)?
+    /// "Ask Pantopus" about plans (the header's trailing button); the map fills it in.
+    var ask: (@MainActor () -> Void)?
 }
 
 /// Where the composer starts: a kind, and for a watch party maybe a game.

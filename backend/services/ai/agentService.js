@@ -297,7 +297,7 @@ function buildUserContent({ message, photos, unreadable, timeZone, coarseLocatio
  * @param {string} [params.conversationId]
  * @param {string} params.message
  * @param {object} [params.coarseLocation]
- * @param {string[]} [params.images] — Image URLs to include as vision input
+ * @param {string[]} [params.images] — Photos to include: the person's uploads (ai-photo: references) or image URLs
  * @param {AbortSignal} [params.signal] — Aborts when the client disconnects, which stops the model call
  * @param {object} sseWriter — { write(event, data), end() }
  */

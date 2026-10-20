@@ -28,6 +28,7 @@ const { checkHomePermission, getActiveOccupancy, mapLegacyRole } = require('../u
 const { computeUtilityScore } = require('../utils/feedRanking');
 const s3 = require('../services/s3Service');
 const feedService = require('../services/feedService');
+const marketplaceService = require('../services/marketplace/marketplaceService');
 const { generateNeighborhoodFacts } = require('../services/ai/neighborhoodFactService');
 const { encodeGeohash6: _encodeGeohash6 } = require('../utils/geohash');
 const { resolveLocation } = require('../services/context/locationResolver');
@@ -124,6 +125,7 @@ const {
   attachIdentityAuthors,
   applyPostLocationPrivacy,
   sortMatchedBusinessesByRating,
+  dropUnpublishedMatches,
   applyCursorCondition,
   buildCursorPagination,
   FEED_POST_SELECT,
@@ -2194,6 +2196,7 @@ router.post('/mute', verifyToken, async (req, res) => {
     });
 
     feedService.invalidateFilterCache(userId);
+    marketplaceService.invalidateFilterCache(userId);
     res.json({ message: `${entityType} muted successfully` });
   } catch (err) {
     logger.error('Mute error', { error: err.message });
@@ -2289,6 +2292,7 @@ router.delete('/mute', verifyToken, async (req, res) => {
     if (error) throw error;
 
     feedService.invalidateFilterCache(userId);
+    marketplaceService.invalidateFilterCache(userId);
     res.json({ message: 'Unmuted successfully' });
   } catch (err) {
     logger.error('Unmute error', { error: err.message });
@@ -2563,6 +2567,7 @@ router.get('/:id', optionalAuth, async (req, res) => {
         .catch(err => logger.warn('post.view_count.error', { error: err.message, postId: id, userId }));
     }
 
+    await dropUnpublishedMatches([post]);
     applyPostLocationPrivacy(post, userId);
     const responsePost = await serializePostForViewer({
       ...post,
@@ -2813,6 +2818,7 @@ router.get('/:id/matched-businesses', verifyToken, async (req, res) => {
       select: `${POST_VISIBILITY_SELECT},service_category,matched_business_ids,matched_businesses_cache,created_at`,
     });
     if (!post) return;
+    await dropUnpublishedMatches([post]);
 
     // No service_category → no matches possible
     if (!post.service_category) {

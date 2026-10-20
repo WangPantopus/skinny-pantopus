@@ -33,6 +33,7 @@ const { resolveTier } = require('../services/placeIntelligenceService');
 const { createNotification } = require('../services/notificationService');
 const { isBlocked, invalidateBlockCache } = require('../services/blockService');
 const { invalidateFilterCache } = require('../services/feedService');
+const marketplaceService = require('../services/marketplace/marketplaceService');
 const {
   MESSAGE_TEMPLATES,
   REPLY_TEMPLATES,
@@ -456,6 +457,8 @@ router.post('/:id/block', verifyToken, async (req, res) => {
     invalidateBlockCache(userId, senderId);
     invalidateFilterCache(userId);
     invalidateFilterCache(senderId);
+    marketplaceService.invalidateFilterCache(userId);
+    marketplaceService.invalidateFilterCache(senderId);
     return res.json({ success: true });
   } catch (err) {
     if (err.code === 'BLOCK_CHECK_UNAVAILABLE') return res.status(503).json({ error: err.message, code: err.code });

@@ -564,7 +564,8 @@ export async function uploadMailAttachments(
 
 /**
  * Upload images for AI assistant chat.
- * Returns public URLs to pass to the AI chat endpoint.
+ * Returns a private reference for each (`url`, `ai-photo:<name>`, not an address to open) to pass
+ * to the AI chat endpoint; the server deletes the photo once it has read it.
  */
 export async function uploadAIMedia(
   files: any[]
@@ -572,7 +573,6 @@ export async function uploadAIMedia(
   message: string;
   images: Array<{
     url: string;
-    key: string;
     name: string;
     mime_type: string;
     size: number;

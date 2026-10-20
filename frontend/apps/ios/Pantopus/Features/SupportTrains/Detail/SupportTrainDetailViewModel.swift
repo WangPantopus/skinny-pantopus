@@ -525,7 +525,8 @@ extension SupportTrainDetailViewModel {
                 ? dto.address?.singleLineLabel
                 : nil,
             deliveryInstructions: dto.deliveryInstructions,
-            updates: updateCards(dto.updates ?? [], organizers: organizers)
+            updates: updateCards(dto.updates ?? [], organizers: organizers),
+            chatRoomId: dto.chatThreadId
         )
     }
 
