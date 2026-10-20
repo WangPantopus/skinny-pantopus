@@ -228,15 +228,19 @@ class MainActivity : FragmentActivity() {
             OAuthSessionStore.deliver(uri)
             return
         }
-        if (forwardReminderAction(intent, uri)) return
-        // A brief or nudge opens only for the account it was sent to; signed out, it waits for that account's sign-in.
-        val assistantRecipient = intent.getStringExtra(ASSISTANT_RECIPIENT)
-        if (assistantRecipient != null) {
-            intent.removeExtra(ASSISTANT_RECIPIENT)
-            DeepLinkRouter.handle(uri.toString(), expectedUserId = assistantRecipient)
-            return
-        }
+        if (forwardReminderAction(intent, uri) || forwardAssistantNudge(intent, uri)) return
         DeepLinkRouter.handle(uri)
+    }
+
+    /** A brief or nudge opens only for the account it was sent to; signed out, it waits for that account's sign-in. */
+    private fun forwardAssistantNudge(
+        intent: Intent,
+        uri: Uri,
+    ): Boolean {
+        val recipient = intent.getStringExtra(ASSISTANT_RECIPIENT) ?: return false
+        intent.removeExtra(ASSISTANT_RECIPIENT)
+        DeepLinkRouter.handle(uri.toString(), expectedUserId = recipient)
+        return true
     }
 
     /**
