@@ -318,13 +318,19 @@ public struct PulsePostDetailView: View {
             onCommentLike: { id in Task { await viewModel.toggleCommentLike(commentId: id) } },
             onCommentDelete: { id in commentPendingDelete = id },
             onRefresh: { [viewModel] in await viewModel.refresh() },
-            // Nothing to ask about a post a moderator took down.
-            onAsk: detail.post.isRemovedByModerator ? nil : { askTopic = .post(id: detail.post.id, title: Self.askAbout(detail.post)) }
+            onAsk: askAction(detail.post)
         )
     }
 }
 
 extension PulsePostDetailView {
+    /// Ask Pantopus about this post; nothing to ask about one a moderator took down.
+    private func askAction(_ post: PostDetailDTO) -> (@MainActor () -> Void)? {
+        guard !post.isRemovedByModerator else { return nil }
+        let topic = AIAskTopic.post(id: post.id, title: Self.askAbout(post))
+        return { askTopic = topic }
+    }
+
     /// "About: …" names the post by its headline, else its first words.
     private static func askAbout(_ post: PostDetailDTO) -> String {
         if let title = post.title?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty { return title }
