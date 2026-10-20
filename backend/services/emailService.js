@@ -216,6 +216,87 @@ ${!isExistingUser ? 'You\'ll create a free account to get started.' : ''}
 }
 
 // ============================================================
+//  LETTER WAITING EMAIL
+// ============================================================
+
+/**
+ * Tell someone who isn't on Pantopus that a letter is waiting for them (POST /api/mailbox/send to an email address).
+ * The email names only who the letter is from (a letter sent as a business names the business); the letter itself
+ * stays on Pantopus behind the link, which opens the web app's /open page.
+ * @param {Object} opts
+ * @param {string} opts.toEmail - the address the sender typed
+ * @param {string} opts.senderName - who the letter is from, as the recipient sees it
+ * @param {string} opts.claimLink - the letter's link
+ * @param {string} opts.expiresAt - when the letter stops waiting (ISO)
+ */
+async function sendLetterWaitingEmail({ toEmail, senderName, claimLink, expiresAt }) {
+  const subject = `${senderName} sent you a letter on Pantopus`;
+  const until = new Date(expiresAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+  const safeLink = escapeHtml(claimLink);
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin:0; padding:0; background-color:#f9fafb; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <div style="max-width:480px; margin:40px auto; background:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+
+    <!-- Header -->
+    <div style="background:#111827; padding:32px 32px 24px; text-align:center;">
+      <div style="font-size:32px; margin-bottom:8px;">✉️</div>
+      <h1 style="color:#ffffff; font-size:20px; font-weight:600; margin:0;">You have a letter</h1>
+    </div>
+
+    <!-- Body -->
+    <div style="padding:32px;">
+      <p style="color:#374151; font-size:15px; line-height:1.6; margin:0 0 16px;">
+        <strong>${escapeHtml(senderName)}</strong> sent you a letter on Pantopus.
+      </p>
+      <p style="color:#374151; font-size:15px; line-height:1.6; margin:0;">
+        Open it to read it and keep it in your own Pantopus mailbox. A Pantopus account is free.
+      </p>
+
+      <!-- CTA -->
+      <div style="text-align:center; margin:28px 0;">
+        <a href="${safeLink}" style="display:inline-block; background:#111827; color:#ffffff; font-size:15px; font-weight:600; padding:14px 32px; border-radius:10px; text-decoration:none;">
+          Open your letter
+        </a>
+      </div>
+
+      <p style="color:#9ca3af; font-size:12px; text-align:center; margin:20px 0 0;">
+        The letter waits for you until ${escapeHtml(until)}. Sign in or create your account with this email address.
+      </p>
+    </div>
+
+    <!-- Footer -->
+    <div style="background:#f9fafb; border-top:1px solid #e5e7eb; padding:16px 32px; text-align:center;">
+      <p style="color:#9ca3af; font-size:11px; margin:0;">
+        Pantopus — Your household, organized.
+      </p>
+      <p style="color:#d1d5db; font-size:10px; margin:8px 0 0;">
+        If you don't know the sender, you can safely ignore this email.
+      </p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  const text = `
+${senderName} sent you a letter on Pantopus.
+
+Open it to read it and keep it in your own Pantopus mailbox: ${claimLink}
+
+The letter waits for you until ${until}. Sign in or create your free account with this email address.
+If you don't know the sender, you can safely ignore this email.
+`;
+
+  return sendEmail({ to: toEmail, subject, html, text });
+}
+
+// ============================================================
 //  PASSWORD RESET EMAIL
 // ============================================================
 
@@ -1137,6 +1218,7 @@ module.exports = {
   checkDeliveryAvailability,
   sendEmail,
   sendHomeInviteEmail,
+  sendLetterWaitingEmail,
   sendPasswordResetEmail,
   sendVerificationEmail,
   sendMonthlyReceipt,

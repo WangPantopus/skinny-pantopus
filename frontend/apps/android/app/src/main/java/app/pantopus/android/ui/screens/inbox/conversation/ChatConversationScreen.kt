@@ -61,6 +61,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SnackbarHost
@@ -209,6 +211,7 @@ fun ChatConversationScreen(
     val openFile by viewModel.openFile.collectAsStateWithLifecycle()
     val linkPreviews by viewModel.linkPreviews.collectAsStateWithLifecycle()
     val isAiStreaming by viewModel.isAiStreaming.collectAsStateWithLifecycle()
+    val isDeletingAi by viewModel.isDeletingAi.collectAsStateWithLifecycle()
     val aiContext by viewModel.aiContext.collectAsStateWithLifecycle()
     val aiStarters by viewModel.aiStarters.collectAsStateWithLifecycle()
     // Nearby Plans (A4): a plan room shows its plan under the header and closes after the plan.
@@ -236,6 +239,7 @@ fun ChatConversationScreen(
     var showReportFailed by remember { mutableStateOf(false) }
     var showBulkDeleteConfirm by remember { mutableStateOf(false) }
     var pendingDeleteId by remember { mutableStateOf<String?>(null) }
+    var showAiDeleteConfirm by remember { mutableStateOf(false) }
     // Photos (and the tapped index) shown in the full-screen viewer.
     var viewerPhotos by remember { mutableStateOf<Pair<List<String>, Int>?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
@@ -411,6 +415,8 @@ fun ChatConversationScreen(
                     onOpenDetails = { showDetailsSheet = true },
                     onOpenProfile = profileTapFor(args.mode, conversationMode, onOpenProfile),
                     onNewAiChat = viewModel::startNewAiConversation,
+                    onDeleteAiChat = { showAiDeleteConfirm = true },
+                    isDeletingAiChat = isDeletingAi,
                     // Nearby Plans (A4): a plan room counts everyone in, parties too ("7 people", as on iOS).
                     planPeople = planChat.plan?.people?.takeIf { it.isNotEmpty() }?.sumOf { it.partySize.coerceAtLeast(1) },
                 )
@@ -815,6 +821,30 @@ fun ChatConversationScreen(
                 },
             )
         }
+        if (showAiDeleteConfirm) {
+            AlertDialog(
+                onDismissRequest = { showAiDeleteConfirm = false },
+                containerColor = PantopusColors.appSurface,
+                title = { Text(text = "Delete this conversation?") },
+                text = { Text(text = "Pantopus AI won't remember it. Any earlier chats with Pantopus AI are deleted too.") },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showAiDeleteConfirm = false
+                            viewModel.deleteAiConversations()
+                        },
+                        modifier = Modifier.testTag("chatAIDeleteConfirm"),
+                    ) {
+                        Text(text = "Delete", color = PantopusColors.error)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showAiDeleteConfirm = false }) {
+                        Text(text = "Cancel", color = PantopusColors.appTextSecondary)
+                    }
+                },
+            )
+        }
         pendingDeleteId?.let { id ->
             AlertDialog(
                 onDismissRequest = { pendingDeleteId = null },
@@ -956,6 +986,9 @@ internal fun ChatHeader(
     onOpenProfile: (() -> Unit)? = null,
     // The assistant's "New chat" (AI thread only).
     onNewAiChat: () -> Unit = {},
+    // The assistant's More menu: "Delete conversation" (AI thread only), and whether that delete is running.
+    onDeleteAiChat: () -> Unit = {},
+    isDeletingAiChat: Boolean = false,
     // A plan room's people (Nearby Plans, board A4): the second line reads "7 people" instead.
     planPeople: Int? = null,
 ) {
@@ -1063,7 +1096,7 @@ internal fun ChatHeader(
                 }
             }
             // A15.3 AI header: "New chat" (lucide square-pen; closest token
-            // icon is MessageSquarePlus) + overflow (decorative until it has actions).
+            // icon is MessageSquarePlus) + overflow, whose menu deletes the conversation.
             isAi -> {
                 Row {
                     Box(
@@ -1083,7 +1116,7 @@ internal fun ChatHeader(
                             tint = PantopusColors.appText,
                         )
                     }
-                    HeaderIcon(PantopusIcon.MoreHorizontal)
+                    AiMoreMenu(onDelete = onDeleteAiChat, enabled = !isDeletingAiChat)
                 }
             }
             else ->
@@ -1719,6 +1752,42 @@ private fun presenceFor(
 private fun HeaderIcon(icon: PantopusIcon) {
     Box(modifier = Modifier.size(34.dp), contentAlignment = Alignment.Center) {
         PantopusIconImage(icon = icon, contentDescription = null, size = 18.dp, tint = PantopusColors.appText)
+    }
+}
+
+/** The assistant header's More (overflow) button and its menu: "Delete conversation". */
+@Composable
+private fun AiMoreMenu(
+    onDelete: () -> Unit,
+    enabled: Boolean,
+) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        Box(
+            modifier =
+                Modifier
+                    .size(34.dp)
+                    .clip(CircleShape)
+                    .clickable(enabled = enabled, onClickLabel = "More options") { open = true }
+                    .testTag("chatAIMore")
+                    .semantics { contentDescription = "More options" },
+            contentAlignment = Alignment.Center,
+        ) {
+            PantopusIconImage(icon = PantopusIcon.MoreHorizontal, contentDescription = null, size = 18.dp, tint = PantopusColors.appText)
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(
+                leadingIcon = {
+                    PantopusIconImage(icon = PantopusIcon.Trash2, contentDescription = null, size = 16.dp, tint = PantopusColors.error)
+                },
+                text = { Text(text = "Delete conversation", fontSize = 13.sp, color = PantopusColors.error) },
+                onClick = {
+                    open = false
+                    onDelete()
+                },
+                modifier = Modifier.testTag("chatAIDeleteConversation"),
+            )
+        }
     }
 }
 
