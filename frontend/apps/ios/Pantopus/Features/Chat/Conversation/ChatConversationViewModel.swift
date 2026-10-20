@@ -835,7 +835,7 @@ public final class ChatConversationViewModel {
         guard messages.isEmpty else { return }
         do {
             let history: AIConversationMessagesResponse = try await api.request(
-                AIEndpoints.conversationMessages(id: conversationId)
+                AIEndpoints.conversationMessages(id: conversationId, cards: AIChatStreamRequest.supportedCards)
             )
             // A message sent (or "New chat") while this loaded wins.
             guard messages.isEmpty, aiConversationId == conversationId else { return }
