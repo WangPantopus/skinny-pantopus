@@ -465,6 +465,8 @@ async function draftPlanChange(args, ctx) {
   const { body: plan, viewer } = found;
   if (plan.viewer.role !== 'host') return { error: 'Only the host can change this plan.' };
   if (plan.state === 'ended' || plan.state === 'cancelled') return { error: 'This plan is over.' };
+  // Seats taken by people who are in (PlanCard going_count), as planActions.editPlan counts them.
+  const going = plan.going_count || 0;
 
   const patch = {};
   const lines = [];
@@ -480,12 +482,12 @@ async function draftPlanChange(args, ctx) {
     patch.starts_at = startsAt;
     patch.ends_at = endsAt;
     lines.push(line('When', whenLabel(startsAt, endsAt, zone)));
-    if (Math.abs(new Date(startsAt) - new Date(plan.starts_at)) > 30 * 60 * 1000 && (plan.going || 0) > 0) {
+    if (Math.abs(new Date(startsAt) - new Date(plan.starts_at)) > 30 * 60 * 1000 && going > 0) {
       warnings.push('Everyone who is in will be asked "Still coming?".');
     }
   }
   if (Number.isInteger(args.spots)) {
-    if (args.spots < (plan.going || 0)) return { error: `${plan.going} people are already in, so spots can't go below that.` };
+    if (args.spots < going) return { error: `${going} ${going === 1 ? 'person is' : 'people are'} in, so spots can't go below that.` };
     patch.spots = args.spots;
     lines.push(line('Spots', `${args.spots}`));
   }
@@ -495,7 +497,7 @@ async function draftPlanChange(args, ctx) {
     if (!place) return { error: `No public place called "${args.place_name}" was found near them.` };
     patch.place = { kind: 'public', name: place.name, address: place.address || null, latitude: place.latitude, longitude: place.longitude };
     lines.push(line('Where', [place.name, place.address].filter(Boolean).join(', ')));
-    if ((plan.going || 0) > 0) warnings.push('Everyone who is in will be asked "Still coming?".');
+    if (going > 0) warnings.push('Everyone who is in will be asked "Still coming?".');
   }
   if (args.about) { patch.about = args.about; lines.push(line('About', args.about)); }
   if (args.guest_note) { patch.guest_note = args.guest_note; lines.push(line('Note for guests', args.guest_note)); }
