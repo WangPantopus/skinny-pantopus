@@ -12,7 +12,7 @@ This file is the contract three sessions build against: the backend, iOS and And
 2. **The model never writes a request.** The server builds each request from validated fields, for a fixed list of card types. The apps execute only requests on their allowlist (section 4.3).
 3. **It sees what the person sees.** Each read tool calls the same service, with the same viewer, as the screen it mirrors: plan cards carry the area only, posts carry displayed points, money sections stay hidden from household members.
 4. **Other people's words are data.** Post text, comments, plan notes and names reach the model inside tool results that say so; nothing in them can act without the person's tap.
-5. **Launch flags hold.** Marketplace, open gigs and the mailbox stay off; Plans tools exist only for people with the `plans` flag; playdates stay off.
+5. **Launch flags hold.** Marketplace, open gigs and the mailbox stay off; Plans tools exist only for people with the `plans` flag. Playdates follow `plans_playdates`: the plan tools offer them only to people who have it, and the plan services' own rules decide the rest (a verified address to see, host or ask to join one; public places; the host approves each family; parents stay).
 
 ## 2. What stays the same
 
@@ -115,11 +115,11 @@ and in history (`GET /api/ai/conversations/:id/messages?cards=pickup_schedule,ac
 
 | `card` | When the server offers it | Request | Done |
 |---|---|---|---|
-| `plan_create` | The person has `plans` and asked to host something | `POST /api/plans` with `kind`, `title`, `about`, `guest_note`, `starts_at`, `ends_at`, `spots`, `place` (`{kind:"public", name, address, latitude, longitude}` or `{kind:"home", home_id}`), `auto_rules`, `join_requirement`, `details`. Validated with the server's own plan rules before the card is shown | "Plan posted", link to the plan |
+| `plan_create` | The person has `plans` and asked to host something | `POST /api/plans` with `kind`, `title`, `about`, `guest_note`, `starts_at`, `ends_at`, `spots`, `place` (`{kind:"public", name, address, latitude, longitude}` or `{kind:"home", home_id}`), `auto_rules`, `join_requirement`, `details` (a playdate's `kids_age_bands`). Validated with the server's own plan rules before the card is shown | "Plan posted", link to the plan |
 | `plan_edit` | The host asked to change their plan | `PATCH /api/plans/:id` with the changed fields only. A warning when the change asks guests "Still coming?" | "Plan updated" |
 | `plan_cancel` | The host asked to cancel | `POST /api/plans/:id/cancel` with `note` | "Plan cancelled" |
 | `plan_requests` | The host asked about who wants to join | One item per waiting request, each with Accept and Decline (`POST …/requests/:id/accept` or `/decline`). The first hand-accept at a home carries `confirm_shares_address: true` with a warning that it shares the address | "Accepted" / "Declined" per item |
-| `plan_ask` | The person wants to join someone's plan | `POST /api/plans/:id/requests` with `party_size` and `note` | "Asked" |
+| `plan_ask` | The person wants to join someone's plan | `POST /api/plans/:id/requests` with `party_size` and `note`; for a playdate, `party_size: 1`, `kids_count`, `kids_age_bands` and `stays_with_kids: true`, with warnings that the parent stays and what the host sees | "Asked" |
 | `plan_message` | The host or an accepted guest wants to message the plan's chat | `POST /api/chat/messages` with `roomId`, `messageText`, `messageType: "text"`, `clientMessageId` (= card id) | "Sent", link to the chat |
 | `post_reply` | The person wants to reply to a post they can see | `POST /api/posts/:id/comments` with `comment`, optional `parentCommentId`, `clientRequestId` (= card id) | "Replied", link to the post |
 | `post_solve` | The author of an open question wants to mark it solved | `PATCH /api/posts/:id/solve` | "Marked solved" |

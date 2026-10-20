@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.ai.AIChatRepository
 import app.pantopus.android.data.ai.AIChatStreamEvent
 import app.pantopus.android.data.ai.AIConversationSession
+import app.pantopus.android.data.api.models.ai.AIConversationMessagesResponse
 import app.pantopus.android.data.api.models.ai.AIConversationsResponse
 import app.pantopus.android.data.api.models.chats.ChatAttachmentDto
 import app.pantopus.android.data.api.models.chats.ChatMediaUploadResponse
@@ -106,6 +107,8 @@ class ChatConversationViewModelTest {
             linkPreviewRepo,
             aiSession,
             activeChatThread,
+            mockk(relaxed = true),
+            mockk(relaxed = true),
             mockk(relaxed = true),
         ).also { viewModels.add(it) }
 
@@ -408,22 +411,29 @@ class ChatConversationViewModelTest {
                         images =
                             listOf(
                                 app.pantopus.android.data.api.models.chats.AIUploadedImage(
-                                    url = "https://cdn.example/image.jpg",
+                                    url = "ai-photo:photo.jpg",
                                 ),
                             ),
                     ),
                 )
-            every { aiRepo.streamChat("Look", null, listOf("https://cdn.example/image.jpg")) } returns
+            every { aiRepo.streamChat("Look", null, listOf("ai-photo:photo.jpg")) } returns
                 flowOf(AIChatStreamEvent.TextDelta("Nice image"), AIChatStreamEvent.Done)
             val vm = makeViewModel()
             vm.configure(mode = ChatThreadMode.Ai, counterparty = counterpartyAi, currentUserId = "u_me")
             vm.load()
-            vm.queueAttachment(ChatQueuedAttachmentKind.Image, "photo.jpg", "image/jpeg", "jpg".toByteArray())
+            vm.queueAttachment(
+                ChatQueuedAttachmentKind.Image,
+                "photo.jpg",
+                "image/jpeg",
+                "jpg".toByteArray(),
+                sourceUri = "content://media/picker/0/photo",
+            )
             vm.setComposerText("Look")
             vm.send()
             val loaded = vm.state.value as ChatConversationUiState.Loaded
             val outgoing = loaded.rows.filterIsInstance<ChatTimelineRow.Bubble>().first { it.content.side == ChatMessageSide.Outgoing }
-            assertTrue(outgoing.content.body is ChatBubbleBody.TextWithImages)
+            // The phone's own photo: the server deletes it once read, and its reference never loads.
+            assertEquals(listOf("content://media/picker/0/photo"), (outgoing.content.body as ChatBubbleBody.TextWithImages).imageUrls)
         }
 
     @Test fun send_failure_marks_optimistic_bubble_as_failed() =
@@ -1283,6 +1293,8 @@ class ChatConversationViewModelTest {
             assertEquals("c42", aiSession.conversationId)
             every { aiRepo.streamChat("Again", "c42", emptyList()) } returns
                 flowOf(AIChatStreamEvent.TextDelta("Welcome back"), AIChatStreamEvent.Done)
+            // The reopened thread shows the conversation's earlier turns (none here).
+            coEvery { aiRepo.conversationMessages("c42") } returns NetworkResult.Success(AIConversationMessagesResponse("c42"))
             val second = makeViewModel()
             second.configure(mode = ChatThreadMode.Ai, counterparty = counterpartyAi, currentUserId = "u_me")
             second.load()

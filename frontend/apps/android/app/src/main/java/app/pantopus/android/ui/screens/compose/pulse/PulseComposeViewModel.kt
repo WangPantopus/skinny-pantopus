@@ -257,6 +257,28 @@ class PulseComposeViewModel
         private val _activeIntent = MutableStateFlow(initialIntent)
         val activeIntent: StateFlow<PulseComposeIntent> = _activeIntent.asStateFlow()
 
+        /**
+         * A Pantopus AI post draft's other fields (AI assistant phase 1 contract, section 8): the event's dates and
+         * place, the deal's end, lost or found, and the heads-up's kind seed the form.
+         */
+        private val prefillDraft: PulseComposeDraftFields? =
+            PulseComposeDraftFields.decode(savedStateHandle.get<String>(PREFILL_DRAFT_FIELDS_KEY))
+
+        /**
+         * The drafted event times: each field's seeded value (this phone's clock) and the instant the draft named. While
+         * a field still shows its seed, the post keeps the drafted instant.
+         */
+        private val draftTimes: Map<PulseComposeField, Pair<String, String?>> =
+            buildMap {
+                prefillDraft?.eventDate?.let { PulseComposeDraftFields.localTime(it) }?.let { time ->
+                    put(PulseComposeField.EventDate, time.local.toLocalDate().toString() to time.instant?.toString())
+                }
+                prefillDraft?.eventEndDate?.let { PulseComposeDraftFields.localTime(it) }?.let { time ->
+                    val shown = if (time.instant == null) time.local.toLocalDate().toString() else pickerDateTime(time.local)
+                    put(PulseComposeField.EventEndDate, shown to time.instant?.toString())
+                }
+            }
+
         private val _prefillState =
             MutableStateFlow<PulseComposePrefillState>(
                 if (editingPostId == null) PulseComposePrefillState.Ready else PulseComposePrefillState.Loading,
@@ -269,14 +291,22 @@ class PulseComposeViewModel
         private val _visibility = MutableStateFlow(PulseComposeVisibility.Neighbors)
         val visibility: StateFlow<PulseComposeVisibility> = _visibility.asStateFlow()
 
-        private val _lostFoundKind = MutableStateFlow(PulseLostFoundKind.Lost)
+        private val _lostFoundKind =
+            MutableStateFlow(
+                prefillDraft?.lostFoundType?.let { type -> PulseLostFoundKind.entries.firstOrNull { it.key == type } }
+                    ?: PulseLostFoundKind.Lost,
+            )
         val lostFoundKind: StateFlow<PulseLostFoundKind> = _lostFoundKind.asStateFlow()
 
         private val _lostFoundContactPref = MutableStateFlow(PulseLostFoundContactPref.Dm)
         val lostFoundContactPref: StateFlow<PulseLostFoundContactPref> = _lostFoundContactPref.asStateFlow()
 
         /** Deal expiry — required by the backend for `postType == deal`. */
-        private val _dealExpiresAt = MutableStateFlow(LocalDateTime.now().plusDays(DEAL_DEFAULT_EXPIRY_DAYS))
+        private val _dealExpiresAt =
+            MutableStateFlow(
+                prefillDraft?.dealExpiresAt?.let { PulseComposeDraftFields.localEnd(it) }
+                    ?: LocalDateTime.now().plusDays(DEAL_DEFAULT_EXPIRY_DAYS),
+            )
         val dealExpiresAt: StateFlow<LocalDateTime> = _dealExpiresAt.asStateFlow()
 
         /** Place-eligibility warning surfaced as a banner on the draft step. */
@@ -316,7 +346,8 @@ class PulseComposeViewModel
         private val _announceAudience = MutableStateFlow(PulseAnnounceAudience.Neighbors)
         val announceAudience: StateFlow<PulseAnnounceAudience> = _announceAudience.asStateFlow()
 
-        private val _safetyAlertKind = MutableStateFlow(PulseSafetyAlertKind.Hazard)
+        private val _safetyAlertKind =
+            MutableStateFlow(prefillDraft?.safetyAlertKind?.let(PulseSafetyAlertKind::fromKey) ?: PulseSafetyAlertKind.Hazard)
         val safetyAlertKind: StateFlow<PulseSafetyAlertKind> = _safetyAlertKind.asStateFlow()
 
         // New Asks start on Handyman; an edited Ask posted without a category has none selected.
@@ -344,6 +375,8 @@ class PulseComposeViewModel
                         when (field) {
                             PulseComposeField.Body -> prefillBody
                             PulseComposeField.Title -> prefillTitle
+                            PulseComposeField.EventLocation -> prefillDraft?.eventVenue
+                            PulseComposeField.EventDate, PulseComposeField.EventEndDate -> draftTimes[field]?.first
                             else -> null
                         }
                     FormFieldState(id = field.key, value = seed.orEmpty())
@@ -1261,8 +1294,8 @@ class PulseComposeViewModel
                             postType = postType,
                             visibility = vis,
                             postAs = postAs,
-                            eventDate = dateRaw.ifEmpty { null }?.let { isoDateTime(it) },
-                            eventEndDate = endRaw.ifEmpty { null }?.let { isoDateTime(it) },
+                            eventDate = eventTime(PulseComposeField.EventDate, dateRaw),
+                            eventEndDate = eventTime(PulseComposeField.EventEndDate, endRaw),
                             eventVenue = venue.ifEmpty { null },
                             audience = audience,
                             purpose = purposeTag,
@@ -1426,6 +1459,22 @@ class PulseComposeViewModel
             return "${raw}T09:00:00Z"
         }
 
+        /**
+         * An event time for the post: the drafted instant while [field] still shows its seed ([value]), else the
+         * person's pick as [isoDateTime] reads it; null when the field is empty.
+         */
+        private fun eventTime(
+            field: PulseComposeField,
+            value: String,
+        ): String? {
+            if (value.isEmpty()) return null
+            return draftTimes[field]?.takeIf { it.first == value }?.second ?: isoDateTime(value)
+        }
+
+        /** The `yyyy-MM-dd HH:mm` shape the end-time picker writes. */
+        private fun pickerDateTime(value: LocalDateTime): String =
+            "%04d-%02d-%02d %02d:%02d".format(value.year, value.monthValue, value.dayOfMonth, value.hour, value.minute)
+
         /** Encode a local date-time as an ISO-8601 UTC instant. */
         private fun isoTimestamp(value: LocalDateTime): String =
             value
@@ -1443,6 +1492,9 @@ class PulseComposeViewModel
 
             /** Nav arg carrying a Pantopus AI post draft's headline. */
             const val PREFILL_TITLE_KEY = "prefillTitle"
+
+            /** Nav arg carrying a Pantopus AI post draft's type and other fields ([PulseComposeDraftFields.encode]). */
+            const val PREFILL_DRAFT_FIELDS_KEY = "prefillDraft"
             private const val TITLE_MAX = 255
             private const val BODY_MAX = 5000
             private const val LOCATION_MAX = 255

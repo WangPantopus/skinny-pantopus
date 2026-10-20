@@ -12,7 +12,9 @@ const Joi = require('joi');
 const logger = require('../utils/logger');
 const { checkHomePermission } = require('../utils/homePermissions');
 const { createNotification, notifyAddressRevealed } = require('../services/notificationService');
+const blockService = require('../services/blockService');
 const savedSearchService = require('../services/marketplace/savedSearchService');
+const { assertListingInteractionAllowed } = require('../services/marketplace/listingBlocks');
 const { LISTING_LIST } = require('../utils/columns');
 const { applyLocationPrecision } = require('../utils/locationPrivacy');
 const { haversineMiles } = require('../utils/geo');
@@ -1514,6 +1516,11 @@ router.get('/:id', optionalAuth, async (req, res) => {
 
     const isOwner = viewerUserId && listing.user_id === viewerUserId;
 
+    // Profile blocks (UserBlock) hide a listing in both directions, as browse does and as posts are hidden.
+    if (viewerUserId && !isOwner && await blockService.isBlocked(listing.user_id, viewerUserId)) {
+      return res.status(404).json({ error: 'Listing not found' });
+    }
+
     // Check address grants for progressive disclosure
     let grantedUserIds = null;
     if (viewerUserId && !isOwner) {
@@ -1595,6 +1602,9 @@ router.get('/:id', optionalAuth, async (req, res) => {
       },
     });
   } catch (err) {
+    if (err.code === 'BLOCK_CHECK_UNAVAILABLE') {
+      return res.status(503).json({ error: 'This listing could not be loaded. Please try again.' });
+    }
     logger.error('Listing fetch error', { error: err.message, listingId: req.params.id });
     res.status(500).json({ error: 'Failed to fetch listing' });
   }
@@ -1877,6 +1887,7 @@ router.post('/:id/message', verifyToken, validate(messageListingSchema), async (
     if (!listing) return res.status(404).json({ error: 'Listing not found' });
     if (listing.status !== 'active') return res.status(400).json({ error: 'Listing is no longer active' });
     if (listing.user_id === buyerId) return res.status(400).json({ error: 'You cannot message your own listing' });
+    await assertListingInteractionAllowed(listing.user_id, buyerId);
 
     // Check for existing pending message from this buyer
     const { data: existing } = await supabaseAdmin
@@ -1927,6 +1938,7 @@ router.post('/:id/message', verifyToken, validate(messageListingSchema), async (
 
     res.status(201).json({ message: 'Interest sent successfully', inquiry: msg });
   } catch (err) {
+    if (err.listingBlockRefusal) return res.status(err.status).json({ error: err.message });
     logger.error('marketplace.message.error', { error: err.message });
     res.status(500).json({ error: 'Failed to send message' });
   }
@@ -2127,6 +2139,7 @@ router.post('/:listingId/questions', verifyToken, async (req, res) => {
       .single();
 
     if (listingErr || !listing) return res.status(404).json({ error: 'Listing not found' });
+    await assertListingInteractionAllowed(listing.user_id, userId);
 
     // Rate limit: max 5 questions per user per listing
     const { count } = await supabaseAdmin
@@ -2180,6 +2193,7 @@ router.post('/:listingId/questions', verifyToken, async (req, res) => {
 
     res.status(201).json({ question: serializeListingQuestionForViewer(q) });
   } catch (err) {
+    if (err.listingBlockRefusal) return res.status(err.status).json({ error: err.message });
     logger.error('Listing question create error', { error: err.message });
     res.status(500).json({ error: 'Failed to post question' });
   }
@@ -2217,6 +2231,20 @@ router.post('/:listingId/questions/:questionId/answer', verifyToken, async (req,
     if (String(listing.user_id) !== String(userId)) {
       return res.status(403).json({ error: 'Only the seller can answer questions' });
     }
+
+    // The asker is notified of the answer.
+    const { data: asked, error: askedErr } = await supabaseAdmin
+      .from('ListingQuestion')
+      .select('asked_by')
+      .eq('id', questionId)
+      .eq('listing_id', listingId)
+      .maybeSingle();
+    if (askedErr) {
+      logger.error('Error reading listing question', { error: askedErr.message });
+      return res.status(500).json({ error: 'Failed to answer question' });
+    }
+    if (!asked) return res.status(404).json({ error: 'Question not found' });
+    await assertListingInteractionAllowed(userId, asked.asked_by);
 
     const nowIso = new Date().toISOString();
     const { data: updated, error } = await supabaseAdmin
@@ -2273,6 +2301,7 @@ router.post('/:listingId/questions/:questionId/answer', verifyToken, async (req,
       }
     });
   } catch (err) {
+    if (err.listingBlockRefusal) return res.status(err.status).json({ error: err.message });
     logger.error('Answer listing question error', { error: err.message });
     res.status(500).json({ error: 'Failed to answer question' });
   }
@@ -2489,6 +2518,10 @@ router.post('/:id/reveal-address', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to reveal address' });
     }
 
+    // A reveal posts in the buyer's chat with the seller and notifies the buyer. (After the grant read,
+    // which refuses an id that isn't a UUID.)
+    await assertListingInteractionAllowed(authorId, granteeUserId);
+
     let grantCreated = false;
     if (!existingGrant) {
       const { error: grantErr } = await supabaseAdmin
@@ -2573,6 +2606,7 @@ router.post('/:id/reveal-address', verifyToken, async (req, res) => {
       message: grantCreated ? 'Address revealed to buyer' : 'Address was already available to buyer',
     });
   } catch (err) {
+    if (err.listingBlockRefusal) return res.status(err.status).json({ error: err.message });
     logger.error('Reveal address error', { error: err.message });
     res.status(500).json({ error: 'Failed to reveal address' });
   }

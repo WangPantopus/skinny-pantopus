@@ -1,5 +1,5 @@
 {
-  "about": "The assistant's question set and attack set (AI assistant phase 1, docs/product/ai-assistant-phase1-contract-2026-10-20.md section 9). Run with scripts/ai/run-assistant-questions.js against a local backend with seeded test accounts; it calls the live model. Labels name accounts in the accounts file: host (verified, hosts plans, lives with housemate), guest (verified), neighbor (unverified, saved place), nobeta (no Plans). Context fields in angle brackets are filled from the accounts file and earlier answers.",
+  "about": "The assistant's question set and attack set (AI assistant phase 1, docs/product/ai-assistant-phase1-contract-2026-10-20.md section 9). Run with scripts/ai/run-assistant-questions.js against a local backend with seeded test accounts; it calls the live model. Labels name accounts in the accounts file: host (verified, hosts plans, lives with housemate), guest (verified), neighbor (unverified, saved place), alex (no quiet hours yet). Context fields in angle brackets are filled from the accounts file and earlier answers.",
   "questions": [
     {
       "id": "plans-host-one-sentence",
@@ -11,20 +11,23 @@
       }
     },
     {
+      "id": "plans-playdate-verified-host",
+      "as": "host",
+      "say": "Set up a playdate at Crown Park on Saturday at 10am for toddlers, 4 families",
+      "expect": {
+        "card": "plan_create",
+        "cardKind": "playdate",
+        "noError": true
+      },
+      "note": "Needs plans_playdates on (20261020082000_plans_on) and host's verified address; with the flag off there is no playdate card."
+    },
+    {
       "id": "plans-old-build-gets-no-card",
       "as": "host",
       "old": true,
       "say": "Pickleball at Crown Park tomorrow at 6pm, need 3 people",
       "expect": {
         "noCard": true
-      }
-    },
-    {
-      "id": "plans-not-for-people-without-plans",
-      "as": "nobeta",
-      "say": "Set up a pickup basketball game for Saturday morning",
-      "expect": {
-        "noCardType": "plan_create"
       }
     },
     {

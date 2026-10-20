@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.data.ai.AIScreenContext
 import app.pantopus.android.data.api.models.plans.PlanDto
 import app.pantopus.android.data.plans.PlanFormat
 import app.pantopus.android.data.plans.PlanState
@@ -76,6 +77,8 @@ fun PlanDetailScreen(
     onOpenChat: (roomId: String, title: String, planId: String) -> Unit,
     onOpenVerification: (HubVerificationTarget) -> Unit,
     onSeeAllPlans: () -> Unit,
+    /** Ask Pantopus about this plan (AI assistant phase 1); null hides the button. */
+    onAskPantopus: ((AIScreenContext) -> Unit)? = null,
     viewModel: PlanDetailViewModel = hiltViewModel(),
 ) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
@@ -118,6 +121,7 @@ fun PlanDetailScreen(
                     onOpenChat = { room -> onOpenChat(room, PlanFormat.shortTitle(state.plan), state.plan.id) },
                     onVerify = openVerification,
                     onSeeAllPlans = onSeeAllPlans,
+                    onAskPantopus = onAskPantopus,
                 )
         }
         ToastHost(controller = toast, modifier = Modifier.align(Alignment.TopCenter))
@@ -137,6 +141,7 @@ private fun PlanReady(
     onOpenChat: (String) -> Unit,
     onVerify: () -> Unit,
     onSeeAllPlans: () -> Unit,
+    onAskPantopus: ((AIScreenContext) -> Unit)? = null,
 ) {
     val standing = plan.standing
     if (standing == PlanViewerStanding.DECLINED || standing == PlanViewerStanding.REMOVED) {
@@ -188,6 +193,7 @@ private fun PlanReady(
         onShare = if (plan.shareUrl != null && !closed) ({ context.sharePlan(plan) }) else null,
         menu = menu,
         footer = footerFor(plan, ui, closed, viewModel, onSeeAllPlans, onVerify, askLocation) { confirmLeave = it },
+        onAsk = onAskPantopus?.let { ask -> { ask(AIScreenContext.plan(plan.id, PlanFormat.shortTitle(plan), hosting)) } },
     ) {
         when {
             hosting ->
