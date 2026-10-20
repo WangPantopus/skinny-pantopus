@@ -116,6 +116,19 @@ Sessions you start for one job (Instant Screens, Nearby Plans, single fixes) wor
 
 - [x] Morning and evening briefings default on for new notification preferences. Show a one-time in-app notice with the saved times and a direct route to Settings → Notifications to change times or turn either off. Preserve existing choices, including off settings. This replaces the morning-only opt-in and saved-place-off defaults in WP1; OS notification permission, recipient-local scheduling and useful-signal suppression still apply. Built and checked in the real web, iOS and Android apps in #2428. Scheduled delivery comes from the production briefing scheduler (#2427, briefings on since October 18); receipt on a physical phone is still unverified.
 
+**Made on October 20 (AI assistant), from the [AI expansion proposal](https://claude.ai/artifact/DkyRkpcQ1bLL4ETb3DjqQ5).** You said "start phase 1 as proposed, using your recommendations for the open decisions and recording them"; these are those recommendations, and they settle the October 4 agent design's open decisions. Progress is in the AI assistant section below; the build contract is [docs/product/ai-assistant-phase1-contract-2026-10-20.md](docs/product/ai-assistant-phase1-contract-2026-10-20.md).
+
+- [x] Build phase 1 now, not after the pilot's first read. The assistant reads what the person can see in Plans, Pulse, Place and Today, and fills in actions as cards that one tap sends through an endpoint the app already uses. It also knows how the app works and links to the right screen. No new tables and no new write paths. iOS and Android; the web keeps working unchanged.
+- [x] Name and autonomy: "Pantopus" in the app and "Ask Pantopus" on buttons. Every action waits for the person's tap; standing rules wait for phase 3.
+- [x] Where it appears: a box at the top of Today and an Ask button on Place, Nearby and Plans, inside each screen's current design. No tab changes. In chats with phase 2.
+- [x] Languages: it answers in the language a person writes in; the app's own words stay English.
+- [x] Reading a chat: only when the person asks inside that chat, only chats they're in, never in the background. Phase 2, after the privacy policy names AI processing and the Anthropic account's retention setting is confirmed.
+- [x] Speaking first (phase 2): one morning brief and at most two nudges a day, held during quiet hours, each with "Fewer like this", and never about an unconfirmed pickup day.
+- [x] New tables for phase 3: `AgentRequest`, `AgentStep` and `AgentMemoryItem` from the October 4 [system design](docs/product/pantopus-agent-system-design-2026-10-04.md), built when phase 2 ships. Memory is kept until the person deletes it, with a yearly reminder to review it. Standing rules (`AgentRule`) come later in phase 3.
+- [x] Siri App Intents and the Android equivalent in phase 3, starting with five actions: next pickup, what's on today, start a plan, catch me up nearby, remind my household.
+- [x] Model unchanged: Claude Sonnet 5.5 for everything (October 12). Claude Haiku 5.5 for background jobs stays your option.
+- [ ] Yours before phase 1 ships: the privacy policy and the data inventory name AI processing and Anthropic as a processor, and you confirm the Anthropic account's data-retention setting. A draft of the wording will be in a pull request for your review.
+
 **Still open. The brief builds the default until you decide.**
 
 - [ ] Confirm the September 26 promise and pilot shape: "Know what matters for your home, and stay on top of it"; first-time homeowners in Vancouver, Camas and Washougal; five households, then 30 to 50, for eight weeks each. Default: as written.
@@ -127,7 +140,7 @@ Sessions you start for one job (Instant Screens, Nearby Plans, single fixes) wor
 - [ ] Crew Day by hand this fall, beside the pilot (section 4A). Default: talk to the crews now; choose the first streets only if the crews pass Gate 1.
 - [ ] The by-hand Crew Day's tools. Default: a form, texts, email, and payment through the crew or a payment link, with no Pantopus web build, so the mobile-only rule holds. The Street Organizer's Phase 1 assumes a browser booking page.
 - [x] Pulse's six approvals in [PR 625](https://github.com/WangPantopus/skinny-pantopus/pull/625): decided October 13 (see above): five tabs; place pages in release R4 after streets, buildings, HOAs and school zones first; labels and permissions approved; adult-only posting approved; paid moderation approved in principle; Pulse is built now rather than after Crew Day.
-- [ ] The Pantopus Agent's open decisions: working name, Stage 1 entry point and languages, autonomy defaults and memory retention ([product design](docs/product/pantopus-agent-product-design-2026-10-04.md#open-decisions)). Default: its recommendations; nothing is built before the pilot's first read.
+- [x] The Pantopus Agent's open decisions: working name, Stage 1 entry point and languages, autonomy defaults and memory retention ([product design](docs/product/pantopus-agent-product-design-2026-10-04.md#open-decisions)). Decided October 20 (see above); building started the same day.
 - [ ] Record these decisions in `docs/pantopus-product-design-index-2026-09-09.md`, `docs/PROJECT_HANDOFF.md` and section 13 of the Wedge v2 page.
 
 ## 1. Done since September 16 (checked on master October 3)
@@ -323,7 +336,7 @@ Phases 0 and 1 of the [Street Organizer launch plan](docs/product/street-organiz
 - [x] Pulse moved to the Pulse section below (October 13): built now, town-wide first, with street areas opening on Crew Day streets. Aim for the place people ask their town, alongside the Facebook groups they already use, not a replacement for them.
 - [ ] Support Train gift funds (off since October 6, PR 1624; the routes exist and are untested). First decide who receives the money (the recipient, the organizer, or Pantopus holding it), whether it waits until the Train ends, any platform fee, what happens when the recipient has no account, and whether organizers see anonymous amounts ([audit](docs/support-train-payments-audit.md)). Recommended order: first let the organizer add an outside fundraiser link (no money passes through Pantopus); in-app gifts through Stripe only after those decisions, with the same test-card checks as invoices.
 - [ ] Porchlight stays an option: at most a by-hand trial with five families after the pilot.
-- [ ] The Pantopus Agent, in four stages, each only after the one before passes its gate ([product design](docs/product/pantopus-agent-product-design-2026-10-04.md), [system design](docs/product/pantopus-agent-system-design-2026-10-04.md)):
+- [ ] The Pantopus Agent, in four stages, each only after the one before passes its gate ([product design](docs/product/pantopus-agent-product-design-2026-10-04.md), [system design](docs/product/pantopus-agent-system-design-2026-10-04.md)). On October 20 the AI assistant section below took over Stage 1 and parts of Stages 3 and 4, in three phases; the people layer (Stage 2) and selling stay as designed here:
   - [ ] Stage 1, Know: one box on the Today tab answering from what Pantopus already knows, with sources, and tasks and reminders after one tap. In the pilot area first.
   - [ ] Stage 2, Ask people: questions routed to people who opted in to help, built once together with the Street Organizer's small asks.
   - [ ] Stage 3, Act for you: quotes, bookings and selling with approval, once marketplace and open gigs return. This is also the paid household assistant ("take this off my plate").
@@ -409,6 +422,18 @@ Decided October 13 (section 0). The [build kit](docs/product/pulse-build/README.
 - [x] October 14: finish everything in the design and have all of it in the app at launch ([coverage check](docs/product/pulse-build/06-coverage.md), [launch bar](docs/product/pulse-build/03-delivery-plan.md#the-launch-bar)). Two parts need other products and are reserved (S25): the Crew Day option and provider pages, and street welcomes. Decide before launch: build those products, or ship without them.
 - [x] When the pilot builds ship relative to the Pulse launch: decided October 14. No pre-Pulse commit is pinned (you said not to worry about the pilot), and production releases from master once you enable it (section 0).
 - [ ] You, when the time comes: confirm moderator cover; the published rules and law-enforcement policy, read by counsel; the Anthropic key on hosted environments for the composer checks; outage-data, SMS and inbound-email accounts (texting registration can take weeks, so start early); legal review and NCMEC reporting setup; officials invited and verified; approval of the seeded Known content; store listing updates for user-generated content; deploys; first-town acceptance rounds with 8 to 10 people.
+
+## AI assistant (added October 20)
+
+Decided October 20 (section 0) from the [AI expansion proposal](https://claude.ai/artifact/DkyRkpcQ1bLL4ETb3DjqQ5). The contract the backend, iOS and Android sessions build against is [docs/product/ai-assistant-phase1-contract-2026-10-20.md](docs/product/ai-assistant-phase1-contract-2026-10-20.md). The server sends the new cards only to app builds that ask for them, so released apps and the web keep working while the apps catch up.
+
+- [ ] Phase 1, backend: read tools for Plans, Pulse, Place, Today and home tasks; action cards; screen context; link buttons; the app guide; 45-second turns with eight tool rounds; a daily budget per person, a global spending cap and an off switch; other people's words handled as data; the question set and the attack set.
+- [ ] Phase 1, iOS: action cards and link buttons in the assistant thread, Ask on Today, Place, Nearby, Plans, a plan and a post, and post cards that keep every field.
+- [ ] Phase 1, Android: the same.
+- [ ] Phase 1, yours: the privacy policy and data inventory wording (section 0), before phase 1 ships.
+- [ ] Phase 2: catch-up for Nearby, chats and plan chats, reply drafts, chat to task, warning signs on first messages from strangers, the morning brief with buttons, weather watch and the host digest for plans, lost-and-found matching, and document readers for the home.
+- [ ] Phase 3: the memory list, "Needs you", standing rules, follow-ups, and Siri and the Android assistant.
+- [ ] Later, when their flags turn on: selling, buying, negotiating within limits and hiring, as the proposal describes.
 
 ## Background backlog
 
