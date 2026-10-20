@@ -34,8 +34,13 @@ const {
 const PLAN_KINDS = KINDS.filter((kind) => kind !== 'playdate');
 // What the nearby feed accepts from residents (posts.js PLACE types).
 const PLACE_POST_TYPES = ['ask_local', 'recommendation', 'event', 'lost_found', 'alert', 'deal', 'local_update', 'neighborhood_win', 'visitor_guide'];
-// The Today screen's sections (PlaceStoreReads / StoreKeys).
-const TODAY_SECTIONS = ['weather', 'air_quality', 'alerts', 'sunrise_sunset', 'good_day_to', 'address_calendar'];
+// The Today screen's cards (PlaceStoreReads.todaySections / StoreKeys.TODAY_SECTIONS). These
+// come with their data,
+const TODAY_SECTIONS = ['weather', 'air_quality', 'alerts', 'sunrise_sunset', 'good_day_to'];
+// and these in one line each, so the day fits its screen context: the address calendar (the
+// chat context also names the next pickups and dates), radon and the Ballot card. The screen's
+// home and block sections only feed its sky drawing.
+const TODAY_BRIEFS = ['address_calendar', 'lead_radon', 'civic_election'];
 // Tasks due on Today, soonest first; list_home_tasks reads them all.
 const TODAY_TASKS = 10;
 const NEARBY_RADIUS_METERS = 16093; // 10 miles
@@ -110,7 +115,7 @@ const readToolDefinitions = [
   },
   {
     name: 'get_today',
-    description: "Today at the person's home: weather and the hourly forecast, air quality, alerts, sunrise and sunset, \"good day to\" picks, the address calendar (pickup days and other dates), plans today and household tasks due.",
+    description: "Today at the person's home: weather and the hourly forecast, air quality, alerts, sunrise and sunset, \"good day to\" picks, and in short the address calendar (pickup days and other dates), radon and the next election; plans today and household tasks due.",
     input_schema: {
       type: 'object',
       properties: { home_id: { type: ['string', 'null'], description: 'One of their homes, or null for the home Today shows.' } },
@@ -661,7 +666,7 @@ async function getToday(args, ctx) {
   const home = await chosenHome(ctx.userId, args.home_id);
   if (!home) return { error: 'They have no home in Pantopus yet, so Today has nothing about a home. They can add one on the Place tab.' };
   const [intelligence, tasks, plans] = await Promise.all([
-    readSections(home.id, ctx.userId, TODAY_SECTIONS),
+    readSections(home.id, ctx.userId, [...TODAY_SECTIONS, ...TODAY_BRIEFS], ctx.user),
     openTasks(home.id, ctx.userId).catch(() => null),
     (async () => {
       if (!(await plansOn(ctx))) return null;
@@ -676,13 +681,16 @@ async function getToday(args, ctx) {
     })().catch(() => null),
   ]);
   const due = tasks ? dueByToday(tasks.records, ctx.timeZone) : null;
-  // The screen's sections come first, so a long day's context is cut in its plans and tasks
+  const read = sectionsOf(intelligence);
+  const zone = intelligence?.time_zone || ctx.timeZone;
+  // The screen's cards come first, so a long day's context is cut in its plans and tasks
   // (find_plans and list_home_tasks have them all), never in its weather and alerts.
   return {
     note: OTHERS_WORDS,
     today: dayLabel(new Date().toISOString(), ctx.timeZone),
     home: { home_id: home.id, city: home.city, state: home.state },
-    sections: sectionsOf(intelligence).map((section) => sectionForModel(section, intelligence.time_zone || ctx.timeZone)),
+    sections: read.filter((section) => TODAY_SECTIONS.includes(section.id)).map((section) => sectionForModel(section, zone)),
+    in_short: read.filter((section) => TODAY_BRIEFS.includes(section.id)).map((section) => sectionBrief(section, zone)),
     plans_today: plans,
     tasks_due: due ? due.slice(0, TODAY_TASKS).map((task) => taskForModel(task, tasks.names, ctx.timeZone)) : null,
     ...(due && due.length > TODAY_TASKS ? { more_tasks_due: due.length - TODAY_TASKS } : {}),
