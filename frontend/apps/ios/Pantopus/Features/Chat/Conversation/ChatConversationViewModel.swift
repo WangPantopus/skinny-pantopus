@@ -1325,11 +1325,14 @@ public final class ChatConversationViewModel {
         startNewAIConversation()
     }
 
-    /// The action cards in one conversation, by card id; none when it is already gone.
+    /// The action cards in one conversation, by card id; none when it is already gone. The history
+    /// read sends the chat's card list, or the server leaves the action cards out.
     private func aiActionCardIds(conversationId: String) async throws -> Set<String> {
         let history: AIConversationMessagesResponse
         do {
-            history = try await api.request(AIEndpoints.conversationMessages(id: conversationId))
+            history = try await api.request(
+                AIEndpoints.conversationMessages(id: conversationId, cards: AIChatStreamRequest.supportedCards)
+            )
         } catch APIError.notFound {
             return []
         }
