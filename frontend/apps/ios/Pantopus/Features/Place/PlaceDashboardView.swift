@@ -334,7 +334,12 @@ struct PlaceDashboardView: View {
 
     /// The civic_election envelope's Ballot P0 card, when the server sent one.
     static func ballot(in intel: PlaceIntelligence) -> (card: BallotSummary, asOf: String?)? {
-        for section in intel.groups.flatMap(\.sections) where section.id == .civicElection {
+        ballot(in: intel.groups.flatMap(\.sections))
+    }
+
+    /// The same card among a preview's sections (a saved or looked-up address).
+    static func ballot(in sections: [PlaceSectionEnvelope]) -> (card: BallotSummary, asOf: String?)? {
+        for section in sections where section.id == .civicElection {
             if section.status == .ready, let card = section.civicElection?.ballotCard {
                 return (card, section.asOf)
             }
@@ -352,21 +357,13 @@ struct PlaceDashboardView: View {
     }
 
     private func seasonBlock(_ card: BallotSummary, asOf: String?) -> some View {
-        VStack(alignment: .leading, spacing: Spacing.s4) {
-            Text("This season")
-                .textCase(.uppercase)
-                .font(.system(size: 11, weight: .semibold))
-                .kerning(0.88)
-                .foregroundStyle(Theme.Color.appTextSecondary)
-                .accessibilityAddTraits(.isHeader)
-            BallotCardView(
-                card: card,
-                asOf: asOf,
-                onOpenGovernments: card.governments.map { governments in
-                    { ballotGovernments = BallotGovernmentsSheet(governments: governments) }
-                }
-            )
-        }
+        BallotSeasonBlock(
+            card: card,
+            asOf: asOf,
+            onOpenGovernments: card.governments.map { governments in
+                { ballotGovernments = BallotGovernmentsSheet(governments: governments) }
+            }
+        )
     }
 
     // MARK: - Group block
@@ -465,7 +462,7 @@ struct PlaceDashboardView: View {
 
 /// The governments view's payload, identified so `.sheet(item:)` keeps its
 /// content on screen while the sheet slides away.
-private struct BallotGovernmentsSheet: Identifiable {
+struct BallotGovernmentsSheet: Identifiable {
     let governments: BallotGovernments
     var id: BallotGovernments {
         governments
