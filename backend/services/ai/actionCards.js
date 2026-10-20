@@ -312,7 +312,7 @@ const actionCardDefinitions = [
   },
   {
     name: 'draft_notification_settings',
-    description: 'Draft a change to the person\'s notification settings: quiet hours (HH:MM, 24-hour), the morning and evening briefings and their times, weather and air alerts, and home reminders. Only the fields that change.',
+    description: 'Draft a change to the person\'s notification settings: quiet hours (HH:MM, 24-hour), the morning and evening briefings and their times, weather and air alerts, home reminders, and Suggestions from Pantopus. Only the fields that change.',
     input_schema: {
       type: 'object',
       properties: {
@@ -325,9 +325,10 @@ const actionCardDefinitions = [
         weather_alerts: nullable({ type: 'boolean' }),
         air_quality_alerts: nullable({ type: 'boolean' }),
         home_reminders: nullable({ type: 'boolean' }),
+        suggestions_enabled: nullable({ type: 'boolean', description: 'Suggestions from Pantopus: a morning brief with buttons, and at most two nudges a day, never during quiet hours.' }),
         note: { type: ['string', 'null'], description: NOTE },
       },
-      required: ['quiet_hours_start', 'quiet_hours_end', 'morning_briefing', 'morning_briefing_time', 'evening_briefing', 'evening_briefing_time', 'weather_alerts', 'air_quality_alerts', 'home_reminders', 'note'],
+      required: ['quiet_hours_start', 'quiet_hours_end', 'morning_briefing', 'morning_briefing_time', 'evening_briefing', 'evening_briefing_time', 'weather_alerts', 'air_quality_alerts', 'home_reminders', 'suggestions_enabled', 'note'],
       additionalProperties: false,
     },
   },
@@ -1142,6 +1143,7 @@ async function draftNotificationSettings(args, ctx) {
     ['weather_alerts', 'weather_alerts_enabled', 'Weather alerts'],
     ['air_quality_alerts', 'aqi_alerts_enabled', 'Air quality alerts'],
     ['home_reminders', 'home_reminders_enabled', 'Home reminders'],
+    ['suggestions_enabled', 'suggestions_enabled', 'Suggestions from Pantopus'],
   ];
   for (const [arg, field, label] of toggles) {
     if (typeof args[arg] === 'boolean') {
