@@ -85,16 +85,7 @@ internal fun PostPdfSlide(
         try {
             bitmap =
                 withContext(Dispatchers.IO) {
-                    PdfRenderer(ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)).use { renderer ->
-                        renderer.openPage(page).use { pdfPage ->
-                            val width = 1400
-                            val height = (width.toFloat() * pdfPage.height / pdfPage.width).toInt().coerceIn(1, 4000)
-                            Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also {
-                                it.eraseColor(android.graphics.Color.WHITE)
-                                pdfPage.render(it, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                            }
-                        }
-                    }
+                    renderPdfPage(file, page)
                 }
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -134,6 +125,21 @@ internal fun PostPdfSlide(
         }
     }
 }
+
+private fun renderPdfPage(
+    file: File,
+    page: Int,
+): Bitmap =
+    PdfRenderer(ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)).use { renderer ->
+        renderer.openPage(page).use { pdfPage ->
+            val width = 1400
+            val height = (width.toFloat() * pdfPage.height / pdfPage.width).toInt().coerceIn(1, 4000)
+            Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also {
+                it.eraseColor(android.graphics.Color.WHITE)
+                pdfPage.render(it, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+            }
+        }
+    }
 
 private fun loadPdfPageCount(
     url: String,
