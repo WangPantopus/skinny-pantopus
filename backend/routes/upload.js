@@ -21,7 +21,7 @@ const { calculateAndStoreCompleteness } = require('../utils/businessCompleteness
 const { requirePersonaEnabled } = require('../utils/featureFlags');
 const { writeIdentityAuditLog } = require('../utils/identityAudit');
 const { syncLocalProfileFromAccount } = require('../utils/identityProfiles');
-const { actingBusinessInRoom } = require('../services/chatBusinessAccess');
+const { actingBusinessInRoom, canActAsBusiness } = require('../services/chatBusinessAccess');
 
 // Rate limit: 30 uploads per 15 minutes per IP
 const uploadLimiter = rateLimit({
@@ -738,23 +738,22 @@ router.post('/chat-media/:roomId', uploadLimiter, verifyToken, upload.array('fil
         : s3.generateS3Key(`chat/${roomId}`, file.originalname, userId);
       const sha256 = crypto.createHash('sha256').update(file.buffer).digest('hex');
       const storageReference = s3.chatFileStorageReference(recordId, userId, roomId, objectKey, sha256);
-      const { url, key } = await s3.uploadToS3(file.buffer, objectKey, file.mimetype,
+      const { key } = await s3.uploadToS3(file.buffer, objectKey, file.mimetype,
         s3.chatFileObjectMetadata(recordId, userId, sha256));
 
       const ext = (path.extname(file.originalname || '').replace('.', '') || '').toLowerCase();
       const category = s3.categorizeFile(file.mimetype) || 'document';
 
-      // Insert with a temporary file_url, then update it to the authenticated
-      // proxy path once we have the generated id. Clients will fetch files
-      // through GET /api/chat/files/:fileId which verifies room membership
-      // and returns a short-lived signed S3 URL.
+      // Clients fetch files through GET /api/chat/files/:fileId, which checks room membership and serves the bytes.
+      // The row never holds the storage address: its key names the uploader, who may be a business's owner or staff,
+      // and messages copy file_url to everyone in the room.
       const row = {
           id: recordId,
           user_id: userId,
           filename: key.split('/').pop() || file.originalname,
           original_filename: file.originalname,
           file_path: key,
-          file_url: id ? `/api/chat/files/${id}` : url,
+          file_url: `/api/chat/files/${recordId}`,
           file_size: file.size,
           mime_type: file.mimetype,
           file_extension: ext,
@@ -797,16 +796,6 @@ router.post('/chat-media/:roomId', uploadLimiter, verifyToken, upload.array('fil
         return res.status(409).json({ error: 'This upload request was already used. Send the attachment again.', code: 'CHAT_UPLOAD_REQUEST_REUSED' });
       }
 
-      if (!id) {
-        // Replace the public URL with the authenticated proxy path
-        const proxyUrl = `/api/chat/files/${saved.id}`;
-        await supabaseAdmin
-          .from('File')
-          .update({ file_url: proxyUrl })
-          .eq('id', saved.id);
-        saved.file_url = proxyUrl;
-      }
-
       uploaded.push(responseFile(saved));
     }
 
@@ -838,7 +827,7 @@ router.post('/gig-question-media/:gigId', uploadLimiter, verifyToken, upload.arr
     // Ensure gig exists.
     const { data: gig, error: gigErr } = await supabaseAdmin
       .from('Gig')
-      .select('id')
+      .select('id, user_id')
       .eq('id', gigId)
       .single();
 
@@ -846,12 +835,17 @@ router.post('/gig-question-media/:gigId', uploadLimiter, verifyToken, upload.arr
       return res.status(404).json({ error: 'Gig not found' });
     }
 
+    // A business's owner and staff answer its task's questions as the business, and these files' addresses are public:
+    // they go under the business, so an address never names the person behind it.
+    const keyOwner = String(gig.user_id) !== String(userId) && await canActAsBusiness(gig.user_id, userId)
+      ? gig.user_id : userId;
+
     const uploadedFiles = [];
     for (const file of files) {
       const { url, key } = await s3.uploadGigMedia(
         file.buffer,
         file.originalname,
-        userId,
+        keyOwner,
         gigId,
         file.mimetype
       );
