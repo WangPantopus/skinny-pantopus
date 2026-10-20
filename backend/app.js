@@ -79,6 +79,7 @@ const { registerPgBossJobs } = require('./jobs/pgBossJobs');
 
 // Import logger
 const logger = require('./utils/logger');
+const { isUserFacing } = require('./utils/userFacingError');
 
 // Verify Supabase connection
 const supabaseAdmin = require('./config/supabaseAdmin');
@@ -546,12 +547,16 @@ app.use((err, req, res, next) => {
   }
 
   // Internal error messages can describe the database or providers; production
-  // clients get a generic one for server faults.
-  const message = status >= 500 && process.env.NODE_ENV === 'production'
+  // clients get a generic one for server faults. Only an error the app marked
+  // as fixed copy (utils/userFacingError) keeps its message and code; the
+  // status alone never does, since provider SDK errors carry their own.
+  const userFacing = isUserFacing(err);
+  const message = status >= 500 && process.env.NODE_ENV === 'production' && !userFacing
     ? 'Internal server error'
     : safeMessage;
   return res.status(status).json({
     error: message,
+    ...(userFacing && typeof err.code === 'string' && { code: err.code }),
     ...(process.env.NODE_ENV === 'development'
       && !['entity.parse.failed', 'entity.too.large'].includes(err.type)
       && { stack: err.stack })
