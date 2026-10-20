@@ -1053,7 +1053,9 @@ async function notifyOwnershipClaimRejected({ userId, homeName, homeId, reason }
     title: 'Home verification not approved',
     body: `Your verification request for ${homeName || 'your home'} was not approved.${reason ? ` ${reason}` : ''}`,
     icon: '📋',
-    link: '/app/homes',
+    // The iOS and Android routers need a Home id in the link; the web
+    // resolves this type to My Homes (lib/notificationRoutes.ts).
+    link: `/app/homes/${homeId}/dashboard`,
     metadata: { home_id: homeId },
   });
 }
@@ -1068,7 +1070,7 @@ async function notifyOwnershipClaimNeedsMoreInfo({ userId, homeName, homeId }) {
     title: 'More information needed',
     body: `Your verification request for ${homeName || 'your home'} needs additional documentation. Open My Homes to continue your claim.`,
     icon: '📋',
-    link: '/app/homes',
+    link: `/app/homes/${homeId}/dashboard`,
     metadata: { home_id: homeId },
   });
 }
