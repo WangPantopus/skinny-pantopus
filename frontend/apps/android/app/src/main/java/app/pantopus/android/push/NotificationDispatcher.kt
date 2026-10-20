@@ -461,4 +461,3 @@ private const val PLAN_ACTION_SLOTS = 4
 
 /** The account a brief's or nudge's push was sent to (its `recipient_user_id`): MainActivity opens it only for them. */
 const val ASSISTANT_RECIPIENT = "pantopus.assistant.recipient"
-
