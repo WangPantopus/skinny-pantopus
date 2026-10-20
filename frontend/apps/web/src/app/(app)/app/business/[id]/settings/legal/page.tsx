@@ -9,6 +9,12 @@ import type { VerificationStatus } from '@pantopus/api';
 // ---- Status badge helper ----
 function VerificationBadge({ status }: { status: string }) {
   switch (status) {
+    case 'unavailable':
+      return (
+        <span className="inline-flex items-center rounded-full bg-app-surface-sunken px-2.5 py-0.5 text-xs font-medium text-app-text-secondary border border-app-border">
+          Status unavailable
+        </span>
+      );
     case 'self_attested':
       return (
         <span className="inline-flex items-center rounded-full bg-app-surface-sunken px-2.5 py-0.5 text-xs font-medium text-app-text-secondary border border-app-border">
@@ -66,6 +72,7 @@ export default function BusinessSettingsLegalPage() {
   // Legal settings (kept from original page)
   const [legalForm, setLegalForm] = useState({ legal_name: '', tax_id_last4: '', support_email: '' });
   const [savingLegal, setSavingLegal] = useState(false);
+  const [legalLoaded, setLegalLoaded] = useState(false);
 
   // Self-attestation form
   const [attestForm, setAttestForm] = useState({ legal_name: '', address_confirmed: false });
@@ -87,20 +94,22 @@ export default function BusinessSettingsLegalPage() {
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
+    setLegalLoaded(false);
     try {
       const [verRes, privateRes] = await Promise.all([
         api.businesses.getVerificationStatus(businessId),
-        api.businesses.getBusinessPrivate(businessId).catch(() => ({ private: {} as Record<string, any> })),
+        api.businesses.getBusinessPrivate(businessId),
       ]);
       setVerificationData(verRes);
 
-      const priv = (privateRes as { private?: Record<string, any> }).private || {};
+      const priv: Partial<api.businesses.BusinessPrivateData> = privateRes.private || {};
       const privLegalName = typeof priv.legal_name === 'string' ? priv.legal_name : '';
       setLegalForm({
         legal_name: privLegalName,
         tax_id_last4: typeof priv.tax_id_last4 === 'string' ? priv.tax_id_last4 : '',
         support_email: typeof priv.support_email === 'string' ? priv.support_email : '',
       });
+      setLegalLoaded(true);
 
       // Pre-fill attestation form with legal name if available
       if (!attestForm.legal_name && privLegalName) {
@@ -120,12 +129,25 @@ export default function BusinessSettingsLegalPage() {
 
   // ---- Legal settings save ----
   const saveLegal = async () => {
+    if (!legalLoaded || savingLegal) return;
+    const legalName = legalForm.legal_name.trim();
+    const taxId = legalForm.tax_id_last4.trim();
+    const supportEmail = legalForm.support_email.trim();
+    if (taxId && !/^[0-9]{4}$/.test(taxId)) {
+      setError('Enter exactly four tax ID digits, or leave it blank.');
+      return;
+    }
+    if (supportEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(supportEmail)) {
+      setError('Enter a valid support email address.');
+      return;
+    }
+    setError('');
     setSavingLegal(true);
     try {
       await api.businesses.updateBusinessPrivate(businessId, {
-        legal_name: legalForm.legal_name.trim() || undefined,
-        tax_id_last4: legalForm.tax_id_last4.trim() || undefined,
-        support_email: legalForm.support_email.trim() || undefined,
+        legal_name: legalName,
+        tax_id_last4: taxId,
+        support_email: supportEmail,
       });
       await load();
     } catch (e: unknown) {
@@ -209,7 +231,7 @@ export default function BusinessSettingsLegalPage() {
     );
   }
 
-  const status = verificationData?.verification_status || 'unverified';
+  const status = verificationData?.verification_status || 'unavailable';
   const evidence = verificationData?.evidence || [];
   const canSelfAttest = verificationData?.can_self_attest || false;
   const canUploadEvidence = verificationData?.can_upload_evidence || false;
@@ -236,7 +258,10 @@ export default function BusinessSettingsLegalPage() {
         </div>
 
         {error && (
-          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+          <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error}
+            {!legalLoaded && <button onClick={() => void load()} className="ml-3 underline">Retry</button>}
+          </div>
         )}
 
         {/* Verification Tiers Explanation */}
@@ -308,6 +333,12 @@ export default function BusinessSettingsLegalPage() {
                 {attesting ? 'Submitting...' : 'Confirm Business Identity'}
               </button>
             </div>
+          ) : status === 'unverified' || status === 'unavailable' ? (
+            <p className="text-sm text-app-text-secondary">
+              {verificationData?.can_self_attest_reason === 'At least one geocoded location is required'
+                ? 'Add and confirm a business location before self-attesting.'
+                : verificationData?.can_self_attest_reason || 'Self-attestation is not available right now.'}
+            </p>
           ) : (
             <div className="flex items-center gap-2 text-sm text-green-700">
               <span className="text-green-600 font-bold">&#10003;</span>
@@ -417,6 +448,7 @@ export default function BusinessSettingsLegalPage() {
               <div className="text-sm font-medium text-app-text-strong mb-1">Legal Business Name</div>
               <input
                 value={legalForm.legal_name}
+                disabled={!legalLoaded}
                 onChange={(e) => setLegalForm((f) => ({ ...f, legal_name: e.target.value }))}
                 className="w-full rounded-lg border border-app-border px-3 py-2 text-sm focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
               />
@@ -425,7 +457,9 @@ export default function BusinessSettingsLegalPage() {
               <div className="text-sm font-medium text-app-text-strong mb-1">Tax ID (last 4)</div>
               <input
                 value={legalForm.tax_id_last4}
-                onChange={(e) => setLegalForm((f) => ({ ...f, tax_id_last4: e.target.value.replace(/\D/g, '').slice(0, 4) }))}
+                disabled={!legalLoaded}
+                inputMode="numeric"
+                onChange={(e) => setLegalForm((f) => ({ ...f, tax_id_last4: e.target.value }))}
                 className="w-full rounded-lg border border-app-border px-3 py-2 text-sm focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
               />
             </label>
@@ -433,13 +467,14 @@ export default function BusinessSettingsLegalPage() {
               <div className="text-sm font-medium text-app-text-strong mb-1">Support Email</div>
               <input
                 value={legalForm.support_email}
+                disabled={!legalLoaded}
                 onChange={(e) => setLegalForm((f) => ({ ...f, support_email: e.target.value }))}
                 className="w-full rounded-lg border border-app-border px-3 py-2 text-sm focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
               />
             </label>
             <button
               onClick={saveLegal}
-              disabled={savingLegal}
+              disabled={savingLegal || !legalLoaded}
               className="px-4 py-2 rounded-lg bg-violet-600 text-white text-sm font-semibold hover:bg-violet-700 disabled:opacity-50"
             >
               {savingLegal ? 'Saving...' : 'Save Legal Settings'}
