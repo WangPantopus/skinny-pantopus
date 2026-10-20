@@ -20,6 +20,7 @@ const {
   supportTrainUnavailable,
 } = require('../middleware/supportTrainPermissions');
 const { emitSupportTrainEvent, formatSupportTrainSlotTime } = require('../services/supportTrainNotifications');
+const { deliverNewMessage } = require('./chats');
 const {
   sendGuestReservationAddressEmail,
   sendGuestReservationConfirmationEmail,
@@ -2661,7 +2662,7 @@ router.post(
         message: req.body.message,
         metadata: { source: 'support_train_nudge', support_train_id: st.id },
       })
-      .select('id, room_id, message, created_at')
+      .select('*, sender:user_id(id, username, name, profile_picture_url)')
       .single();
 
     if (error || !msg) {
@@ -2669,7 +2670,20 @@ router.post(
       return res.status(500).json({ error: 'INTERNAL', message: 'Failed to send nudge.' });
     }
 
-    res.status(201).json(msg);
+    // The reminder goes out as any message in the train's chat does: live to everyone in the
+    // chat, with their unread badge and a push. It's posted either way.
+    try {
+      await deliverNewMessage(req.app.get('io'), {
+        room: { id: chatThreadId, type: 'support_train' },
+        message: msg,
+        actorUserId: req.user.id,
+        requestId: req.requestId,
+      });
+    } catch (deliveryErr) {
+      logger.warn('Send nudge delivery failed (non-fatal)', { supportTrainId: st.id, error: deliveryErr.message });
+    }
+
+    res.status(201).json({ id: msg.id, room_id: msg.room_id, message: msg.message, created_at: msg.created_at });
   })
 );
 
@@ -4446,6 +4460,19 @@ router.get(
 
     if (viewerLevel === 'organizer') {
       response.activity_visibility = activity?.visibility || 'private';
+    }
+
+    // The train's chat, only for someone in it: its organizers and recipient join at publish
+    // and helpers when they sign up, and they leave it when they're out.
+    if (userId && activity?.chat_thread_id) {
+      const { data: chatMember } = await supabaseAdmin
+        .from('ChatParticipant')
+        .select('id')
+        .eq('room_id', activity.chat_thread_id)
+        .eq('user_id', userId)
+        .eq('is_active', true)
+        .maybeSingle();
+      if (chatMember) response.chat_thread_id = activity.chat_thread_id;
     }
 
     // ── Privacy-gated fields (address, delivery instructions) ──
