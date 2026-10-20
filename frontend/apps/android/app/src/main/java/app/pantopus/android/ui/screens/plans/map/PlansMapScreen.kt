@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -133,6 +134,8 @@ data class PlansMapActions(
     val onInvite: () -> Unit,
     /** Ask Pantopus about plans (AI assistant phase 1); null hides the button. */
     val onAskPantopus: ((AIScreenContext) -> Unit)? = null,
+    /** The side menu, on every tab (founder decision 2026-10-20); null hides the button. */
+    val onOpenMenu: (() -> Unit)? = null,
 )
 
 /**
@@ -205,6 +208,7 @@ fun PlansMapScreen(
                 },
                 onUseHome = viewModel::useHome,
                 onBackFromCard = { viewModel.select(null) },
+                onOpenMenu = actions.onOpenMenu,
                 onAskPantopus = actions.onAskPantopus?.let { ask -> { ask(AIScreenContext.plans()) } },
                 modifier =
                     Modifier.align(Alignment.TopCenter).onSizeChanged { size ->
@@ -651,7 +655,14 @@ private fun PlansTopChrome(
     onBackFromCard: () -> Unit,
     modifier: Modifier = Modifier,
     onAskPantopus: (() -> Unit)? = null,
+    onOpenMenu: (() -> Unit)? = null,
 ) {
+    // The side menu keeps its place at the end of the top row in every state (founder decision 2026-10-20).
+    val menu: @Composable () -> Unit = {
+        onOpenMenu?.let {
+            GlassCircleButton(icon = PantopusIcon.Menu, label = "Menu", onClick = it, modifier = Modifier.testTag("plans.menu"))
+        }
+    }
     Column(
         modifier =
             modifier
@@ -676,10 +687,18 @@ private fun PlansTopChrome(
                             },
                     )
                 }
+                if (onOpenMenu != null) Spacer(modifier = Modifier.width(Spacing.s2))
+                menu()
             }
             return@Column
         }
-        if (state.locationStatus == PlansLocationStatus.Missing) return@Column
+        if (state.locationStatus == PlansLocationStatus.Missing) {
+            Row {
+                Spacer(modifier = Modifier.weight(1f))
+                menu()
+            }
+            return@Column
+        }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
             AreaPill(state = state, onWindow = onWindow, onLocate = onLocate, onUseHome = onUseHome, modifier = Modifier.weight(1f))
             if (!state.isEmpty) GlassCircleButton(icon = PantopusIcon.Navigation, label = "Show my location", onClick = onLocate)
@@ -692,6 +711,7 @@ private fun PlansTopChrome(
                     iconTint = PantopusColors.magic,
                 )
             }
+            menu()
         }
         if (!state.isEmpty) KindChips(state = state, onKind = onKind)
     }

@@ -62,7 +62,20 @@ struct AddressTodayTabView: View {
         return true
     }
 
+    /// The title, date and address, with the side menu at the end (every tab
+    /// has it, founder decision 2026-10-20).
     private var header: some View {
+        HStack(alignment: .top, spacing: Spacing.s2) {
+            titleBlock
+            NavigationMenuButton(accessibilityIdentifier: "today.menu")
+                .padding(.top, -Spacing.s2)
+        }
+        .padding(.leading, 18)
+        .padding(.trailing, Spacing.s2)
+        .padding(.vertical, 10)
+    }
+
+    private var titleBlock: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text("Today")
@@ -89,8 +102,6 @@ struct AddressTodayTabView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 18)
-        .padding(.vertical, 10)
     }
 
     private var address: String? {

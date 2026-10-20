@@ -320,8 +320,12 @@ import app.pantopus.android.ui.screens.membership.MembershipDetailScreen
 import app.pantopus.android.ui.screens.my_bids.MyBidsScreen
 import app.pantopus.android.ui.screens.my_posts.MyPostsScreen
 import app.pantopus.android.ui.screens.my_tasks.MyTasksScreen
-import app.pantopus.android.ui.screens.nearby.NearbyScreen
+import app.pantopus.android.ui.screens.nearby.NEIGHBORHOOD_INVITE_MESSAGE
+import app.pantopus.android.ui.screens.nearby.NearbySegment
+import app.pantopus.android.ui.screens.nearby.NearbySegmentRequests
+import app.pantopus.android.ui.screens.nearby.NearbyTab
 import app.pantopus.android.ui.screens.nearby.NearbyViewModel
+import app.pantopus.android.ui.screens.nearby.NeighborhoodScreen
 import app.pantopus.android.ui.screens.nearby.pulseQuietStateCard
 import app.pantopus.android.ui.screens.notifications.NotificationsScreen
 import app.pantopus.android.ui.screens.offers.OffersScreen
@@ -2067,6 +2071,19 @@ private fun NavHostController.navigateToRootTab(
     }
 }
 
+/**
+ * Where Pulse opens: its own tab with the Pulse redesign on; with it off, the Nearby tab on its Pulse segment (founder
+ * decision 2026-10-20), or its Neighborhood segment for a `/nearby` link.
+ */
+private fun NavHostController.openNearbySegment(segment: NearbySegment) {
+    if (LaunchFeatures.pulseRedesign) {
+        navigateToRootTab(PantopusRoute.Pulse)
+    } else {
+        NearbySegmentRequests.request(segment)
+        navigateToRootTab(PantopusRoute.Nearby)
+    }
+}
+
 /** A verify-sheet door opens its real flow (Wedge v2 D3); the Place dashboard and the Place detail pages share it. */
 private fun NavHostController.openPlaceVerify(
     method: PlaceVerifyMethod,
@@ -2218,6 +2235,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
     // (repurposed from "open Settings"; Settings now lives as a drawer row).
     val navDrawerState = rememberDrawerState(DrawerValue.Closed)
     val navDrawerScope = rememberCoroutineScope()
+    // The side menu opens from every tab's top screen (founder decision 2026-10-20).
+    val openMenu: () -> Unit = { navDrawerScope.launch { navDrawerState.open() } }
     // Place tapped again on its root: one event, which scrolls the root back to the top.
     val placeReselects = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
     var ballotHomeId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -2297,7 +2316,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 DeepLinkRouter.consume()
             }
             DeepLinkRouter.Destination.Feed -> {
-                navController.navigateToRootTab(PantopusRoute.Pulse)
+                navController.openNearbySegment(NearbySegment.Pulse)
                 DeepLinkRouter.consume()
             }
             DeepLinkRouter.Destination.Home -> {
@@ -2305,9 +2324,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 DeepLinkRouter.consume()
             }
             // Nearby is no longer a tab: its links, pushes and saved state open Pulse (Pulse build S3). With the Pulse
-            // redesign off Nearby is the tab, as on October 13.
+            // redesign off Nearby is the tab, and a `/nearby` link (the neighborhood milestone push among them) opens
+            // its Neighborhood segment (founder decision 2026-10-20).
             DeepLinkRouter.Destination.Nearby -> {
-                navController.navigateToRootTab(if (LaunchFeatures.pulseRedesign) PantopusRoute.Pulse else PantopusRoute.Nearby)
+                navController.openNearbySegment(NearbySegment.Neighborhood)
                 DeepLinkRouter.consume()
             }
             DeepLinkRouter.Destination.PlansTab -> {
@@ -2350,7 +2370,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 DeepLinkRouter.consume()
             }
             is DeepLinkRouter.Destination.Post -> {
-                navController.navigateToRootTab(PantopusRoute.Pulse)
+                navController.openNearbySegment(NearbySegment.Pulse)
                 navController.navigate(ChildRoutes.pulsePost(pending.id))
                 DeepLinkRouter.consume()
             }
@@ -2750,7 +2770,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         scrollToTop = placeReselects,
                         ballotHomeId = ballotHomeId,
                         onBallotOpened = { ballotHomeId = null },
-                        onOpenMenu = { navDrawerScope.launch { navDrawerState.open() } },
+                        onOpenMenu = openMenu,
                     )
                 }
                 // ── Pulse build S3: Place · Today · Pulse · Plans · Mail (Place · Today · Nearby · Plans · Mail with the redesign off) ──
@@ -2771,6 +2791,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     TodayTabScreen(
                         onClaim = { navController.navigate(ChildRoutes.ADD_HOME) },
                         onAsk = { context -> navController.navigate(ChildRoutes.askPantopus(context)) },
+                        onOpenMenu = openMenu,
                         onOpenPlace = { homeId ->
                             placeLinkScope.launch {
                                 currentPlaceHost?.let {
@@ -2813,24 +2834,41 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                     onOpenConnections = { navController.navigate(ChildRoutes.CONNECTIONS) },
                                     onInvite = { appContext.shareText(PLANS_INVITE_MESSAGE, "Invite a neighbor") },
                                     onAskPantopus = { context -> navController.navigate(ChildRoutes.askPantopus(context)) },
+                                    onOpenMenu = openMenu,
                                 ),
                         )
                     }
                 }
                 composable(PantopusRoute.Nearby.path) {
-                    // Nearby is no longer a tab; its old route (saved state, a stale entry) opens Pulse. With the Pulse
-                    // redesign off it is the October 13 Nearby screen, with Plans its own tab beside it.
+                    // Nearby is no longer a tab with the Pulse redesign on; its old route (saved state, a stale entry)
+                    // opens Pulse. With it off Nearby is the tab, Plans its own tab beside it, and (founder decision
+                    // 2026-10-20) no door page: the Pulse | Neighborhood switch and the side menu over the October 13
+                    // feed and the density window. Connections is in the side menu.
                     if (LaunchFeatures.pulseRedesign) {
                         LaunchedEffect(Unit) { navController.navigateToRootTab(PantopusRoute.Pulse) }
                     } else {
-                        NearbyScreen(
-                            onClaim = { navController.navigate(ChildRoutes.ADD_HOME) },
-                            onOpenPulse = { navController.navigate(PantopusRoute.Pulse.path) },
-                            onOpenBeacons = { navController.navigate(ChildRoutes.BEACONS_FEED) },
-                            onOpenConnections = { navController.navigate(ChildRoutes.CONNECTIONS) },
-                            onOpenMarketplace = { navController.navigate(PantopusRoute.Marketplace.path) },
-                            onOpenTasks = { navController.navigate(PantopusRoute.Tasks.path) },
-                            onAsk = { context -> navController.navigate(ChildRoutes.askPantopus(context)) },
+                        NearbyTab(
+                            onOpenMenu = openMenu,
+                            pulse = {
+                                FeedScreen(
+                                    onOpenPost = { postId -> navController.navigate(ChildRoutes.pulsePost(postId)) },
+                                    onCompose = { intent -> navController.navigate(ChildRoutes.composePost(intent.key)) },
+                                    onComposeStarter = { starter ->
+                                        navController.navigate(
+                                            ChildRoutes.composePost(PulseIntent.Ask.key, starter.placeholder),
+                                        )
+                                    },
+                                    onAsk = { context -> navController.navigate(ChildRoutes.askPantopus(context)) },
+                                )
+                            },
+                            neighborhood = {
+                                NeighborhoodScreen(
+                                    onClaim = { navController.navigate(ChildRoutes.ADD_HOME) },
+                                    onOpenMarketplace = { navController.navigate(PantopusRoute.Marketplace.path) },
+                                    onOpenTasks = { navController.navigate(PantopusRoute.Tasks.path) },
+                                    onInvite = { appContext.shareText(NEIGHBORHOOD_INVITE_MESSAGE, "Invite your neighbors") },
+                                )
+                            },
                         )
                     }
                 }
@@ -2878,6 +2916,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             onOpenConversation = { row -> navController.navigate(ChildRoutes.chatConversation(row)) },
                             onCompose = { navController.navigate(ChildRoutes.NEW_MESSAGE) },
                             onOpenSearch = { navController.navigate(ChildRoutes.CHAT_SEARCH) },
+                            onOpenMenu = openMenu,
                         )
                     }
                     MailboxRootScreen(
@@ -2904,18 +2943,11 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 composable(PantopusRoute.Pulse.path) {
                     // Nearby's other content lives here now: the neighborhood meter or "Set up a home" as one
                     // quiet-state card, and Connections (Beacons too, while that launch cut is off) in the top menu.
-                    // With the Pulse redesign off this is the October 13 feed, opened from Nearby: neither.
+                    // With the Pulse redesign off the October 13 feed is the Nearby tab's Pulse segment (founder
+                    // decision 2026-10-20): this route (saved state, a stale entry) opens it there.
                     if (!LaunchFeatures.pulseRedesign) {
-                        return@composable FeedScreen(
-                            onOpenPost = { postId -> navController.navigate(ChildRoutes.pulsePost(postId)) },
-                            onCompose = { intent -> navController.navigate(ChildRoutes.composePost(intent.key)) },
-                            onComposeStarter = { starter ->
-                                navController.navigate(
-                                    ChildRoutes.composePost(PulseIntent.Ask.key, starter.placeholder),
-                                )
-                            },
-                            onAsk = { context -> navController.navigate(ChildRoutes.askPantopus(context)) },
-                        )
+                        LaunchedEffect(Unit) { navController.openNearbySegment(NearbySegment.Pulse) }
+                        return@composable
                     }
                     val quietMeter: NearbyViewModel = hiltViewModel()
                     val quietStateCard =
@@ -3118,7 +3150,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         homeId = homeId,
                         scrollToBallot = ballotHomeId == homeId,
                         onBallotOpened = { ballotHomeId = null },
-                        onOpenMenu = { navDrawerScope.launch { navDrawerState.open() } },
+                        onOpenMenu = openMenu,
                         onSwitchHome = { id ->
                             currentPlaceHost?.switchHome(id)
                             navController.openPlaceRoot()
