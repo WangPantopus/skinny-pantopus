@@ -36,10 +36,16 @@ extension EnvironmentValues {
 extension ChatAIActionCard {
     /// Every action's key: the card's own, then each row's.
     var actionKeys: [String] {
-        envelope.actions.map { AIActionDoneStore.key(cardId: envelope.id, itemId: nil, actionId: $0.id) }
-            + envelope.items.flatMap { item in
-                item.actions.map { AIActionDoneStore.key(cardId: envelope.id, itemId: item.id, actionId: $0.id) }
+        var keys: [String] = []
+        for action in envelope.actions {
+            keys.append(AIActionDoneStore.key(cardId: envelope.id, itemId: nil, actionId: action.id))
+        }
+        for item in envelope.items {
+            for action in item.actions {
+                keys.append(AIActionDoneStore.key(cardId: envelope.id, itemId: item.id, actionId: action.id))
             }
+        }
+        return keys
     }
 
     /// The card's own actions, or one row's.

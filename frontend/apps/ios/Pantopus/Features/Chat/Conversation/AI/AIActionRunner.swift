@@ -50,14 +50,25 @@ enum AIActionAllowlist {
     }
 
     static func permits(method: Endpoint.Method, path: String) -> Bool {
-        let segments = path.split(separator: "/", omittingEmptySubsequences: false)
-        return routes.contains { route in
-            let pattern = route.path.split(separator: "/", omittingEmptySubsequences: false)
-            guard route.method == method, pattern.count == segments.count else { return false }
-            return zip(pattern, segments).allSatisfy { expected, actual in
-                expected == ":id" ? actual.count == 36 && UUID(uuidString: String(actual)) != nil : expected == actual
+        let segments: [String] = path.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
+        for route in routes where route.method == method && matches(pattern: route.path, segments: segments) {
+            return true
+        }
+        return false
+    }
+
+    /// One route's path, segment by segment; `:id` takes only a uuid.
+    private static func matches(pattern: String, segments: [String]) -> Bool {
+        let expected: [String] = pattern.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
+        guard expected.count == segments.count else { return false }
+        for (want, have) in zip(expected, segments) {
+            if want == ":id" {
+                guard have.count == 36, UUID(uuidString: have) != nil else { return false }
+            } else if want != have {
+                return false
             }
         }
+        return true
     }
 }
 

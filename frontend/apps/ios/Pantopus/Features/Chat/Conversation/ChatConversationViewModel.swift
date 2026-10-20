@@ -856,8 +856,11 @@ public final class ChatConversationViewModel {
                     }
                 }
                 // A reply's link buttons stay under it after a relaunch.
-                let itemLinks = (item.links ?? []).filter { !$0.label.isEmpty && !$0.url.isEmpty }
-                let target = restored.contains { $0.id == replyId } ? replyId : restored.last { $0.messageType == "ai_reply" }?.id
+                let itemLinks: [AIChatLinkDTO] = (item.links ?? []).filter { !$0.label.isEmpty && !$0.url.isEmpty }
+                var target: String? = replyId
+                if !restored.contains(where: { $0.id == replyId }) {
+                    target = restored.last(where: { $0.messageType == "ai_reply" })?.id
+                }
                 if !itemLinks.isEmpty, let target {
                     links[target, default: []] += itemLinks.map { ChatAILink(label: $0.label, url: $0.url) }
                 }
