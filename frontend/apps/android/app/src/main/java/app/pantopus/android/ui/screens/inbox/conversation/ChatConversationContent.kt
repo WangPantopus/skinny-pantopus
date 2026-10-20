@@ -156,6 +156,8 @@ data class ChatConversationRouteArgs(
     val aiContext: AIScreenContext? = null,
     /** A brief's or nudge's notification id: the assistant thread opens at its message. */
     val aiNudgeId: String? = null,
+    /** The conversation that brief or nudge was added to: the assistant thread opens and continues it. */
+    val aiConversationId: String? = null,
 )
 
 /**

@@ -1412,6 +1412,9 @@ private object ChildRoutes {
 
     /** A brief's or nudge's notification id: the assistant thread opens at its message (empty otherwise). */
     const val CHAT_AI_NUDGE_KEY = "aiNudge"
+
+    /** The conversation that brief or nudge was added to: the assistant thread opens and continues it (empty otherwise). */
+    const val CHAT_AI_CONVERSATION_KEY = "aiConversation"
     const val CHAT_CONVERSATION =
         "chat/{$CHAT_KIND_KEY}/{$CHAT_ID_KEY}?" +
             "$CHAT_NAME_KEY={$CHAT_NAME_KEY}" +
@@ -1431,7 +1434,8 @@ private object ChildRoutes {
             "&$CHAT_ARRIVAL_ROOM_KEY={$CHAT_ARRIVAL_ROOM_KEY}" +
             "&$CHAT_BUSINESS_ID_KEY={$CHAT_BUSINESS_ID_KEY}" +
             "&$CHAT_AI_CONTEXT_KEY={$CHAT_AI_CONTEXT_KEY}" +
-            "&$CHAT_AI_NUDGE_KEY={$CHAT_AI_NUDGE_KEY}"
+            "&$CHAT_AI_NUDGE_KEY={$CHAT_AI_NUDGE_KEY}" +
+            "&$CHAT_AI_CONVERSATION_KEY={$CHAT_AI_CONVERSATION_KEY}"
 
     /** New message contact picker (T6.6b P25). Reached from Chat list
      *  compose button + empty-state CTA. */
@@ -1633,13 +1637,16 @@ private object ChildRoutes {
     }
 
     /**
-     * `pantopus://assistant` (AI assistant phase 2 contract §8.2): the assistant thread, at the brief or nudge
-     * [nudgeId] names when there is one.
+     * `pantopus://assistant` (AI assistant phase 2 contract §8.2): the assistant thread, in [conversationId] when the
+     * link names one, at the brief or nudge [nudgeId] names when there is one.
      */
-    fun assistantThread(nudgeId: String?): String {
+    fun assistantThread(
+        nudgeId: String?,
+        conversationId: String?,
+    ): String {
         fun enc(value: String) = java.net.URLEncoder.encode(value, "UTF-8").replace("+", "%20")
         return "chat/ai/ai_assistant?$CHAT_NAME_KEY=${enc("Pantopus AI")}&$CHAT_INITIALS_KEY=AI" +
-            "&$CHAT_AI_NUDGE_KEY=${enc(nudgeId.orEmpty())}"
+            "&$CHAT_AI_NUDGE_KEY=${enc(nudgeId.orEmpty())}&$CHAT_AI_CONVERSATION_KEY=${enc(conversationId.orEmpty())}"
     }
 
     // A Creator Inbox row no longer builds a generic-chat path. Persona DMs
@@ -2369,7 +2376,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
             // Back lands on the conversation list. Messages opens fresh, so an earlier assistant thread isn't kept under it.
             is DeepLinkRouter.Destination.Assistant -> {
                 navController.navigateToRootTab(PantopusRoute.messagesTab, restoreState = false)
-                navController.navigate(ChildRoutes.assistantThread(pending.nudgeId))
+                navController.navigate(ChildRoutes.assistantThread(pending.nudgeId, pending.conversationId))
                 DeepLinkRouter.consume()
             }
             DeepLinkRouter.Destination.CreateBusiness -> {
@@ -5106,6 +5113,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 type = NavType.StringType
                                 defaultValue = ""
                             },
+                            navArgument(ChildRoutes.CHAT_AI_CONVERSATION_KEY) {
+                                type = NavType.StringType
+                                defaultValue = ""
+                            },
                         ),
                 ) { entry ->
                     val args = entry.arguments ?: return@composable
@@ -5204,6 +5215,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onOpenPlan = { planId -> navController.navigate(PlansRoutes.plan(planId)) },
                         aiContext = if (kind == "ai") AIScreenContext.decode(args.getString(ChildRoutes.CHAT_AI_CONTEXT_KEY)) else null,
                         aiNudgeId = args.getString(ChildRoutes.CHAT_AI_NUDGE_KEY)?.takeIf { kind == "ai" && it.isNotBlank() },
+                        aiConversationId = args.getString(ChildRoutes.CHAT_AI_CONVERSATION_KEY)?.takeIf { kind == "ai" && it.isNotBlank() },
                     )
                 }
                 composable(ChildRoutes.CHAT_SEARCH) {

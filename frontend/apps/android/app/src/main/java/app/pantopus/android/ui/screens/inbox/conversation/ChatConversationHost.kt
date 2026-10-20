@@ -51,6 +51,7 @@ fun ChatConversationHost(
     onOpenPlan: (String) -> Unit = {},
     aiContext: AIScreenContext? = null,
     aiNudgeId: String? = null,
+    aiConversationId: String? = null,
     authViewModel: ChatConversationHostViewModel = hiltViewModel(),
 ) {
     val state by authViewModel.authState.collectAsStateWithLifecycle()
@@ -73,6 +74,7 @@ fun ChatConversationHost(
                 gigId = gigId,
                 aiContext = aiContext,
                 aiNudgeId = aiNudgeId,
+                aiConversationId = aiConversationId,
             ),
         chrome = chrome,
         onBack = onBack,
