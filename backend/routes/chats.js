@@ -3033,7 +3033,7 @@ router.get('/messages/:messageId/reactions', verifyToken, async (req, res) => {
 });
 
 // ============================================================
-// Authenticated chat file download — generates short-lived signed URL
+// Authenticated chat file download — streamed by this API
 // ============================================================
 
 // Allow auth token via query param for contexts where headers can't be set
@@ -3048,6 +3048,22 @@ function tokenFromQuery(req, _res, next) {
   next();
 }
 
+// One HTTP byte range (`bytes=a-b`, `bytes=a-`, `bytes=-n`) resolved against the file's size: a chat file's bytes never
+// change under its id, so storage is only ever asked for bytes that exist (local storage hangs on a range past the end).
+// Null for no range or one this API doesn't serve (the whole file then answers); `unsatisfiable` past the end.
+function chatFileByteRange(header, size) {
+  const match = /^bytes=(\d*)-(\d*)$/.exec(header || '');
+  if (!match || (!match[1] && !match[2]) || !Number.isSafeInteger(size) || size <= 0) return null;
+  if (!match[1]) {
+    const suffix = Number(match[2]);
+    return suffix > 0 ? { start: Math.max(0, size - suffix), end: size - 1 } : { unsatisfiable: true };
+  }
+  const start = Number(match[1]);
+  if (match[2] && Number(match[2]) < start) return null;
+  if (start >= size) return { unsatisfiable: true };
+  return { start, end: match[2] ? Math.min(Number(match[2]), size - 1) : size - 1 };
+}
+
 router.get('/files/:fileId', tokenFromQuery, verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
@@ -3060,7 +3076,7 @@ router.get('/files/:fileId', tokenFromQuery, verifyToken, async (req, res) => {
     // Look up the file record
     const { data: file, error: fileErr } = await supabaseAdmin
       .from('File')
-      .select('id, file_path, file_url, mime_type, metadata, is_deleted, file_type, access_count')
+      .select('id, file_path, file_url, original_filename, mime_type, file_size, metadata, is_deleted, file_type, access_count')
       .eq('id', fileId)
       .maybeSingle();
 
@@ -3136,13 +3152,41 @@ router.get('/files/:fileId', tokenFromQuery, verifyToken, async (req, res) => {
       });
     }
 
-    // Videos and documents: a 15-minute signed link (range requests, never cached automatically).
-    const signedUrl = await s3Service.getPresignedDownloadUrl(file.file_path, 900);
-    trackAccess();
-    res.redirect(302, signedUrl);
+    // Videos and documents are served here too, never by a link to storage: the object's key and metadata name the
+    // person who uploaded it, and in a business's rooms that is its owner or a staff member, whom the customer must not
+    // learn (a business seat never exposes the person behind it). One byte range at a time, so players can seek; never
+    // cached. A video plays in the page; a document downloads under its own name.
+    const size = Number(file.file_size);
+    const range = chatFileByteRange(req.headers.range, size);
+    if (range?.unsatisfiable) return res.status(416).set('Content-Range', `bytes */${size}`).end();
+    let object;
+    try {
+      object = await s3Service.getObjectStream(file.file_path, undefined, range ? `bytes=${range.start}-${range.end}` : undefined);
+    } catch (storageErr) {
+      if (storageErr?.name === 'NoSuchKey' || storageErr?.$metadata?.httpStatusCode === 404) {
+        return res.status(404).json({ error: 'File not found' });
+      }
+      throw storageErr;
+    }
+    const name = file.original_filename || 'attachment';
+    const disposition = String(file.mime_type).startsWith('video/') ? 'inline' : 'attachment';
+    res.set({
+      'Cache-Control': 'private, no-store',
+      'Accept-Ranges': 'bytes',
+      'Content-Disposition': `${disposition}; filename="${name.replace(/[^\x20-\x7e]|["\\]/g, '_')}"; `
+        + `filename*=UTF-8''${encodeURIComponent(name).replace(/['()*]/g, c => `%${c.charCodeAt(0).toString(16).toUpperCase()}`)}`,
+    });
+    res.type(file.mime_type || 'application/octet-stream');
+    if (object.contentRange) res.status(206).set('Content-Range', object.contentRange);
+    if (Number.isSafeInteger(object.contentLength)) res.set('Content-Length', String(object.contentLength));
+    // A player asks for many ranges per view: count the first.
+    if (!range || range.start === 0) trackAccess();
+    return pipeline(object.body, res).catch((streamErr) => {
+      logger.warn('Chat file stream ended early', { requestId: req.requestId, fileId, error: streamErr.message });
+    });
   } catch (err) {
     logger.error('Chat file download error', { requestId: req.requestId, userId: req.user?.id, fileId: req.params.fileId, error: err.message });
-    res.status(500).json({ error: 'Failed to generate download URL' });
+    res.status(500).json({ error: 'Failed to load the file' });
   }
 });
 
