@@ -263,6 +263,7 @@ struct PostMediaTileView: View {
                     Text("PDF").font(.headline)
                     Text("Tap to read").font(.caption)
                 }
+                .foregroundStyle(Theme.Color.appText)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Theme.Color.appSurfaceSunken)
             }
