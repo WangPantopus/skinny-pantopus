@@ -137,7 +137,7 @@ export default function AccountDeleteModal({ open, onClose, onConfirm }: Account
             </ul>
 
             <p className="text-sm text-app-secondary mb-4">
-              Before deleting your account, delete your businesses or transfer ownership and leave each business. Things other people rely on, like bills, tasks and documents in a shared home, stay with them without your name.
+              Before deleting your account, close your businesses or transfer ownership and leave each business. Things other people rely on, like bills, tasks and documents in a shared home, stay with them without your name.
             </p>
 
             {organizedTrains > 0 && (

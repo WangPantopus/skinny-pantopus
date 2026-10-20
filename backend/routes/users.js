@@ -5306,7 +5306,7 @@ const ACCOUNT_DELETE_OTHER_ROWS = [
 ];
 const pairNames = (list) => list.map(({ table, column }) => `${table}.${column}`);
 const businessOwnershipRequired = {
-  error: 'Before deleting your account, delete your businesses or transfer ownership and leave each business.',
+  error: 'Before deleting your account, close your businesses or transfer ownership and leave each business.',
   code: 'BUSINESS_OWNERSHIP_REQUIRED',
 };
 
