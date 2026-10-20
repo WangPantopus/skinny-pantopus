@@ -21,6 +21,7 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
 import app.pantopus.android.core.routing.DeepLinkRouter
+import app.pantopus.android.core.routing.WebLinkFallback
 import app.pantopus.android.core.security.AppLockManager
 import app.pantopus.android.core.security.SecureWindowController
 import app.pantopus.android.data.analytics.PilotEvents
@@ -48,7 +49,8 @@ import javax.inject.Inject
  * Navigation is entirely in-Compose via [PantopusNavHost]; incoming
  * deep-link intents get forwarded into [DeepLinkRouter] for the
  * RootTabScreen to consume — except the browser OAuth callback, which goes
- * to [OAuthSessionStore] instead.
+ * to [OAuthSessionStore] instead, and pantopus.com pages the app has no
+ * screen for, which open in the browser ([WebLinkFallback]).
  *
  * Declared `singleTask` in the manifest so a browser redirect resumes this
  * instance through [onNewIntent] rather than stacking a second copy.
@@ -220,6 +222,12 @@ class MainActivity : FragmentActivity() {
         }
         val uri = intent?.data ?: return
         if (intent.action != Intent.ACTION_VIEW) return
+        // A pantopus.com page the app has no screen for opens in the browser,
+        // except on a relaunch from Recents, which is a return to the app.
+        if (WebLinkFallback.isWebOnly(uri)) {
+            if (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY == 0) WebLinkFallback.open(this, uri)
+            return
+        }
         // Browser OAuth callbacks belong to the in-flight sign-in attempt,
         // not the router. Mirrors iOS `PantopusApp`'s
         // `guard !AuthManager.isOAuthCallback(url) else { return }`.
