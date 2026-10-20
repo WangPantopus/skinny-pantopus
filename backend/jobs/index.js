@@ -70,6 +70,7 @@ const purgeAddressVerificationEvents = require('./purgeAddressVerificationEvents
 const reconcileHomeHouseholdResolution = require('./reconcileHomeHouseholdResolution');
 // Chat jobs
 const chatRedactionJob = require('./chatRedactionJob');
+const aiChatPhotoSweep = require('./aiChatPhotoSweep');
 // Business cleanup
 const cleanupGhostBusinesses = require('./cleanupGhostBusinesses');
 // Pop-up business expiry
@@ -533,6 +534,14 @@ function startJobs(options = {}) {
   // Permanently redacts soft-deleted messages past their retention period.
   // Replaces message text and clears attachments in batches.
   scheduleCron('30 * * * *', wrapJob('chatRedactionJob', chatRedactionJob), {
+    scheduled: true,
+    timezone: 'UTC',
+  });
+
+  // ─── AI Chat Photo Sweep ───
+  // Runs every 15 minutes at :04/:19/:34/:49.
+  // Deletes photos uploaded for the assistant that no request read within an hour.
+  scheduleCron('4,19,34,49 * * * *', wrapJob('aiChatPhotoSweep', aiChatPhotoSweep), {
     scheduled: true,
     timezone: 'UTC',
   });

@@ -50,6 +50,7 @@ const chatSchema = Joi.object({
     city: Joi.string().max(100),
     state: Joi.string().max(50),
   }).optional(),
+  // The person's own uploads (POST /api/upload/ai-media hands back ai-photo: references) or image URLs.
   images: Joi.array().items(Joi.string().uri()).max(5).optional(),
   // The draft cards this app can show beyond the original ones (e.g. "pickup_schedule",
   // "action", "link"). Unknown names are ignored, so older servers and newer apps get along.
