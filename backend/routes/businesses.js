@@ -4090,17 +4090,18 @@ router.patch('/:businessId/private', verifyToken, async (req, res) => {
     for (const key of allowed) {
       if (req.body[key] !== undefined) updates[key] = req.body[key];
     }
-    const { error: validationError, value: validated } = Joi.object({
+    // Distinct names keep this check valid beside a request-body validation in this handler.
+    const { error: privateFieldError, value: privateFields } = Joi.object({
       tax_id_last4: Joi.string().trim().pattern(/^[0-9]{4}$/).allow('', null),
       support_email: Joi.string().trim().email({ tlds: { allow: false } }).allow('', null),
     }).unknown(true).validate(updates);
-    if (validationError) {
+    if (privateFieldError) {
       return res.status(400).json({
         error: 'Enter a valid support email and exactly four tax-ID digits, or leave them blank.',
         code: 'VALIDATION_ERROR',
       });
     }
-    Object.assign(updates, validated);
+    Object.assign(updates, privateFields);
     updates.updated_at = new Date().toISOString();
 
     // Upsert — create if missing
