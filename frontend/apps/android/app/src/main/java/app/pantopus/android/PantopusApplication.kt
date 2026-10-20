@@ -8,6 +8,7 @@ import app.pantopus.android.data.analytics.PostHogAnalytics
 import app.pantopus.android.data.observability.Observability
 import app.pantopus.android.data.storage.ImageDiskCache
 import app.pantopus.android.data.storage.StorageLimit
+import app.pantopus.android.ui.screens.inbox.conversation.ChatMediaUrl
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.memory.MemoryCache
@@ -21,6 +22,7 @@ import dagger.hilt.components.SingletonComponent
 import okhttp3.OkHttpClient
 import timber.log.Timber
 import java.io.File
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
 /**
@@ -38,6 +40,8 @@ class PantopusApplication :
     override fun onCreate() {
         super.onCreate()
         HomeDocumentTemporaryFiles.clearPreviousLaunch(cacheDir)
+        // Files opened from chats and photos taken for them, left by an earlier run.
+        ChatMediaUrl.removeLocalFiles(cacheDir, olderThanMs = TimeUnit.HOURS.toMillis(1))
         // Earlier builds kept API replies (door codes, wallet, profile) in an OkHttp disk cache until sign-out.
         // The API client no longer caches; delete what an update left behind, off the main thread.
         Thread { File(cacheDir, LEGACY_HTTP_CACHE_DIR).deleteRecursively() }.start()
