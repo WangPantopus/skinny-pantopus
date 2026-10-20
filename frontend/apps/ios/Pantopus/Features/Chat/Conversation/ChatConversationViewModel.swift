@@ -381,11 +381,14 @@ public final class ChatConversationViewModel {
     /// `consumePendingScroll()` after scrolling.
     public private(set) var pendingScrollTargetId: String?
 
-    /// True while the screen was opened from Chat Search and the matched
-    /// message hasn't been scrolled to yet — the view skips its
-    /// land-at-latest pass so the two don't fight over the position.
+    /// True while the screen was opened from Chat Search (or at a nudge) and
+    /// the matched message hasn't been scrolled to yet — the view skips its
+    /// land-at-latest pass so the two don't fight over the position. It
+    /// stays true from finding the message until the view has scrolled to
+    /// it: the populated frame appears in between, and its pass would
+    /// otherwise pin the thread back to the bottom.
     public var hasPendingSearchTarget: Bool {
-        scrollToMessageId != nil && !didResolveScrollTarget
+        scrollToMessageId != nil && (!didResolveScrollTarget || awaitingTargetScroll)
     }
 
     /// Header counterparty data (drives the top-bar variant).
@@ -601,6 +604,8 @@ public final class ChatConversationViewModel {
     /// the message that carries it.
     private var scrollToMessageId: String?
     private var didResolveScrollTarget = false
+    /// Found, not yet scrolled to (`consumePendingScroll()` clears it).
+    private var awaitingTargetScroll = false
     /// The brief or nudge the assistant thread was opened at.
     private let aiNudge: AIAssistantNudge?
     private let logger = Logger(label: "app.pantopus.ios.ChatConversation")
@@ -2640,6 +2645,7 @@ public final class ChatConversationViewModel {
         let rowId = "bubble_\(target)"
         guard rows.contains(where: { $0.id == rowId }) else { return }
         didResolveScrollTarget = true
+        awaitingTargetScroll = true
         // Publish on the next beat so the populated frame is mounted and
         // laid out before the view reacts — it scrolls in `.onChange`,
         // which only fires for a value that changes while it is on screen.
@@ -2652,6 +2658,7 @@ public final class ChatConversationViewModel {
     /// Clear the scroll target after the view has scrolled to it.
     public func consumePendingScroll() {
         pendingScrollTargetId = nil
+        awaitingTargetScroll = false
     }
 
     /// Merge persisted messages with optimistic pending rows. Failed
