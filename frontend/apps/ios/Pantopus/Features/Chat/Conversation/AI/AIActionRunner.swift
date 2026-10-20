@@ -15,9 +15,13 @@
 import Foundation
 
 /// The requests an action card may send: these methods and paths, where `:id`
-/// is a uuid, with no header but `x-pantopus-session-scope`.
+/// is a uuid and `:system` one of a home's six system keys, with no header
+/// but `x-pantopus-session-scope`.
 enum AIActionAllowlist {
     static let sessionScopeHeader = "x-pantopus-session-scope"
+
+    /// The systems a `home_system` card can date (`PUT /api/homes/:id/systems/:key`).
+    static let systemKeys: Set<String> = ["roof", "hvac", "water_heater", "electrical_panel", "sewer_septic", "windows"]
 
     private static let routes: [(method: Endpoint.Method, path: String)] = [
         (.post, "/api/plans"),
@@ -30,6 +34,11 @@ enum AIActionAllowlist {
         (.post, "/api/posts/:id/comments"),
         (.patch, "/api/posts/:id/solve"),
         (.post, "/api/homes/:id/tasks"),
+        // Phase 2: a system's installed year, a task's status, date or
+        // owner, and an appliance.
+        (.put, "/api/homes/:id/systems/:system"),
+        (.put, "/api/homes/:id/tasks/:id"),
+        (.post, "/api/homes/:id/assets"),
         (.post, "/api/homes/:id/tasks/:id/recurrence"),
         (.put, "/api/hub/preferences"),
         // Phase 2: a nudge's "Fewer like this".
@@ -61,13 +70,16 @@ enum AIActionAllowlist {
         return false
     }
 
-    /// One route's path, segment by segment; `:id` takes only a uuid.
+    /// One route's path, segment by segment; `:id` takes only a uuid and
+    /// `:system` only a system key.
     private static func matches(pattern: String, segments: [String]) -> Bool {
         let expected: [String] = pattern.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
         guard expected.count == segments.count else { return false }
         for (want, have) in zip(expected, segments) {
             if want == ":id" {
                 guard have.count == 36, UUID(uuidString: have) != nil else { return false }
+            } else if want == ":system" {
+                guard systemKeys.contains(have) else { return false }
             } else if want != have {
                 return false
             }

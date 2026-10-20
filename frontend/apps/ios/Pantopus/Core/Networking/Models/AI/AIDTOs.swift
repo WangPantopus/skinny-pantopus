@@ -49,6 +49,8 @@ public struct AIConversationMessageDTO: Decodable, Sendable, Hashable {
     public let text: String?
     /// How many photos a person's message carried (they aren't kept).
     public let photos: Int?
+    /// How many PDFs a person's message carried (phase 2; not kept either).
+    public let documents: Int?
     public let draft: AIConversationDraftDTO?
     /// The link buttons under an assistant reply, for apps that ask for them.
     public let links: [AIChatLinkDTO]?
