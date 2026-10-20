@@ -30,7 +30,7 @@ function cleanContext(context) {
     surface: context.surface,
     id: isUuid(context.id) ? context.id : null,
     home_id: isUuid(context.home_id) ? context.home_id : null,
-    section: typeof context.section === 'string' && PLACE_SLUG_SECTIONS[context.section] ? context.section : null,
+    section: typeof context.section === 'string' && Object.hasOwn(PLACE_SLUG_SECTIONS, context.section) ? context.section : null,
   };
 }
 

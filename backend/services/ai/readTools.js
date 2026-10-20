@@ -361,17 +361,23 @@ const nextHours = (hourly) => (Array.isArray(hourly) ? hourly : [])
   .filter((hour) => Date.parse(hour.time) + HOUR_MS > Date.now())
   .slice(0, 24);
 
-/**
- * The calendar day of a time in `zone`. A date stored as UTC midnight (the Ballot card's
- * checked date) stays that date instead of moving back a day in the Americas.
- */
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+
+/** The calendar day of a time in `zone`; a bare date ("2026-09-24") is that day. */
 function localDate(iso, zone) {
   if (!iso) return null;
   const text = String(iso);
-  if (/^\d{4}-\d{2}-\d{2}(T00:00:00(\.0+)?Z)?$/.test(text)) return text.slice(0, 10);
+  if (DATE_ONLY.test(text)) return text;
   const at = DateTime.fromISO(text, { zone: 'utc' }).setZone(zoneOr(zone));
   return at.isValid ? at.toISODate() : null;
 }
+
+/**
+ * When a section's data is from. The Ballot card's is the date a person checked it, which its
+ * envelope stores as UTC midnight (a day early once read in the Americas), so its own checked_at
+ * is used instead.
+ */
+const asOfOf = (section) => (DATE_ONLY.test(String(section.data?.checked_at || '')) ? section.data.checked_at : section.as_of);
 
 /**
  * The weather section in the home's own time: now, today's high and low, the next 24
@@ -415,11 +421,10 @@ function weatherForModel(data, zone) {
 /**
  * When a section's data is from, to the hour in the home's time ("2026-10-20 3 AM"): enough to say how current
  * it is, and steady, so a screen's context isn't added to the conversation again on every turn just because a
- * timestamp moved (the weather's and the address calendar's are the time they were read). A date stored as UTC
- * midnight stays a date (localDate).
+ * timestamp moved (the weather's and the address calendar's are the time they were read). A bare date stays a date.
  */
 function asOfHour(iso, zone) {
-  if (!iso || /^\d{4}-\d{2}-\d{2}(T00:00:00(\.0+)?Z)?$/.test(String(iso))) return localDate(iso, zone);
+  if (!iso || DATE_ONLY.test(String(iso))) return localDate(iso, zone);
   const at = DateTime.fromISO(String(iso), { zone: 'utc' }).setZone(zoneOr(zone));
   return at.isValid ? at.toFormat('yyyy-LL-dd h a') : null;
 }
@@ -437,7 +442,7 @@ function sectionForModel(section, zone, dataChars = SECTION_DATA_CHARS) {
     status: section.status,
     access: section.access,
     source: section.source || null,
-    as_of: asOfHour(section.as_of, zone),
+    as_of: asOfHour(asOfOf(section), zone),
     coverage: section.coverage,
     unavailable_reason: section.unavailable_reason || null,
     data,
@@ -555,7 +560,7 @@ function sectionBrief(section, zone) {
     ...(section.access !== 'available' ? { access: section.access } : {}),
     ...(section.coverage && section.coverage !== 'full' ? { coverage: section.coverage } : {}),
     source: section.source || null,
-    as_of: localDate(section.as_of, zone),
+    as_of: localDate(asOfOf(section), zone),
     ...(section.unavailable_reason ? { unavailable_reason: clip(section.unavailable_reason, 160) } : {}),
     ...(summary != null ? { summary } : {}),
   };
@@ -636,6 +641,22 @@ async function getHousehold(args, ctx) {
   };
 }
 
+/**
+ * Tasks due by the end of their day: today's first, soonest first, then overdue ones, latest
+ * first, so a pile of old ones never hides what is due today.
+ */
+function dueByToday(records, zone) {
+  const today = todayIn(zone);
+  const dueDay = (task) => localDate(task.due_at, zone);
+  return records.filter((task) => task.due_at && dueDay(task) <= today)
+    .sort((a, b) => {
+      const aToday = dueDay(a) === today;
+      if (aToday !== (dueDay(b) === today)) return aToday ? -1 : 1;
+      const soonest = (Date.parse(a.due_at) || 0) - (Date.parse(b.due_at) || 0);
+      return aToday ? soonest : -soonest;
+    });
+}
+
 async function getToday(args, ctx) {
   const home = await chosenHome(ctx.userId, args.home_id);
   if (!home) return { error: 'They have no home in Pantopus yet, so Today has nothing about a home. They can add one on the Place tab.' };
@@ -654,12 +675,7 @@ async function getToday(args, ctx) {
         .map((card) => planForModel(card, ctx.timeZone));
     })().catch(() => null),
   ]);
-  // Due by the end of their day, overdue ones included, soonest first.
-  const today = todayIn(ctx.timeZone);
-  const due = tasks
-    ? tasks.records.filter((task) => task.due_at && localDate(task.due_at, ctx.timeZone) <= today)
-      .sort((a, b) => (Date.parse(a.due_at) || 0) - (Date.parse(b.due_at) || 0))
-    : null;
+  const due = tasks ? dueByToday(tasks.records, ctx.timeZone) : null;
   // The screen's sections come first, so a long day's context is cut in its plans and tasks
   // (find_plans and list_home_tasks have them all), never in its weather and alerts.
   return {
