@@ -342,10 +342,11 @@ function compactForStorage(messages) {
       }
     }
     if (photos) {
-      // Say the photo was seen. A bare "[Photo attached]" led Claude to doubt, and retract, its own earlier description.
+      // Say the photo was seen, and with which message. A bare "[Photo attached]" led Claude to doubt, and retract, its own
+      // earlier description; inviting them to "send it again" led it to judge that description by the next photo they sent.
       const note = photos === 1
-        ? '[Photo attached. You saw it when you replied; it is not included again. Go by your earlier reply, or ask them to send it again if you need a closer look.]'
-        : `[${photos} photos attached. You saw them when you replied; they are not included again. Go by your earlier reply, or ask them to send them again if you need a closer look.]`;
+        ? '[Photo attached. You saw it when you answered this message, and that answer says what it showed. It is not shown again; a photo in another message is a different one.]'
+        : `[${photos} photos attached. You saw them when you answered this message, and that answer says what they showed. They are not shown again; photos in other messages are different ones.]`;
       kept.unshift({ type: 'text', text: note });
     }
     if (kept.length) compact.push({ role: message.role, content: kept });
