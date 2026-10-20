@@ -28,12 +28,15 @@ interface TimelineStep {
 export default function GigTimeline({
   gig,
   isMyGig,
+  asBusiness = false,
   iAmWorker,
   onAction,
   myReviewAt = null,
 }: {
   gig: Record<string, any>;
   isMyGig: boolean;
+  /** The viewer manages the task as the business that posted it (its owner or staff), not as the poster. */
+  asBusiness?: boolean;
   iAmWorker: boolean;
   onAction: (action: string) => void;
   /** When the viewer left their review of this task; completes the Reviewed step. */
@@ -123,14 +126,14 @@ export default function GigTimeline({
     timestamp: gig?.owner_confirmed_at,
   });
 
-  // 7. Reviewed
+  // 7. Reviewed. Reviews come from the poster and the worker; a business's team members can't leave one.
   steps.push({
     key: 'reviewed',
     label: 'Reviewed',
     icon: <Star className="w-4 h-4" />,
     status: ownerConfirmed ? (myReviewAt ? 'done' : 'current') : 'upcoming',
     timestamp: myReviewAt,
-    action: ownerConfirmed && !myReviewAt && (isMyGig || iAmWorker)
+    action: ownerConfirmed && !myReviewAt && ((isMyGig && !asBusiness) || iAmWorker)
       ? { label: 'Leave Review', actionKey: 'leave_review', variant: 'secondary' }
       : null,
   });
