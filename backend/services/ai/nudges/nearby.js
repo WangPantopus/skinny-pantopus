@@ -254,11 +254,15 @@ async function judge(batch) {
   return verdicts;
 }
 
-/** The day a post went up, as a nudge says it: "Tuesday" this week, else "Oct 14". */
+/** The day a post went up, as a nudge says it: "today", "yesterday", "Tuesday" this week, else "Oct 14". */
 function dayOf(post, now) {
-  const at = DateTime.fromISO(String(post.created_at), { zone: 'utc' })
-    .setZone(timezoneFromCoordinates(post.latitude, post.longitude, rules.DEFAULT_TIMEZONE));
-  return now - at.toMillis() < 6 * DAY_MS ? at.toFormat('cccc') : at.toFormat('LLL d');
+  const zone = timezoneFromCoordinates(post.latitude, post.longitude, rules.DEFAULT_TIMEZONE);
+  const at = DateTime.fromISO(String(post.created_at), { zone: 'utc' }).setZone(zone);
+  const today = DateTime.fromMillis(now, { zone }).startOf('day');
+  const days = Math.round(today.diff(at.startOf('day'), 'days').days);
+  if (days <= 0) return 'today';
+  if (days === 1) return 'yesterday';
+  return days < 6 ? at.toFormat('cccc') : at.toFormat('LLL d');
 }
 
 /**

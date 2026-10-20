@@ -33,7 +33,9 @@ const {
   PRECIP_LIKELY, PRECIP_POSSIBLE, GRILL_MAX_WIND_MPH, AQI_SENSITIVE,
 } = require('../../goodDayEngine');
 const { EXTREME_HEAT_F } = require('../../context/usefulnessEngine');
-const { card, action, KIND_LABELS } = require('../actionCards');
+const {
+  card, action, KIND_LABELS, WHO_GETS_IN,
+} = require('../actionCards');
 const { linkFor } = require('../appGuide');
 const { clip, whenLabel } = require('../assistantKit');
 const { fit, capitalized, listText } = require('./words');
@@ -422,16 +424,6 @@ async function requestsWaiting(now) {
 
 // ─── After the plan ────────────────────────────────────────────────────────
 
-const WHO_GETS_IN_TEXT = (autoRules, placeKind) => {
-  const has = (rule) => autoRules.includes(rule);
-  if (placeKind === 'home' && !has('hosted_before')) return 'You approve each person';
-  if (has('anyone_nearby')) return 'Anyone nearby gets in right away';
-  if (has('verified') && has('hosted_before')) return "Verified neighbors and people you've hosted get in right away; you approve everyone else";
-  if (has('verified')) return 'Verified neighbors get in right away; you approve everyone else';
-  if (has('hosted_before')) return "People you've hosted before get in right away; you approve everyone else";
-  return 'You approve each person';
-};
-
 /**
  * The same plan a week later as a plan_create card: the same place, time of day, spots and
  * rules, checked by the server's own plan rules (planActions.previewPlan), as the chat's card
@@ -486,6 +478,9 @@ async function sameNextWeekCard(plan) {
     details: checked.details,
   };
   const playdate = checked.kind === 'playdate';
+  // The chat card's words for who gets in (actionCards.draftPlan), whatever order the rules were saved in.
+  const sameRules = (list) => [...list].sort().join() === [...checked.autoRules].sort().join();
+  const who = Object.values(WHO_GETS_IN).find((w) => sameRules(w.rules)) || WHO_GETS_IN.host_approves;
   const line = (label, value) => (value ? { label, value: clip(String(value), 300) } : null);
   return card('plan_create', {
     title: checked.title,
@@ -494,7 +489,7 @@ async function sameNextWeekCard(plan) {
       line('When', whenLabel(checked.startsAt, checked.endsAt, checked.timezone)),
       line('Where', checked.place.kind === 'home' ? 'Your place' : [checked.place.name, checked.place.address].filter(Boolean).join(', ')),
       line(playdate ? 'Families' : 'Spots', `${checked.spots}`),
-      line('Who gets in', playdate ? 'You approve each family' : WHO_GETS_IN_TEXT(checked.autoRules, checked.place.kind)),
+      line('Who gets in', playdate ? 'You approve each family' : who.text),
       line('About', checked.about),
       line(playdate ? 'Note for families' : 'Note for guests', checked.guestNote),
     ],

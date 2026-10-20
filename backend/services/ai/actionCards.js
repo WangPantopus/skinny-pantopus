@@ -936,7 +936,8 @@ module.exports = {
   CARD_EXECUTORS,
   PLAN_CARD_TOOLS,
   KIND_LABELS,
-  // For tests and scripts.
+  WHO_GETS_IN,
+  // For tests and scripts, and the assistant's nudges (nudges/plans.js).
   card,
   action,
 };
