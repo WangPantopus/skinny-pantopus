@@ -1004,8 +1004,8 @@ async function draftHomeTask(args, ctx) {
     ...(dueAt ? { due_at: dueAt } : {}),
     ...(args.priority ? { priority: args.priority } : {}),
     visibility,
-    // How home_paperwork finds it. The server keeps details.source for tasks made from mail.
-    ...(paper ? { details: { origin: 'document', kind: paper.kind, ends_on: paper.ends_on } } : {}),
+    // How home_paperwork finds it, and what it calls it. The server keeps details.source for tasks made from mail.
+    ...(paper ? { details: { origin: 'document', kind: paper.kind, ends_on: paper.ends_on, name: clip(paper.name, 80) } } : {}),
   };
   const thisYear = todayIn(zone).slice(0, 4);
   const dueYear = dueAt ? dueDate.slice(0, 4) : null;
@@ -1458,7 +1458,8 @@ module.exports = {
   CARD_EXECUTORS,
   PLAN_CARD_TOOLS,
   KIND_LABELS,
-  // For tests and scripts.
+  // For the nudges (nudges/home.js), tests and scripts.
   card,
   action,
+  line,
 };
