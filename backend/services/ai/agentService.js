@@ -154,6 +154,8 @@ const TOOL_STATUS = {
   draft_post_reply: 'Drafting your reply…',
   draft_post_solve: 'Getting it ready to mark solved…',
   draft_home_task: 'Drafting the task…',
+  draft_home_task_update: 'Getting the task ready…',
+  draft_home_year: 'Planning your year…',
   draft_home_system: 'Getting your home\'s record ready…',
   draft_home_asset: 'Getting your home\'s record ready…',
   draft_notification_settings: 'Drafting your settings…',
