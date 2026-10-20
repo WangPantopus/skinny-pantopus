@@ -114,7 +114,7 @@ Sessions you start for one job (Instant Screens, Nearby Plans, single fixes) wor
 
 **Made by the founder on October 17 (briefings).**
 
-- [x] Morning and evening briefings default on for new notification preferences. Show a one-time in-app notice with the saved times and a direct route to Settings → Notifications to change times or turn either off. Preserve existing choices, including off settings. This replaces the morning-only opt-in and saved-place-off defaults in WP1; OS notification permission, recipient-local scheduling and useful-signal suppression still apply. Implementation and real-app verification are in progress.
+- [x] Morning and evening briefings default on for new notification preferences. Show a one-time in-app notice with the saved times and a direct route to Settings → Notifications to change times or turn either off. Preserve existing choices, including off settings. This replaces the morning-only opt-in and saved-place-off defaults in WP1; OS notification permission, recipient-local scheduling and useful-signal suppression still apply. Built and checked in the real web, iOS and Android apps in #2428. Scheduled delivery comes from the production briefing scheduler (#2427, briefings on since October 18); receipt on a physical phone is still unverified.
 
 **Still open. The brief builds the default until you decide.**
 
