@@ -1736,6 +1736,19 @@ router.get('/feed', verifyToken, async (req, res) => {
   }
 });
 
+// The person looked at the Nearby feed: its "since you last looked" marker moves to now
+// (AI assistant phase 2 contract §6.1). The apps call it when the feed appears, at most once
+// every 5 minutes. It is the marker the paused Pulse redesign keeps (services/pulse/seen.js),
+// which only ever moves forward.
+router.post('/feed/seen', verifyToken, async (req, res) => {
+  try {
+    res.json(await require('../services/pulse/seen').advance(req.user.id, 'nearby', new Date().toISOString()));
+  } catch (err) {
+    logger.error('Feed seen error', { error: err.message, userId: req.user?.id });
+    res.status(500).json({ error: "Couldn't save where you left off." });
+  }
+});
+
 
 
 router.get('/map', verifyToken, async (req, res) => {

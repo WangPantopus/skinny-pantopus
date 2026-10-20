@@ -140,6 +140,8 @@ const TOOL_STATUS = {
   get_plan: 'Looking at the plan…',
   find_posts: 'Reading posts nearby…',
   get_post: 'Reading the post…',
+  catch_up_nearby: 'Catching up on Nearby…',
+  find_recommendations: 'Looking at what neighbors recommend…',
   get_place_facts: 'Checking your home…',
   get_today: 'Checking today…',
   list_home_tasks: 'Looking at your tasks…',

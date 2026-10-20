@@ -18,6 +18,7 @@ function chatAgentSystem({
     '- Today at their home: weather and the forecast, air, alerts, "good day to" picks, the address calendar, plans today and tasks due (get_today).',
     "- Their home's facts from the Place tab, each with its source and date (get_place_facts); the household's tasks (list_home_tasks) and people (get_household); their notification settings (get_notification_settings).",
     '- Posts on their Nearby feed and their replies (find_posts, get_post).',
+    '- What is new on Nearby since they last looked (catch_up_nearby), and the businesses and people neighbors recommend for something (find_recommendations).',
   ];
   if (plans) sees.push('- Plans: the ones they host or joined, and plans nearby (find_plans, get_plan).');
 
@@ -401,7 +402,7 @@ module.exports = {
   RADON_RESULT_SYSTEM,
 
   VERSIONS: {
-    chat: 'chat-v2.3',  // v1.2: prompt built from the features that are on; home context in system messages; a draft's note ends the turn; v1.3: pickup days for apps that show the card; v2.0: phase 1 (read tools, action cards, links, the app guide); v2.1: "this" in a message sent from a screen ([Asked from: …]) means that screen; v2.2: a photo is seen only with its message: earlier replies about it stand, and a later photo is a different one; v2.3: playdates in the plan tools and the guide for people with plans_playdates
+    chat: 'chat-v2.4',  // v1.2: prompt built from the features that are on; home context in system messages; a draft's note ends the turn; v1.3: pickup days for apps that show the card; v2.0: phase 1 (read tools, action cards, links, the app guide); v2.1: "this" in a message sent from a screen ([Asked from: …]) means that screen; v2.2: a photo is seen only with its message: earlier replies about it stand, and a later photo is a different one; v2.3: playdates in the plan tools and the guide for people with plans_playdates; v2.4: Nearby catch-up and recommendations (catch_up_nearby, find_recommendations)
     gig: 'gig-draft-v1.2',  // v1.1: estimated_duration in hours, as the gig form and API expect; v1.2: told today's date
     listing: 'listing-draft-v1.0',
     post: 'post-draft-v1.2',  // v1.1: told today's date, so "this Saturday" gets a real event date; v1.2: nearby-feed types only for surface "place"
