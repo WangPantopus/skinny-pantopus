@@ -413,7 +413,8 @@ class ChatConversationViewModel
                 return
             }
             // A brief or nudge opens the conversation it was added to, at its message (AI assistant phase 2 §8.2).
-            if (mode is ChatThreadMode.Ai && aiConversationId == null && (aiNudgeId != null || aiNudgeConversationId != null)) {
+            val openedForNudge = aiNudgeId != null || aiNudgeConversationId != null
+            if (mode is ChatThreadMode.Ai && aiConversationId == null && openedForNudge) {
                 openAtNudge()
             } else if (mode is ChatThreadMode.Ai && aiConversationId == null) {
                 // Seed AI continuity: a new VM instance for the AI thread keeps
