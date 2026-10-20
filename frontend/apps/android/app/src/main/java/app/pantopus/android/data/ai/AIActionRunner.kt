@@ -47,10 +47,12 @@ internal object AIActionAllowlist {
             "POST" to "/api/homes/:id/tasks",
             "POST" to "/api/homes/:id/tasks/:id/recurrence",
             "PUT" to "/api/hub/preferences",
-            // Phase 2: a system's installed year, a task's update, and a nudge's "Fewer like this".
+            // Phase 2: a system's installed year, a task's update, a nudge's "Fewer like this", and an appliance for
+            // the home's records (the home_asset card, once the assets route was hardened: contract §7.1).
             "PUT" to "/api/homes/:id/systems/:system",
             "PUT" to "/api/homes/:id/tasks/:id",
             "POST" to "/api/ai/nudges/:id/fewer",
+            "POST" to "/api/homes/:id/assets",
         ).map { (method, path) -> method to Regex("^" + path.replace(":id", UUID).replace(":system", SYSTEM_KEY) + "$") }
 
     fun allows(request: ChatAICardRequest): Boolean =

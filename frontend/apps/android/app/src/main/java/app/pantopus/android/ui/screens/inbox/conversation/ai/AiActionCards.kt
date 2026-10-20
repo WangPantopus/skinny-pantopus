@@ -335,6 +335,7 @@ private fun actionCardIcon(card: String): PantopusIcon =
         card == "home_task" -> PantopusIcon.ListChecks
         card == "home_task_update" -> PantopusIcon.CheckCheck
         card == "home_system" -> PantopusIcon.Wrench
+        card == "home_asset" -> PantopusIcon.Package
         card.startsWith("home_") -> PantopusIcon.Home
         card == "notification_settings" -> PantopusIcon.Bell
         else -> PantopusIcon.Sparkles
@@ -353,6 +354,7 @@ private fun actionCardLabel(card: String): String =
         "home_task" -> "Reminder"
         "home_task_update" -> "Task update"
         "home_system" -> "Home system"
+        "home_asset" -> "Appliance"
         "notification_settings" -> "Notifications"
         // A nudge with nothing to do but "Fewer like this" (AI assistant phase 2 §3.6).
         "suggestion" -> "Suggestion"
