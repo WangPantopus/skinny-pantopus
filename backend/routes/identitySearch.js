@@ -20,6 +20,7 @@ const {
   isConnected,
   isSearchable,
   isScopedBlocked,
+  unpublishedBusinessIds,
 } = require('../utils/visibilityPolicy');
 const { hasBlocked } = require('../services/blockService');
 const { isKnownMadeUpUsername } = require('../utils/personalUsername');
@@ -408,9 +409,13 @@ router.get('/search', verifyToken, identitySearchLimiter, async (req, res) => {
         }
       }
 
+      const unpublishedBusinesses = await unpublishedBusinessIds(
+        [...localCandidateById.values()].map((profile) => profile.user_id),
+      );
       for (const profile of localCandidateById.values()) {
         const localSearchFields = getLocalProfileCandidateSearchFields(profile);
         if (!matchesTokens(profile, localSearchFields, tokens)) continue;
+        if (unpublishedBusinesses.has(String(profile.user_id))) continue;
         if (!(await canDiscoverLocalProfile(profile, viewerId))) continue;
         const result = await localProfileResult(profile);
         if (!result) continue;
