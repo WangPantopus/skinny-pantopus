@@ -128,6 +128,7 @@ data class NotificationPreferencesPatch(
     val locationMode: String? = null,
     val dailyBriefingTimezone: String? = null,
     val dailyBriefingPrompted: Boolean? = null,
+    val deviceTimezone: String? = null,
 ) {
     /** Last write wins per key; untouched keys survive the merge. */
     fun mergedWith(newer: NotificationPreferencesPatch): NotificationPreferencesPatch =
@@ -146,6 +147,7 @@ data class NotificationPreferencesPatch(
             locationMode = newer.locationMode ?: locationMode,
             dailyBriefingTimezone = newer.dailyBriefingTimezone ?: dailyBriefingTimezone,
             dailyBriefingPrompted = newer.dailyBriefingPrompted ?: dailyBriefingPrompted,
+            deviceTimezone = newer.deviceTimezone ?: deviceTimezone,
         )
 
     /** Nothing to send — Joi's `.min(1)` would 400 on an empty body. */
@@ -192,6 +194,7 @@ class NotificationPreferencesPatchJsonAdapter {
         value.locationMode?.let { writer.name("location_mode").value(it) }
         value.dailyBriefingTimezone?.let { writer.name("daily_briefing_timezone").value(it) }
         value.dailyBriefingPrompted?.let { writer.name("daily_briefing_prompted").value(it) }
+        value.deviceTimezone?.let { writer.name("device_timezone").value(it) }
         writer.endObject()
     }
 

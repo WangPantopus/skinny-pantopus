@@ -35,6 +35,7 @@ public enum EmergencyFilter: String, CaseIterable, Sendable {
     case contact
     case evac
     case medical
+    case other
 
     /// Resolve the underlying `EmergencyCategory` for chip ids that
     /// represent a single category. `.all` returns `nil`.
@@ -45,6 +46,7 @@ public enum EmergencyFilter: String, CaseIterable, Sendable {
         case .contact: .contact
         case .evac: .evac
         case .medical: .medical
+        case .other: .other
         }
     }
 }
@@ -60,7 +62,7 @@ func emergencyPhoneNumber(for projection: EmergencyRowProjection) -> String? {
               !target.trimmingCharacters(in: .whitespaces).isEmpty
         else { return nil }
         return target
-    case .shutoff, .evac:
+    case .shutoff, .evac, .other:
         return nil
     }
 }
@@ -162,6 +164,7 @@ final class EmergencyInfoViewModel: ListOfRowsDataSource {
             case .contact: "\(EmergencyCategory.contact.chipLabel) \(counts[.contact] ?? 0)"
             case .evac: "\(EmergencyCategory.evac.chipLabel) \(counts[.evac] ?? 0)"
             case .medical: "\(EmergencyCategory.medical.chipLabel) \(counts[.medical] ?? 0)"
+            case .other: "\(EmergencyCategory.other.chipLabel) \(counts[.other] ?? 0)"
             }
             return ChipStripConfig.Chip(
                 id: filter.rawValue,
@@ -329,7 +332,7 @@ final class EmergencyInfoViewModel: ListOfRowsDataSource {
         let bucketed = rowsByCategory()
         let categoriesToShow: [EmergencyCategory] = {
             if let category = filter.category { return [category] }
-            return [.shutoff, .contact, .evac, .medical]
+            return EmergencyCategory.allCases
         }()
 
         var sections: [RowSection] = []
@@ -379,7 +382,7 @@ final class EmergencyInfoViewModel: ListOfRowsDataSource {
     func row(for dto: HomeEmergencyDTO, pinned: Bool) -> RowModel {
         let projection = EmergencyInfoViewModel.project(dto: dto, pinned: pinned)
         let category = projection.category
-        let dtoCopy = dto
+        let phone = emergencyPhoneNumber(for: projection)
         return RowModel(
             id: projection.id,
             title: projection.title,
@@ -389,22 +392,17 @@ final class EmergencyInfoViewModel: ListOfRowsDataSource {
                 background: category.background,
                 foreground: category.foreground
             ),
-            trailing: .circularAction(
-                icon: category.actionIcon,
-                accessibilityLabel: category.actionAccessibilityLabel,
-                background: category.background,
-                foreground: category.foreground
-            ) { [weak self, onAction] in
-                // A stored phone number is a tap-to-dial affordance (RN
-                // `emergency.tsx:157-162`); everything else opens the
-                // item detail.
-                if let phone = emergencyPhoneNumber(for: projection) {
-                    Task { @MainActor in self?.dial(phone) }
-                } else {
-                    onAction(dtoCopy)
+            trailing: phone.map { number in
+                .circularAction(
+                    icon: .phoneCall,
+                    accessibilityLabel: "Call",
+                    background: category.background,
+                    foreground: category.foreground
+                ) { [weak self] in
+                    Task { @MainActor in self?.dial(number) }
                 }
-            },
-            onTap: { [onAction] in onAction(dtoCopy) },
+            } ?? .chevron,
+            onTap: { [onAction] in onAction(dto) },
             body: projection.body,
             bodyIcon: projection.bodyIcon,
             inlineChip: nil,
@@ -483,7 +481,9 @@ final class EmergencyInfoViewModel: ListOfRowsDataSource {
         case .shutoff, .evac:
             .mapPin
         case .medical:
-            dto.details["phone"] != nil ? .phone : .mapPin
+            dto.details["phone"] != nil ? .phone : .info
+        case .other:
+            .info
         }
     }
 
@@ -496,6 +496,8 @@ final class EmergencyInfoViewModel: ListOfRowsDataSource {
             dto.details["phone"]
         case .evac, .shutoff:
             dto.details["map_url"] ?? dto.details["photo_url"]
+        case .other:
+            nil
         }
     }
 
@@ -539,7 +541,7 @@ final class EmergencyInfoViewModel: ListOfRowsDataSource {
             let unit = summary.needsReviewCount == 1 ? "item needs" : "items need"
             return "\(summary.needsReviewCount) \(unit) review · keep the plan current"
         }
-        return "Plan current · shared with household members"
+        return "Shared with household members · review regularly"
     }
 
     // MARK: - Helpers

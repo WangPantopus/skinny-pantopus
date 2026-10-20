@@ -51,6 +51,8 @@ data class NeighborManageFlags(
     val notHelpful: Boolean = false,
     val blocked: Boolean = false,
     val reported: Boolean = false,
+    val busy: Boolean = false,
+    val error: String? = null,
 )
 
 /**

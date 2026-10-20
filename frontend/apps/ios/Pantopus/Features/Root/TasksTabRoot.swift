@@ -230,6 +230,9 @@ public struct TasksTabRoot: View {
                     identityKind: nil,
                     verified: false
                 )))
+            },
+            onOpenChat: { destination in
+                path.append(.chatConversation(destination))
             }
         )
     }

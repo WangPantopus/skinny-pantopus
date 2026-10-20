@@ -44,9 +44,7 @@ import {
   EventTypeTiles,
   Note,
   PillarPill,
-  SegmentedControl,
   Stepper,
-  TextArea,
   TextField,
   ToggleRow,
 } from "@/components/scheduling/packages/ui";
@@ -74,9 +72,6 @@ export default function PackageEditor({
   const [saving, setSaving] = useState(false);
   // One id per intended package, reused when the same package is retried, so a lost reply can't create it twice.
   const pendingCreate = useRef<{ draft: string; id: string } | null>(null);
-  // UI-only fields not persisted by the backend (design shows them view-only).
-  const [description, setDescription] = useState("");
-  const [expiry, setExpiry] = useState("1 year");
   // Has-active-buyers locked state: backend does not expose a buyers count today;
   // this flag gates UI only and would be wired to the API response when available.
   const hasActiveBuyers = false; // TODO: wire to API when endpoint exposes it
@@ -227,14 +222,6 @@ export default function PackageEditor({
                 placeholder="5-session cleaning"
                 error={errors.name}
               />
-              {/* Description: view-only UI field; not persisted by the backend. */}
-              <TextArea
-                label="Description"
-                value={description}
-                onChange={setDescription}
-                placeholder="What's included"
-                rows={3}
-              />
             </Card>
 
             {hasActiveBuyers && (
@@ -315,15 +302,6 @@ export default function PackageEditor({
                 keep their terms.
               </Note>
             )}
-
-            {/* Expiry card: view-only UI field; not persisted by the backend. */}
-            <Card overline="Expiry" pillar={pillar}>
-              <SegmentedControl
-                options={["90 days", "1 year", "Never"]}
-                value={expiry}
-                onChange={setExpiry}
-              />
-            </Card>
 
             <Card pillar={pillar}>
               <ToggleRow

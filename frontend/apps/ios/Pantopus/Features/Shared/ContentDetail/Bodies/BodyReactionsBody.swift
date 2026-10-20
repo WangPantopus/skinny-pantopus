@@ -231,7 +231,7 @@ public struct BodyReactionsBody: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s4) {
             if !bodyText.isEmpty {
-                Text(bodyText)
+                PostLinkText(bodyText)
                     .font(.system(size: 15, weight: .regular))
                     .foregroundStyle(Theme.Color.appText)
                     .lineSpacing(7) // 15 + 7 ≈ 22pt line height

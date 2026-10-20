@@ -6,7 +6,7 @@
 //  field + primary "Send reset link" CTA. On success transitions to the
 //  shared Status/Wait "Check your email" surface (StatusWaitingView with
 //  `.resetLinkSent(email:)` content). Resend is rate-limited client-side
-//  (30s cooldown) on top of the backend's `forgotPasswordLimiter`. Ghost
+//  (60s cooldown) on top of the backend's `forgotPasswordLimiter`. Ghost
 //  CTA on the status screen pops back to login.
 //
 
@@ -28,12 +28,26 @@ struct ForgotPasswordView: View {
             case .form:
                 formBody
             case let .sent(email):
-                StatusWaitingView(
-                    content: .resetLinkSent(email: email),
-                    onPrimary: { _ in resend(email: email) },
-                    onSecondary: { _ in onBack() }
-                )
-                .accessibilityIdentifier("forgotPasswordSentStatus")
+                if let error = viewModel.errorMessage {
+                    ErrorBanner(error: error, onDismiss: viewModel.clearError)
+                        .padding(.horizontal, Spacing.s5)
+                        .padding(.top, Spacing.s3)
+                        .accessibilityIdentifier("forgotPasswordErrorBanner")
+                }
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    let remaining = viewModel.resendSecondsRemaining(at: context.date)
+                    StatusWaitingView(
+                        content: .resetLinkSent(
+                            email: email,
+                            resendLabel: viewModel.isLoading ? "Requesting…"
+                                : remaining > 0 ? "Resend in \(remaining)s" : "Resend",
+                            resendDisabled: viewModel.isLoading || remaining > 0
+                        ),
+                        onPrimary: { _ in resend(email: email) },
+                        onSecondary: { _ in onBack() }
+                    )
+                    .accessibilityIdentifier("forgotPasswordSentStatus")
+                }
             }
         }
         .background(Theme.Color.appSurface)
@@ -156,8 +170,8 @@ final class ForgotPasswordViewModel {
     /// rate-limited request was rejected before reaching the network.
     private(set) var resendCooldownUntil: Date?
 
-    /// Cooldown after a successful send. Matches the web's 30s value.
-    static let resendCooldown: TimeInterval = 30
+    /// Matches the backend's auth-link resend window.
+    static let resendCooldown: TimeInterval = 60
 
     var canSubmit: Bool {
         !isLoading && AuthValidation.email(email) == nil
@@ -174,6 +188,7 @@ final class ForgotPasswordViewModel {
     /// Submits the initial `/forgot-password` request. On success transitions
     /// to `.sent(email)` and starts the resend cooldown.
     func requestReset(using auth: AuthManager, now: Date = Date()) async {
+        guard !isLoading else { return }
         let target = email.trimmingCharacters(in: .whitespaces).lowercased()
         if AuthValidation.email(target) != nil { return }
         clearError()
@@ -194,9 +209,11 @@ final class ForgotPasswordViewModel {
 
     /// Re-sends the reset email from the status screen. Honours the local
     /// cooldown so a frustrated tap doesn't pile on the backend rate
-    /// limiter. Returns silently if the cooldown hasn't elapsed.
+    /// limiter. The status screen shows the remaining wait and disables the CTA.
     func resend(email: String, using auth: AuthManager, now: Date = Date()) async {
+        guard !isLoading else { return }
         if let until = resendCooldownUntil, until > now { return }
+        clearError()
         isLoading = true
         defer { isLoading = false }
         do {
@@ -209,6 +226,11 @@ final class ForgotPasswordViewModel {
             errorMessage = .unknown
             Observability.shared.capture(error)
         }
+    }
+
+    func resendSecondsRemaining(at date: Date) -> Int {
+        guard let until = resendCooldownUntil else { return 0 }
+        return max(0, Int(ceil(until.timeIntervalSince(date))))
     }
 
     func clearError() {

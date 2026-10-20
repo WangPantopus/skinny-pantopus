@@ -1,4 +1,3 @@
-// @ts-nocheck
 'use client';
 
 import { Suspense, useEffect, useState } from 'react';
@@ -36,7 +35,8 @@ function SeatInviteAcceptContent() {
 
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [invite, setInvite] = useState<Record<string, any> | null>(null);
+  const [invite, setInvite] = useState<Awaited<ReturnType<typeof api.businessSeats.getInviteDetails>> | null>(null);
+  const [joinedBusinessId, setJoinedBusinessId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [accepting, setAccepting] = useState(false);
   const [declining, setDeclining] = useState(false);
@@ -49,14 +49,18 @@ function SeatInviteAcceptContent() {
   const isLoggedIn = mounted && !!getAuthToken();
 
   useEffect(() => {
+    if (!mounted) return;
+    setError('');
+    setInvite(null);
     if (!token) {
       setError('No invite token provided');
       setLoading(false);
       return;
     }
-    loadInvite();
+    if (!isLoggedIn) { setLoading(false); return; }
+    void loadInvite();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
+  }, [token, mounted, isLoggedIn]);
 
   const loadInvite = async () => {
     setLoading(true);
@@ -80,7 +84,8 @@ function SeatInviteAcceptContent() {
     }
     setAccepting(true);
     try {
-      await api.businessSeats.acceptInvite({ token });
+      const result = await api.businessSeats.acceptInvite({ token });
+      setJoinedBusinessId(result.business_user_id);
       setDone('accepted');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to accept invite';
@@ -112,6 +117,22 @@ function SeatInviteAcceptContent() {
             <Building2 className="w-6 h-6 text-violet-600 animate-pulse" />
           </div>
           <p className="text-app-secondary text-sm">Loading invitation…</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Invite details require authentication. Keep the invitation as the return
+  // destination instead of turning a signed-out visitor into an invalid-token error.
+  if (!isLoggedIn && token) {
+    const returnTo = encodeURIComponent(`/invite/seat?token=${token}`);
+    return (
+      <div className="min-h-screen bg-app flex items-center justify-center p-4">
+        <div className="bg-surface rounded-2xl border border-app shadow-lg p-8 max-w-md w-full text-center space-y-4">
+          <h1 className="text-lg font-semibold text-app">Business Seat Invitation</h1>
+          <p className="text-sm text-app-secondary">Sign in with the invited email to review this invitation before accepting.</p>
+          <button onClick={() => router.push(`/login?redirectTo=${returnTo}`)} className="w-full px-4 py-2 rounded-lg bg-violet-600 text-white text-sm font-semibold hover:bg-violet-700">Log in to review invitation</button>
+          <button onClick={() => router.push(`/register?redirectTo=${returnTo}`)} className="text-sm text-violet-600 hover:underline">Create an account</button>
         </div>
       </div>
     );
@@ -156,12 +177,12 @@ function SeatInviteAcceptContent() {
           </h2>
           <p className="text-sm text-app-secondary mb-6">
             {done === 'accepted'
-              ? `You've joined ${invite?.business_name || 'the business'} as ${invite?.display_name || 'a team member'}. Your personal identity remains private.`
+              ? `You've joined ${invite?.business?.name || 'the business'} as ${invite?.display_name || 'a team member'}. Your personal identity remains private.`
               : 'You\'ve declined this invitation. No changes were made to your account.'
             }
           </p>
           <button
-            onClick={() => router.push(done === 'accepted' ? '/app' : '/')}
+            onClick={() => router.push(done === 'accepted' && joinedBusinessId ? `/app/businesses/${joinedBusinessId}/dashboard` : done === 'accepted' ? '/app' : '/')}
             className="px-4 py-2 rounded-lg bg-violet-600 text-white text-sm font-semibold hover:bg-violet-700 transition"
           >
             {done === 'accepted' ? 'Go to dashboard' : 'Go home'}
@@ -187,10 +208,10 @@ function SeatInviteAcceptContent() {
         {/* Details */}
         <div className="p-6 space-y-5">
           {/* Business name */}
-          {invite?.business_name && (
+          {invite?.business?.name && (
             <div className="text-center">
               <p className="text-xs uppercase tracking-wider text-app-secondary mb-1">Business</p>
-              <p className="text-lg font-semibold text-app">{invite.business_name}</p>
+              <p className="text-lg font-semibold text-app">{invite.business.name}</p>
             </div>
           )}
 
@@ -203,15 +224,10 @@ function SeatInviteAcceptContent() {
             <div className="flex justify-between items-center">
               <span className="text-sm text-app-secondary">Role</span>
               <span className="inline-flex items-center rounded-full border border-app px-2.5 py-0.5 text-xs font-semibold text-app-strong">
-                {ROLE_LABELS[invite?.role_base] || invite?.role_base || 'Viewer'}
+                {ROLE_LABELS[invite?.role_base || ''] || invite?.role_base || 'Viewer'}
               </span>
             </div>
-            {invite?.title && (
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-app-secondary">Title</span>
-                <span className="text-sm text-app">{invite.title}</span>
-              </div>
-            )}
+
           </div>
 
           {/* Privacy notice */}
@@ -259,7 +275,7 @@ function SeatInviteAcceptContent() {
         {/* Footer */}
         <div className="border-t border-app px-6 py-4 flex items-center justify-center gap-1.5">
           <Clock className="w-3.5 h-3.5 text-app-secondary" />
-          <span className="text-xs text-app-secondary">This invitation expires in 7 days</span>
+          <span className="text-xs text-app-secondary">If this invitation expires, ask the business for a new link.</span>
         </div>
       </div>
     </div>

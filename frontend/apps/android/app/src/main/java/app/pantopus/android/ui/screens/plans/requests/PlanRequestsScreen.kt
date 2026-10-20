@@ -41,6 +41,7 @@ import app.pantopus.android.data.plans.PlanAutoRule
 import app.pantopus.android.data.plans.PlanFormat
 import app.pantopus.android.data.plans.isAtHome
 import app.pantopus.android.data.plans.isPlaydate
+import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.GhostButton
 import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.components.ToastController
@@ -80,15 +81,20 @@ fun PlanRequestsScreen(
     Box(modifier = Modifier.fillMaxSize().testTag("planRequests")) {
         PlanPlainScaffold(onBack = onBack, title = "Requests") {
             val plan = ui.plan
+            if (ui.loading) {
+                PlanRowsSkeleton(rows = 2)
+                return@PlanPlainScaffold
+            }
+            if (ui.failed != null) {
+                ErrorState(
+                    headline = "Couldn't load requests",
+                    message = ui.failed.orEmpty(),
+                    onRetry = viewModel::load,
+                )
+                return@PlanPlainScaffold
+            }
             if (plan != null) RequestsHeader(plan, onHostedBefore = viewModel::setHostedBefore)
             when {
-                ui.loading && ui.pending.isEmpty() -> PlanRowsSkeleton(rows = 2)
-                ui.failed != null ->
-                    Text(
-                        text = ui.failed.orEmpty(),
-                        style = PantopusTextStyle.small,
-                        color = PantopusColors.appTextSecondary,
-                    )
                 ui.pending.isEmpty() ->
                     Text(
                         text = "No requests right now. We'll tell you when someone asks.",

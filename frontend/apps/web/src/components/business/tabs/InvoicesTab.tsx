@@ -52,9 +52,10 @@ const FILTER_OPTIONS: { key: string | undefined; label: string }[] = [
 
 interface Props {
   businessId: string;
+  canManage: boolean;
 }
 
-export default function InvoicesTab({ businessId }: Props) {
+export default function InvoicesTab({ businessId, canManage }: Props) {
   const [invoices, setInvoices] = useState<BusinessInvoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
@@ -126,11 +127,23 @@ export default function InvoicesTab({ businessId }: Props) {
   const handleCreate = async () => {
     if (!recipient) { toast.error('Choose who to invoice'); return; }
     const parsedItems: InvoiceLineItem[] = [];
-    for (const item of lineItems) {
-      if (!item.description.trim() || !item.amount.trim()) continue;
-      const amount_cents = Math.round(parseFloat(item.amount) * 100);
-      if (isNaN(amount_cents) || amount_cents <= 0) { toast.error(`Invalid amount: ${item.amount}`); return; }
-      parsedItems.push({ description: item.description.trim(), amount_cents, quantity: parseInt(item.quantity) || 1 });
+    for (const [index, item] of lineItems.entries()) {
+      if (!item.description.trim() || !item.amount.trim()) {
+        toast.error(`Line ${index + 1}: add a description and amount, or remove the line.`);
+        return;
+      }
+      const amount = item.amount.trim();
+      const amount_cents = Math.round(Number(amount) * 100);
+      if (!/^(?:\d+|\d*\.\d{1,2})$/.test(amount) || !Number.isSafeInteger(amount_cents) || amount_cents <= 0) {
+        toast.error(`Line ${index + 1}: enter a positive amount with no more than two decimal places.`);
+        return;
+      }
+      const quantity = Number(item.quantity.trim());
+      if (!/^\d+$/.test(item.quantity.trim()) || !Number.isInteger(quantity) || quantity < 1 || quantity > 10000) {
+        toast.error(`Line ${index + 1}: quantity must be a whole number from 1 to 10,000.`);
+        return;
+      }
+      parsedItems.push({ description: item.description.trim(), amount_cents, quantity });
     }
     if (parsedItems.length === 0) { toast.error('At least one line item is required'); return; }
 
@@ -167,10 +180,10 @@ export default function InvoicesTab({ businessId }: Props) {
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-app-text">Invoices</h2>
-        <button onClick={() => setShowCreate(true)}
+        {canManage && <button onClick={() => setShowCreate(true)}
           className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 transition">
           <Plus className="w-4 h-4" /> New Invoice
-        </button>
+        </button>}
       </div>
 
       {/* Filter chips */}
@@ -194,7 +207,7 @@ export default function InvoicesTab({ businessId }: Props) {
         <div className="text-center py-16">
           <FileText className="w-12 h-12 mx-auto text-app-text-muted mb-3" />
           <p className="text-sm text-app-text-secondary">{statusFilter ? `No ${statusFilter} invoices` : 'No invoices yet'}</p>
-          <p className="text-xs text-app-text-muted mt-1">Create an invoice to bill a customer after service delivery.</p>
+          {canManage && <p className="text-xs text-app-text-muted mt-1">Create an invoice to bill a customer after service delivery.</p>}
         </div>
       ) : (
         <div className="space-y-3">
@@ -234,7 +247,7 @@ export default function InvoicesTab({ businessId }: Props) {
                   </div>
                 </div>
 
-                {['sent', 'viewed', 'overdue'].includes(inv.status) && (
+                {canManage && ['sent', 'viewed', 'overdue'].includes(inv.status) && (
                   <button onClick={() => handleVoid(inv.id)} className="text-xs text-red-600 font-medium mt-3 hover:underline">
                     Void Invoice
                   </button>
@@ -246,7 +259,7 @@ export default function InvoicesTab({ businessId }: Props) {
       )}
 
       {/* Create Invoice Modal */}
-      {showCreate && (
+      {canManage && showCreate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="w-full max-w-lg mx-4 bg-app-surface rounded-xl shadow-2xl border border-app-border max-h-[90vh] flex flex-col overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b border-app-border-subtle">
@@ -298,11 +311,11 @@ export default function InvoicesTab({ businessId }: Props) {
                 <label className="text-xs text-app-text-secondary mb-1 block">Line Items</label>
                 {lineItems.map((item, i) => (
                   <div key={i} className="flex items-center gap-2 mb-2">
-                    <input type="text" value={item.description} onChange={e => updateLineItem(i, 'description', e.target.value)} placeholder="Description"
+                    <input type="text" value={item.description} onChange={e => updateLineItem(i, 'description', e.target.value)} placeholder="Description" aria-label={`Line ${i + 1} description`}
                       className="flex-[2] text-sm px-3 py-2 border border-app-border rounded-lg bg-app-surface text-app-text placeholder:text-app-text-muted focus:outline-none focus:ring-1 focus:ring-violet-500" />
-                    <input type="text" value={item.amount} onChange={e => updateLineItem(i, 'amount', e.target.value)} placeholder="$0.00"
+                    <input type="text" value={item.amount} onChange={e => updateLineItem(i, 'amount', e.target.value)} placeholder="$0.00" inputMode="decimal" aria-label={`Line ${i + 1} unit amount`}
                       className="flex-1 text-sm px-3 py-2 border border-app-border rounded-lg bg-app-surface text-app-text placeholder:text-app-text-muted focus:outline-none focus:ring-1 focus:ring-violet-500" />
-                    <input type="text" value={item.quantity} onChange={e => updateLineItem(i, 'quantity', e.target.value)} placeholder="1"
+                    <input type="text" value={item.quantity} onChange={e => updateLineItem(i, 'quantity', e.target.value)} placeholder="1" inputMode="numeric" aria-label={`Line ${i + 1} quantity`}
                       className="w-12 text-sm px-2 py-2 border border-app-border rounded-lg bg-app-surface text-app-text text-center focus:outline-none focus:ring-1 focus:ring-violet-500" />
                     {lineItems.length > 1 && (
                       <button aria-label="Remove line item" onClick={() => setLineItems(prev => prev.filter((_, j) => j !== i))} className="text-red-500 hover:text-red-700"><Trash2 className="w-4 h-4" /></button>

@@ -6,7 +6,7 @@ import * as api from '@pantopus/api';
 import type { LinkPreviewData } from '@pantopus/api';
 import FeedMediaImage from './FeedMediaImage';
 
-const URL_REGEX = /(https?:\/\/[^\s]+)/gi;
+const URL_REGEX = /(?:https?:\/\/|www\.)[^\s<>"']+/gi;
 const INTERNAL_HOSTS = new Set(['pantopus.com', 'www.pantopus.com', 'localhost', '127.0.0.1']);
 
 // In-memory cache to avoid refetching on re-renders
@@ -20,17 +20,33 @@ function getHostname(url: string): string | null {
   }
 }
 
-function findFirstExternalUrl(content: string): string | null {
-  for (const match of content.matchAll(URL_REGEX)) {
-    const url = match[0];
-    try {
-      const parsed = new URL(url);
-      if (!INTERNAL_HOSTS.has(parsed.hostname)) return url;
-    } catch {
-      continue;
+function postLinks(content: string) {
+  return Array.from(content.matchAll(URL_REGEX)).flatMap(match => {
+    let text = match[0].replace(/[.,!?;:]+$/, '');
+    for (const [open, close] of [['(', ')'], ['[', ']'], ['{', '}']]) {
+      while (text.endsWith(close) && text.split(close).length > text.split(open).length) text = text.slice(0, -1);
     }
-  }
-  return null;
+    try {
+      const url = new URL(/^https?:\/\//i.test(text) ? text : `https://${text}`);
+      return ['http:', 'https:'].includes(url.protocol) ? [{ text, url: url.href, index: match.index! }] : [];
+    } catch { return []; }
+  });
+}
+
+function findFirstExternalUrl(content: string): string | null {
+  return postLinks(content).find(link => !INTERNAL_HOSTS.has(new URL(link.url).hostname))?.url ?? null;
+}
+
+/** All links stay usable even when a site doesn't provide preview metadata. */
+export function PostLinkContent({ content }: { content: string }) {
+  let cursor = 0;
+  const parts = postLinks(content).flatMap(link => {
+    const before = content.slice(cursor, link.index);
+    cursor = link.index + link.text.length;
+    return [before, <a key={link.index} href={link.url} target="_blank" rel="noopener noreferrer"
+      className="text-app-link underline" onClick={event => event.stopPropagation()}>{link.text}</a>];
+  });
+  return <>{parts}{content.slice(cursor)}</>;
 }
 
 interface LinkPreviewCardProps {
@@ -49,6 +65,7 @@ export default function LinkPreviewCard({ content }: LinkPreviewCardProps) {
       return;
     }
     setUrl(externalUrl);
+    setPreview(null);
 
     // Check cache
     if (previewCache.has(externalUrl)) {

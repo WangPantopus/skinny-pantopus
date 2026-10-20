@@ -435,6 +435,7 @@ import app.pantopus.android.ui.screens.scheduling.setup.FirstRunWizardScreen
 import app.pantopus.android.ui.screens.scheduling.setup.OnboardingHomeBusinessScreen
 import app.pantopus.android.ui.screens.scheduling.visits.VisitDetailScreen
 import app.pantopus.android.ui.screens.scheduling.visits.VisitSetupScreen
+import app.pantopus.android.ui.screens.settings.BriefingNotice
 import app.pantopus.android.ui.screens.settings.NotificationSettingsScreen
 import app.pantopus.android.ui.screens.settings.PrivacySettingsScreen
 import app.pantopus.android.ui.screens.settings.SettingsIndexScreen
@@ -1399,6 +1400,7 @@ private object ChildRoutes {
     /** The room a chat link named when it opened as a person thread, so the
      *  link's arrival still completes (empty for every other open). */
     const val CHAT_ARRIVAL_ROOM_KEY = "arrivalRoom"
+    const val CHAT_BUSINESS_ID_KEY = "asBusinessUserId"
     const val CHAT_CONVERSATION =
         "chat/{$CHAT_KIND_KEY}/{$CHAT_ID_KEY}?" +
             "$CHAT_NAME_KEY={$CHAT_NAME_KEY}" +
@@ -1415,7 +1417,8 @@ private object ChildRoutes {
             "&$CHAT_TOPIC_REF_ID_KEY={$CHAT_TOPIC_REF_ID_KEY}" +
             "&$CHAT_TOPIC_TITLE_KEY={$CHAT_TOPIC_TITLE_KEY}" +
             "&$CHAT_GIG_ID_KEY={$CHAT_GIG_ID_KEY}" +
-            "&$CHAT_ARRIVAL_ROOM_KEY={$CHAT_ARRIVAL_ROOM_KEY}"
+            "&$CHAT_ARRIVAL_ROOM_KEY={$CHAT_ARRIVAL_ROOM_KEY}" +
+            "&$CHAT_BUSINESS_ID_KEY={$CHAT_BUSINESS_ID_KEY}"
 
     /** New message contact picker (T6.6b P25). Reached from Chat list
      *  compose button + empty-state CTA. */
@@ -1658,6 +1661,7 @@ private object ChildRoutes {
         displayName: String,
         initials: String,
         verified: Boolean,
+        asBusinessUserId: String? = null,
     ): String {
         fun enc(value: String) = java.net.URLEncoder.encode(value, "UTF-8").replace("+", "%20")
         return "chat/room/${enc(roomId)}?" +
@@ -1672,7 +1676,8 @@ private object ChildRoutes {
             "&$CHAT_SCROLL_TO_KEY=" +
             "&$CHAT_TOPIC_TYPE_KEY=" +
             "&$CHAT_TOPIC_REF_ID_KEY=" +
-            "&$CHAT_TOPIC_TITLE_KEY="
+            "&$CHAT_TOPIC_TITLE_KEY=" +
+            "&$CHAT_BUSINESS_ID_KEY=${enc(asBusinessUserId.orEmpty())}"
     }
 
     /** Build the chat-conversation path for a Chat Search result. Carries
@@ -2178,6 +2183,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
         ) { uri ->
             if (uri != null) appContext.shareText(InviteLinks.INVITE_MESSAGE, "Invite to Pantopus")
         }
+    BriefingNotice(onManage = { navController.navigate(ChildRoutes.SETTINGS_NOTIFICATIONS) })
     val sessionViewModel: RootSessionViewModel = hiltViewModel()
     val chatBadgeViewModel: ChatBadgeViewModel = hiltViewModel()
     val currentHandle by sessionViewModel.currentHandle.collectAsStateWithLifecycle()
@@ -2189,6 +2195,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
     val navDrawerScope = rememberCoroutineScope()
     // Place tapped again on its root: one event, which scrolls the root back to the top.
     val placeReselects = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
+    var ballotHomeId by rememberSaveable { mutableStateOf<String?>(null) }
     // Child screens keep the tab they were opened from lit (they used to fall
     // back to Place, which also swallowed taps on Place from those screens).
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -2350,7 +2357,11 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         ),
                     )
                 } else if (pending.id.isNotBlank()) {
-                    val display = pending.name?.takeIf { it.isNotBlank() } ?: "Conversation"
+                    // A room the Messages list shows under its own name (a Support Train's) opens under it.
+                    val display =
+                        deepLinkChatResolver.roomName(pending.id)
+                            ?: pending.name?.takeIf { it.isNotBlank() }
+                            ?: "Conversation"
                     val initials =
                         display
                             .split(" ")
@@ -2707,6 +2718,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     PlaceTabRoot(
                         navController = navController,
                         scrollToTop = placeReselects,
+                        ballotHomeId = ballotHomeId,
+                        onBallotOpened = { ballotHomeId = null },
                         onOpenMenu = { navDrawerScope.launch { navDrawerState.open() } },
                     )
                 }
@@ -2728,8 +2741,12 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     TodayTabScreen(
                         onClaim = { navController.navigate(ChildRoutes.ADD_HOME) },
                         onOpenPlace = { homeId ->
-                            // The ballot card is on this home's Your Place: a link to it, as a push would open it.
-                            placeLinkScope.launch { currentPlaceHost?.let { navController.openPlaceLink(it, homeId, null) } }
+                            placeLinkScope.launch {
+                                currentPlaceHost?.let {
+                                    ballotHomeId = homeId
+                                    navController.openPlaceLink(it, homeId, null)
+                                }
+                            }
                         },
                         plans =
                             PlansTodayActions(
@@ -3064,6 +3081,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     PlaceDashboardDestination(
                         navController = navController,
                         homeId = homeId,
+                        scrollToBallot = ballotHomeId == homeId,
+                        onBallotOpened = { ballotHomeId = null },
                         onOpenMenu = { navDrawerScope.launch { navDrawerState.open() } },
                         onSwitchHome = { id ->
                             currentPlaceHost?.switchHome(id)
@@ -3095,6 +3114,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     val homeId = entry.arguments?.getString(PLACE_DETAIL_HOME_ID_KEY).orEmpty()
                     PlaceDetailScreen(
                         onBack = { navController.popBackStack() },
+                        onOpenBallot = {
+                            ballotHomeId = homeId
+                            navController.popBackStack()
+                        },
                         // A locked section's "Verify address" opens the dashboard's verify sheet and its real flows.
                         onStartVerify = { method -> navController.openPlaceVerify(method, homeId) },
                         onOpenVerificationStatus = { navController.navigate(ChildRoutes.waitingRoom(homeId)) },
@@ -4790,10 +4813,19 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 composable(
                     route = ChildRoutes.EDIT_BUSINESS_PAGE,
                     arguments = listOf(navArgument(EDIT_BUSINESS_PAGE_BUSINESS_ID_KEY) { type = NavType.StringType }),
-                ) {
+                ) { backStackEntry ->
+                    val businessId = backStackEntry.arguments?.getString(EDIT_BUSINESS_PAGE_BUSINESS_ID_KEY).orEmpty()
                     EditBusinessPageScreen(
                         onBack = { navController.popBackStack() },
-                        onPreview = { navController.popBackStack() },
+                        onPreview = { navController.navigate(ChildRoutes.businessProfile(businessId)) },
+                        onBusinessClosed = {
+                            if (!navController.popBackStack(ChildRoutes.MY_BUSINESSES, false)) {
+                                if (!navController.popBackStack(ChildRoutes.businessOwner(businessId), true)) {
+                                    navController.popBackStack()
+                                }
+                                navController.navigate(ChildRoutes.MY_BUSINESSES) { launchSingleTop = true }
+                            }
+                        },
                     )
                 }
                 // C4 — public profile opened on a named custom page
@@ -4998,6 +5030,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 type = NavType.StringType
                                 defaultValue = ""
                             },
+                            navArgument(ChildRoutes.CHAT_BUSINESS_ID_KEY) {
+                                type = NavType.StringType
+                                defaultValue = ""
+                            },
                         ),
                 ) { entry ->
                     val args = entry.arguments ?: return@composable
@@ -5017,6 +5053,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     val topicTitle = args.getString(ChildRoutes.CHAT_TOPIC_TITLE_KEY).orEmpty().takeIf { it.isNotEmpty() }
                     val gigId = args.getString(ChildRoutes.CHAT_GIG_ID_KEY).orEmpty().takeIf { it.isNotEmpty() }
                     val arrivalRoomId = args.getString(ChildRoutes.CHAT_ARRIVAL_ROOM_KEY).orEmpty().takeIf { it.isNotEmpty() }
+                    val asBusinessUserId = args.getString(ChildRoutes.CHAT_BUSINESS_ID_KEY)?.takeIf { it.isNotBlank() }
                     val initialTopic =
                         if (topicType != null && topicTitle != null) {
                             ChatInitialTopic(topicType = topicType, topicRefId = topicRefId, title = topicTitle)
@@ -5026,7 +5063,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     val mode: ChatThreadMode =
                         when (kind) {
                             "ai" -> ChatThreadMode.Ai
-                            "room" -> ChatThreadMode.Room(id)
+                            "room" -> ChatThreadMode.Room(id, asBusinessUserId)
                             "creator" -> ChatThreadMode.Person(otherUserId = id)
                             else -> ChatThreadMode.Person(otherUserId = id)
                         }
@@ -6123,6 +6160,18 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                         ),
                                     )
                                 },
+                                // The train's group chat opens under the train's title.
+                                onOpenChat = { roomId, title ->
+                                    val initials = title.split(" ").take(2).mapNotNull { it.firstOrNull()?.uppercase() }
+                                    navController.navigate(
+                                        ChildRoutes.chatConversationRoom(
+                                            roomId = roomId,
+                                            displayName = title,
+                                            initials = initials.joinToString(""),
+                                            verified = false,
+                                        ),
+                                    )
+                                },
                             ),
                     )
                 }
@@ -6672,6 +6721,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                     displayName = name,
                                     initials = initialsFromName(name),
                                     verified = false,
+                                    asBusinessUserId = businessId,
                                 ),
                             )
                         },
@@ -7067,6 +7117,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
 private fun PlaceTabRoot(
     navController: NavHostController,
     scrollToTop: Flow<Unit>,
+    ballotHomeId: String?,
+    onBallotOpened: () -> Unit,
     onOpenMenu: () -> Unit,
     host: HomeTabHostViewModel = hiltViewModel(),
 ) {
@@ -7123,6 +7175,8 @@ private fun PlaceTabRoot(
                         onSwitchHome = host::switchHome,
                         onPlaceUnavailable = host::replaceUnavailable,
                         scrollToTop = scrollToTop,
+                        scrollToBallot = ballotHomeId == current.homeId,
+                        onBallotOpened = onBallotOpened,
                         // A new default changes where Place lands next time, not the Home on screen now.
                         onDefaultHomeChange = { host.switchHome(current.homeId) },
                     )
@@ -7180,6 +7234,8 @@ private fun PlaceDashboardDestination(
     onPlaceUnavailable: (String) -> Unit,
     scrollToTop: Flow<Unit>? = null,
     onDefaultHomeChange: () -> Unit = {},
+    scrollToBallot: Boolean = false,
+    onBallotOpened: () -> Unit = {},
 ) {
     PlaceDashboardScreen(
         homeId = homeId,
@@ -7212,6 +7268,8 @@ private fun PlaceDashboardDestination(
         onManageHomes = { navController.navigate(ChildRoutes.MY_HOMES) },
         onDefaultHomeChange = onDefaultHomeChange,
         scrollToTop = scrollToTop,
+        scrollToBallot = scrollToBallot,
+        onBallotOpened = onBallotOpened,
     )
 }
 

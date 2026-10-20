@@ -420,6 +420,8 @@ public struct SupportTrainDetailContent: Equatable, Sendable {
     public let deliveryInstructions: String?
     /// The organizers' updates, newest first (the train's latest 10).
     public let updates: [TrainUpdateCard]
+    /// The train's chat room, when the viewer is in it.
+    public let chatRoomId: String?
 
     public struct CelebrationBanner: Equatable, Sendable {
         public let title: String
@@ -453,7 +455,8 @@ public struct SupportTrainDetailContent: Equatable, Sendable {
         viewerRole: SupportTrainViewerRole = .viewer,
         exactAddress: String? = nil,
         deliveryInstructions: String? = nil,
-        updates: [TrainUpdateCard] = []
+        updates: [TrainUpdateCard] = [],
+        chatRoomId: String? = nil
     ) {
         self.trainId = trainId
         self.recipient = recipient
@@ -469,5 +472,6 @@ public struct SupportTrainDetailContent: Equatable, Sendable {
         self.exactAddress = exactAddress
         self.deliveryInstructions = deliveryInstructions
         self.updates = updates
+        self.chatRoomId = chatRoomId
     }
 }

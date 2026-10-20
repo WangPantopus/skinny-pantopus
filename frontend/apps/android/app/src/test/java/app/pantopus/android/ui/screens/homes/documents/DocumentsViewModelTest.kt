@@ -4,9 +4,11 @@ package app.pantopus.android.ui.screens.homes.documents
 
 import androidx.lifecycle.SavedStateHandle
 import app.pantopus.android.data.api.models.homes.GetHomeDocumentsResponse
+import app.pantopus.android.data.api.models.homes.HomeAccessDto
 import app.pantopus.android.data.api.models.homes.HomeDocumentDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.homes.HomeAdminRepository
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsUiState
 import io.mockk.coEvery
@@ -36,12 +38,15 @@ import java.time.Instant
 @OptIn(ExperimentalCoroutinesApi::class)
 class DocumentsViewModelTest {
     private val repo: HomesRepository = mockk()
+    private val adminRepo: HomeAdminRepository = mockk()
 
     /** Fixed clock so expiring / recent filtering stays deterministic. */
     private val fixedNow: Instant = Instant.parse("2026-05-15T12:00:00Z")
 
     @Before fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        coEvery { adminRepo.myAccess("home-1") } returns
+            NetworkResult.Success(HomeAccessDto(hasAccess = true, permissions = listOf("docs.upload", "docs.manage")))
     }
 
     @After fun tearDown() {
@@ -51,6 +56,7 @@ class DocumentsViewModelTest {
     private fun makeVm(): DocumentsViewModel =
         DocumentsViewModel(
             repo = repo,
+            adminRepo = adminRepo,
             savedStateHandle = SavedStateHandle(mapOf(DOCUMENTS_HOME_ID_KEY to "home-1")),
             clock = { fixedNow },
         )

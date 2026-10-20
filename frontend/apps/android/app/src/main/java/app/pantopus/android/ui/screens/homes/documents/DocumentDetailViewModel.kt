@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.homes.HomeDocumentDto
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
+import app.pantopus.android.data.homes.HomeAdminRepository
 import app.pantopus.android.data.homes.HomesRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -34,6 +35,7 @@ sealed interface DocumentDetailUiState {
         val document: HomeDocumentDto,
         val isMutating: Boolean = false,
         val content: ByteString? = null,
+        val canManage: Boolean = false,
     ) : DocumentDetailUiState
 
     /** [headline] names what failed: loading the document, a delete that didn't confirm, or a replacement. */
@@ -48,6 +50,7 @@ class DocumentDetailViewModel
     @Inject
     constructor(
         private val repo: HomesRepository,
+        private val adminRepo: HomeAdminRepository,
         savedStateHandle: SavedStateHandle,
     ) : ViewModel() {
         private val homeId: String =
@@ -102,6 +105,10 @@ class DocumentDetailViewModel
             if (mutating || deleted) return
             clearContent()
             val requestId = loadId
+            val access = adminRepo.myAccess(homeId)
+            if (requestId != loadId) return
+            val canManage = (access as? NetworkResult.Success)?.data?.can("docs.manage") == true
+            if (!canManage) cancelReplacement()
             when (val result = repo.getHomeDocuments(homeId)) {
                 is NetworkResult.Success -> {
                     if (requestId != loadId) return
@@ -114,13 +121,13 @@ class DocumentDetailViewModel
                     } else if (match == null) {
                         _state.value = DocumentDetailUiState.Error("This document is no longer available.")
                     } else if (match.contentUrl == null) {
-                        _state.value = DocumentDetailUiState.Loaded(match)
+                        _state.value = DocumentDetailUiState.Loaded(match, canManage = canManage)
                     } else {
                         val bytes = repo.homeDocumentContent(homeId, documentId)
                         if (requestId != loadId) return
                         _state.value =
                             when (bytes) {
-                                is NetworkResult.Success -> DocumentDetailUiState.Loaded(match, content = bytes.data)
+                                is NetworkResult.Success -> DocumentDetailUiState.Loaded(match, content = bytes.data, canManage = canManage)
                                 is NetworkResult.Failure ->
                                     DocumentDetailUiState.Error(bytes.error.displayMessage("Couldn't load this file."))
                             }
@@ -136,7 +143,7 @@ class DocumentDetailViewModel
 
         fun beginReplacement(): Boolean {
             val current = _state.value as? DocumentDetailUiState.Loaded ?: return false
-            if (mutating || deleted) return false
+            if (mutating || deleted || !current.canManage) return false
             if (current.document.fileVersion == null || current.document.contentUrl == null) return false
             replacementSelection = UUID.randomUUID()
             replacementDocument = current.document
@@ -174,6 +181,7 @@ class DocumentDetailViewModel
 
         @Suppress("ReturnCount") // An incomplete or cancelled picker cannot start a mutation.
         fun replace() {
+            // Only an authorized beginReplacement creates this selection; retain it for a failed-write retry.
             val original = replacementDocument ?: return
             val version = original.fileVersion ?: return
             val file = _replacementFile.value ?: return
@@ -184,15 +192,13 @@ class DocumentDetailViewModel
             replacementAttempt = Triple(file, version, uploadId)
             mutating = true
             loadId += 1
-            _state.value = DocumentDetailUiState.Loaded(original, isMutating = true)
+            _state.value = DocumentDetailUiState.Loaded(original, isMutating = true, canManage = true)
             viewModelScope.launch {
                 val result = repo.replaceHomeDocument(homeId, documentId, uploadId, version, file.filename, file.mimeType, bytes)
                 when (result) {
                     is NetworkResult.Success -> {
                         val document = result.data.document
-                        val matchesDocument = document.id == documentId && document.fileId == documentId
-                        val matchesVersion = document.fileVersion == uploadId && document.contentUrl != null
-                        if (matchesDocument && matchesVersion) {
+                        if (confirmsReplacement(document, uploadId)) {
                             cancelReplacement()
                             mutating = false
                             loadDocument()
@@ -212,9 +218,16 @@ class DocumentDetailViewModel
             }
         }
 
+        private fun confirmsReplacement(
+            document: HomeDocumentDto,
+            uploadId: String,
+        ): Boolean =
+            document.id == documentId && document.fileId == documentId &&
+                document.fileVersion == uploadId && document.contentUrl != null
+
         fun delete() {
             val current = _state.value as? DocumentDetailUiState.Loaded ?: return
-            if (mutating || deleted) return
+            if (mutating || deleted || !current.canManage) return
             mutating = true
             cancelReplacement()
             loadId += 1

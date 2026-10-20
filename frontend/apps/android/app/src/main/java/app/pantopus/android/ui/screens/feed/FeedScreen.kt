@@ -1293,18 +1293,6 @@ private fun PopulatedFrame(
         if (header != null && listState.firstVisibleItemIndex <= 1) listState.scrollToItem(0)
     }
     Box(modifier = Modifier.fillMaxSize().pullRefresh(pullState)) {
-        if (state.rows.isEmpty() && searchActive) {
-            Text(
-                text = "No posts match your search",
-                fontSize = 14.sp,
-                color = PantopusColors.appTextSecondary,
-                modifier =
-                    Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(top = Spacing.s10)
-                        .testTag("pulseSearchEmpty"),
-            )
-        }
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize().testTag("pulseFeedList"),
@@ -1312,6 +1300,19 @@ private fun PopulatedFrame(
             verticalArrangement = Arrangement.spacedBy(Spacing.s2),
         ) {
             header?.let { card -> item(key = "quietStateCard") { card() } }
+            if (state.rows.isEmpty() && searchActive) {
+                item(key = "searchEmpty") {
+                    Text(
+                        text = "No loaded posts match your search",
+                        fontSize = 14.sp,
+                        color = PantopusColors.appTextSecondary,
+                        textAlign = TextAlign.Center,
+                        modifier =
+                            Modifier.fillMaxWidth().padding(vertical = Spacing.s10)
+                                .testTag("pulseSearchEmpty"),
+                    )
+                }
+            }
             items(items = state.rows, key = { it.id }) { row ->
                 LaunchedEffect(row.id) { onRowAppeared(row.id) }
                 FeedPostRow(row, onTapPost, onTapReaction, rowActions)

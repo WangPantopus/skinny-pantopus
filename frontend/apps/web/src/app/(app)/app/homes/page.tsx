@@ -102,7 +102,9 @@ export default function HomesPage() {
         || !(h.occupancy === null || (h.occupancy && typeof h.occupancy.id === 'string'
           && typeof h.occupancy.is_active === 'boolean')))
         || new Set(list.map(h => h.id)).size !== list.length) throw new Error('Your Home list could not be verified. Please retry.');
-      const homeIds = new Set(list.map((h) => h.id));
+      // A private task workspace is not a verification receipt. Keep its
+      // document claim visible even though the Home already appears below.
+      const homeIds = new Set(list.filter((h) => h.access_kind !== 'private_setup').map((h) => h.id));
       const claims = claimsRes?.claims;
       if (!Array.isArray(claims)) throw new Error('Your verification progress could not be loaded. Please retry.');
       const pending = claims.filter((c) => claimInProgress(c.status) && c.home_id && !homeIds.has(c.home_id));
@@ -285,8 +287,9 @@ export default function HomesPage() {
                   {pendingClaims.map(({ claim, addressLine, cityLine }) => {
                     // A renter's residency document has its own status page; an ownership claim continues its evidence.
                     const residency = claim.claim_type === 'resident';
+                    const hasPrivateSetup = homes.some((home) => home.id === claim.home_id && home.access_kind === 'private_setup');
                     const q = claim.id ? `?claimId=${encodeURIComponent(claim.id)}` : '';
-                    const href = residency ? `/app/homes/${claim.home_id}/verify-residency/submitted`
+                    const href = residency ? `/app/homes/${claim.home_id}/verify-residency${q}`
                       : `/app/homes/${claim.home_id}/claim-owner/evidence${q}`;
                     const busy = deletingClaimId === claim.id;
                     return (
@@ -304,10 +307,11 @@ export default function HomesPage() {
                           <div className="text-base font-semibold text-app-text">{addressLine}</div>
                           <div className="text-sm text-app-text-secondary">{cityLine}</div>
                           <div className="mt-2 inline-flex items-center rounded-full bg-violet-100 dark:bg-violet-900/50 px-2.5 py-1 text-xs font-semibold text-violet-800 dark:text-violet-200">
-                            {residency ? 'Residency claim · Under review' : 'Ownership claim · Under review'}
+                            {residency ? 'Residency claim' : 'Ownership claim'} · {claim.has_evidence === false ? 'Document needed' : claim.has_evidence === true ? 'Under review' : 'Check document status'}
                           </div>
                           <p className="mt-2 text-xs text-app-text-secondary">
-                            You are not a member of this home yet. Continue your claim or wait for review.
+                            This claim does not grant household access.
+                            {hasPrivateSetup ? ' Your private tasks remain available while verification is pending.' : ''}
                           </p>
                           <p className="mt-2 text-sm text-app-text-secondary">Continue →</p>
                         </div>

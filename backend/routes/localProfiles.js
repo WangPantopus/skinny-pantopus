@@ -21,7 +21,7 @@ const {
 } = require('../serializers/identitySerializers');
 const { applyLocationPrecision, leastPrecise } = require('../utils/locationPrivacy');
 const { requireIdentityFirewallEnabled } = require('../utils/featureFlags');
-const { isSearchable, isScopedBlocked } = require('../utils/visibilityPolicy');
+const { isSearchable, isScopedBlocked, isUnpublishedBusiness } = require('../utils/visibilityPolicy');
 const { hasBlocked } = require('../services/blockService');
 const { isPublicStorageUrl } = require('../services/s3Service');
 const { readablePosts, postScopeAccess } = require('../services/pulse/readAccess');
@@ -164,8 +164,8 @@ const FORBIDDEN_PUBLIC_METADATA_KEY = /(^|_)(user|author|actor|owner|email|phone
 
 function parseLimit(value, fallback = 20, max = 50) {
   const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
-  return Math.min(Math.floor(parsed), max);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) return fallback;
+  return Math.min(parsed, max);
 }
 
 function sanitizePublicMetadata(metadata) {
@@ -228,7 +228,9 @@ async function canViewLocalProfile(profile, context) {
 
 async function resolveViewableLocalProfile(handle, viewerId) {
   const profile = await getLocalProfileByHandle(handle);
-  if (!profile) return { errorStatus: 404, error: 'Local profile not found' };
+  if (!profile || await isUnpublishedBusiness(profile.user_id)) {
+    return { errorStatus: 404, error: 'Local profile not found' };
+  }
   const viewerContext = await getLocalProfileViewerContext(profile, viewerId);
   if (!(await canViewLocalProfile(profile, viewerContext))) {
     return { errorStatus: 404, error: 'Local profile not found' };
@@ -474,7 +476,7 @@ router.get('/:handle/gigs', optionalAuth, async (req, res) => {
       .select('*')
       .eq('user_id', profile.user_id)
       .order('created_at', { ascending: false })
-      .limit(Number(req.query.limit) || 20);
+      .limit(parseLimit(req.query.limit));
 
     if (error) return res.status(500).json({ error: 'Failed to load local gigs' });
     res.json({ gigs: (data || []).map((gig) => serializeLocalOwnedRecord(gig, profile, 'author', req.user?.id || null)) });
@@ -495,7 +497,7 @@ router.get('/:handle/listings', optionalAuth, async (req, res) => {
       .eq('user_id', profile.user_id)
       .eq('status', 'active')
       .order('created_at', { ascending: false })
-      .limit(Number(req.query.limit) || 20);
+      .limit(parseLimit(req.query.limit));
 
     if (error) return res.status(500).json({ error: 'Failed to load local listings' });
     res.json({ listings: (data || []).map((listing) => serializeLocalOwnedRecord(listing, profile, 'author', req.user?.id || null)) });

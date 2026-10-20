@@ -56,6 +56,8 @@ data class SupportTrainDetailDto(
     @Json(name = "special_instructions") val specialInstructions: String? = null,
     /** Organizer-only echo of the parent Activity's visibility. */
     @Json(name = "activity_visibility") val activityVisibility: String? = null,
+    /** The train's chat room — only for someone in it (organizers, the recipient, helpers with a signup). */
+    @Json(name = "chat_thread_id") val chatThreadId: String? = null,
 ) {
     /** True for primary / co-organizer / recipient-delegate viewers. */
     val viewerIsOrganizer: Boolean

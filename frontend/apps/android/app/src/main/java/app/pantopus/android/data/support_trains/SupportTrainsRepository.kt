@@ -12,6 +12,7 @@ import app.pantopus.android.data.api.models.support_trains.GenerateSupportTrainS
 import app.pantopus.android.data.api.models.support_trains.ReserveSlotBody
 import app.pantopus.android.data.api.models.support_trains.SupportTrainDetailDto
 import app.pantopus.android.data.api.models.support_trains.SupportTrainFundDto
+import app.pantopus.android.data.api.models.support_trains.SupportTrainListItemDto
 import app.pantopus.android.data.api.models.support_trains.SupportTrainNudgeBody
 import app.pantopus.android.data.api.models.support_trains.SupportTrainOrganizersResponse
 import app.pantopus.android.data.api.models.support_trains.SupportTrainReservationsResponse
@@ -19,6 +20,7 @@ import app.pantopus.android.data.api.models.support_trains.SupportTrainUpdateBod
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsListResponse
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsNearbyResponse
 import app.pantopus.android.data.api.models.support_trains.UpdateSupportTrainSlotBody
+import app.pantopus.android.data.api.net.Conditional
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.conditionalApiCall
 import app.pantopus.android.data.api.net.mapFresh
@@ -35,6 +37,7 @@ import javax.inject.Singleton
 
 /** Saved slot times come back as `HH:mm:ss`; the request sends `HH:mm`. */
 private const val CLOCK_TIME_LENGTH = 5
+private const val MY_TRAINS_PAGE_SIZE = 50
 
 /**
  * Wraps `api/activities/support-trains/…` calls in the [NetworkResult]
@@ -52,8 +55,12 @@ class SupportTrainsRepository
     ) {
         /** My trains and Invitations through the screens' store (fresh for a minute). [force] reads now. */
         suspend fun mineStored(force: Boolean = false): Stored<SupportTrainsListResponse> =
-            store.read(StoreKeys.mySupportTrains, force) { etag ->
-                conditionalApiCall { api.mineConditional(limit = 20, offset = 0, etag = etag) }
+            store.read(StoreKeys.mySupportTrains, force) {
+                // A first-page ETag cannot validate changes on the remaining pages.
+                when (val result = mineAll()) {
+                    is NetworkResult.Success -> NetworkResult.Success(Conditional.Fresh(result.data, etag = null))
+                    is NetworkResult.Failure -> result
+                }
             }
 
         /** Nearby trains through the screens' store, searched from the point rounded to about 110 m. */
@@ -91,6 +98,25 @@ class SupportTrainsRepository
         ): NetworkResult<SupportTrainsListResponse> =
             safeApiCall {
                 api.mine(role = role, status = status, limit = limit, offset = offset)
+            }
+
+        /** Read every page before replacing a complete list or searching it. */
+        suspend fun mineAll(role: String? = null): NetworkResult<SupportTrainsListResponse> =
+            safeApiCall {
+                val rows = linkedMapOf<String, SupportTrainListItemDto>()
+                var offset = 0
+                do {
+                    val page = api.mine(role = role, limit = MY_TRAINS_PAGE_SIZE, offset = offset)
+                    if (page.offset != null && page.offset != offset) throw JsonDataException("Unexpected train page")
+                    page.supportTrains.forEach { row ->
+                        if (row.id.isBlank()) throw JsonDataException("Missing train id")
+                        if (rows.put(row.id, row) != null) throw JsonDataException("Train list changed during loading")
+                    }
+                    offset += page.supportTrains.size
+                    val hasMore = page.total?.let { offset < it } ?: (page.supportTrains.size == MY_TRAINS_PAGE_SIZE)
+                    if (hasMore && page.supportTrains.isEmpty()) throw JsonDataException("Incomplete train list")
+                } while (hasMore)
+                SupportTrainsListResponse(supportTrains = rows.values.toList(), total = rows.size)
             }
 
         /**

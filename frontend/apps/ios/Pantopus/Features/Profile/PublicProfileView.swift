@@ -336,7 +336,7 @@ public struct PublicProfileView: View {
                     followRow
 
                     LocalProfileTabStrip(
-                        postCount: payload.posts.isEmpty ? nil : payload.posts.count,
+                        postCount: viewModel.connection == .blocked || payload.posts.isEmpty ? nil : payload.posts.count,
                         reviewCount: payload.profile.reviewCount.flatMap { $0 > 0 ? $0 : nil },
                         selected: viewModel.selectedLocalTab
                     ) { viewModel.selectedLocalTab = $0 }

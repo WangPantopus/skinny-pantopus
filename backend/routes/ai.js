@@ -33,6 +33,7 @@ const neighborhoodPulseComposer = require('../services/ai/neighborhoodPulseCompo
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 const { checkHomePermission } = require('../utils/homePermissions');
+const { getRequestSessionScope } = require('../utils/requestSessionScope');
 
 function aiErrorStatus(errorCode) {
   if (errorCode === 'AI_UNAVAILABLE') return 503;
@@ -49,10 +50,19 @@ const chatSchema = Joi.object({
     city: Joi.string().max(100),
     state: Joi.string().max(50),
   }).optional(),
+  // The person's own uploads (POST /api/upload/ai-media hands back ai-photo: references) or image URLs.
   images: Joi.array().items(Joi.string().uri()).max(5).optional(),
-  // The draft cards this app can show beyond the original ones (e.g. "pickup_schedule").
-  // Unknown names are ignored, so older servers and newer apps get along.
+  // The draft cards this app can show beyond the original ones (e.g. "pickup_schedule",
+  // "action", "link"). Unknown names are ignored, so older servers and newer apps get along.
   cards: Joi.array().items(Joi.string().max(40)).max(20).optional(),
+  // The screen the person tapped Ask on (docs/product/ai-assistant-phase1-contract-2026-10-20.md §6).
+  // Unknown surfaces are ignored; access is checked as that screen checks it.
+  context: Joi.object({
+    surface: Joi.string().max(40).required(),
+    id: Joi.string().uuid().optional().allow(null),
+    home_id: Joi.string().uuid().optional().allow(null),
+    section: Joi.string().max(40).optional().allow(null),
+  }).optional().allow(null),
 });
 
 const draftGigSchema = Joi.object({
@@ -123,8 +133,16 @@ router.get('/health', (req, res) => {
 // ─── Streaming Chat ─────────────────────────────────────────────────────────
 
 router.post('/chat', verifyToken, aiChatLimiter, validate(chatSchema), asyncHandler(async (req, res) => {
-  const { message, conversationId, coarseLocation, images, cards } = req.body;
+  const { message, conversationId, coarseLocation, images, cards, context } = req.body;
   const userId = req.user.id;
+  // Action cards that create household tasks carry this session's scope, as the
+  // tasks screen's own requests do (utils/requestSessionScope.js).
+  let sessionScope = null;
+  try {
+    sessionScope = getRequestSessionScope(req).session_scope;
+  } catch {
+    sessionScope = null;
+  }
 
   // Set up SSE headers
   res.writeHead(200, {
@@ -164,7 +182,10 @@ router.post('/chat', verifyToken, aiChatLimiter, validate(chatSchema), asyncHand
   });
 
   await agentService.streamChat(
-    { userId, conversationId, message, coarseLocation, images, cards, signal: clientGone.signal },
+    {
+      userId, conversationId, message, coarseLocation, images, cards, context, sessionScope,
+      user: { id: userId, role: req.user.role || null }, signal: clientGone.signal,
+    },
     sseWriter
   );
 }));

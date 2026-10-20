@@ -122,6 +122,7 @@ data class EmptyStateContent(
  *     phase body — e.g. a category-chip filter strip. Visible in every
  *     phase so the user can pre-filter before (or while) typing. The
  *     default empty slot keeps the original field-then-results layout.
+ * @param errorContent Optional load failure and retry, replacing the phase body while keeping the query field.
  */
 @Composable
 fun <Result : Any> SearchListShell(
@@ -136,6 +137,7 @@ fun <Result : Any> SearchListShell(
     recentQueries: List<String> = emptyList(),
     onRecentTap: (String) -> Unit = {},
     filters: @Composable () -> Unit = {},
+    errorContent: (@Composable () -> Unit)? = null,
 ) {
     // 250ms-debounced echo of `query`. The shell uses this to gate
     // the transition from typing-shimmer to empty so the user doesn't
@@ -170,16 +172,20 @@ fun <Result : Any> SearchListShell(
         HorizontalDivider(color = PantopusColors.appBorderSubtle, thickness = 1.dp)
         filters()
         Box(modifier = Modifier.fillMaxSize()) {
-            when (phase) {
-                SearchListPhase.Recent ->
-                    RecentSection(
-                        recentQueries = recentQueries,
-                        onRecentTap = onRecentTap,
-                    )
-                SearchListPhase.Typing -> ShimmerSection()
-                SearchListPhase.Results ->
-                    ResultsSection(results = results, row = row)
-                SearchListPhase.Empty -> EmptySection(emptyState = emptyState)
+            if (errorContent != null) {
+                errorContent()
+            } else {
+                when (phase) {
+                    SearchListPhase.Recent ->
+                        RecentSection(
+                            recentQueries = recentQueries,
+                            onRecentTap = onRecentTap,
+                        )
+                    SearchListPhase.Typing -> ShimmerSection()
+                    SearchListPhase.Results ->
+                        ResultsSection(results = results, row = row)
+                    SearchListPhase.Empty -> EmptySection(emptyState = emptyState)
+                }
             }
         }
     }

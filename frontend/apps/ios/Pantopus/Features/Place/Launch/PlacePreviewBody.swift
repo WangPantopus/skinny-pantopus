@@ -124,8 +124,12 @@ struct PlacePreviewContent: View {
     var onAction: () -> Void
     var onRetry: () -> Void
     var retrying: Bool
+    @State private var ballotGovernments: BallotGovernmentsSheet?
 
     var body: some View {
+        // Ballot P0 (ballot_p0): the "Your ballot" card under "This season",
+        // in place of the election row, as on the Place dashboard.
+        let ballot = PlaceDashboardView.ballot(in: preview.sections ?? [])
         VStack(alignment: .leading, spacing: 0) {
             // The aha card leads (D1): the most surprising ready fact, in the
             // server's words. A real dollar band follows when the backend had
@@ -137,14 +141,33 @@ struct PlacePreviewContent: View {
             if let lead = preview.moneyLead, lead.isRenderable {
                 moneyLeadCard(lead)
             }
+            if let ballot {
+                BallotSeasonBlock(
+                    card: ballot.card,
+                    asOf: ballot.asOf,
+                    onOpenGovernments: ballot.card.governments.map { governments in
+                        { ballotGovernments = BallotGovernmentsSheet(governments: governments) }
+                    }
+                )
+                .padding(.top, 18)
+            }
             if let sections = preview.sections, !sections.isEmpty {
-                previewSections(sections)
+                previewSections(ballot == nil ? sections : sections.filter { $0.id != .civicElection })
             } else if let free = preview.free {
                 freeSections(free)
             }
             if showsLocked, let locked = preview.locked, !locked.isEmpty {
                 lockedSections(locked)
             }
+        }
+        .sheet(item: $ballotGovernments) { sheet in
+            let address = preview.place?.address ?? ""
+            BallotGovernmentsView(
+                governments: sheet.governments,
+                address: address.components(separatedBy: ",").first ?? address
+            ) { ballotGovernments = nil }
+                .presentationDetents([.large])
+                .presentationDragIndicator(.hidden)
         }
     }
 

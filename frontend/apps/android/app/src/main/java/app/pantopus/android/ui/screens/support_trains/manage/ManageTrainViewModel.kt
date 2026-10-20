@@ -111,6 +111,8 @@ data class ManageTrainContent(
     val viewerRole: SupportTrainViewerRole = SupportTrainViewerRole.PRIMARY_ORGANIZER,
     /** Organizer controls and private replies belong only to the current checked visit. */
     val privateDetailsAvailable: Boolean = true,
+    /** A sharing grant alone does not establish that a delivery address exists. */
+    val deliveryAddressAvailable: Boolean = false,
 )
 
 /** Drives the Close-train confirmation sheet presentation. */
@@ -140,6 +142,8 @@ data class ManageTrainUiState(
     val slotRows: List<ManageSlotRow> = emptyList(),
     /** Co-organizer roster from `GET /:id/organizers`. */
     val organizerRows: List<ManageOrganizerRow> = emptyList(),
+    /** A failed roster read must not look like the organizers were removed. */
+    val organizersFailed: Boolean = false,
     /** Gift-fund summary from `GET /:id/fund`. */
     val fund: SupportTrainFundDto? = null,
     /** True while any organizer mutation is in flight. */
@@ -238,7 +242,7 @@ class ManageTrainViewModel
                 it.copy(
                     state = if (session.isCurrent) summary() else ManageTrainState.Loading,
                     helperRows = emptyList(), organizerRows = emptyList(), fund = null, deliveredMeals = null,
-                    slotRows = emptyList(), helpersFailed = false, pendingConfirm = null,
+                    slotRows = emptyList(), helpersFailed = false, organizersFailed = false, pendingConfirm = null,
                     toast = null, actionError = null, refreshing = false, refreshNotice = null,
                 )
             }
@@ -336,8 +340,8 @@ class ManageTrainViewModel
         }
 
         /**
-         * Fan-out for the organizer-only feeds. Failures degrade to empty
-         * sections instead of blowing up the whole screen.
+         * Fan-out for the organizer-only feeds. A failed roster clears
+         * its rows and shows an error without hiding the rest of the screen.
          */
         @Suppress("CyclomaticComplexMethod")
         private suspend fun loadOrganizerSurfaces(
@@ -407,6 +411,7 @@ class ManageTrainViewModel
                             null
                         },
                     organizerRows = ManageOrganizerProjection.organizerRows(organizers),
+                    organizersFailed = organizersResult is NetworkResult.Failure,
                     fund = fund,
                 )
             }
@@ -737,10 +742,12 @@ class ManageTrainViewModel
          * signup). The address never comes back in this response — the
          * reload re-runs the server-side privacy gate.
          */
-        fun shareExactAddress(reservationId: String) =
+        fun shareExactAddress(reservationId: String) {
+            if ((_state.value.state as? ManageTrainState.Loaded)?.content?.deliveryAddressAvailable != true) return
             runAction("Exact location shared", "Couldn't share the exact location.") {
                 repo.revealAddress(trainId, reservationId)
             }
+        }
 
         /** `POST /:id/reservations/:rid/confirm`. */
         fun confirmDelivery(reservationId: String) =

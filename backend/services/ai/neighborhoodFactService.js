@@ -523,7 +523,7 @@ function generateSeasonalFacts(geohash, seasonalCtx, neighborhoodPreview, week, 
     });
   }
 
-  // Peak category tip with neighbor count
+  // A suggested category is guidance, not evidence of a local seasonal peak.
   if (seasonalCtx.suggested_gig_categories?.length > 0) {
     const topCategory = seasonalCtx.suggested_gig_categories[0];
     const neighborCount = neighborhoodPreview?.verified_users_count || 0;
@@ -534,8 +534,8 @@ function generateSeasonalFacts(geohash, seasonalCtx, neighborhoodPreview, week, 
     facts.push({
       id: makeFactId(geohash, 'seasonal_tip', week, year, 2),
       type: 'seasonal_tip',
-      title: `Peak ${topCategory} Season`,
-      body: `This is peak ${topCategory.toLowerCase()} season.${neighborClause}`,
+      title: `${topCategory} Help`,
+      body: `Looking for help with ${topCategory.toLowerCase()}?${neighborClause}`,
       source: seasonalCtx.region_label ? `${seasonalCtx.region_label} seasonal guidance` : 'Seasonal guidance',
       post_type: 'gig',
       cta: `Find ${topCategory.toLowerCase()} help`,

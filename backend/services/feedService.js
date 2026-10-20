@@ -8,6 +8,7 @@
 
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
+const { GeoCache } = require('../utils/geoCache');
 const { personaPostVisibleToViewer } = require('../utils/personaPostVisibility');
 const {
   applyLocationPrecision,
@@ -17,6 +18,7 @@ const {
 } = require('../utils/locationPrivacy');
 const s3 = require('./s3Service');
 const { readablePosts, postScopeAccess } = require('./pulse/readAccess');
+const { unpublishedBusinessIds } = require('../utils/visibilityPolicy');
 const {
   SAFE_CREATOR_SELECT,
   serializeAudienceProfileForViewer,
@@ -31,7 +33,7 @@ const {
 // In-memory cache for mute/hide filters (60-second TTL)
 // ---------------------------------------------------------------------------
 
-const _filterCache = new Map(); // key: userId, value: { data, expires }
+const _filterCache = new GeoCache(1000); // userId → { data }, including pending read guards
 const FILTER_CACHE_TTL = 60_000; // 60 seconds
 
 // ---------------------------------------------------------------------------
@@ -300,6 +302,32 @@ function sortMatchedBusinessesByRating(businesses) {
   ));
 }
 
+// The match job's snapshot and ranked ids keep a business that closed or went back to draft after the job ran,
+// until its next run. Leave such businesses out, as the live list does. If their state can't be read, show none.
+async function dropUnpublishedMatches(posts) {
+  const ids = posts.flatMap((post) => [
+    ...(Array.isArray(post.matched_business_ids) ? post.matched_business_ids : []),
+    ...(Array.isArray(post.matched_businesses_cache) ? post.matched_businesses_cache.map((b) => b?.business_user_id) : []),
+  ]);
+  if (!ids.length) return posts;
+  let hidden = null;
+  try {
+    hidden = await unpublishedBusinessIds(ids);
+  } catch (err) {
+    logger.warn('Matched business state unavailable', { error: err.message });
+  }
+  const shown = (id) => hidden !== null && !hidden.has(String(id));
+  for (const post of posts) {
+    if (Array.isArray(post.matched_business_ids)) {
+      post.matched_business_ids = post.matched_business_ids.filter(shown);
+    }
+    if (Array.isArray(post.matched_businesses_cache)) {
+      post.matched_businesses_cache = post.matched_businesses_cache.filter((b) => shown(b?.business_user_id));
+    }
+  }
+  return posts;
+}
+
 // Where this viewer is shown a post: the stored point for its author, the point
 // applyPostLocationPrivacy gives everyone else, or null when it shows none. Worked out on a
 // copy, so the post itself still gets privacy exactly once (in enrichWithUserStatus). Area
@@ -330,13 +358,13 @@ function displayedPoint(post, viewerUserId, { orEffective = false } = {}) {
 
 async function getMuteAndHideFilters(userId) {
   const cached = _filterCache.get(userId);
-  if (cached && cached.expires > Date.now()) {
+  if (cached?.data) {
     return cached.data;
   }
 
   // A mute/unmute can invalidate this read while its database response is pending.
-  const pendingEntry = { data: null, expires: 0 };
-  _filterCache.set(userId, pendingEntry);
+  const pendingEntry = { data: null };
+  _filterCache.set(userId, pendingEntry, FILTER_CACHE_TTL);
 
   const [
     { data: mutes, error: mutesError },
@@ -409,7 +437,7 @@ async function getMuteAndHideFilters(userId) {
 
   if (_filterCache.get(userId) === pendingEntry) {
     pendingEntry.data = result;
-    pendingEntry.expires = Date.now() + FILTER_CACHE_TTL;
+    _filterCache.set(userId, pendingEntry, FILTER_CACHE_TTL);
   }
   return result;
 }
@@ -482,6 +510,7 @@ function loadUserStatusRows(posts, userId) {
 // `statusRows` is loadUserStatusRows' result when the caller has already read it.
 async function enrichWithUserStatus(posts, userId, statusRows = null) {
   if (!posts.length) return posts;
+  await dropUnpublishedMatches(posts);
   const [{ data: likes }, { data: saves }, { data: reposts }] = statusRows || await loadUserStatusRows(posts, userId);
   const likedSet = new Set((likes || []).map(r => r.post_id));
   const savedSet = new Set((saves || []).map(r => r.post_id));
@@ -1695,6 +1724,7 @@ module.exports = {
   enrichFeedPosts,
   applyPostLocationPrivacy,
   sortMatchedBusinessesByRating,
+  dropUnpublishedMatches,
   applyCursorCondition,
   buildCursorPagination,
   applyPinnedCursorCondition,

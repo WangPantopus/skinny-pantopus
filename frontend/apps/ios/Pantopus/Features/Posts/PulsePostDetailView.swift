@@ -24,6 +24,8 @@ public struct PulsePostDetailView: View {
     @State private var showsReadScopeConfirm = false
     @State private var showsWhy = false
     @State private var privateMessage: PulsePrivateMessageDestination?
+    /// The assistant, opened under the reactions about this post.
+    @State private var askTopic: AIAskTopic?
     @Environment(\.scenePhase) private var scenePhase
     private let onBack: @MainActor () -> Void
     private let onOpenProfile: @MainActor (String) -> Void
@@ -167,6 +169,7 @@ public struct PulsePostDetailView: View {
             .sheet(isPresented: $showsWhy) {
                 PulseWhySheet(postId: viewModel.postId, view: nil, topic: nil, areaId: nil)
             }
+            .askPantopus($askTopic)
             .sheet(isPresented: $showsReadScopeConfirm) {
                 PulseAudiencePickerView(viewModel: viewModel)
             }
@@ -199,6 +202,7 @@ public struct PulsePostDetailView: View {
         .accessibilityIdentifier("pulsePostDetail")
         .task { await viewModel.load() }
         .task { await viewModel.loadNearbyProviders() }
+        .refreshesAfterAssistant(postId: viewModel.postId) { await viewModel.refresh() }
         .onAppear { isVisible = true }
         .onDisappear {
             isVisible = false
@@ -314,12 +318,28 @@ public struct PulsePostDetailView: View {
             onCommentReply: { comment in viewModel.beginReply(to: comment) },
             onCommentLike: { id in Task { await viewModel.toggleCommentLike(commentId: id) } },
             onCommentDelete: { id in commentPendingDelete = id },
-            onRefresh: { [viewModel] in await viewModel.refresh() }
+            onRefresh: { [viewModel] in await viewModel.refresh() },
+            onAsk: askAction(detail.post)
         )
     }
 }
 
 extension PulsePostDetailView {
+    /// Ask Pantopus about this post; nothing to ask about one a moderator took down.
+    private func askAction(_ post: PostDetailDTO) -> (@MainActor () -> Void)? {
+        guard !post.isRemovedByModerator else { return nil }
+        let topic = AIAskTopic.post(id: post.id, title: Self.askAbout(post))
+        return { askTopic = topic }
+    }
+
+    /// "About: …" names the post by its headline, else its first words.
+    private static func askAbout(_ post: PostDetailDTO) -> String {
+        if let title = post.title?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty { return title }
+        let words = post.content.split(whereSeparator: \.isWhitespace)
+        let start = words.prefix(8).joined(separator: " ")
+        return words.count > 8 ? start + "\u{2026}" : (start.isEmpty ? "This post" : start)
+    }
+
     private var overflowAction: ContentDetailTopBarAction {
         ContentDetailTopBarAction(
             icon: .moreHorizontal,
@@ -438,5 +458,13 @@ extension PostDetailDTO {
             }
         }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+}
+
+private extension View {
+    /// A reply or "solved" sent from Ask Pantopus about this post shows here
+    /// (the action card's request signals the post's topic).
+    func refreshesAfterAssistant(postId: String, perform: @escaping @MainActor () async -> Void) -> some View {
+        refreshesOnStoreChange(affects: { $0.names(topic: ScreenTopic.post(postId)) }, perform: perform)
     }
 }

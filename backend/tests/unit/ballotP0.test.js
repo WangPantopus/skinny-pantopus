@@ -50,6 +50,7 @@ const CAMAS_GOVERNMENTS = {
   ],
   county_geoid: '53011',
   state_geoid: '53',
+  state_name: 'Washington',
 };
 
 const CAMAS_GEOGRAPHIES = {

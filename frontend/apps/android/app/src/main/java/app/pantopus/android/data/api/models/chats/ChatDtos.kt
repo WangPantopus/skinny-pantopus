@@ -122,7 +122,13 @@ data class ChatMessageSender(
     val username: String? = null,
     val name: String? = null,
     @Json(name = "profile_picture_url") val profilePictureUrl: String? = null,
-)
+    /** Current public identity projection; legacy servers still use name/username. */
+    val displayName: String? = null,
+    val handle: String? = null,
+) {
+    val displayLabel: String?
+        get() = listOf(displayName, name, handle, username).firstOrNull { !it.isNullOrBlank() }
+}
 
 /** One row from `/messages`. */
 @JsonClass(generateAdapter = true)
@@ -216,6 +222,7 @@ data class SendChatMessageBody(
     val replyToId: String? = null,
     val topicId: String? = null,
     val metadata: Map<String, Any>? = null,
+    val asBusinessUserId: String? = null,
 )
 
 /** `POST /messages` envelope. */
@@ -275,6 +282,8 @@ data class ChatRoomDetailResponse(
 @JsonClass(generateAdapter = true)
 data class ChatRoomDetail(
     val type: String? = null,
+    /** The room's name; a Support Train's room goes by the train's title. */
+    val name: String? = null,
     val participants: List<ChatRoomParticipant>? = null,
     /** False once the room is read-only (a plan's chat after the plan, or a cancelled plan). */
     @Json(name = "is_active") val isActive: Boolean? = null,

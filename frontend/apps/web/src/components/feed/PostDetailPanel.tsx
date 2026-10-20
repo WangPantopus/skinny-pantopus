@@ -7,16 +7,20 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   MessageCircle, Star, CalendarDays, Search, Megaphone,
   AlertTriangle, PenLine, Pencil, Heart, Siren, Tag, Wrench, Newspaper,
-  Trophy, Compass, User as UserIcon,   Bookmark, Repeat2, Share2, X, ChevronLeft, ChevronRight,
+  Trophy, Compass, User as UserIcon,   Bookmark, Repeat2, Share2, X,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import * as api from '@pantopus/api';
 import CommentThread from './CommentThread';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
-import FeedMediaImage from './FeedMediaImage';
+import { PostMediaPreview, resolvePostMediaSlots } from './PostMediaGrid';
+import PostMediaLightbox from './PostMediaLightbox';
+import { PostLinkContent } from './LinkPreviewCard';
 import LinkPreviewCard from './LinkPreviewCard';
+import PostMetadata from './PostMetadata';
+import { sharePostLink } from './sharePostLink';
 import { formatTimeAgo as timeAgo, getPostTypeConfig, POST_TYPE_ICONS_LUCIDE } from '@pantopus/ui-utils';
-import { buildCanonicalShareUrlForPost, chosenUsername } from '@pantopus/utils';
+import { chosenUsername } from '@pantopus/utils';
 import { removePostFromFeedCaches } from '@/hooks/useFeedData';
 import { usePostDetail } from '@/hooks/usePostDetail';
 import type { Post, PostComment as PostCommentType } from '@pantopus/types';
@@ -109,27 +113,9 @@ export default function PostDetailPanel({
       setLightboxIndex(null);
       return;
     }
+    if (lightboxIndex !== null) return; // The media viewer owns its keyboard controls.
     const handler = (e: KeyboardEvent) => {
-      if (lightboxIndex !== null && post?.media_urls && post.media_urls.length > 0) {
-        const n = post.media_urls.length;
-        if (e.key === 'ArrowLeft') {
-          e.preventDefault();
-          setLightboxIndex((i) => (i === null ? 0 : (i - 1 + n) % n));
-          return;
-        }
-        if (e.key === 'ArrowRight') {
-          e.preventDefault();
-          setLightboxIndex((i) => (i === null ? 0 : (i + 1) % n));
-          return;
-        }
-      }
-      if (e.key !== 'Escape') return;
-      if (lightboxIndex !== null) {
-        e.preventDefault();
-        setLightboxIndex(null);
-        return;
-      }
-      onClose();
+      if (e.key === 'Escape') onClose();
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
@@ -291,18 +277,8 @@ export default function PostDetailPanel({
 
   const handleShare = async () => {
     if (!post) return;
-    const url = buildCanonicalShareUrlForPost(post);
-
     try {
-      if (typeof navigator !== 'undefined' && navigator.share) {
-        await navigator.share({
-          title: post.title || 'Post',
-          text: post.content?.slice(0, 120),
-          url,
-        });
-      } else {
-        await navigator.clipboard.writeText(url);
-      }
+      if (!await sharePostLink(post)) return;
 
       const res = await api.posts.sharePost(post.id);
       setPost((prev) => prev ? { ...prev, share_count: res.shareCount } : prev);
@@ -459,10 +435,13 @@ export default function PostDetailPanel({
               )}
 
               <div className="px-5 pb-4">
+                {post.title && <h3 className="mb-2 text-base font-semibold text-app break-words">{post.title}</h3>}
                 <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-app">
-                  {post.content}
+                  <PostLinkContent content={post.content} />
                 </p>
               </div>
+
+              <PostMetadata post={post} spacing="mx-5 mb-3" />
 
               {post.tags && post.tags.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 px-5 pb-3">
@@ -479,33 +458,35 @@ export default function PostDetailPanel({
               {post.media_urls && post.media_urls.length > 0 && (
                 <div className="space-y-2 px-5 pb-4">
                   {post.media_urls.map((url, idx) => (
-                    <button
+                    <div
                       key={idx}
-                      type="button"
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) {
+                          e.preventDefault();
+                          setLightboxIndex(idx);
+                        }
+                      }}
                       onClick={() => setLightboxIndex(idx)}
-                      className="relative block w-full cursor-zoom-in overflow-hidden rounded-xl border-0 bg-transparent p-0 text-left transition hover:opacity-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
-                      aria-label={`View ${post.media_types?.[idx] === 'video' ? 'video' : 'image'} ${idx + 1} full size`}
+                      className={`relative ${(post.media_types?.[idx] ?? "image") !== "image" ? "h-80" : ""} block w-full cursor-zoom-in overflow-hidden rounded-xl border-0 bg-transparent p-0 text-left transition hover:opacity-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500`}
+                      aria-label={`View attachment ${idx + 1} full size`}
                     >
-                      <FeedMediaImage
-                        src={url}
-                        alt=""
-                        className="max-h-80 w-full rounded-xl object-cover"
-                        loading="lazy"
-                      />
-                      {post.media_types?.[idx] === 'video' && (
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-black/50">
-                            <svg viewBox="0 0 24 24" fill="white" className="ml-0.5 h-6 w-6"><path d="M8 5v14l11-7z" /></svg>
-                          </div>
-                        </div>
-                      )}
-                    </button>
+                      <PostMediaPreview url={url} thumbnailUrl={post.media_thumbnails?.[idx]}
+                        slot={resolvePostMediaSlots(post.media_urls!, post.media_types, post.media_live_urls)[idx]}
+                        imageClassName="max-h-80 w-full rounded-xl object-cover" onPress={() => setLightboxIndex(idx)} />
+
+                    </div>
+
                   ))}
                 </div>
               )}
 
               <div className="grid grid-cols-2 gap-2 border-y border-app px-5 py-3 sm:grid-cols-5">
                 <button
+                  type="button"
+                  aria-label={post.userHasLiked ? 'Unlike post' : 'Like post'}
+                  aria-pressed={!!post.userHasLiked}
                   onClick={handleLike}
                   className={`flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium transition ${
                     post.userHasLiked ? 'bg-red-50 text-red-500 hover:bg-red-100' : 'text-app-muted hover-bg-app'
@@ -537,6 +518,8 @@ export default function PostDetailPanel({
                   <span>{post.userHasReposted ? 'Reposted' : 'Repost'}</span>
                 </button>
                 <button
+                  type="button"
+                  aria-label="Share post"
                   onClick={handleShare}
                   className="flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium text-app-muted transition hover-bg-app"
                 >
@@ -575,85 +558,9 @@ export default function PostDetailPanel({
         </div>
       </aside>
 
-      {lightboxIndex !== null &&
-        post?.media_urls &&
-        post.media_urls.length > 0 &&
-        lightboxIndex < post.media_urls.length && (
-          <div
-            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Full size image"
-            onClick={() => setLightboxIndex(null)}
-          >
-            <button
-              type="button"
-              onClick={() => setLightboxIndex(null)}
-              className="absolute right-4 top-4 z-[102] rounded-full bg-white/10 p-2 text-white transition hover:bg-white/20"
-              aria-label="Close"
-            >
-              <X className="h-6 w-6" />
-            </button>
-            {post.media_urls.length > 1 && (
-              <>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setLightboxIndex((i) =>
-                      i === null ? 0 : (i - 1 + post.media_urls!.length) % post.media_urls!.length
-                    );
-                  }}
-                  className="absolute left-2 top-1/2 z-[102] -translate-y-1/2 rounded-full bg-white/10 p-3 text-white transition hover:bg-white/20 md:left-4"
-                  aria-label="Previous image"
-                >
-                  <ChevronLeft className="h-7 w-7" />
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setLightboxIndex((i) =>
-                      i === null ? 0 : (i + 1) % post.media_urls!.length
-                    );
-                  }}
-                  className="absolute right-2 top-1/2 z-[102] -translate-y-1/2 rounded-full bg-white/10 p-3 text-white transition hover:bg-white/20 md:right-4"
-                  aria-label="Next image"
-                >
-                  <ChevronRight className="h-7 w-7" />
-                </button>
-              </>
-            )}
-            <div
-              className="relative max-h-[min(92vh,1080px)] max-w-[min(96vw,1920px)]"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {post.media_types?.[lightboxIndex] === 'video' ? (
-                <video
-                  key={lightboxIndex}
-                  src={post.media_urls[lightboxIndex]}
-                  controls
-                  autoPlay
-                  className="max-h-[min(92vh,1080px)] w-auto max-w-full rounded-lg"
-                />
-              ) : (
-                <FeedMediaImage
-                  src={post.media_urls[lightboxIndex]}
-                  alt=""
-                  width={1920}
-                  height={1080}
-                  className="max-h-[min(92vh,1080px)] w-auto max-w-full object-contain"
-                  priority
-                />
-              )}
-            </div>
-            {post.media_urls.length > 1 && (
-              <div className="pointer-events-none absolute bottom-6 left-1/2 z-[102] -translate-x-1/2 rounded-full bg-black/50 px-3 py-1 text-xs text-white">
-                {lightboxIndex + 1} / {post.media_urls.length}
-              </div>
-            )}
-          </div>
-        )}
+      {post?.media_urls && <PostMediaLightbox urls={post.media_urls} mediaTypes={post.media_types}
+        liveUrls={post.media_live_urls} index={lightboxIndex} onIndexChange={setLightboxIndex} onClose={() => setLightboxIndex(null)} />}
+
     </>,
     document.body
   );

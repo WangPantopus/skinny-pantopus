@@ -168,27 +168,23 @@ const verifyToken = async (req, res, next) => {
       sessionsValidAfter = cached.sessionsValidAfter;
     } else {
       logger.debug('auth.role_cache_miss', { user_id: data.user.id });
-      try {
-        let { data: userRow, error: userRowError } = await supabaseAdmin
-          .from('User')
-          .select('role, account_type, sessions_valid_after')
-          .eq('id', data.user.id)
-          .single();
-        if (userRowError && !userRow) {
-          // Migration 160 not applied yet (column missing) — fall back to the
-          // legacy projection so roles never silently downgrade to 'user'.
-          ({ data: userRow } = await supabaseAdmin
-            .from('User')
-            .select('role, account_type')
-            .eq('id', data.user.id)
-            .single());
-        }
-        if (userRow?.role) userRole = userRow.role;
-        if (userRow?.account_type) userAccountType = userRow.account_type;
-        if (userRow?.sessions_valid_after) sessionsValidAfter = userRow.sessions_valid_after;
-      } catch {
-        // Non-fatal: default to 'user' role
+      const { data: userRow, error: userRowError } = await supabaseAdmin
+        .from('User')
+        .select('role, account_type, sessions_valid_after')
+        .eq('id', data.user.id)
+        .maybeSingle();
+      // A failed read must not erase a sign-out watermark or silently cache
+      // a default role. The current database baseline includes this column.
+      if (userRowError) throw authSessionService.authUnavailableError(userRowError);
+      // A read that found no account is not an outage: retrying can't help, so
+      // the session ends (a deleted account, or a sign-in whose profile wasn't saved).
+      if (!userRow) {
+        logger.warn('auth.account_missing', { user_id: data.user.id, method: req._authMethod });
+        return res.status(401).json({ error: SESSION_REVOKED_MESSAGE, code: 'SESSION_REVOKED' });
       }
+      if (userRow.role) userRole = userRow.role;
+      if (userRow.account_type) userAccountType = userRow.account_type;
+      if (userRow.sessions_valid_after) sessionsValidAfter = userRow.sessions_valid_after;
       setCachedRole(data.user.id, userRole, userAccountType, sessionsValidAfter);
     }
 
@@ -231,6 +227,10 @@ const verifyToken = async (req, res, next) => {
     const checkCsrf = () => csrfProtection(req, res, next);
     return userWriteLimits ? userWriteLimits(req, res, checkCsrf) : checkCsrf();
   } catch (err) {
+    if (err.authBusy) {
+      logger.warn('auth.policy_unavailable', { code: err.code });
+      return res.status(503).json({ error: 'Could not verify this session right now. Please try again.', code: 'AUTH_UNAVAILABLE' });
+    }
     logger.error('Token verification error:', err);
     res.status(500).json({ error: 'Token verification failed' });
   }

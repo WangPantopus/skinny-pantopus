@@ -180,14 +180,14 @@ public final class ManageTrainViewModel {
     /// Transient toast (e.g. "Update sent · 12 helpers").
     public var toast: String?
 
-    // MARK: - S1 organizer surfaces
-
     /// Helper roster from `GET /:id/reservations` — drives share-address /
     /// confirm-delivery / remove-from-slot.
     public private(set) var helperRows: [ManageHelperRow] = []
     /// True when that read failed: the Helpers section says so instead of
     /// "No signups yet".
     public private(set) var helpersFailed = false
+    /// True only when the organizer detail includes an exact street address.
+    public private(set) var hasDeliveryAddress = false
     /// Nil while the existing reservation read cannot establish delivery counts.
     public private(set) var deliveredMeals: Int?
     /// Slot roster from the detail payload — drives add / edit / remove date.
@@ -215,8 +215,6 @@ public final class ManageTrainViewModel {
     private let sessionScope: HomeClaimSessionScope
     private var readGeneration = 0
     private var initializedDrafts = false
-    /// Explicit offline content (previews / tests). When set `load()`
-    /// renders it directly instead of hitting the network.
     private let seed: ManageTrainContent?
 
     /// Public entry point — carries no `APIClient` (the client and `.shared`
@@ -253,6 +251,7 @@ public final class ManageTrainViewModel {
             guard readIsCurrent(read, cache: cache) else { return }
             apply(Self.project(dto))
             slotRows = Self.slotRows(dto.slots ?? [])
+            hasDeliveryAddress = !(dto.address?.address?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
             await loadOrganizerSurfaces(read: read, cache: cache)
         } catch {
             guard readIsCurrent(read, cache: cache), !(error is CancellationError) else { return }
@@ -275,6 +274,7 @@ public final class ManageTrainViewModel {
         guard seed == nil else { return }
         readGeneration += 1
         helperRows = []
+        hasDeliveryAddress = false
         organizerRows = []
         fund = nil
         deliveredMeals = nil

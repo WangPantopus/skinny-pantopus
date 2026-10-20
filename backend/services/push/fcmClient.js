@@ -114,13 +114,10 @@ function classifyFcmFailure(status, body) {
 }
 
 async function fetchWithTimeout(url, options) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  try {
-    return await fetch(url, { ...options, signal: controller.signal });
-  } finally {
-    clearTimeout(timer);
-  }
+  const deadline = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+  const signal = options.signal ? AbortSignal.any([options.signal, deadline]) : deadline;
+  // The deadline also covers OAuth/send JSON bodies after headers arrive.
+  return fetch(url, { ...options, signal });
 }
 
 /** Exchange the service-account assertion for a cached OAuth2 access token. */
@@ -174,7 +171,9 @@ async function sendOne(url, accessToken, token, message) {
   try {
     body = await res.json();
   } catch {
-    /* empty / non-JSON body */
+    // An interrupted or malformed response cannot confirm provider acceptance
+    // or permanent token rejection. Retain the token for a future attempt.
+    return { token, action: 'retry' };
   }
   const action = classifyFcmFailure(res.status, body);
   if (action === 'retry' && res.status !== 200) {

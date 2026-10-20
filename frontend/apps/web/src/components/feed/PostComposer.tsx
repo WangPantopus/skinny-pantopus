@@ -16,7 +16,7 @@ import * as api from '@pantopus/api';
 import { Trophy } from 'lucide-react';
 import PostLocationPicker from './PostLocationPicker';
 import type { SportsComposerMetadata, TopicKey } from '@/constants/feedTopics';
-import { SPORTS_COMPOSER_INLINE_INTENTS } from '@/constants/feedTopics';
+import { SPORTS_COMPOSER_INLINE_INTENTS, SPORTS_SCOPE_LABELS } from '@/constants/feedTopics';
 import { usePostForm, type PostFormState, type ProfileVisibilityScope } from './composer/usePostForm';
 import IntentSelector, { INTENTS } from './composer/IntentSelector';
 import EventFields from './composer/EventFields';
@@ -71,6 +71,15 @@ function storedWallClockToInput(value: string | null | undefined, kind: 'datetim
 
 function parseTags(value: string): string[] {
   return value.split(',').map((t) => t.trim()).filter(Boolean);
+}
+
+function eventTimeError(start: string, end: string): string | null {
+  if (!end) return null;
+  if (!start) return 'Add a start time before setting an end time.';
+  if (new Date(asStoredWallClock(end)).getTime() <= new Date(asStoredWallClock(start)).getTime()) {
+    return 'The event end time must be after its start time.';
+  }
+  return null;
 }
 
 const TITLE_POST_TYPES = ['event', 'alert', 'deal', 'service_offer', 'announcement', 'lost_found'];
@@ -564,6 +573,16 @@ export default function PostComposer({
 
     setSubmitError(null);
 
+    const timeError = f.selectedIntent === 'event' ? eventTimeError(f.eventDate, f.eventEndDate) : null;
+    if (timeError) {
+      setSubmitError(timeError);
+      return;
+    }
+    if (parseTags(f.tags).length > 3) {
+      setSubmitError('Use up to 3 tags.');
+      return;
+    }
+
     if (isGlobalComposer && !selectedIdentity) {
       setSubmitError('Loading posting identities…');
       return;
@@ -586,6 +605,11 @@ export default function PostComposer({
       targetPostType = f.selectedIntent;
       if (selectedIdentity.type === 'home') homeId = selectedIdentity.id;
       if (selectedIdentity.type === 'business') businessId = selectedIdentity.id;
+    }
+
+    if (canUseGlobalAudience && targetPostAs === 'business') {
+      setSubmitError('Business identities cannot create Pulse posts. Choose your personal or Home identity.');
+      return;
     }
 
     if (canUseGlobalAudience && !allowedPostTypes.includes(targetPostType)) {
@@ -691,6 +715,11 @@ export default function PostComposer({
 
   const handleSaveEdit = async () => {
     if (!editPatch || !editChanged || !onSaveEdit || savingEdit || !f.content.trim()) return;
+    const timeError = editPost?.post_type === 'event' ? eventTimeError(f.eventDate, f.eventEndDate) : null;
+    if (timeError) {
+      setSubmitError(timeError);
+      return;
+    }
     if (parseTags(f.tags).length > 3) {
       setSubmitError('Use up to 3 tags.');
       return;
@@ -724,8 +753,8 @@ export default function PostComposer({
         <div className="mb-2 flex items-center gap-2 rounded-lg border border-primary-200 bg-primary-50 px-3 py-1.5 text-xs font-medium text-primary-700 dark:border-primary-700/40 dark:bg-primary-500/10 dark:text-primary-200">
           <Trophy className="h-3.5 w-3.5" />
           <span>Posting to Sports</span>
-          {composeSportsScope && (
-            <span className="text-primary-600/80 dark:text-primary-300/80">· scope: {composeSportsScope}</span>
+          {composeSportsScope && SPORTS_SCOPE_LABELS[composeSportsScope] && (
+            <span className="text-primary-600/80 dark:text-primary-300/80">· {SPORTS_SCOPE_LABELS[composeSportsScope]}</span>
           )}
           <button
             type="button"
@@ -750,8 +779,8 @@ export default function PostComposer({
           onSelect={selectIntent}
           user={user}
           activeSurface={activeSurface}
-          // Service and Announce aren't Place post types; the Place feed would refuse them.
-          allowedTypes={activeSurface === 'place' ? allowedPostTypes : undefined}
+          // Match submission rules in both the Place and global composers.
+          allowedTypes={activeSurface === 'place' || isGlobalComposer ? allowedPostTypes : undefined}
         />
       )}
 
@@ -823,12 +852,14 @@ export default function PostComposer({
                             key={`${identity.type}-${identity.id}`}
                             type="button"
                             data-testid={`posting-identity-${identity.type}`}
+                            disabled={identity.type === 'business'}
+                            title={identity.type === 'business' ? 'Business identities cannot create Pulse posts.' : undefined}
                             onClick={() => {
                               setSelectedIdentity(identity);
                               setSelectedAudience(defaultAudienceForIdentity(identity));
                               setSubmitError(null);
                             }}
-                            className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs transition ${
+                            className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs transition disabled:cursor-not-allowed disabled:opacity-45 ${
                               isActive
                                 ? 'border-primary-500 bg-primary-50 text-primary-700'
                                 : 'border-app bg-surface text-app-muted hover-bg-app'
@@ -845,6 +876,9 @@ export default function PostComposer({
                         );
                       })}
                     </div>
+                    {identities.some((identity) => identity.type === 'business') && (
+                      <p className="mt-2 text-xs text-app-muted">Business identities cannot create Pulse posts.</p>
+                    )}
                   </div>
 
                   <div>
@@ -1120,7 +1154,7 @@ export default function PostComposer({
 
           <div className="space-y-2 border-t border-app bg-surface-muted/60 px-4 py-3">
             {submitError && (
-              <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+              <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
                 {submitError}
               </div>
             )}

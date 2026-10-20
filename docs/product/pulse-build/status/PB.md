@@ -2,6 +2,10 @@
 
 Owner: the PB session. Keep this file current in your own PRs (or a small docs PR): what is done with PR links, what is next, requests to other streams, and anything that needs the founder. Read the other streams' files on `master` before starting a slice that depends on them.
 
+## October 17 — household posts and event dates ([#2434](https://github.com/WangPantopus/skinny-pantopus/pull/2434))
+
+A fix to the shipped posts, not a redesign slice. `canReadPost` reads a household post through the current Home access policy (`checkHomePermission`, as the Home feed does), never through its location or distribution targets, and such a post can't be shared outside the app. Creating a post and editing one reject an event end without a start, or at or before the start (`INVALID_EVENT_DATES`). No migration or flag change; the redesign stays paused.
+
 ## Paused (October 15, founder decision)
 
 The Pulse redesign is behind the launch-cut key `pulse_redesign`, which is off for launch; the apps ship the October 13 Pulse. See the [README's paused note](../README.md) and cut 11 in [`docs/launch-scope-flags-2026-10-01.md`](../../../launch-scope-flags-2026-10-01.md).

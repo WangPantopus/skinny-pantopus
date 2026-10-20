@@ -653,7 +653,7 @@ internal fun UploadStepContent(
                 "Upload a document that proves you live at $homeLabel. " +
                     "Your access will be limited until verified."
             } else {
-                "Two documents help us verify you own $homeLabel. We auto-check the address against your account."
+                "Upload an ownership document for $homeLabel. A Pantopus reviewer will check it."
             },
         )
         // Copy lifted from RN's info banner (`evidence.tsx:283-289`).

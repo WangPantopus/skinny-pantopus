@@ -71,6 +71,7 @@ public struct BusinessCatalogView: View {
                 target: target,
                 categories: viewModel.state.categories,
                 isSaving: viewModel.isMutating,
+                errorMessage: viewModel.mutationError,
                 onCancel: { editorTarget = nil },
                 onSave: { draft in
                     let ok: Bool = switch target {
@@ -87,12 +88,15 @@ public struct BusinessCatalogView: View {
             BusinessCatalogCategoriesView(
                 categories: viewModel.state.categories,
                 isSaving: viewModel.isMutating,
+                errorMessage: viewModel.mutationError,
                 onClose: { showsCategories = false },
                 onCreate: { name in await viewModel.createCategory(name: name) },
                 onRename: { id, name in await viewModel.renameCategory(id: id, name: name) },
                 onDelete: { id in await viewModel.deleteCategory(id: id) }
             )
         }
+        .onChange(of: editorTarget?.id) { _, _ in viewModel.clearMutationError() }
+        .onChange(of: showsCategories) { _, _ in viewModel.clearMutationError() }
         .confirmationDialog(
             "Archive item",
             isPresented: Binding(

@@ -35,6 +35,7 @@ const {
   assertCanMutateTarget,
 } = require('../utils/homePermissions');
 const { HOME_DOCUMENT_VISIBILITIES, HOME_DOCUMENT_TYPES, homeDocumentVisibilities, serializeHomeDocument } = require('../utils/homeDocumentAccess');
+const { unpublishedBusinessIds, isUnpublishedBusiness } = require('../utils/visibilityPolicy');
 const homeClaimMergeService = require('../services/homeClaimMergeService');
 const homeClaimRoutingService = require('../services/homeClaimRoutingService');
 const propertySuggestionsService = require('../services/ai/propertySuggestionsService');
@@ -1363,11 +1364,11 @@ router.put('/default', verifyToken, validate(defaultHomeSchema), async (req, res
     if (!homes.some(home => home.id === homeId && ['shared', 'private_setup'].includes(home.access_kind))) {
       return res.status(404).json({ error: 'You can only make a Home you can open your default.', code: 'DEFAULT_HOME_NOT_OPENABLE' });
     }
-    // Insert only, briefings off: choosing a default must never opt someone into briefings or overwrite
-    // their notification choices (the POST /api/saved-places pattern).
+    // Insert only: new preferences start with both briefings on; choosing a
+    // default home must never overwrite existing notification choices.
     const { error: rowError } = await supabaseAdmin
       .from('UserNotificationPreferences')
-      .upsert({ user_id: userId, daily_briefing_enabled: false, evening_briefing_enabled: false },
+      .upsert({ user_id: userId, daily_briefing_enabled: true, evening_briefing_enabled: true },
         { onConflict: 'user_id', ignoreDuplicates: true });
     if (rowError) throw rowError;
     const { error } = await supabaseAdmin
@@ -3011,6 +3012,8 @@ const MAINTENANCE_CATEGORY_VALUES = new Set([
   'hvac', 'plumbing', 'electrical', 'roof', 'gutter', 'appliance', 'pest',
   'landscape', 'cleaning', 'painting', 'safety', 'chimney', 'generic'
 ]);
+const maintenanceCostSchema = Joi.number().min(0).max(9999999999.99)
+  .precision(2).strict().allow(null).optional();
 
 /**
  * GET /api/homes/:id/maintenance
@@ -3075,6 +3078,9 @@ router.post('/:id/maintenance', verifyToken, async (req, res) => {
     if (!access.hasAccess) return res.status(403).json({ error: 'No permission to manage maintenance' });
 
     const { task, vendor, cost, recurrence, due_date, status, performed_at, notes, category, performer_contact, clientRequestId } = req.body || {};
+    if (maintenanceCostSchema.validate(cost).error) {
+      return res.status(400).json({ error: 'Cost must be a non-negative amount below $10 billion, with at most two decimal places.' });
+    }
     if (Joi.string().max(4000).allow('', null).optional().validate(notes).error) {
       return res.status(400).json({ error: 'Notes must be text up to 4000 characters' });
     }
@@ -3191,6 +3197,10 @@ router.put('/:id/maintenance/:taskId', verifyToken, async (req, res) => {
     const updates = {};
     for (const key of allowed) {
       if (req.body && req.body[key] !== undefined) updates[key] = req.body[key];
+    }
+
+    if (maintenanceCostSchema.validate(updates.cost).error) {
+      return res.status(400).json({ error: 'Cost must be a non-negative amount below $10 billion, with at most two decimal places.' });
     }
 
     if (Joi.string().max(4000).allow('', null).optional().validate(updates.notes).error) {
@@ -3499,6 +3509,7 @@ router.get('/:id/documents', verifyToken, async (req, res) => {
     // The apps' "Uploaded by" reads `uploaded_by_name`, the uploader's display name (never the raw user id). Only the
     // name leaves the server, as the Home timeline's `actor_name` does; a deleted account leaves it null.
     res.json({
+      permissions: (access.permissions || []).filter(permission => ['docs.view', 'docs.upload', 'docs.manage'].includes(permission)),
       documents: (data || []).map(({ uploader, ...document }) => ({
         ...serializeHomeDocument(document),
         uploaded_by_name: uploader ? displayNameFromUser(uploader) : null,
@@ -3699,8 +3710,12 @@ router.get('/:id/businesses', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch linked businesses' });
     }
 
+    // A business that closed or went back to draft after it was linked leaves the list, as its profile does.
+    const hidden = await unpublishedBusinessIds((data || []).map(l => l.business_user_id));
+    const links = (data || []).filter(l => !hidden.has(String(l.business_user_id)));
+
     // Enrich with business user info
-    const businessIds = (data || []).map(l => l.business_user_id);
+    const businessIds = links.map(l => l.business_user_id);
     let businesses = [];
     if (businessIds.length > 0) {
       const { data: bizUsers } = await supabaseAdmin
@@ -3718,13 +3733,13 @@ router.get('/:id/businesses', verifyToken, async (req, res) => {
       const profMap = {};
       for (const p of (profiles || [])) profMap[p.business_user_id] = p;
 
-      businesses = (data || []).map(link => ({
+      businesses = links.map(link => ({
         ...link,
         business: bizMap[link.business_user_id] || null,
         profile: profMap[link.business_user_id] || null,
       }));
     } else {
-      businesses = data || [];
+      businesses = links;
     }
 
     res.json({ links: businesses });
@@ -3752,7 +3767,6 @@ router.post('/:id/businesses', verifyToken, validate(linkBusinessSchema), async 
 
     const access = await checkHomePermission(homeId, userId, 'vendors.manage');
     if (!access.hasAccess) return res.status(403).json({ error: 'No access' });
-    if (!access.hasPermission) return res.status(403).json({ error: 'Missing vendors.manage permission' });
 
     let businessUserId = req.body.business_user_id;
 
@@ -3778,6 +3792,10 @@ router.post('/:id/businesses', verifyToken, validate(linkBusinessSchema), async 
 
     if (!targetUser || targetUser.account_type !== 'business') {
       return res.status(400).json({ error: 'Target user is not a business account' });
+    }
+    // A draft isn't public (its profile answers 404, and search leaves it out), so it can't be linked.
+    if (await isUnpublishedBusiness(businessUserId)) {
+      return res.status(404).json({ error: 'Business not found' });
     }
 
     const { data, error } = await supabaseAdmin
@@ -3818,7 +3836,6 @@ router.patch('/:id/businesses/:linkId', verifyToken, async (req, res) => {
 
     const access = await checkHomePermission(homeId, userId, 'vendors.manage');
     if (!access.hasAccess) return res.status(403).json({ error: 'No access' });
-    if (!access.hasPermission) return res.status(403).json({ error: 'Missing vendors.manage permission' });
 
     const allowed = ['kind', 'notes'];
     const updates = {};
@@ -3861,7 +3878,6 @@ router.delete('/:id/businesses/:linkId', verifyToken, async (req, res) => {
 
     const access = await checkHomePermission(homeId, userId, 'vendors.manage');
     if (!access.hasAccess) return res.status(403).json({ error: 'No access' });
-    if (!access.hasPermission) return res.status(403).json({ error: 'Missing vendors.manage permission' });
 
     const { error } = await supabaseAdmin
       .from('HomeBusinessLink')

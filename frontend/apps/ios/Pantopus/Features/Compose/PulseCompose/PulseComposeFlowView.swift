@@ -28,6 +28,10 @@ public struct PulseComposeFlowView: View {
     private let prefillTitle: String?
     /// Sports-lane starter prompt text seeded into the draft body.
     private let prefillBody: String?
+    /// A Pantopus AI post card: its type picks the form, and every field it
+    /// carries (event times and place, a deal's end, lost or found, the
+    /// Heads Up kind) starts filled in.
+    private let prefillDraft: PulseComposeDraft?
     private let onCancel: @MainActor () -> Void
     private let onPosted: @MainActor (String?) -> Void
 
@@ -37,6 +41,7 @@ public struct PulseComposeFlowView: View {
         taskShare: PulseTaskShare? = nil,
         prefillTitle: String? = nil,
         prefillBody: String? = nil,
+        prefillDraft: PulseComposeDraft? = nil,
         onCancel: @escaping @MainActor () -> Void = {},
         onPosted: @escaping @MainActor (String?) -> Void = { _ in }
     ) {
@@ -45,6 +50,7 @@ public struct PulseComposeFlowView: View {
         self.taskShare = taskShare
         self.prefillTitle = prefillTitle
         self.prefillBody = prefillBody
+        self.prefillDraft = prefillDraft
         self.onCancel = onCancel
         self.onPosted = onPosted
         if editingPostId != nil {
@@ -95,6 +101,7 @@ public struct PulseComposeFlowView: View {
             taskShare: taskShare,
             prefillTitle: prefillTitle,
             prefillBody: prefillBody,
+            prefillDraft: prefillDraft,
             onCancel: onCancel,
             onPosted: onPosted
         )
@@ -120,6 +127,10 @@ public struct PulseComposeFlowView: View {
 
     private func prefillPurpose(for target: PulsePostingTarget) -> PulseComposePurpose? {
         if taskShare != nil { return .localUpdate }
+        // A card's own type wins: a deal and a Heads Up share one form family.
+        if let purpose = prefillDraft?.purpose, PulseComposePurpose.allowed(for: target).contains(purpose) {
+            return purpose
+        }
         guard let feedIntent = prefillFeedIntent, feedIntent != .all else { return nil }
         let candidate = PulseComposePurpose.allCases.first { $0.legacyIntent == PulseComposeIntent.from(feedIntent: feedIntent) }
         guard let candidate else { return nil }

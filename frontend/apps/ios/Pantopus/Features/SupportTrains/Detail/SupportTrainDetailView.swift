@@ -25,6 +25,8 @@ public struct SupportTrainDetailView: View {
     private let onSendCard: (@MainActor () -> Void)?
     private let onJoinAsBackup: (@MainActor () -> Void)?
     private let onMessageHost: (@MainActor (HostedByFooter) -> Void)?
+    /// Opens the train's group chat (shown only to people in it).
+    private let onOpenChat: (@MainActor (InboxConversationDestination) -> Void)?
     private let isOrganizer: Bool
 
     public init(
@@ -37,7 +39,8 @@ public struct SupportTrainDetailView: View {
         onEditSlot: (@MainActor (SlotRowContent) -> Void)? = nil,
         onSendCard: (@MainActor () -> Void)? = nil,
         onJoinAsBackup: (@MainActor () -> Void)? = nil,
-        onMessageHost: (@MainActor (HostedByFooter) -> Void)? = nil
+        onMessageHost: (@MainActor (HostedByFooter) -> Void)? = nil,
+        onOpenChat: (@MainActor (InboxConversationDestination) -> Void)? = nil
     ) {
         _viewModel = State(initialValue: viewModel)
         self.isOrganizer = isOrganizer
@@ -49,6 +52,7 @@ public struct SupportTrainDetailView: View {
         self.onSendCard = onSendCard
         self.onJoinAsBackup = onJoinAsBackup
         self.onMessageHost = onMessageHost
+        self.onOpenChat = onOpenChat
     }
 
     /// Confirm target for "Leave this slot" — RN gates the cancel behind
@@ -206,6 +210,10 @@ public struct SupportTrainDetailView: View {
                     overline("Slot calendar")
                     calendarCard(days: content.calendarDays)
 
+                    if content.viewerRole == .recipient {
+                        recipientDeliveries
+                    }
+
                     ForEach(content.sections) { section in
                         let expanded = expandedSections.contains(section.id)
                         overline(
@@ -229,6 +237,20 @@ public struct SupportTrainDetailView: View {
                     if let address = content.exactAddress {
                         overline("Delivery address")
                         exactAddressCard(address, instructions: content.deliveryInstructions)
+                    } else if content.viewerRole != .viewer, content.viewerRole != .recipient {
+                        // Organizers and helpers coordinate delivery; recipients don't head out.
+                        overline("Delivery address")
+                        Text(content.viewerRole.isOrganizer
+                            ? "No delivery address is available for this train. Coordinate delivery details with your helpers."
+                            : "Delivery details aren't available yet. Contact the organizer before heading out.")
+                            .pantopusTextStyle(.body)
+                            .foregroundStyle(Theme.Color.appTextSecondary)
+                            .accessibilityIdentifier("supportTrainAddressUnavailable")
+                    }
+
+                    if let openChat = openChatAction(content) {
+                        GroupChatRow(onOpen: openChat)
+                            .padding(.top, Spacing.s3)
                     }
 
                     HostedByRow(content: content.hostedBy, onMessageHost: messageHostAction(content))
@@ -264,6 +286,28 @@ public struct SupportTrainDetailView: View {
         return { onMessageHost(content.hostedBy) }
     }
 
+    /// The train's group chat: for the people in it (the train names its room
+    /// only to them), opened under the train's title.
+    private func openChatAction(_ content: SupportTrainDetailContent) -> (@MainActor () -> Void)? {
+        guard let onOpenChat, let roomId = content.chatRoomId, !roomId.isEmpty else { return nil }
+        let title = content.typeDates.title
+        return {
+            onOpenChat(InboxConversationDestination(
+                mode: .room(id: roomId),
+                displayName: title,
+                initials: Self.initials(from: title),
+                identityKind: nil,
+                verified: false
+            ))
+        }
+    }
+
+    private static func initials(from name: String) -> String {
+        let letters = name.split(separator: " ").prefix(2).compactMap { $0.first.map(String.init) }
+        let joined = letters.joined().uppercased()
+        return joined.isEmpty ? "?" : joined
+    }
+
     /// A fully covered train has no dock unless the host wires Send a card
     /// or Join as backup (neither has a backend route yet).
     private func hasDock(_ dock: SupportTrainDock) -> Bool {
@@ -284,7 +328,7 @@ public struct SupportTrainDetailView: View {
     /// Helper-side actions under the viewer's own commitment rows —
     /// `POST …/deliver` and `POST …/cancel` with `helper_reason`
     /// (RN `handleLeaveSlot`, `src/app/support-trains/[id].tsx:322`).
-    /// Recipients / organizers get `POST …/confirm` on a delivered row.
+    /// Organizers get `POST …/confirm` on their delivered row; recipients use the delivery-review section.
     @ViewBuilder
     private func commitmentActions(
         for row: SlotRowContent,
@@ -305,8 +349,7 @@ public struct SupportTrainDetailView: View {
                         }
                     }
                 }
-                if row.reservationStatus == "delivered",
-                   content.viewerRole == .recipient || content.viewerRole.isOrganizer {
+                if row.reservationStatus == "delivered", content.viewerRole.isOrganizer {
                     rowActionButton(
                         title: "Confirm delivery",
                         icon: .checkCircle,
@@ -328,6 +371,39 @@ public struct SupportTrainDetailView: View {
                 Spacer(minLength: Spacing.s0)
             }
             .padding(.bottom, Spacing.s1)
+        }
+    }
+
+    @ViewBuilder
+    private var recipientDeliveries: some View {
+        overline("Deliveries to confirm")
+        if let error = viewModel.deliveryLoadError {
+            Text(error)
+                .pantopusTextStyle(.body)
+                .foregroundStyle(Theme.Color.appTextSecondary)
+            rowActionButton(title: "Try again", icon: .refreshCw, identifier: "supportTrainDeliveriesRetry") {
+                Task { await viewModel.refresh() }
+            }
+        } else if let rows = viewModel.deliveryRows {
+            if rows.isEmpty {
+                Text("No deliveries awaiting your confirmation.")
+                    .pantopusTextStyle(.body)
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+            }
+            ForEach(rows) { row in
+                SlotRow(content: row)
+                rowActionButton(
+                    title: "Confirm delivery",
+                    icon: .checkCircle,
+                    identifier: "supportTrainRecipientConfirm-\(row.id)"
+                ) {
+                    Task { await viewModel.confirmDelivery(reservationId: row.id) }
+                }
+            }
+        } else {
+            Text("Loading deliveries…")
+                .pantopusTextStyle(.body)
+                .foregroundStyle(Theme.Color.appTextSecondary)
         }
     }
 
@@ -745,6 +821,54 @@ private struct HostedByRow: View {
             RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
                 .stroke(Theme.Color.appBorderSubtle, lineWidth: 1)
         )
+    }
+}
+
+// MARK: - Group chat
+
+/// Opens the train's chat with its organizers and helpers; styled as the
+/// "Hosted by" row below it.
+@MainActor
+private struct GroupChatRow: View {
+    let onOpen: @MainActor () -> Void
+
+    var body: some View {
+        Button(action: onOpen) {
+            HStack(spacing: Spacing.s2) {
+                ZStack {
+                    Circle().fill(Theme.Color.primarySolid)
+                    Icon(.users, size: 12, strokeWidth: 2.2, color: Theme.Color.appTextInverse)
+                }
+                .frame(width: 24, height: 24)
+                .accessibilityHidden(true)
+
+                HStack(spacing: Spacing.s1) {
+                    Text("Group chat")
+                        .pantopusTextStyle(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(Theme.Color.appTextStrong)
+                    Text("· Everyone on the train")
+                        .pantopusTextStyle(.caption)
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                Icon(.messageSquare, size: 14, color: Theme.Color.appTextMuted)
+            }
+            .padding(.horizontal, Spacing.s3)
+            .padding(.vertical, Spacing.s2)
+            .background(Theme.Color.appSurface)
+            .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
+                    .stroke(Theme.Color.appBorderSubtle, lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Group chat, everyone on the train")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityIdentifier("supportTrainGroupChat")
     }
 }
 

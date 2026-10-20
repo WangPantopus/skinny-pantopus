@@ -9,6 +9,7 @@
 
 package app.pantopus.android.ui.screens.businesses.owner_dashboard
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -36,7 +37,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,6 +51,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.BizStatusBadge
 import app.pantopus.android.ui.components.EmptyState
@@ -120,9 +122,15 @@ fun BusinessOwnerScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val toast by viewModel.toast.collectAsStateWithLifecycle()
-    var mode by remember { mutableStateOf(OwnerViewMode.Owner) }
+    // Saved, so returning from a customer conversation lands back in the inbox it was opened from.
+    var mode by rememberSaveable { mutableStateOf(OwnerViewMode.Owner) }
+    // System Back leaves the inbox or preview for the dashboard, like their top-bar Back.
+    BackHandler(enabled = mode != OwnerViewMode.Owner) { mode = OwnerViewMode.Owner }
 
-    LaunchedEffect(Unit) { viewModel.load() }
+    LifecycleResumeEffect(Unit) {
+        viewModel.refresh()
+        onPauseOrDispose { }
+    }
 
     Box(
         modifier =
@@ -281,6 +289,8 @@ internal fun OwnerEditFrame(
                     handle = profile.header.handle?.let { "@$it" } ?: "",
                     locality = profile.header.locality ?: "",
                     logoIcon = profile.header.logoIcon,
+                    logoUrl = profile.header.logoUrl,
+                    bannerUrl = profile.header.bannerUrl,
                     status = bannerStatus(profile.status),
                     onEdit = onEditPage,
                     isVerified = content.isVerified,
@@ -644,7 +654,7 @@ private fun ManageServiceRow(
     service: BusinessServiceRow,
     onClick: () -> Unit,
 ) {
-    val subtitle = listOfNotNull(service.detail, service.priceLabel).joinToString(" · ")
+    val subtitle = listOfNotNull(service.detail, service.priceLabel).filter(String::isNotBlank).joinToString(" · ")
     Row(
         modifier =
             Modifier

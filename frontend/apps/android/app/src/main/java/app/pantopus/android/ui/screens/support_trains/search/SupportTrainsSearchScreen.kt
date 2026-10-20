@@ -13,6 +13,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.api.models.support_trains.SupportTrainListItemDto
+import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.screens.shared.list_of_rows.RowView
 import app.pantopus.android.ui.screens.shared.search_list.EmptyStateContent
 import app.pantopus.android.ui.screens.shared.search_list.SearchListShell
@@ -38,6 +39,7 @@ fun SupportTrainsSearchScreen(
     val query by viewModel.query.collectAsStateWithLifecycle()
     val results by viewModel.results.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val error by viewModel.error.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
         viewModel.onOpenTrain = onOpenTrain
@@ -51,6 +53,16 @@ fun SupportTrainsSearchScreen(
             onQueryChange = viewModel::setQuery,
             results = results,
             isLoading = isLoading,
+            errorContent =
+                error?.let { message ->
+                    {
+                        ErrorState(
+                            headline = "Couldn't load support trains",
+                            message = message,
+                            onRetry = viewModel::retry,
+                        )
+                    }
+                },
             emptyState =
                 EmptyStateContent(
                     icon = PantopusIcon.Search,

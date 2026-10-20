@@ -2,6 +2,7 @@
 
 package app.pantopus.android.ui.screens.support_trains.detail
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -16,6 +17,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -33,6 +36,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -58,7 +62,7 @@ import app.pantopus.android.ui.components.RefreshFailedLine
 import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.components.SlotCalendar
-import app.pantopus.android.ui.components.SlotCalendarDay
+import app.pantopus.android.ui.components.SlotCalendarState
 import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
 import app.pantopus.android.ui.screens.support_trains.detail.components.RecipientCard
 import app.pantopus.android.ui.screens.support_trains.detail.components.SlotRow
@@ -74,6 +78,7 @@ import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
 import app.pantopus.android.ui.theme.pantopusShadow
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * A10.9 — Participant-facing Support Train detail screen.
@@ -241,6 +246,8 @@ data class SupportTrainDetailActions(
     val onJoinAsBackup: (() -> Unit)? = null,
     /** Opens a chat with the train's organizer. Null hides "Message the host". */
     val onMessageHost: ((HostedByFooter) -> Unit)? = null,
+    /** Opens the train's group chat (room id, train title); shown only to people in it. */
+    val onOpenChat: ((roomId: String, title: String) -> Unit)? = null,
 )
 
 /**
@@ -342,6 +349,7 @@ internal fun SupportTrainDetailContentLayout(
                     onSendCard = actions.onSendCard,
                     onJoinAsBackup = actions.onJoinAsBackup,
                     onMessageHost = messageHost,
+                    onOpenChat = actions.onOpenChat,
                     isSubmitting = isSubmitting,
                     onReserveSlot = onReserveSlot,
                     onMarkDelivered = onMarkDelivered,
@@ -482,6 +490,7 @@ private fun OverflowMenuButton(onAction: () -> Unit) {
 // MARK: - Loaded body
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 private fun LoadedBody(
     content: SupportTrainDetailContent,
     onSignUp: () -> Unit,
@@ -489,6 +498,7 @@ private fun LoadedBody(
     onSendCard: (() -> Unit)?,
     onJoinAsBackup: (() -> Unit)?,
     onMessageHost: (() -> Unit)?,
+    onOpenChat: ((roomId: String, title: String) -> Unit)? = null,
     isSubmitting: Boolean = false,
     onReserveSlot: (String?) -> Unit = {},
     onMarkDelivered: (String) -> Unit = {},
@@ -499,6 +509,8 @@ private fun LoadedBody(
 ) {
     // Sections whose "See all N" was tapped.
     var expandedSections by remember { mutableStateOf(setOf<String>()) }
+    val commitmentFocus = remember { BringIntoViewRequester() }
+    val scope = rememberCoroutineScope()
     Column(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier =
@@ -535,25 +547,39 @@ private fun LoadedBody(
 
             SectionOverline("Slot calendar")
             val signupsClosed = content.dock is SupportTrainDock.Closed
-            CalendarCard(content.calendarDays, onSelectDate = { if (!signupsClosed) onSignUp() })
+            CalendarCard(
+                content = content,
+                signupsClosed = signupsClosed,
+                onSignUp = onSignUp,
+                onReserveSlot = onReserveSlot,
+                onOpenCommitment = { scope.launch { commitmentFocus.bringIntoView() } },
+            )
+
+            if (content.helperDetailsUnavailable) {
+                TextButton(onClick = onRetry) { Text("Couldn't load helper details. Try again") }
+            }
 
             content.sections.forEach { section ->
                 val expanded = section.id in expandedSections
-                SlotSectionBlock(
-                    section = section,
-                    expanded = expanded,
-                    onToggleExpanded = {
-                        expandedSections = if (expanded) expandedSections - section.id else expandedSections + section.id
-                    },
-                    signupsClosed = signupsClosed,
-                    viewerRole = content.viewerRole,
-                    isSubmitting = isSubmitting,
-                    onReserveSlot = onReserveSlot,
-                    onEditSlot = onEditSlot,
-                    onMarkDelivered = onMarkDelivered,
-                    onConfirmDelivery = onConfirmDelivery,
-                    onRequestLeave = onRequestLeave,
-                )
+                Column(
+                    modifier = if (section.rows.any { it.mine }) Modifier.bringIntoViewRequester(commitmentFocus) else Modifier,
+                ) {
+                    SlotSectionBlock(
+                        section = section,
+                        expanded = expanded,
+                        onToggleExpanded = {
+                            expandedSections = if (expanded) expandedSections - section.id else expandedSections + section.id
+                        },
+                        signupsClosed = signupsClosed,
+                        viewerRole = content.viewerRole,
+                        isSubmitting = isSubmitting,
+                        onReserveSlot = onReserveSlot,
+                        onEditSlot = onEditSlot,
+                        onMarkDelivered = onMarkDelivered,
+                        onConfirmDelivery = onConfirmDelivery,
+                        onRequestLeave = onRequestLeave,
+                    )
+                }
             }
 
             content.exactAddress?.let { address ->
@@ -562,6 +588,7 @@ private fun LoadedBody(
             }
 
             Spacer(modifier = Modifier.height(Spacing.s3))
+            GroupChatEntry(content, onOpenChat)
             if (content.privateDetailsAvailable) HostedByRow(content.hostedBy, onMessageHost = onMessageHost)
             Spacer(modifier = Modifier.height(Spacing.s3))
         }
@@ -704,7 +731,7 @@ private fun CommitmentActions(
     onRequestLeave: (SlotRowContent) -> Unit,
 ) {
     val reservationId = row.reservationId
-    if (!row.mine || reservationId == null) return
+    if (reservationId == null) return
     val canConfirm =
         row.reservationStatus == "delivered" &&
             (viewerRole == SupportTrainViewerRole.RECIPIENT || viewerRole.isOrganizer)
@@ -863,8 +890,11 @@ private fun SectionOverline(
 
 @Composable
 private fun CalendarCard(
-    days: List<SlotCalendarDay>,
-    onSelectDate: (java.util.Date) -> Unit,
+    content: SupportTrainDetailContent,
+    signupsClosed: Boolean,
+    onSignUp: () -> Unit,
+    onReserveSlot: (String?) -> Unit,
+    onOpenCommitment: () -> Unit,
 ) {
     val shape = RoundedCornerShape(Radii.lg)
     Box(
@@ -878,7 +908,20 @@ private fun CalendarCard(
                 .padding(Spacing.s3),
         contentAlignment = Alignment.Center,
     ) {
-        SlotCalendar(days = days, onSelectDate = onSelectDate)
+        SlotCalendar(
+            days = content.calendarDays,
+            onSelectDate = { date ->
+                val mine = content.calendarDays.any { it.date == date && it.state == SlotCalendarState.Mine }
+                if (mine) {
+                    onOpenCommitment()
+                } else if (!signupsClosed) {
+                    // Calendar cells encode date-only values at UTC midnight, like the slot API.
+                    val day = date.toInstant().atZone(java.time.ZoneOffset.UTC).toLocalDate().toString()
+                    val slot = content.reserveOptions.singleOrNull { it.slotDate == day }
+                    if (slot != null) onReserveSlot(slot.id) else onSignUp()
+                }
+            },
+        )
     }
 }
 
@@ -1001,6 +1044,76 @@ private fun HostedByRow(
                 tint = PantopusColors.appTextMuted,
             )
         }
+    }
+}
+
+/** The train's chat, for the people in it; rechecked with the train's other private details. */
+@Composable
+private fun GroupChatEntry(
+    content: SupportTrainDetailContent,
+    onOpenChat: ((roomId: String, title: String) -> Unit)?,
+) {
+    val chatRoomId = content.chatRoomId
+    if (!content.privateDetailsAvailable || chatRoomId == null || onOpenChat == null) return
+    GroupChatRow(onOpen = { onOpenChat(chatRoomId, content.typeDates.title) })
+    Spacer(modifier = Modifier.height(Spacing.s3))
+}
+
+/** Opens the train's chat with its organizers and helpers; styled as the "Hosted by" row below it. */
+@Composable
+private fun GroupChatRow(onOpen: () -> Unit) {
+    val shape = RoundedCornerShape(Radii.md)
+    Row(
+        modifier =
+            Modifier
+                .testTag("supportTrainGroupChat")
+                .fillMaxWidth()
+                .clip(shape)
+                .background(PantopusColors.appSurface)
+                .border(1.dp, PantopusColors.appBorderSubtle, shape)
+                .clickable(onClick = onOpen)
+                .padding(horizontal = Spacing.s3, vertical = Spacing.s2)
+                .clearAndSetSemantics {
+                    role = Role.Button
+                    contentDescription = "Group chat, everyone on the train"
+                },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .size(24.dp)
+                    .clip(CircleShape)
+                    .background(PantopusColors.primary600),
+            contentAlignment = Alignment.Center,
+        ) {
+            PantopusIconImage(
+                icon = PantopusIcon.Users,
+                contentDescription = null,
+                size = 12.dp,
+                tint = PantopusColors.appTextInverse,
+            )
+        }
+        Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "Group chat",
+                color = PantopusColors.appTextStrong,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 12.sp,
+            )
+            Text(
+                text = " · Everyone on the train",
+                color = PantopusColors.appTextSecondary,
+                fontSize = 12.sp,
+            )
+        }
+        PantopusIconImage(
+            icon = PantopusIcon.MessageSquare,
+            contentDescription = null,
+            size = 14.dp,
+            tint = PantopusColors.appTextMuted,
+        )
     }
 }
 

@@ -28,6 +28,7 @@ public struct ManageHelperRow: Sendable, Hashable, Identifiable {
     public let status: String
     public let isGuest: Bool
     public let exactAddressShared: Bool
+    public let hasDeliveryAddress: Bool
     /// The helper's "Note to recipient", which the organizer reads here on the recipient's behalf.
     public let note: String?
 
@@ -39,6 +40,7 @@ public struct ManageHelperRow: Sendable, Hashable, Identifiable {
         status: String,
         isGuest: Bool,
         exactAddressShared: Bool,
+        hasDeliveryAddress: Bool = true,
         note: String? = nil
     ) {
         self.id = id
@@ -48,6 +50,7 @@ public struct ManageHelperRow: Sendable, Hashable, Identifiable {
         self.status = status
         self.isGuest = isGuest
         self.exactAddressShared = exactAddressShared
+        self.hasDeliveryAddress = hasDeliveryAddress
         self.note = note
     }
 
@@ -66,7 +69,7 @@ public struct ManageHelperRow: Sendable, Hashable, Identifiable {
     /// The reveal route 409s on canceled reservations
     /// (`backend/routes/supportTrains.js:2800`).
     public var canShareAddress: Bool {
-        status != "canceled" && !exactAddressShared
+        status != "canceled" && hasDeliveryAddress && !exactAddressShared
     }
 }
 
@@ -238,7 +241,7 @@ public extension ManageTrainViewModel {
             ids.contains { $0 == nil } ? nil : Set(ids.compactMap { $0 }).count
         }
         replaceOrganizerSurfaces(
-            helpers: Self.helperRows(reservations?.reservations ?? [], slots: slotRows),
+            helpers: Self.helperRows(reservations?.reservations ?? [], slots: slotRows, hasDeliveryAddress: hasDeliveryAddress),
             helpersFailed: reservations == nil,
             deliveredMeals: reservations?.reservations.filter {
                 ["delivered", "confirmed"].contains($0.status ?? "") &&
@@ -612,7 +615,8 @@ public extension ManageTrainViewModel {
 
     internal nonisolated static func helperRows(
         _ reservations: [SupportTrainReservationDTO],
-        slots: [ManageSlotRow]
+        slots: [ManageSlotRow],
+        hasDeliveryAddress: Bool = true
     ) -> [ManageHelperRow] {
         let slotById = Dictionary(uniqueKeysWithValues: slots.map { ($0.id, $0) })
         return reservations.map { reservation in
@@ -631,6 +635,7 @@ public extension ManageTrainViewModel {
                 status: reservation.status ?? "reserved",
                 isGuest: reservation.isGuestSignup,
                 exactAddressShared: reservation.exactAddressShared ?? false,
+                hasDeliveryAddress: hasDeliveryAddress,
                 note: reservation.noteToRecipient
                     .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                     .flatMap { $0.isEmpty ? nil : $0 }

@@ -13,6 +13,8 @@ import SwiftUI
 
 struct PlaceDetailView: View {
     @State private var viewModel: PlaceDetailViewModel
+    /// The assistant, opened from the header about this section.
+    @State private var askTopic: AIAskTopic?
     var onBack: () -> Void
 
     init(viewModel: PlaceDetailViewModel, onBack: @escaping () -> Void) {
@@ -36,6 +38,7 @@ struct PlaceDetailView: View {
             onBackground: viewModel.discardTemporaryCopy
         ) { await viewModel.refreshIfStale() }
         .onDisappear { viewModel.discardTemporaryCopy() }
+        .askPantopus($askTopic)
         .sheet(isPresented: $viewModel.showVerify) {
             PlaceVerifySheet(
                 address: verifyAddress,
@@ -66,8 +69,17 @@ struct PlaceDetailView: View {
         PlaceDetailHeader(
             title: viewModel.group.title,
             address: headerAddress,
-            onBack: onBack
+            onBack: onBack,
+            onAsk: askAction
         )
+    }
+
+    /// Ask about a home's section (contract section 6 names these six); none
+    /// for Identity or a saved place, which has no home.
+    private var askAction: (() -> Void)? {
+        guard viewModel.group != .identity, viewModel.savedPlaceId == nil, !viewModel.homeId.isEmpty else { return nil }
+        let topic = AIAskTopic.place(homeId: viewModel.homeId, section: viewModel.group)
+        return { askTopic = topic }
     }
 
     private var headerAddress: String {

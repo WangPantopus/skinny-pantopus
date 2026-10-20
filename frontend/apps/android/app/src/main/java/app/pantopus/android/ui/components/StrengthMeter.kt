@@ -182,7 +182,7 @@ private fun BreachPill() {
                 .background(PantopusColors.errorBg)
                 .border(width = 1.dp, color = PantopusColors.errorLight, shape = CircleShape)
                 .padding(horizontal = Spacing.s2, vertical = Spacing.s1)
-                .semantics { contentDescription = "Found in breach data" },
+                .semantics { contentDescription = "Common password" },
     ) {
         PantopusIconImage(
             icon = PantopusIcon.ShieldAlert,
@@ -191,7 +191,7 @@ private fun BreachPill() {
             tint = PantopusColors.error,
         )
         Text(
-            text = "Found in breach data",
+            text = "Common password",
             style = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.SemiBold),
             color = PantopusColors.error,
         )
@@ -215,7 +215,7 @@ private fun segmentFill(
 
 private fun accessibilityLabel(strength: PasswordStrength): String {
     if (strength.breached) {
-        return "Password strength: found in breach data, must be changed"
+        return "Password strength: common password, choose another"
     }
     val labels = listOf("Add a password", "Weak", "Fair", "Good", "Strong")
     val label = labels[minOf(strength.rulesMet, labels.lastIndex)]

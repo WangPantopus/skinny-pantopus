@@ -28,6 +28,7 @@ const { checkHomePermission, getActiveOccupancy, mapLegacyRole } = require('../u
 const { computeUtilityScore } = require('../utils/feedRanking');
 const s3 = require('../services/s3Service');
 const feedService = require('../services/feedService');
+const marketplaceService = require('../services/marketplace/marketplaceService');
 const { generateNeighborhoodFacts } = require('../services/ai/neighborhoodFactService');
 const { encodeGeohash6: _encodeGeohash6 } = require('../utils/geohash');
 const { resolveLocation } = require('../services/context/locationResolver');
@@ -124,6 +125,7 @@ const {
   attachIdentityAuthors,
   applyPostLocationPrivacy,
   sortMatchedBusinessesByRating,
+  dropUnpublishedMatches,
   applyCursorCondition,
   buildCursorPagination,
   FEED_POST_SELECT,
@@ -234,7 +236,7 @@ const createPostSchema = Joi.object({
   content: Joi.string().min(1).max(5000).required(),
   title: Joi.string().max(255).optional(),
   mediaUrls: Joi.array().items(Joi.string().uri()).max(10).optional(),
-  mediaTypes: Joi.array().items(Joi.string().valid('image', 'video', 'live_photo')).optional(),
+  mediaTypes: Joi.array().items(Joi.string().valid('image', 'video', 'live_photo', 'document')).optional(),
   mediaThumbnails: Joi.array().items(Joi.string().uri().allow('', null)).max(10).optional(),
   mediaLiveUrls: Joi.array().items(Joi.string().uri().allow('', null)).max(10).optional(),
   postType: Joi.string().valid(...POST_TYPES, ...PULSE_ONLY_TYPES).default('general'),
@@ -357,7 +359,7 @@ const updatePostSchema = Joi.object({
   content: Joi.string().min(1).max(5000),
   title: Joi.string().max(255).allow(null, ''),
   mediaUrls: Joi.array().items(Joi.string().uri()).max(10),
-  mediaTypes: Joi.array().items(Joi.string().valid('image', 'video', 'live_photo')),
+  mediaTypes: Joi.array().items(Joi.string().valid('image', 'video', 'live_photo', 'document')),
   mediaThumbnails: Joi.array().items(Joi.string().uri().allow('', null)).max(10),
   mediaLiveUrls: Joi.array().items(Joi.string().uri().allow('', null)).max(10),
   postType: Joi.string().valid(...POST_TYPES, ...PULSE_ONLY_TYPES),
@@ -862,8 +864,21 @@ async function isVisitorAt(userId, latitude, longitude) {
     && homes.every((home) => Math.abs(lat - home.latitude) > 0.5 || Math.abs(lng - home.longitude) > 0.5);
 }
 
+// An event may omit its times, but an end requires a strictly earlier start.
+// Edits call this with the resulting pair, not just the fields in the request.
+function eventRangeError(start, end) {
+  if (end == null) return null;
+  if (start == null) return 'Choose an event start time before setting its end time.';
+  if (new Date(end).getTime() <= new Date(start).getTime()) {
+    return 'The event end time must be after its start time.';
+  }
+  return null;
+}
+
 router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
   try {
+    const dateError = eventRangeError(req.body.eventDate, req.body.eventEndDate);
+    if (dateError) return res.status(400).json({ error: dateError, code: 'INVALID_EVENT_DATES' });
     const {
       content, title, mediaUrls, mediaTypes, mediaThumbnails, mediaLiveUrls, postType, postFormat,
       visibility, visibilityScope, locationPrecision,
@@ -1174,12 +1189,17 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
       // v1.1: Home Place rate limit — 2 per day per home
       if (postAs === 'home' && homeId) {
         const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-        const { count } = await supabaseAdmin
+        let homePlacePosts = supabaseAdmin
           .from('Post')
           .select('id', { count: 'exact', head: true })
           .eq('home_id', homeId)
           .contains('distribution_targets', ['place'])
           .gte('created_at', oneDayAgo);
+        // A retry of a post this composer command already saved (to attach photos
+        // after a failed upload) is not a new post, so it doesn't count against itself.
+        const retryId = commandPostId(userId, req.body.clientRequestId);
+        if (retryId) homePlacePosts = homePlacePosts.neq('id', retryId);
+        const { count } = await homePlacePosts;
         if (count >= 2) {
           return res.status(429).json({ error: 'Home posting limit reached (2 posts per day to Place feed). Try again later.' });
         }
@@ -2176,6 +2196,7 @@ router.post('/mute', verifyToken, async (req, res) => {
     });
 
     feedService.invalidateFilterCache(userId);
+    marketplaceService.invalidateFilterCache(userId);
     res.json({ message: `${entityType} muted successfully` });
   } catch (err) {
     logger.error('Mute error', { error: err.message });
@@ -2271,6 +2292,7 @@ router.delete('/mute', verifyToken, async (req, res) => {
     if (error) throw error;
 
     feedService.invalidateFilterCache(userId);
+    marketplaceService.invalidateFilterCache(userId);
     res.json({ message: 'Unmuted successfully' });
   } catch (err) {
     logger.error('Unmute error', { error: err.message });
@@ -2545,6 +2567,7 @@ router.get('/:id', optionalAuth, async (req, res) => {
         .catch(err => logger.warn('post.view_count.error', { error: err.message, postId: id, userId }));
     }
 
+    await dropUnpublishedMatches([post]);
     applyPostLocationPrivacy(post, userId);
     const responsePost = await serializePostForViewer({
       ...post,
@@ -2574,10 +2597,17 @@ router.patch('/:id', verifyToken, validate(updatePostSchema), async (req, res) =
     const { data: existing } = await supabaseAdmin.from('Post')
       .select(`user_id, media_urls, media_thumbnails, media_live_urls, safety_alert_kind, post_metadata,
         post_type, content, topic, area_id, read_scope, latitude, longitude, location_precision,
-        visibility, visibility_scope, radius_miles`)
+        visibility, visibility_scope, radius_miles, event_date, event_end_date`)
       .eq('id', id).single();
     if (!existing) return res.status(404).json({ error: 'Post not found' });
     if (existing.user_id !== userId) return res.status(403).json({ error: 'You can only edit your own posts' });
+    if (req.body.eventDate !== undefined || req.body.eventEndDate !== undefined) {
+      const dateError = eventRangeError(
+        req.body.eventDate !== undefined ? req.body.eventDate : existing.event_date,
+        req.body.eventEndDate !== undefined ? req.body.eventEndDate : existing.event_end_date
+      );
+      if (dateError) return res.status(400).json({ error: dateError, code: 'INVALID_EVENT_DATES' });
+    }
     // Only Pulse creates Share and Offer posts; an older post can't become one.
     if (!existing.read_scope && PULSE_ONLY_TYPES.includes(req.body.postType) && req.body.postType !== existing.post_type) {
       return res.status(400).json({ error: "A post's type can't be changed to this one.", code: 'PULSE_FIELD_LOCKED' });
@@ -2788,6 +2818,7 @@ router.get('/:id/matched-businesses', verifyToken, async (req, res) => {
       select: `${POST_VISIBILITY_SELECT},service_category,matched_business_ids,matched_businesses_cache,created_at`,
     });
     if (!post) return;
+    await dropUnpublishedMatches([post]);
 
     // No service_category → no matches possible
     if (!post.service_category) {

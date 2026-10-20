@@ -24,9 +24,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import javax.inject.Inject
 
 /** Nav-arg key for the home id consumed via [SavedStateHandle]. */
@@ -81,7 +78,6 @@ data class TransferOwnershipUiState(
     val toast: TransferToast? = null,
     val shouldDismiss: Boolean = false,
     val biometryLabel: String = "Fingerprint",
-    val confirmationTimestamp: String = "",
 ) {
     val confirmationPhrase: String get() = TRANSFER_CONFIRMATION_PHRASE
 
@@ -116,13 +112,9 @@ data class TransferOwnershipUiState(
     val confirmationMatches: Boolean
         get() = confirmationField.value == confirmationPhrase
 
-    /**
-     * Whether the sticky CTA is active. The context strip failing to
-     * load doesn't block the mutation — the request only needs the home
-     * id and the buyer's email.
-     */
+    /** Require the home and owner roster so the confirmation describes the actual transfer. */
     val isReadyToCommit: Boolean
-        get() = recipientIsValid && confirmationMatches
+        get() = contextState == TransferContextState.Loaded && recipientIsValid && confirmationMatches
 
     val isDirty: Boolean
         get() = recipientField.value.isNotEmpty() || confirmationField.value.isNotEmpty()
@@ -242,7 +234,6 @@ class TransferOwnershipViewModel
                         currentUser?.displayName?.takeIf { it.isNotBlank() }
                             ?: currentUser?.email?.substringBefore('@')?.takeIf { it.isNotBlank() }
                             ?: "You",
-                    confirmationTimestamp = formatNow(),
                 ),
             )
         val state: StateFlow<TransferOwnershipUiState> = _state.asStateFlow()
@@ -328,7 +319,7 @@ class TransferOwnershipViewModel
         }
 
         fun dismissConfirmSheet() {
-            if (_state.value.sheetPhase == ConfirmSheetPhase.Authenticating) return
+            if (_state.value.sheetPhase != ConfirmSheetPhase.Visible) return
             _state.update { it.copy(sheetPhase = ConfirmSheetPhase.Hidden, biometricErrorMessage = null) }
         }
 
@@ -421,8 +412,4 @@ class TransferOwnershipViewModel
                 2 -> "${names[0]} and ${names[1]}"
                 else -> "${names.dropLast(1).joinToString(", ")} and ${names.last()}"
             }
-
-        private companion object {
-            fun formatNow(): String = SimpleDateFormat("HH:mm MMM d", Locale.getDefault()).format(Date())
-        }
     }

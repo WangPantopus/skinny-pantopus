@@ -215,6 +215,13 @@ struct PlansListSheet: View {
                     .foregroundStyle(Theme.Color.appTextSecondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            if let ask = actions.ask {
+                AskPantopusButton(accessibilityIdentifier: "plansListAskPantopus", action: ask) {
+                    AskPantopusGlyph()
+                        .frame(width: 44, height: 44)
+                        .background(Circle().fill(Theme.Color.appSurfaceSunken))
+                }
+            }
             Button { onStop(.peek) } label: {
                 Icon(.map, size: 20, color: Theme.Color.appText)
                     .frame(width: 44, height: 44)

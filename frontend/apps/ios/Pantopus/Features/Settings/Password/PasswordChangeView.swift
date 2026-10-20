@@ -117,21 +117,20 @@ public struct PasswordChangeView: View {
                 contentType: .password,
                 identifier: "field_current"
             )
-            if viewModel.fields[.current]?.error != nil {
-                Button(
-                    action: { viewModel.requestResetLink() },
-                    label: {
-                        HStack(spacing: Spacing.s1) {
-                            Icon(.mail, size: 12, color: Theme.Color.primaryInk)
-                            Text("Email me a reset link instead")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(Theme.Color.primaryInk)
-                        }
+            Button(
+                action: { Task { await viewModel.requestResetLink() } },
+                label: {
+                    HStack(spacing: Spacing.s1) {
+                        Icon(.mail, size: 12, color: Theme.Color.primaryInk)
+                        Text(viewModel.isRequestingReset ? "Requesting reset link…" : "Email me a reset link instead")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Theme.Color.primaryInk)
                     }
-                )
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("passwordChangeResetLink")
-            }
+                }
+            )
+            .buttonStyle(.plain)
+            .disabled(viewModel.isRequestingReset || viewModel.isSaving)
+            .accessibilityIdentifier("passwordChangeResetLink")
         }
     }
 

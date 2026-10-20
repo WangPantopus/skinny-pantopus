@@ -27,8 +27,7 @@ export function emergencyCategory(type: unknown): EmergencyCategory {
 }
 
 // What the page's create form saves for each design category. Shutoffs are
-// stored per utility and have no create mapping until a utility choice is
-// approved for the form.
+// stored per utility and use the form's explicit utility choice.
 export const CATEGORY_CREATE_TYPE: Record<Exclude<EmergencyCategory, 'shutoff'>, HomeEmergencyType> = {
   contact: 'emergency_contacts',
   evacuation: 'evac_plan',

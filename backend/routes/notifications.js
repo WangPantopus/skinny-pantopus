@@ -11,6 +11,7 @@
  */
 
 const express = require('express');
+const Joi = require('joi');
 const router = express.Router();
 const supabaseAdmin = require('../config/supabaseAdmin');
 const verifyToken = require('../middleware/verifyToken');
@@ -25,6 +26,10 @@ const { excludeHiddenLaunchNotifications, isLaunchFeatureEnabled } = require('..
 const FIREWALL_VALUES = ['personal', 'audience', 'platform'];
 const CONTEXT_INPUT = ['all', ...FIREWALL_VALUES];
 const LEGACY_CONTEXT_TYPES = ['personal', 'business'];
+const paginationSchema = Joi.object({
+  limit: Joi.number().integer().min(1).max(Number.MAX_SAFE_INTEGER).default(20),
+  offset: Joi.number().integer().min(0).max(2147483597).default(0),
+});
 
 function parseFirewallFilter(req, { allowMultiple = false } = {}) {
   const contextRaw = req.query.context ?? req.body?.context;
@@ -97,8 +102,15 @@ const NOTIFICATION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-
 router.get('/', verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
-    const limit = Math.min(parseInt(req.query.limit) || 20, 50);
-    const offset = parseInt(req.query.offset) || 0;
+    const pagination = paginationSchema.validate({ limit: req.query.limit, offset: req.query.offset });
+    if (pagination.error) {
+      return res.status(400).json({
+        error: 'Invalid pagination. Use a positive whole-number limit and a non-negative offset within the supported range.',
+        code: 'INVALID_PAGINATION',
+      });
+    }
+    const limit = Math.min(pagination.value.limit, 50);
+    const offset = pagination.value.offset;
     const unreadOnly = req.query.unread === 'true';
     const contextType = req.query.context_type; // legacy 'personal' | 'business'
     const contextId = req.query.context_id;
@@ -127,7 +139,7 @@ router.get('/', verifyToken, async (req, res) => {
           .maybeSingle();
         if (anchorError) {
           logger.error('Error reading notification cursor', { error: anchorError.message, userId });
-          return res.status(500).json({ error: 'Failed to fetch notifications' });
+          throw anchorError;
         }
         if (!anchor) {
           return res.status(400).json({ error: 'Unknown notification; reload the list.', code: 'NOTIFICATION_CURSOR_UNKNOWN' });
@@ -180,14 +192,7 @@ router.get('/', verifyToken, async (req, res) => {
 
     const [{ data: notifications, error }, { count: unreadCount, error: countErr }] = await Promise.all([query, countQuery]);
 
-    if (error) {
-      logger.error('Error fetching notifications', { error: error.message, userId });
-      return res.status(500).json({ error: 'Failed to fetch notifications' });
-    }
-
-    if (countErr) {
-      logger.error('Error counting unread notifications', { error: countErr.message });
-    }
+    if (error || countErr) throw error || countErr;
 
     res.json({
       notifications: notifications || [],
@@ -196,7 +201,7 @@ router.get('/', verifyToken, async (req, res) => {
     });
   } catch (err) {
     logger.error('Notifications fetch error', { error: err.message });
-    res.status(500).json({ error: 'Failed to fetch notifications' });
+    res.status(503).json({ error: 'Could not load notifications right now. Please try again.', code: 'NOTIFICATIONS_UNAVAILABLE' });
   }
 });
 
@@ -233,8 +238,7 @@ router.get('/unread-count', verifyToken, async (req, res) => {
       .map((r) => r && r.error)
       .find(Boolean);
     if (firstError) {
-      logger.error('Error counting unread', { error: firstError.message });
-      return res.status(500).json({ error: 'Failed to count notifications' });
+      throw firstError;
     }
 
     const total = totalRes.count || 0;
@@ -247,7 +251,7 @@ router.get('/unread-count', verifyToken, async (req, res) => {
     res.json({ count: total, total, byContext });
   } catch (err) {
     logger.error('Unread count error', { error: err.message });
-    res.status(500).json({ error: 'Failed to count notifications' });
+    res.status(503).json({ error: 'Could not load notifications right now. Please try again.', code: 'NOTIFICATIONS_UNAVAILABLE' });
   }
 });
 

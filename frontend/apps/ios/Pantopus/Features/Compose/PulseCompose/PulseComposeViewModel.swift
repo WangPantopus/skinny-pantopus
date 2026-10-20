@@ -212,17 +212,26 @@ public struct PulseComposePhoto: Identifiable, Sendable, Hashable {
     /// place-picker anchor hint ONLY — never sent on any request.
     public let capturedLatitude: Double?
     public let capturedLongitude: Double?
+    public let mimeType: String?
+    public let filename: String?
+    public let liveVideo: Data?
 
     public init(
         id: UUID = UUID(),
         data: Data,
         capturedLatitude: Double? = nil,
-        capturedLongitude: Double? = nil
+        capturedLongitude: Double? = nil,
+        mimeType: String? = nil,
+        filename: String? = nil,
+        liveVideo: Data? = nil
     ) {
         self.id = id
         self.data = data
         self.capturedLatitude = capturedLatitude
         self.capturedLongitude = capturedLongitude
+        self.mimeType = mimeType
+        self.filename = filename
+        self.liveVideo = liveVideo
     }
 }
 
@@ -395,6 +404,7 @@ public final class PulseComposeViewModel {
         taskShare: PulseTaskShare? = nil,
         prefillTitle: String? = nil,
         prefillBody: String? = nil,
+        prefillDraft: PulseComposeDraft? = nil,
         api: APIClient = .shared,
         multipartUploader: MultipartUploader = .shared,
         locationProvider: any LocationProviding = DeviceLocationProvider.shared
@@ -438,15 +448,46 @@ public final class PulseComposeViewModel {
         // pre-filled — RN `FeedScreen.tsx:296` (`setComposeText`); a
         // Pantopus AI post draft brings its headline too.
         if taskShare == nil {
-            for (field, value) in [(PulseComposeField.title, prefillTitle), (PulseComposeField.body, prefillBody)] {
+            for (field, value) in [
+                (PulseComposeField.title, prefillTitle ?? prefillDraft?.title),
+                (PulseComposeField.body, prefillBody ?? prefillDraft?.body)
+            ] {
                 guard let value, !value.isEmpty else { continue }
                 var snapshot = fields[field] ?? FormFieldState(id: field.rawValue, originalValue: "")
                 snapshot.value = value
                 fields[field] = snapshot
             }
+            if let prefillDraft { seedDraft(prefillDraft) }
         }
         baselineIdentity = self.identity
         baselineVisibility = visibility
+    }
+
+    /// A Pantopus AI post card's other fields, as current values like its
+    /// text: the event's times and place, when a deal ends, lost or found,
+    /// and the Heads Up kind. A value the form can't take keeps its default.
+    private func seedDraft(_ draft: PulseComposeDraft) {
+        let pickerFormat = DateFormatter()
+        pickerFormat.calendar = Calendar(identifier: .iso8601)
+        pickerFormat.locale = Locale(identifier: "en_US_POSIX")
+        // The card's times are moments; the Event fields hold the picker's local
+        // wall clock (`PulseComposeContent.formatDate`), which every composer posts
+        // as wall-clock time (`PulseEventDetails`).
+        pickerFormat.dateFormat = "yyyy-MM-dd HH:mm"
+        let venue = draft.eventVenue?.trimmingCharacters(in: .whitespacesAndNewlines)
+        for (field, value) in [
+            (PulseComposeField.eventDate, PulseComposeDraft.date(from: draft.eventDate).map(pickerFormat.string(from:))),
+            (PulseComposeField.eventEndDate, PulseComposeDraft.date(from: draft.eventEndDate).map(pickerFormat.string(from:))),
+            (PulseComposeField.eventLocation, venue?.isEmpty == false ? venue : nil)
+        ] {
+            guard let value else { continue }
+            var snapshot = fields[field] ?? FormFieldState(id: field.rawValue, originalValue: "")
+            snapshot.value = value
+            fields[field] = snapshot
+        }
+        if let expires = PulseComposeDraft.lastMoment(from: draft.dealExpiresAt) { dealExpiresAt = expires }
+        if let kind = draft.lostFoundType.flatMap(PulseLostFoundKind.init(rawValue:)) { lostFoundKind = kind }
+        if let kind = draft.safetyAlertKind.flatMap(PulseSafetyAlertKind.init(rawValue:)) { safetyAlertKind = kind }
     }
 
     /// True when the draft screen was reached via target/purpose pickers.
@@ -779,19 +820,27 @@ public final class PulseComposeViewModel {
                 return false
             }
             if !photos.isEmpty {
-                let files = photos.enumerated().map { index, photo in
-                    photo.asMultipartFile(index: index)
+                var files: [MultipartFile] = []
+                let slots = photos.enumerated().map { index, photo in
+                    var slot = ["fileIndex": files.count]
+                    files.append(photo.asMultipartFile(index: index))
+                    if let clip = photo.liveVideo {
+                        slot["liveVideoIndex"] = files.count
+                        files.append(MultipartFile(fieldName: "files", filename: "live-\(index).mp4", mimeType: "video/mp4", data: clip))
+                    }
+                    return slot
                 }
+                let metadata = try String(bytes: JSONEncoder().encode(slots), encoding: .utf8)
                 do {
-                    _ = try await multipartUploader.uploadPostMedia(postId: postId, files: files)
+                    _ = try await multipartUploader.uploadPostMedia(postId: postId, files: files, media: metadata)
                 } catch {
                     toast = ToastMessage(
                         text: isEditing
-                            ? "Saved. Photos could not be confirmed. Try again."
-                            : "Post saved. Photos could not be confirmed. Try again.",
+                            ? "Saved. Attachments could not be confirmed. Try again."
+                            : "Post saved. Attachments could not be confirmed. Try again.",
                         kind: .error
                     )
-                    state = .error(toast?.text ?? "Photos could not be confirmed. Try again.")
+                    state = .error(toast?.text ?? "Attachments could not be confirmed. Try again.")
                     PulsePostsRefresh.notifyPostsDidChange()
                     Analytics.track(.formPulseComposeSubmit(intent: activeIntent.rawValue, result: .error))
                     return false
@@ -1343,8 +1392,13 @@ public final class PulseComposeViewModel {
 
 private extension PulseComposePhoto {
     func asMultipartFile(index: Int) -> MultipartFile {
-        let (filename, mimeType) = Self.mimeInfo(for: data, index: index)
-        return MultipartFile(fieldName: "files", filename: filename, mimeType: mimeType, data: data)
+        let inferred = Self.mimeInfo(for: data, index: index)
+        return MultipartFile(
+            fieldName: "files",
+            filename: filename ?? inferred.filename,
+            mimeType: mimeType ?? inferred.mimeType,
+            data: data
+        )
     }
 
     static func mimeInfo(for data: Data, index: Int) -> (filename: String, mimeType: String) {

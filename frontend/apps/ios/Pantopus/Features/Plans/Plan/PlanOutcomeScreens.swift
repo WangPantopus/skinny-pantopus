@@ -79,7 +79,7 @@ struct PlanNotThisTimeScreen: View {
     private var reason: String {
         let host = PlanCardLines.firstName(card.host.displayName)
         switch status {
-        case .expired: return "It started before \(host) could answer."
+        case .expired: return "Joining closed before you got a spot."
         case .removed: return "\(host) made a change to who's coming."
         default: return "\(host) couldn't fit you this time."
         }
