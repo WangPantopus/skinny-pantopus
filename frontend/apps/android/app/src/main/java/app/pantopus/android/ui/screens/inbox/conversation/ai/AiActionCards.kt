@@ -322,6 +322,9 @@ private fun actionCardIcon(card: String): PantopusIcon =
         card.startsWith("plan_") -> PantopusIcon.CalendarCheck
         card == "post_solve" -> PantopusIcon.CheckCircle
         card == "home_task" -> PantopusIcon.ListChecks
+        card == "home_task_update" -> PantopusIcon.CheckCheck
+        card == "home_system" -> PantopusIcon.Wrench
+        card.startsWith("home_") -> PantopusIcon.Home
         card == "notification_settings" -> PantopusIcon.Bell
         else -> PantopusIcon.Sparkles
     }
@@ -337,8 +340,10 @@ private fun actionCardLabel(card: String): String =
         "post_reply" -> "Reply"
         "post_solve" -> "Mark solved"
         "home_task" -> "Reminder"
+        "home_task_update" -> "Task update"
+        "home_system" -> "Home system"
         "notification_settings" -> "Notifications"
-        else -> "Pantopus"
+        else -> if (card.startsWith("home_")) "Home" else "Pantopus"
     }
 
 /** Buttons to screens of the app under an assistant reply (contract section 5). */

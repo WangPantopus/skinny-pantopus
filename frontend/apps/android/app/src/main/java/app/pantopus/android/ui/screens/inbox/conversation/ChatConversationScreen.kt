@@ -347,6 +347,7 @@ fun ChatConversationScreen(
             args.initialTopic,
             args.gigId,
             args.aiContext,
+            args.aiNudgeId,
         )
         viewModel.load()
     }
@@ -598,8 +599,19 @@ fun ChatConversationScreen(
                             PackageManager.PERMISSION_GRANTED
                     if (granted) launchCamera() else cameraPermission.launch(Manifest.permission.CAMERA)
                 },
-                onPhotos = { photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) },
-                onDocument = { attachmentPicker.launch(arrayOf("*/*")) },
+                // The assistant reads photos and PDFs (AI assistant phase 2 §7.1): its thread picks only those.
+                onPhotos = {
+                    val media =
+                        if (args.mode is ChatThreadMode.Ai) {
+                            ActivityResultContracts.PickVisualMedia.ImageOnly
+                        } else {
+                            ActivityResultContracts.PickVisualMedia.ImageAndVideo
+                        }
+                    photoPicker.launch(PickVisualMediaRequest(media))
+                },
+                onDocument = {
+                    attachmentPicker.launch(if (args.mode is ChatThreadMode.Ai) arrayOf("application/pdf", "image/*") else arrayOf("*/*"))
+                },
                 onLocation = { viewModel.sendCurrentLocation() },
                 onGig = { showGigPicker = true },
                 onListing = { showListingPicker = true },
@@ -3013,19 +3025,23 @@ private fun BubbleRow(
                                         onOpenUrl = onOpenUrl,
                                     )
                                 }
-                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    body.imageUrls.take(3).forEach { url ->
-                                        AsyncImage(
-                                            model = inlinePhotoRequest(url),
-                                            contentDescription = "AI prompt image",
-                                            contentScale = ContentScale.Crop,
-                                            modifier =
-                                                Modifier
-                                                    .size(72.dp)
-                                                    .clip(RoundedCornerShape(Radii.md)),
-                                        )
+                                if (body.imageUrls.isNotEmpty()) {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        body.imageUrls.take(3).forEach { url ->
+                                            AsyncImage(
+                                                model = inlinePhotoRequest(url),
+                                                contentDescription = "AI prompt image",
+                                                contentScale = ContentScale.Crop,
+                                                modifier =
+                                                    Modifier
+                                                        .size(72.dp)
+                                                        .clip(RoundedCornerShape(Radii.md)),
+                                            )
+                                        }
                                     }
                                 }
+                                // Documents sent to the assistant: a chip each, as a file in a chat shows.
+                                body.files.forEach { file -> SentFileChip(file = file, isOut = isOut, textColor = textColor) }
                             }
                         }
                     is ChatBubbleBody.Image -> {
@@ -5130,6 +5146,40 @@ internal fun AttachmentStripView(
         ) {
             attachments.forEach { attachment ->
                 AttachmentTile(attachment = attachment, onRemove = onRemove)
+            }
+        }
+    }
+}
+
+/** A document sent to the assistant, inside the person's bubble: the file's icon, name and size, as a chat file shows. */
+@Composable
+private fun SentFileChip(
+    file: ChatSentFile,
+    isOut: Boolean,
+    textColor: Color,
+) {
+    Row(
+        modifier = Modifier.semantics(mergeDescendants = true) {}.testTag("chatAISentFile"),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+    ) {
+        PantopusIconImage(
+            icon = PantopusIcon.FileText,
+            contentDescription = null,
+            size = 18.dp,
+            tint = if (isOut) PantopusColors.appTextInverse else PantopusColors.primary600,
+        )
+        Column {
+            Text(
+                text = file.name,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = textColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            file.sizeLabel?.let { size ->
+                Text(text = size, fontSize = 11.sp, color = textColor.copy(alpha = 0.75f))
             }
         }
     }

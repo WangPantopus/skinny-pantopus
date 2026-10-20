@@ -45,9 +45,15 @@ data class AIConversationMessageDto(
     val text: String? = null,
     /** How many photos a person's message carried (they aren't kept). */
     val photos: Int? = null,
+    /** How many documents (PDFs) a person's message carried; they aren't kept either (AI assistant phase 2). */
+    val documents: Int? = null,
     val draft: AIConversationDraftDto? = null,
     /** The reply's buttons to screens of the app (AI assistant phase 1 contract, section 5). */
     val links: List<AIConversationLinkDto>? = null,
+    /**
+     * The notification id of the brief or nudge this message carries (AI assistant phase 2): `?nudge=` scrolls to it.
+     */
+    @Json(name = "nudge_id") val nudgeId: String? = null,
 )
 
 @JsonClass(generateAdapter = true)

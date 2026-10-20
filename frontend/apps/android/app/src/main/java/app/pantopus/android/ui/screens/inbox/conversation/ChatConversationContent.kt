@@ -154,6 +154,8 @@ data class ChatConversationRouteArgs(
     val gigId: String? = null,
     /** The screen an assistant thread was opened from (Ask Pantopus), or null. */
     val aiContext: AIScreenContext? = null,
+    /** A brief's or nudge's notification id: the assistant thread opens at its message. */
+    val aiNudgeId: String? = null,
 )
 
 /**
@@ -227,6 +229,13 @@ data class ChatFanEntitlement(
 enum class ChatSystemLinkAccent { Primary, Success, Warning, Error }
 
 enum class ChatQueuedAttachmentKind { Image, Document }
+
+/** A document sent to the assistant (a PDF), as its chip shows it: the file's name and size. */
+@Immutable
+data class ChatSentFile(
+    val name: String,
+    val sizeLabel: String? = null,
+)
 
 @Immutable
 data class ChatQueuedAttachment(
@@ -397,6 +406,8 @@ sealed interface ChatBubbleBody {
     data class TextWithImages(
         val text: String,
         val imageUrls: List<String>,
+        /** Documents (PDFs) sent to the assistant with the message, shown as file chips. */
+        val files: List<ChatSentFile> = emptyList(),
     ) : ChatBubbleBody
 
     /**

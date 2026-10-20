@@ -982,7 +982,9 @@ class NotificationsViewModel
             if (dto.isRead != true) markRead(dto.id)
             if (!mayOpenTask(dto)) return
             val link =
-                HomeTaskNotificationRoute.metadataPath(dto.type, dto.metadata)
+                // A brief or nudge opens the assistant at its message.
+                DeepLinkRouter.assistantNotificationPath(dto.type, dto.id, dto.link)
+                    ?: HomeTaskNotificationRoute.metadataPath(dto.type, dto.metadata)
                     ?: DeepLinkRouter.notificationPath(dto.type, dto.link)
             if (!link.isNullOrEmpty()) {
                 val gigId = DeepLinkRouter.gigIdForLink(link)
