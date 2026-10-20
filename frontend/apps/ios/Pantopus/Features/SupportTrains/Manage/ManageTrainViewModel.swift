@@ -198,8 +198,10 @@ public final class ManageTrainViewModel {
     public private(set) var fund: SupportTrainFundDTO?
     /// True while any organizer mutation is in flight.
     public private(set) var isSubmitting = false
-    /// AI-drafted open-slots nudge, editable before sending.
+    /// Open-slots nudge being edited before sending: the AI draft, or a simple one when drafting failed.
     public var nudgeDraft: String?
+    /// Shown above that editor when the AI draft failed.
+    public var nudgeDraftNote: String?
     /// Inline failure copy for the last organizer action.
     public var actionError: String?
     /// Presented slot editor (add or edit), or nil.
