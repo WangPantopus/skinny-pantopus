@@ -41,16 +41,22 @@ PRs, screenshots and chat. Preserve unrelated local work.
 
 ## Verify in the real apps
 
-- Verify a change by using the apps it touches: the web app in a browser, the
-  iOS app in a simulator and the Android app in an emulator, against a real
-  local backend and database. Check that changes persist after a relaunch or
-  reload, and check the other person's view where there is one.
+- Verify a change end to end by using the apps it touches: the web app in a
+  browser, the iOS app in a simulator and the Android app in an emulator,
+  against a real local backend and database. Cover every feature and workflow
+  the change touches, its edge cases and its error handling (server errors,
+  offline, refused permissions, empty states, AI failures and their fallbacks).
+  Check that changes persist after a relaunch or reload, and check the other
+  person's view where there is one.
 - An API response, a mock or green CI alone doesn't show that a flow works.
   Name what you couldn't verify (hosted services, physical phones, live
   payments) instead of claiming it.
-- Don't write new unit tests or chase coverage. If an intended behavior change
-  breaks an existing test, update or remove that test in the same PR.
-- Run the relevant existing checks before pushing, and keep CI on master green.
+- Write no unit tests and don't chase coverage. The founder said on October 20:
+  "DO NOT WRITE ANY UNIT TESTS ANYMORE, IF WRITTEN THEN FINE BUT NO MORE."
+  Don't spend time running unit-test suites locally; CI runs the existing ones.
+  If a change breaks an existing test, make the smallest change to that test or
+  delete it in the same PR, and never add one.
+- Run lint and type checks before pushing, and keep CI on master green.
 
 ## Parallel sessions
 

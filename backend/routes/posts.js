@@ -2717,22 +2717,27 @@ router.delete('/:id', verifyToken, async (req, res) => {
     if (existing.user_id !== userId) return res.status(403).json({ error: 'You can only delete your own posts' });
 
     const keys = new Set();
-    const prefix = `posts/${id}/${existing.user_id}/`;
-    const publicPrefix = s3.getPublicUrl(prefix);
+    // This post's own uploads (POST /api/upload/post-media) sit in posts/<post>/, or in posts/<post>/<writer>/ when
+    // uploaded before their keys stopped naming the writer.
+    const folders = [`posts/${id}/${existing.user_id}/`, `posts/${id}/`];
+    const ownFolder = (key) => folders.find((folder) => key.startsWith(folder) && !key.slice(folder.length).includes('/'));
+    const storage = s3.getPublicUrl('');
     for (const urls of [existing.media_urls, existing.media_thumbnails, existing.media_live_urls]) {
       if (urls != null && !Array.isArray(urls)) {
         return res.status(503).json({ error: 'Post media could not be checked. Please retry.' });
       }
       for (const url of urls || []) {
         // External/shared references do not authorize deleting another object's bytes.
-        if (typeof url !== 'string' || !url.startsWith(publicPrefix)) continue;
-        const name = url.slice(publicPrefix.length);
-        if (!/^(?:\d+_[a-f0-9]{16}|media_[a-f0-9]{64})(?:_(?:thumb|card|detail|full))?\.[a-z0-9]+$/.test(name)) {
+        const folder = typeof url === 'string' && url.startsWith(storage) ? ownFolder(url.slice(storage.length)) : null;
+        if (!folder) continue;
+        const name = url.slice(storage.length + folder.length);
+        // A Live Photo's clip is media_<hash>_live.<ext>.
+        if (!/^(?:\d+_[a-f0-9]{16}|media_[a-f0-9]{64})(?:_(?:thumb|card|detail|full|live))?\.[a-z0-9]+$/.test(name)) {
           return res.status(503).json({ error: 'Post media storage could not be verified. Please retry.' });
         }
-        const key = prefix + name;
+        const key = folder + name;
         keys.add(key);
-        if (!/_(?:thumb|card|detail|full)\.[a-z0-9]+$/.test(name)) {
+        if (!/_(?:thumb|card|detail|full|live)\.[a-z0-9]+$/.test(name)) {
           for (const variant of require('../services/marketplace/imageResizeService').getImageVariantKeys(key)) {
             keys.add(variant);
           }
@@ -2747,8 +2752,9 @@ router.delete('/:id', verifyToken, async (req, res) => {
         return res.status(503).json({ error: 'Post attachments could not be checked. Please retry.' });
       }
       for (const file of files) {
-        const filePrefix = file.comment_id ? `comments/${file.comment_id}/${file.user_id}/` : prefix;
-        if (typeof file.file_path !== 'string' || !file.file_path.startsWith(filePrefix)
+        const filePrefix = file.comment_id ? `comments/${file.comment_id}/${file.user_id}/`
+          : typeof file.file_path === 'string' && ownFolder(file.file_path);
+        if (typeof file.file_path !== 'string' || !filePrefix || !file.file_path.startsWith(filePrefix)
           || file.file_path.slice(filePrefix.length).includes('/') || file.file_path.includes('..')) {
           return res.status(503).json({ error: 'Post attachment storage could not be verified. Please retry.' });
         }

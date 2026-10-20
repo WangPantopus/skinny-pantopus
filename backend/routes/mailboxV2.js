@@ -12,7 +12,7 @@ const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
 const Joi = require('joi');
 const logger = require('../utils/logger');
-const s3 = require('../services/s3Service');
+const mailObjects = require('../services/mailObjectStorage');
 const { chosenUsernameOrNull } = require('../utils/personalUsername');
 // A letter sent as a business names the business to everyone it reaches, never the person who sent it.
 const { presentMailSender } = require('../utils/mailSenderView');
@@ -448,15 +448,12 @@ router.get('/item/:id', verifyToken, async (req, res) => {
       try {
         const { data: objectRow } = await supabaseAdmin
           .from('MailObject')
-          .select('object_key, bucket_name')
+          .select('id, storage_provider, bucket_name, object_key, sha256')
           .eq('id', mail.object_id)
           .single();
 
         if (objectRow?.object_key) {
-          const objectText = await s3.getObjectAsString(
-            objectRow.object_key,
-            objectRow.bucket_name || undefined,
-          );
+          const objectText = await mailObjects.readText(objectRow);
           try {
             objectPayload = JSON.parse(objectText);
           } catch {
