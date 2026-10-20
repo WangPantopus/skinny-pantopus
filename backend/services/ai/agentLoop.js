@@ -64,8 +64,10 @@ function raceAbort(promise, signal) {
  * @param {(use: object) => Promise<object>} p.runTool   Runs one tool_use block, resolves to its tool_result block.
  * @param {(delta: string) => void} p.onText             Called with each piece of reply text as it streams.
  * @param {(name: string) => void} [p.onToolStart]       Called when Claude starts a tool call, before its input is complete.
- * @param {(uses: object[]) => (string|null)} [p.finishAfterTools]  After a round's tools ran: the closing line that ends
- *                                       the turn there (a draft is the answer, shown as a card), or null to carry on.
+ * @param {(uses: object[], round: {said: string}) => (string|true|null)} [p.finishAfterTools]  After a round's tools ran
+ *                                       (`said` is the text that round showed): the closing line that ends the turn there
+ *                                       (a draft is the answer, shown as a card), true to end it with nothing more (the
+ *                                       answer is already shown), or null to carry on.
  * @returns {Promise<{messages: Array, usage: object, toolCalls: number, outcome: string, stopReason: string|null, category?: string|null}>}
  *   outcome: 'complete' | 'refused' | 'truncated' | 'empty' | 'tool_limit'. Rejects when the signal aborts or the API fails.
  */
@@ -155,7 +157,9 @@ async function runAgentTurn({
     // A draft is the answer: the person already sees it as a card. End the turn with
     // its closing line rather than a second request that would only describe it
     // (on Claude Sonnet 5.5 a reply after a tool result arrives all at once, late).
-    const closing = finishAfterTools ? finishAfterTools(uses) : null;
+    const said = content.filter((block) => block.type === 'text').map((block) => block.text).join('').trim();
+    const closing = finishAfterTools ? finishAfterTools(uses, { said }) : null;
+    if (closing === true) return finish('complete');
     if (typeof closing === 'string' && closing.trim()) {
       if (spoke) onText('\n\n');
       onText(closing.trim());
@@ -273,10 +277,15 @@ function sanitizeHistory(stored) {
     kept.push(message);
   }
 
-  // A stored transcript ends on an answer, never mid-tool-call.
+  // A stored transcript ends on an answer, never mid-tool-call. A turn may also end on the
+  // results of calls made after its answer, in the same reply (link buttons): the next
+  // person's message follows them, and the API reads the two as one turn.
   while (kept.length) {
     const last = kept[kept.length - 1];
     if (last.role === 'assistant' && !toolUseIds(last).length) break;
+    const previous = kept[kept.length - 2];
+    if (last.role === 'user' && !isTurnStart(last) && previous?.role === 'assistant'
+      && blocksOf(previous).some((block) => block.type === 'text')) break;
     kept.pop();
   }
   return trimToBudget(kept);

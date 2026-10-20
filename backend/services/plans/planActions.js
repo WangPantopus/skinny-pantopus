@@ -304,8 +304,8 @@ async function assertHostLimits(userId) {
 
 // ── Create ───────────────────────────────────────────────────
 
-async function createPlan(user, input) {
-  const viewer = await loadViewer(user, { gps: input.gps });
+/** A new plan's input checked by the hosting rules: what createPlan would save, or a PlanError. */
+async function checkedPlanInput(viewer, input) {
   const kind = input.kind;
   if (!rules.KINDS.includes(kind)) fail(422, 'validation', 'Choose what kind of plan this is.');
   if (kind === 'playdate' && !viewer.playdatesFlag) fail(404, 'not_found', "Playdates aren't available yet.");
@@ -323,6 +323,52 @@ async function createPlan(user, input) {
     : (oneOf(input.join_requirement, ['located', 'verified'], 'who can ask') || 'located');
   const details = normalizeDetails(kind, input.details);
   await assertHostLimits(viewer.id);
+  return { kind, title, about, guestNote, spots, place, autoRules, joinRequirement, details };
+}
+
+/**
+ * The plan this host posted in the last ten minutes with the same kind, title and
+ * start, or null: a second tap on the same "Post plan" (the assistant's card, a
+ * retried request) gets the plan already posted instead of a copy.
+ */
+async function recentSamePlan(hostId, input) {
+  const start = new Date(input?.starts_at);
+  const title = typeof input?.title === 'string' ? input.title.replace(/\s+/g, ' ').trim() : '';
+  if (!rules.KINDS.includes(input?.kind) || !title || Number.isNaN(start.getTime())) return null;
+  const { data, error } = await supabaseAdmin.from('Plan')
+    .select('post_id, post:Post!inner(title, event_date)')
+    .eq('host_user_id', hostId)
+    .eq('kind', input.kind)
+    .eq('status', 'open')
+    .eq('post.title', title)
+    .eq('post.event_date', start.toISOString())
+    .gt('created_at', new Date(Date.now() - 10 * 60 * 1000).toISOString())
+    .limit(1);
+  if (error) return null;
+  return data && data[0] ? data[0].post_id : null;
+}
+
+/**
+ * What createPlan would save from `input`, checked by the same rules, without
+ * saving anything. The assistant's plan card is built from it, so the card never
+ * offers a plan the server would refuse.
+ */
+async function previewPlan(user, input) {
+  const viewer = await loadViewer(user, { gps: input.gps });
+  const checked = await checkedPlanInput(viewer, input);
+  return {
+    ...checked,
+    startsAt: new Date(input.starts_at).toISOString(),
+    endsAt: new Date(input.ends_at).toISOString(),
+    timezone: planPlace.timezoneFor(checked.place.latitude, checked.place.longitude),
+  };
+}
+
+async function createPlan(user, input) {
+  const viewer = await loadViewer(user, { gps: input.gps });
+  const repeat = await recentSamePlan(viewer.id, input);
+  if (repeat) return planBodyFor(repeat, viewer);
+  const { kind, title, about, guestNote, spots, place, autoRules, joinRequirement, details } = await checkedPlanInput(viewer, input);
 
   const area = planPlace.areaPointFor(kind, place.latitude, place.longitude);
   const fallbackCity = place.home?.city || viewer.homes.find((h) => h.city)?.city || null;
@@ -1008,6 +1054,7 @@ async function reportPlan(user, postId, { reason, details }) {
 module.exports = {
   PlanError,
   createPlan,
+  previewPlan,
   editPlan,
   cancelPlan,
   askToJoin,

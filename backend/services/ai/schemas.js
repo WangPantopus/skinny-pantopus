@@ -285,6 +285,19 @@ const postDraftJsonSchemaStrict = {
   required: Object.keys(postDraftJsonSchema.properties),
 };
 
+// Posts to the nearby feed: only the types and heads-up kinds that feed accepts from
+// residents (routes/posts.js), so a draft never offers a post the server refuses.
+const PLACE_POST_TYPES = ['ask_local', 'recommendation', 'event', 'lost_found', 'alert', 'deal', 'local_update', 'neighborhood_win', 'visitor_guide'];
+const RESIDENT_ALERT_KINDS = ['road_hazard', 'power_outage', 'weather_damage', 'missing_pet', 'hazard', 'other'];
+const postDraftPlaceJsonSchemaStrict = {
+  ...postDraftJsonSchemaStrict,
+  properties: {
+    ...postDraftJsonSchemaStrict.properties,
+    postType: { type: 'string', enum: PLACE_POST_TYPES },
+    safetyAlertKind: { type: ['string', 'null'], enum: [...RESIDENT_ALERT_KINDS, null] },
+  },
+};
+
 const mailSummaryJsonSchemaStrict = {
   ...mailSummaryJsonSchema,
   required: Object.keys(mailSummaryJsonSchema.properties),
@@ -370,6 +383,7 @@ const claudeSchemas = {
   gigDraft: toClaudeSchema(gigDraftJsonSchemaStrict),
   listingDraft: toClaudeSchema(listingDraftJsonSchemaStrict),
   postDraft: toClaudeSchema(postDraftJsonSchemaStrict),
+  postDraftPlace: toClaudeSchema(postDraftPlaceJsonSchemaStrict),
   mailSummary: toClaudeSchema(mailSummaryJsonSchemaStrict),
   placeBrief: toClaudeSchema(placeBriefJsonSchemaStrict),
   supportTrainDraft: toClaudeSchema(supportTrainDraftJsonSchemaStrict),
