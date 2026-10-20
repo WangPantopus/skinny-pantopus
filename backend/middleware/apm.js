@@ -35,7 +35,9 @@ function getRouteKey(req) {
   if (req.baseUrl && req.route?.path) {
     // baseUrl is already interpolated for the home scheduling and persona
     // subrouters. Hide that parent id even when validation rejects its value.
-    const baseUrl = req.baseUrl.replace(/^(\/api\/(?:homes|personas))\/[^/]+(?=\/|$)/i, '$1/:id');
+    // Mount paths match case-insensitively, but baseUrl keeps the caller's
+    // casing; lower it so /API/Users cannot add a key per spelling.
+    const baseUrl = req.baseUrl.toLowerCase().replace(/^(\/api\/(?:homes|personas))\/[^/]+(?=\/|$)/, '$1/:id');
     path = baseUrl + req.route.path;
   }
   return `${req.method} ${path}`;
