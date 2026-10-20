@@ -35,6 +35,7 @@ const {
   assertCanMutateTarget,
 } = require('../utils/homePermissions');
 const { HOME_DOCUMENT_VISIBILITIES, HOME_DOCUMENT_TYPES, homeDocumentVisibilities, serializeHomeDocument } = require('../utils/homeDocumentAccess');
+const { unpublishedBusinessIds, isUnpublishedBusiness } = require('../utils/visibilityPolicy');
 const homeClaimMergeService = require('../services/homeClaimMergeService');
 const homeClaimRoutingService = require('../services/homeClaimRoutingService');
 const propertySuggestionsService = require('../services/ai/propertySuggestionsService');
@@ -3709,8 +3710,12 @@ router.get('/:id/businesses', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch linked businesses' });
     }
 
+    // A business that closed or went back to draft after it was linked leaves the list, as its profile does.
+    const hidden = await unpublishedBusinessIds((data || []).map(l => l.business_user_id));
+    const links = (data || []).filter(l => !hidden.has(String(l.business_user_id)));
+
     // Enrich with business user info
-    const businessIds = (data || []).map(l => l.business_user_id);
+    const businessIds = links.map(l => l.business_user_id);
     let businesses = [];
     if (businessIds.length > 0) {
       const { data: bizUsers } = await supabaseAdmin
@@ -3728,13 +3733,13 @@ router.get('/:id/businesses', verifyToken, async (req, res) => {
       const profMap = {};
       for (const p of (profiles || [])) profMap[p.business_user_id] = p;
 
-      businesses = (data || []).map(link => ({
+      businesses = links.map(link => ({
         ...link,
         business: bizMap[link.business_user_id] || null,
         profile: profMap[link.business_user_id] || null,
       }));
     } else {
-      businesses = data || [];
+      businesses = links;
     }
 
     res.json({ links: businesses });
@@ -3787,6 +3792,10 @@ router.post('/:id/businesses', verifyToken, validate(linkBusinessSchema), async 
 
     if (!targetUser || targetUser.account_type !== 'business') {
       return res.status(400).json({ error: 'Target user is not a business account' });
+    }
+    // A draft isn't public (its profile answers 404, and search leaves it out), so it can't be linked.
+    if (await isUnpublishedBusiness(businessUserId)) {
+      return res.status(404).json({ error: 'Business not found' });
     }
 
     const { data, error } = await supabaseAdmin

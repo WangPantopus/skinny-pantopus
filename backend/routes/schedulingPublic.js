@@ -28,6 +28,7 @@ const bookingService = require('../services/scheduling/bookingService');
 const payments = require('../services/scheduling/schedulingPaymentsService');
 const { buildIcs } = require('../services/scheduling/icsService');
 const { hashToken, normalizeEmail, hashEmail } = require('../services/scheduling/schedulingShared');
+const { isUnpublishedBusiness } = require('../utils/visibilityPolicy');
 
 // ---------- page lookup helpers ----------
 
@@ -43,6 +44,14 @@ function isValidSlug(slug) {
   return typeof slug === 'string' && SLUG_RE.test(slug);
 }
 
+/**
+ * A business's page is public only while the business is: a draft isn't public, and closing a business
+ * (DELETE /api/businesses/:id) unpublishes it and leaves no one who can manage or turn off its page.
+ */
+async function isUnpublishedBusinessPage(page) {
+  return page.owner_type === 'business' && isUnpublishedBusiness(page.owner_id);
+}
+
 async function loadLivePage(slug) {
   if (!isValidSlug(slug)) return null;
   const { data } = await supabaseAdmin
@@ -50,7 +59,7 @@ async function loadLivePage(slug) {
     .select('*')
     .ilike('slug', slug) // lower(slug) unique index; input is charset-guarded above
     .maybeSingle();
-  if (!data || !data.is_live) return null;
+  if (!data || !data.is_live || await isUnpublishedBusinessPage(data)) return null;
   return data;
 }
 
@@ -134,7 +143,7 @@ router.get('/book/:slug', previewLimiter, asyncHandler(async (req, res) => {
     ? (await supabaseAdmin.from('BookingPage').select('*').ilike('slug', req.params.slug).maybeSingle()).data
     : null;
   // Distinguish unavailable (offline/not-found) from paused so the invitee sees the right state.
-  if (!page || !page.is_live) {
+  if (!page || !page.is_live || await isUnpublishedBusinessPage(page)) {
     return res.status(404).json({ error: 'NOT_FOUND', status: 'unavailable', message: 'This booking page is not available.' });
   }
   // Listed page shows public, active event types. Secret ones are reachable only by direct slug.

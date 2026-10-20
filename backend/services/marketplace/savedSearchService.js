@@ -8,6 +8,20 @@
 const supabaseAdmin = require('../../config/supabaseAdmin');
 const logger = require('../../utils/logger');
 const notificationService = require('../notificationService');
+const { applyMuteAndBlockFilters } = require('./marketplaceService');
+
+/**
+ * Whether browse would show the listing to userId: a block either way, a mute or a
+ * hide leaves it out. If those can't be read, no notice goes out.
+ */
+async function isShownTo(listing, userId) {
+  try {
+    return (await applyMuteAndBlockFilters([listing], userId)).length > 0;
+  } catch (err) {
+    logger.warn('savedSearch.match.filter_error', { error: err.message });
+    return false;
+  }
+}
 
 // ─── Public API ──────────────────────────────────────────────
 
@@ -31,6 +45,7 @@ async function matchNewListing(listing) {
 
     for (const search of searches) {
       if (!isMatch(listing, search)) continue;
+      if (!(await isShownTo(listing, search.user_id))) continue;
 
       matchedCount++;
 

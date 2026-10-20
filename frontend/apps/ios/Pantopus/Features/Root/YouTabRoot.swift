@@ -1772,6 +1772,9 @@ public struct YouTabRoot: View {
                 onOpenManage: { Task { @MainActor in path.append(.manageTrain(trainId: supportTrainId)) } },
                 onMessageHost: { host in
                     Task { @MainActor in path.append(Self.chatRoute(toHost: host)) }
+                },
+                onOpenChat: { destination in
+                    Task { @MainActor in path.append(.chatConversation(destination)) }
                 }
             )
         case .searchSupportTrains:

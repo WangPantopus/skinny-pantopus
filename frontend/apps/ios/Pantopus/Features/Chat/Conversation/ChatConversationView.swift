@@ -2545,8 +2545,8 @@ private struct ChatBubbleRow: View {
                 Spacer(minLength: 44)
                 bubbleStack
             } else {
-                if let incomingInitials, showsIncomingAvatarSlot {
-                    ChatMiniAvatar(initials: incomingInitials, hidden: content.isContinuation)
+                if let initials = senderInitials ?? incomingInitials, showsIncomingAvatarSlot {
+                    ChatMiniAvatar(initials: initials, hidden: content.isContinuation)
                 }
                 bubbleStack
                 Spacer(minLength: 44)
@@ -2608,8 +2608,22 @@ private struct ChatBubbleRow: View {
         }
     }
 
+    /// A room's incoming message carries its sender's initials, not the room's.
+    private var senderInitials: String? {
+        guard let name = content.senderName else { return nil }
+        let letters = name.split(separator: " ").prefix(2).compactMap { $0.first.map(String.init) }
+        return letters.isEmpty ? nil : letters.joined().uppercased()
+    }
+
     private var bubbleStack: some View {
         VStack(alignment: alignment, spacing: Spacing.s0) {
+            if content.side == .incoming, !content.isContinuation, let name = content.senderName {
+                Text(name)
+                    .pantopusTextStyle(.caption)
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                    .lineLimit(1)
+                    .padding(.bottom, 2)
+            }
             bubbleBody
                 // A15 `.reaction` — pills float over the bubble's bottom
                 // edge: leading corner for outgoing, trailing for

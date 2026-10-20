@@ -146,11 +146,13 @@ public struct UnifiedConversation: Decodable, Sendable, Hashable, Identifiable {
 public struct ChatRoomDetailResponse: Decodable, Sendable {
     public struct Room: Decodable, Sendable {
         public let type: String?
+        /// The room's name; a Support Train's room goes by the train's title.
+        public let name: String?
         public let isActive: Bool?
         public let participants: [Participant]?
 
         private enum CodingKeys: String, CodingKey {
-            case type, participants
+            case type, name, participants
             case isActive = "is_active"
         }
     }
@@ -280,9 +282,14 @@ public struct ChatMessageSender: Decodable, Sendable, Hashable, Identifiable {
     public let username: String?
     public let name: String?
     public let profilePictureURL: String?
+    /// The sender's public identity (`backend/serializers/identitySerializers.js`),
+    /// which the messages routes send now; older servers send `name` and
+    /// `username` instead.
+    public let displayName: String?
+    public let handle: String?
 
     private enum CodingKeys: String, CodingKey {
-        case id, username, name
+        case id, username, name, displayName, handle
         case profilePictureURL = "profile_picture_url"
     }
 }
