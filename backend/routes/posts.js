@@ -28,6 +28,7 @@ const { checkHomePermission, getActiveOccupancy, mapLegacyRole } = require('../u
 const { computeUtilityScore } = require('../utils/feedRanking');
 const s3 = require('../services/s3Service');
 const feedService = require('../services/feedService');
+const marketplaceService = require('../services/marketplace/marketplaceService');
 const { generateNeighborhoodFacts } = require('../services/ai/neighborhoodFactService');
 const { encodeGeohash6: _encodeGeohash6 } = require('../utils/geohash');
 const { resolveLocation } = require('../services/context/locationResolver');
@@ -2176,6 +2177,7 @@ router.post('/mute', verifyToken, async (req, res) => {
     });
 
     feedService.invalidateFilterCache(userId);
+    marketplaceService.invalidateFilterCache(userId);
     res.json({ message: `${entityType} muted successfully` });
   } catch (err) {
     logger.error('Mute error', { error: err.message });
@@ -2271,6 +2273,7 @@ router.delete('/mute', verifyToken, async (req, res) => {
     if (error) throw error;
 
     feedService.invalidateFilterCache(userId);
+    marketplaceService.invalidateFilterCache(userId);
     res.json({ message: 'Unmuted successfully' });
   } catch (err) {
     logger.error('Unmute error', { error: err.message });

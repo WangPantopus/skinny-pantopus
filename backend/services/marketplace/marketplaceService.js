@@ -199,9 +199,13 @@ async function getMuteAndBlockFilters(userId) {
   if (!userId) return null;
 
   const cached = _filterCache.get(userId);
-  if (cached) {
-    return cached;
+  if (cached?.data) {
+    return cached.data;
   }
+
+  // A block, unblock or mute can invalidate this read while its database response is pending.
+  const pendingEntry = { data: null };
+  _filterCache.set(userId, pendingEntry, FILTER_CACHE_TTL);
 
   // ListingHide table may not exist yet — query it safely (Supabase builder is thenable but has no .catch)
   const hidesPromise = Promise.resolve(
@@ -211,14 +215,27 @@ async function getMuteAndBlockFilters(userId) {
     return { data: [] };
   });
 
-  const [{ data: mutes }, { data: blocks }, hidesResult] = await Promise.all([
+  const [
+    { data: mutes, error: mutesError },
+    { data: blocks, error: blocksError },
+    { data: userBlocks, error: userBlocksError },
+    hidesResult,
+  ] = await Promise.all([
     supabaseAdmin.from('PostMute').select('muted_entity_id, muted_entity_type').eq('user_id', userId),
     supabaseAdmin.from('Relationship')
       .select('requester_id, addressee_id')
       .eq('status', 'blocked')
       .or(`requester_id.eq.${userId},addressee_id.eq.${userId}`),
+    // Profile blocks (UserBlock) hide listings in both directions, like the feed and messaging.
+    supabaseAdmin.from('UserBlock')
+      .select('blocker_user_id, blocked_user_id')
+      .or(`blocker_user_id.eq.${userId},blocked_user_id.eq.${userId}`),
     hidesPromise,
   ]);
+
+  // A failed mute or block read must not show listings unfiltered.
+  const filterError = mutesError || blocksError || userBlocksError;
+  if (filterError) throw new Error(`Failed to load marketplace filters: ${filterError.message}`);
   const hides = hidesResult.data;
 
   const blockedUserIds = new Set();
@@ -226,6 +243,11 @@ async function getMuteAndBlockFilters(userId) {
     for (const b of blocks) {
       if (b.requester_id === userId) blockedUserIds.add(b.addressee_id);
       else blockedUserIds.add(b.requester_id);
+    }
+  }
+  if (userBlocks) {
+    for (const b of userBlocks) {
+      blockedUserIds.add(b.blocker_user_id === userId ? b.blocked_user_id : b.blocker_user_id);
     }
   }
 
@@ -237,7 +259,10 @@ async function getMuteAndBlockFilters(userId) {
     hiddenListingIds: new Set((hides || []).map(h => h.listing_id)),
   };
 
-  _filterCache.set(userId, result, FILTER_CACHE_TTL);
+  if (_filterCache.get(userId) === pendingEntry) {
+    pendingEntry.data = result;
+    _filterCache.set(userId, pendingEntry, FILTER_CACHE_TTL);
+  }
   return result;
 }
 
@@ -249,6 +274,11 @@ function applyListingExclusions(listings, filters) {
     if (filters.blockedUserIds.has(l.user_id)) return false;
     return true;
   });
+}
+
+/** Leaves out the listings browse doesn't show this viewer (null: signed out, nothing left out). */
+async function applyMuteAndBlockFilters(listings, userId) {
+  return applyListingExclusions(listings, await getMuteAndBlockFilters(userId));
 }
 
 function invalidateFilterCache(userId) {
@@ -1004,10 +1034,12 @@ async function autocompleteListings({ query: searchQuery, lat, lng, limit = 5 })
 /**
  * Applies location privacy for the viewer to stored rows read from a widened
  * box (locationPrivacy.widenBounds) and keeps those whose search point is inside
- * `bounds`, in their order.
+ * `bounds`, in their order. As in browse, it leaves out what the viewer hid and
+ * the listings of people they muted or are blocked from (either way).
  */
 async function showListingsInBounds(rows, viewerUserId, bounds) {
-  const placed = await applyLocationPrivacyWithSearchPoints(rows, viewerUserId);
+  const shown = await applyMuteAndBlockFilters(rows, viewerUserId);
+  const placed = await applyLocationPrivacyWithSearchPoints(shown, viewerUserId);
   return placed.filter(({ point }) => isPointInBounds(point, bounds)).map(({ listing }) => listing);
 }
 
@@ -1017,17 +1049,20 @@ async function showListingsInBounds(rows, viewerUserId, bounds) {
  * within radiusMeters of (latitude, longitude). Each comes with the distance to
  * its shown point (null without one). sortByDistance orders by that distance
  * (none last), then newest; otherwise the rows keep their order. The rows are
- * returned as stored: normalize them, then apply location privacy.
+ * returned as stored: normalize them, then apply location privacy. As in browse,
+ * it leaves out what the viewer hid and the listings of people they muted or are
+ * blocked from (either way).
  *
  * @returns {Promise<Array<{ row: object, distanceMeters: ?number }>>}
  */
 async function pickListingsWithinRadius(rows, viewerUserId, { latitude, longitude, radiusMeters, sortByDistance = false }) {
-  const placed = await applyLocationPrivacyWithSearchPoints(rows, viewerUserId);
+  const shown = await applyMuteAndBlockFilters(rows, viewerUserId);
+  const placed = await applyLocationPrivacyWithSearchPoints(shown, viewerUserId);
   const picked = [];
   placed.forEach(({ listing, point }, i) => {
     if (point && haversineDistance(latitude, longitude, point.latitude, point.longitude) > radiusMeters) return;
     const distance = shownDistanceMeters(listing, latitude, longitude);
-    picked.push({ row: rows[i], distanceMeters: distance == null ? null : Math.round(distance) });
+    picked.push({ row: shown[i], distanceMeters: distance == null ? null : Math.round(distance) });
   });
   if (sortByDistance) {
     picked.sort((a, b) => ((a.distanceMeters ?? Infinity) - (b.distanceMeters ?? Infinity))
@@ -1108,4 +1143,5 @@ module.exports = {
   getSavedListingIds,
   getMuteAndBlockFilters,
   applyListingExclusions,
+  applyMuteAndBlockFilters,
 };

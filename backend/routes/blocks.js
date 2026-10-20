@@ -5,6 +5,7 @@ const verifyToken = require('../middleware/verifyToken');
 const logger = require('../utils/logger');
 const { invalidateBlockCache } = require('../services/blockService');
 const { invalidateFilterCache } = require('../services/feedService');
+const marketplaceService = require('../services/marketplace/marketplaceService');
 const { writeIdentityAuditLog } = require('../utils/identityAudit');
 const { chosenUsernameOrNull } = require('../utils/personalUsername');
 
@@ -52,6 +53,8 @@ router.post('/:userId/block', verifyToken, async (req, res) => {
     invalidateBlockCache(blockerId, blockedId);
     invalidateFilterCache(blockerId);
     invalidateFilterCache(blockedId);
+    marketplaceService.invalidateFilterCache(blockerId);
+    marketplaceService.invalidateFilterCache(blockedId);
 
     // P1.14: audience-profile §9 + unified-IA §5.1 — personal-side
     // block cascades to every persona the blocker owns. The cascade
@@ -121,6 +124,8 @@ router.delete('/:userId/block', verifyToken, async (req, res) => {
     invalidateBlockCache(blockerId, blockedId);
     invalidateFilterCache(blockerId);
     invalidateFilterCache(blockedId);
+    marketplaceService.invalidateFilterCache(blockerId);
+    marketplaceService.invalidateFilterCache(blockedId);
     await writeIdentityAuditLog({
       req,
       actorUserId: blockerId,
