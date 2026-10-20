@@ -17,7 +17,9 @@ const { escapeIlike } = require('../utils/escapeIlike');
 // Who lives in a Home, for compose, is the household mail rule's: an active occupancy in a trusted
 // verification state. A pending claim (anyone can file one on any Home) is not a household member.
 const { getAccessibleHomeIds, MAIL_TRUSTED_VERIFICATION_STATUSES } = require('../utils/homeMailAccess');
-const { unpublishedBusinessIds } = require('../utils/visibilityPolicy');
+const { unpublishedBusinessIds, isSearchable, isScopedBlocked, isConnected } = require('../utils/visibilityPolicy');
+const { localProfileVisibilityFor } = require('../utils/identityProfiles');
+const { hasBlocked } = require('../services/blockService');
 
 // ─── Helpers ───────────────────────────────────────────────
 
@@ -110,6 +112,25 @@ async function getConnectionUserIds(userId) {
     }
   }
   return ids;
+}
+
+/**
+ * Whether a stranger's search finds this account, by the rules /api/users/search applies
+ * (canDiscoverLocalProfileForUserSearch in routes/users.js): no personal or scoped block, the
+ * account's and Local Profile's search visibility, and a profile that isn't private (or, when
+ * it is for connections, a connection).
+ */
+async function isFindableBy(senderId, user, localProfile) {
+  if (await hasBlocked(user.id, senderId)) return false;
+  if (!(await isSearchable(senderId, user.id))) return false;
+  if (await isScopedBlocked(senderId, user.id, 'search_only')) return false;
+  const searchVisibility = localProfile?.search_visibility || 'everyone';
+  const profileVisibility = await localProfileVisibilityFor(localProfile || { user_id: user.id }, senderId, user);
+  if (searchVisibility === 'nobody' || profileVisibility === 'private') return false;
+  if (searchVisibility === 'mutuals' || ['connections', 'followers'].includes(profileVisibility)) {
+    return isConnected(senderId, user.id);
+  }
+  return true;
 }
 
 /**
@@ -262,18 +283,25 @@ router.get('/recipients', verifyToken, async (req, res) => {
 
       const { data: generalUsers } = await supabaseAdmin
         .from('User')
-        .select('id, name, username, verified, profile_picture_url')
+        .select('id, name, username, verified, profile_picture_url, profile_visibility')
         .or(`name.ilike.${searchPattern},username.ilike.${searchPattern}`)
         .not('id', 'in', `(${excludeIds.join(',')})`)
         .limit(remaining);
 
       if (generalUsers) {
-        const unpublishedBusinesses = await unpublishedBusinessIds(generalUsers.map((user) => user.id));
+        const generalUserIds = generalUsers.map((user) => user.id);
+        const unpublishedBusinesses = await unpublishedBusinessIds(generalUserIds);
+        const { data: localProfiles, error: localProfileError } = generalUserIds.length
+          ? await supabaseAdmin.from('LocalProfile').select('user_id, search_visibility, profile_visibility').in('user_id', generalUserIds)
+          : { data: [], error: null };
+        if (localProfileError) throw localProfileError;
+        const localProfileByUserId = new Map((localProfiles || []).map((profile) => [profile.user_id, profile]));
         // Someone who is neither a housemate nor a connection is matched by name
         // only: their Home, address and photo stay private.
         for (const user of generalUsers) {
           if (seenUserIds.has(user.id)) continue;
           if (unpublishedBusinesses.has(String(user.id))) continue;
+          if (!(await isFindableBy(senderId, user, localProfileByUserId.get(user.id)))) continue;
           seenUserIds.add(user.id);
           results.push(buildRecipientResult(user, null, null, null, 2));
         }
