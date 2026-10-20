@@ -234,6 +234,7 @@ export default function BusinessDashboardPage() {
             businessId={businessId}
             profile={profile}
             onUpdate={refresh}
+            canClose={access.isOwner}
           />
         )}
       </div>

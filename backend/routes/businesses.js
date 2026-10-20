@@ -1600,47 +1600,26 @@ router.delete('/:businessId', verifyToken, async (req, res) => {
   try {
     const { businessId } = req.params;
     const userId = req.user.id;
-
-    const access = await checkBusinessPermission(businessId, userId);
-    if (!access.isOwner) {
-      return res.status(403).json({ error: 'Only the owner can delete a business' });
+    if (Joi.string().uuid().validate(businessId).error) {
+      return res.status(400).json({ error: 'Invalid business ID' });
     }
 
-    // Soft-delete: unpublish + deactivate seats and team
-    await supabaseAdmin
-      .from('BusinessProfile')
-      .update({ is_published: false, updated_at: new Date().toISOString() })
-      .eq('business_user_id', businessId);
-
-    // Deactivate all seats
-    await supabaseAdmin
-      .from('BusinessSeat')
-      .update({ is_active: false, deactivated_at: new Date().toISOString(), deactivated_reason: 'Business deleted' })
-      .eq('business_user_id', businessId);
-
-    // Remove all seat bindings for this business
-    const { data: seats } = await supabaseAdmin
-      .from('BusinessSeat')
-      .select('id')
-      .eq('business_user_id', businessId);
-    if (seats && seats.length > 0) {
-      await supabaseAdmin
-        .from('SeatBinding')
-        .delete()
-        .in('seat_id', seats.map(s => s.id));
+    // Authorization and every retirement write share one transaction. A
+    // failed write must not report success or strand a partially closed crew.
+    const { error } = await supabaseAdmin.rpc('retire_business_account', {
+      p_business_id: businessId,
+      p_actor_id: userId,
+    });
+    if (error) {
+      if (error.code === '42501') {
+        return res.status(403).json({ error: 'Only the owner can delete a business' });
+      }
+      logger.warn('Business deletion unavailable', { businessId, code: error.code });
+      return res.status(503).json({
+        error: 'Business closure is temporarily unavailable. Please try again.',
+        code: 'BUSINESS_DELETE_UNAVAILABLE',
+      });
     }
-
-    // Dual-write: also deactivate legacy BusinessTeam
-    await supabaseAdmin
-      .from('BusinessTeam')
-      .update({ is_active: false, left_at: new Date().toISOString() })
-      .eq('business_user_id', businessId);
-
-    // Mark the User row as deleted (soft)
-    await supabaseAdmin
-      .from('User')
-      .update({ account_type: 'individual', updated_at: new Date().toISOString() })
-      .eq('id', businessId);
 
     await writeAuditLog(businessId, userId, 'delete_business', 'User', businessId, {});
 
