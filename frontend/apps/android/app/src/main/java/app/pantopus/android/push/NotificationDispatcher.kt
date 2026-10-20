@@ -149,6 +149,8 @@ class NotificationDispatcher
             val body = notificationBody ?: data["body"]
             var deepLink =
                 HomeTaskNotificationRoute.pushPath(data)
+                    // A brief or nudge opens the assistant at its message, in the conversation it was added to.
+                    ?: DeepLinkRouter.assistantNotificationPath(data["type"], data["notificationId"], data["link"], data["conversation_id"])
                     ?: DeepLinkRouter.notificationPath(data["type"], data["link"])
                     ?: data["deepLink"]
                     ?: briefingOrReceiptLink(data)
@@ -419,6 +421,10 @@ class NotificationDispatcher
                         action = Intent.ACTION_VIEW
                         data = normalizeForIntent(deepLink)
                     }
+                    // A brief or nudge opens only for the account it was sent to (signed out, it waits for that one).
+                    if (DeepLinkRouter.assistantNotificationPath(routing.pushType, null, null) != null) {
+                        routing.recipientUserId?.let { putExtra(ASSISTANT_RECIPIENT, it) }
+                    }
                 }
             val update = if (reminderSession == null) PendingIntent.FLAG_UPDATE_CURRENT else PendingIntent.FLAG_ONE_SHOT
             val flags = update or PendingIntent.FLAG_IMMUTABLE
@@ -452,3 +458,6 @@ class NotificationDispatcher
 
 /** Request codes per notification: room for every Plans button on one notification. */
 private const val PLAN_ACTION_SLOTS = 4
+
+/** The account a brief's or nudge's push was sent to (its `recipient_user_id`): MainActivity opens it only for them. */
+const val ASSISTANT_RECIPIENT = "pantopus.assistant.recipient"
