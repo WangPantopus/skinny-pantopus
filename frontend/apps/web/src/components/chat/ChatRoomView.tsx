@@ -370,7 +370,7 @@ export default function ChatRoomView({
       })()}
       {historicalRoomId && (
         <div className="text-center mt-2">
-          <button onClick={() => router.push(`/app/chat/${historicalRoomId}`)} className="text-xs text-violet-600 hover:text-violet-800">
+          <button onClick={() => router.push(`/app/chat/${historicalRoomId}${asBusinessUserId ? `?asBusinessUserId=${encodeURIComponent(asBusinessUserId)}` : ''}`)} className="text-xs text-violet-600 hover:text-violet-800">
             Open original conversation
           </button>
         </div>
