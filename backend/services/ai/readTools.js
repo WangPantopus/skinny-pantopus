@@ -155,7 +155,7 @@ const readToolDefinitions = [
   },
   {
     name: 'get_notification_settings',
-    description: "The person's notification settings: quiet hours, the morning and evening briefings and their times, weather and air alerts, home reminders.",
+    description: "The person's notification settings: quiet hours, the morning and evening briefings and their times, weather and air alerts, home reminders, and Suggestions from Pantopus (suggestions_enabled: null means never chosen, which is off; suggestions_muted: kinds muted with \"Fewer like this\", until when).",
     input_schema: { type: 'object', properties: {}, required: [], additionalProperties: false },
   },
 ];
@@ -687,7 +687,7 @@ async function getToday(args, ctx) {
 
 async function getNotificationSettings(_args, ctx) {
   const { data, error } = await supabaseAdmin.from('UserNotificationPreferences')
-    .select('daily_briefing_enabled, daily_briefing_time_local, daily_briefing_timezone, evening_briefing_enabled, evening_briefing_time_local, weather_alerts_enabled, aqi_alerts_enabled, home_reminders_enabled, quiet_hours_start_local, quiet_hours_end_local')
+    .select('daily_briefing_enabled, daily_briefing_time_local, daily_briefing_timezone, evening_briefing_enabled, evening_briefing_time_local, weather_alerts_enabled, aqi_alerts_enabled, home_reminders_enabled, quiet_hours_start_local, quiet_hours_end_local, suggestions_enabled, suggestions_muted')
     .eq('user_id', ctx.userId)
     .maybeSingle();
   if (error) throw new Error(`Preferences read failed: ${error.message}`);

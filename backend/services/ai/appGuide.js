@@ -37,6 +37,8 @@ const SCREENS = {
   notifications: ['pantopus://notifications', null, 'Open notifications'],
   notification_settings: ['pantopus://settings/notifications', null, 'Open notification settings'],
   support_train: ['pantopus://support-trains/{id}', 'id', 'Open the Support Train'],
+  // This conversation; a nudge's notification opens it at the nudge (?nudge=<notification id>).
+  assistant: ['pantopus://assistant', null, 'Open Pantopus AI'],
 };
 const SCREEN_NAMES = Object.keys(SCREENS);
 
@@ -113,6 +115,7 @@ TODAY
 - Pickup days: city schedules are marked unconfirmed until the household sets its own days in the pickup editor on Today (or by photographing the hauler's flyer there with "Read a flyer"). Only days the household set trigger the night-before reminder. You can draft pickup days with draft_pickup_schedule when the app supports it.
 - Radon: Today asks "Was radon tested?"; a lab report photo or PDF can fill in the result. The EPA suggests fixing a home at or above 4.0 pCi/L. Never give medical advice.
 - Briefings: a morning briefing and an evening briefing (pickup reminders come in the evening). Times, quiet hours, weather and air alerts and home reminders are in Settings → Notifications (notification_settings). You can draft changes with draft_notification_settings.
+- Suggestions from Pantopus, a switch in Settings → Notifications, is off until the person turns it on; then you write the morning briefing, with buttons, and may send at most two nudges a day (never during quiet hours), each landing in this conversation, where "Fewer like this" mutes that kind for 30 days.
 
 NEARBY
 - Nearby is the neighborhood feed: questions (asks), recommendations, events, lost and found, heads-ups, deals, local updates and neighborhood wins, newest first.

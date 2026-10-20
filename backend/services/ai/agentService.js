@@ -269,6 +269,25 @@ async function updateConversation(conversationId, { messages, messageCount, titl
   }
 }
 
+/**
+ * A turn saves the whole transcript it read when it started. A nudge Pantopus sent
+ * meanwhile (nudges/engine.js) was saved to the conversation after that read, so it
+ * is kept, after the turn's own messages.
+ */
+async function withNudgesSentMeanwhile(conversation, saved) {
+  try {
+    const { data, error } = await supabaseAdmin.from('AIConversation').select('messages').eq('id', conversation.id).maybeSingle();
+    if (error || !data) return saved;
+    // Required here: the engine loads the notification and push services, which a chat turn otherwise doesn't need.
+    const { nudgesSentDuring } = require('./nudges/engine');
+    const added = nudgesSentDuring(conversation.messages, data.messages);
+    return added.length ? compactForStorage([...saved, ...added]) : saved;
+  } catch (err) {
+    logger.warn('Nudges sent during the turn could not be checked', { conversationId: conversation.id, error: err.message });
+    return saved;
+  }
+}
+
 // ─── 1. Streaming Chat Agent ────────────────────────────────────────────────
 
 /**
@@ -579,9 +598,10 @@ async function streamChat({
     ? message.slice(0, 60) + (message.length > 60 ? '…' : '')
     : undefined;
 
+  // A turn that ran out of tool rounds has no answer to remember.
+  const saved = turn.outcome === 'complete' ? compactForStorage(turn.messages) : undefined;
   await updateConversation(conversation.id, {
-    // A turn that ran out of tool rounds has no answer to remember.
-    messages: turn.outcome === 'complete' ? compactForStorage(turn.messages) : undefined,
+    messages: saved && await withNudgesSentMeanwhile(conversation, saved),
     messageCount: newMessageCount,
     title,
   });
@@ -1354,6 +1374,8 @@ const DRAFT_TYPES = {
 const APP_LINES = [
   /\n*\[(?:Sent|Asked from|User location context): [^\]\n]*\]/g,
   /\n*\[\d+ of the \d+ photos couldn't be opened[^\]\n]*\]/g,
+  // The line before a nudge Pantopus sent (nudges/engine.js); it is nobody's message.
+  /\n*\[Suggestion from Pantopus, sent as a notification: [^\]\n]*\]/g,
 ];
 // The note that stands in for a stored photo (agentLoop.compactForStorage).
 const PHOTO_NOTE = /^\[(?:Photo attached|(\d+) photos attached)\./;
@@ -1416,9 +1438,15 @@ function displayMessages(stored) {
         else texts.push(block.text);
       }
       const said = personText(texts.join('\n'));
+      // Only app lines (a nudge's): nothing the person said.
+      if (!said && !photos) continue;
       items.push({ role: 'user', text: photos && said === PHOTO_ONLY_QUESTION ? '' : said, photos });
       continue;
     }
+    // A nudge or brief Pantopus sent: its first item carries the notification id, which the
+    // notification's link (pantopus://assistant?nudge=<id>) scrolls to.
+    const nudge = blocks.map((block) => block.type === 'tool_use' && results.get(block.id)?.nudge).find((value) => value?.id);
+    const firstItem = items.length;
     let text = '';
     for (const block of blocks) {
       if (block.type === 'text') text += (text ? '\n\n' : '') + block.text.replace(/\*\*/g, '');
@@ -1448,6 +1476,7 @@ function displayMessages(stored) {
       items.push({ role: 'assistant', draft: { type: DRAFT_TYPES[block.name], draft } });
     }
     if (text.trim()) items.push({ role: 'assistant', text: text.trim() });
+    if (nudge && items[firstItem]) items[firstItem].nudge = { id: nudge.id, kind: nudge.kind };
   }
   flushLinks();
   return items;
@@ -1554,4 +1583,6 @@ module.exports = {
   listConversations,
   getConversationMessages,
   deleteConversation,
+  // For background model calls (background.js), which log to the same table.
+  logRequest,
 };

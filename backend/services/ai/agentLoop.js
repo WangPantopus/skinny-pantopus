@@ -21,6 +21,9 @@ const MAX_STORED_MESSAGES = 60;
 const TRIMMED_STORED_MESSAGES = 40;
 // Tool results are only context for follow-ups; the full text is not worth keeping.
 const MAX_STORED_TOOL_RESULT_CHARS = 4000;
+// Except an action card's: it is what history shows again (agentService.displayMessages),
+// so it is kept whole up to this, which covers the biggest card (ten people asking to join).
+const MAX_STORED_CARD_CHARS = 32000;
 // What one turn is sent of the stored transcript, whatever it holds: older turns
 // are left out until it fits, so a bloated row can't slow every reply. (The turn
 // is saved from what it was sent, so they are dropped then.)
@@ -291,7 +294,17 @@ function sanitizeHistory(stored) {
   return trimToBudget(kept);
 }
 
-const clip = (text) => (typeof text === 'string' && text.length > MAX_STORED_TOOL_RESULT_CHARS
+/** An action card's tool result (`draftType: "action"`), which is kept whole up to its own cap. */
+function isCardResult(text) {
+  if (text.length > MAX_STORED_CARD_CHARS || !text.startsWith('{')) return false;
+  try {
+    return JSON.parse(text).draftType === 'action';
+  } catch {
+    return false;
+  }
+}
+
+const clip = (text) => (typeof text === 'string' && text.length > MAX_STORED_TOOL_RESULT_CHARS && !isCardResult(text)
   ? `${text.slice(0, MAX_STORED_TOOL_RESULT_CHARS)}…[truncated]`
   : text);
 

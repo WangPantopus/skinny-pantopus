@@ -90,6 +90,8 @@ function check(question, got) {
   if (e.card && !types.includes(e.card)) fails.push(`no ${e.card} card (got ${types.join(',') || 'none'})`);
   if (e.cardKind && !got.cards.some((c) => (c.actions || []).some((a) => a.request?.body?.kind === e.cardKind))) fails.push(`no ${e.cardKind} plan card`);
   if (e.then && !got.cards.some((c) => (c.actions || []).some((a) => a.then))) fails.push('card has no follow-up request');
+  if (e.cardBodyHas && !got.cards.some((c) => (c.actions || []).some((a) => Object.entries(e.cardBodyHas)
+    .every(([key, value]) => a.request?.body?.[key] === value)))) fails.push(`no card request with ${JSON.stringify(e.cardBodyHas)}`);
   if (e.noCard && got.cards.length) fails.push(`unexpected card ${types.join(',')}`);
   if (e.noCardType && types.includes(e.noCardType)) fails.push(`unexpected ${e.noCardType} card`);
   if (e.linkContains && !got.links.some((url) => url.includes(e.linkContains))) fails.push(`no link containing ${e.linkContains}`);
