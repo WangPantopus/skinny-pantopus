@@ -144,7 +144,6 @@ import coil.request.ImageRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
 import java.util.UUID
 import kotlin.math.roundToInt
 
@@ -310,7 +309,7 @@ fun ChatConversationScreen(
             }
         }
     val launchCamera = {
-        val photoFile = File(context.cacheDir, "chat-camera-${UUID.randomUUID()}.jpg")
+        val photoFile = ChatMediaUrl.cameraFile(context.cacheDir)
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", photoFile)
         pendingCameraUri = uri.toString()
         // No camera app (or a broken resolver) must not crash the thread —
@@ -479,7 +478,7 @@ fun ChatConversationScreen(
                             },
                             onOpenPhotos = { urls, index -> viewerPhotos = urls to index },
                             onOpenAttachment = { attachment ->
-                                viewModel.openAttachment(attachment, File(context.cacheDir, "chat-files").apply { mkdirs() })
+                                viewModel.openAttachment(attachment, ChatMediaUrl.openedFilesFolder(context.cacheDir).apply { mkdirs() })
                             },
                         )
                     is ChatConversationUiState.Error -> ErrorFrame(message = s.message, onRetry = viewModel::refresh)

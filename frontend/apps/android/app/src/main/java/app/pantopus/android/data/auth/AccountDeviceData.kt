@@ -10,6 +10,7 @@ import app.pantopus.android.data.support_trains.SupportTrainReservationsStore
 import app.pantopus.android.data.widget.TodayWidgetStore
 import app.pantopus.android.data.widget.WidgetSnapshotStore
 import app.pantopus.android.ui.screens.audience_profile.broadcast_detail.BroadcastDetailSeedCache
+import app.pantopus.android.ui.screens.inbox.conversation.ChatMediaUrl
 import app.pantopus.android.ui.screens.place.detail.homeTodayPreferences
 import coil.annotation.ExperimentalCoilApi
 import coil.imageLoader
@@ -63,6 +64,9 @@ class AccountDeviceData
                     .onFailure { Timber.w(it, "Sign-out could not clear the chat preferences") }
                 runCatching { context.homeTodayPreferences.edit { it.clear() } }
                     .onFailure { Timber.w(it, "Sign-out could not clear the Today preferences") }
+                // And the files opened from its chats, with the photos taken for them.
+                runCatching { ChatMediaUrl.removeLocalFiles(context.cacheDir) }
+                    .onFailure { Timber.w(it, "Sign-out could not remove the chat files") }
             }
         }
     }
