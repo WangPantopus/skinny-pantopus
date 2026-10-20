@@ -364,7 +364,10 @@ router.post('/:id/reply', verifyToken, validate(replySchema), async (req, res) =
         .eq('user_id', row.sender_user_id)
         .eq('type', 'neighbor_message_reply')
         .contains('metadata', { neighbor_message_id: row.id });
-      if (notificationError) throw notificationError;
+      // The changed reply is already saved; a stale notification body must not report it as failed.
+      if (notificationError) {
+        logger.warn('neighborMessages.reply_notification_update_error', { error: notificationError.message, userId });
+      }
     }
 
     return res.json(serializeReceived(updated, access));
