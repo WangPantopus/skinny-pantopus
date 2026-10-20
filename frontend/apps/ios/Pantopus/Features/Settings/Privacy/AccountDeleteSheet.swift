@@ -85,8 +85,7 @@ public struct AccountDeleteSheet: View {
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .multilineTextAlignment(.center)
                     .padding(.top, Spacing.s3)
-                Text("Business profiles are managed separately. "
-                    + "Close businesses you own or hand off ownership before deleting your account.")
+                Text(Self.businessNote)
                     .pantopusTextStyle(.small)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .multilineTextAlignment(.center)
@@ -200,6 +199,12 @@ public struct AccountDeleteSheet: View {
     /// (the deletion route and each owning table null the attribution).
     static let retainedNote =
         "Things other people rely on, like bills, tasks and documents in a shared home, stay with them without your name."
+
+    /// The server refuses the deletion while the person owns a business; this
+    /// says where the owner closes one.
+    static let businessNote = "Business profiles are managed separately. Before deleting your account, "
+        + "close each business you own or hand off its ownership. To close one, open it from "
+        + "My businesses, tap Settings, then Close business."
 
     /// What happens to the Support Trains the person organizes (migration 20260930134000):
     /// each one with a co-organizer passes to them; the others are removed.

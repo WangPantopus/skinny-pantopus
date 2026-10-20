@@ -38,6 +38,13 @@ private struct SaveFailure: Error {
     let message: String
 }
 
+/// A close the server refused or couldn't run. The sheet stays open with it.
+public struct CloseBusinessFailure: Equatable, Sendable {
+    public let message: String
+    /// A 503 or a lost connection: the same request can work on a retry.
+    public let canRetry: Bool
+}
+
 /// Why a save can't be attempted. `.address` also paints the field inline.
 private enum SaveBlock {
     case toast(String)
@@ -59,6 +66,14 @@ public final class EditBusinessPageViewModel {
     public var showsDiscardConfirm = false
     /// The banner or logo upload in flight, if any.
     public private(set) var uploadingMedia: BusinessMediaKind?
+    /// Only an owner can close the business; `DELETE /:businessId` refuses
+    /// everyone else.
+    public private(set) var canClose = false
+    public private(set) var showsCloseConfirm = false
+    public private(set) var isClosing = false
+    public private(set) var closeFailure: CloseBusinessFailure?
+    /// Set once the server closed the business; the host leaves the editor.
+    public private(set) var didClose = false
 
     private let businessId: String
     private let api: APIClient
@@ -119,6 +134,7 @@ public final class EditBusinessPageViewModel {
                 hasLoadedOnce = false
                 return
             }
+            canClose = detail.access?.isOwner == true
             let location = detail.profile?.primaryLocation
                 ?? detail.locations.first { $0.isPrimary == true }
                 ?? detail.locations.first
@@ -348,6 +364,88 @@ public final class EditBusinessPageViewModel {
         state = .loaded(EditBusinessPageMapper.withRecomputedMode(reverted))
         showsDiscardConfirm = false
         toastMessage = "Edits discarded"
+    }
+
+    // MARK: - Close business
+
+    public func closeRequested() {
+        guard canClose, case .loaded = state else { return }
+        closeFailure = nil
+        showsCloseConfirm = true
+    }
+
+    public func closeCancelled() {
+        guard !isClosing else { return }
+        showsCloseConfirm = false
+        closeFailure = nil
+    }
+
+    /// `DELETE /api/businesses/:businessId`. A failure keeps the sheet and
+    /// the typed word, with the server's sentence.
+    public func closeBusiness() async {
+        guard canClose, !isClosing, case .loaded = state else { return }
+        if isSaving || uploadingMedia != nil {
+            closeFailure = CloseBusinessFailure(
+                message: "Wait for the current save or upload to finish, then try again.",
+                canRetry: false
+            )
+            return
+        }
+        isClosing = true
+        closeFailure = nil
+        defer { isClosing = false }
+        do {
+            _ = try await api.request(BusinessesEndpoints.closeBusiness(businessId: businessId))
+        } catch {
+            if await wasAlreadyClosed(after: error) {
+                finishClosing()
+            } else {
+                closeFailure = Self.closeFailure(for: error)
+            }
+            return
+        }
+        finishClosing()
+    }
+
+    /// The client retries a DELETE, so when an earlier attempt closed the
+    /// business and its reply was lost, the retry is refused. A business the
+    /// server no longer finds is closed.
+    private func wasAlreadyClosed(after error: any Error) async -> Bool {
+        guard case .forbidden = error as? APIError else { return false }
+        do {
+            try await api.request(BusinessesEndpoints.business(businessId: businessId))
+            return false
+        } catch {
+            return isNotFound(error)
+        }
+    }
+
+    private func finishClosing() {
+        // My businesses and the You screen's business card are kept on the
+        // phone; neither may keep showing the closed business.
+        let store = ScreenStore.store(for: api)
+        store.remove(BusinessesEndpoints.myBusinesses())
+        store.markStale(topics: [ScreenTopic.profileMe])
+        showsCloseConfirm = false
+        didClose = true
+    }
+
+    private static func closeFailure(for error: any Error) -> CloseBusinessFailure {
+        let fallback = "Couldn't close the business. Please try again."
+        guard let apiError = error as? APIError else {
+            return CloseBusinessFailure(message: fallback, canRetry: true)
+        }
+        switch apiError {
+        case let .server(_, body):
+            // The 503 says what happened; shown under the same readable-sentence
+            // rule as a 403 body, so an HTML error page never reaches the sheet.
+            let message = APIError.readableForbiddenMessage(Data(body.utf8)) ?? fallback
+            return CloseBusinessFailure(message: message, canRetry: true)
+        case .transport, .retriesExhausted:
+            return CloseBusinessFailure(message: apiError.errorDescription ?? fallback, canRetry: true)
+        default:
+            return CloseBusinessFailure(message: apiError.errorDescription ?? fallback, canRetry: false)
+        }
     }
 
     // MARK: - Persist

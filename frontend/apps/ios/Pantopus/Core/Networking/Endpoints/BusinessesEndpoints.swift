@@ -142,6 +142,15 @@ public enum BusinessesEndpoints {
         Endpoint(method: .post, path: "/api/businesses/\(businessId)/publish")
     }
 
+    /// `DELETE /api/businesses/:businessId` — the owner closes the business:
+    /// the profile is unpublished and every team member's access ends, in
+    /// one transaction. 403 for anyone but an active owner, 503
+    /// `BUSINESS_DELETE_UNAVAILABLE` when nothing could be changed.
+    /// Route `backend/routes/businesses.js:1600`.
+    public static func closeBusiness(businessId: String) -> Endpoint {
+        Endpoint(method: .delete, path: "/api/businesses/\(businessId)")
+    }
+
     /// `GET /api/businesses/:businessId/locations/:locationId/hours` —
     /// weekly hours for a location. Route `backend/routes/businesses.js:2084`.
     public static func locationHours(businessId: String, locationId: String) -> Endpoint {

@@ -1015,6 +1015,27 @@ public struct YouTabRoot: View {
         if !path.isEmpty { path.removeLast() }
     }
 
+    /// A closed business has no screens left: back to My businesses, which
+    /// refreshes as it appears, or onto it when the editor was opened another way.
+    @MainActor
+    private func showMyBusinesses(afterClosing businessId: String) {
+        if path.contains(.myBusinesses) {
+            while let last = path.last, last != .myBusinesses {
+                path.removeLast()
+            }
+            return
+        }
+        path.removeAll { route in
+            switch route {
+            case let .editBusinessPage(id), let .businessOwner(id), let .businessProfile(id):
+                id == businessId
+            default:
+                false
+            }
+        }
+        path.append(.myBusinesses)
+    }
+
     @MainActor
     private func handleWaitingRoomNav(_ nav: WaitingRoomNav, homeId _: String) {
         switch nav {
@@ -2761,7 +2782,8 @@ public struct YouTabRoot: View {
                     Task { @MainActor in
                         if !path.isEmpty { path.removeLast() }
                     }
-                }
+                },
+                onClosed: { Task { @MainActor in showMyBusinesses(afterClosing: businessId) } }
             )
         case let .businessPages(businessId):
             BusinessPagesView(

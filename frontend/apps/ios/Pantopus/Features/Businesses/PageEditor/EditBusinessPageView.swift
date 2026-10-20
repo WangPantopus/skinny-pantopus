@@ -26,12 +26,15 @@ public struct EditBusinessPageView: View {
     @State private var viewModel: EditBusinessPageViewModel
     private let onBack: @MainActor () -> Void
     private let onPreview: @MainActor () -> Void
+    private let onClosed: @MainActor () -> Void
 
+    /// - Parameter onClosed: after the owner closed the business; defaults to `onBack`.
     public init(
         businessId: String,
         preview: EditBusinessPageContent? = nil,
         onBack: @escaping @MainActor () -> Void,
-        onPreview: @escaping @MainActor () -> Void = {}
+        onPreview: @escaping @MainActor () -> Void = {},
+        onClosed: (@MainActor () -> Void)? = nil
     ) {
         _viewModel = State(initialValue: EditBusinessPageViewModel(
             businessId: businessId,
@@ -39,6 +42,7 @@ public struct EditBusinessPageView: View {
         ))
         self.onBack = onBack
         self.onPreview = onPreview
+        self.onClosed = onClosed ?? onBack
     }
 
     public var body: some View {
@@ -82,6 +86,32 @@ public struct EditBusinessPageView: View {
         } message: {
             Text(viewModel.mediaUploadError ?? "")
         }
+        .sheet(
+            isPresented: Binding(
+                get: { viewModel.showsCloseConfirm },
+                set: { if !$0 { viewModel.closeCancelled() } }
+            )
+        ) {
+            CloseBusinessSheet(
+                businessName: closingBusinessName,
+                isClosing: viewModel.isClosing,
+                failure: viewModel.closeFailure,
+                onCancel: { viewModel.closeCancelled() },
+                onConfirm: { await viewModel.closeBusiness() }
+            )
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+            .interactiveDismissDisabled(viewModel.isClosing)
+        }
+        .onChange(of: viewModel.didClose) { _, closed in
+            if closed { onClosed() }
+        }
+    }
+
+    private var closingBusinessName: String {
+        guard case let .loaded(payload) = viewModel.state else { return "this business" }
+        let name = payload.name.original.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? "this business" : name
     }
 
     @ViewBuilder private var content: some View {
@@ -131,7 +161,8 @@ public struct EditBusinessPageView: View {
                 onPickMedia: { kind, data, mimeType in
                     Task { await viewModel.uploadMedia(kind, data: data, mimeType: mimeType) }
                 },
-                uploadingMedia: viewModel.uploadingMedia
+                uploadingMedia: viewModel.uploadingMedia,
+                onCloseBusiness: viewModel.canClose ? { viewModel.closeRequested() } : nil
             )
         case .empty:
             VStack(spacing: Spacing.s0) {
@@ -192,6 +223,8 @@ public struct EditBusinessPageLoadedView: View {
     public let onBeginDescription: @MainActor () -> Void
     public let onPickMedia: (@MainActor (BusinessMediaKind, Data, String) -> Void)?
     public let uploadingMedia: BusinessMediaKind?
+    /// Owner only; nil hides the Close business section.
+    public let onCloseBusiness: (@MainActor () -> Void)?
 
     public init(
         content: EditBusinessPageContent,
@@ -204,7 +237,8 @@ public struct EditBusinessPageLoadedView: View {
         onFieldChange: @escaping @MainActor (EditBusinessPageFieldKey, String) -> Void = { _, _ in },
         onBeginDescription: @escaping @MainActor () -> Void = {},
         onPickMedia: (@MainActor (BusinessMediaKind, Data, String) -> Void)? = nil,
-        uploadingMedia: BusinessMediaKind? = nil
+        uploadingMedia: BusinessMediaKind? = nil,
+        onCloseBusiness: (@MainActor () -> Void)? = nil
     ) {
         self.content = content
         self.onBack = onBack
@@ -217,6 +251,7 @@ public struct EditBusinessPageLoadedView: View {
         self.onBeginDescription = onBeginDescription
         self.onPickMedia = onPickMedia
         self.uploadingMedia = uploadingMedia
+        self.onCloseBusiness = onCloseBusiness
     }
 
     public var body: some View {
@@ -248,6 +283,9 @@ public struct EditBusinessPageLoadedView: View {
                     // tiles that did nothing, so it stays hidden until one exists.
                     contactSection
                     locationSection
+                    if let onCloseBusiness {
+                        closeBusinessSection(onCloseBusiness)
+                    }
 
                     Color.clear.frame(height: 100)
                 }
@@ -442,6 +480,32 @@ public struct EditBusinessPageLoadedView: View {
                 if case .published = content.mode {
                     HideAddressToggle(on: content.location.hideExactAddress)
                 }
+            }
+        }
+    }
+
+    /// Owner only. The danger ghost button opens the typed confirmation.
+    private func closeBusinessSection(_ onClose: @escaping @MainActor () -> Void) -> some View {
+        EditBusinessSection(overline: "Close business") {
+            VStack(alignment: .leading, spacing: Spacing.s3) {
+                Text("Closing removes the public page and ends access for the whole team.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button(action: onClose) {
+                    HStack(spacing: Spacing.s1) {
+                        Icon(.xCircle, size: 16, color: Theme.Color.error)
+                        Text("Close business").font(.system(size: 14, weight: .bold))
+                    }
+                    .foregroundStyle(Theme.Color.error)
+                    .frame(maxWidth: .infinity, minHeight: 46)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)
+                            .strokeBorder(Theme.Color.errorLight, lineWidth: 1)
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("editBusinessPage.closeBusiness")
             }
         }
     }

@@ -590,6 +590,28 @@ public struct HubTabRoot: View {
         if !path.isEmpty { path.removeLast() }
     }
 
+    /// A closed business has no screens left: back to My businesses, which
+    /// refreshes as it appears, or onto it when the editor was opened another way.
+    @MainActor
+    private func showMyBusinesses(afterClosing businessId: String) {
+        if path.contains(.myBusinesses) {
+            while let last = path.last, last != .myBusinesses {
+                path.removeLast()
+            }
+            return
+        }
+        path.removeAll { route in
+            switch route {
+            case let .editBusinessPage(id), let .businessOwner(id), let .businessProfile(id),
+                 let .businessProfilePage(id, _):
+                id == businessId
+            default:
+                false
+            }
+        }
+        path.append(.myBusinesses)
+    }
+
     private func handleListingCreated(
         _ listingId: String,
         push: @escaping @MainActor @Sendable (HubRoute) -> Void
@@ -2256,7 +2278,8 @@ public struct HubTabRoot: View {
                     Task { @MainActor in
                         if !path.isEmpty { path.removeLast() }
                     }
-                }
+                },
+                onClosed: { Task { @MainActor in showMyBusinesses(afterClosing: businessId) } }
             )
         case .createBusiness:
             CreateBusinessWizardView(
