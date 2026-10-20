@@ -2946,7 +2946,7 @@ private struct ChatBubbleRow: View {
             ForEach(Array(files.enumerated()), id: \.offset) { _, file in
                 attachmentFileRow(filename: file.name, sizeLabel: file.sizeLabel)
                     .accessibilityElement(children: .combine)
-                    .accessibilityIdentifier("chatSentFile")
+                    .accessibilityIdentifier("chatAISentFile")
             }
         }
     }

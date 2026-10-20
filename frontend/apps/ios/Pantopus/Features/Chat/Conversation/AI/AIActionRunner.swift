@@ -37,9 +37,10 @@ enum AIActionAllowlist {
         (.post, "/api/homes/:id/tasks/:id/recurrence"),
         (.put, "/api/hub/preferences"),
         // Phase 2: a system's installed year, a task's status, date or owner,
-        // and a nudge's "Fewer like this".
+        // an appliance, and a nudge's "Fewer like this".
         (.put, "/api/homes/:id/systems/:system"),
         (.put, "/api/homes/:id/tasks/:id"),
+        (.post, "/api/homes/:id/assets"),
         (.post, "/api/ai/nudges/:id/fewer")
     ]
 

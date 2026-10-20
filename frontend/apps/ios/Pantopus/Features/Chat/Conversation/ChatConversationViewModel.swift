@@ -854,6 +854,16 @@ public final class ChatConversationViewModel {
         }
     }
 
+    /// A restored message of the person's: their words, or a line for the
+    /// photos and PDFs they sent alone ("Sent a photo and a document").
+    static func sentText(_ text: String, photos: Int, documents: Int) -> String {
+        guard text.isEmpty else { return text }
+        var sent: [String] = []
+        if photos > 0 { sent.append(photos == 1 ? "a photo" : "\(photos) photos") }
+        if documents > 0 { sent.append(documents == 1 ? "a document" : "\(documents) documents") }
+        return sent.isEmpty ? text : "Sent " + sent.joined(separator: " and ")
+    }
+
     /// A brief's or nudge's push or row: the conversation it went into (the
     /// one its metadata names, else the newest, which a nudge is added to),
     /// shown with its turns and opened at the nudge's message. The person
@@ -861,25 +871,41 @@ public final class ChatConversationViewModel {
     /// weather nudge reaches the plan it was about.
     private func openAINudge(_ nudge: AIAssistantNudge) async {
         var conversationId = nudge.conversationId
-        if conversationId == nil {
-            do {
-                let response: AIConversationsResponse = try await api.request(AIEndpoints.conversations())
-                conversationId = response.conversations.first?.id
-            } catch {
-                logger.warning("AI conversation for a nudge unavailable: \(error)")
-            }
-        }
+        if conversationId == nil { conversationId = await newestAIConversationId() }
         // A message sent meanwhile already has its conversation.
         if let conversationId, aiConversationId == nil {
-            aiConversationId = conversationId
-            aiConversationStore.setConversationId(conversationId, forUserId: currentUserId)
-            await loadAIHistory(conversationId: conversationId)
+            await continueAIConversation(conversationId)
+            // The conversation it named is gone (deleted): the newest one instead.
+            if messages.isEmpty, nudge.conversationId != nil, aiConversationId == conversationId,
+               let newest = await newestAIConversationId(), newest != conversationId, messages.isEmpty {
+                aiConversationId = nil
+                await continueAIConversation(newest)
+            }
         }
         // Not found (gone, or another conversation): the thread opens at its latest message.
         if scrollToMessageId == nudge.notificationId, !didResolveScrollTarget {
             didResolveScrollTarget = true
             rebuild()
         }
+    }
+
+    /// The person's newest assistant conversation (`GET /api/ai/conversations`
+    /// lists them newest-updated first), nil when there is none or the read failed.
+    private func newestAIConversationId() async -> String? {
+        do {
+            let response: AIConversationsResponse = try await api.request(AIEndpoints.conversations())
+            return response.conversations.first?.id
+        } catch {
+            logger.warning("AI conversations unavailable: \(error)")
+            return nil
+        }
+    }
+
+    /// Carries on in `conversationId`, showing its turns.
+    private func continueAIConversation(_ conversationId: String) async {
+        aiConversationId = conversationId
+        aiConversationStore.setConversationId(conversationId, forUserId: currentUserId)
+        await loadAIHistory(conversationId: conversationId)
     }
 
     /// Seed the thread with a restored conversation's turns
@@ -897,22 +923,14 @@ public final class ChatConversationViewModel {
             var restored: [ChatMessageDTO] = []
             var drafts: [String: [ChatAIDraftCard]] = [:]
             var links: [String: [ChatAILink]] = [:]
-            var files: [String: [ChatSentFile]] = [:]
             var openReplyId: String?
             var nudgeMessageId: String?
             for (index, item) in history.messages.enumerated() {
                 let id = "ai_history_\(index)"
                 if item.role == "user" {
                     openReplyId = nil
-                    let text = item.text ?? ""
-                    let photos = item.photos ?? 0
-                    let documents = item.documents ?? 0
-                    let shown = text.isEmpty && photos > 0 ? (photos == 1 ? "Sent a photo" : "Sent \(photos) photos") : text
+                    let shown = Self.sentText(item.text ?? "", photos: item.photos ?? 0, documents: item.documents ?? 0)
                     restored.append(localMessage(id: id, text: shown, userId: currentUserId, type: "text"))
-                    // A PDF isn't kept: its chip says one was sent.
-                    if documents > 0 {
-                        files[id] = Array(repeating: ChatSentFile(name: "PDF", sizeLabel: nil), count: min(documents, 5))
-                    }
                     continue
                 }
                 var replyId = openReplyId ?? id
@@ -948,7 +966,7 @@ public final class ChatConversationViewModel {
                     links[target, default: []] += itemLinks.map { ChatAILink(label: $0.label, url: $0.url) }
                 }
                 // The first reply carrying the nudge the thread was opened at.
-                if nudgeMessageId == nil, let nudge = aiNudge, item.notificationId?.lowercased() == nudge.notificationId,
+                if nudgeMessageId == nil, let nudge = aiNudge, item.nudge?.id.lowercased() == nudge.notificationId,
                    let target {
                     nudgeMessageId = target
                 }
@@ -956,7 +974,6 @@ public final class ChatConversationViewModel {
             messages = restored
             aiDraftsByMessageId = drafts
             aiLinksByMessageId = links
-            aiSentFiles = files
             if aiNudge != nil, !didResolveScrollTarget {
                 if let nudgeMessageId {
                     scrollToMessageId = nudgeMessageId
@@ -1250,7 +1267,8 @@ public final class ChatConversationViewModel {
         let message: ChatMessageDTO
         /// The uploads' private references, for the chat's `images`.
         let references: [String]
-        let hasDocuments: Bool
+        /// PDFs and no photos: the question without words asks about the document.
+        let documentsOnly: Bool
     }
 
     /// The person's message, its photos and PDFs uploaded first: nil when the
@@ -1282,7 +1300,7 @@ public final class ChatConversationViewModel {
                 ChatSentFile(name: $0.filename, sizeLabel: Self.fileSizeLabel($0.data?.count))
             }
         }
-        return AIOutgoing(message: userMessage, references: references, hasDocuments: !documents.isEmpty)
+        return AIOutgoing(message: userMessage, references: references, documentsOnly: photos.isEmpty && !documents.isEmpty)
     }
 
     private func sendAIMessage(_ text: String) async {
@@ -1298,7 +1316,7 @@ public final class ChatConversationViewModel {
 
         let request = AIChatStreamRequest(
             message: text.isEmpty
-                ? (outgoing.hasDocuments ? "What can you tell me about this document?" : "What can you tell me about this image?")
+                ? (outgoing.documentsOnly ? "What can you tell me about this document?" : "What can you tell me about this image?")
                 : text,
             conversationId: aiConversationId,
             // PDF references go with the photos' (phase 2 contract §7.1).
@@ -2013,22 +2031,23 @@ public final class ChatConversationViewModel {
     static let aiDocumentMaxPages = 20
 
     /// A PDF for the assistant (Attach → Document), read on the phone first so
-    /// one the server would refuse says so at once.
+    /// one the server would refuse says so at once, in the server's words.
     public func queueAIDocument(filename: String, data: Data) {
         guard data.count <= Self.aiDocumentMaxBytes else {
-            actionFailure = "That PDF is over 10 MB. Choose a smaller one."
+            actionFailure = "That PDF is over 10 MB. Try a smaller one, or photos of the pages that matter."
             return
         }
-        guard let document = PDFDocument(data: data) else {
-            actionFailure = "Couldn\u{2019}t open that PDF."
+        guard let document = PDFDocument(data: data), document.pageCount > 0 else {
+            actionFailure = "That PDF can\u{2019}t be read. Try saving it again as a PDF, or send photos of the pages."
             return
         }
-        guard !document.isLocked else {
-            actionFailure = "That PDF is locked with a password. Choose one that opens without it."
+        guard !document.isEncrypted else {
+            actionFailure = "That PDF is password-protected. Send a copy without a password, or photos of the pages."
             return
         }
         guard document.pageCount <= Self.aiDocumentMaxPages else {
-            actionFailure = "That PDF has more than 20 pages. Choose a shorter one."
+            actionFailure = "That PDF has \(document.pageCount) pages; the assistant reads up to \(Self.aiDocumentMaxPages). "
+                + "Send the pages that matter."
             return
         }
         let name = filename.lowercased().hasSuffix(".pdf") ? filename : filename + ".pdf"

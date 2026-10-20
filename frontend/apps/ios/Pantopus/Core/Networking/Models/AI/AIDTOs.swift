@@ -54,15 +54,16 @@ public struct AIConversationMessageDTO: Decodable, Sendable, Hashable {
     public let draft: AIConversationDraftDTO?
     /// The link buttons under an assistant reply, for apps that ask for them.
     public let links: [AIChatLinkDTO]?
-    /// The Notification row of the brief or nudge this item came from
-    /// (`docs/product/ai-assistant-phase2-contract-2026-10-20.md` §3.3), so
-    /// `pantopus://assistant?nudge=<id>` opens the thread at it.
-    public let notificationId: String?
+    /// On the first item of a brief or nudge Pantopus sent
+    /// (`docs/product/ai-assistant-phase2-contract-2026-10-20.md` §3.3).
+    public let nudge: AIConversationNudgeDTO?
+}
 
-    private enum CodingKeys: String, CodingKey {
-        case role, text, photos, documents, draft, links
-        case notificationId = "notification_id"
-    }
+/// A brief or nudge in the assistant's history: its Notification row's id,
+/// which `pantopus://assistant?nudge=<id>` opens the thread at, and its kind.
+public struct AIConversationNudgeDTO: Decodable, Sendable, Hashable {
+    public let id: String
+    public let kind: String?
 }
 
 public struct AIConversationDraftDTO: Decodable, Sendable, Hashable {

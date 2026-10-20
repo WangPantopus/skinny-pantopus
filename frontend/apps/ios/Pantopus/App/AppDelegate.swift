@@ -256,11 +256,12 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
         let homeId = userInfo["homeId"] as? String ?? userInfo["home_id"] as? String
         let taskId = userInfo["taskId"] as? String ?? userInfo["task_id"] as? String
         // A brief or nudge opens the assistant at its message (AI assistant phase 2).
-        let deepLink = DeepLinkRouter.assistantPath(
+        let assistantPath = DeepLinkRouter.assistantPath(
             type: type,
             notificationId: userInfo["notificationId"] as? String ?? userInfo["notification_id"] as? String,
             conversationId: userInfo["conversation_id"] as? String
         )
+        let deepLink = assistantPath
             ?? HomeTaskNotificationRoute.pushPath(userInfo)
             ?? DeepLinkRouter.notificationPath(type: userInfo["type"] as? String, link: userInfo["link"] as? String)
             ?? (userInfo["deepLink"] as? String)
@@ -305,6 +306,11 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
             }
             guard action == UNNotificationDefaultActionIdentifier else { return }
             PilotEvents.shared.notificationOpened(type: type)
+            // Only for the account it was sent to; signed out, it waits for that sign-in.
+            if let assistantPath, let recipient, UUID(uuidString: recipient) != nil {
+                DeepLinkRouter.shared.handle(path: assistantPath, expectedUserID: recipient)
+                return
+            }
             if let deepLink, !deepLink.isEmpty {
                 // `link` is a path like `/chat/42`; handle(path:) normalises it
                 // to the pantopus:// scheme, matching the Android dispatcher.
