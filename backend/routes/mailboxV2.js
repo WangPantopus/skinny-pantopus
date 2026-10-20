@@ -14,6 +14,8 @@ const Joi = require('joi');
 const logger = require('../utils/logger');
 const s3 = require('../services/s3Service');
 const { chosenUsernameOrNull } = require('../utils/personalUsername');
+// A letter sent as a business names the business to everyone it reaches, never the person who sent it.
+const { presentMailSender } = require('../utils/mailSenderView');
 
 // ============ VALIDATION SCHEMAS ============
 
@@ -364,12 +366,12 @@ router.get('/drawer/:drawer', verifyToken, async (req, res) => {
       }
     }
 
-    const enrichedMail = (mail || []).map(m => ({
+    const enrichedMail = (mail || []).map(m => presentMailSender({
       ...m,
       sender_display: resolveSenderDisplay(m),
       sender_trust: resolveSenderTrust(m),
       package: packageData[m.id] || null,
-    }));
+    }, userId));
 
     // Sort by urgency then recency
     enrichedMail.sort((a, b) => {
@@ -471,14 +473,14 @@ router.get('/item/:id', verifyToken, async (req, res) => {
     }
 
     return res.json({
-      mail: {
+      mail: presentMailSender({
         ...mail,
         sender_display: resolveSenderDisplay(mail),
         sender_trust: resolveSenderTrust(mail),
         package: packageInfo,
         timeline: packageTimeline,
         object_payload: objectPayload,
-      },
+      }, userId),
     });
   } catch (err) {
     logger.error('Item fetch error', { error: err.message });
