@@ -32,8 +32,10 @@ beforeEach(() => {
   cells.mockResolvedValue({ state: 'no_place' });
 });
 
+// Nearby is Pulse | Neighborhood (founder decision 2026-10-20): this page is
+// the Neighborhood segment, and Connections moved to the menu.
 it.each(['loading', 'error', 'no_place', 'forming', 'growing', 'unlocked'])(
-  'keeps social destinations actionable when meter is %s',
+  'shows the Nearby switch on the Neighborhood segment when meter is %s',
   async (state) => {
     if (state === 'loading') meter.mockReturnValue(new Promise(() => {}));
     else if (state === 'error') meter.mockRejectedValue(new Error('offline'));
@@ -57,19 +59,22 @@ it.each(['loading', 'error', 'no_place', 'forming', 'growing', 'unlocked'])(
       await screen.findByRole('heading', {
         name: 'Local marketplace and tasks',
       });
-    const social = within(
-      screen.getByRole('navigation', { name: 'Social discovery' }),
+    const segments = within(
+      screen.getByRole('navigation', { name: 'Nearby' }),
     );
-    for (const [name, route] of [
-      ['Pulse', '/app/feed'],
-      ['Beacons', '/app/beacons'],
-      ['Connections', '/app/connections'],
-    ]) {
-      fireEvent.click(
-        social.getByRole('button', { name: new RegExp(`^${name}`) }),
-      );
-      expect(push).toHaveBeenLastCalledWith(route);
-    }
+    expect(segments.getByRole('link', { name: 'Pulse' })).toHaveAttribute(
+      'href',
+      '/app/feed',
+    );
+    expect(
+      segments.getByRole('link', { name: 'Neighborhood' }),
+    ).toHaveAttribute('aria-current', 'page');
+    expect(
+      screen.queryByRole('navigation', { name: 'Social discovery' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /^Connections/ }),
+    ).not.toBeInTheDocument();
     if (state === 'forming') {
       expect(screen.getByRole('progressbar')).not.toHaveAttribute(
         'aria-valuenow',

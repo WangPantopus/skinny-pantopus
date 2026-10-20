@@ -72,7 +72,7 @@ struct NeighborhoodView: View {
         }
         .background(Theme.Color.appBg)
         .accessibilityIdentifier("nearbyNeighborhood")
-        .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
+        // The offline strip is the tab's, above the segment header (`NeighborhoodTabRoot`), as on the Pulse segment.
         .task { await viewModel.load() }
         .refreshable { await viewModel.refresh() }
         // A home added, claimed or verified (`homes`) can change the meter.
