@@ -779,7 +779,7 @@ class ManageTrainViewModel
                             } else {
                                 it.copy(
                                     isSubmitting = false,
-                                    nudgeDraft = ManageOrganizerProjection.fallbackNudge(content.title, content.slotsOpen),
+                                    nudgeDraft = fallbackNudge(content.title, content.slotsOpen),
                                     nudgeDraftNote = NUDGE_DRAFT_FAILED_NOTE,
                                 )
                             }
@@ -893,5 +893,23 @@ class ManageTrainViewModel
             private const val CENTS_PER_DOLLAR = 100
             private const val DAY_MILLIS = 24L * 60 * 60 * 1000
             private const val NUDGE_DRAFT_FAILED_NOTE = "Couldn't draft a reminder. Here's a simple one you can edit and send."
+
+            /**
+             * The reminder the editor opens with when the AI draft fails, written here from the
+             * train's title and open-date count. Mirrors iOS `ManageTrainViewModel.fallbackNudge(title:openDates:)`.
+             */
+            internal fun fallbackNudge(
+                title: String,
+                openDates: Int,
+            ): String {
+                val train = title.trim().ifEmpty { "This Support Train" }
+                val stillOpen =
+                    when {
+                        openDates == 1 -> "still has 1 open date. If you can take it"
+                        openDates > 1 -> "still has $openDates open dates. If you can take one"
+                        else -> "still has open dates. If you can take one"
+                    }
+                return "$train $stillOpen, please sign up on the train's page. Thank you!"
+            }
         }
     }

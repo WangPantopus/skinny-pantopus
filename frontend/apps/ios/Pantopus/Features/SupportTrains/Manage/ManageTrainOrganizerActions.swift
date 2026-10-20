@@ -685,7 +685,7 @@ public extension ManageTrainViewModel {
     }
 
     /// The reminder the editor opens with when the AI draft fails, written here from the
-    /// train's title and open-date count. Mirrors Android `ManageOrganizerProjection.fallbackNudge`.
+    /// train's title and open-date count. Mirrors Android `ManageTrainViewModel.fallbackNudge`.
     internal nonisolated static func fallbackNudge(title: String, openDates: Int) -> String {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let train = trimmed.isEmpty ? "This Support Train" : trimmed
