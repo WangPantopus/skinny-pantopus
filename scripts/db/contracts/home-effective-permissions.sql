@@ -7,7 +7,7 @@ SET LOCAL search_path = public, extensions, pg_catalog;
 CREATE TEMP TABLE effective_reference_before AS
   SELECT jsonb_agg(to_jsonb(r) ORDER BY role_base, permission) AS rows FROM public."HomeRolePermission" r;
 DO $$ BEGIN
-  IF (SELECT count(*) FROM public."HomeRolePermission") <> 31 THEN
+  IF (SELECT count(*) FROM public."HomeRolePermission") <> 33 THEN
     RAISE EXCEPTION 'Contract requires the exact shipped role reference count';
   END IF;
   IF has_function_privilege('authenticated', 'public.home_effective_access(uuid,uuid)', 'EXECUTE')
