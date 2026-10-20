@@ -268,6 +268,41 @@ async function getOrCreateChecklist(homeId, seasonKey, year, options = {}) {
 }
 
 /**
+ * The checklist items a home would get over the next 12 months, season by season, without
+ * saving anything (the assistant's year plan; getOrCreateChecklist saves the current season's).
+ * Each item comes once, with the first month (1-12) and year its season starts, and every month
+ * its key comes back in (gutters in spring and fall).
+ *
+ * @param {string} homeId
+ * @param {object} [options]
+ * @param {Date} [options.date]  Now, for tests.
+ * @returns {Promise<{ region_label: string|null, items: Array<object> }>}
+ */
+async function yearAhead(homeId, { date = new Date() } = {}) {
+  const homeContext = await getHomeContext(homeId);
+  const now = getSeasonalContext({ ...homeContext, date });
+  const items = new Map();
+  let regionLabel = now.region_label;
+  for (let ahead = 0; ahead < 12; ahead += 1) {
+    // Mid-month, so the home's time zone can't move it into another month.
+    const at = new Date(Date.UTC(now.year, now.month - 1 + ahead, 15, 12));
+    const context = getSeasonalContext({ ...homeContext, date: at });
+    regionLabel = regionLabel || context.region_label;
+    const key = context.checklist_season;
+    if (!key) continue;
+    for (const item of filterItems(SEASON_CHECKLISTS[key] || [], { ...homeContext, region: context.region })) {
+      const seen = items.get(item.item_key);
+      if (seen) {
+        if (!seen.months.includes(context.month)) seen.months.push(context.month);
+        continue;
+      }
+      items.set(item.item_key, { ...item, season_key: key, month: context.month, year: context.year, months: [context.month] });
+    }
+  }
+  return { region_label: regionLabel || null, items: [...items.values()] };
+}
+
+/**
  * Update a checklist item's status.
  *
  * @param {string} homeId  Exact requested Home
@@ -472,4 +507,4 @@ async function getChecklistHistory(homeId) {
     });
 }
 
-module.exports = { getOrCreateChecklist, updateChecklistItem, linkGigToChecklist, releaseClosedHires, getChecklistHistory, SEASON_CHECKLISTS };
+module.exports = { getOrCreateChecklist, updateChecklistItem, linkGigToChecklist, releaseClosedHires, getChecklistHistory, yearAhead, SEASON_CHECKLISTS };

@@ -48,6 +48,9 @@ const SPORT_NAMES = {
   american_football: 'football field',
   multi: 'sports courts',
 };
+// What follows the park's name in an unnamed court's or playground's name, longest first.
+const FACILITY_NAMES = [...new Set([...Object.values(SPORT_NAMES), 'courts', 'playground'])]
+  .sort((a, b) => b.length - a.length);
 
 /** Plain tag matches only (no regular expressions): the cheapest query for the public servers. */
 function overpassQuery({ south, west, north, east }) {
@@ -238,4 +241,13 @@ async function placesNear({ latitude, longitude, q = '' }) {
   return { places, loading, attribution: ATTRIBUTION };
 }
 
-module.exports = { placesNear, toPlaces, ATTRIBUTION };
+/** The park a court or playground is named after ("Crown Park pickleball courts" → "Crown Park"), or null. */
+function parkNameOf(name) {
+  const text = String(name || '').trim();
+  const what = FACILITY_NAMES.find((facility) => text.toLowerCase().endsWith(` ${facility}`));
+  const park = what ? text.slice(0, -(what.length + 1)).trim() : '';
+  // One word ("Community playground") describes the place rather than naming a park.
+  return park.includes(' ') ? park : null;
+}
+
+module.exports = { placesNear, toPlaces, parkNameOf, ATTRIBUTION };
