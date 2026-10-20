@@ -4649,12 +4649,11 @@ router.post('/:gigId/bids/:bidId/accept', verifyToken, async (req, res) => {
       }
 
       if (roomId) {
+        // A business's staff who accepted aren't added: they answer as the business through its own row
+        // (services/chatBusinessAccess), so the worker never sees who they are.
         const participants = [
           { room_id: roomId, user_id: gig.user_id, role: 'owner', is_active: true },
           { room_id: roomId, user_id: bid.user_id, role: 'member', is_active: true },
-          ...(String(actorUserId) !== String(gig.user_id)
-            ? [{ room_id: roomId, user_id: actorUserId, role: 'member', is_active: true }]
-            : []),
         ];
 
         await supabaseAdmin
@@ -7826,6 +7825,8 @@ async function openOwnerConversation(userId, gig) {
  * Pre-bid users get added as participants but are message-limited.
  * Once a worker is assigned, the room is the owner's and the worker's conversation:
  * anyone else gets their direct room with the owner and is never added to it.
+ * A business owner's staff are never added either: they answer as the business through its
+ * own row (services/chatBusinessAccess), so the worker and askers never see who they are.
  */
 router.get('/:gigId/chat-room', verifyToken, async (req, res) => {
   const { gigId } = req.params;
@@ -7881,14 +7882,11 @@ router.get('/:gigId/chat-room', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to get chat room' });
     }
 
-    // Ensure participants
+    // Ensure participants: the owner, the worker, and anyone asking before the task is assigned.
     const participants = [
       { room_id: roomId, user_id: gig.user_id, role: 'owner' },
       ...(gig.accepted_by ? [{ room_id: roomId, user_id: gig.accepted_by, role: 'member' }] : []),
-      // Add current acting user as participant when different from canonical owner/worker.
-      ...(!isAcceptedWorker && String(userId) !== String(gig.user_id)
-        ? [{ room_id: roomId, user_id: userId, role: 'member' }]
-        : []),
+      ...(!isOwner && !isAcceptedWorker ? [{ room_id: roomId, user_id: userId, role: 'member' }] : []),
     ];
 
     const { error: partErr } = await supabaseAdmin
@@ -7961,7 +7959,8 @@ router.get('/:gigId/chat-room', verifyToken, async (req, res) => {
     }
 
     // ─── Unified conversation: also create direct room + task topic ───
-    const { topicId } = await openOwnerConversation(userId, gig);
+    // Not for the owner's staff: theirs would be a conversation with their own business.
+    const { topicId } = isOwner ? { topicId: null } : await openOwnerConversation(userId, gig);
 
     return res.json({ roomId, preBidInfo, topicId, gigOwnerId: gig.user_id });
   } catch (err) {

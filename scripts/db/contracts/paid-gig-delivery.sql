@@ -67,10 +67,13 @@ BEGIN
  result:=public.finalize_paid_gig_acceptance_as_actor('aae30000-0000-4000-8000-000000000101','aae30000-0000-4000-8000-000000000201',
   'aae30000-0000-4000-8000-000000000001','aae30000-0000-4000-8000-000000000301','aae30000-0000-4000-8000-000000000004');
  v_room:=(result->>'room_id')::uuid;
- IF v_room IS NULL OR (SELECT count(*) FROM public."ChatParticipant" WHERE room_id=v_room AND is_active)<>3
+ IF v_room IS NULL OR (SELECT count(*) FROM public."ChatParticipant" WHERE room_id=v_room AND is_active)<>2
  OR (SELECT count(*) FROM public."ChatMessage" WHERE room_id=v_room)<>1
  OR (SELECT count(*) FROM public."GigAcceptanceDelivery" WHERE acceptance_id=(SELECT attempt FROM paid_delivery_state))<>3 THEN
  RAISE EXCEPTION 'Atomic participant/message/notification receipt missing'; END IF;
+ -- The business's staff member acts through the business's own row: never a member of the task's room.
+ IF EXISTS(SELECT FROM public."ChatParticipant" WHERE room_id=v_room AND user_id='aae30000-0000-4000-8000-000000000004') THEN
+ RAISE EXCEPTION 'Delegate joined the task room'; END IF;
  again:=public.finalize_paid_gig_acceptance_as_actor('aae30000-0000-4000-8000-000000000101','aae30000-0000-4000-8000-000000000201',
   'aae30000-0000-4000-8000-000000000001','aae30000-0000-4000-8000-000000000301','aae30000-0000-4000-8000-000000000004');
  IF again->>'reused' IS DISTINCT FROM 'true' OR (result-'reused') IS DISTINCT FROM (again-'reused')
