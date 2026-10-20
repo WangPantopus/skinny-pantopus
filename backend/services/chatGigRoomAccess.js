@@ -103,9 +103,10 @@ async function isGigRoomClosedTo(roomId, actorUserId, identityIds = []) {
 }
 
 /**
- * Leftover members among `members` ({ room_id, user_id }) of the given `rooms`, as
- * `${room_id}:${user_id}` keys. They are left out of member lists, so the owner and the worker
- * don't see a stranger listed in their task room.
+ * Members among `members` ({ room_id, user_id }) of the given `rooms` that member lists leave out,
+ * as `${room_id}:${user_id}` keys: in an assigned task's room, everyone but the owner and the
+ * worker. A leftover member is a stranger there, and a business owner's staff act through the
+ * business's own row (services/chatBusinessAccess), so the worker never sees who answers for it.
  */
 async function hiddenGigRoomMembers(rooms, members) {
   const hidden = new Set();
@@ -125,18 +126,11 @@ async function hiddenGigRoomMembers(rooms, members) {
     const gig = gigById.get(String(room.gig_id));
     if (gig && gig.accepted_by) assignedGigByRoom.set(String(room.id), gig);
   }
-  const ownerActor = new Map();
   for (const m of members) {
     const gig = assignedGigByRoom.get(String(m.room_id));
     if (!gig || !m.user_id) continue;
     const uid = String(m.user_id);
-    if (uid === String(gig.accepted_by) || uid === String(gig.user_id)) continue;
-    const key = `${gig.user_id}:${uid}`;
-    if (!ownerActor.has(key)) {
-      const { isOwnerActor } = await getGigOwnerMessagingContext(gig.user_id, uid);
-      ownerActor.set(key, isOwnerActor);
-    }
-    if (!ownerActor.get(key)) hidden.add(`${m.room_id}:${uid}`);
+    if (uid !== String(gig.accepted_by) && uid !== String(gig.user_id)) hidden.add(`${m.room_id}:${uid}`);
   }
   return hidden;
 }
