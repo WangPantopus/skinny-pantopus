@@ -16,6 +16,7 @@ const { resolveLocation } = require('../context/locationResolver');
 const { escapeIlike } = require('../../utils/escapeIlike');
 const { draftPickupSchedule } = require('./pickupDraft');
 const { readToolDefinitions, runReadTool, PLACE_POST_TYPES } = require('./readTools');
+const { nearbyReadToolDefinitions, runNearbyReadTool } = require('./readToolsNearby');
 const { actionCardDefinitions, runCardTool } = require('./actionCards');
 const { showLinkDefinition, runShowLink } = require('./appGuide');
 const { homesOf, localToUtc } = require('./assistantKit');
@@ -269,6 +270,7 @@ const toolDefinitions = [
     },
   },
   ...readToolDefinitions,
+  ...nearbyReadToolDefinitions,
   ...actionCardDefinitions,
   showLinkDefinition,
 ];
@@ -313,6 +315,9 @@ const TOOL_TIMEOUTS_MS = {
   get_plan: 8000,
   find_posts: 8000,
   get_post: 8000,
+  // Two feed reads and their replies: as long as Place and Today, and a little more.
+  catch_up_nearby: 12000,
+  find_recommendations: 15000,
   list_home_tasks: 8000,
   get_household: 8000,
   draft_plan: 15000,
@@ -374,6 +379,8 @@ async function _executeToolImpl(name, args, ctx) {
   const { userId } = ctx;
   const read = await runReadTool(name, args, ctx);
   if (read) return read;
+  const nearby = await runNearbyReadTool(name, args, ctx);
+  if (nearby) return nearby;
   const drafted = await runCardTool(name, args, ctx);
   if (drafted) return drafted;
   if (name === 'show_link') return runShowLink(args, ctx);
