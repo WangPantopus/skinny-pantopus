@@ -11,6 +11,7 @@ import app.pantopus.android.data.ai.AIActionRunner
 import app.pantopus.android.data.ai.AIChatRepository
 import app.pantopus.android.data.ai.AIChatStreamEvent
 import app.pantopus.android.data.ai.AIConversationSession
+import app.pantopus.android.data.ai.AIPdfCheck
 import app.pantopus.android.data.ai.AIScreenContext
 import app.pantopus.android.data.api.models.chats.ChatMessageDto
 import app.pantopus.android.data.api.models.chats.ChatMessageSender
@@ -746,8 +747,8 @@ class ChatConversationViewModel
             sourceUri: String? = null,
         ) {
             // The assistant reads a PDF of up to 10 MB (`POST /api/upload/ai-media`); a bigger one is turned away here.
-            if (mode is ChatThreadMode.Ai && mimeType == PDF_MIME && bytes.size > AI_PDF_MAX_BYTES) {
-                _actionFailure.value = "That PDF is over 10 MB. Try a smaller one."
+            if (mode is ChatThreadMode.Ai && mimeType == PDF_MIME && bytes.size > AIPdfCheck.MAX_BYTES) {
+                refuseAttachment(AIPdfCheck.TOO_LARGE)
                 return
             }
             appendQueuedAttachment(
@@ -760,6 +761,11 @@ class ChatConversationViewModel
                     sourceUri = sourceUri,
                 ),
             )
+        }
+
+        /** A picked file the assistant can't take: the reason, in the server's words, and nothing queued. */
+        fun refuseAttachment(reason: String) {
+            _actionFailure.value = reason
         }
 
         private fun appendQueuedAttachment(attachment: ChatQueuedAttachment) {
@@ -2988,9 +2994,6 @@ private val ATTACHMENT_PLACEHOLDER = Regex("""^(\[.+ attachments?]|Photo|Video|D
 
 /** The documents the assistant reads (AI assistant phase 2 §7.1). */
 private const val PDF_MIME = "application/pdf"
-
-/** `POST /api/upload/ai-media` takes a PDF of up to 10 MB. */
-private const val AI_PDF_MAX_BYTES = 10 * 1024 * 1024
 
 /**
  * Min gap between `typing:start` emits. The backend rate-limits the event

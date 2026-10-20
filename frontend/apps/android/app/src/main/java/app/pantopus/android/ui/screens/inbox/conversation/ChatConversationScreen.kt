@@ -121,6 +121,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.core.routing.DeepLinkRouter
+import app.pantopus.android.data.ai.AIPdfCheck
 import app.pantopus.android.data.links.LinkPreview
 import app.pantopus.android.ui.components.GhostButton
 import app.pantopus.android.ui.components.PrimaryButton
@@ -280,6 +281,14 @@ fun ChatConversationScreen(
                     }
                 attachments.forEach { (uri, picked) ->
                     val (mimeType, filename, bytes) = picked
+                    // The assistant reads a PDF only within the server's limits: say which one it can't, at once.
+                    if (args.mode is ChatThreadMode.Ai && mimeType == "application/pdf") {
+                        val problem = withContext(Dispatchers.IO) { AIPdfCheck.problem(bytes, context.cacheDir) }
+                        if (problem != null) {
+                            viewModel.refuseAttachment(problem)
+                            return@forEach
+                        }
+                    }
                     viewModel.queueAttachment(
                         kind = if (mimeType.startsWith("image/")) ChatQueuedAttachmentKind.Image else ChatQueuedAttachmentKind.Document,
                         filename = filename,
@@ -598,7 +607,8 @@ fun ChatConversationScreen(
                             PackageManager.PERMISSION_GRANTED
                     if (granted) launchCamera() else cameraPermission.launch(Manifest.permission.CAMERA)
                 },
-                // The assistant reads photos and PDFs (AI assistant phase 2 §7.1): its thread picks only those.
+                // The assistant reads photos and PDFs (AI assistant phase 2 §7.1): its thread's Photos picks photos and its
+                // Document picks PDFs.
                 onPhotos = {
                     val media =
                         if (args.mode is ChatThreadMode.Ai) {
@@ -609,7 +619,7 @@ fun ChatConversationScreen(
                     photoPicker.launch(PickVisualMediaRequest(media))
                 },
                 onDocument = {
-                    attachmentPicker.launch(if (args.mode is ChatThreadMode.Ai) arrayOf("application/pdf", "image/*") else arrayOf("*/*"))
+                    attachmentPicker.launch(if (args.mode is ChatThreadMode.Ai) arrayOf("application/pdf") else arrayOf("*/*"))
                 },
                 onLocation = { viewModel.sendCurrentLocation() },
                 onGig = { showGigPicker = true },
