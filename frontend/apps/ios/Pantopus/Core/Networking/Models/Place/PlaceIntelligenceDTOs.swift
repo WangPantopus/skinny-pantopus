@@ -581,7 +581,10 @@ public struct PlaceEpaFacility: Decodable, Sendable, Hashable {
     public let name: String
     /// Regulating program, e.g. "Clean Water Act".
     public let program: String
-    public let distanceMi: Double
+    /// Null when ECHO sends no coordinates for the site (its default columns
+    /// carry none). A required distance failed the whole section and left
+    /// the Environment card with only its title.
+    public let distanceMi: Double?
 
     private enum CodingKeys: String, CodingKey {
         case name, program
