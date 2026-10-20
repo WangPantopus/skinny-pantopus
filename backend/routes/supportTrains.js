@@ -123,12 +123,13 @@ function buildCoarseLocation(home) {
 async function hasSupportTrainAddressGrant(supportTrainId, granteeUserId) {
   if (!supportTrainId || !granteeUserId) return false;
 
-  const { count } = await supabaseAdmin
+  const { count, error } = await supabaseAdmin
     .from('SupportTrainAddressGrant')
     .select('id', { count: 'exact', head: true })
     .eq('support_train_id', supportTrainId)
     .eq('grantee_user_id', granteeUserId);
 
+  if (error) throw Object.assign(new Error('Could not check address access. Please try again.'), { status: 503 });
   return (count || 0) > 0;
 }
 
@@ -171,13 +172,13 @@ function formatAddressLabel(address) {
   return [firstLine, secondLine].filter(Boolean).join('\n');
 }
 
-async function getSupportTrainExactDeliveryDetails(st, supportTrainId) {
-  const [{ data: profile }, homeResult] = await Promise.all([
-    supabaseAdmin
+async function getSupportTrainExactDeliveryDetails(st, supportTrainId, { includeInstructions = true } = {}) {
+  const [profileResult, homeResult] = await Promise.all([
+    includeInstructions ? supabaseAdmin
       .from('SupportTrainRecipientProfile')
       .select('delivery_instructions, special_instructions')
       .eq('support_train_id', supportTrainId)
-      .single(),
+      .maybeSingle() : { data: null, error: null },
     (async () => {
       const locationHomeId = st.recipient_home_id || st.Activity?.home_id || null;
       if (!locationHomeId) return { data: null, error: null };
@@ -185,15 +186,16 @@ async function getSupportTrainExactDeliveryDetails(st, supportTrainId) {
         .from('Home')
         .select('address, address2, city, state, zipcode')
         .eq('id', locationHomeId)
-        .single();
+        .maybeSingle();
     })(),
   ]);
 
-  if (homeResult.error) {
-    logger.warn('Failed to resolve Support Train exact address for guest email', {
+  if (homeResult.error || profileResult.error) {
+    logger.warn('Failed to resolve Support Train exact delivery details', {
       supportTrainId,
-      error: homeResult.error.message,
+      error: (homeResult.error || profileResult.error).message,
     });
+    throw Object.assign(new Error('Could not load the delivery address. Please try again.'), { status: 503 });
   }
 
   let address = null;
@@ -218,8 +220,8 @@ async function getSupportTrainExactDeliveryDetails(st, supportTrainId) {
   return {
     address,
     addressLabel: formatAddressLabel(address),
-    deliveryInstructions: profile?.delivery_instructions || null,
-    specialInstructions: profile?.special_instructions || null,
+    deliveryInstructions: profileResult.data?.delivery_instructions || null,
+    specialInstructions: profileResult.data?.special_instructions || null,
   };
 }
 
@@ -3213,12 +3215,21 @@ router.post(
 
     let isOrganizer = st.organizer_user_id === userId;
     if (!isOrganizer) {
-      const { data: orgRow } = await supabaseAdmin
+      const { data: orgRow, error: orgErr } = await supabaseAdmin
         .from('SupportTrainOrganizer')
         .select('role')
         .eq('support_train_id', st.id)
         .eq('user_id', userId)
-        .single();
+        .maybeSingle();
+      // A failed read is not a refusal: a co-organizer must not be told they can't share.
+      if (orgErr) {
+        logger.error('Reveal Support Train address organizer check failed', {
+          supportTrainId: st.id,
+          userId,
+          error: orgErr.message,
+        });
+        throw Object.assign(new Error('Could not check organizer access. Please try again.'), { status: 503 });
+      }
       if (orgRow && (orgRow.role === 'primary' || orgRow.role === 'co_organizer')) {
         isOrganizer = true;
       }
@@ -3258,6 +3269,18 @@ router.post(
       });
     }
 
+    // Both account helpers and email guests need an actual street address.
+    // Check before creating a grant or claiming that a repeated share worked.
+    const delivery = await getSupportTrainExactDeliveryDetails(st, st.id, {
+      includeInstructions: !reservation.user_id,
+    });
+    if (!delivery.address?.address?.trim()) {
+      return res.status(409).json({
+        error: 'ADDRESS_UNAVAILABLE',
+        message: 'This Support Train does not have an exact delivery address to share.',
+      });
+    }
+
     if (!reservation.user_id) {
       // A share emailed moments ago is this same share (a re-sent request or a second tap):
       // answer as it did without emailing the guest again. A later Resend still emails.
@@ -3279,15 +3302,6 @@ router.post(
         .select('slot_date, slot_label, start_time, end_time')
         .eq('id', reservation.slot_id)
         .single();
-      const delivery = await getSupportTrainExactDeliveryDetails(st, st.id);
-
-      if (!delivery.addressLabel) {
-        return res.status(409).json({
-          error: 'ADDRESS_UNAVAILABLE',
-          message: 'This Support Train does not have an exact delivery address to share.',
-        });
-      }
-
       const alreadyShared = !!reservation.guest_address_shared_at;
       const emailResult = await sendGuestReservationAddressEmail({
         toEmail: reservation.guest_email,
