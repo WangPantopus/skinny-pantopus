@@ -288,7 +288,8 @@ fun GigDetailScreen(
     LaunchedEffect(stopState.recoveryError) { stopState.recoveryError?.let { showToast(it, true) } }
 
     // Launch cut #4 (Open Gigs): a task the viewer neither posted nor works is open-task
-    // browsing, hidden for the first launch; the detail and lifecycle of their own tasks stay.
+    // browsing, hidden for the first launch; the detail and lifecycle of their own tasks stay,
+    // and a business's owner and staff see its tasks.
     if (!LaunchFeatures.openGigs && state is ContentDetailUiState.Loaded && !viewModel.viewerIsPartOfTask()) {
         NotYetAvailableView(tabName = "Open tasks", icon = PantopusIcon.Info, onBack = onBack)
         return
