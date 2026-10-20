@@ -3215,12 +3215,21 @@ router.post(
 
     let isOrganizer = st.organizer_user_id === userId;
     if (!isOrganizer) {
-      const { data: orgRow } = await supabaseAdmin
+      const { data: orgRow, error: orgErr } = await supabaseAdmin
         .from('SupportTrainOrganizer')
         .select('role')
         .eq('support_train_id', st.id)
         .eq('user_id', userId)
-        .single();
+        .maybeSingle();
+      // A failed read is not a refusal: a co-organizer must not be told they can't share.
+      if (orgErr) {
+        logger.error('Reveal Support Train address organizer check failed', {
+          supportTrainId: st.id,
+          userId,
+          error: orgErr.message,
+        });
+        throw Object.assign(new Error('Could not check organizer access. Please try again.'), { status: 503 });
+      }
       if (orgRow && (orgRow.role === 'primary' || orgRow.role === 'co_organizer')) {
         isOrganizer = true;
       }
