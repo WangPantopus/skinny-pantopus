@@ -13,6 +13,7 @@
 
 const supabaseAdmin = require('../../config/supabaseAdmin');
 const logger = require('../../utils/logger');
+const { GeoCache } = require('../../utils/geoCache');
 const { escapeIlike } = require('../../utils/escapeIlike');
 const s3 = require('../s3Service');
 const {
@@ -63,7 +64,7 @@ const LISTING_BROWSE_SELECT = `
 // ---------------------------------------------------------------------------
 
 // Mute/block filter cache (60s TTL, same pattern as feedService)
-const _filterCache = new Map();
+const _filterCache = new GeoCache(1000); // userId → filters
 const FILTER_CACHE_TTL = 60_000;
 
 // Total-in-bounds count cache (30s TTL)
@@ -197,8 +198,8 @@ async function getMuteAndBlockFilters(userId) {
   if (!userId) return null;
 
   const cached = _filterCache.get(userId);
-  if (cached && cached.expires > Date.now()) {
-    return cached.data;
+  if (cached) {
+    return cached;
   }
 
   // ListingHide table may not exist yet — query it safely (Supabase builder is thenable but has no .catch)
@@ -235,7 +236,7 @@ async function getMuteAndBlockFilters(userId) {
     hiddenListingIds: new Set((hides || []).map(h => h.listing_id)),
   };
 
-  _filterCache.set(userId, { data: result, expires: Date.now() + FILTER_CACHE_TTL });
+  _filterCache.set(userId, result, FILTER_CACHE_TTL);
   return result;
 }
 
