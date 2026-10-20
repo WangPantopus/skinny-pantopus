@@ -75,7 +75,8 @@ export default function MediaUpload({ mediaFiles, onAddMedia, onRemoveMedia }: M
             : valid.length !== files.length
               ? 'Some files weren’t added. Files can’t be empty; photos can be up to 10 MB, videos 100 MB and PDFs 25 MB.'
               : valid.length > remaining
-                ? `Up to ${MAX_ATTACHMENTS} attachments per post. ${remaining > 0 ? `Only the first ${remaining} were added.` : 'Your existing attachments are kept.'}`
+                ? `Up to ${MAX_ATTACHMENTS} attachments per post. ${remaining === 0 ? 'Your existing attachments are kept.'
+                  : remaining === 1 ? 'Only the first file was added.' : `Only the first ${remaining} files were added.`}`
                 : null);
           if (remaining > 0 && valid.length > 0) onAddMedia(valid.slice(0, remaining));
         }}
