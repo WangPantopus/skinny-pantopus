@@ -789,23 +789,25 @@ public final class ChatConversationViewModel {
     /// state when handed that conversation id. Its earlier turns are shown
     /// too, so the assistant never refers to something the person can't
     /// see. When the session store already holds an id (a same-session
-    /// reopen), only that conversation's turns are read.
+    /// reopen), only that conversation's turns are read. A thread opened
+    /// with Ask on a screen continues the same conversation but shows only
+    /// what is asked there, so its starters stay in view.
     private func restoreAIConversationIfNeeded() async {
-        // A thread opened with Ask on a screen starts about that screen.
-        guard case .ai = mode, aiTopic == nil else { return }
+        guard case .ai = mode else { return }
         // Reopened this session (or after an Ask on a screen): show the
         // conversation it continues, as a relaunch does.
         if let aiConversationId {
-            await loadAIHistory(conversationId: aiConversationId)
+            if aiTopic == nil { await loadAIHistory(conversationId: aiConversationId) }
             return
         }
         guard !aiConversationStore.didStartFresh(forUserId: currentUserId) else { return }
         do {
             let response: AIConversationsResponse = try await api.request(AIEndpoints.conversations())
-            guard let latest = response.conversations.first else { return }
+            // A message sent meanwhile already has its conversation.
+            guard let latest = response.conversations.first, aiConversationId == nil else { return }
             aiConversationId = latest.id
             aiConversationStore.setConversationId(latest.id, forUserId: currentUserId)
-            await loadAIHistory(conversationId: latest.id)
+            if aiTopic == nil { await loadAIHistory(conversationId: latest.id) }
         } catch {
             // Non-fatal — the thread simply starts a fresh conversation.
             logger.warning("AI conversation restore failed: \(error)")
