@@ -223,12 +223,6 @@ class MainActivity : FragmentActivity() {
         }
         val uri = intent?.data ?: return
         if (intent.action != Intent.ACTION_VIEW) return
-        // A pantopus.com page the app has no screen for opens in the browser,
-        // except on a relaunch from Recents, which is a return to the app.
-        if (WebLinkFallback.isWebOnly(uri)) {
-            if (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY == 0) WebLinkFallback.open(this, uri)
-            return
-        }
         // Browser OAuth callbacks belong to the in-flight sign-in attempt,
         // not the router. Mirrors iOS `PantopusApp`'s
         // `guard !AuthManager.isOAuthCallback(url) else { return }`.
@@ -236,8 +230,21 @@ class MainActivity : FragmentActivity() {
             OAuthSessionStore.deliver(uri)
             return
         }
-        if (forwardReminderAction(intent, uri) || forwardAssistantNudge(intent, uri)) return
+        if (forwardWebOnlyLink(intent, uri) || forwardReminderAction(intent, uri) || forwardAssistantNudge(intent, uri)) return
         DeepLinkRouter.handle(uri)
+    }
+
+    /**
+     * A pantopus.com page the app has no screen for opens in the browser, except on a
+     * relaunch from Recents, which is a return to the app. True when [uri] is such a page.
+     */
+    private fun forwardWebOnlyLink(
+        intent: Intent,
+        uri: Uri,
+    ): Boolean {
+        if (!WebLinkFallback.isWebOnly(uri)) return false
+        if (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY == 0) WebLinkFallback.open(this, uri)
+        return true
     }
 
     /** A brief or nudge opens only for the account it was sent to; signed out, it waits for that account's sign-in. */
