@@ -259,31 +259,21 @@ private fun AiCardButtons(
                     modifier = Modifier.testTag("chatAIActionError"),
                 )
             }
-            @Composable
-            fun button(
-                action: ChatAICardAction,
-                modifier: Modifier,
-            ) = PantopusButton(
-                title = action.label,
-                kind =
-                    when (action.style) {
-                        "secondary" -> PantopusButtonKind.Ghost
-                        "destructive" -> PantopusButtonKind.Destructive
-                        else -> PantopusButtonKind.Primary
-                    },
-                onClick = { onAction(scope, action) },
-                modifier = modifier.testTag("chatAIActionButton_${action.id}"),
-                isLoading = (run as? ChatAICardRun.Running)?.actionId == action.id,
-                isEnabled = !card.isRunning,
-            )
-            // Two buttons share a row; three or more (a task's Done, new date and assign) stack, so none is squeezed.
-            if (actions.size > 2) {
-                Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    actions.forEach { button(it, Modifier.fillMaxWidth()) }
-                }
-            } else {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-                    actions.forEach { button(it, Modifier.weight(1f)) }
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+                actions.forEach { action ->
+                    PantopusButton(
+                        title = action.label,
+                        kind =
+                            when (action.style) {
+                                "secondary" -> PantopusButtonKind.Ghost
+                                "destructive" -> PantopusButtonKind.Destructive
+                                else -> PantopusButtonKind.Primary
+                            },
+                        onClick = { onAction(scope, action) },
+                        modifier = Modifier.weight(1f).testTag("chatAIActionButton_${action.id}"),
+                        isLoading = (run as? ChatAICardRun.Running)?.actionId == action.id,
+                        isEnabled = !card.isRunning,
+                    )
                 }
             }
         }
@@ -332,9 +322,6 @@ private fun actionCardIcon(card: String): PantopusIcon =
         card.startsWith("plan_") -> PantopusIcon.CalendarCheck
         card == "post_solve" -> PantopusIcon.CheckCircle
         card == "home_task" -> PantopusIcon.ListChecks
-        card == "home_task_update" -> PantopusIcon.CheckCheck
-        card == "home_system" -> PantopusIcon.Wrench
-        card.startsWith("home_") -> PantopusIcon.Home
         card == "notification_settings" -> PantopusIcon.Bell
         else -> PantopusIcon.Sparkles
     }
@@ -350,10 +337,8 @@ private fun actionCardLabel(card: String): String =
         "post_reply" -> "Reply"
         "post_solve" -> "Mark solved"
         "home_task" -> "Reminder"
-        "home_task_update" -> "Task update"
-        "home_system" -> "Home system"
         "notification_settings" -> "Notifications"
-        else -> if (card.startsWith("home_")) "Home" else "Pantopus"
+        else -> "Pantopus"
     }
 
 /** Buttons to screens of the app under an assistant reply (contract section 5). */
