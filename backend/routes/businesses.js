@@ -87,6 +87,7 @@ const { shouldBlockCoordinateOverwrite } = require('../utils/verifiedCoordinateG
 const { generateNewBusinessSignal } = require('../services/businessSignalService');
 const membershipService = require('../services/businessMembershipService');
 const { chosenUsernameOrNull } = require('../utils/personalUsername');
+const { isUnpublishedBusiness } = require('../utils/visibilityPolicy');
 
 
 // ============ CONSTANTS ============
@@ -4185,14 +4186,14 @@ router.post('/:businessId/inbox/start', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'This account cannot send messages' });
     }
 
-    // Verify business exists
+    // Verify business exists. A draft isn't public (its profile answers 404), so it takes no inquiries.
     const { data: biz } = await supabaseAdmin
       .from('User')
       .select('id, name')
       .eq('id', businessId)
       .eq('account_type', 'business')
       .single();
-    if (!biz) return res.status(404).json({ error: 'Business not found' });
+    if (!biz || await isUnpublishedBusiness(businessId)) return res.status(404).json({ error: 'Business not found' });
 
     const { isBlocked } = require('../services/blockService');
     if (await isBlocked(userId, businessId)) {

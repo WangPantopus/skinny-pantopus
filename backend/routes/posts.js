@@ -125,6 +125,7 @@ const {
   attachIdentityAuthors,
   applyPostLocationPrivacy,
   sortMatchedBusinessesByRating,
+  dropUnpublishedMatches,
   applyCursorCondition,
   buildCursorPagination,
   FEED_POST_SELECT,
@@ -2566,6 +2567,7 @@ router.get('/:id', optionalAuth, async (req, res) => {
         .catch(err => logger.warn('post.view_count.error', { error: err.message, postId: id, userId }));
     }
 
+    await dropUnpublishedMatches([post]);
     applyPostLocationPrivacy(post, userId);
     const responsePost = await serializePostForViewer({
       ...post,
@@ -2816,6 +2818,7 @@ router.get('/:id/matched-businesses', verifyToken, async (req, res) => {
       select: `${POST_VISIBILITY_SELECT},service_category,matched_business_ids,matched_businesses_cache,created_at`,
     });
     if (!post) return;
+    await dropUnpublishedMatches([post]);
 
     // No service_category → no matches possible
     if (!post.service_category) {
