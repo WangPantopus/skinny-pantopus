@@ -353,6 +353,8 @@ private fun actionCardLabel(card: String): String =
         "home_task_update" -> "Task update"
         "home_system" -> "Home system"
         "notification_settings" -> "Notifications"
+        // A nudge with nothing to do but "Fewer like this" (AI assistant phase 2 §3.6).
+        "suggestion" -> "Suggestion"
         else -> if (card.startsWith("home_")) "Home" else "Pantopus"
     }
 
