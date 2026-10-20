@@ -2308,11 +2308,27 @@ public final class ChatConversationViewModel {
                 stamp: stamp,
                 deliveryState: deliveryState,
                 lockedTier: Self.lockedTier(for: message),
-                sentSupportTier: Self.sentSupportTier(for: message)
+                sentSupportTier: Self.sentSupportTier(for: message),
+                senderName: side == .incoming ? roomSenderName(for: message) : nil
             )))
         }
         state = .loaded(rows: rows)
         resolveScrollTargetIfNeeded(rows: rows)
+    }
+
+    /// A room's incoming messages name their sender, as on Android: a room
+    /// has several people, and its avatar alone doesn't say who wrote what.
+    /// A made-up username is never shown.
+    private func roomSenderName(for message: ChatMessageDTO) -> String? {
+        guard case .room = mode else { return nil }
+        for name in [message.sender?.displayName, message.sender?.name] {
+            if let name = name?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
+                return name
+            }
+        }
+        return MadeUpUsername.chosen(message.sender?.handle)
+            ?? MadeUpUsername.chosen(message.sender?.username)
+            ?? "Participant"
     }
 
     /// Resolve the Chat Search scroll target once: if the deep-linked

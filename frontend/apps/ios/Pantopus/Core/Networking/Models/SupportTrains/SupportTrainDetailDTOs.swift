@@ -59,6 +59,9 @@ public struct SupportTrainDetailDTO: Decodable, Sendable {
     /// Organizer-only echo of the parent Activity's visibility
     /// (`backend/routes/supportTrains.js:3699`).
     public let activityVisibility: String?
+    /// The train's chat room — only for someone in it (organizers, the
+    /// recipient, helpers with a signup).
+    public let chatThreadId: String?
 
     enum CodingKeys: String, CodingKey {
         case id, title, story, status, slots, updates, organizers
@@ -82,6 +85,7 @@ public struct SupportTrainDetailDTO: Decodable, Sendable {
         case deliveryInstructions = "delivery_instructions"
         case specialInstructions = "special_instructions"
         case activityVisibility = "activity_visibility"
+        case chatThreadId = "chat_thread_id"
     }
 
     /// `primary` / `co_organizer` / `recipient_delegate` hold organizer

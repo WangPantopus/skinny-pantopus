@@ -496,6 +496,10 @@ public struct ChatBubbleContent: Identifiable, Sendable, Hashable {
     public let lockedTier: String?
     /// Paid support tier attached to outgoing fan replies.
     public let sentSupportTier: String?
+    /// Who sent an incoming message in a room with several people (a
+    /// group's, a Support Train's); never the room's title. `nil` in a
+    /// one-to-one thread.
+    public let senderName: String?
 
     public init(
         id: String,
@@ -508,7 +512,8 @@ public struct ChatBubbleContent: Identifiable, Sendable, Hashable {
         stamp: String?,
         deliveryState: ChatDeliveryState? = nil,
         lockedTier: String? = nil,
-        sentSupportTier: String? = nil
+        sentSupportTier: String? = nil,
+        senderName: String? = nil
     ) {
         self.id = id
         self.side = side
@@ -521,6 +526,7 @@ public struct ChatBubbleContent: Identifiable, Sendable, Hashable {
         self.deliveryState = deliveryState
         self.lockedTier = lockedTier
         self.sentSupportTier = sentSupportTier
+        self.senderName = senderName
     }
 }
 
