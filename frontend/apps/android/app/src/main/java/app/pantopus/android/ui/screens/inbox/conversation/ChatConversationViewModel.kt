@@ -296,6 +296,10 @@ class ChatConversationViewModel
             val metadata: Map<String, Any>? = null,
         )
 
+        // Photos sent to the assistant, by the message that carried them: where each is on the phone, because the
+        // server deletes a photo once it has read it and its reference never loads.
+        private val aiSentPhotos = mutableMapOf<String, List<String>>()
+
         private var aiConversationId: String? = null
         private val aiDraftsByMessageId = mutableMapOf<String, List<ChatAIDraftCard>>()
 
@@ -722,6 +726,7 @@ class ChatConversationViewModel
             filename: String,
             mimeType: String,
             bytes: ByteArray,
+            sourceUri: String? = null,
         ) {
             appendQueuedAttachment(
                 ChatQueuedAttachment(
@@ -730,6 +735,7 @@ class ChatConversationViewModel
                     filename = filename,
                     mimeType = mimeType,
                     bytes = bytes,
+                    sourceUri = sourceUri,
                 ),
             )
         }
@@ -1256,6 +1262,7 @@ class ChatConversationViewModel
             aiConversationId = null
             aiSession.conversationId = null
             aiSession.freshStartUserId = currentUserId
+            aiSentPhotos.clear()
             messages.clear()
             aiDraftsByMessageId.clear()
             aiLinksByMessageId.clear()
@@ -1265,6 +1272,11 @@ class ChatConversationViewModel
         }
 
         private suspend fun streamAiMessage(text: String) {
+            // Where the photos the upload sends (images only) are on the phone, taken before it starts.
+            val photos =
+                _queuedAttachments.value
+                    .filter { it.bytes != null && it.mimeType.startsWith("image/") }
+                    .mapNotNull { it.sourceUri }
             val imageUrls = uploadQueuedAIImagesIfNeeded()
             val userMessage =
                 localMessage(
@@ -1272,8 +1284,8 @@ class ChatConversationViewModel
                     text = text,
                     userId = currentUserId,
                     type = "text",
-                    imageUrls = imageUrls,
                 )
+            if (imageUrls.isNotEmpty()) aiSentPhotos[userMessage.id] = photos
             val assistantId = "ai_assistant_${UUID.randomUUID()}"
             streamingAssistantId = assistantId
             messages.add(userMessage)
@@ -2589,10 +2601,11 @@ class ChatConversationViewModel
                     )
                 "text" -> {
                     val imageUrls =
-                        (message.metadata?.get("image_urls") as? List<*>)
-                            ?.filterIsInstance<String>()
-                            ?.mapNotNull(ChatMediaUrl::resolve)
-                            .orEmpty()
+                        aiSentPhotos[message.id]
+                            ?: (message.metadata?.get("image_urls") as? List<*>)
+                                ?.filterIsInstance<String>()
+                                ?.mapNotNull(ChatMediaUrl::resolve)
+                                .orEmpty()
                     if (imageUrls.isNotEmpty()) {
                         ChatBubbleBody.TextWithImages(message.resolvedText, imageUrls)
                     } else {
@@ -2737,7 +2750,6 @@ class ChatConversationViewModel
             text: String,
             userId: String,
             type: String,
-            imageUrls: List<String> = emptyList(),
         ): ChatMessageDto =
             ChatMessageDto(
                 id = id,
@@ -2745,7 +2757,6 @@ class ChatConversationViewModel
                 userId = userId,
                 messageText = text,
                 messageType = type,
-                metadata = if (imageUrls.isEmpty()) null else mapOf("image_urls" to imageUrls),
                 createdAt = Instant.now().toString(),
             )
 

@@ -235,6 +235,8 @@ data class ChatQueuedAttachment(
     val filename: String,
     val mimeType: String = "application/octet-stream",
     val bytes: ByteArray? = null,
+    /** Where the picked file is on the phone (its content:// address): a photo sent to the assistant shows from it. */
+    val sourceUri: String? = null,
 )
 
 /**

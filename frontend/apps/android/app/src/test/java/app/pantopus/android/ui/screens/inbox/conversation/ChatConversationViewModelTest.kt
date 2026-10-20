@@ -411,22 +411,29 @@ class ChatConversationViewModelTest {
                         images =
                             listOf(
                                 app.pantopus.android.data.api.models.chats.AIUploadedImage(
-                                    url = "https://cdn.example/image.jpg",
+                                    url = "ai-photo:photo.jpg",
                                 ),
                             ),
                     ),
                 )
-            every { aiRepo.streamChat("Look", null, listOf("https://cdn.example/image.jpg")) } returns
+            every { aiRepo.streamChat("Look", null, listOf("ai-photo:photo.jpg")) } returns
                 flowOf(AIChatStreamEvent.TextDelta("Nice image"), AIChatStreamEvent.Done)
             val vm = makeViewModel()
             vm.configure(mode = ChatThreadMode.Ai, counterparty = counterpartyAi, currentUserId = "u_me")
             vm.load()
-            vm.queueAttachment(ChatQueuedAttachmentKind.Image, "photo.jpg", "image/jpeg", "jpg".toByteArray())
+            vm.queueAttachment(
+                ChatQueuedAttachmentKind.Image,
+                "photo.jpg",
+                "image/jpeg",
+                "jpg".toByteArray(),
+                sourceUri = "content://media/picker/0/photo",
+            )
             vm.setComposerText("Look")
             vm.send()
             val loaded = vm.state.value as ChatConversationUiState.Loaded
             val outgoing = loaded.rows.filterIsInstance<ChatTimelineRow.Bubble>().first { it.content.side == ChatMessageSide.Outgoing }
-            assertTrue(outgoing.content.body is ChatBubbleBody.TextWithImages)
+            // The phone's own photo: the server deletes it once read, and its reference never loads.
+            assertEquals(listOf("content://media/picker/0/photo"), (outgoing.content.body as ChatBubbleBody.TextWithImages).imageUrls)
         }
 
     @Test fun send_failure_marks_optimistic_bubble_as_failed() =
