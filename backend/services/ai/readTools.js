@@ -37,6 +37,7 @@ const {
 function planKinds(playdates = false) {
   return playdates ? KINDS : KINDS.filter((kind) => kind !== 'playdate');
 }
+
 // What the nearby feed accepts from residents (posts.js PLACE types).
 const PLACE_POST_TYPES = ['ask_local', 'recommendation', 'event', 'lost_found', 'alert', 'deal', 'local_update', 'neighborhood_win', 'visitor_guide'];
 // The Today screen's sections (PlaceStoreReads / StoreKeys).
