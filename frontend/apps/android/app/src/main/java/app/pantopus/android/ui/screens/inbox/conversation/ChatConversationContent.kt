@@ -154,6 +154,8 @@ data class ChatConversationRouteArgs(
     val gigId: String? = null,
     /** The screen an assistant thread was opened from (Ask Pantopus), or null. */
     val aiContext: AIScreenContext? = null,
+    /** A brief's or nudge's notification id: the assistant thread opens at its message. */
+    val aiNudgeId: String? = null,
 )
 
 /**

@@ -19,12 +19,16 @@ import javax.inject.Singleton
 private const val HTTP_CONFLICT = 409
 
 /**
- * The requests an action card may send (AI assistant phase 1 contract, section 4.3): each is an endpoint the
- * app already uses, with `:id` a UUID. Anything else is never sent.
+ * The requests an action card may send (AI assistant phase 1 contract, section 4.3, and phase 2 section 8.1): each is
+ * an endpoint the app already uses, with `:id` a UUID and `:system` one of a home's six system keys. Anything else is
+ * never sent.
  */
 internal object AIActionAllowlist {
     const val SESSION_SCOPE_HEADER = "x-pantopus-session-scope"
     private const val UUID = "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+
+    /** The systems Place keeps an installed year for (`PUT /api/homes/:id/systems/:key`). */
+    private const val SYSTEM_KEY = "(?:roof|hvac|water_heater|electrical_panel|sewer_septic|windows)"
 
     /** Stands in for a `{{response.…}}` placeholder when a follow-up is checked before the first request. */
     const val PLACEHOLDER_STAND_IN = "00000000-0000-0000-0000-000000000000"
@@ -43,7 +47,11 @@ internal object AIActionAllowlist {
             "POST" to "/api/homes/:id/tasks",
             "POST" to "/api/homes/:id/tasks/:id/recurrence",
             "PUT" to "/api/hub/preferences",
-        ).map { (method, path) -> method to Regex("^" + path.replace(":id", UUID) + "$") }
+            // Phase 2: a system's installed year, a task's update, and a nudge's "Fewer like this".
+            "PUT" to "/api/homes/:id/systems/:system",
+            "PUT" to "/api/homes/:id/tasks/:id",
+            "POST" to "/api/ai/nudges/:id/fewer",
+        ).map { (method, path) -> method to Regex("^" + path.replace(":id", UUID).replace(":system", SYSTEM_KEY) + "$") }
 
     fun allows(request: ChatAICardRequest): Boolean =
         RULES.any { (method, path) -> method == request.method && path.matches(request.path) } &&

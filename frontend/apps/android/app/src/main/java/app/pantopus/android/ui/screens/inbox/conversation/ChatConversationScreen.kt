@@ -347,6 +347,7 @@ fun ChatConversationScreen(
             args.initialTopic,
             args.gigId,
             args.aiContext,
+            args.aiNudgeId,
         )
         viewModel.load()
     }

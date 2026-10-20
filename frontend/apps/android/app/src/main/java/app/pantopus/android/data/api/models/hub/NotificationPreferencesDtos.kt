@@ -6,6 +6,8 @@ import com.squareup.moshi.JsonClass
 import com.squareup.moshi.JsonReader
 import com.squareup.moshi.JsonWriter
 import com.squareup.moshi.ToJson
+import java.time.Instant
+import java.time.OffsetDateTime
 
 /**
  * T2 — hub notification / briefing preferences.
@@ -50,6 +52,16 @@ data class NotificationPreferencesDto(
     @Json(name = "quiet_hours_end_local") val quietHoursEndLocal: String? = null,
     /** `primary_home | viewing_location | device_location | custom`. */
     @Json(name = "location_mode") val locationMode: String? = null,
+    /**
+     * Suggestions from Pantopus (AI assistant phase 2 contract §3.4): null until the person chooses, which
+     * counts as off.
+     */
+    @Json(name = "suggestions_enabled") val suggestionsEnabled: Boolean? = null,
+    /**
+     * "Fewer like this": each muted kind and when its mute ends. A server with Suggestions always answers it
+     * (`{}` at least); an older server leaves it out.
+     */
+    @Json(name = "suggestions_muted") val suggestionsMuted: Map<String, Any?>? = null,
 )
 
 /**
@@ -72,9 +84,20 @@ data class NotificationPreferences(
     val quietHoursEndLocal: String?,
     val locationMode: String,
     val dailyBriefingPromptedAt: String? = null,
+    /** Null: never chosen, which counts as off. */
+    val suggestionsEnabled: Boolean? = null,
+    /** Muted kinds and when each mute ends (ISO 8601); null on a server without Suggestions. */
+    val suggestionsMuted: Map<String, String>? = null,
 ) {
     /** Mirrors RN (`notification-preferences.tsx:205`). */
     val quietHoursEnabled: Boolean get() = quietHoursStartLocal != null
+
+    /** The server has Suggestions: only then do the switch and the notice show, so nothing sends a key it rejects. */
+    val supportsSuggestions: Boolean get() = suggestionsMuted != null
+
+    /** A "Fewer like this" mute hasn't ended yet, so "Reset" has something to bring back. */
+    fun hasActiveSuggestionMutes(now: Instant = Instant.now()): Boolean =
+        suggestionsMuted.orEmpty().values.any { end -> parseInstant(end)?.isAfter(now) == true }
 
     companion object {
         const val DEFAULT_DAILY_TIME = "07:30"
@@ -100,7 +123,14 @@ data class NotificationPreferences(
                 quietHoursEndLocal = dto.quietHoursEndLocal,
                 locationMode = dto.locationMode ?: MODE_PRIMARY_HOME,
                 dailyBriefingPromptedAt = dto.dailyBriefingPromptedAt,
+                suggestionsEnabled = dto.suggestionsEnabled,
+                suggestionsMuted =
+                    dto.suggestionsMuted?.entries?.mapNotNull { (kind, end) -> (end as? String)?.let { kind to it } }?.toMap(),
             )
+
+        /** `2026-11-19T16:00:00.000Z` or with an offset; null when it isn't a time. */
+        private fun parseInstant(raw: String): Instant? =
+            runCatching { Instant.parse(raw) }.getOrNull() ?: runCatching { OffsetDateTime.parse(raw).toInstant() }.getOrNull()
     }
 }
 
@@ -129,6 +159,10 @@ data class NotificationPreferencesPatch(
     val dailyBriefingTimezone: String? = null,
     val dailyBriefingPrompted: Boolean? = null,
     val deviceTimezone: String? = null,
+    /** Suggestions from Pantopus on or off (the first choice comes from the one-time notice). */
+    val suggestionsEnabled: Boolean? = null,
+    /** True sends `suggestions_muted: {}`, which ends every "Fewer like this" mute. */
+    val clearSuggestionMutes: Boolean? = null,
 ) {
     /** Last write wins per key; untouched keys survive the merge. */
     fun mergedWith(newer: NotificationPreferencesPatch): NotificationPreferencesPatch =
@@ -148,6 +182,8 @@ data class NotificationPreferencesPatch(
             dailyBriefingTimezone = newer.dailyBriefingTimezone ?: dailyBriefingTimezone,
             dailyBriefingPrompted = newer.dailyBriefingPrompted ?: dailyBriefingPrompted,
             deviceTimezone = newer.deviceTimezone ?: deviceTimezone,
+            suggestionsEnabled = newer.suggestionsEnabled ?: suggestionsEnabled,
+            clearSuggestionMutes = newer.clearSuggestionMutes ?: clearSuggestionMutes,
         )
 
     /** Nothing to send — Joi's `.min(1)` would 400 on an empty body. */
@@ -195,6 +231,8 @@ class NotificationPreferencesPatchJsonAdapter {
         value.dailyBriefingTimezone?.let { writer.name("daily_briefing_timezone").value(it) }
         value.dailyBriefingPrompted?.let { writer.name("daily_briefing_prompted").value(it) }
         value.deviceTimezone?.let { writer.name("device_timezone").value(it) }
+        value.suggestionsEnabled?.let { writer.name("suggestions_enabled").value(it) }
+        if (value.clearSuggestionMutes == true) writer.name("suggestions_muted").beginObject().endObject()
         writer.endObject()
     }
 

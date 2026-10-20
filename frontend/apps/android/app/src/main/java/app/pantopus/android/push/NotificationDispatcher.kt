@@ -149,6 +149,8 @@ class NotificationDispatcher
             val body = notificationBody ?: data["body"]
             var deepLink =
                 HomeTaskNotificationRoute.pushPath(data)
+                    // A brief or nudge opens the assistant at its message.
+                    ?: DeepLinkRouter.assistantNotificationPath(data["type"], data["notificationId"], data["link"])
                     ?: DeepLinkRouter.notificationPath(data["type"], data["link"])
                     ?: data["deepLink"]
                     ?: briefingOrReceiptLink(data)
