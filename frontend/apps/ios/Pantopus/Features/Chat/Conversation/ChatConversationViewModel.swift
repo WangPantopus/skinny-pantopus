@@ -370,6 +370,12 @@ public struct AIAssistantNudge: Hashable, Sendable {
     }
 }
 
+/// How reading an assistant conversation's turns went: shown (or overtaken by a
+/// message sent meanwhile), gone (404), or not read (offline, a server error).
+private enum AIHistoryLoad {
+    case read, missing, failed
+}
+
 @Observable
 @MainActor
 public final class ChatConversationViewModel {
@@ -868,17 +874,10 @@ public final class ChatConversationViewModel {
     /// carries on in that conversation, so "move it to Sunday" after a
     /// weather nudge reaches the plan it was about.
     private func openAINudge(_ nudge: AIAssistantNudge) async {
-        var conversationId = nudge.conversationId
-        if conversationId == nil { conversationId = await newestAIConversationId() }
-        // A message sent meanwhile already has its conversation.
-        if let conversationId, aiConversationId == nil {
-            await continueAIConversation(conversationId)
-            // The conversation it named is gone (deleted): the newest one instead.
-            if messages.isEmpty, nudge.conversationId != nil, aiConversationId == conversationId,
-               let newest = await newestAIConversationId(), newest != conversationId, messages.isEmpty {
-                aiConversationId = nil
-                await continueAIConversation(newest)
-            }
+        let shown = await showNudgeConversation(nudge)
+        if !shown {
+            // Offline or a server error: say so, rather than show an empty thread.
+            actionFailure = "Couldn\u{2019}t load this conversation. Check your connection, then open it again."
         }
         // Not found (gone, or another conversation): the thread opens at its latest message.
         if scrollToMessageId == nudge.notificationId, !didResolveScrollTarget {
@@ -887,37 +886,57 @@ public final class ChatConversationViewModel {
         }
     }
 
-    /// The person's newest assistant conversation (`GET /api/ai/conversations`
-    /// lists them newest-updated first), nil when there is none or the read failed.
-    private func newestAIConversationId() async -> String? {
+    /// Shows the conversation a brief or nudge went into; when the one it names is gone
+    /// (deleted), the newest. False when it couldn't be read.
+    private func showNudgeConversation(_ nudge: AIAssistantNudge) async -> Bool {
         do {
-            let response: AIConversationsResponse = try await api.request(AIEndpoints.conversations())
-            return response.conversations.first?.id
+            var named = nudge.conversationId
+            if named == nil { named = try await newestAIConversationId() }
+            // A message sent meanwhile already has its conversation.
+            guard let conversationId = named, aiConversationId == nil else { return true }
+            switch await continueAIConversation(conversationId) {
+            case .read: return true
+            case .failed: return false
+            case .missing:
+                guard nudge.conversationId != nil, aiConversationId == conversationId,
+                      let newest = try await newestAIConversationId(), newest != conversationId else { return true }
+                aiConversationId = nil
+                return await continueAIConversation(newest) != .failed
+            }
         } catch {
             logger.warning("AI conversations unavailable: \(error)")
-            return nil
+            return false
         }
     }
 
+    /// The person's newest assistant conversation (`GET /api/ai/conversations`
+    /// lists them newest-updated first), nil when there is none.
+    private func newestAIConversationId() async throws -> String? {
+        let response: AIConversationsResponse = try await api.request(AIEndpoints.conversations())
+        return response.conversations.first?.id
+    }
+
     /// Carries on in `conversationId`, showing its turns.
-    private func continueAIConversation(_ conversationId: String) async {
+    @discardableResult
+    private func continueAIConversation(_ conversationId: String) async -> AIHistoryLoad {
         aiConversationId = conversationId
         aiConversationStore.setConversationId(conversationId, forUserId: currentUserId)
-        await loadAIHistory(conversationId: conversationId)
+        return await loadAIHistory(conversationId: conversationId)
     }
 
     /// Seed the thread with a restored conversation's turns
     /// (`GET /api/ai/conversations/:id/messages`). A draft and the note
     /// after it share one reply, as they did when it streamed. A server
     /// without the route (404) leaves the thread empty, as before.
-    private func loadAIHistory(conversationId: String) async {
-        guard messages.isEmpty else { return }
+    @discardableResult
+    private func loadAIHistory(conversationId: String) async -> AIHistoryLoad {
+        guard messages.isEmpty else { return .read }
         do {
             let history: AIConversationMessagesResponse = try await api.request(
                 AIEndpoints.conversationMessages(id: conversationId)
             )
             // A message sent (or "New chat") while this loaded wins.
-            guard messages.isEmpty, aiConversationId == conversationId else { return }
+            guard messages.isEmpty, aiConversationId == conversationId else { return .read }
             var restored: [ChatMessageDTO] = []
             var drafts: [String: [ChatAIDraftCard]] = [:]
             var links: [String: [ChatAILink]] = [:]
@@ -988,8 +1007,12 @@ public final class ChatConversationViewModel {
                 }
             }
             rebuild()
+            return .read
+        } catch APIError.notFound {
+            return .missing
         } catch {
             logger.warning("AI conversation history unavailable: \(error)")
+            return .failed
         }
     }
 
