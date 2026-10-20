@@ -56,6 +56,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -919,6 +920,9 @@ private fun ViewModeToggle(
 /** Above this font scale the Pulse bar's List / Map segment moves under the title. */
 private const val LARGE_TEXT_SCALE = 1.3f
 
+/** With Ask Pantopus as a fourth button, the bar's one line needs about this width (dp) at 100 % text. */
+private const val ASK_ONE_LINE_WIDTH_DP = 420
+
 @Composable
 private fun TopBar(
     title: String,
@@ -934,8 +938,11 @@ private fun TopBar(
     /** Non-null shows Ask Pantopus (AI assistant phase 1). */
     onAskTap: (() -> Unit)? = null,
 ) {
-    // With large text the title, the List / Map segment and three 48 dp buttons don't fit on one line.
-    val stackToggle = viewMode != null && LocalDensity.current.fontScale > LARGE_TEXT_SCALE
+    // With large text the title, the List / Map segment and three 48 dp buttons don't fit on one line;
+    // with Ask as a fourth button they don't fit on most phones, so the segment moves under the title there too.
+    val fontScale = LocalDensity.current.fontScale
+    val askCrowds = onAskTap != null && LocalConfiguration.current.screenWidthDp < ASK_ONE_LINE_WIDTH_DP * fontScale
+    val stackToggle = viewMode != null && (fontScale > LARGE_TEXT_SCALE || askCrowds)
     Box(modifier = Modifier.fillMaxWidth().background(PantopusColors.appBg)) {
         Column(
             modifier =
