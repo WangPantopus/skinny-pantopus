@@ -18,7 +18,13 @@ const {
 } = require('../serializers/identitySerializers');
 const { verifiedResidentUserIds } = require('../utils/identityProfiles');
 const { isUnpublishedBusiness } = require('../utils/visibilityPolicy');
-const { hasPermission } = require('../utils/businessPermissions');
+const {
+  isBusinessAccount,
+  canActAsBusiness,
+  businessMembership,
+  actingBusinessInRoom,
+  dropStaffMembership,
+} = require('../services/chatBusinessAccess');
 const s3Service = require('../services/s3Service');
 const { isBlocked, blockCheckUnavailable } = require('../services/blockService');
 const {
@@ -213,24 +219,6 @@ const reactToMessageSchema = Joi.object({
   reacted: Joi.boolean(),
 });
 
-async function isBusinessAccount(userId) {
-  const { data: user } = await supabaseAdmin
-    .from('User')
-    .select('id, account_type')
-    .eq('id', userId)
-    .maybeSingle();
-  return Boolean(user && user.account_type === 'business');
-}
-
-async function canActAsBusiness(businessUserId, actorUserId) {
-  if (!businessUserId || !actorUserId) return false;
-  if (String(businessUserId) === String(actorUserId)) return true;
-  if (!(await isBusinessAccount(businessUserId))) return false;
-  const canManage = await hasPermission(businessUserId, actorUserId, 'gigs.manage');
-  if (canManage) return true;
-  return hasPermission(businessUserId, actorUserId, 'gigs.post');
-}
-
 // The business identity an actor may act as here, or none (their own id always counts).
 async function verifiedBusinessIdentity(asBusinessUserId, actorUserId) {
   if (!asBusinessUserId) return [];
@@ -282,42 +270,25 @@ async function getBusinessMessagingMemberIds(businessUserId) {
   return Array.from(ids);
 }
 
-async function ensureBusinessRoomActorAccess(roomId, actorUserId, businessUserId) {
-  if (!roomId || !actorUserId || !businessUserId) return false;
-
-  const canAct = await canActAsBusiness(businessUserId, actorUserId);
-  if (!canAct) return false;
-
-  const { data: businessParticipant } = await supabaseAdmin
+// The membership a request reads or writes the room through. Acting for a business (`asBusinessUserId`), it is the
+// business's own: its owner and staff are never members of its conversations (services/chatBusinessAccess). Otherwise
+// it is the caller's own row; `activeOnly` refuses one they left.
+async function roomMembership(roomId, userId, asBusinessUserId, { activeOnly = false } = {}) {
+  const { data: own } = await supabaseAdmin
     .from('ChatParticipant')
-    .select('id')
+    .select('*')
     .eq('room_id', roomId)
-    .eq('user_id', businessUserId)
-    .eq('is_active', true)
+    .eq('user_id', userId)
     .maybeSingle();
-
-  if (!businessParticipant) return false;
-
-  await supabaseAdmin
-    .from('ChatParticipant')
-    .upsert(
-      {
-        room_id: roomId,
-        user_id: actorUserId,
-        role: 'member',
-        is_active: true,
-        left_at: null,
-      },
-      { onConflict: 'room_id,user_id', ignoreDuplicates: true }
-    );
-
-  await supabaseAdmin
-    .from('ChatParticipant')
-    .update({ is_active: true, left_at: null })
-    .eq('room_id', roomId)
-    .eq('user_id', actorUserId);
-
-  return true;
+  if (asBusinessUserId && String(asBusinessUserId) !== String(userId)) {
+    const business = await businessMembership(roomId, userId, asBusinessUserId);
+    if (business) {
+      if (own) await dropStaffMembership(roomId, userId, asBusinessUserId);
+      return business;
+    }
+  }
+  if (!own || (activeOnly && own.is_active === false)) return null;
+  return own;
 }
 
 async function redactExpiredDeletedMessages(roomId) {
@@ -391,11 +362,32 @@ async function personRowUnread(userId, otherUserId, sentRoomId) {
     .reduce((sum, row) => sum + (Number(row.unread_count) || 0), 0);
 }
 
+// The owner and staff of a business in the room aren't members themselves, so their open business inbox hears its
+// messages here, on their own devices. Without other_user_id: a personal Messages list that gets one reloads instead
+// of filing it under a person.
+async function emitToBusinessStaff(emitTo, payload, businessIds, heard) {
+  if (businessIds.length === 0) return;
+  const { connectedUsers } = require('../socket/chatSocketio');
+  const { data: team, error } = await supabaseAdmin
+    .from('BusinessTeam')
+    .select('business_user_id, user_id')
+    .in('business_user_id', businessIds)
+    .eq('is_active', true);
+  if (error || !Array.isArray(team)) throw new Error(error?.message || 'business team unavailable');
+  for (const row of team) {
+    const staffId = String(row.user_id);
+    if (heard.has(staffId) || !connectedUsers.has(staffId)) continue;
+    if (!(await canActAsBusiness(row.business_user_id, staffId))) continue;
+    heard.add(staffId);
+    emitTo(staffId, payload);
+  }
+}
+
 async function emitNewMessage(io, { room, message, actorUserId, identityUserId }) {
   const { connectedUsers } = require('../socket/chatSocketio');
   const { data: members, error } = await supabaseAdmin
     .from('ChatParticipant')
-    .select('user_id, unread_count')
+    .select('user_id, unread_count, user:user_id(account_type)')
     .eq('room_id', room.id)
     .eq('is_active', true);
   if (error || !Array.isArray(members)) throw new Error(error?.message || 'members unavailable');
@@ -427,6 +419,15 @@ async function emitNewMessage(io, { room, message, actorUserId, identityUserId }
     if (unread !== null) own = { ...base, other_user_id: counterpart, unread_for: unread };
   }
   emitTo(actor, own);
+  // Staff hear what their business hears, and what a colleague sent as it. Members already heard it above.
+  const businessIds = members
+    .filter((row) => row.user?.account_type === 'business')
+    .map((row) => String(row.user_id))
+    .filter((id) => recipients.has(id) || id === identity);
+  const heard = new Set([actor, ...members.map((row) => String(row.user_id))]);
+  await emitToBusinessStaff(emitTo, base, businessIds, heard).catch((staffError) => {
+    logger.warn('message_new_business_staff_failed', { roomId: room.id, error: staffError.message });
+  });
 }
 
 async function resolveRoomPreviewMap(roomPreviews, requestId, logContext) {
@@ -846,13 +847,9 @@ router.get('/business/:businessUserId/rooms', verifyToken, async (req, res) => {
     const closedRoomIds = await closedGigRoomIds(joinedRooms.map((p) => p.room), actorUserId, [businessUserId]);
     const roomList = joinedRooms.filter((p) => !closedRoomIds.has(String(p.room.id)));
 
-    // NOTE: We intentionally do NOT auto-upsert the actor as a participant
-    // across all business rooms on inbox load. That was too aggressive — it
-    // added the team member to every room the business owns, even rooms they
-    // never opened. Instead, the actor is added as a participant only when
-    // they explicitly open a specific room (via ensureBusinessRoomActorAccess
-    // called from GET /rooms/:roomId, GET /rooms/:roomId/messages, or
-    // POST /messages with asBusinessUserId).
+    // The actor never becomes a member of these rooms: opening, reading and
+    // replying with asBusinessUserId go through the business's own membership
+    // (roomMembership, services/chatBusinessAccess).
 
     // Batch-fetch participants and last messages for all rooms (2 queries instead of 2N)
     const allBizRoomIds = roomList.map(p => p.room.id);
@@ -951,29 +948,11 @@ router.get('/rooms/:roomId', verifyToken, async (req, res) => {
     const { roomId } = req.params;
     const userId = req.user.id;
     const asBusinessUserId = req.query.asBusinessUserId ? String(req.query.asBusinessUserId) : null;
-    
+
     // Verify access
-    let { data: participant } = await supabaseAdmin
-      .from('ChatParticipant')
-      .select('*')
-      .eq('room_id', roomId)
-      .eq('user_id', userId)
-      .maybeSingle();
-    
-    if (!participant) {
-      if (!asBusinessUserId) return res.status(403).json({ error: 'Access denied' });
-      const allowedViaBusiness = await ensureBusinessRoomActorAccess(roomId, userId, asBusinessUserId);
-      if (!allowedViaBusiness) return res.status(403).json({ error: 'Access denied' });
-      const refreshed = await supabaseAdmin
-        .from('ChatParticipant')
-        .select('*')
-        .eq('room_id', roomId)
-        .eq('user_id', userId)
-        .maybeSingle();
-      participant = refreshed.data || null;
-      if (!participant) return res.status(403).json({ error: 'Access denied' });
-    }
-    
+    const participant = await roomMembership(roomId, userId, asBusinessUserId);
+    if (!participant) return res.status(403).json({ error: 'Access denied' });
+
     if (await gigRoomClosed(roomId, userId, asBusinessUserId)) {
       return res.status(403).json({ error: 'Access denied' });
     }
@@ -1095,16 +1074,9 @@ router.post('/direct', verifyToken, directChatLimiter, validate(createDirectChat
       return res.status(500).json({ error: 'Failed to create chat' });
     }
 
-    // Ensure actor + all authorized business members can access business direct chats.
-    const participantIds = new Set([String(initiatorIdentityUserId), String(otherUserId), String(userId)]);
-    if (await isBusinessAccount(initiatorIdentityUserId)) {
-      const memberIds = await getBusinessMessagingMemberIds(initiatorIdentityUserId);
-      for (const memberId of memberIds) participantIds.add(String(memberId));
-    }
-    if (otherUser.account_type === 'business') {
-      const memberIds = await getBusinessMessagingMemberIds(otherUserId);
-      for (const memberId of memberIds) participantIds.add(String(memberId));
-    }
+    // The two identities only. A business's owner and staff act for it in the room without joining it
+    // (services/chatBusinessAccess): as members they would be named to the customer and see it in their own Messages.
+    const participantIds = new Set([String(initiatorIdentityUserId), String(otherUserId)]);
 
     const participants = Array.from(participantIds).map((participantUserId) => ({
       room_id: roomId,
@@ -1369,12 +1341,13 @@ router.get('/conversations/:otherUserId/messages', verifyToken, async (req, res)
     const asBusinessUserId = req.query.asBusinessUserId ? String(req.query.asBusinessUserId) : null;
 
     const lim = Math.min(Math.max(parseInt(limit, 10) || 100, 1), 400);
-    const identityUserIds = new Set([String(userId)]);
+    let identityUserIds = new Set([String(userId)]);
 
     if (asBusinessUserId) {
       const canAct = await canActAsBusiness(asBusinessUserId, userId);
       if (!canAct) return res.status(403).json({ error: 'Access denied' });
-      identityUserIds.add(String(asBusinessUserId));
+      // Acting for a business reads the business's conversations with this person, never the actor's own.
+      identityUserIds = new Set([String(asBusinessUserId)]);
     }
 
     // Only rooms the caller is still in: a former member reads their history in the room itself.
@@ -1481,13 +1454,14 @@ router.post('/conversations/:otherUserId/read', verifyToken, async (req, res) =>
     const userId = req.user.id;
     const { otherUserId } = req.params;
     const asBusinessUserId = req.body?.asBusinessUserId ? String(req.body.asBusinessUserId) : null;
-    const identityUserIds = new Set([String(userId)]);
+    let identityUserIds = new Set([String(userId)]);
     let readTargetUserId = userId;
 
     if (asBusinessUserId) {
       const canAct = await canActAsBusiness(asBusinessUserId, userId);
       if (!canAct) return res.status(403).json({ error: 'Access denied' });
-      identityUserIds.add(String(asBusinessUserId));
+      // Reading for a business marks the business's conversations with this person read, never the reader's own.
+      identityUserIds = new Set([String(asBusinessUserId)]);
       readTargetUserId = asBusinessUserId;
     }
 
@@ -1533,9 +1507,7 @@ router.post('/conversations/:otherUserId/read', verifyToken, async (req, res) =>
     }
 
     const stamp = new Date().toISOString();
-    const usersToClear = asBusinessUserId
-      ? Array.from(new Set([String(readTargetUserId), String(userId)]))
-      : [String(readTargetUserId)];
+    const usersToClear = [String(readTargetUserId)];
 
     const { error: updateErr } = await supabaseAdmin
       .from('ChatParticipant')
@@ -1571,29 +1543,11 @@ router.get('/rooms/:roomId/messages', verifyToken, async (req, res) => {
     const userId = req.user.id;
     const { limit = 50, before, after } = req.query;
     const asBusinessUserId = req.query.asBusinessUserId ? String(req.query.asBusinessUserId) : null;
-    
+
     // Verify access
-    let { data: participant } = await supabaseAdmin
-      .from('ChatParticipant')
-      .select('*')
-      .eq('room_id', roomId)
-      .eq('user_id', userId)
-      .maybeSingle();
-    
-    if (!participant) {
-      if (!asBusinessUserId) return res.status(403).json({ error: 'Access denied' });
-      const allowedViaBusiness = await ensureBusinessRoomActorAccess(roomId, userId, asBusinessUserId);
-      if (!allowedViaBusiness) return res.status(403).json({ error: 'Access denied' });
-      const refreshed = await supabaseAdmin
-        .from('ChatParticipant')
-        .select('*')
-        .eq('room_id', roomId)
-        .eq('user_id', userId)
-        .maybeSingle();
-      participant = refreshed.data || null;
-      if (!participant) return res.status(403).json({ error: 'Access denied' });
-    }
-    
+    const participant = await roomMembership(roomId, userId, asBusinessUserId);
+    if (!participant) return res.status(403).json({ error: 'Access denied' });
+
     if (await gigRoomClosed(roomId, userId, asBusinessUserId)) {
       return res.status(403).json({ error: 'Access denied' });
     }
@@ -1688,28 +1642,8 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
     let senderUserId = userId;
     
     // Verify participant
-    let { data: participant } = await supabaseAdmin
-      .from('ChatParticipant')
-      .select('*')
-      .eq('room_id', roomId)
-      .eq('user_id', userId)
-      .eq('is_active', true)
-      .single();
-    
-    if (!participant) {
-      if (!asBusinessUserId) return res.status(403).json({ error: 'Not a participant' });
-      const allowedViaBusiness = await ensureBusinessRoomActorAccess(roomId, userId, asBusinessUserId);
-      if (!allowedViaBusiness) return res.status(403).json({ error: 'Not a participant' });
-      const refreshed = await supabaseAdmin
-        .from('ChatParticipant')
-        .select('*')
-        .eq('room_id', roomId)
-        .eq('user_id', userId)
-        .eq('is_active', true)
-        .single();
-      participant = refreshed.data || null;
-      if (!participant) return res.status(403).json({ error: 'Not a participant' });
-    }
+    const participant = await roomMembership(roomId, userId, asBusinessUserId, { activeOnly: true });
+    if (!participant) return res.status(403).json({ error: 'Not a participant' });
 
     if (await gigRoomClosed(roomId, userId, asBusinessUserId)) {
       return res.status(403).json({ error: 'Not a participant' });
@@ -2297,20 +2231,17 @@ router.post('/rooms/:roomId/read', verifyToken, async (req, res) => {
     }
 
     if (asBusinessUserId) {
-      const allowedViaBusiness = await ensureBusinessRoomActorAccess(roomIdStr, userId, asBusinessUserId);
-      if (!allowedViaBusiness) return res.status(403).json({ error: 'Access denied' });
+      const businessRow = await businessMembership(roomIdStr, userId, asBusinessUserId);
+      if (!businessRow) return res.status(403).json({ error: 'Access denied' });
       readTargetUserId = asBusinessUserId;
     }
-    
+
     if (await gigRoomClosed(roomIdStr, userId, asBusinessUserId)) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    // Reading for a business also clears the reader's own row in the room, as the conversation read does,
-    // so the same message isn't left unread in their personal inbox.
-    const usersToClear = asBusinessUserId
-      ? Array.from(new Set([String(readTargetUserId), String(userId)]))
-      : [String(readTargetUserId)];
+    // Reading for a business marks the business's row read: the reader isn't a member of its conversations.
+    const usersToClear = [String(readTargetUserId)];
 
     // Update participant's read state directly; with nothing unread there is no row to change (count stays 0)
     const { error } = await supabaseAdmin
@@ -3123,7 +3054,8 @@ router.get('/files/:fileId', tokenFromQuery, verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'File is not associated with a chat room' });
     }
 
-    // Verify the requesting user is an active participant in the room
+    // Verify the requesting user is an active participant in the room, or acts for a business that is (its inbox
+    // shows the room's photos; owners and staff aren't members of their business's rooms)
     const { data: participant } = await supabaseAdmin
       .from('ChatParticipant')
       .select('id')
@@ -3131,11 +3063,12 @@ router.get('/files/:fileId', tokenFromQuery, verifyToken, async (req, res) => {
       .eq('user_id', userId)
       .eq('is_active', true)
       .maybeSingle();
+    const actingFor = participant ? null : await actingBusinessInRoom(roomId, userId);
 
-    if (!participant) {
+    if (!participant && !actingFor) {
       return res.status(403).json({ error: 'Not authorized to access this file' });
     }
-    if (await isGigRoomClosedTo(roomId, userId)) {
+    if (await isGigRoomClosedTo(roomId, userId, actingFor ? [actingFor] : [])) {
       return res.status(403).json({ error: 'Not authorized to access this file' });
     }
     if (thumbnail && !STREAMED_CHAT_IMAGE_TYPES.has(file.mime_type)) {
