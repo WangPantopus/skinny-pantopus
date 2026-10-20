@@ -1368,7 +1368,11 @@ class ChatConversationViewModel
                 aiRepo.streamChat(
                     message =
                         text.ifEmpty {
-                            if (photos.isEmpty() && files.isNotEmpty()) "What can you tell me about this document?" else "What can you tell me about this image?"
+                            if (photos.isEmpty() && files.isNotEmpty()) {
+                                "What can you tell me about this document?"
+                            } else {
+                                "What can you tell me about this image?"
+                            }
                         },
                     conversationId = aiConversationId,
                     images = imageUrls,

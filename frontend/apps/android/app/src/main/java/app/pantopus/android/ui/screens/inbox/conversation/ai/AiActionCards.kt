@@ -259,21 +259,31 @@ private fun AiCardButtons(
                     modifier = Modifier.testTag("chatAIActionError"),
                 )
             }
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-                actions.forEach { action ->
-                    PantopusButton(
-                        title = action.label,
-                        kind =
-                            when (action.style) {
-                                "secondary" -> PantopusButtonKind.Ghost
-                                "destructive" -> PantopusButtonKind.Destructive
-                                else -> PantopusButtonKind.Primary
-                            },
-                        onClick = { onAction(scope, action) },
-                        modifier = Modifier.weight(1f).testTag("chatAIActionButton_${action.id}"),
-                        isLoading = (run as? ChatAICardRun.Running)?.actionId == action.id,
-                        isEnabled = !card.isRunning,
-                    )
+            @Composable
+            fun button(
+                action: ChatAICardAction,
+                modifier: Modifier,
+            ) = PantopusButton(
+                title = action.label,
+                kind =
+                    when (action.style) {
+                        "secondary" -> PantopusButtonKind.Ghost
+                        "destructive" -> PantopusButtonKind.Destructive
+                        else -> PantopusButtonKind.Primary
+                    },
+                onClick = { onAction(scope, action) },
+                modifier = modifier.testTag("chatAIActionButton_${action.id}"),
+                isLoading = (run as? ChatAICardRun.Running)?.actionId == action.id,
+                isEnabled = !card.isRunning,
+            )
+            // Two buttons share a row; three or more (a task's Done, new date and assign) stack, so none is squeezed.
+            if (actions.size > 2) {
+                Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    actions.forEach { button(it, Modifier.fillMaxWidth()) }
+                }
+            } else {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+                    actions.forEach { button(it, Modifier.weight(1f)) }
                 }
             }
         }
