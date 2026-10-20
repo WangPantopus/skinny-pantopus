@@ -1120,6 +1120,9 @@ public struct HubTabRoot: View {
         case .securityDevices:
             path.append(.securityDevices)
             _ = router.consume()
+        case .notificationSettings:
+            path.append(.notificationSettings)
+            _ = router.consume()
         case .createBusiness:
             path.append(.createBusiness)
             _ = router.consume()
@@ -2346,7 +2349,8 @@ public struct HubTabRoot: View {
                 onCompose: { intent in
                     Task { @MainActor in push(.composePost(intent: intent.rawValue)) }
                 },
-                onBack: { Task { @MainActor in pop() } }
+                onBack: { Task { @MainActor in pop() } },
+                asksPantopus: true
             )
         case .myPosts:
             MyPostsView(

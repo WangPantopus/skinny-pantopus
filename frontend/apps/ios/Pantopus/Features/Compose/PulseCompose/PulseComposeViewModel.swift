@@ -404,6 +404,7 @@ public final class PulseComposeViewModel {
         taskShare: PulseTaskShare? = nil,
         prefillTitle: String? = nil,
         prefillBody: String? = nil,
+        prefillDraft: PulseComposeDraft? = nil,
         api: APIClient = .shared,
         multipartUploader: MultipartUploader = .shared,
         locationProvider: any LocationProviding = DeviceLocationProvider.shared
@@ -447,15 +448,44 @@ public final class PulseComposeViewModel {
         // pre-filled — RN `FeedScreen.tsx:296` (`setComposeText`); a
         // Pantopus AI post draft brings its headline too.
         if taskShare == nil {
-            for (field, value) in [(PulseComposeField.title, prefillTitle), (PulseComposeField.body, prefillBody)] {
+            for (field, value) in [
+                (PulseComposeField.title, prefillTitle ?? prefillDraft?.title),
+                (PulseComposeField.body, prefillBody ?? prefillDraft?.body)
+            ] {
                 guard let value, !value.isEmpty else { continue }
                 var snapshot = fields[field] ?? FormFieldState(id: field.rawValue, originalValue: "")
                 snapshot.value = value
                 fields[field] = snapshot
             }
+            if let prefillDraft { seedDraft(prefillDraft) }
         }
         baselineIdentity = self.identity
         baselineVisibility = visibility
+    }
+
+    /// A Pantopus AI post card's other fields, as current values like its
+    /// text: the event's times and place, when a deal ends, lost or found,
+    /// and the Heads Up kind. A value the form can't take keeps its default.
+    private func seedDraft(_ draft: PulseComposeDraft) {
+        let pickerFormat = DateFormatter()
+        pickerFormat.calendar = Calendar(identifier: .iso8601)
+        pickerFormat.locale = Locale(identifier: "en_US_POSIX")
+        // The Event picker's own shape and zone (`PulseComposeContent.formatDate`).
+        pickerFormat.dateFormat = "yyyy-MM-dd HH:mm"
+        let venue = draft.eventVenue?.trimmingCharacters(in: .whitespacesAndNewlines)
+        for (field, value) in [
+            (PulseComposeField.eventDate, PulseComposeDraft.date(from: draft.eventDate).map(pickerFormat.string(from:))),
+            (PulseComposeField.eventEndDate, PulseComposeDraft.date(from: draft.eventEndDate).map(pickerFormat.string(from:))),
+            (PulseComposeField.eventLocation, venue?.isEmpty == false ? venue : nil)
+        ] {
+            guard let value else { continue }
+            var snapshot = fields[field] ?? FormFieldState(id: field.rawValue, originalValue: "")
+            snapshot.value = value
+            fields[field] = snapshot
+        }
+        if let expires = PulseComposeDraft.date(from: draft.dealExpiresAt) { dealExpiresAt = expires }
+        if let kind = draft.lostFoundType.flatMap(PulseLostFoundKind.init(rawValue:)) { lostFoundKind = kind }
+        if let kind = draft.safetyAlertKind.flatMap(PulseSafetyAlertKind.init(rawValue:)) { safetyAlertKind = kind }
     }
 
     /// True when the draft screen was reached via target/purpose pickers.

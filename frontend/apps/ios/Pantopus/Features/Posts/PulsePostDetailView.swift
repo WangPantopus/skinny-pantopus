@@ -24,6 +24,8 @@ public struct PulsePostDetailView: View {
     @State private var showsReadScopeConfirm = false
     @State private var showsWhy = false
     @State private var privateMessage: PulsePrivateMessageDestination?
+    /// The assistant, opened under the reactions about this post.
+    @State private var askTopic: AIAskTopic?
     @Environment(\.scenePhase) private var scenePhase
     private let onBack: @MainActor () -> Void
     private let onOpenProfile: @MainActor (String) -> Void
@@ -167,6 +169,7 @@ public struct PulsePostDetailView: View {
             .sheet(isPresented: $showsWhy) {
                 PulseWhySheet(postId: viewModel.postId, view: nil, topic: nil, areaId: nil)
             }
+            .askPantopus($askTopic)
             .sheet(isPresented: $showsReadScopeConfirm) {
                 PulseAudiencePickerView(viewModel: viewModel)
             }
@@ -314,12 +317,22 @@ public struct PulsePostDetailView: View {
             onCommentReply: { comment in viewModel.beginReply(to: comment) },
             onCommentLike: { id in Task { await viewModel.toggleCommentLike(commentId: id) } },
             onCommentDelete: { id in commentPendingDelete = id },
-            onRefresh: { [viewModel] in await viewModel.refresh() }
+            onRefresh: { [viewModel] in await viewModel.refresh() },
+            // Nothing to ask about a post a moderator took down.
+            onAsk: detail.post.isRemovedByModerator ? nil : { askTopic = .post(id: detail.post.id, title: Self.askAbout(detail.post)) }
         )
     }
 }
 
 extension PulsePostDetailView {
+    /// "About: …" names the post by its headline, else its first words.
+    private static func askAbout(_ post: PostDetailDTO) -> String {
+        if let title = post.title?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty { return title }
+        let words = post.content.split(whereSeparator: \.isWhitespace)
+        let start = words.prefix(8).joined(separator: " ")
+        return words.count > 8 ? start + "\u{2026}" : (start.isEmpty ? "This post" : start)
+    }
+
     private var overflowAction: ContentDetailTopBarAction {
         ContentDetailTopBarAction(
             icon: .moreHorizontal,

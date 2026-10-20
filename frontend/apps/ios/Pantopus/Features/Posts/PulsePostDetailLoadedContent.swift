@@ -27,6 +27,8 @@ public struct PulsePostDetailLoadedContent: View {
     private let onCommentLike: (@MainActor (String) -> Void)?
     private let onCommentDelete: (@MainActor (String) -> Void)?
     private let onRefresh: (@Sendable () async -> Void)?
+    /// "Ask Pantopus" about this post, under its reactions; nil hides it.
+    private let onAsk: (@MainActor () -> Void)?
 
     public init(
         detail: PulsePostDetailContent,
@@ -49,7 +51,8 @@ public struct PulsePostDetailLoadedContent: View {
         onCommentReply: (@MainActor (PostCommentRow) -> Void)? = nil,
         onCommentLike: (@MainActor (String) -> Void)? = nil,
         onCommentDelete: (@MainActor (String) -> Void)? = nil,
-        onRefresh: (@Sendable () async -> Void)? = nil
+        onRefresh: (@Sendable () async -> Void)? = nil,
+        onAsk: (@MainActor () -> Void)? = nil
     ) {
         self.detail = detail
         self.commentsState = commentsState
@@ -72,6 +75,22 @@ public struct PulsePostDetailLoadedContent: View {
         self.onCommentLike = onCommentLike
         self.onCommentDelete = onCommentDelete
         self.onRefresh = onRefresh
+        self.onAsk = onAsk
+    }
+
+    /// Under the reactions: Ask, then the matched local businesses.
+    private var belowReactions: AnyView? {
+        guard onAsk != nil || !nearbyProviders.isEmpty else { return nil }
+        return AnyView(
+            VStack(alignment: .leading, spacing: Spacing.s3) {
+                if let onAsk {
+                    AskPantopusRow(action: onAsk)
+                }
+                if !nearbyProviders.isEmpty {
+                    NearbyProvidersCard(rows: nearbyProviders, onOpenBusiness: onOpenBusiness)
+                }
+            }
+        )
     }
 
     /// Opens the author's profile; nil (no tap) when the post came without its author's id.
@@ -137,14 +156,7 @@ public struct PulsePostDetailLoadedContent: View {
                     onCommentReply: detail.post.isRemovedByModerator ? nil : onCommentReply,
                     onCommentLike: onCommentLike,
                     onCommentDelete: onCommentDelete,
-                    belowReactions: nearbyProviders.isEmpty
-                        ? nil
-                        : AnyView(
-                            NearbyProvidersCard(
-                                rows: nearbyProviders,
-                                onOpenBusiness: onOpenBusiness
-                            )
-                        ),
+                    belowReactions: belowReactions,
                     repliesClosedNote: detail.post.isRemovedByModerator ? "Replies are off for this post." : nil
                 ) { userId in
                     onOpenProfile(userId)
