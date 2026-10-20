@@ -53,4 +53,14 @@ class DeepLinkChatResolverViewModel
             val blocked = (blocksRepository.blocked() as? NetworkResult.Success)?.data?.blocked ?: return null
             return person.takeUnless { linked -> blocked.any { it.userId == linked.userId } }
         }
+
+        /**
+         * The name a linked room goes by in the Messages list (a Support Train's, a group's), or null
+         * for a direct or task room, or a failed read. A chat push's title names the sender, not the room.
+         */
+        suspend fun roomName(roomId: String): String? {
+            val room = (chatRepository.room(roomId) as? NetworkResult.Success)?.data?.room ?: return null
+            if (room.type == "direct" || room.type == "gig") return null
+            return room.name?.takeIf(String::isNotBlank)
+        }
     }

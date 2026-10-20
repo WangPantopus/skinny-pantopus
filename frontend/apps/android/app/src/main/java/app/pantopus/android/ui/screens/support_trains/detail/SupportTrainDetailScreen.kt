@@ -246,6 +246,8 @@ data class SupportTrainDetailActions(
     val onJoinAsBackup: (() -> Unit)? = null,
     /** Opens a chat with the train's organizer. Null hides "Message the host". */
     val onMessageHost: ((HostedByFooter) -> Unit)? = null,
+    /** Opens the train's group chat (room id, train title); shown only to people in it. */
+    val onOpenChat: ((roomId: String, title: String) -> Unit)? = null,
 )
 
 /**
@@ -347,6 +349,7 @@ internal fun SupportTrainDetailContentLayout(
                     onSendCard = actions.onSendCard,
                     onJoinAsBackup = actions.onJoinAsBackup,
                     onMessageHost = messageHost,
+                    onOpenChat = actions.onOpenChat,
                     isSubmitting = isSubmitting,
                     onReserveSlot = onReserveSlot,
                     onMarkDelivered = onMarkDelivered,
@@ -495,6 +498,7 @@ private fun LoadedBody(
     onSendCard: (() -> Unit)?,
     onJoinAsBackup: (() -> Unit)?,
     onMessageHost: (() -> Unit)?,
+    onOpenChat: ((roomId: String, title: String) -> Unit)? = null,
     isSubmitting: Boolean = false,
     onReserveSlot: (String?) -> Unit = {},
     onMarkDelivered: (String) -> Unit = {},
@@ -584,6 +588,7 @@ private fun LoadedBody(
             }
 
             Spacer(modifier = Modifier.height(Spacing.s3))
+            GroupChatEntry(content, onOpenChat)
             if (content.privateDetailsAvailable) HostedByRow(content.hostedBy, onMessageHost = onMessageHost)
             Spacer(modifier = Modifier.height(Spacing.s3))
         }
@@ -1039,6 +1044,76 @@ private fun HostedByRow(
                 tint = PantopusColors.appTextMuted,
             )
         }
+    }
+}
+
+/** The train's chat, for the people in it; rechecked with the train's other private details. */
+@Composable
+private fun GroupChatEntry(
+    content: SupportTrainDetailContent,
+    onOpenChat: ((roomId: String, title: String) -> Unit)?,
+) {
+    val chatRoomId = content.chatRoomId
+    if (!content.privateDetailsAvailable || chatRoomId == null || onOpenChat == null) return
+    GroupChatRow(onOpen = { onOpenChat(chatRoomId, content.typeDates.title) })
+    Spacer(modifier = Modifier.height(Spacing.s3))
+}
+
+/** Opens the train's chat with its organizers and helpers; styled as the "Hosted by" row below it. */
+@Composable
+private fun GroupChatRow(onOpen: () -> Unit) {
+    val shape = RoundedCornerShape(Radii.md)
+    Row(
+        modifier =
+            Modifier
+                .testTag("supportTrainGroupChat")
+                .fillMaxWidth()
+                .clip(shape)
+                .background(PantopusColors.appSurface)
+                .border(1.dp, PantopusColors.appBorderSubtle, shape)
+                .clickable(onClick = onOpen)
+                .padding(horizontal = Spacing.s3, vertical = Spacing.s2)
+                .clearAndSetSemantics {
+                    role = Role.Button
+                    contentDescription = "Group chat, everyone on the train"
+                },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .size(24.dp)
+                    .clip(CircleShape)
+                    .background(PantopusColors.primary600),
+            contentAlignment = Alignment.Center,
+        ) {
+            PantopusIconImage(
+                icon = PantopusIcon.Users,
+                contentDescription = null,
+                size = 12.dp,
+                tint = PantopusColors.appTextInverse,
+            )
+        }
+        Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "Group chat",
+                color = PantopusColors.appTextStrong,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 12.sp,
+            )
+            Text(
+                text = " · Everyone on the train",
+                color = PantopusColors.appTextSecondary,
+                fontSize = 12.sp,
+            )
+        }
+        PantopusIconImage(
+            icon = PantopusIcon.MessageSquare,
+            contentDescription = null,
+            size = 14.dp,
+            tint = PantopusColors.appTextMuted,
+        )
     }
 }
 
