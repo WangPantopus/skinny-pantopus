@@ -400,7 +400,7 @@ module.exports = {
   RADON_RESULT_SYSTEM,
 
   VERSIONS: {
-    chat: 'chat-v2.1',  // v1.2: prompt built from the features that are on; home context in system messages; a draft's note ends the turn; v1.3: pickup days for apps that show the card; v2.0: phase 1 (read tools, action cards, links, the app guide); v2.1: "this" in a message sent from a screen ([Asked from: …]) means that screen
+    chat: 'chat-v2.2',  // v1.2: prompt built from the features that are on; home context in system messages; a draft's note ends the turn; v1.3: pickup days for apps that show the card; v2.0: phase 1 (read tools, action cards, links, the app guide); v2.1: "this" in a message sent from a screen ([Asked from: …]) means that screen; v2.2: playdates in the plan tools and the guide for people with plans_playdates
     gig: 'gig-draft-v1.2',  // v1.1: estimated_duration in hours, as the gig form and API expect; v1.2: told today's date
     listing: 'listing-draft-v1.0',
     post: 'post-draft-v1.2',  // v1.1: told today's date, so "this Saturday" gets a real event date; v1.2: nearby-feed types only for surface "place"
