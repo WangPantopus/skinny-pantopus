@@ -412,6 +412,37 @@ async function isScopedBlocked(viewerId, targetUserId, scope = 'full') {
   return blocks && blocks.length > 0;
 }
 
+/**
+ * Business accounts among `userIds` whose profile isn't published: drafts, and businesses closed with
+ * DELETE /api/businesses/:id, which unpublishes the profile and makes the account 'individual' (so a
+ * BusinessProfile on any other account type is a closed business). GET /api/businesses/public/:username refuses
+ * both, so a lookup by handle, id or name leaves them out too. A failed read throws, so callers fail closed.
+ *
+ * @param {string[]} userIds
+ * @returns {Promise<Set<string>>}
+ */
+async function unpublishedBusinessIds(userIds) {
+  const ids = [...new Set((userIds || []).filter(Boolean).map(String))];
+  if (!ids.length) return new Set();
+  const [accounts, profiles] = await Promise.all([
+    supabaseAdmin.from('User').select('id, account_type').in('id', ids),
+    supabaseAdmin.from('BusinessProfile').select('business_user_id, is_published').in('business_user_id', ids),
+  ]);
+  if (accounts.error) throw accounts.error;
+  if (profiles.error) throw profiles.error;
+  const published = new Map((profiles.data || [])
+    .map((row) => [String(row.business_user_id), row.is_published === true]));
+  return new Set((accounts.data || [])
+    .filter((user) => (user.account_type === 'business'
+      ? published.get(String(user.id)) !== true
+      : published.has(String(user.id))))
+    .map((user) => String(user.id)));
+}
+
+async function isUnpublishedBusiness(userId) {
+  return (await unpublishedBusinessIds([userId])).has(String(userId));
+}
+
 
 // ============================================================
 // EXPORTS
@@ -436,4 +467,8 @@ module.exports = {
   isSearchable,
   canViewProfileField,
   isScopedBlocked,
+
+  // Draft and closed businesses
+  unpublishedBusinessIds,
+  isUnpublishedBusiness,
 };

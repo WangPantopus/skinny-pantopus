@@ -12,10 +12,10 @@ const logger = require('../utils/logger');
 // database rejects, so they would come back as a failed read (503) instead of a bad id (400).
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-function unavailable(res) {
+function unavailable(res, message = 'Could not load this Support Train right now. Please try again.') {
   return res.status(503).json({
     error: 'SUPPORT_TRAIN_UNAVAILABLE',
-    message: 'Could not load this Support Train right now. Please try again.',
+    message,
   });
 }
 
@@ -174,4 +174,5 @@ module.exports = {
   loadSupportTrain,
   requireSupportTrainRole,
   requireSupportTrainViewer,
+  supportTrainUnavailable: unavailable,
 };

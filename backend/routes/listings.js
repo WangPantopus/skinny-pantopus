@@ -19,6 +19,7 @@ const { haversineMiles } = require('../utils/geo');
 const { hydrateListingCreatorIdentities } = require('../utils/listingCreatorIdentity');
 const {
   AREA_SEARCH_CANDIDATE_LIMIT,
+  applyMuteAndBlockFilters,
   browseListings,
   discoverListings,
   searchListings,
@@ -1121,10 +1122,12 @@ router.get('/search', optionalAuth, async (req, res) => {
       resultCount: listings?.length || 0, latencyMs: Date.now() - start,
     });
 
+    const viewerUserId = req.user?.id || null;
+    const shown = await applyMuteAndBlockFilters(listings || [], viewerUserId);
     res.json({
       listings: await applyLocationPrivacyBatch(
-        await normalizeListingsWithHydratedCreators(listings || []),
-        req.user?.id || null
+        await normalizeListingsWithHydratedCreators(shown),
+        viewerUserId
       ),
       pagination: { limit: parseInt(limit), offset: parseInt(offset), hasMore: listings && listings.length === parseInt(limit) },
     });
@@ -1449,7 +1452,7 @@ router.get('/:id/similar', optionalAuth, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch similar listings' });
     }
 
-    const results = (candidates || []).filter((row) => {
+    const results = (await applyMuteAndBlockFilters(candidates || [], viewerUserId)).filter((row) => {
       const point = applyLocationPrivacy(row, null);
       if (point.latitude == null || point.longitude == null) return false;
       const distance = haversineMiles(center.latitude, center.longitude, point.latitude, point.longitude);

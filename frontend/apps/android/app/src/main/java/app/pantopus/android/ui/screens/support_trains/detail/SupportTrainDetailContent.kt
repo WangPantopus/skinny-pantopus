@@ -241,6 +241,8 @@ data class SupportTrainDetailContent(
     val privateDetailsAvailable: Boolean = true,
     /** A fresh, role-gated helper-detail read failed; no previous helpers' private details are retained. */
     val helperDetailsUnavailable: Boolean = false,
+    /** The train's chat room, when the viewer is in it. */
+    val chatRoomId: String? = null,
 ) {
     val isFullyCovered: Boolean get() = typeDates.isFullyCovered
 }

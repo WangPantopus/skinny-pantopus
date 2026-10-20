@@ -17,11 +17,13 @@ const {
   serializeUserIdentityForViewer,
 } = require('../serializers/identitySerializers');
 const { verifiedResidentUserIds } = require('../utils/identityProfiles');
+const { isUnpublishedBusiness } = require('../utils/visibilityPolicy');
 const {
   isBusinessAccount,
   canActAsBusiness,
   businessMembership,
   actingBusinessInRoom,
+  taskBusinessInRoom,
   dropStaffMembership,
 } = require('../services/chatBusinessAccess');
 const s3Service = require('../services/s3Service');
@@ -269,9 +271,10 @@ async function getBusinessMessagingMemberIds(businessUserId) {
   return Array.from(ids);
 }
 
-// The membership a request reads or writes the room through. Acting for a business (`asBusinessUserId`), it is the
-// business's own: its owner and staff are never members of its conversations (services/chatBusinessAccess). Otherwise
-// it is the caller's own row; `activeOnly` refuses one they left.
+// The membership a request reads or writes the room through. Acting for a business, it is the business's own: its
+// owner and staff are never members of its conversations (services/chatBusinessAccess). They act for it when the
+// request says so (`asBusinessUserId`), and in the chat room of a task it posted, where they always answer as the
+// business. Otherwise it is the caller's own row; `activeOnly` refuses one they left.
 async function roomMembership(roomId, userId, asBusinessUserId, { activeOnly = false } = {}) {
   const { data: own } = await supabaseAdmin
     .from('ChatParticipant')
@@ -279,10 +282,13 @@ async function roomMembership(roomId, userId, asBusinessUserId, { activeOnly = f
     .eq('room_id', roomId)
     .eq('user_id', userId)
     .maybeSingle();
-  if (asBusinessUserId && String(asBusinessUserId) !== String(userId)) {
-    const business = await businessMembership(roomId, userId, asBusinessUserId);
+  const businessUserId = asBusinessUserId && String(asBusinessUserId) !== String(userId)
+    ? asBusinessUserId
+    : await taskBusinessInRoom(roomId, userId);
+  if (businessUserId) {
+    const business = await businessMembership(roomId, userId, businessUserId);
     if (business) {
-      if (own) await dropStaffMembership(roomId, userId, asBusinessUserId);
+      if (own) await dropStaffMembership(roomId, userId, businessUserId);
       return business;
     }
   }
@@ -1146,7 +1152,8 @@ router.post('/direct', verifyToken, directChatLimiter, validate(createDirectChat
       .eq('id', otherUserId)
       .single();
     
-    if (userError || !otherUser) {
+    // A draft or closed business isn't public (its profile answers 404), so no chat names or reaches it.
+    if (userError || !otherUser || await isUnpublishedBusiness(otherUserId)) {
       return res.status(404).json({ error: 'User not found' });
     }
 
