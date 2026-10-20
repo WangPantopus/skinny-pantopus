@@ -33,6 +33,9 @@ struct MyBusinessesView: View {
         .accessibilityIdentifier("myBusinessesContainer")
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .task { await viewModel.refresh() }
+        .onReceive(NotificationCenter.default.publisher(for: .businessClosed)) { _ in
+            Task { await viewModel.refresh() }
+        }
         .onAppear { Analytics.track(.screenMyBusinessesViewed) }
     }
 

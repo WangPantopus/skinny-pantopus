@@ -426,6 +426,7 @@ public final class EditBusinessPageViewModel {
         let store = ScreenStore.store(for: api)
         store.remove(BusinessesEndpoints.myBusinesses())
         store.markStale(topics: [ScreenTopic.profileMe])
+        NotificationCenter.default.post(name: .businessClosed, object: businessId)
         showsCloseConfirm = false
         didClose = true
     }

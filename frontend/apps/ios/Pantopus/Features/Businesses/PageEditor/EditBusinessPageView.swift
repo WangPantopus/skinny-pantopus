@@ -108,6 +108,12 @@ public struct EditBusinessPageView: View {
         }
     }
 
+    /// Owner only; nil hides the Close business section.
+    private var closeBusinessAction: (@MainActor () -> Void)? {
+        guard viewModel.canClose else { return nil }
+        return { viewModel.closeRequested() }
+    }
+
     private var closingBusinessName: String {
         guard case let .loaded(payload) = viewModel.state else { return "this business" }
         let name = payload.name.original.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -162,7 +168,7 @@ public struct EditBusinessPageView: View {
                     Task { await viewModel.uploadMedia(kind, data: data, mimeType: mimeType) }
                 },
                 uploadingMedia: viewModel.uploadingMedia,
-                onCloseBusiness: viewModel.canClose ? { viewModel.closeRequested() } : nil
+                onCloseBusiness: closeBusinessAction
             )
         case .empty:
             VStack(spacing: Spacing.s0) {

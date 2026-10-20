@@ -1015,8 +1015,8 @@ public struct YouTabRoot: View {
         if !path.isEmpty { path.removeLast() }
     }
 
-    /// A closed business has no screens left: back to My businesses, which
-    /// refreshes as it appears, or onto it when the editor was opened another way.
+    /// A closed business has no screens left: back to My businesses (which
+    /// re-reads on `.businessClosed`), or onto it when the editor was opened another way.
     @MainActor
     private func showMyBusinesses(afterClosing businessId: String) {
         if path.contains(.myBusinesses) {
