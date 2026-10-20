@@ -4574,6 +4574,9 @@ router.post('/:id/follow', verifyToken, async (req, res) => {
       .insert({ follower_id: followerId, following_id: followingId });
 
     if (error) {
+      if (error.code === 'PT403' && error.message === 'PERSONAL_CONNECTION_BLOCKED') {
+        return res.status(403).json({ error: 'Cannot follow this user' });
+      }
       logger.error('Error following user', { error: error.message, followerId, followingId });
       return res.status(500).json({ error: 'Failed to follow user' });
     }
