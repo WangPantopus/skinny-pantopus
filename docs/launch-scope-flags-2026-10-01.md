@@ -103,7 +103,8 @@ Tests run with every feature on (`backend/jest.config.js`, `frontend/apps/web/te
    `/api/internal/briefing/reminder-push`.
 14. **Letters to a contact need both mail keys:** the email or text that tells a non-member about a letter, and the
    `mail_claimed` / `mail_escrow_*` notices, go out only with `mailbox` and `mail_extras` both on (a surface of two cut
-   features).
+   features). The web page that email's link opens (`/open/<mail id>`, where the person previews the letter and signs
+   in or signs up to claim it) is hidden the same way.
 15. **What stays while `pulse_redesign` is off (2026-10-15, founder decision):**
    - **Two rules from the Pulse build stay in force:**
      - Heads-ups about crime or suspicious people stay refused (`ALERT_KIND_NOT_ALLOWED`). Old posts of those kinds

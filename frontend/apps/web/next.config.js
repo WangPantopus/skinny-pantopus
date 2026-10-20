@@ -83,6 +83,15 @@ const createNextConfig = (phase) => ({
           { key: 'X-Robots-Tag', value: 'noindex, nofollow' },
         ],
       },
+      // A letter's claim page: its link carries the claim token.
+      {
+        source: '/open/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'private, no-store' },
+          { key: 'Referrer-Policy', value: 'no-referrer' },
+          { key: 'X-Robots-Tag', value: 'noindex, nofollow' },
+        ],
+      },
       {
         source: '/.well-known/apple-app-site-association',
         headers: [{ key: 'Content-Type', value: 'application/json' }],
