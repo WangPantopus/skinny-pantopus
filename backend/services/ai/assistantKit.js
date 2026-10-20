@@ -98,6 +98,14 @@ function todayIn(zone) {
   return DateTime.now().setZone(zoneOr(zone)).toISODate();
 }
 
+const DISTANCE_WORDS = {
+  under_1_mi: 'Under a mile', about_1_mi: 'About a mile', about_2_mi: 'About 2 miles', about_3_mi: 'About 3 miles', about_5_mi: 'About 5 miles',
+};
+/** "About 2 miles" for a Plans distance band ("about_2_mi"), or null. */
+function distanceWords(band) {
+  return DISTANCE_WORDS[band] || null;
+}
+
 /** A person's first name for others to read: never a username or an email. */
 function firstNameOf(user) {
   if (!user) return null;
@@ -119,4 +127,5 @@ module.exports = {
   dayLabel,
   todayIn,
   firstNameOf,
+  distanceWords,
 };

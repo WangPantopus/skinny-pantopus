@@ -26,7 +26,7 @@ const homeDetailService = require('../homeDetailService');
 const { checkHomePermission } = require('../../utils/homePermissions');
 const { localDisplayNames } = require('../../utils/identityProfiles');
 const {
-  OTHERS_WORDS, isUuid, clip, chosenHome, homesOf, whenLabel, dayLabel, todayIn, firstNameOf,
+  OTHERS_WORDS, isUuid, clip, chosenHome, homesOf, whenLabel, dayLabel, todayIn, firstNameOf, distanceWords,
 } = require('./assistantKit');
 
 // Playdates stay off for launch (plans_playdates); the assistant never offers them.
@@ -159,7 +159,7 @@ function planForModel(card, zone) {
     starts_at: card.starts_at || null,
     ends_at: card.ends_at || null,
     area: card.area?.label || null,
-    distance: card.distance_band || null,
+    distance: distanceWords(card.distance_band),
     host_name: card.host?.display_name || null,
     host_verified: Boolean(card.host?.verified_address),
     spots: card.spots,
@@ -224,7 +224,7 @@ async function getPlan(args, ctx) {
       name: r.user.display_name,
       party_size: r.party_size,
       verified_address: r.user.verified_address,
-      distance: r.user.distance_band,
+      distance: distanceWords(r.user.distance_band),
       plans_joined: r.user.plans_joined,
       mutual_connections: r.user.mutual_connections,
       hosted_before: r.user.hosted_before,

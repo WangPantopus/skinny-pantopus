@@ -26,10 +26,10 @@ const { localDisplayNames } = require('../../utils/identityProfiles');
 const { PLAN_KINDS } = require('./readTools');
 const { linkFor } = require('./appGuide');
 const {
-  isUuid, clip, chosenHome, localToUtc, whenLabel, dayLabel, firstNameOf,
+  isUuid, clip, chosenHome, localToUtc, whenLabel, dayLabel, firstNameOf, distanceWords,
 } = require('./assistantKit');
 
-const NOTE = 'One short sentence shown under the card: the assumption that matters most or a detail worth adding. Null when there is nothing to say.';
+const NOTE = 'One short sentence shown under the card: the assumption that matters most or a detail worth adding. Nothing happens until they tap, so write about the card, never as if it were already done. Null when there is nothing to say.';
 const HHMM = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
 const KIND_LABELS = {
   watch_party: 'Watch party', pickup_game: 'Pickup game', walk_coffee: 'Walk & coffee', study_group: 'Study group', playdate: 'Playdate',
@@ -285,18 +285,28 @@ async function planFor(planId, ctx) {
 
 // ─── Plans ─────────────────────────────────────────────────────────────────
 
-/** The first public place matching `name` near the person, from the place picker's own search. */
+/**
+ * The first public place matching `name` near the person, from the place picker's own search
+ * (OpenStreetMap, cached for a day per area). { loading: true } when that search has no answer
+ * yet (an area seen for the first time, or its servers are slow), so the person can be told.
+ */
 async function findPublicPlace(name, origin) {
   const query = clip(name, 60);
   if (!query || !origin) return null;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const result = await planPlaces.placesNear({ latitude: origin.latitude, longitude: origin.longitude, q: query });
-    if (result.places && result.places.length) return result.places[0];
-    if (!result.loading) return null;
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+  try {
+    const result = await Promise.race([
+      planPlaces.placesNear({ latitude: origin.latitude, longitude: origin.longitude, q: query }),
+      new Promise((resolve) => { setTimeout(() => resolve({ places: [], loading: true }), 9000).unref?.(); }),
+    ]);
+    if (result?.places?.length) return result.places[0];
+    return result?.loading ? { loading: true } : null;
+  } catch (err) {
+    logger.warn('assistant place search failed', { error: err.message });
+    return { loading: true };
   }
-  return null;
 }
+
+const PLACES_LOADING = "Places near them aren't loading right now (the map's place search is slow or busy). Say so, and offer to try again in a minute, or link them to plan_new to pick the place themselves.";
 
 function detailsInput(kind, details) {
   const d = details || {};
@@ -332,6 +342,7 @@ async function draftPlan(args, ctx) {
   } else {
     if (!args.place_name) return { error: 'A public place is needed. Ask where, or suggest a park, court, library or café near them.' };
     const found = await findPublicPlace(args.place_name, viewer.origin);
+    if (found?.loading) return { error: PLACES_LOADING };
     if (!found) return { error: `No public place called "${args.place_name}" was found near them. Ask for another place or a nearby landmark.` };
     place = { kind: 'public', name: found.name, address: found.address || null, latitude: found.latitude, longitude: found.longitude };
   }
@@ -433,6 +444,7 @@ async function draftPlanChange(args, ctx) {
   }
   if (args.place_name) {
     const place = await findPublicPlace(args.place_name, viewer.origin);
+    if (place?.loading) return { error: PLACES_LOADING };
     if (!place) return { error: `No public place called "${args.place_name}" was found near them.` };
     patch.place = { kind: 'public', name: place.name, address: place.address || null, latitude: place.latitude, longitude: place.longitude };
     lines.push(line('Where', [place.name, place.address].filter(Boolean).join(', ')));
@@ -496,7 +508,7 @@ async function showPlanRequests(args, ctx) {
       title: `${r.user.display_name}${party}`,
       lines: [
         line('Address', r.user.verified_address ? 'Verified' : 'Not verified'),
-        line('Distance', r.user.distance_band),
+        line('Distance', distanceWords(r.user.distance_band)),
         line('Plans joined', `${r.user.plans_joined}`),
         r.user.mutual_connections ? line('Mutual connections', `${r.user.mutual_connections}`) : null,
         r.user.hosted_before ? line('Before', "You've hosted them") : null,

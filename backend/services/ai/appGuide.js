@@ -59,7 +59,7 @@ function linkFor(screen, id = null, extra = {}) {
 
 const showLinkDefinition = {
   name: 'show_link',
-  description: 'Show a button under your reply that opens a screen in the app, when your answer points somewhere ("open notification settings", "see who asked to join"). Ids come from your tools or the screen context. Use it at most twice per reply.',
+  description: 'Show a button under your reply that opens a screen in the app. Write your whole answer first and call this last, only when your answer sends them to that screen to do something ("open notification settings", "see who asked to join"); never instead of answering, and never for something they didn\'t ask about. Ids come from your tools or the screen context. At most two per reply.',
   input_schema: {
     type: 'object',
     properties: {

@@ -94,6 +94,31 @@ function launchScopedChatInstructions({ pickupSchedule = false, actionCards = fa
   });
 }
 
+/**
+ * The apps show replies as plain text, so bold markers (**like this**) would show as
+ * asterisks. Claude is told not to use them; this removes any that slip through, holding
+ * a trailing "*" until the next piece arrives in case a pair is split across two.
+ */
+function plainTextStream(write) {
+  let held = '';
+  return {
+    push(delta) {
+      let text = held + delta;
+      held = '';
+      if (text.endsWith('*')) {
+        held = '*';
+        text = text.slice(0, -1);
+      }
+      text = text.replace(/\*\*/g, '');
+      if (text) write(text);
+    },
+    flush() {
+      if (held) write(held);
+      held = '';
+    },
+  };
+}
+
 // What the person sees while a tool runs (SSE `status`; older apps ignore the event).
 const TOOL_STATUS = {
   create_post_draft: 'Drafting your post…',
@@ -395,6 +420,7 @@ async function streamChat({
 
   // Filled in as rounds finish, so a timeout can still log what was used.
   const usage = emptyUsage();
+  const replyText = plainTextStream((delta) => sseWriter.write('text_delta', { delta }));
   let firstTextMs = null;
   let turn;
   try {
@@ -419,7 +445,7 @@ async function streamChat({
       usage,
       onText: (delta) => {
         if (firstTextMs === null) firstTextMs = Date.now() - startTime;
-        sseWriter.write('text_delta', { delta });
+        replyText.push(delta);
       },
       onToolStart: (name) => sseWriter.write('status', { tool: name, message: TOOL_STATUS[name] || 'Working on it…' }),
       // Run one tool Claude asked for; a draft goes to the client as soon as it exists.
@@ -533,6 +559,7 @@ async function streamChat({
   });
 
   // Send done event
+  replyText.flush();
   sseWriter.write('done', {
     conversationId: conversation.id,
     usage: { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens },
@@ -1332,11 +1359,23 @@ function displayMessages(stored) {
   const items = [];
   const history = sanitizeHistory(stored);
   const results = storedResults(history);
+  // Link buttons (show_link) go on the last reply text of their turn, whichever round made them.
+  let turnStart = 0;
+  let turnLinks = [];
+  const flushLinks = () => {
+    if (!turnLinks.length) return;
+    const own = items.slice(turnStart).reverse().find((item) => item.role === 'assistant' && typeof item.text === 'string');
+    if (own) own.links = [...(own.links || []), ...turnLinks];
+    else items.push({ role: 'assistant', text: '', links: turnLinks });
+    turnLinks = [];
+  };
   for (const message of history) {
     if (message.role === 'system') continue;
     const blocks = typeof message.content === 'string' ? [{ type: 'text', text: message.content }] : message.content;
     if (message.role === 'user') {
       if (!blocks.some((block) => block.type !== 'tool_result')) continue;
+      flushLinks();
+      turnStart = items.length;
       let photos = 0;
       const texts = [];
       for (const block of blocks) {
@@ -1349,14 +1388,12 @@ function displayMessages(stored) {
       continue;
     }
     let text = '';
-    const links = [];
-    const firstOfMessage = items.length;
     for (const block of blocks) {
-      if (block.type === 'text') text += (text ? '\n\n' : '') + block.text;
+      if (block.type === 'text') text += (text ? '\n\n' : '') + block.text.replace(/\*\*/g, '');
       if (block.type !== 'tool_use') continue;
       const result = results.get(block.id);
       // A link button (show_link) goes with this reply's text.
-      if (block.name === 'show_link' && result?.link?.url) links.push(result.link);
+      if (block.name === 'show_link' && result?.link?.url) turnLinks.push(result.link);
       // An action card is what its tool returned: the exact request the app sends.
       if (result?.draftType === 'action' && result.draft?.card) {
         if (text.trim()) items.push({ role: 'assistant', text: text.trim() });
@@ -1379,13 +1416,8 @@ function displayMessages(stored) {
       items.push({ role: 'assistant', draft: { type: DRAFT_TYPES[block.name], draft } });
     }
     if (text.trim()) items.push({ role: 'assistant', text: text.trim() });
-    if (links.length) {
-      // On the last reply text of this message, or on a reply of its own.
-      const own = items.slice(firstOfMessage).reverse().find((item) => item.role === 'assistant' && typeof item.text === 'string');
-      if (own) own.links = [...(own.links || []), ...links];
-      else items.push({ role: 'assistant', text: '', links });
-    }
   }
+  flushLinks();
   return items;
 }
 
