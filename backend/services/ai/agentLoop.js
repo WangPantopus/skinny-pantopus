@@ -321,8 +321,9 @@ const scrubDeep = (value) => JSON.parse(JSON.stringify(value, (_key, v) => (type
  *   - text, tool calls and tool results, as sent and received;
  *   - not thinking blocks (the transcript is edited as it grows, which would
  *     invalidate them, and the model doesn't need its old reasoning);
- *   - not photos, which are fetched afresh on every request and cost tokens each
- *     time; a placeholder says one was there, and the reply that described it stays;
+ *   - not photos or documents (PDFs), which are deleted once read and would cost
+ *     tokens on every request; a placeholder says one was there, and the reply that
+ *     described it stays;
  *   - not text that is only whitespace, which the API refuses as input.
  */
 function compactForStorage(messages) {
@@ -338,6 +339,7 @@ function compactForStorage(messages) {
 
     const kept = [];
     let photos = 0;
+    let documents = 0;
     for (const block of blocks) {
       if (block.type === 'text') {
         if (!isBlank(block.text)) kept.push({ type: 'text', text: scrub(block.text) });
@@ -352,7 +354,15 @@ function compactForStorage(messages) {
         });
       } else if (block.type === 'image') {
         photos += 1;
+      } else if (block.type === 'document') {
+        documents += 1;
       }
+    }
+    if (documents) {
+      const note = documents === 1
+        ? '[Document attached. You read it when you answered this message, and that answer says what it showed. It is not shown again; a document in another message is a different one.]'
+        : `[${documents} documents attached. You read them when you answered this message, and that answer says what they showed. They are not shown again; documents in other messages are different ones.]`;
+      kept.unshift({ type: 'text', text: note });
     }
     if (photos) {
       // Say the photo was seen, and with which message. A bare "[Photo attached]" led Claude to doubt, and retract, its own
