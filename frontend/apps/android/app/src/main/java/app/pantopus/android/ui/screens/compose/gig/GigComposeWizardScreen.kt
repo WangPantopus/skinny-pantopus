@@ -57,6 +57,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
+import app.pantopus.android.data.gigs.GigCameraPhotos
 import app.pantopus.android.ui.components.FutureDateTimePickerDialogs
 import app.pantopus.android.ui.components.PantopusTextField
 import app.pantopus.android.ui.screens.shared.wizard.WizardShell
@@ -75,7 +76,6 @@ import app.pantopus.android.ui.theme.Spacing
 import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.io.File
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -127,7 +127,7 @@ fun GigComposeWizardScreen(
             if (success) onPicked(uri)
         }
     val launchCamera = {
-        val photoFile = File(context.cacheDir, "gig-camera-${UUID.randomUUID()}.jpg")
+        val photoFile = GigCameraPhotos.newFile(context.cacheDir)
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", photoFile)
         pendingCameraUri = uri.toString()
         // No camera app (or a broken resolver) must not crash — drop it.
