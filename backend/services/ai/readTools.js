@@ -332,6 +332,11 @@ async function readSections(homeId, userId, sectionIds) {
   return placeIntelligenceService.composeHomeIntelligence({ homeId, userId, access, sectionIds, homeRead });
 }
 
+/** The composed payload's sections in screen order; serializePlaceIntelligence nests them under groups. */
+function sectionsOf(intelligence) {
+  return (intelligence?.groups || []).flatMap((group) => group.sections || []);
+}
+
 function sectionForModel(section) {
   let data = null;
   if (section.data != null) {
@@ -358,7 +363,7 @@ async function getPlaceFacts(args, ctx) {
   if (!intelligence) return { error: "They can't see this home's Place facts." };
   return {
     home: { home_id: home.id, city: home.city, state: home.state },
-    sections: (intelligence.sections || []).map(sectionForModel),
+    sections: sectionsOf(intelligence).map(sectionForModel),
   };
 }
 
@@ -442,7 +447,7 @@ async function getToday(args, ctx) {
     note: OTHERS_WORDS,
     today: dayLabel(new Date().toISOString(), ctx.timeZone),
     home: { home_id: home.id, city: home.city, state: home.state },
-    sections: intelligence ? (intelligence.sections || []).map(sectionForModel) : [],
+    sections: sectionsOf(intelligence).map(sectionForModel),
     plans_today: plans,
     tasks_due: due,
   };
