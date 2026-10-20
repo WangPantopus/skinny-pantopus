@@ -983,6 +983,16 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
       && (LOCAL_AUDIENCES.includes(requestedAudience) || requestedDistributionTargets.includes('place'))) {
       return res.status(403).json({ error: BUSINESS_CANNOT_POST_ERROR, code: 'BUSINESS_CANNOT_POST' });
     }
+    // A business has no connections: a business post for the writer's own connections would tell them who is behind
+    // the business (and notify them by the writer's name).
+    if (postAs === 'business' && (['connections', 'network'].includes(requestedAudience)
+      || requestedVisibility === 'connections'
+      || requestedDistributionTargets.some((target) => ['connections', 'followers'].includes(target)))) {
+      return res.status(400).json({
+        error: "Business posts can't go to your connections. Use Public instead.",
+        code: 'business_connections_audience',
+      });
+    }
     const alertRefusal = alertKindRefusal(safetyAlertKind, req.user.accountType, sourceUrl);
     if (alertRefusal) {
       return res.status(400).json({ error: alertRefusal, code: 'ALERT_KIND_NOT_ALLOWED' });
@@ -1736,6 +1746,19 @@ router.get('/feed', verifyToken, async (req, res) => {
   }
 });
 
+// The person looked at the Nearby feed: its "since you last looked" marker moves to now
+// (AI assistant phase 2 contract §6.1). The apps call it when the feed appears, at most once
+// every 5 minutes. It is the marker the paused Pulse redesign keeps (services/pulse/seen.js),
+// which only ever moves forward.
+router.post('/feed/seen', verifyToken, async (req, res) => {
+  try {
+    res.json(await require('../services/pulse/seen').advance(req.user.id, 'nearby', new Date().toISOString()));
+  } catch (err) {
+    logger.error('Feed seen error', { error: err.message, userId: req.user?.id });
+    res.status(500).json({ error: "Couldn't save where you left off." });
+  }
+});
+
 
 
 router.get('/map', verifyToken, async (req, res) => {
@@ -2187,17 +2210,24 @@ router.post('/mute', verifyToken, async (req, res) => {
     if (!['user', 'business', 'persona'].includes(entityType)) {
       return res.status(400).json({ error: 'entityType must be "user", "business", or "persona"' });
     }
+    // A business post carries the business's id for everyone but its writer, and the web mutes a post's author as a
+    // "user": muting a business account mutes the business (its posts), never the person who wrote one.
+    let mutedType = entityType;
+    if (entityType === 'user') {
+      const { data: account } = await supabaseAdmin.from('User').select('account_type').eq('id', entityId).maybeSingle();
+      if (account?.account_type === 'business') mutedType = 'business';
+    }
 
     await ensurePostMute({
       userId,
-      entityType,
+      entityType: mutedType,
       entityId,
       surface: null,
     });
 
     feedService.invalidateFilterCache(userId);
     marketplaceService.invalidateFilterCache(userId);
-    res.json({ message: `${entityType} muted successfully` });
+    res.json({ message: `${mutedType} muted successfully` });
   } catch (err) {
     logger.error('Mute error', { error: err.message });
     res.status(500).json({ error: 'Failed to mute' });
@@ -3537,12 +3567,16 @@ router.get('/user/:userId', verifyToken, async (req, res) => {
     if (!(isOwn && includeArchived === 'true')) query = query.is('archived_at', null);
 
     if (isOwn) {
-      // Own profile: see everything (no filters on visibility)
+      // Own profile: see everything (no filters on visibility), the posts written for a business too, so the
+      // writer can still edit or delete them.
     } else {
       // Non-own profiles: only show posts marked for profile display
       query = query.eq('show_on_profile', true);
       // Exclude posts explicitly hidden from profiles
       query = query.neq('profile_visibility_scope', 'hidden');
+      // A post written for a business is the business's (its page lists it), never its writer's. Both ways of
+      // writing one (POST /api/posts as the business, the retired POST /api/businesses/:id/posts) store post_as.
+      query = query.or('post_as.is.null,post_as.neq.business');
     }
 
     query = applyCursorCondition(query, cursorCreatedAt, cursorId);
