@@ -20,6 +20,7 @@ const { getAccessibleHomeIds, MAIL_TRUSTED_VERIFICATION_STATUSES } = require('..
 const { unpublishedBusinessIds, isSearchable, isScopedBlocked, isConnected } = require('../utils/visibilityPolicy');
 const { localProfileVisibilityFor } = require('../utils/identityProfiles');
 const { hasBlocked } = require('../services/blockService');
+const { sentAsBusiness, claimPageSender } = require('../utils/mailSenderView');
 
 // ─── Helpers ───────────────────────────────────────────────
 
@@ -480,7 +481,7 @@ router.get('/claim/:mailId', async (req, res) => {
 
     const { data: mail, error } = await supabaseAdmin
       .from('Mail')
-      .select('id, sender_user_id, subject, content, type, mail_type, mail_extracted, attachments, created_at, escrow_status, escrow_claim_token, object_id')
+      .select('id, sender_user_id, sender_entity_id, sender_business_name, sender_display, sender_trust, subject, content, type, mail_type, mail_extracted, attachments, created_at, escrow_status, escrow_claim_token, object_id')
       .eq('id', mailId)
       .single();
 
@@ -501,12 +502,17 @@ router.get('/claim/:mailId', async (req, res) => {
       return res.status(404).json({ error: 'Mail not found or invalid token' });
     }
 
-    // Fetch sender info
-    const { data: sender } = await supabaseAdmin
+    // Fetch sender info. A letter sent as a business shows the business (its name and whether it is verified),
+    // never the person who sent it for the business.
+    const { data: sender } = sentAsBusiness(mail) ? { data: null } : await supabaseAdmin
       .from('User')
       .select('name, username, verified')
       .eq('id', mail.sender_user_id)
       .single();
+    const shownSender = claimPageSender(mail, {
+      senderName: sender?.name || sender?.username || 'Someone',
+      senderVerified: sender?.verified || false,
+    });
 
     // Get body content — if object_id exists, fetch from MailObject
     let body = mail.content || '';
@@ -552,8 +558,8 @@ router.get('/claim/:mailId', async (req, res) => {
     res.json({
       mail: {
         id: mail.id,
-        senderName: sender?.name || sender?.username || 'Someone',
-        senderVerified: sender?.verified || false,
+        senderName: shownSender.senderName,
+        senderVerified: shownSender.senderVerified,
         subject: mail.subject || null,
         body,
         stationeryTheme,

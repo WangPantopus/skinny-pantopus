@@ -87,6 +87,8 @@ async function runPostCreatedHooksNow({
   rateLimit = true,
 }) {
   if (!post?.id || !userId) return;
+  // A business post is the business's: the writer's connections hear nothing about it (the notice named the writer).
+  if (post.post_as === 'business' || post.business_author_id || post.identity_context_type === 'business') return;
 
   const distributionTargets = Array.isArray(targets)
     ? targets

@@ -535,8 +535,17 @@ async function enrichWithUserStatus(posts, userId, statusRows = null) {
 // serializeUserAsLocalIdentity (new keys only). Audience Profile design v2
 // §16 item 3.
 
-function redactPrivateIdentityFields(post, author) {
+function redactPrivateIdentityFields(post, author, viewerUserId = null) {
   if (!author) return post;
+
+  if (author.type === 'business') {
+    // A business post names the business, never the owner or staff member who wrote it. Only that person keeps
+    // their own id on it: the apps offer Edit and Delete when user_id is the viewer's (and the server lets only
+    // them edit). Everyone else, the business's other team members included, gets the business's id.
+    const writerId = post.author_user_id || post.user_id;
+    if (viewerUserId && writerId && String(writerId) === String(viewerUserId)) return post;
+    return { ...post, user_id: author.id, author_user_id: author.id };
+  }
 
   if (author.type === 'persona') {
     return sanitizePersonaPostForViewer({
@@ -626,7 +635,7 @@ async function attachIdentityAuthors(posts, viewerUserId, authorRows = null) {
 
     if (!author) return post;
 
-    const publicPost = redactPrivateIdentityFields(post, author);
+    const publicPost = redactPrivateIdentityFields(post, author, viewerUserId);
 
     // P0.4 follow-up: legacyCreatorFromAuthor (which fabricated a
     // {username, name, first_name, profile_picture_url} legacy shape) is
@@ -1079,9 +1088,11 @@ async function getListFeed({
         .eq('identity_context_type', 'persona')
         .overlaps('distribution_targets', [distributionTarget]);
     } else {
+      // A business post is the business's, not its writer's: it never reaches the writer's connections.
       query = query
         .in('user_id', authorIds)
-        .overlaps('distribution_targets', [distributionTarget]);
+        .overlaps('distribution_targets', [distributionTarget])
+        .or('post_as.is.null,post_as.neq.business');
     }
 
     // Place bounding-box filter
@@ -1614,7 +1625,8 @@ async function loadMapPosts({
     .limit(queryLimit + 40);
 
   if (postType) query = query.eq('post_type', postType);
-  if (authorIds) query = query.in('user_id', authorIds);
+  // A business post is the business's, not its writer's: it never reaches the writer's connections.
+  if (authorIds) query = query.in('user_id', authorIds).or('post_as.is.null,post_as.neq.business');
 
   const { data, error } = await query;
   if (error) {
