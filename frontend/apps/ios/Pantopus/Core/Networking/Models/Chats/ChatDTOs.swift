@@ -146,11 +146,13 @@ public struct UnifiedConversation: Decodable, Sendable, Hashable, Identifiable {
 public struct ChatRoomDetailResponse: Decodable, Sendable {
     public struct Room: Decodable, Sendable {
         public let type: String?
+        /// The room's name; a Support Train's room goes by the train's title.
+        public let name: String?
         public let isActive: Bool?
         public let participants: [Participant]?
 
         private enum CodingKeys: String, CodingKey {
-            case type, participants
+            case type, name, participants
             case isActive = "is_active"
         }
     }
