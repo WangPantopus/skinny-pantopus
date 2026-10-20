@@ -165,6 +165,7 @@ data class NotificationPreferencesPatch(
     val clearSuggestionMutes: Boolean? = null,
 ) {
     /** Last write wins per key; untouched keys survive the merge. */
+    @Suppress("CyclomaticComplexMethod")
     fun mergedWith(newer: NotificationPreferencesPatch): NotificationPreferencesPatch =
         NotificationPreferencesPatch(
             dailyBriefingEnabled = newer.dailyBriefingEnabled ?: dailyBriefingEnabled,
