@@ -579,6 +579,11 @@ public struct GigChatRoomResponse: Decodable, Sendable {
     public let roomId: String
     public let topicId: String?
     public let gigOwnerId: String?
+    /// Set for the owner and staff of the business that posted the task:
+    /// they answer its room as the business.
+    public let asBusinessUserId: String?
+    /// The assigned worker's name, set with `asBusinessUserId`.
+    public let workerName: String?
 }
 
 // MARK: - Structured Q&A
