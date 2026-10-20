@@ -3,7 +3,9 @@
 //  Pantopus
 //
 //  One tap on a Pantopus AI action card (contract
-//  `docs/product/ai-assistant-phase1-contract-2026-10-20.md`, section 4.3).
+//  `docs/product/ai-assistant-phase1-contract-2026-10-20.md`, section 4.3,
+//  with the phase 2 additions in
+//  `docs/product/ai-assistant-phase2-contract-2026-10-20.md`, section 8.1).
 //  The card's request goes out only when it is on the allowlist, through the
 //  signed-in API client, so the endpoint's own permissions, validation and
 //  notifications apply. A follow-up runs after it with the reply's values
@@ -29,7 +31,9 @@ enum AIActionAllowlist {
         (.patch, "/api/posts/:id/solve"),
         (.post, "/api/homes/:id/tasks"),
         (.post, "/api/homes/:id/tasks/:id/recurrence"),
-        (.put, "/api/hub/preferences")
+        (.put, "/api/hub/preferences"),
+        // Phase 2: a nudge's "Fewer like this".
+        (.post, "/api/ai/nudges/:id/fewer")
     ]
 
     /// The request as an endpoint, or nil when the app never sends it: a
@@ -221,6 +225,9 @@ enum AIActionRunner {
         case "chat":
             let room = body?.dictValue?["roomId"]?.stringValue
             signal(Set([ScreenTopic.chats] + (room.map { [ScreenTopic.chat($0)] } ?? [])))
+        case "hub", "ai":
+            // Notification settings show the switches and "Fewer like this" mutes.
+            signal([ScreenTopic.profileMe])
         default:
             break
         }

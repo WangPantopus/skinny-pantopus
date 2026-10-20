@@ -188,17 +188,26 @@ struct AIActionCardView: View {
         }
     }
 
+    /// Two buttons share a row; three or more (a nudge's, with "Fewer like
+    /// this") stack, so none is squeezed.
+    @ViewBuilder
     private func buttons(_ actions: [AIActionCardDTO.Action], itemId: String?, size: CompactButtonSize) -> some View {
+        if actions.count > 2 {
+            VStack(spacing: 6) { buttonRow(actions, itemId: itemId, size: size) }
+        } else {
+            HStack(spacing: Spacing.s2) { buttonRow(actions, itemId: itemId, size: size) }
+        }
+    }
+
+    private func buttonRow(_ actions: [AIActionCardDTO.Action], itemId: String?, size: CompactButtonSize) -> some View {
         let locked = card.running != nil || card.isExpired
-        return HStack(spacing: Spacing.s2) {
-            ForEach(actions) { action in
-                CompactButton(title: action.label, variant: variant(action.style), size: size) {
-                    handlers.run(cardId, itemId, action.id)
-                }
-                .disabled(locked)
-                .opacity(locked ? 0.5 : 1)
-                .accessibilityIdentifier("chatAIActionButton_\(action.id)")
+        return ForEach(actions) { action in
+            CompactButton(title: action.label, variant: variant(action.style), size: size) {
+                handlers.run(cardId, itemId, action.id)
             }
+            .disabled(locked)
+            .opacity(locked ? 0.5 : 1)
+            .accessibilityIdentifier("chatAIActionButton_\(action.id)")
         }
     }
 
@@ -229,6 +238,8 @@ struct AIActionCardView: View {
         case "post_reply", "post_solve": ("Post", .messageSquare)
         case "home_task": ("Task", .checkCircle)
         case "notification_settings": ("Notifications", .bell)
+        // A nudge with nothing to do but "Fewer like this" (phase 2 §3.6).
+        case "suggestion": ("Suggestion", .sparkles)
         default: ("Action", .sparkles)
         }
     }
