@@ -219,6 +219,24 @@ object ManageOrganizerProjection {
                 )
             }
 
+    /**
+     * The reminder the editor opens with when the AI draft fails, written here from the
+     * train's title and open-date count. Mirrors iOS `fallbackNudge(title:openDates:)`.
+     */
+    fun fallbackNudge(
+        title: String,
+        openDates: Int,
+    ): String {
+        val train = title.trim().ifEmpty { "This Support Train" }
+        val stillOpen =
+            when {
+                openDates == 1 -> "still has 1 open date. If you can take it"
+                openDates > 1 -> "still has $openDates open dates. If you can take one"
+                else -> "still has open dates. If you can take one"
+            }
+        return "$train $stillOpen, please sign up on the train's page. Thank you!"
+    }
+
     fun parseDate(value: String?): Date? {
         if (value.isNullOrBlank()) return null
         return runCatching { utc("yyyy-MM-dd").parse(value.take(10)) }.getOrNull()

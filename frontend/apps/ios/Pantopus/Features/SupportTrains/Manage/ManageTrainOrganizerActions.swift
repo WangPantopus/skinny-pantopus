@@ -478,6 +478,8 @@ public extension ManageTrainViewModel {
 
     // MARK: Nudge
 
+    /// Drafting needs AI and sending doesn't, so when the draft fails the
+    /// editor opens with a simple reminder and a note instead of an alert.
     func draftNudge() async {
         guard !isSubmitting else { return }
         setSubmitting(true)
@@ -487,8 +489,14 @@ public extension ManageTrainViewModel {
                 SupportTrainActionsEndpoints.draftNudge(supportTrainId: supportTrainId)
             )
             nudgeDraft = response.message ?? ""
+            nudgeDraftNote = nil
         } catch {
-            actionError = (error as? APIError)?.errorDescription ?? "Couldn't draft a reminder."
+            guard case let .loaded(content) = state else {
+                actionError = (error as? APIError)?.errorDescription ?? "Couldn't draft a reminder."
+                return
+            }
+            nudgeDraft = Self.fallbackNudge(title: content.title, openDates: content.slotsOpen)
+            nudgeDraftNote = "Couldn't draft a reminder. Here's a simple one you can edit and send."
         }
     }
 
@@ -506,6 +514,7 @@ public extension ManageTrainViewModel {
                 as: EmptyResponse.self
             )
             nudgeDraft = nil
+            nudgeDraftNote = nil
             toast = "Reminder posted to the campaign chat"
         } catch {
             actionError = (error as? APIError)?.errorDescription ?? "Couldn't send that reminder."
@@ -514,6 +523,7 @@ public extension ManageTrainViewModel {
 
     func discardNudge() {
         nudgeDraft = nil
+        nudgeDraftNote = nil
     }
 
     // MARK: Gift fund
@@ -672,6 +682,19 @@ public extension ManageTrainViewModel {
         formatter.timeZone = .current
         formatter.dateFormat = "h:mm a"
         return formatter.string(from: date).lowercased()
+    }
+
+    /// The reminder the editor opens with when the AI draft fails, written here from the
+    /// train's title and open-date count. Mirrors Android `ManageOrganizerProjection.fallbackNudge`.
+    internal nonisolated static func fallbackNudge(title: String, openDates: Int) -> String {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let train = trimmed.isEmpty ? "This Support Train" : trimmed
+        let stillOpen = switch openDates {
+        case 1: "still has 1 open date. If you can take it"
+        case 2...: "still has \(openDates) open dates. If you can take one"
+        default: "still has open dates. If you can take one"
+        }
+        return "\(train) \(stillOpen), please sign up on the train's page. Thank you!"
     }
 
     internal nonisolated static func organizerRows(

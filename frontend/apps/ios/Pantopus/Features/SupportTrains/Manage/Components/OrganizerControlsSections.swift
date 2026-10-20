@@ -339,6 +339,8 @@ struct ManageNudgeSection: View {
     /// False while the train has no dates: none are open, but none are filled either.
     var hasDates = true
     let draft: String?
+    /// Shown above the editor when the AI draft failed and it holds a simple reminder instead.
+    var draftNote: String?
     let isBusy: Bool
     let onDraft: @MainActor () -> Void
     let onEditDraft: @MainActor (String) -> Void
@@ -360,6 +362,13 @@ struct ManageNudgeSection: View {
                         .font(.system(size: 12.5))
                         .foregroundStyle(Theme.Color.appTextSecondary)
                     if let draft {
+                        if let draftNote {
+                            Text(draftNote)
+                                .font(.system(size: 12.5))
+                                .foregroundStyle(Theme.Color.error)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .accessibilityIdentifier("manageTrainNudgeDraftNote")
+                        }
                         TextEditor(text: Binding(get: { draft }, set: { onEditDraft($0) }))
                             .frame(minHeight: 90)
                             .padding(Spacing.s2)
