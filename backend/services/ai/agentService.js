@@ -37,7 +37,7 @@ const { isFeatureEnabled } = require('../featureFlagService');
 const { readToolDefinitions, PLAN_TOOLS } = require('./readTools');
 const { actionCardDefinitions, PLAN_CARD_TOOLS } = require('./actionCards');
 const { appGuide } = require('./appGuide');
-const { screenContextText } = require('./screenContext');
+const { screenContextText, screenName } = require('./screenContext');
 const { checkChatBudget } = require('./assistantBudget');
 
 const READ_TOOL_NAMES = new Set(readToolDefinitions.map((tool) => tool.name));
@@ -269,15 +269,17 @@ async function updateConversation(conversationId, { messages, messageCount, titl
 
 /**
  * The person's message as Claude's content: photos first, then the text, then
- * the app's lines (when it was sent, which the model can't know, and the coarse
- * location the client reports).
+ * the app's lines (when it was sent, which the model can't know, the screen it
+ * was sent from, and the coarse location the client reports).
  */
-function buildUserContent({ message, photos, unreadable, timeZone, coarseLocation, contextText }) {
+function buildUserContent({ message, photos, unreadable, timeZone, askedFrom, coarseLocation, contextText }) {
   let text = message;
   if (unreadable) {
     text += `\n\n[${unreadable} of the ${photos.length + unreadable} photos couldn't be opened, so they aren't included.]`;
   }
   text += `\n\n[Sent: ${describeNow(timeZone)}]`;
+  // Every message from a screen says so, also when that screen's context isn't sent again.
+  if (askedFrom) text += `\n[Asked from: ${askedFrom}]`;
   if (coarseLocation) {
     text += `\n[User location context: ${coarseLocation.city || ''}, ${coarseLocation.state || ''}]`;
   }
@@ -395,6 +397,7 @@ async function streamChat({
         photos,
         unreadable: (images?.length || 0) - photos.length,
         timeZone: context.timeZone,
+        askedFrom: screenText ? screenName(screen) : null,
         coarseLocation,
         contextText: systemMessages ? null : newContext,
       }),
@@ -1340,7 +1343,7 @@ const DRAFT_TYPES = {
 };
 // Lines the app adds to a person's message, which aren't theirs to see again.
 const APP_LINES = [
-  /\n*\[(?:Sent|User location context): [^\]\n]*\]/g,
+  /\n*\[(?:Sent|Asked from|User location context): [^\]\n]*\]/g,
   /\n*\[\d+ of the \d+ photos couldn't be opened[^\]\n]*\]/g,
 ];
 // The note that stands in for a stored photo (agentLoop.compactForStorage).
