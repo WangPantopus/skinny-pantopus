@@ -2321,10 +2321,14 @@ public final class ChatConversationViewModel {
     /// A made-up username is never shown.
     private func roomSenderName(for message: ChatMessageDTO) -> String? {
         guard case .room = mode else { return nil }
-        if let name = message.sender?.name?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
-            return name
+        for name in [message.sender?.displayName, message.sender?.name] {
+            if let name = name?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
+                return name
+            }
         }
-        return MadeUpUsername.chosen(message.sender?.username) ?? "Participant"
+        return MadeUpUsername.chosen(message.sender?.handle)
+            ?? MadeUpUsername.chosen(message.sender?.username)
+            ?? "Participant"
     }
 
     /// Resolve the Chat Search scroll target once: if the deep-linked

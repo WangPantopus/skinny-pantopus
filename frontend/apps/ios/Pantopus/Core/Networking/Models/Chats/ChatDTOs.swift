@@ -282,9 +282,14 @@ public struct ChatMessageSender: Decodable, Sendable, Hashable, Identifiable {
     public let username: String?
     public let name: String?
     public let profilePictureURL: String?
+    /// The sender's public identity (`backend/serializers/identitySerializers.js`),
+    /// which the messages routes send now; older servers send `name` and
+    /// `username` instead.
+    public let displayName: String?
+    public let handle: String?
 
     private enum CodingKeys: String, CodingKey {
-        case id, username, name
+        case id, username, name, displayName, handle
         case profilePictureURL = "profile_picture_url"
     }
 }
