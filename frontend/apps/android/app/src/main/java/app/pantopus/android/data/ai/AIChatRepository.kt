@@ -168,6 +168,9 @@ class AIChatRepository
             return url?.trim()?.ifEmpty { null }?.let { ChatAILink(label = text, url = it) }
         }
 
+        /** Delete one conversation for good. Route `backend/routes/ai.js:451`. */
+        suspend fun deleteConversation(id: String): NetworkResult<Unit> = safeApiCall { api.deleteConversation(id) }
+
         /**
          * One turn of the assistant over server-sent events. [context] says which screen the thread was
          * opened from (contract section 6); it goes with every message while the thread keeps it.

@@ -33,6 +33,8 @@ export function safeRedirectPath(redirectTo: string | null | undefined, fallback
       /^\/(?:invite|persona|posts)\/[a-zA-Z0-9_-]+$/.test(path) ||
       // A business's public page, or one of its pages (/b/:username/:slug).
       /^\/b\/[a-zA-Z0-9_-]+(?:\/[a-zA-Z0-9_-]+)?$/.test(path) ||
+      // A letter's claim page (/open/:mailId?token=…), opened from its email before signing in.
+      /^\/open\/[a-fA-F0-9-]+$/.test(path) ||
       /^\/@[a-zA-Z0-9_-]+$/.test(path);
     return allowed ? path + suffix : fallback;
   } catch {

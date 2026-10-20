@@ -1085,9 +1085,11 @@ router.post('/post-media/:postId', uploadLimiter, verifyToken, postMediaUpload.a
 
     // Match the accepted comment upload contract: multipart filenames can
     // change after a lost reply, but sanitized bytes and MIME remain stable.
-    // Images and videos alike get a content-addressed key under this post and
-    // owner, so a re-sent upload is recognised as already attached instead of
-    // being appended again.
+    // Images and videos alike get a content-addressed key under this post, so
+    // a re-sent upload is recognised as already attached instead of being
+    // appended again. Only the post's writer uploads here, and neither the key
+    // nor its hash names them: a business post's viewers see these URLs, and
+    // the writer's id in them would name the person behind the business.
     let slots;
     try {
       slots = postMediaSlots(files, req.body.media);
@@ -1097,15 +1099,15 @@ router.post('/post-media/:postId', uploadLimiter, verifyToken, postMediaUpload.a
     const pending = new Map();
     for (const { file, clip, category, type } of slots) {
       const hashBuilder = crypto.createHash('sha256')
-        .update(JSON.stringify([`post-${clip ? 'live-photo' : category}-v1`, postId, userId, file.mimetype]))
+        .update(JSON.stringify([`post-${clip ? 'live-photo' : category}-v2`, postId, file.mimetype]))
         .update(file.buffer);
       if (clip) hashBuilder.update(clip.mimetype).update(clip.buffer);
       const hash = hashBuilder.digest('hex');
       const ext = category === 'document' ? 'pdf' : category === 'image'
         ? file.mimetype.split('/')[1].replace(/[^a-z0-9]/g, '')
         : POST_VIDEO_EXTENSIONS[file.mimetype];
-      const key = `posts/${postId}/${userId}/media_${hash}.${ext}`;
-      const clipKey = clip ? `posts/${postId}/${userId}/media_${hash}_live.${POST_VIDEO_EXTENSIONS[clip.mimetype]}` : null;
+      const key = `posts/${postId}/media_${hash}.${ext}`;
+      const clipKey = clip ? `posts/${postId}/media_${hash}_live.${POST_VIDEO_EXTENSIONS[clip.mimetype]}` : null;
       pending.set(key, { file, clip, clipKey, category, type, url: s3.getPublicUrl(key) });
     }
     const existingUrls = new Set(postRecord.media_urls || []);
@@ -1360,7 +1362,6 @@ router.delete('/listing-media/:listingId', verifyToken, async (req, res) => {
  */
 router.post('/mail-attachments', uploadLimiter, verifyToken, upload.array('files', 5), enforceFileSizeLimits, validateAndStripUploads, async (req, res) => {
   try {
-    const userId = req.user.id;
     const files = req.files || [];
 
     if (files.length === 0) {
@@ -1369,11 +1370,10 @@ router.post('/mail-attachments', uploadLimiter, verifyToken, upload.array('files
 
     const uploaded = [];
     for (const file of files) {
-      const { url, key } = await s3.uploadGeneral(
+      // The key names no uploader: the letter may go out as a business (s3.generateOpaqueS3Key).
+      const { url, key } = await s3.uploadToS3(
         file.buffer,
-        file.originalname,
-        userId,
-        `mailbox/${userId}`,
+        s3.generateOpaqueS3Key('mailbox', file.originalname),
         file.mimetype
       );
 
@@ -1777,9 +1777,10 @@ const LIVE_PHOTO_VIDEO_MAX = 15 * 1024 * 1024;  // 15 MB
  *   - "image" (JPEG/HEIC/PNG, ≤ 10 MB) — the still frame
  *   - "video" (MOV/MP4, ≤ 15 MB)       — the companion Live Photo clip
  *
- * Uploads both to S3 with linked keys:
- *   posts/{userId}/{ts}_{rand}.jpg
- *   posts/{userId}/{ts}_{rand}_live.{ext}
+ * Uploads both to S3 with linked keys, which name no uploader (the pair may
+ * go into a business's post):
+ *   posts/{ts}_{rand}.jpg
+ *   posts/{ts}_{rand}_live.{ext}
  *
  * Runs the existing thumbnail pipeline on the still image.
  *
@@ -1836,7 +1837,7 @@ router.post(
       const crypto = require('crypto');
       const ts = Date.now();
       const rand = crypto.randomBytes(8).toString('hex');
-      const base = `posts/${userId}/${ts}_${rand}`;
+      const base = `posts/${ts}_${rand}`;
 
       const imageExt = imageFile.mimetype === 'image/png' ? '.png' : '.jpg';
       const videoExt = videoFile.mimetype === 'video/mp4' ? '.mp4' : '.mov';

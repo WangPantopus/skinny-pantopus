@@ -140,6 +140,9 @@ function generateAqiSignals(aqi) {
   }];
 }
 
+// Heat that becomes the day's signal, °F (also the assistant's weather watch for plans).
+const EXTREME_HEAT_F = 95;
+
 /**
  * Generate temperature extreme signal.
  */
@@ -162,7 +165,7 @@ function generateTempSignals(weather) {
       action: null,
       data: { temp_f: temp, extreme: 'cold' },
     });
-  } else if (temp >= 95) {
+  } else if (temp >= EXTREME_HEAT_F) {
     signals.push({
       kind: 'temperature',
       score: 0.75 * 0.35 + 0.70 * 0.25 + 0.65 * 0.30 + 0.90 * 0.10,
@@ -633,4 +636,4 @@ function rankSignals(inputs) {
 }
 
 module.exports = {
-  generateAddressCalendarSignals, rankSignals, computeDisplayMode, costOfInaction, COST_OF_INACTION };
+  generateAddressCalendarSignals, rankSignals, computeDisplayMode, costOfInaction, COST_OF_INACTION, EXTREME_HEAT_F };
