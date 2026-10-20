@@ -443,3 +443,5 @@ Decided October 20 (section 0) from the [AI expansion proposal](https://claude.a
 ## Background backlog
 
 The September acceptance backlog ([REMAINING_WORK](docs/REMAINING_WORK_2026-09-11.md)) is background; its row IDs are handy names, not a process. The launch streams verify their areas end to end, and L4 runs the final release-candidate sweep on iOS, Android and the web before the pilot.
+
+- [ ] Support Train page during a sign-in outage. When Supabase Auth can't verify a signed-in person's token, `optionalAuth` serves the request as signed out for 5 seconds, so an organizer or helper briefly sees the public train page, or "You do not have access" on a My connections or draft train. Answer the page's retryable 503 instead when a token was sent but couldn't be checked, and decide whether the Group chat membership read ([#2460](https://github.com/WangPantopus/skinny-pantopus/pull/2460)) should also answer 503 when it fails (today it only hides the chat button). A small backend change, found while landing [#2468](https://github.com/WangPantopus/skinny-pantopus/pull/2468) on October 20; put in the backlog that day.
