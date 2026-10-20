@@ -560,6 +560,10 @@ async function showPlanRequests(args, ctx) {
         r.user.mutual_connections ? line('Mutual connections', `${r.user.mutual_connections}`) : null,
         r.user.hosted_before ? line('Before', "You've hosted them") : null,
         r.user.new_to_pantopus ? line('New', 'New to Pantopus') : null,
+        // A playdate's family: its kids and their ages (never names), as the app's requests screen.
+        plan.kind === 'playdate'
+          ? line('Kids', [`${r.kids_count || 1} ${(r.kids_count || 1) === 1 ? 'kid' : 'kids'}`, agesText(r.kids_age_bands)].filter(Boolean).join(' · '))
+          : null,
         line('Their note', r.note),
         requests.waitlisted.includes(r) ? line('Status', 'On the waitlist') : null,
       ].filter(Boolean),

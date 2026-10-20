@@ -251,6 +251,8 @@ async function getPlan(args, ctx) {
       mutual_connections: r.user.mutual_connections,
       hosted_before: r.user.hosted_before,
       new_to_pantopus: r.user.new_to_pantopus,
+      // A playdate's family: how many kids and their ages (never names).
+      ...(body.kind === 'playdate' ? { kids_count: r.kids_count, kids_age_bands: r.kids_age_bands } : {}),
       note_text: clip(r.note, 280),
     });
     plan.waiting = requests.pending.map(view);
