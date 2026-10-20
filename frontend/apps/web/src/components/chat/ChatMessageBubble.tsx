@@ -43,7 +43,7 @@ function ChatMessageBubble({ msg, isMine, showSender = false, onImageClick, onRe
     : '';
   const msgText = msg.message_text || msg.message || msg.content || '';
   const allAttachments = extractAttachments(msg);
-  const attachments = allAttachments.filter(a => !allAttachments.some(still => still.live_video_file_id === a.id && a.live_photo_file_id === still.id));
+  const attachments = allAttachments.filter(a => !(a.id && a.live_photo_file_id && allAttachments.some(still => still.id && still.live_video_file_id === a.id && a.live_photo_file_id === still.id)));
   const metadata = msg.metadata || {};
   const msgType = resolveMessageType(msg);
   const isOptimistic = msg._optimistic;
@@ -202,7 +202,9 @@ function ChatMessageBubble({ msg, isMine, showSender = false, onImageClick, onRe
                   const mime = String(a?.mime_type || '');
                   const isImage = mime.startsWith('image/');
                   const url = a?.file_url as string | undefined;
-                  const live = allAttachments.find(clip => clip.id === a.live_video_file_id && clip.live_photo_file_id === a.id);
+                  const live = a.id && a.live_video_file_id
+                    ? allAttachments.find(clip => clip.id === a.live_video_file_id && clip.live_photo_file_id === a.id)
+                    : undefined;
                   if (mime === 'application/pdf' && url) {
                     return <button key={`${msg.id}-att-${i}`} type="button" className="block rounded-lg border p-3 text-left"
                       onClick={() => setPreview({ url, title: a.original_filename, mimeType: mime })}>

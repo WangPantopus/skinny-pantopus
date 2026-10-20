@@ -395,7 +395,7 @@ export default function ChatRoomView({
     : null;
 
   return (
-    <div className="bg-app-surface-sunken flex flex-col h-full min-h-0 overflow-hidden">
+    <div className="bg-app-surface-sunken flex flex-col h-full min-h-0 overflow-hidden pb-[var(--fab-lift,0px)]">
       {/* Chat toolbar */}
       <div className="bg-surface border-b border-app flex-shrink-0 z-10">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
