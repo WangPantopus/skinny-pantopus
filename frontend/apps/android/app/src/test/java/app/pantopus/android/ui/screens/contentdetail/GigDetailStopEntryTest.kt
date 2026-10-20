@@ -103,6 +103,7 @@ class GigDetailStopEntryTest {
                 },
             stopFactory = mockk { every { create(any(), any()) } returns coordinator },
             tipStore = mockk(relaxed = true),
+            businessTeamRepo = mockk(relaxed = true),
         )
     }
 
