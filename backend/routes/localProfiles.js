@@ -164,8 +164,8 @@ const FORBIDDEN_PUBLIC_METADATA_KEY = /(^|_)(user|author|actor|owner|email|phone
 
 function parseLimit(value, fallback = 20, max = 50) {
   const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
-  return Math.min(Math.floor(parsed), max);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) return fallback;
+  return Math.min(parsed, max);
 }
 
 function sanitizePublicMetadata(metadata) {
@@ -474,7 +474,7 @@ router.get('/:handle/gigs', optionalAuth, async (req, res) => {
       .select('*')
       .eq('user_id', profile.user_id)
       .order('created_at', { ascending: false })
-      .limit(Number(req.query.limit) || 20);
+      .limit(parseLimit(req.query.limit));
 
     if (error) return res.status(500).json({ error: 'Failed to load local gigs' });
     res.json({ gigs: (data || []).map((gig) => serializeLocalOwnedRecord(gig, profile, 'author', req.user?.id || null)) });
@@ -495,7 +495,7 @@ router.get('/:handle/listings', optionalAuth, async (req, res) => {
       .eq('user_id', profile.user_id)
       .eq('status', 'active')
       .order('created_at', { ascending: false })
-      .limit(Number(req.query.limit) || 20);
+      .limit(parseLimit(req.query.limit));
 
     if (error) return res.status(500).json({ error: 'Failed to load local listings' });
     res.json({ listings: (data || []).map((listing) => serializeLocalOwnedRecord(listing, profile, 'author', req.user?.id || null)) });
