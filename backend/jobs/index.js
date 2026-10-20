@@ -18,6 +18,7 @@
 //   - recomputeUtilityScores     → every 15 minutes (Social Layer)
 //   - monthlyReceiptJob          → 1st of month at 9:00 AM PT (17:00 UTC)
 //   - authRegistryPrune          → hourly at :50 (persistent login)
+//   - nearbyNudges               → hourly at :27 (AI assistant phase 2)
 // ============================================================
 
 const cron = require('node-cron');
@@ -712,7 +713,8 @@ function startJobs(options = {}) {
 
   // ─── Nearby Plans ───
   // Every 5 minutes: held pushes (quiet hours, ask bundles), expiring asks, ending
-  // plans, closing chats 24h after the end, reminders and the 8 AM host summary.
+  // plans, closing chats 24h after the end, reminders and the 8 AM host summary,
+  // then the assistant's nudges for hosts (weather, requests waiting, after the plan).
   // Every send is claimed first, so overlapping runners don't repeat a notice.
   scheduleCron('*/5 * * * *', wrapJob('plansTick', runPlansTick), {
     scheduled: true,
@@ -724,6 +726,14 @@ function startJobs(options = {}) {
   // or are dropped if the nudge expired or Suggestions was turned off meanwhile.
   // Each send is claimed first, like the Plans tick's.
   scheduleCron('*/5 * * * *', wrapJob('assistantHeldPushes', releaseHeldNudges), {
+    scheduled: true,
+    timezone: 'UTC',
+  });
+
+  // ─── Nearby nudges (AI assistant phase 2) ───
+  // Hourly at :27: lost-and-found pairs judged by the model (a pair at most once in 7
+  // days), and open questions that got answers. They go out through the nudge engine.
+  scheduleCron('27 * * * *', wrapJob('nearbyNudges', () => require('../services/ai/nudges/nearby').runNearbyNudges()), {
     scheduled: true,
     timezone: 'UTC',
   });

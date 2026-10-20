@@ -467,6 +467,9 @@ public final class ChatConversationViewModel {
     /// shown in place of "Thinking…" until the reply or its card arrives.
     public private(set) var aiStatus: String?
 
+    /// True while "Delete conversation" runs; the header's menu waits.
+    public private(set) var isDeletingAIConversation = false
+
     /// Local pre-send queue. Backend upload/send wiring is out of scope
     /// for this phase, but the UI can still render and remove queued
     /// attachments deterministically.
@@ -544,7 +547,7 @@ public final class ChatConversationViewModel {
 
     public var canSend: Bool {
         roomClosedNote == nil && (!composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !queuedAttachments.isEmpty) &&
-            !isSending
+            !isSending && !isDeletingAIConversation
     }
 
     /// True when another older page can be fetched.
@@ -964,7 +967,7 @@ public final class ChatConversationViewModel {
     /// failure marks the row as failed for the view's retry CTA.
     public func send() async {
         let hasQueuedFiles = queuedAttachments.contains { $0.data != nil }
-        guard roomClosedNote == nil, canSend || hasQueuedFiles else { return }
+        guard roomClosedNote == nil, !isDeletingAIConversation, canSend || hasQueuedFiles else { return }
         let trimmed = composerText.trimmingCharacters(in: .whitespacesAndNewlines)
         composerText = ""
         isSending = true
@@ -1281,6 +1284,64 @@ public final class ChatConversationViewModel {
         } else {
             replaceLocalMessage(id: assistantId, text: partialText, type: "ai_reply", userId: "ai")
         }
+    }
+
+    /// "Delete conversation" (the header's More menu): every conversation the assistant keeps for this
+    /// person goes (`DELETE /api/ai/conversations/:id`), the one on screen and any earlier one "New chat"
+    /// or another device left, which the next launch would otherwise show. Each one's cards are read
+    /// first, so their records on this phone go with it. Then the thread starts over, as "New chat" does.
+    public func deleteAIConversations() async {
+        guard case .ai = mode, !isDeletingAIConversation else { return }
+        isDeletingAIConversation = true
+        defer { isDeletingAIConversation = false }
+        aiStreamTask?.cancel()
+        var deleted: Set<String> = []
+        var cleared = false
+        do {
+            // The list holds the newest 50, so a long history takes a few rounds.
+            for _ in 0..<20 {
+                let listed: AIConversationsResponse = try await api.request(AIEndpoints.conversations())
+                let ids = listed.conversations.map(\.id).filter { !deleted.contains($0) }
+                cleared = listed.conversations.isEmpty
+                // Done, or listed again after its delete went through.
+                if ids.isEmpty { break }
+                for id in ids {
+                    let cardIds = try await aiActionCardIds(conversationId: id)
+                    _ = try await api.request(AIEndpoints.deleteConversation(id: id), as: EmptyResponse.self)
+                    actionDoneStore.forget(cardIds: cardIds)
+                    deleted.insert(id)
+                }
+            }
+        } catch let APIError.clientError(status, _) where status == 429 {
+            actionFailure = "Couldn\u{2019}t delete it all yet. Try again in a minute."
+            return
+        } catch {
+            logger.warning("AI conversation delete failed: \(error)")
+        }
+        guard cleared else {
+            actionFailure = "Couldn\u{2019}t delete the conversation. Try again."
+            return
+        }
+        startNewAIConversation()
+    }
+
+    /// The action cards in one conversation, by card id; none when it is already gone.
+    private func aiActionCardIds(conversationId: String) async throws -> Set<String> {
+        let history: AIConversationMessagesResponse
+        do {
+            history = try await api.request(AIEndpoints.conversationMessages(id: conversationId))
+        } catch APIError.notFound {
+            return []
+        }
+        var cardIds: Set<String> = []
+        for item in history.messages {
+            guard let draft = item.draft, draft.type == "action" else { continue }
+            let fields: [String: Any] = draft.draft.mapValues { AIChatStreamClient.foundationValue($0) }
+            if let cardId = AIChatStreamClient.actionCard(from: fields)?.action?.envelope.id {
+                cardIds.insert(cardId)
+            }
+        }
+        return cardIds
     }
 
     /// Toggle a reaction on a message. The request carries the state the
