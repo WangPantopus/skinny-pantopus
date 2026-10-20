@@ -386,6 +386,16 @@ object DeepLinkRouter {
         /** `/plans` opens the Plans tab (Pulse build S3). Behind the `plans` flag. */
         data object PlansTab : Destination
 
+        /**
+         * `pantopus://assistant` opens the assistant thread; `?nudge=<notificationId>` opens it at that brief's or
+         * nudge's message (AI assistant phase 2 contract §8.2), and `&conversation=<id>` names the conversation it was
+         * added to. Each is null without one, or when it isn't a UUID.
+         */
+        data class Assistant(
+            val nudgeId: String? = null,
+            val conversationId: String? = null,
+        ) : Destination
+
         data class Unknown(val uri: String) : Destination
     }
 
@@ -756,6 +766,15 @@ object DeepLinkRouter {
             "nearby" -> if (segments.size == 1) Destination.Nearby else Destination.Unknown(raw)
             "notifications" -> Destination.Notifications
             "today" -> if (segments.size == 1) Destination.TodayTab else Destination.Unknown(raw)
+            "assistant" ->
+                if (segments.size == 1) {
+                    Destination.Assistant(
+                        nudgeId = Paths.queryParam(queryPart, "nudge")?.takeIf(MAIL_UUID::matches),
+                        conversationId = Paths.queryParam(queryPart, "conversation")?.takeIf(MAIL_UUID::matches),
+                    )
+                } else {
+                    Destination.Unknown(raw)
+                }
             "hub-today", "hub_today" ->
                 // `?deliveryId=` + `?kind=` ride the Morning/Evening Briefing push.
                 Destination.HubToday(
@@ -1103,6 +1122,28 @@ object DeepLinkRouter {
         if (ownerKind == null) return Destination.BookingDetail(bookingId)
         val owner = HomeTaskNotificationRoute.canonicalId(ownerId)?.takeIf { ownerKind == "home" || ownerKind == "business" }
         return owner?.let { Destination.BookingDetail(bookingId, ownerKind, it) }
+    }
+
+    /** Briefs and nudges: the notification types the assistant sends first (AI assistant phase 2 contract §3.2). */
+    private val ASSISTANT_NOTIFICATION_TYPES = setOf("assistant_brief", "assistant_nudge")
+
+    /**
+     * A brief or nudge (a push or a notification row) opens the assistant at its message, whatever its stored link
+     * says (AI assistant phase 2 contract §8.3): `pantopus://assistant?nudge=<notificationId>`, with
+     * `&conversation=<id>` when the notification names the conversation it was added to. Null for other types.
+     */
+    fun assistantNotificationPath(
+        type: String?,
+        notificationId: String?,
+        link: String?,
+        conversationId: String? = null,
+    ): String? {
+        if (type?.lowercase() !in ASSISTANT_NOTIFICATION_TYPES) return null
+        val linked = link?.let { resolveString(Paths.normalizeIncoming(it)) as? Destination.Assistant }
+        val nudgeId = notificationId?.takeIf(MAIL_UUID::matches) ?: linked?.nudgeId
+        val conversation = conversationId?.takeIf(MAIL_UUID::matches) ?: linked?.conversationId
+        val query = listOfNotNull(nudgeId?.let { "nudge=$it" }, conversation?.let { "conversation=$it" }).joinToString("&")
+        return if (query.isEmpty()) "pantopus://assistant" else "pantopus://assistant?$query"
     }
 
     /**
