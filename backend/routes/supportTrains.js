@@ -4108,6 +4108,9 @@ router.get(
 
 // ─── Public Campaign View ─────────────────────────────────────────────────
 
+// A malformed id fails the database read; it is checked first so only a real read failure answers 503.
+const SUPPORT_TRAIN_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 // Get a Support Train (public-facing with privacy gating)
 router.get(
   '/:id',
@@ -4116,14 +4119,23 @@ router.get(
     const supportTrainId = req.params.id;
     const userId = req.user?.id || null;
 
+    if (!SUPPORT_TRAIN_ID.test(supportTrainId)) {
+      return res.status(404).json({ error: 'NOT_FOUND', message: 'Support Train not found.' });
+    }
+
     // Load SupportTrain + Activity
     const { data: st, error: stErr } = await supabaseAdmin
       .from('SupportTrain')
       .select('*, Activity!inner ( * )')
       .eq('id', supportTrainId)
-      .single();
+      .maybeSingle();
 
-    if (stErr || !st) {
+    // A failed read is not an answer: organizers and helpers must not be told the train doesn't exist.
+    if (stErr) {
+      logger.error('Support Train read failed', { supportTrainId, error: stErr.message });
+      return supportTrainUnavailable(res);
+    }
+    if (!st) {
       return res.status(404).json({ error: 'NOT_FOUND', message: 'Support Train not found.' });
     }
 
@@ -4240,7 +4252,7 @@ router.get(
         .from('SupportTrainRecipientProfile')
         .select('*')
         .eq('support_train_id', supportTrainId)
-        .single(),
+        .maybeSingle(),
       supabaseAdmin
         .from('SupportTrainSlot')
         .select(
@@ -4277,25 +4289,55 @@ router.get(
         : Promise.resolve({ data: [] }),
     ]);
 
+    // The page is built from every one of these. A failed read would show as content:
+    // "None specified" for allergies, an empty schedule, no "You're signed up", "No updates yet".
+    const failedRead = [
+      ['recipient profile', profileRes],
+      ['slots', slotsRes],
+      ['updates', updatesRes],
+      ['organizers', organizersRes],
+      ['my reservations', myResRes],
+    ].find(([, result]) => result.error);
+    if (failedRead) {
+      logger.error('Support Train page read failed', {
+        supportTrainId,
+        userId,
+        read: failedRead[0],
+        error: failedRead[1].error.message,
+      });
+      return supportTrainUnavailable(res);
+    }
+
     const profile = profileRes.data;
     let slots = slotsRes.data || [];
     try {
       slots = await normalizeSlotsWithActiveReservations(slots);
     } catch (error) {
+      // The stored counts can be stale; open and full come from the signups themselves.
       logger.error('Support Train slot availability normalization failed', {
         supportTrainId,
         error: error.message,
       });
+      return supportTrainUnavailable(res);
     }
     // The apps list the person's signups as sent. Follow the slots' day order,
     // so a signup made later for an earlier day doesn't come last.
     const slotPosition = new Map(slots.map((slot, index) => [slot.id, index]));
     const dayOrder = (reservation) => slotPosition.get(reservation.slot_id) ?? slots.length;
     const myReservations = (myResRes.data || []).sort((a, b) => dayOrder(a) - dayOrder(b));
-    const helperHasExactAddress =
-      viewerLevel === 'signed_up_helper'
-        ? await hasSupportTrainAddressGrant(supportTrainId, userId)
-        : false;
+    let helperHasExactAddress = false;
+    if (viewerLevel === 'signed_up_helper') {
+      try {
+        helperHasExactAddress = await hasSupportTrainAddressGrant(supportTrainId, userId);
+      } catch (error) {
+        logger.error('Support Train address grant check failed', {
+          supportTrainId,
+          userId,
+          error: error.message,
+        });
+        return supportTrainUnavailable(res);
+      }
+    }
     const canSeeExactAddress =
       viewerLevel === 'organizer' || viewerLevel === 'recipient' || helperHasExactAddress;
 
@@ -4326,11 +4368,18 @@ router.get(
     }
 
     if (primaryOrganizerIndex === -1 && st.organizer_user_id) {
-      const { data: organizerUser } = await supabaseAdmin
+      const { data: organizerUser, error: organizerUserErr } = await supabaseAdmin
         .from('User')
         .select('id, username, name, profile_picture_url')
         .eq('id', st.organizer_user_id)
         .maybeSingle();
+      if (organizerUserErr) {
+        logger.error('Support Train primary organizer read failed', {
+          supportTrainId,
+          error: organizerUserErr.message,
+        });
+        return supportTrainUnavailable(res);
+      }
 
       if (organizerUser) {
         organizers.unshift({
@@ -4414,13 +4463,15 @@ router.get(
             'address, address2, city, state, zipcode, map_center_lat, map_center_lng, location'
           )
           .eq('id', locationHomeId)
-          .single();
+          .maybeSingle();
+        // Without it the page shows no address at all: a helper it was shared with can't deliver.
         if (homeError) {
-          logger.warn('Failed to resolve Support Train exact address home', {
+          logger.error('Failed to resolve Support Train exact address home', {
             supportTrainId,
             locationHomeId,
             error: homeError.message,
           });
+          return supportTrainUnavailable(res);
         }
         if (home) {
           response.coarse_location = buildCoarseLocation(home);
@@ -4456,13 +4507,14 @@ router.get(
           .from('Home')
           .select('city, state, zipcode, map_center_lat, map_center_lng, location')
           .eq('id', locationHomeId)
-          .single();
+          .maybeSingle();
         if (homeError) {
-          logger.warn('Failed to resolve Support Train coarse location home', {
+          logger.error('Failed to resolve Support Train coarse location home', {
             supportTrainId,
             locationHomeId,
             error: homeError.message,
           });
+          return supportTrainUnavailable(res);
         }
         if (home) {
           response.coarse_location = buildCoarseLocation(home);
