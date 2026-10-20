@@ -214,6 +214,7 @@ const NOT_NAMES = new Set([
   'january', 'february', 'march', 'april', 'june', 'july', 'august', 'september', 'october', 'november', 'december',
   'service', 'price', 'prices', 'quality', 'work', 'job', 'staff', 'food', 'everything', 'everyone', 'nothing',
   'communication', 'scheduling', 'customer', 'appointment', 'quote', 'parking', 'delivery',
+  'second', 'seconded', 'seconding', 'another', 'plus', 'agree', 'agreed', 'same', 'ditto', 'downtown',
 ]);
 const CONNECTORS = new Set(['&', 'and', 'of', 'the', 'de', 'la']);
 // A run ending in one of these is a street, not someone to recommend.
@@ -269,6 +270,30 @@ function nameKey(name) {
   return name.toLowerCase().replace(/'s$/, '').replace(/&/g, ' and ').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 }
 
+/**
+ * One business named two ways is one group: "Joe's Plumbing" takes in "Second Joe's Plumbing" and
+ * "Joe's Plumbing Co", by whole words at either end. A one-word name ("Joe") is left alone, so it
+ * never swallows every business that shares it.
+ */
+function mergeContainedNames(groups) {
+  const keys = [...groups.keys()].sort((a, b) => a.length - b.length);
+  for (const short of keys) {
+    if (!groups.has(short) || !short.includes(' ')) continue;
+    for (const long of keys) {
+      if (long === short || !groups.has(long) || !(long.startsWith(`${short} `) || long.endsWith(` ${short}`))) continue;
+      const into = groups.get(short);
+      const from = groups.get(long);
+      for (const [name, count] of from.names) into.names.set(name, (into.names.get(name) || 0) + count);
+      for (const id of from.by) into.by.add(id);
+      into.mentions += from.mentions;
+      for (const postId of from.posts) if (!into.posts.includes(postId)) into.posts.push(postId);
+      into.latest = Math.max(into.latest, from.latest);
+      for (const said of from.said) if (into.said.length < 2 && !into.said.includes(said)) into.said.push(said);
+      groups.delete(long);
+    }
+  }
+}
+
 /** The sentence around a name, as a short quote. */
 function snippet(text, name) {
   const flat = String(text || '').replace(/\s+/g, ' ').replace(/’/g, "'");
@@ -315,13 +340,15 @@ async function findRecommendations(args, ctx) {
       .map((reply) => ({ postId: reply.post_id, authorId: reply.user_id, at: reply.created_at, text: reply.comment })),
   ];
   const queryKeys = new Set(normalizeTitle(String(args.query || '')));
+  // Their own town is named in posts all the time ("near downtown Bend"); it's no one to recommend.
+  const placeKeys = new Set(String(location.label || '').toLowerCase().replace(/^near\s+/, '').split(/[,\s]+/).filter(Boolean));
   const groups = new Map();
   const named = new Set();
   for (const item of texts) {
     const inText = new Set();
     for (const name of namesIn(item.text)) {
       const key = nameKey(name);
-      if (!key || inText.has(key) || queryKeys.has(key)) continue;
+      if (!key || inText.has(key) || queryKeys.has(key) || placeKeys.has(key)) continue;
       inText.add(key);
       named.add(item.postId);
       if (!groups.has(key)) groups.set(key, { names: new Map(), by: new Set(), mentions: 0, posts: [], latest: 0, said: [] });
@@ -334,13 +361,15 @@ async function findRecommendations(args, ctx) {
       if (group.said.length < 2) group.said.push(snippet(item.text, name));
     }
   }
+  mergeContainedNames(groups);
   const ranked = [...groups.values()]
     .sort((a, b) => (b.by.size - a.by.size) || (b.mentions - a.mentions) || (b.latest - a.latest))
     .slice(0, RECOMMENDATION_NAMES);
   return {
     ...base,
     mentions: ranked.map((group) => ({
-      name_text: [...group.names.entries()].sort((a, b) => b[1] - a[1])[0][0],
+      // The way most neighbors wrote it; on a tie, the shorter (without "Second" and the like).
+      name_text: [...group.names.entries()].sort((a, b) => (b[1] - a[1]) || (a[0].length - b[0].length))[0][0],
       neighbors: group.by.size,
       mentions: group.mentions,
       post_ids: group.posts.slice(0, 3),

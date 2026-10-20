@@ -315,8 +315,9 @@ const TOOL_TIMEOUTS_MS = {
   get_plan: 8000,
   find_posts: 8000,
   get_post: 8000,
-  catch_up_nearby: 10000,
-  find_recommendations: 10000,
+  // Two feed reads and their replies: as long as Place and Today, and a little more.
+  catch_up_nearby: 12000,
+  find_recommendations: 15000,
   list_home_tasks: 8000,
   get_household: 8000,
   draft_plan: 15000,
