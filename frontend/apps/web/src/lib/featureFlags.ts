@@ -126,6 +126,8 @@ const LAUNCH_CUT_ROUTES: ReadonlyArray<readonly [boolean, RegExp]> = [
   [launchFeatures.openGigs && launchFeatures.householdExtras, /^\/app\/mailbox\/gig(?:\/|$)/],
   // #8 Mail extras, incl. Earn (offers and ad earnings that never reach the withdrawable wallet).
   [launchFeatures.mailExtras, /^\/app\/mailbox\/(?:certified|community|party|translation|earn)(?:\/|$)/],
+  // #8 + #10: the page a letter's emailed link opens for someone not on Pantopus (/open/<mail id>).
+  [launchFeatures.mailExtras && launchFeatures.mailbox, /^\/open(?:\/|$)/],
   // #10 Mailbox: every mailbox page. The middleware sends the mailbox itself to Messages.
   // Postcard verification (/app/homes/<id>/verify-postcard) stays.
   [launchFeatures.mailbox, /^\/app\/mailbox(?:\/|$)/],

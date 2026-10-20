@@ -892,7 +892,10 @@ router.post('/upload', verifyToken, upload.single('file'), async (req, res) => {
       ? await businessVerificationStorage.store(userId, file)
       : await s3.uploadToS3(
         file.buffer,
-        s3.generateS3Key(folder, file.originalname, userId),
+        // A voice postscript goes into a letter, which may go out as a business: its key names no uploader.
+        purpose === 'voice_postscript'
+          ? s3.generateOpaqueS3Key(folder, file.originalname)
+          : s3.generateS3Key(folder, file.originalname, userId),
         file.mimetype
       );
 
