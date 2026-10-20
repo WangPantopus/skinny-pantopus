@@ -172,7 +172,7 @@ to the founder. No unchecked hosted or physical-device gate is claimed complete.
 | New native apps | iOS `app.pantopus.ios`, Android `app.pantopus.android`: different app IDs from the April apps, so they're new store listings (decision D2). Not uploaded anywhere yet. |
 | Supabase | The April production project and new `pantopus-production` project (`falmvysvndmwtfxsrxek`) are in the founder's `Pantopus` Free organization. The new project is healthy in Oregon; all 148 canonical migrations were applied and verified on October 9, the first production release applied the 36 newer ones on October 17 (184 in all), and the private `home-documents` bucket is configured. Auth transfer, the two 100 MB buckets, the S3 key and managed daily backups are pending. `Pantopus-staging` is separate and was reset to the canonical migrations on October 7 (S2). A separate production organization is optional billing isolation. |
 | GitHub | `staging` releases from `dev` after CI. `production` has nine secrets, `DB_MIGRATIONS_ENABLED=true`, and, since October 17 at 00:20 UTC, `BACKEND_DEPLOY_ENABLED=true`: every master merge that changes the backend releases to production after CI, migrations first. Store signing setup remains separate (section 4). |
-| AWS Lambdas | Staging stack `pantopus-seeder-staging` carries the seeder, briefing, home-reminder, weather-alert, mail and job-trigger functions. The founder paused the April `pantopus-seeder-production` stack: all 14 EventBridge rules were independently confirmed `DISABLED` on October 11, and its briefing log has no event after October 8 at 19:14 UTC. Keep them disabled until P8 replaces the old production configuration. The April `pantopus-seeder-dev` functions were deleted; its ten schedules have nothing to run. |
+| AWS Lambdas | Staging stack `pantopus-seeder-staging` carries the seeder, briefing, home-reminder, weather-alert, mail and job-trigger functions. The founder paused the April `pantopus-seeder-production` stack: all 14 EventBridge rules were independently confirmed `DISABLED` on October 11, and its briefing log has no event after October 8 at 19:14 UTC. P8 then replaced its code and secret (paused, October 17) and turned on only the briefing rule and its daily cleanup (October 18); every other production schedule stays disabled. The April `pantopus-seeder-dev` functions were deleted; its ten schedules have nothing to run. |
 
 **Reminders run on AWS Lambda.** Morning and evening briefings (the night-before
 pickup push rides the evening one), task and bill reminders, weather alerts and
@@ -764,15 +764,24 @@ for P10). The containers were not inspected on the host.
   `https://api.pantopus.com/api/v1/webhooks/lob`; its secret in
   `LOB_WEBHOOK_SECRET`.
 
-### P8. Production scheduled jobs (paused deployment complete; activation pending)
+### P8. Production scheduled jobs (briefings active since October 18; other jobs paused)
+
+**Current state (recorded from the PR #2427 rollout, October 18):** the stack
+runs `SchedulesEnabled=false BriefingsEnabled=true`. Only the every-minute
+briefing rule and the daily briefing cleanup are enabled, with one reserved
+briefing invocation; the other 22 schedules stay disabled. Scheduled delivery
+to a physical iPhone and Android phone is still unverified (step 4), so P8 is
+not complete. The paused-rollout and quota notes below are the earlier history.
 
 The April stack `pantopus-seeder-production` already exists, so
 `sam deploy --config-env prod` updates it in place: new code, the job trigger,
 the failure alarms and recipient-local reminder schedules. The stack never
 writes secret contents, so the secret `pantopus/seeder/production` keeps its
 previous values until they are replaced separately.
-The checked-in production deploy configuration now leaves **all schedules
-disabled**. Activation is a separate, explicit parameter change.
+The checked-in production deploy configuration matches the live stack:
+briefings and their housekeeping on, every other schedule paused. A plain
+`sam deploy --config-env prod` keeps that state; changing activation is an
+explicit parameter change, recorded here and in `samconfig.toml` together.
 Paused jobs do not reserve Lambda concurrency. Before activation, check
 `aws lambda get-account-settings --region us-west-2`: the account must have
 capacity for one reserved briefing invocation (and one each for home reminders
@@ -813,6 +822,18 @@ conditional `State`, not conditional `Enabled`, so the SAM transform preserves
 the pause conditions. Actual scheduled delivery on iPhone and Android is still
 unverified, and P8 remains incomplete.
 
+**Briefing-only activation, October 18, with explicit founder authorization:**
+AWS raised the account's Lambda concurrency quota to 1,000, which resolved the
+quota blocker above. At 06:17 UTC a reviewed parameter-only change set reused
+the deployed template and changed exactly three properties: it enabled the
+every-minute briefing rule and the daily briefing cleanup and reserved one
+concurrent briefing scheduler invocation. CloudFormation reported
+UPDATE_COMPLETE at 06:18 UTC. The 12 deployed Lambda packages were unchanged,
+every function was Active and the six error alarms were OK. The first two
+scheduled runs completed with zero eligible, sent, skipped or failed
+deliveries and no logged errors or timeouts. That shows scheduling is live; it
+does not show receipt on a phone.
+
 In this order:
 
 1. Make sure the April schedules are paused (start of section 3). While they
@@ -836,11 +857,14 @@ In this order:
      --secret-id pantopus/seeder/production --secret-string file://<private json file>
    ```
 3. Build and deploy as in S8 step 1, using `sam build --use-container --config-env prod`
-   and `sam deploy --config-env prod`. This deploy keeps every schedule paused,
-   including the new `pantopus-home-reminders-local-production` Scheduler
-   resource. Review the change set before executing it. Verify the deployed
-   code date, secret target and internal-key authentication while still paused.
-4. Activate **only morning/evening briefings and their housekeeping** first:
+   and `sam deploy --config-env prod --parameter-overrides Environment=production
+   SchedulesEnabled=false BriefingsEnabled=false` (done October 17). This deploy
+   kept every schedule paused, including the new
+   `pantopus-home-reminders-local-production` Scheduler resource. Review the
+   change set before executing it. Verify the deployed code date, secret target
+   and internal-key authentication while still paused.
+4. Activate **only morning/evening briefings and their housekeeping** first
+   (done October 18; the checked-in `samconfig.toml` now carries these values):
    ```bash
    sam deploy --config-env prod \
      --parameter-overrides Environment=production SchedulesEnabled=false BriefingsEnabled=true
@@ -859,9 +883,11 @@ In this order:
    ```
    Subscribe your inbox to `pantopus-job-alarms-production` as in S8 step 4.
    To pause everything, redeploy with `SchedulesEnabled=false BriefingsEnabled=false`.
-   Every later production deploy must explicitly preserve the chosen activation
-   parameters; the checked-in default is paused. Do not enable individual rules
-   by hand and leave their state different from the template.
+   Whenever activation changes, update `parameter_overrides` in
+   `pantopus-seeder/deploy/samconfig.toml` to the same values, so a later plain
+   `sam deploy --config-env prod` never silently pauses or enables jobs. Do not
+   enable individual rules by hand and leave their state different from the
+   template.
 
 **Check:** as S8 with `-production` names. After step 4, only the briefing and
 cleanup rules are enabled. After step 5, every rule is enabled and

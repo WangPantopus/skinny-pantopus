@@ -43,5 +43,7 @@ region = "us-west-2"
 confirm_changeset = true
 capabilities = "CAPABILITY_IAM"
 resolve_s3 = true
-parameter_overrides = "Environment=production SchedulesEnabled=false BriefingsEnabled=false"
+# Matches the live production stack since 2026-10-18 06:17 UTC: briefings and their
+# housekeeping on, every other schedule paused (docs/release/prod-config-checklist.md P8).
+parameter_overrides = "Environment=production SchedulesEnabled=false BriefingsEnabled=true"
 disable_rollback = false
