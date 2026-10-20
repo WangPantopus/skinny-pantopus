@@ -1156,13 +1156,29 @@ async function revokeOtherDevices(userId, keepDeviceRowId, reason) {
 }
 
 /**
+ * The current session's row, only to spare its device when signing others out.
+ * An unreadable row must not stop a sign-out: without it every device is
+ * signed out, this one included, which is the safe way to miss.
+ */
+async function currentSessionForSignOut(currentSessionId) {
+  if (!currentSessionId) return null;
+  try {
+    return await authSessionService.getSessionById(currentSessionId);
+  } catch (err) {
+    if (!err.authBusy) throw err;
+    logger.warn('auth.revoke_others.current_session_unavailable', { sessionId: currentSessionId });
+    return null;
+  }
+}
+
+/**
  * Sign out every OTHER session/device (revoke-others, /logout scope others,
  * password change).
  * @returns {Promise<{revoked:number}>}
  */
 async function revokeOthers({ userId, currentSessionId, accessToken, req, reason = 'user', eventType = 'revoke_others' }) {
   await authSessionService.signOutSupabase(accessToken, 'others', { source: eventType, userId });
-  const current = currentSessionId ? await authSessionService.getSessionById(currentSessionId) : null;
+  const current = await currentSessionForSignOut(currentSessionId);
   const revoked = await authSessionService.revokeSessionsForUser(userId, { exceptSessionId: currentSessionId || null, reason });
   const revokedDevices = await revokeOtherDevices(userId, current?.device_id || null, reason);
   // Grants: keep only the current device's.
@@ -1238,7 +1254,7 @@ async function onPasswordChanged({ userId, currentSessionId, accessToken, req })
     reason: 'password_change',
     eventType: 'password_changed',
   });
-  const current = currentSessionId ? await authSessionService.getSessionById(currentSessionId) : null;
+  const current = await currentSessionForSignOut(currentSessionId);
   const currentDevice = current?.device_id ? await getDevice(current.device_id) : null;
   await authNotifyService.passwordChangedOtherDevices({ userId, req, currentDevice });
   return result;

@@ -172,10 +172,16 @@ const verifyToken = async (req, res, next) => {
         .from('User')
         .select('role, account_type, sessions_valid_after')
         .eq('id', data.user.id)
-        .single();
+        .maybeSingle();
       // A failed read must not erase a sign-out watermark or silently cache
       // a default role. The current database baseline includes this column.
-      if (userRowError || !userRow) throw authSessionService.authUnavailableError(userRowError);
+      if (userRowError) throw authSessionService.authUnavailableError(userRowError);
+      // A read that found no account is not an outage: retrying can't help, so
+      // the session ends (a deleted account, or a sign-in whose profile wasn't saved).
+      if (!userRow) {
+        logger.warn('auth.account_missing', { user_id: data.user.id, method: req._authMethod });
+        return res.status(401).json({ error: SESSION_REVOKED_MESSAGE, code: 'SESSION_REVOKED' });
+      }
       if (userRow.role) userRole = userRow.role;
       if (userRow.account_type) userAccountType = userRow.account_type;
       if (userRow.sessions_valid_after) sessionsValidAfter = userRow.sessions_valid_after;

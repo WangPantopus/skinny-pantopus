@@ -11,7 +11,8 @@
 //     sessions_valid_after watermark), exactly as after getUser.
 // An authentic token past its expiry is refused here too (Supabase refuses it as well). Anything this check
 // can't decide goes to Supabase's getUser as before: a malformed token, an unknown key id, a JWKS outage, a
-// secret-signed token without SUPABASE_JWT_SECRET, a session without a registry row, a failed registry read.
+// secret-signed token without SUPABASE_JWT_SECRET, a session without a registry row. A failed registry read
+// answers busy: the registry decides sign-outs, so getUser can't stand in for it.
 // AUTH_LOCAL_JWT=off sends every token to getUser.
 // ============================================================
 

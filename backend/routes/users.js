@@ -2250,7 +2250,13 @@ router.post('/reauthenticate', verifyToken, reauthLimiter, reauthAccountLimiter,
     // that just showed its password becomes interactive (design §7.10).
     const sid = currentSessionId(req);
     const stepUp = await safeHook('reauthenticate_step_up', async () => {
-      const sessionRow = await authDeviceService.sessionRowFromRequest(req);
+      // The password was just verified. An unreadable session row only skips
+      // promoting a restored session; it must not withhold the step-up.
+      const sessionRow = await authDeviceService.sessionRowFromRequest(req).catch((err) => {
+        if (!err.authBusy) throw err;
+        logger.warn('auth.reauthenticate.session_unavailable', { userId });
+        return null;
+      });
       if (sessionRow?.context === 'restored') {
         await authDeviceService.promoteSessionToInteractive(sessionRow);
       }
@@ -4322,6 +4328,11 @@ router.post('/reset-password', resetPasswordLimiter, validate(resetPasswordSchem
     startSignInCountsAgain(resetEmail);
     return res.json({ message: 'Password reset successful. You can now sign in.' });
   } catch (err) {
+    // Only the recovery-token check reads the session registry, before anything changes.
+    if (err.authBusy) {
+      logger.warn('Reset password unavailable - session registry unreadable', { code: err.code });
+      return res.status(503).json({ error: RESET_BUSY_LINK_KEPT, code: 'AUTH_BUSY' });
+    }
     logger.error('Reset password error', { error: err.message });
     return res.status(500).json({ error: 'Failed to reset password' });
   }
