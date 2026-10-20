@@ -278,11 +278,7 @@ private fun AiCardButtons(
                 isLoading = (run as? ChatAICardRun.Running)?.actionId == action.id,
                 isEnabled = !card.isRunning,
             )
-            // Two short buttons share a row. Three or more (a task's Done, new date and assign), a label too long to sit
-            // beside another ("Fewer like this"), or large text stack, so none is squeezed.
-            val crowded = LocalDensity.current.fontScale > LARGE_TEXT_SCALE || actions.any { it.label.length > SIDE_BY_SIDE_LABEL_MAX }
-            val stacked = actions.size > 2 || (actions.size == 2 && crowded)
-            if (stacked) {
+            if (stacksButtons(actions, LocalDensity.current.fontScale)) {
                 Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     actions.forEach { button(it, Modifier.fillMaxWidth()) }
                 }
@@ -368,6 +364,18 @@ private const val SIDE_BY_SIDE_LABEL_MAX = 12
 
 /** From this font scale on, two buttons on a card stack too. */
 private const val LARGE_TEXT_SCALE = 1.3f
+
+/**
+ * Two short buttons share a row. Three or more (a task's Done, new date and assign), a label too long to sit beside
+ * another ("Fewer like this"), or large text stack, so none is squeezed.
+ */
+private fun stacksButtons(
+    actions: List<ChatAICardAction>,
+    fontScale: Float,
+): Boolean {
+    if (actions.size != 2) return actions.size > 2
+    return fontScale > LARGE_TEXT_SCALE || actions.any { it.label.length > SIDE_BY_SIDE_LABEL_MAX }
+}
 
 /** Buttons to screens of the app under an assistant reply (contract section 5). */
 @Composable
