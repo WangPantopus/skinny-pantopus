@@ -134,6 +134,7 @@ class GigTipViewModelTest {
             authorizationFactory = mockk { every { create(any(), any()) } returns authorization },
             stopFactory = mockk(relaxed = true),
             tipStore = mockk(relaxed = true),
+            businessTeamRepo = mockk(relaxed = true),
         )
     }
 

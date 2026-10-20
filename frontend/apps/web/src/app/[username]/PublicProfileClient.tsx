@@ -118,6 +118,7 @@ export default function PublicProfileClient({ username, initialProfile }: Public
   const [loading, setLoading] = useState(!initialProfile);
   // A failed read that is not a 404 must not claim the profile doesn't exist.
   const [loadFailed, setLoadFailed] = useState(false);
+  const [profileRestricted, setProfileRestricted] = useState(false);
   const [activeTab, setActiveTab] = useState<ProfileTab>('overview');
   const [userGigs, setUserGigs] = useState<GigListItem[]>([]);
   const [gigsLoading, setGigsLoading] = useState(false);
@@ -214,6 +215,7 @@ export default function PublicProfileClient({ username, initialProfile }: Public
   const loadProfile = useCallback(async () => {
     const current = captureAction();
     setLoadFailed(false);
+    setProfileRestricted(false);
     try {
       const profileData = UUID_REGEX.test(profileIdentifier)
         ? await api.users.getProfileById(profileIdentifier)
@@ -245,7 +247,14 @@ export default function PublicProfileClient({ username, initialProfile }: Public
       }
 
       console.error('Failed to load profile:', err);
-      if ((err as { statusCode?: number } | null)?.statusCode !== 404) setLoadFailed(true);
+      const status = (err as { statusCode?: number } | null)?.statusCode;
+      if (status === 403 || status === 404) {
+        // A previously rendered profile must disappear when access is refused.
+        setProfile(null);
+        setProfileRestricted(status === 403);
+      } else {
+        setLoadFailed(true);
+      }
     } finally {
       if (current()) setLoading(false);
     }
@@ -674,8 +683,10 @@ export default function PublicProfileClient({ username, initialProfile }: Public
     return (
       <div className="flex items-center justify-center py-20">
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-app mb-2">Profile not found</h2>
-          <p className="text-app-secondary mb-4">This user doesn&apos;t exist or has been removed.</p>
+          <h2 className="text-2xl font-bold text-app mb-2">{profileRestricted ? 'Profile unavailable' : 'Profile not found'}</h2>
+          <p className="text-app-secondary mb-4">
+            {profileRestricted ? "This profile isn't visible to your account." : "This user doesn't exist or has been removed."}
+          </p>
           <button
             onClick={() => router.push('/app')}
             className="bg-primary-600 text-white px-6 py-2 rounded-lg hover:bg-primary-700"

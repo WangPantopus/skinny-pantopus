@@ -57,6 +57,8 @@ public struct ChatConversationView: View {
     @State private var bulkDeleteConfirmPresented = false
     /// Message awaiting the single-delete confirm.
     @State private var pendingDeleteId: String?
+    /// The assistant's "Delete conversation" awaiting its confirm.
+    @State private var aiDeleteConfirmPresented = false
     /// Photos shown in the full-screen viewer.
     @State private var viewerPhotos: ChatPhotoViewerItem?
     /// Gates the scroll-to-top pagination trigger: armed ~0.5s after the
@@ -83,6 +85,8 @@ public struct ChatConversationView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// A Nearby Plan's chat (board A4): the plan above the messages.
     @Environment(\.chatPlanContext) private var planContext
+    /// Opens a screen in the app from the assistant (closing the Ask sheet first).
+    @Environment(\.openPantopusLink) private var openPantopusLink
     /// Presentation mode — drives the AI chrome (avatar, welcome card,
     /// reply bubbles). Default `.dm`.
     private let mode: ChatConversationMode
@@ -138,6 +142,8 @@ public struct ChatConversationView: View {
                 onBack: onBack,
                 onOpenDetails: { detailsPresented = true },
                 onNewAIChat: { viewModel.startNewAIConversation() },
+                onDeleteAIChat: { aiDeleteConfirmPresented = true },
+                isDeletingAIChat: viewModel.isDeletingAIConversation,
                 onOpenProfile: headerProfileTap
             )
             if isSelecting {
@@ -145,6 +151,8 @@ public struct ChatConversationView: View {
             }
             gigContextStrip
             if let planContext { PlanChatStrip(context: planContext) }
+            // Ask on a screen: what the thread is about.
+            if let topic = viewModel.aiTopic { AIAboutStrip(about: topic.about) }
             if mode == .creatorThread {
                 ChatCreatorAudienceStrip(
                     context: resolvedCreatorContext,
@@ -201,11 +209,17 @@ public struct ChatConversationView: View {
                 ChatSelectionDeleteBar(selectedCount: selectedMessageIds.count) {
                     bulkDeleteConfirmPresented = true
                 }
-            } else if let closed = planContext?.closedNote {
+            } else if let closed = viewModel.roomClosedNote ?? planContext?.closedNote {
                 PlanChatClosedLine(text: closed)
             } else {
                 actionBanner
                 sendLimitBanner
+                if viewModel.isBusinessReply {
+                    Text("Replying as this business")
+                        .font(.footnote)
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                        .accessibilityIdentifier("chatBusinessReplyIdentity")
+                }
                 ChatComposer(
                     text: Binding(
                         get: { viewModel.composerText },
@@ -233,6 +247,17 @@ public struct ChatConversationView: View {
         }
         .background(Theme.Color.appSurface)
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
+        // Action cards' taps and "Not now" (`AIActionCardView`). The handlers
+        // hold the view-model weakly: UIKit keeps the composer's text view, and
+        // the environment it was handed, after the thread closes (until another
+        // field takes the keyboard), so a strong capture kept the view-model
+        // and its messages alive.
+        .environment(\.chatAIActions, ChatAIActionHandlers(
+            run: { [weak viewModel] cardId, itemId, actionId in
+                Task { await viewModel?.runAIAction(cardId: cardId, itemId: itemId, actionId: actionId) }
+            },
+            dismiss: { [weak viewModel] cardId in viewModel?.dismissAIAction(cardId: cardId) }
+        ))
         .task { await viewModel.load() }
         .onChange(of: hasLoadedContent, initial: true) { _, loaded in
             if loaded { onContentLoaded() }
@@ -361,6 +386,14 @@ public struct ChatConversationView: View {
             }
         } message: { _ in
             Text("Deleted messages are removed for everyone in this conversation.")
+        }
+        .alert("Delete this conversation?", isPresented: $aiDeleteConfirmPresented) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) {
+                Task { await viewModel.deleteAIConversations() }
+            }
+        } message: {
+            Text("Pantopus AI won\u{2019}t remember it. Any earlier chats with Pantopus AI are deleted too.")
         }
         .fullScreenCover(item: $viewerPhotos) { photos in
             MediaViewerView(
@@ -807,8 +840,13 @@ extension ChatConversationView {
                     .padding(.top, 6)
                 aiPrivacyRow
                     .padding(.top, 10)
-                aiPromptGrid
-                    .padding(.top, 18)
+                if viewModel.aiTopic != nil {
+                    aiStarterPrompts
+                        .padding(.top, 18)
+                } else {
+                    aiPromptGrid
+                        .padding(.top, 18)
+                }
             }
             .padding(.horizontal, 28)
             .padding(.top, Spacing.s10)
@@ -862,6 +900,40 @@ extension ChatConversationView {
                 .buttonStyle(.plain)
                 .accessibilityLabel(card.question)
                 .accessibilityIdentifier("chatAIPromptCard_\(card.id)")
+            }
+        }
+    }
+
+    /// Ask on a screen: that screen's starter prompts, in the suggestion
+    /// cards' style. One ending in "…" goes into the composer to finish.
+    private var aiStarterPrompts: some View {
+        VStack(spacing: Spacing.s2) {
+            ForEach(viewModel.aiPrompts) { chip in
+                Button {
+                    Task { await viewModel.sendCapabilityPrompt(chip) }
+                } label: {
+                    HStack(spacing: Spacing.s2) {
+                        Icon(.sparkles, size: 13, color: Theme.Color.magic)
+                        Text(chip.label)
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.Color.appText)
+                            .multilineTextAlignment(.leading)
+                        Spacer(minLength: Spacing.s2)
+                        Icon(.arrowUpRight, size: 14, color: Theme.Color.appTextMuted)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    .background(Theme.Color.appSurface)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(Theme.Color.appBorder, lineWidth: 1)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .shadow(color: .black.opacity(0.04), radius: 1.5, y: 1)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("chatAIStarter_\(chip.id)")
             }
         }
     }
@@ -1203,7 +1275,8 @@ extension ChatConversationView {
         // Excludes in-flight (`client_`) rows and AI-thread local rows
         // (`ai_user_` / `ai_assistant_`) — neither is persisted, so the
         // bulk-delete loop could never delete them server-side.
-        let selectable = bubble.side == .outgoing && !bubble.id.hasPrefix("client_") && !bubble.id.hasPrefix("ai_")
+        let selectable = viewModel.canManageMessage(bubble.id)
+            && !bubble.id.hasPrefix("client_") && !bubble.id.hasPrefix("ai_")
         if isSelecting {
             let isSelected = selectedMessageIds.contains(bubble.id)
             HStack(alignment: .center, spacing: Spacing.s2) {
@@ -1241,6 +1314,7 @@ extension ChatConversationView {
             rowWidth: rowWidth,
             incomingInitials: incomingInitials,
             aiStatus: viewModel.aiStatus,
+            canManage: viewModel.canManageMessage(bubble.id),
             onLockedAction: { upgradePromptPresented = true },
             onReply: { viewModel.beginReply(to: bubble.id) },
             onEdit: { viewModel.beginEdit(messageId: bubble.id) },
@@ -1256,7 +1330,7 @@ extension ChatConversationView {
                 // A pickup-days card saves here; once saved it opens Today, where the days show.
                 if let pickup = draft.pickup {
                     if pickup.save == .saved, let today = URL(string: "pantopus://today") {
-                        DeepLinkRouter.shared.handle(url: today)
+                        openPantopusLink(today)
                     } else {
                         Task { await viewModel.savePickupSchedule(draft) }
                     }
@@ -1617,6 +1691,10 @@ private struct ChatConversationHeader: View {
     var onOpenDetails: @MainActor () -> Void = {}
     /// The assistant's "New chat" (AI thread only).
     var onNewAIChat: @MainActor () -> Void = {}
+    /// The assistant's More menu: "Delete conversation" (AI thread only).
+    var onDeleteAIChat: @MainActor () -> Void = {}
+    /// True while that delete runs.
+    var isDeletingAIChat = false
     /// Opens the other person's profile from their avatar and name (person DMs only).
     var onOpenProfile: (@MainActor () -> Void)?
 
@@ -1755,7 +1833,7 @@ private struct ChatConversationHeader: View {
                 .accessibilityLabel("Conversation details")
             case .ai:
                 // A15.3 header actions: square-pen "New chat" then
-                // more-horizontal (decorative until it has actions).
+                // more-horizontal, whose menu deletes the conversation.
                 HStack(spacing: 2) {
                     Button {
                         onNewAIChat()
@@ -1767,9 +1845,21 @@ private struct ChatConversationHeader: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel("New chat")
                     .accessibilityIdentifier("chatAINewChat")
-                    Icon(.moreHorizontal, size: 18, color: Theme.Color.appTextStrong)
-                        .frame(width: 34, height: 34)
-                        .accessibilityHidden(true)
+                    Menu {
+                        Button(role: .destructive) {
+                            onDeleteAIChat()
+                        } label: {
+                            Label("Delete conversation", systemImage: "trash")
+                        }
+                        .accessibilityIdentifier("chatAIDeleteConversation")
+                    } label: {
+                        Icon(.moreHorizontal, size: 18, color: Theme.Color.appTextStrong)
+                            .frame(width: 34, height: 34)
+                            .contentShape(Rectangle())
+                    }
+                    .disabled(isDeletingAIChat)
+                    .accessibilityLabel("More options")
+                    .accessibilityIdentifier("chatAIMore")
                 }
             case .group:
                 Icon(.moreVertical, size: 18, color: Theme.Color.appText)
@@ -2527,6 +2617,7 @@ private struct ChatBubbleRow: View {
     let incomingInitials: String?
     /// What the assistant is doing while a reply is pending ("Drafting your post…").
     var aiStatus: String?
+    let canManage: Bool
     let onLockedAction: @MainActor () -> Void
     let onReply: @MainActor () -> Void
     let onEdit: @MainActor () -> Void
@@ -2555,8 +2646,8 @@ private struct ChatBubbleRow: View {
                 Spacer(minLength: 44)
                 bubbleStack
             } else {
-                if let incomingInitials, showsIncomingAvatarSlot {
-                    ChatMiniAvatar(initials: incomingInitials, hidden: content.isContinuation)
+                if let initials = senderInitials ?? incomingInitials, showsIncomingAvatarSlot {
+                    ChatMiniAvatar(initials: initials, hidden: content.isContinuation)
                 }
                 bubbleStack
                 Spacer(minLength: 44)
@@ -2583,7 +2674,7 @@ private struct ChatBubbleRow: View {
             // `client_` rows aren't persisted yet; `ai_`-prefixed rows
             // (AI-thread local messages) are never persisted server-side,
             // so Edit/Delete would PUT/DELETE an id that can't exist.
-            if content.side == .outgoing && !content.id.hasPrefix("client_") && !content.id.hasPrefix("ai_") {
+            if canManage && !content.id.hasPrefix("client_") && !content.id.hasPrefix("ai_") {
                 Button { onBeginSelect() } label: {
                     Text("Select")
                 }
@@ -2595,7 +2686,13 @@ private struct ChatBubbleRow: View {
                 }
             }
         }
-        .accessibilityElement(children: .combine)
+        // A reply with action cards or link buttons keeps each button its own element.
+        .accessibilityElement(children: hasAIControls ? .contain : .combine)
+    }
+
+    private var hasAIControls: Bool {
+        guard case let .aiReply(_, _, drafts) = content.body else { return false }
+        return !content.aiLinks.isEmpty || drafts.contains { $0.action != nil }
     }
 
     /// Plain text carried by the bubble — the context menu's Copy
@@ -2618,8 +2715,22 @@ private struct ChatBubbleRow: View {
         }
     }
 
+    /// A room's incoming message carries its sender's initials, not the room's.
+    private var senderInitials: String? {
+        guard let name = content.senderName else { return nil }
+        let letters = name.split(separator: " ").prefix(2).compactMap { $0.first.map(String.init) }
+        return letters.isEmpty ? nil : letters.joined().uppercased()
+    }
+
     private var bubbleStack: some View {
         VStack(alignment: alignment, spacing: Spacing.s0) {
+            if content.side == .incoming, !content.isContinuation, let name = content.senderName {
+                Text(name)
+                    .pantopusTextStyle(.caption)
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                    .lineLimit(1)
+                    .padding(.bottom, 2)
+            }
             bubbleBody
                 // A15 `.reaction` — pills float over the bubble's bottom
                 // edge: leading corner for outgoing, trailing for
@@ -3156,7 +3267,14 @@ private struct ChatBubbleRow: View {
                 AIEstimateCard(estimate: estimate)
             }
             ForEach(drafts) { draft in
-                AIDraftCard(draft: draft, onUse: onUseAIDraft)
+                if let action = draft.action {
+                    AIActionCardView(cardId: draft.id, card: action)
+                } else {
+                    AIDraftCard(draft: draft, onUse: onUseAIDraft)
+                }
+            }
+            if !content.aiLinks.isEmpty {
+                AILinkButtons(links: content.aiLinks)
             }
         }
         .padding(.horizontal, 12)
@@ -3672,6 +3790,8 @@ private struct ChatComposer: View {
     let onEmoji: @MainActor () -> Void
     let onSend: @MainActor () -> Void
     var onStop: @MainActor () -> Void = {}
+    /// The keyboard's Send, held only weakly by the field's `.onSubmit`.
+    @State private var returnKey = ChatComposerReturnKey()
 
     var body: some View {
         // A15 `.composer` — [+ disc] → [input pill with trailing smile]
@@ -3695,7 +3815,10 @@ private struct ChatComposer: View {
                     .foregroundStyle(Theme.Color.appText)
                     .lineLimit(1...4)
                     .submitLabel(.send)
-                    .onSubmit { if canSend { onSend() } }
+                    .onSubmit { [weak returnKey] in returnKey?.send() }
+                    .onChange(of: canSend, initial: true) { _, isEnabled in
+                        returnKey.send = isEnabled ? onSend : {}
+                    }
                     // A multi-line field exposes no name of its own; VoiceOver
                     // read just "text field".
                     .accessibilityLabel("Message")
@@ -3799,6 +3922,15 @@ private struct ChatComposer: View {
         guard canSend else { return Theme.Color.appSurfaceSunken }
         return isLockedAction ? Theme.Color.warningSolid : Theme.Color.primarySolid
     }
+}
+
+/// What the keyboard's Send does in the composer. SwiftUI keeps `.onSubmit`'s
+/// action in the field's environment, which UIKit keeps after the thread
+/// closes (see `chatAIActions`), so the action holds this box weakly instead
+/// of the composer's closures and, through them, the view-model.
+@MainActor
+private final class ChatComposerReturnKey {
+    var send: @MainActor () -> Void = {}
 }
 
 private struct ChatComposerContextBanner: View {

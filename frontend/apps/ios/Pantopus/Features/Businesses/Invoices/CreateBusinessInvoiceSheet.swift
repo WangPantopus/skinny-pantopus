@@ -141,7 +141,16 @@ struct CreateBusinessInvoiceSheet: View {
 
     private var recipientOptionsList: some View {
         VStack(spacing: Spacing.s0) {
-            if viewModel.recipientOptions.isEmpty {
+            if let error = viewModel.recipientSearchError {
+                VStack(alignment: .leading, spacing: Spacing.s2) {
+                    Text(error).foregroundStyle(Theme.Color.error)
+                    Button("Try again") { viewModel.searchRecipients(immediately: true) }
+                        .accessibilityIdentifier("createInvoice.recipient.retry")
+                }
+                .font(.system(size: 13))
+                .padding(Spacing.s3)
+                .accessibilityIdentifier("createInvoice.recipient.error")
+            } else if viewModel.recipientOptions.isEmpty {
                 Text(
                     viewModel.isSearchingRecipients
                         ? "Searching…"

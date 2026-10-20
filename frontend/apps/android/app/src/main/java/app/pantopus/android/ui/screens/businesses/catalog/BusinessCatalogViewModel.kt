@@ -90,6 +90,11 @@ class BusinessCatalogViewModel
             _toast.value = null
         }
 
+        /** An editor's or panel's failure, cleared when it closes; success toasts keep their own timer. */
+        fun dismissErrorToast() {
+            if (_toast.value?.kind == BusinessCatalogToastKind.Error) _toast.value = null
+        }
+
         // ---- Fetch ----------------------------------------------------
 
         private suspend fun fetch() {
@@ -134,7 +139,7 @@ class BusinessCatalogViewModel
             onDone: (Boolean) -> Unit = {},
         ) {
             if (!draft.isValid) {
-                _toast.value = BusinessCatalogToast("Name is required", BusinessCatalogToastKind.Error)
+                _toast.value = BusinessCatalogToast(draft.validationError ?: "Check the item details", BusinessCatalogToastKind.Error)
                 onDone(false)
                 return
             }
@@ -155,7 +160,7 @@ class BusinessCatalogViewModel
             onDone: (Boolean) -> Unit = {},
         ) {
             if (!draft.isValid) {
-                _toast.value = BusinessCatalogToast("Name is required", BusinessCatalogToastKind.Error)
+                _toast.value = BusinessCatalogToast(draft.validationError ?: "Check the item details", BusinessCatalogToastKind.Error)
                 onDone(false)
                 return
             }
@@ -251,6 +256,7 @@ class BusinessCatalogViewModel
                 return
             }
             _isMutating.value = true
+            _toast.value = null
             viewModelScope.launch {
                 try {
                     val result = call()

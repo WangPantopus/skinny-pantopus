@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.data.ai.AIScreenContext
 import app.pantopus.android.data.api.models.place.PlaceBand
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.place.PlaceSectionAccess
@@ -58,9 +59,12 @@ import app.pantopus.android.ui.theme.PantopusIcon
 @Composable
 fun PlaceDetailScreen(
     onBack: () -> Unit,
+    onOpenBallot: () -> Unit = onBack,
     onStartVerify: ((PlaceVerifyMethod) -> Unit)? = null,
     // The status of a residency document already in review (the Waiting Room).
     onOpenVerificationStatus: (() -> Unit)? = null,
+    // Ask Pantopus about this section (AI assistant phase 1); null hides the button.
+    onAsk: ((AIScreenContext) -> Unit)? = null,
     viewModel: PlaceDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -80,6 +84,7 @@ fun PlaceDetailScreen(
             title = viewModel.group.title,
             address = (state as? PlaceDetailUiState.Loaded)?.intelligence?.place?.let { placeDetailAddress(it) }.orEmpty(),
             onBack = onBack,
+            onAsk = onAsk?.let { ask -> askAboutSection(viewModel, ask) },
         )
         refreshNotice?.let { RefreshFailedLine(it) }
         PullToRefreshBox(isRefreshing = refreshing, onRefresh = viewModel::refresh, modifier = Modifier.weight(1f)) {
@@ -111,7 +116,12 @@ fun PlaceDetailScreen(
                                 LocalPlaceDetailVerify provides detailVerify,
                                 LocalPlaceDetailVerifiesFirst provides current.intelligence.verifiesFirst,
                             ) {
-                                GroupContent(group = viewModel.group, intel = current.intelligence, viewModel = viewModel, onBack = onBack)
+                                GroupContent(
+                                    group = viewModel.group,
+                                    intel = current.intelligence,
+                                    viewModel = viewModel,
+                                    onOpenBallot = onOpenBallot,
+                                )
                             }
                             Spacer(modifier = Modifier.height(40.dp))
                         }
@@ -144,11 +154,11 @@ private fun GroupContent(
     group: PlaceDetailGroup,
     intel: PlaceIntelligence,
     viewModel: PlaceDetailViewModel,
-    onBack: () -> Unit,
+    onOpenBallot: () -> Unit,
 ) {
     when (group) {
         // This page opens over the Place dashboard, where the ballot card is.
-        PlaceDetailGroup.TODAY -> PlaceTodayDetailContent(intel, viewModel, onOpenBallot = onBack)
+        PlaceDetailGroup.TODAY -> PlaceTodayDetailContent(intel, viewModel, onOpenBallot = onOpenBallot)
         PlaceDetailGroup.YOUR_HOME -> PlaceHomeDetailContent(intel)
         PlaceDetailGroup.RISK -> PlaceRiskDetailContent(intel, viewModel)
         PlaceDetailGroup.BLOCK -> PlaceBlockDetailContent(intel, viewModel)
@@ -258,3 +268,14 @@ fun PlaceDetailFallbackCard(
 }
 
 fun PlaceSectionEnvelope.isLive(): Boolean = status == PlaceSectionStatus.READY || status == PlaceSectionStatus.STALE
+
+/** Ask Pantopus about a section the assistant reads (contract section 6): not Identity. */
+private fun askAboutSection(
+    viewModel: PlaceDetailViewModel,
+    ask: (AIScreenContext) -> Unit,
+): (() -> Unit)? =
+    if (viewModel.group == PlaceDetailGroup.IDENTITY) {
+        null
+    } else {
+        { ask(AIScreenContext.place(viewModel.calendarHomeId, viewModel.group.slug, viewModel.group.title)) }
+    }

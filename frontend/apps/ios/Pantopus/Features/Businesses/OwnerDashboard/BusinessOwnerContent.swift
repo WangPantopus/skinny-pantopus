@@ -138,6 +138,12 @@ public struct OwnerFoundingOffer: Sendable, Hashable {
 /// A10.6 render reused by the preview frame and read by the owner frame's
 /// shared sections; the remaining fields are owner-only overlays.
 public struct BusinessOwnerContent: Sendable, Hashable {
+    public let access: BusinessTeamAccessDTO
+
+    public func allows(_ permission: String) -> Bool {
+        access.hasAccess && (access.isOwner == true || access.permissions.contains(permission))
+    }
+
     public let businessId: String
     /// Whether the page is published / live ("Page is live").
     public let isLive: Bool
@@ -175,8 +181,10 @@ public struct BusinessOwnerContent: Sendable, Hashable {
         publicProfile: BusinessProfileContent,
         canPostAsBusiness: Bool = false,
         foundingOffer: OwnerFoundingOffer? = nil,
-        isVerified: Bool = false
+        isVerified: Bool = false,
+        access: BusinessTeamAccessDTO = .init(hasAccess: true, isOwner: true, roleBase: "owner")
     ) {
+        self.access = access
         self.foundingOffer = foundingOffer
         self.isVerified = isVerified
         self.businessId = businessId
@@ -220,7 +228,8 @@ public struct BusinessOwnerContent: Sendable, Hashable {
             publicProfile: publicProfile,
             canPostAsBusiness: canPostAsBusiness,
             foundingOffer: foundingOffer,
-            isVerified: isVerified
+            isVerified: isVerified,
+            access: access
         )
     }
 
@@ -238,7 +247,8 @@ public struct BusinessOwnerContent: Sendable, Hashable {
             publicProfile: publicProfile,
             canPostAsBusiness: canPostAsBusiness,
             foundingOffer: offer,
-            isVerified: isVerified
+            isVerified: isVerified,
+            access: access
         )
     }
 

@@ -11,6 +11,12 @@ export function resolveWebNotificationPath(link: string | null | undefined, noti
       return `/app/homes/${home.toLowerCase()}/tasks/${task.toLowerCase()}`;
     }
   }
+  // A claim that was not approved or needs more documents grants no Home
+  // access, so its dashboard link (kept for the native routers) can't show it.
+  // My Homes lists the claim with its next step.
+  if (notification?.type === 'ownership_claim_rejected' || notification?.type === 'ownership_claim_needs_more_info') {
+    return '/app/homes';
+  }
   if (!link) return null;
   const trimmed = link.trim();
   if (!trimmed) return null;
@@ -47,6 +53,12 @@ export function resolveWebNotificationPath(link: string | null | undefined, noti
     const suffix = path.slice(listingMatch[0].length);
     return `/app/marketplace/${listingMatch[1]}${suffix}`;
   }
+
+  // Plans are hosted in the apps; the web has only a plan's share page, which
+  // opens it in the app. A host's "asked to join" and "requests waiting" notices
+  // link to the apps' requests screen (/plans/:id/requests).
+  const planRequests = path.match(/^\/plans\/([^/?#]+)\/requests(?=$|[?#])/i);
+  if (planRequests && uuid.test(planRequests[1])) return `/plans/${planRequests[1]}`;
 
   // Older Home notices linked to pages the web never had: /homes/:id/ownership
   // (the Owners page) and /homes/:id/occupants (the Members page).

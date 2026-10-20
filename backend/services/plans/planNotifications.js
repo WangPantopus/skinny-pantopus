@@ -14,6 +14,10 @@
  *    (PLAN_REQUEST, PLAN_REMINDER, PLAN_CHANGED).
  * Held pushes carry metadata.push_deferred_until; jobs/planJobs.js sends them.
  * Notices carry the area only, never an address or the venue's name.
+ *
+ * The host also hears when a guest leaves and when a rule lets someone in, and a guest
+ * who hasn't answered "Still coming?" is asked once more (AI assistant phase 2 contract
+ * §3.7). These are ordinary Plans notices, not assistant nudges: no daily cap.
  */
 
 const { resolveNotificationTimezone } = require('../context/locationResolver');
@@ -32,6 +36,8 @@ const CATEGORY_BY_TYPE = {
   plan_request: 'PLAN_REQUEST',
   plan_reminder: 'PLAN_REMINDER',
   plan_changed: 'PLAN_CHANGED',
+  // Asked again: the same Still coming / Can't make it buttons.
+  plan_still_coming_reminder: 'PLAN_CHANGED',
 };
 
 const ICON_BY_KIND = {
@@ -215,8 +221,9 @@ async function updateMetadata(row, patch) {
  * @param {object} opts
  * @param {boolean} [opts.recipientIsIn] the person is in (or hosts) this plan: near its start, quiet hours don't hold the push
  * @param {Date|null} [opts.holdUntil] hold the push until then at least (bundles)
+ * @param {string|null} [opts.idempotencyKey] a notice sent once: a second one with the key is not created (null)
  */
-async function notify({ userId, type, title, body, link, plan, metadata = {}, recipientIsIn = false, holdUntil = null }) {
+async function notify({ userId, type, title, body, link, plan, metadata = {}, recipientIsIn = false, holdUntil = null, idempotencyKey = null }) {
   try {
     const category = CATEGORY_BY_TYPE[type] || null;
     const fullMetadata = {
@@ -226,7 +233,7 @@ async function notify({ userId, type, title, body, link, plan, metadata = {}, re
       ...(category && !metadata.bundled ? { category } : {}),
       ...metadata,
     };
-    const rows = await notificationService.createBulkNotifications([{
+    const notice = {
       userId,
       type,
       title,
@@ -235,8 +242,10 @@ async function notify({ userId, type, title, body, link, plan, metadata = {}, re
       icon: ICON_BY_KIND[plan.kind] || '📅',
       link,
       metadata: fullMetadata,
-    }], { sendPush: false });
-    const row = rows && rows[0];
+    };
+    const row = idempotencyKey
+      ? await notificationService.createNotification({ ...notice, idempotencyKey, sendPush: false })
+      : (await notificationService.createBulkNotifications([notice], { sendPush: false }))?.[0];
     if (!row) return null;
 
     const quiet = await quietHoursOf(userId, rules.timezoneForPlan(plan));
@@ -416,19 +425,88 @@ async function reminder({ plan, request, goingCount, band }) {
   });
 }
 
+/** The morning of the plan. With people still waiting to hear back, it says how many and opens their requests. */
 async function hostSummary({ plan, comingCount, spotsLeft, requestsCount }) {
   const time = timeText(new Date(plan.post.event_date), rules.timezoneForPlan(plan));
   const parts = [time, `${comingCount} coming`];
   if (spotsLeft > 0) parts.push(`${spotsLeft} ${spotsLeft === 1 ? 'spot' : 'spots'} left`);
-  if (requestsCount > 0) parts.push(`${requestsCount} ${requestsCount === 1 ? 'request' : 'requests'}`);
+  if (requestsCount > 0) parts.push(`${requestsCount} ${requestsCount === 1 ? 'request' : 'requests'} waiting`);
   return notify({
     userId: plan.host_user_id,
     type: 'plan_host_summary',
     title: `Your ${noun(plan)} is today`,
     body: parts.join(' · '),
+    link: requestsCount > 0 ? `/plans/${plan.post_id}/requests` : `/plans/${plan.post_id}`,
+    plan,
+    recipientIsIn: true,
+    metadata: requestsCount > 0 ? { requests_waiting: requestsCount } : {},
+  });
+}
+
+// ── Host notices and asking again ────────────────────────────
+
+// How a rule let someone in, as the host set it (who gets in).
+const RULE_TEXT = {
+  verified: 'Verified neighbor',
+  hosted_before: "You've hosted them before",
+  anyone_nearby: 'Anyone nearby can join',
+};
+
+const goingText = (plan, goingCount) => {
+  const spotsLeft = Math.max(0, plan.spots - goingCount);
+  return [`${goingCount} going`, spotsLeft > 0 ? `${spotsLeft} ${spotsLeft === 1 ? 'spot' : 'spots'} open` : null];
+};
+
+/** A guest who was in left, or answered "Still coming?" with Can't make it. To the host. */
+async function guestLeft({ plan, request, guestName, goingCount }) {
+  const when = whenText(plan.post.event_date, rules.timezoneForPlan(plan));
+  return notify({
+    userId: plan.host_user_id,
+    type: 'plan_guest_left',
+    title: `${guestName} can't make it`,
+    body: [`${capitalized(noun(plan))} ${when}`, ...goingText(plan, goingCount)].filter(Boolean).join(' · '),
     link: `/plans/${plan.post_id}`,
     plan,
     recipientIsIn: true,
+    metadata: { request_id: request.id },
+  });
+}
+
+/** A rule let someone in without the host answering (or gave them a spot from the waitlist). To the host. */
+async function guestAutoJoined({ plan, request, guestName, rule, goingCount, viaWaitlist = false }) {
+  const when = whenText(plan.post.event_date, rules.timezoneForPlan(plan));
+  const how = viaWaitlist ? 'From the waitlist' : RULE_TEXT[rule] || null;
+  return notify({
+    userId: plan.host_user_id,
+    type: 'plan_guest_auto_joined',
+    title: `${guestName} ${guestName.includes(' + ') ? 'are' : 'is'} in your ${noun(plan)}`,
+    body: [how, when, ...goingText(plan, goingCount)].filter(Boolean).join(' · '),
+    link: `/plans/${plan.post_id}`,
+    plan,
+    recipientIsIn: true,
+    metadata: { request_id: request.id, ...(rule ? { rule } : {}) },
+  });
+}
+
+/**
+ * "Still coming?" again, for a guest who hasn't answered: once per change (the change's
+ * reconfirm_requested_at is in the key), with the same buttons as the first ask.
+ */
+async function stillComingReminder({ plan, request, hostFirst }) {
+  const when = whenText(plan.post.event_date, rules.timezoneForPlan(plan), { long: true, at: true });
+  let what = `Now ${when}.`;
+  if (request.reconfirm_reason === 'place') what = "It's at a new place now.";
+  else if (request.reconfirm_reason === 'both') what = `Now ${when}, at a new place.`;
+  return notify({
+    userId: request.user_id,
+    type: 'plan_still_coming_reminder',
+    title: `Still coming to ${hostFirst}'s ${noun(plan)}?`,
+    body: `${what} Let ${hostFirst} know.`,
+    link: `/plans/${plan.post_id}`,
+    plan,
+    recipientIsIn: true,
+    metadata: { request_id: request.id, asked_at: new Date(request.reconfirm_requested_at).toISOString() },
+    idempotencyKey: `plan_still_coming_reminder:${request.id}:${new Date(request.reconfirm_requested_at).toISOString()}`,
   });
 }
 
@@ -456,4 +534,7 @@ module.exports = {
   spotOpened,
   reminder,
   hostSummary,
+  guestLeft,
+  guestAutoJoined,
+  stillComingReminder,
 };

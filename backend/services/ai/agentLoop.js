@@ -21,6 +21,9 @@ const MAX_STORED_MESSAGES = 60;
 const TRIMMED_STORED_MESSAGES = 40;
 // Tool results are only context for follow-ups; the full text is not worth keeping.
 const MAX_STORED_TOOL_RESULT_CHARS = 4000;
+// Except an action card's: it is what history shows again (agentService.displayMessages),
+// so it is kept whole up to this, which covers the biggest card (ten people asking to join).
+const MAX_STORED_CARD_CHARS = 32000;
 // What one turn is sent of the stored transcript, whatever it holds: older turns
 // are left out until it fits, so a bloated row can't slow every reply. (The turn
 // is saved from what it was sent, so they are dropped then.)
@@ -64,8 +67,10 @@ function raceAbort(promise, signal) {
  * @param {(use: object) => Promise<object>} p.runTool   Runs one tool_use block, resolves to its tool_result block.
  * @param {(delta: string) => void} p.onText             Called with each piece of reply text as it streams.
  * @param {(name: string) => void} [p.onToolStart]       Called when Claude starts a tool call, before its input is complete.
- * @param {(uses: object[]) => (string|null)} [p.finishAfterTools]  After a round's tools ran: the closing line that ends
- *                                       the turn there (a draft is the answer, shown as a card), or null to carry on.
+ * @param {(uses: object[], round: {said: string}) => (string|true|null)} [p.finishAfterTools]  After a round's tools ran
+ *                                       (`said` is the text that round showed): the closing line that ends the turn there
+ *                                       (a draft is the answer, shown as a card), true to end it with nothing more (the
+ *                                       answer is already shown), or null to carry on.
  * @returns {Promise<{messages: Array, usage: object, toolCalls: number, outcome: string, stopReason: string|null, category?: string|null}>}
  *   outcome: 'complete' | 'refused' | 'truncated' | 'empty' | 'tool_limit'. Rejects when the signal aborts or the API fails.
  */
@@ -155,7 +160,9 @@ async function runAgentTurn({
     // A draft is the answer: the person already sees it as a card. End the turn with
     // its closing line rather than a second request that would only describe it
     // (on Claude Sonnet 5.5 a reply after a tool result arrives all at once, late).
-    const closing = finishAfterTools ? finishAfterTools(uses) : null;
+    const said = content.filter((block) => block.type === 'text').map((block) => block.text).join('').trim();
+    const closing = finishAfterTools ? finishAfterTools(uses, { said }) : null;
+    if (closing === true) return finish('complete');
     if (typeof closing === 'string' && closing.trim()) {
       if (spoke) onText('\n\n');
       onText(closing.trim());
@@ -273,16 +280,31 @@ function sanitizeHistory(stored) {
     kept.push(message);
   }
 
-  // A stored transcript ends on an answer, never mid-tool-call.
+  // A stored transcript ends on an answer, never mid-tool-call. A turn may also end on the
+  // results of calls made after its answer, in the same reply (link buttons): the next
+  // person's message follows them, and the API reads the two as one turn.
   while (kept.length) {
     const last = kept[kept.length - 1];
     if (last.role === 'assistant' && !toolUseIds(last).length) break;
+    const previous = kept[kept.length - 2];
+    if (last.role === 'user' && !isTurnStart(last) && previous?.role === 'assistant'
+      && blocksOf(previous).some((block) => block.type === 'text')) break;
     kept.pop();
   }
   return trimToBudget(kept);
 }
 
-const clip = (text) => (typeof text === 'string' && text.length > MAX_STORED_TOOL_RESULT_CHARS
+/** An action card's tool result (`draftType: "action"`), which is kept whole up to its own cap. */
+function isCardResult(text) {
+  if (text.length > MAX_STORED_CARD_CHARS || !text.startsWith('{')) return false;
+  try {
+    return JSON.parse(text).draftType === 'action';
+  } catch {
+    return false;
+  }
+}
+
+const clip = (text) => (typeof text === 'string' && text.length > MAX_STORED_TOOL_RESULT_CHARS && !isCardResult(text)
   ? `${text.slice(0, MAX_STORED_TOOL_RESULT_CHARS)}…[truncated]`
   : text);
 
@@ -299,8 +321,9 @@ const scrubDeep = (value) => JSON.parse(JSON.stringify(value, (_key, v) => (type
  *   - text, tool calls and tool results, as sent and received;
  *   - not thinking blocks (the transcript is edited as it grows, which would
  *     invalidate them, and the model doesn't need its old reasoning);
- *   - not photos, which are fetched afresh on every request and cost tokens each
- *     time; a placeholder says one was there, and the reply that described it stays;
+ *   - not photos or documents (PDFs), which are deleted once read and would cost
+ *     tokens on every request; a placeholder says one was there, and the reply that
+ *     described it stays;
  *   - not text that is only whitespace, which the API refuses as input.
  */
 function compactForStorage(messages) {
@@ -316,6 +339,7 @@ function compactForStorage(messages) {
 
     const kept = [];
     let photos = 0;
+    let documents = 0;
     for (const block of blocks) {
       if (block.type === 'text') {
         if (!isBlank(block.text)) kept.push({ type: 'text', text: scrub(block.text) });
@@ -330,13 +354,22 @@ function compactForStorage(messages) {
         });
       } else if (block.type === 'image') {
         photos += 1;
+      } else if (block.type === 'document') {
+        documents += 1;
       }
     }
+    if (documents) {
+      const note = documents === 1
+        ? '[Document attached. You read it when you answered this message, and that answer says what it showed. It is not shown again; a document in another message is a different one.]'
+        : `[${documents} documents attached. You read them when you answered this message, and that answer says what they showed. They are not shown again; documents in other messages are different ones.]`;
+      kept.unshift({ type: 'text', text: note });
+    }
     if (photos) {
-      // Say the photo was seen. A bare "[Photo attached]" led Claude to doubt, and retract, its own earlier description.
+      // Say the photo was seen, and with which message. A bare "[Photo attached]" led Claude to doubt, and retract, its own
+      // earlier description; inviting them to "send it again" led it to judge that description by the next photo they sent.
       const note = photos === 1
-        ? '[Photo attached. You saw it when you replied; it is not included again. Go by your earlier reply, or ask them to send it again if you need a closer look.]'
-        : `[${photos} photos attached. You saw them when you replied; they are not included again. Go by your earlier reply, or ask them to send them again if you need a closer look.]`;
+        ? '[Photo attached. You saw it when you answered this message, and that answer says what it showed. It is not shown again; a photo in another message is a different one.]'
+        : `[${photos} photos attached. You saw them when you answered this message, and that answer says what they showed. They are not shown again; photos in other messages are different ones.]`;
       kept.unshift({ type: 'text', text: note });
     }
     if (kept.length) compact.push({ role: message.role, content: kept });

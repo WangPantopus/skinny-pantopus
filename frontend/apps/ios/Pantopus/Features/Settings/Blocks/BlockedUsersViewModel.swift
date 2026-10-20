@@ -225,7 +225,7 @@ public final class BlockedUsersViewModel: ListOfRowsDataSource {
                 _ = try await api.request(PrivacyEndpoints.deleteBlock(blockId: blockId))
             }
             // Settings' block count and chats change (own edit, contract section 6).
-            ScreenStore.shared.markStale(topics: [ScreenTopic.profileMe, ScreenTopic.chats])
+            ScreenStore.shared.markStale(topics: [ScreenTopic.profileMe, ScreenTopic.chats, ScreenTopic.posts])
             guard current(), action == mutation else { return }
             pending = nil
             request += 1

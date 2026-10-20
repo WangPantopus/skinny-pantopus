@@ -55,6 +55,12 @@ struct NeighborMessageReceivedView: View {
 
                 PlaceDetailSectionLabel(text: "Reply")
                 replySection(message)
+                    .disabled(viewModel.isUpdating)
+
+                if let error = viewModel.actionError {
+                    NeighborErrorBanner(message: error)
+                        .padding(.top, 12)
+                }
 
                 PlaceDetailSectionLabel(text: "Manage this message")
                 ManageCard(
@@ -63,6 +69,7 @@ struct NeighborMessageReceivedView: View {
                     onBlock: { Task { await viewModel.block() } },
                     onReport: { Task { await viewModel.report() } }
                 )
+                .disabled(viewModel.isUpdating || viewModel.replying)
 
                 HStack(alignment: .top, spacing: 8) {
                     Icon(.shield, size: 14, strokeWidth: 2, color: Theme.Color.appTextMuted)
@@ -86,7 +93,7 @@ struct NeighborMessageReceivedView: View {
         let hasReply = message.reply != nil && !viewModel.editingReply
         let canReply = message.canReply && !viewModel.flags.blocked
         if hasReply, let reply = message.reply {
-            ReplySent(messageBody: reply.body) { viewModel.startEditingReply() }
+            ReplySent(messageBody: reply.body, canChange: canReply) { viewModel.startEditingReply() }
         } else if canReply {
             QuickReplyBar(
                 replies: viewModel.replies,
@@ -186,6 +193,7 @@ private struct QuickReplyBar: View {
 
 private struct ReplySent: View {
     let messageBody: String
+    let canChange: Bool
     var onChange: () -> Void
 
     var bodyContent: some View {
@@ -221,10 +229,12 @@ private struct ReplySent: View {
                         .foregroundStyle(Theme.Color.home)
                 }
                 Spacer(minLength: 0)
-                Button("Change reply", action: onChange)
-                    .font(.system(size: 13.5, weight: .semibold))
-                    .foregroundStyle(Theme.Color.primaryInk)
-                    .buttonStyle(.plain)
+                if canChange {
+                    Button("Change reply", action: onChange)
+                        .font(.system(size: 13.5, weight: .semibold))
+                        .foregroundStyle(Theme.Color.primaryInk)
+                        .buttonStyle(.plain)
+                }
             }
         }
     }
@@ -290,7 +300,7 @@ private struct ManageCard: View {
                 icon: .ban,
                 tone: .neutral,
                 title: "Block this neighbor",
-                sub: "Stop messages from this verified home. They won't be notified.",
+                sub: "Stop messages from this sender. They won't be notified.",
                 doneTitle: "Neighbor blocked",
                 done: flags.blocked,
                 action: onBlock

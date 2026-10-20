@@ -34,7 +34,7 @@ public struct AIConversationsResponse: Decodable, Sendable, Hashable {
     public let conversations: [AIConversationSummaryDTO]
 }
 
-/// `GET /api/ai/conversations/:id/messages` (`backend/routes/ai.js:365`) — a
+/// `GET /api/ai/conversations/:id/messages` (`backend/routes/ai.js:445`) — a
 /// conversation as the thread shows it after a relaunch: the person's
 /// messages, the replies, and the drafts as cards.
 public struct AIConversationMessagesResponse: Decodable, Sendable, Hashable {
@@ -50,12 +50,142 @@ public struct AIConversationMessageDTO: Decodable, Sendable, Hashable {
     /// How many photos a person's message carried (they aren't kept).
     public let photos: Int?
     public let draft: AIConversationDraftDTO?
+    /// The link buttons under an assistant reply, for apps that ask for them.
+    public let links: [AIChatLinkDTO]?
 }
 
 public struct AIConversationDraftDTO: Decodable, Sendable, Hashable {
-    /// `post`, `support_train`, `gig`, `listing`.
+    /// `post`, `support_train`, `pickup_schedule`, `action`, `gig`, `listing`.
     public let type: String
     public let draft: [String: JSONValue]
+}
+
+/// `POST /api/ai/chat` `context`: what the person was looking at when they
+/// tapped Ask (`docs/product/ai-assistant-phase1-contract-2026-10-20.md`
+/// section 6). The server checks access as that screen does, so a plan or
+/// post the person can't see counts as no context.
+public struct AIChatContext: Encodable, Sendable, Hashable {
+    /// `today`, `place`, `nearby`, `post`, `plans` or `plan`.
+    public let surface: String
+    /// The post or plan id.
+    public let id: String?
+    public let homeId: String?
+    /// A Place section's slug: `today`, `your-home`, `risk`, `block`, `money`, `civic`.
+    public let section: String?
+
+    public init(surface: String, id: String? = nil, homeId: String? = nil, section: String? = nil) {
+        self.surface = surface
+        self.id = id
+        self.homeId = homeId
+        self.section = section
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case surface, id, section
+        case homeId = "home_id"
+    }
+}
+
+/// A link button under a reply: the `link` event and history `links`. URLs
+/// come from the server's fixed catalog of app screens, never the model.
+public struct AIChatLinkDTO: Decodable, Sendable, Hashable {
+    public let label: String
+    public let url: String
+}
+
+/// An action card: a `draft` event of type `action` (contract section 4.2).
+/// One tap sends `request` through an endpoint the app already uses; the
+/// server built it from validated fields, and the app sends only requests on
+/// its allowlist (`AIActionAllowlist`). A malformed request still decodes, so
+/// the card can say it can't be used rather than vanish.
+public struct AIActionCardDTO: Decodable, Sendable, Hashable {
+    public struct Line: Decodable, Sendable, Hashable {
+        public let label: String
+        public let value: String
+    }
+
+    public struct Request: Decodable, Sendable, Hashable {
+        public let method: String?
+        public let path: String?
+        /// A JSON object, sent as is.
+        public let body: JSONValue?
+        /// Only `x-pantopus-session-scope` is ever sent.
+        public let headers: [String: JSONValue]?
+    }
+
+    /// A request sent only after the action's own request succeeds.
+    public struct FollowUp: Decodable, Sendable, Hashable {
+        public let request: Request
+    }
+
+    public struct Done: Decodable, Sendable, Hashable {
+        public let label: String?
+        /// An app link, opened through the deep-link router.
+        public let link: String?
+    }
+
+    public struct Action: Decodable, Sendable, Hashable, Identifiable {
+        public let id: String
+        public let label: String
+        /// `primary`, `secondary` or `destructive`.
+        public let style: String?
+        public let request: Request
+        public let then: FollowUp?
+        public let done: Done?
+    }
+
+    /// One row with its own buttons, such as a request to join a plan.
+    public struct Item: Decodable, Sendable, Hashable, Identifiable {
+        public let id: String
+        public let title: String
+        public let lines: [Line]
+        public let actions: [Action]
+
+        public init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            id = try container.decode(String.self, forKey: .id)
+            title = try container.decodeIfPresent(String.self, forKey: .title) ?? ""
+            lines = try container.decodeIfPresent([Line].self, forKey: .lines) ?? []
+            actions = try container.decodeIfPresent([Action].self, forKey: .actions) ?? []
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case id, title, lines, actions
+        }
+    }
+
+    /// Also the idempotency key where an endpoint takes one.
+    public let id: String
+    /// `plan_create`, `plan_edit`, `plan_cancel`, `plan_requests`, `plan_ask`,
+    /// `plan_message`, `post_reply`, `post_solve`, `home_task`, `notification_settings`.
+    public let card: String
+    public let title: String
+    public let lines: [Line]
+    public let warnings: [String]
+    /// The assistant's one line (also streamed as text).
+    public let note: String?
+    /// After this, the card shows as expired and its actions are off.
+    public let expiresAt: String?
+    public let actions: [Action]
+    public let items: [Item]
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        card = try container.decodeIfPresent(String.self, forKey: .card) ?? ""
+        title = try container.decodeIfPresent(String.self, forKey: .title) ?? ""
+        lines = try container.decodeIfPresent([Line].self, forKey: .lines) ?? []
+        warnings = try container.decodeIfPresent([String].self, forKey: .warnings) ?? []
+        note = try container.decodeIfPresent(String.self, forKey: .note)
+        expiresAt = try container.decodeIfPresent(String.self, forKey: .expiresAt)
+        actions = try container.decodeIfPresent([Action].self, forKey: .actions) ?? []
+        items = try container.decodeIfPresent([Item].self, forKey: .items) ?? []
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, card, title, lines, warnings, note, actions, items
+        case expiresAt = "expires_at"
+    }
 }
 
 /// Body for `POST /api/ai/draft/listing-vision` (Snap & Sell). Images

@@ -56,6 +56,7 @@ import app.pantopus.android.core.LaunchFeature
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.core.perf.ScreenTiming
 import app.pantopus.android.core.routing.DeepLinkRouter
+import app.pantopus.android.data.ai.AIScreenContext
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.InviteLinks
 import app.pantopus.android.ui.components.NavigationDrawer
@@ -102,7 +103,9 @@ import app.pantopus.android.ui.screens.compose.gig.GigComposeViewModel
 import app.pantopus.android.ui.screens.compose.gig.GigComposeWizardScreen
 import app.pantopus.android.ui.screens.compose.listing.ListingComposeStep
 import app.pantopus.android.ui.screens.compose.listing.ListingComposeWizardScreen
+import app.pantopus.android.ui.screens.compose.pulse.PulseComposeDraftFields
 import app.pantopus.android.ui.screens.compose.pulse.PulseComposeFlowScreen
+import app.pantopus.android.ui.screens.compose.pulse.PulseComposeViewModel
 import app.pantopus.android.ui.screens.connections.ConnectionsChatTarget
 import app.pantopus.android.ui.screens.connections.ConnectionsScreen
 import app.pantopus.android.ui.screens.contentdetail.GigDetailScreen
@@ -435,10 +438,13 @@ import app.pantopus.android.ui.screens.scheduling.setup.FirstRunWizardScreen
 import app.pantopus.android.ui.screens.scheduling.setup.OnboardingHomeBusinessScreen
 import app.pantopus.android.ui.screens.scheduling.visits.VisitDetailScreen
 import app.pantopus.android.ui.screens.scheduling.visits.VisitSetupScreen
+import app.pantopus.android.ui.screens.settings.BriefingNotice
+import app.pantopus.android.ui.screens.settings.BriefingNoticeViewModel
 import app.pantopus.android.ui.screens.settings.NotificationSettingsScreen
 import app.pantopus.android.ui.screens.settings.PrivacySettingsScreen
 import app.pantopus.android.ui.screens.settings.SettingsIndexScreen
 import app.pantopus.android.ui.screens.settings.SettingsRoute
+import app.pantopus.android.ui.screens.settings.SuggestionsNotice
 import app.pantopus.android.ui.screens.settings.about.AboutScreen
 import app.pantopus.android.ui.screens.settings.blocks.BlockedUsersScreen
 import app.pantopus.android.ui.screens.settings.data_export.DataExportScreen
@@ -1399,6 +1405,16 @@ private object ChildRoutes {
     /** The room a chat link named when it opened as a person thread, so the
      *  link's arrival still completes (empty for every other open). */
     const val CHAT_ARRIVAL_ROOM_KEY = "arrivalRoom"
+    const val CHAT_BUSINESS_ID_KEY = "asBusinessUserId"
+
+    /** Ask Pantopus: the screen the assistant thread was opened from ([AIScreenContext.encode]; empty otherwise). */
+    const val CHAT_AI_CONTEXT_KEY = "aiContext"
+
+    /** A brief's or nudge's notification id: the assistant thread opens at its message (empty otherwise). */
+    const val CHAT_AI_NUDGE_KEY = "aiNudge"
+
+    /** The conversation that brief or nudge was added to: the assistant thread opens and continues it (empty otherwise). */
+    const val CHAT_AI_CONVERSATION_KEY = "aiConversation"
     const val CHAT_CONVERSATION =
         "chat/{$CHAT_KIND_KEY}/{$CHAT_ID_KEY}?" +
             "$CHAT_NAME_KEY={$CHAT_NAME_KEY}" +
@@ -1415,7 +1431,11 @@ private object ChildRoutes {
             "&$CHAT_TOPIC_REF_ID_KEY={$CHAT_TOPIC_REF_ID_KEY}" +
             "&$CHAT_TOPIC_TITLE_KEY={$CHAT_TOPIC_TITLE_KEY}" +
             "&$CHAT_GIG_ID_KEY={$CHAT_GIG_ID_KEY}" +
-            "&$CHAT_ARRIVAL_ROOM_KEY={$CHAT_ARRIVAL_ROOM_KEY}"
+            "&$CHAT_ARRIVAL_ROOM_KEY={$CHAT_ARRIVAL_ROOM_KEY}" +
+            "&$CHAT_BUSINESS_ID_KEY={$CHAT_BUSINESS_ID_KEY}" +
+            "&$CHAT_AI_CONTEXT_KEY={$CHAT_AI_CONTEXT_KEY}" +
+            "&$CHAT_AI_NUDGE_KEY={$CHAT_AI_NUDGE_KEY}" +
+            "&$CHAT_AI_CONVERSATION_KEY={$CHAT_AI_CONVERSATION_KEY}"
 
     /** New message contact picker (T6.6b P25). Reached from Chat list
      *  compose button + empty-state CTA. */
@@ -1432,9 +1452,12 @@ private object ChildRoutes {
 
     /** Optional headline seeded into the draft (a Pantopus AI post draft's title). */
     const val COMPOSE_TITLE_KEY = "prefillTitle"
+
+    /** A Pantopus AI post draft's type and other fields ([PulseComposeDraftFields.encode]; empty otherwise). */
+    const val COMPOSE_DRAFT_FIELDS_KEY = PulseComposeViewModel.PREFILL_DRAFT_FIELDS_KEY
     const val COMPOSE_POST =
         "feed/compose?$COMPOSE_INTENT_KEY={$COMPOSE_INTENT_KEY}&$COMPOSE_BODY_KEY={$COMPOSE_BODY_KEY}" +
-            "&$COMPOSE_TITLE_KEY={$COMPOSE_TITLE_KEY}"
+            "&$COMPOSE_TITLE_KEY={$COMPOSE_TITLE_KEY}&$COMPOSE_DRAFT_FIELDS_KEY={$COMPOSE_DRAFT_FIELDS_KEY}"
 
     /** P3.5 — Edit an existing Pulse post. Re-uses the compose flow. */
     const val EDIT_POST_POST_ID_KEY = "postId"
@@ -1519,10 +1542,13 @@ private object ChildRoutes {
         intent: String,
         prefillBody: String = "",
         prefillTitle: String = "",
+        draftFields: PulseComposeDraftFields? = null,
     ): String =
         "feed/compose?$COMPOSE_INTENT_KEY=${java.net.URLEncoder.encode(intent, "UTF-8").replace("+", "%20")}" +
             "&$COMPOSE_BODY_KEY=${java.net.URLEncoder.encode(prefillBody, "UTF-8").replace("+", "%20")}" +
-            "&$COMPOSE_TITLE_KEY=${java.net.URLEncoder.encode(prefillTitle, "UTF-8").replace("+", "%20")}"
+            "&$COMPOSE_TITLE_KEY=${java.net.URLEncoder.encode(prefillTitle, "UTF-8").replace("+", "%20")}" +
+            draftFields?.let { "&$COMPOSE_DRAFT_FIELDS_KEY=${java.net.URLEncoder.encode(it.encode(), "UTF-8").replace("+", "%20")}" }
+                .orEmpty()
 
     /** Build the start-a-Support-Train path with a story to start from. */
     fun startSupportTrain(story: String): String =
@@ -1600,6 +1626,29 @@ private object ChildRoutes {
             "&$CHAT_GIG_ID_KEY=${enc(row.gigId ?: "")}"
     }
 
+    /**
+     * Ask Pantopus from a screen: the assistant thread (the one the Messages row opens) with that screen's
+     * context and starter prompts, nothing sent yet (AI assistant phase 1 contract, section 7).
+     */
+    fun askPantopus(context: AIScreenContext): String {
+        fun enc(value: String) = java.net.URLEncoder.encode(value, "UTF-8").replace("+", "%20")
+        return "chat/ai/ai_assistant?$CHAT_NAME_KEY=${enc("Pantopus AI")}&$CHAT_INITIALS_KEY=AI" +
+            "&$CHAT_AI_CONTEXT_KEY=${enc(context.encode())}"
+    }
+
+    /**
+     * `pantopus://assistant` (AI assistant phase 2 contract §8.2): the assistant thread, in [conversationId] when the
+     * link names one, at the brief or nudge [nudgeId] names when there is one.
+     */
+    fun assistantThread(
+        nudgeId: String?,
+        conversationId: String?,
+    ): String {
+        fun enc(value: String) = java.net.URLEncoder.encode(value, "UTF-8").replace("+", "%20")
+        return "chat/ai/ai_assistant?$CHAT_NAME_KEY=${enc("Pantopus AI")}&$CHAT_INITIALS_KEY=AI" +
+            "&$CHAT_AI_NUDGE_KEY=${enc(nudgeId.orEmpty())}&$CHAT_AI_CONVERSATION_KEY=${enc(conversationId.orEmpty())}"
+    }
+
     // A Creator Inbox row no longer builds a generic-chat path. Persona DMs
     // are addressed by thread id (`personaDmThread`) because the DM
     // serializer emits no user_id for either party — the previous
@@ -1658,6 +1707,7 @@ private object ChildRoutes {
         displayName: String,
         initials: String,
         verified: Boolean,
+        asBusinessUserId: String? = null,
     ): String {
         fun enc(value: String) = java.net.URLEncoder.encode(value, "UTF-8").replace("+", "%20")
         return "chat/room/${enc(roomId)}?" +
@@ -1672,7 +1722,8 @@ private object ChildRoutes {
             "&$CHAT_SCROLL_TO_KEY=" +
             "&$CHAT_TOPIC_TYPE_KEY=" +
             "&$CHAT_TOPIC_REF_ID_KEY=" +
-            "&$CHAT_TOPIC_TITLE_KEY="
+            "&$CHAT_TOPIC_TITLE_KEY=" +
+            "&$CHAT_BUSINESS_ID_KEY=${enc(asBusinessUserId.orEmpty())}"
     }
 
     /** Build the chat-conversation path for a Chat Search result. Carries
@@ -2118,9 +2169,11 @@ private fun routeForAIDraft(draft: ChatAIDraftCard): String =
     when (draft.type) {
         "gig" -> ChildRoutes.composeGig(GigsCategory.All.key)
         "listing" -> ChildRoutes.COMPOSE_LISTING
+        // The draft's exact type, dates, place and kinds go along too (AI assistant phase 1 contract, section 8).
         "post" ->
-            draft.prefill?.let { ChildRoutes.composePost(PulseIntent.fromPostType(it.postType).key, it.body, it.title.orEmpty()) }
-                ?: ChildRoutes.composePost(PulseIntent.Ask.key)
+            draft.prefill?.let {
+                ChildRoutes.composePost(PulseIntent.fromPostType(it.postType).key, it.body, it.title.orEmpty(), it.post)
+            } ?: ChildRoutes.composePost(PulseIntent.Ask.key)
         "support_train" -> ChildRoutes.startSupportTrain(draft.prefill?.body.orEmpty())
         else -> ChildRoutes.composePost(PulseIntent.Ask.key)
     }
@@ -2178,6 +2231,11 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
         ) { uri ->
             if (uri != null) appContext.shareText(InviteLinks.INVITE_MESSAGE, "Invite to Pantopus")
         }
+    val briefingNotice: BriefingNoticeViewModel = hiltViewModel()
+    BriefingNotice(onManage = { navController.navigate(ChildRoutes.SETTINGS_NOTIFICATIONS) }, viewModel = briefingNotice)
+    // AI assistant phase 2: asks once whether to turn on Suggestions from Pantopus, after the briefing notice.
+    val briefingNoticeShowing by briefingNotice.preferences.collectAsStateWithLifecycle()
+    SuggestionsNotice(waiting = briefingNoticeShowing != null)
     val sessionViewModel: RootSessionViewModel = hiltViewModel()
     val chatBadgeViewModel: ChatBadgeViewModel = hiltViewModel()
     val currentHandle by sessionViewModel.currentHandle.collectAsStateWithLifecycle()
@@ -2189,6 +2247,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
     val navDrawerScope = rememberCoroutineScope()
     // Place tapped again on its root: one event, which scrolls the root back to the top.
     val placeReselects = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
+    var ballotHomeId by rememberSaveable { mutableStateOf<String?>(null) }
     // Child screens keep the tab they were opened from lit (they used to fall
     // back to Place, which also swallowed taps on Place from those screens).
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -2308,6 +2367,18 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 navController.navigate(ChildRoutes.SETTINGS_DEVICES)
                 DeepLinkRouter.consume()
             }
+            DeepLinkRouter.Destination.NotificationSettings -> {
+                navController.navigate(ChildRoutes.MENU)
+                navController.navigate(ChildRoutes.SETTINGS_NOTIFICATIONS)
+                DeepLinkRouter.consume()
+            }
+            // A brief or a nudge (push or notification row): the assistant thread over Messages, where its row is, so
+            // Back lands on the conversation list. Messages opens fresh, so an earlier assistant thread isn't kept under it.
+            is DeepLinkRouter.Destination.Assistant -> {
+                navController.navigateToRootTab(PantopusRoute.messagesTab, restoreState = false)
+                navController.navigate(ChildRoutes.assistantThread(pending.nudgeId, pending.conversationId))
+                DeepLinkRouter.consume()
+            }
             DeepLinkRouter.Destination.CreateBusiness -> {
                 navController.navigate(ChildRoutes.CREATE_BUSINESS)
                 DeepLinkRouter.consume()
@@ -2350,7 +2421,11 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         ),
                     )
                 } else if (pending.id.isNotBlank()) {
-                    val display = pending.name?.takeIf { it.isNotBlank() } ?: "Conversation"
+                    // A room the Messages list shows under its own name (a Support Train's) opens under it.
+                    val display =
+                        deepLinkChatResolver.roomName(pending.id)
+                            ?: pending.name?.takeIf { it.isNotBlank() }
+                            ?: "Conversation"
                     val initials =
                         display
                             .split(" ")
@@ -2707,6 +2782,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     PlaceTabRoot(
                         navController = navController,
                         scrollToTop = placeReselects,
+                        ballotHomeId = ballotHomeId,
+                        onBallotOpened = { ballotHomeId = null },
                         onOpenMenu = { navDrawerScope.launch { navDrawerState.open() } },
                     )
                 }
@@ -2727,9 +2804,14 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     ) = ChildRoutes.chatConversationRoom(roomId, title, title.trim().take(1).uppercase(), verified = false)
                     TodayTabScreen(
                         onClaim = { navController.navigate(ChildRoutes.ADD_HOME) },
+                        onAsk = { context -> navController.navigate(ChildRoutes.askPantopus(context)) },
                         onOpenPlace = { homeId ->
-                            // The ballot card is on this home's Your Place: a link to it, as a push would open it.
-                            placeLinkScope.launch { currentPlaceHost?.let { navController.openPlaceLink(it, homeId, null) } }
+                            placeLinkScope.launch {
+                                currentPlaceHost?.let {
+                                    ballotHomeId = homeId
+                                    navController.openPlaceLink(it, homeId, null)
+                                }
+                            }
                         },
                         plans =
                             PlansTodayActions(
@@ -2764,6 +2846,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                     onOpenPulse = { navController.navigateToRootTab(PantopusRoute.Pulse) },
                                     onOpenConnections = { navController.navigate(ChildRoutes.CONNECTIONS) },
                                     onInvite = { appContext.shareText(PLANS_INVITE_MESSAGE, "Invite a neighbor") },
+                                    onAskPantopus = { context -> navController.navigate(ChildRoutes.askPantopus(context)) },
                                 ),
                         )
                     }
@@ -2781,6 +2864,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             onOpenConnections = { navController.navigate(ChildRoutes.CONNECTIONS) },
                             onOpenMarketplace = { navController.navigate(PantopusRoute.Marketplace.path) },
                             onOpenTasks = { navController.navigate(PantopusRoute.Tasks.path) },
+                            onAsk = { context -> navController.navigate(ChildRoutes.askPantopus(context)) },
                         )
                     }
                 }
@@ -2818,6 +2902,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 )
                             },
                             openNearby = { navController.navigateToRootTab(PantopusRoute.Plans) },
+                            askPantopus = { context -> navController.navigate(ChildRoutes.askPantopus(context)) },
                         ),
                 )
                 composable(PantopusRoute.Mail.path) {
@@ -2863,6 +2948,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                     ChildRoutes.composePost(PulseIntent.Ask.key, starter.placeholder),
                                 )
                             },
+                            onAsk = { context -> navController.navigate(ChildRoutes.askPantopus(context)) },
                         )
                     }
                     val quietMeter: NearbyViewModel = hiltViewModel()
@@ -3064,6 +3150,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     PlaceDashboardDestination(
                         navController = navController,
                         homeId = homeId,
+                        scrollToBallot = ballotHomeId == homeId,
+                        onBallotOpened = { ballotHomeId = null },
                         onOpenMenu = { navDrawerScope.launch { navDrawerState.open() } },
                         onSwitchHome = { id ->
                             currentPlaceHost?.switchHome(id)
@@ -3095,9 +3183,14 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     val homeId = entry.arguments?.getString(PLACE_DETAIL_HOME_ID_KEY).orEmpty()
                     PlaceDetailScreen(
                         onBack = { navController.popBackStack() },
+                        onOpenBallot = {
+                            ballotHomeId = homeId
+                            navController.popBackStack()
+                        },
                         // A locked section's "Verify address" opens the dashboard's verify sheet and its real flows.
                         onStartVerify = { method -> navController.openPlaceVerify(method, homeId) },
                         onOpenVerificationStatus = { navController.navigate(ChildRoutes.waitingRoom(homeId)) },
+                        onAsk = { context -> navController.navigate(ChildRoutes.askPantopus(context)) },
                     )
                 }
                 composable(
@@ -4790,10 +4883,19 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 composable(
                     route = ChildRoutes.EDIT_BUSINESS_PAGE,
                     arguments = listOf(navArgument(EDIT_BUSINESS_PAGE_BUSINESS_ID_KEY) { type = NavType.StringType }),
-                ) {
+                ) { backStackEntry ->
+                    val businessId = backStackEntry.arguments?.getString(EDIT_BUSINESS_PAGE_BUSINESS_ID_KEY).orEmpty()
                     EditBusinessPageScreen(
                         onBack = { navController.popBackStack() },
-                        onPreview = { navController.popBackStack() },
+                        onPreview = { navController.navigate(ChildRoutes.businessProfile(businessId)) },
+                        onBusinessClosed = {
+                            if (!navController.popBackStack(ChildRoutes.MY_BUSINESSES, false)) {
+                                if (!navController.popBackStack(ChildRoutes.businessOwner(businessId), true)) {
+                                    navController.popBackStack()
+                                }
+                                navController.navigate(ChildRoutes.MY_BUSINESSES) { launchSingleTop = true }
+                            }
+                        },
                     )
                 }
                 // C4 — public profile opened on a named custom page
@@ -4881,6 +4983,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             // "Nearby Providers" row → `/business/:username`.
                             navController.navigate(ChildRoutes.businessProfile(username))
                         },
+                        onAsk = { context -> navController.navigate(ChildRoutes.askPantopus(context)) },
                     )
                 }
                 composable(
@@ -4998,6 +5101,22 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 type = NavType.StringType
                                 defaultValue = ""
                             },
+                            navArgument(ChildRoutes.CHAT_BUSINESS_ID_KEY) {
+                                type = NavType.StringType
+                                defaultValue = ""
+                            },
+                            navArgument(ChildRoutes.CHAT_AI_CONTEXT_KEY) {
+                                type = NavType.StringType
+                                defaultValue = ""
+                            },
+                            navArgument(ChildRoutes.CHAT_AI_NUDGE_KEY) {
+                                type = NavType.StringType
+                                defaultValue = ""
+                            },
+                            navArgument(ChildRoutes.CHAT_AI_CONVERSATION_KEY) {
+                                type = NavType.StringType
+                                defaultValue = ""
+                            },
                         ),
                 ) { entry ->
                     val args = entry.arguments ?: return@composable
@@ -5017,6 +5136,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     val topicTitle = args.getString(ChildRoutes.CHAT_TOPIC_TITLE_KEY).orEmpty().takeIf { it.isNotEmpty() }
                     val gigId = args.getString(ChildRoutes.CHAT_GIG_ID_KEY).orEmpty().takeIf { it.isNotEmpty() }
                     val arrivalRoomId = args.getString(ChildRoutes.CHAT_ARRIVAL_ROOM_KEY).orEmpty().takeIf { it.isNotEmpty() }
+                    val asBusinessUserId = args.getString(ChildRoutes.CHAT_BUSINESS_ID_KEY)?.takeIf { it.isNotBlank() }
                     val initialTopic =
                         if (topicType != null && topicTitle != null) {
                             ChatInitialTopic(topicType = topicType, topicRefId = topicRefId, title = topicTitle)
@@ -5026,7 +5146,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     val mode: ChatThreadMode =
                         when (kind) {
                             "ai" -> ChatThreadMode.Ai
-                            "room" -> ChatThreadMode.Room(id)
+                            "room" -> ChatThreadMode.Room(id, asBusinessUserId)
                             "creator" -> ChatThreadMode.Person(otherUserId = id)
                             else -> ChatThreadMode.Person(otherUserId = id)
                         }
@@ -5093,6 +5213,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         arrivalRoomId = arrivalRoomId,
                         onOpenProfile = { userId -> navController.navigate(ChildRoutes.publicProfile(userId)) },
                         onOpenPlan = { planId -> navController.navigate(PlansRoutes.plan(planId)) },
+                        aiContext = if (kind == "ai") AIScreenContext.decode(args.getString(ChildRoutes.CHAT_AI_CONTEXT_KEY)) else null,
+                        aiNudgeId = args.getString(ChildRoutes.CHAT_AI_NUDGE_KEY)?.takeIf { kind == "ai" && it.isNotBlank() },
+                        aiConversationId = args.getString(ChildRoutes.CHAT_AI_CONVERSATION_KEY)?.takeIf { kind == "ai" && it.isNotBlank() },
                     )
                 }
                 composable(ChildRoutes.CHAT_SEARCH) {
@@ -5354,13 +5477,14 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     GigDetailScreen(
                         onBack = { navController.popBackStack() },
                         onOpenPayouts = { navController.navigate(ChildRoutes.SETTINGS_PAYMENTS) },
-                        onOpenChat = { roomId, displayName, initials, verified ->
+                        onOpenChat = { roomId, displayName, initials, verified, asBusinessUserId ->
                             navController.navigate(
                                 ChildRoutes.chatConversationRoom(
                                     roomId = roomId,
                                     displayName = displayName,
                                     initials = initials,
                                     verified = verified,
+                                    asBusinessUserId = asBusinessUserId,
                                 ),
                             )
                         },
@@ -5464,6 +5588,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 type = NavType.StringType
                                 defaultValue = ""
                             },
+                            navArgument(ChildRoutes.COMPOSE_DRAFT_FIELDS_KEY) {
+                                type = NavType.StringType
+                                defaultValue = ""
+                            },
                         ),
                 ) { entry ->
                     val raw = entry.arguments?.getString(ChildRoutes.COMPOSE_INTENT_KEY) ?: PulseIntent.All.key
@@ -5471,6 +5599,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     PulseComposeFlowScreen(
                         onBack = { navController.popBackStack() },
                         prefillFeedIntent = feedIntent,
+                        prefillDraft = PulseComposeDraftFields.decode(entry.arguments?.getString(ChildRoutes.COMPOSE_DRAFT_FIELDS_KEY)),
                     )
                 }
                 composable(
@@ -6123,6 +6252,18 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                         ),
                                     )
                                 },
+                                // The train's group chat opens under the train's title.
+                                onOpenChat = { roomId, title ->
+                                    val initials = title.split(" ").take(2).mapNotNull { it.firstOrNull()?.uppercase() }
+                                    navController.navigate(
+                                        ChildRoutes.chatConversationRoom(
+                                            roomId = roomId,
+                                            displayName = title,
+                                            initials = initials.joinToString(""),
+                                            verified = false,
+                                        ),
+                                    )
+                                },
                             ),
                     )
                 }
@@ -6672,6 +6813,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                     displayName = name,
                                     initials = initialsFromName(name),
                                     verified = false,
+                                    asBusinessUserId = businessId,
                                 ),
                             )
                         },
@@ -7067,6 +7209,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
 private fun PlaceTabRoot(
     navController: NavHostController,
     scrollToTop: Flow<Unit>,
+    ballotHomeId: String?,
+    onBallotOpened: () -> Unit,
     onOpenMenu: () -> Unit,
     host: HomeTabHostViewModel = hiltViewModel(),
 ) {
@@ -7123,6 +7267,8 @@ private fun PlaceTabRoot(
                         onSwitchHome = host::switchHome,
                         onPlaceUnavailable = host::replaceUnavailable,
                         scrollToTop = scrollToTop,
+                        scrollToBallot = ballotHomeId == current.homeId,
+                        onBallotOpened = onBallotOpened,
                         // A new default changes where Place lands next time, not the Home on screen now.
                         onDefaultHomeChange = { host.switchHome(current.homeId) },
                     )
@@ -7180,6 +7326,8 @@ private fun PlaceDashboardDestination(
     onPlaceUnavailable: (String) -> Unit,
     scrollToTop: Flow<Unit>? = null,
     onDefaultHomeChange: () -> Unit = {},
+    scrollToBallot: Boolean = false,
+    onBallotOpened: () -> Unit = {},
 ) {
     PlaceDashboardScreen(
         homeId = homeId,
@@ -7212,6 +7360,9 @@ private fun PlaceDashboardDestination(
         onManageHomes = { navController.navigate(ChildRoutes.MY_HOMES) },
         onDefaultHomeChange = onDefaultHomeChange,
         scrollToTop = scrollToTop,
+        scrollToBallot = scrollToBallot,
+        onBallotOpened = onBallotOpened,
+        onAsk = { context -> navController.navigate(ChildRoutes.askPantopus(context)) },
     )
 }
 

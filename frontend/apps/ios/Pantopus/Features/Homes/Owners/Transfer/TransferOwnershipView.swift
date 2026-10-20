@@ -142,7 +142,6 @@ public struct TransferOwnershipView: View {
                     recipientName: viewModel.recipientEmail,
                     homeAddress: viewModel.homeAddress,
                     coOwnerNames: viewModel.coOwnerNames,
-                    timestamp: viewModel.confirmationTimestamp,
                     biometryLabel: viewModel.biometryLabel,
                     isAuthenticating: viewModel.sheetPhase == .authenticating,
                     onCancel: viewModel.dismissConfirmSheet

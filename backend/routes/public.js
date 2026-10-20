@@ -503,6 +503,9 @@ async function buildPlacePreview(place) {
     if (!tractPromise) tractPromise = geocodeToTractCached(place.lat, place.lng).catch(() => null);
     return tractPromise;
   };
+  // While Ballot is on, the election row is Ballot's, from the teaser's
+  // in-memory boundary lookup (nothing is written for the point).
+  const ballot = await ballotOnForEveryone() ? { lookup: lookupGovernmentsCached } : null;
 
   const [floodSettled, areaSettled, bucketSettled, moneySettled, remoteSettled, foundingSettled] = await Promise.allSettled([
     fetchFloodCached(place.lat, place.lng),
@@ -513,7 +516,7 @@ async function buildPlacePreview(place) {
     // civic), each on its own time budget — a slow provider degrades
     // only its own section (placePreviewService).
     placePreviewService.composePreviewSections({
-      lat: place.lat, lng: place.lng, city: place.city, state: place.state, resolveTract,
+      lat: place.lat, lng: place.lng, city: place.city, state: place.state, resolveTract, ballot,
     }),
     // Are Founding Neighbor slots genuinely open in this cell? A boolean,
     // never a count — it only chooses the density card's invitation line.
@@ -591,16 +594,38 @@ async function buildPlacePreview(place) {
 // The teaser's boundary lookup, kept in the preview's in-memory cache like
 // the flood and Census facts beside it: a fact about a point of land, keyed
 // by the point (~5 m), never by the address typed, held 24 h on this instance
-// only. It keeps the time it was made so the card never looks fresher.
+// only. It keeps the time it was made so the card never looks fresher. The
+// teaser and the preview's election row ask at once and share one call.
+const governmentsInFlight = new Map();
+
 async function lookupGovernmentsCached(lat, lng, options) {
   const key = `ballot-governments:${encodeGeohash(lat, lng, 9)}`;
   const cached = previewCache.get(key);
   if (cached) return cached;
-  const result = await ballotGovernments.governmentsForPoint(lat, lng, options);
-  if (!result) return { result: null, lookedUpAt: null };
-  const entry = { result, lookedUpAt: new Date().toISOString() };
-  previewCache.set(key, entry, AREA_TTL_MS);
-  return entry;
+  let call = governmentsInFlight.get(key);
+  if (!call) {
+    call = (async () => {
+      const result = await ballotGovernments.governmentsForPoint(lat, lng, options);
+      if (!result) return { result: null, lookedUpAt: null };
+      const entry = { result, lookedUpAt: new Date().toISOString() };
+      previewCache.set(key, entry, AREA_TTL_MS);
+      return entry;
+    })().finally(() => governmentsInFlight.delete(key));
+    governmentsInFlight.set(key, call);
+  }
+  return call;
+}
+
+// Ballot in a preview follows the flag's GLOBAL switch only: a preview reads
+// the same for everyone who asks about a point. Any failure reads as off.
+async function ballotOnForEveryone() {
+  try {
+    const flag = await featureFlagService.getFlag('ballot_p0');
+    return Boolean(flag && flag.enabled_globally);
+  } catch (err) {
+    console.warn('[public/place] ballot flag read failed:', err.message);
+    return false;
+  }
 }
 
 // Ballot P0 teaser (docs/ballot-implementation-plan-2026-09-24.md §5.3).
@@ -609,15 +634,14 @@ async function lookupGovernmentsCached(lat, lng, options) {
 // preview's per-section time budget. `undefined` = flag off (key omitted).
 async function ballotTeaserFor(place) {
   try {
-    const flag = await featureFlagService.getFlag('ballot_p0');
-    if (!flag || !flag.enabled_globally) return undefined;
+    if (!await ballotOnForEveryone()) return undefined;
     const budgetMs = placePreviewService.sectionBudgetMs();
     const [teaser] = await placePreviewService.withBudget(
-      // The lookup stops when the budget does, so no upstream call runs on
-      // after the response.
+      // The lookup stops before the budget does, so no upstream call runs on
+      // after the response (the election row shares it, on the same clock).
       async () => [await ballotSummary.teaserForPoint(
         { lat: place.lat, lng: place.lng, state: place.state },
-        { timeoutMs: budgetMs, lookup: lookupGovernmentsCached },
+        { timeoutMs: placePreviewService.ballotLookupMs(budgetMs), lookup: lookupGovernmentsCached },
       )],
       budgetMs,
       () => [null],
@@ -627,6 +651,17 @@ async function ballotTeaserFor(place) {
     console.warn('[public/place] ballot teaser failed:', err.message);
     return null;
   }
+}
+
+// The preview a client renders, with the Ballot teaser beside it while
+// ballot_p0 is on: a typed address's (GET /place) and a saved address's
+// (routes/savedPlaces.js), whose Place tab is this preview.
+async function placePreviewWithBallot(place) {
+  const [preview, ballotTeaser] = await Promise.all([
+    buildPlacePreview(place),
+    ballotTeaserFor(place),
+  ]);
+  return ballotTeaser !== undefined ? { ...preview, ballot_teaser: ballotTeaser } : preview;
 }
 
 router.get('/place', async (req, res) => {
@@ -671,13 +706,7 @@ router.get('/place', async (req, res) => {
       });
     }
 
-    // The Ballot teaser rides beside the preview of a typed address only; a
-    // saved place's preview (routes/savedPlaces.js) carries no Ballot.
-    const [preview, ballotTeaser] = await Promise.all([
-      buildPlacePreview(place),
-      ballotTeaserFor(place),
-    ]);
-    return res.json(ballotTeaser !== undefined ? { ...preview, ballot_teaser: ballotTeaser } : preview);
+    return res.json(await placePreviewWithBallot(place));
   } catch (err) {
     console.error('[public/place] Error:', err.message);
     res.status(500).json({ error: 'Internal server error' });
@@ -891,6 +920,7 @@ module.exports = router;
 // Shared with Scout (routes/scout.js): one geocoder, one cache, one set of
 // US-bounds rules. A second copy would drift and double the Mapbox spend.
 module.exports.geocodeUsAddress = geocodeUsAddress;
-module.exports.buildPlacePreview = buildPlacePreview;
+// A saved address's preview (routes/savedPlaces.js) is the same preview.
+module.exports.placePreviewWithBallot = placePreviewWithBallot;
 // Test-only hook: reset the in-memory preview caches between cases.
 module.exports.__clearPreviewCaches = () => previewCache.clear();

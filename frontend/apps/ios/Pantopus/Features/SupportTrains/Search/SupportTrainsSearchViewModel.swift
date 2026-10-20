@@ -27,9 +27,11 @@ public final class SupportTrainsSearchViewModel {
     /// filtering is synchronous, so the shell shows the typing shimmer just
     /// for the initial load, never per keystroke.
     public private(set) var isLoading = false
+    public private(set) var errorMessage: String?
 
     private var corpus: [SupportTrainListItemDTO] = []
     private var loadedOnce = false
+    private var isFetching = false
 
     private let api: APIClient
     private let onOpenTrain: @MainActor (String) -> Void
@@ -58,23 +60,31 @@ public final class SupportTrainsSearchViewModel {
     // MARK: - Lifecycle
 
     public func load() async {
+        guard !isFetching else { return }
+        isFetching = true
+        errorMessage = nil
         // After the first load, each appearance re-reads quietly, so a train
         // deleted from its detail or Manage screen drops out of the results.
         if !loadedOnce { isLoading = true }
-        defer { isLoading = false }
+        defer {
+            isLoading = false
+            isFetching = false
+        }
         do {
-            let response: SupportTrainsListResponse = try await api.request(
-                SupportTrainsEndpoints.mine()
-            )
-            corpus = response.supportTrains
+            corpus = try await SupportTrainsEndpoints.allMine { endpoint in
+                try await api.request(endpoint)
+            }
             loadedOnce = true
+        } catch is CancellationError {
+            return
         } catch {
-            // A failed corpus load degrades to "no matches" — the user can
-            // cancel and retry from the list. The list screen owns the
-            // first-class error/retry surface; search stays inside the
-            // shell's four-phase contract. A failed quiet re-read keeps
-            // the results already shown.
-            if !loadedOnce { corpus = [] }
+            if !loadedOnce || ScreenStore.isRefusal(error) {
+                corpus = []
+                loadedOnce = false
+            }
+            errorMessage = loadedOnce
+                ? "Couldn't refresh support trains. Showing previous results."
+                : "Couldn't load support trains. Try again."
         }
     }
 
@@ -139,6 +149,7 @@ public final class SupportTrainsSearchViewModel {
         switch role ?? "" {
         case "organizer": "You organize"
         case "co_organizer": "You co-organize"
+        case "recipient": "For you"
         case "helper": "Helper"
         default: nil
         }

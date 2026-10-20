@@ -270,6 +270,9 @@ struct ProfileStep: View {
                 }
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("\(day.shortLabel) hours")
+            .accessibilityValue(day.isClosed ? "Closed" : "Open, \(day.openTime) to \(day.closeTime)")
+            .accessibilityHint(day.isClosed ? "Mark this day open" : "Mark this day closed")
             .accessibilityIdentifier("createBusiness_hoursDay_\(day.dayOfWeek)")
 
             Text(day.shortLabel)

@@ -254,9 +254,15 @@ public final class BusinessLegalViewModel {
             )
             privateRecord = response.privateRecord
         } catch let error as APIError {
-            if case .forbidden = error { privateDenied = true }
+            if case .forbidden = error {
+                privateDenied = true
+            } else {
+                state = .error(message: error.errorDescription ?? "Couldn't load legal information. Try again.")
+                return
+            }
         } catch {
-            // Leave the form empty; the verification half still renders.
+            state = .error(message: "Couldn't load legal information. Try again.")
+            return
         }
 
         if let privateRecord {
@@ -278,19 +284,28 @@ public final class BusinessLegalViewModel {
 
     /// `PATCH /private`. Only the three fields this screen owns are sent.
     public func savePrivateRecord() async {
-        guard seededContent == nil else { return }
-        action = .saving
+        guard seededContent == nil, action != .saving else { return }
         let name = legalName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let last4 = taxIdLast4.filter(\.isNumber).suffix(4)
+        let last4 = taxIdLast4.trimmingCharacters(in: .whitespacesAndNewlines)
         let email = supportEmail.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard last4.isEmpty || last4.range(of: #"^[0-9]{4}$"#, options: .regularExpression) != nil else {
+            action = .failed(message: "Enter exactly the last four tax-ID digits, or leave this blank.")
+            return
+        }
+        guard email.isEmpty || AuthValidation.email(email) == nil else {
+            action = .failed(message: "Enter a valid support email, or leave this blank.")
+            return
+        }
+        action = .saving
         do {
             _ = try await api.request(
                 BusinessFinanceEndpoints.updatePrivateRecord(
                     businessId: businessId,
                     body: UpdateBusinessPrivateRequest(
-                        legalName: name.isEmpty ? nil : name,
-                        taxIdLast4: last4.isEmpty ? nil : String(last4),
-                        supportEmail: email.isEmpty ? nil : email
+                        // Empty strings clear saved values; nil omits a PATCH field.
+                        legalName: name,
+                        taxIdLast4: last4,
+                        supportEmail: email
                     )
                 ),
                 as: BusinessPrivateResponse.self

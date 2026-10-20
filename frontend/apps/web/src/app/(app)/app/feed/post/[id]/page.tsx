@@ -19,12 +19,13 @@ import { PostMediaPreview, resolvePostMediaSlots } from '@/components/feed/PostM
 import PostMediaLightbox from '@/components/feed/PostMediaLightbox';
 import { PostLinkContent } from '@/components/feed/LinkPreviewCard';
 import { formatDistance, formatTimeAgo as timeAgo, getPostTypeConfig, POST_TYPE_ICONS_LUCIDE } from '@pantopus/ui-utils';
-import { buildCanonicalShareUrlForPost, getErrorMessage, chosenUsername } from '@pantopus/utils';
+import { getErrorMessage, chosenUsername } from '@pantopus/utils';
 import Image from 'next/image';
 import { confirmStore } from '@/components/ui/confirm-store';
 import ReportModal from '@/components/ui/ReportModal';
 import ErrorState from '@/components/ui/ErrorState';
-import { lostFoundContactLabel } from '@/components/feed/composer/LostFoundFields';
+import PostMetadata from '@/components/feed/PostMetadata';
+import { sharePostLink } from '@/components/feed/sharePostLink';
 import { patchPostInFeedCaches, removePostFromFeedCaches } from '@/hooks/useFeedData';
 import { launchFeatures } from '@/lib/featureFlags';
 import { fetchMe } from '@/lib/me';
@@ -300,22 +301,17 @@ export default function PostDetailPage() {
 
   const handleShare = () => {
     if (!post) return;
-    const url = buildCanonicalShareUrlForPost(post);
     const share = async () => {
-      if (typeof navigator !== 'undefined' && navigator.share) {
-        await navigator.share({ title: post.title || 'Post', text: post.content?.slice(0, 100), url });
-      } else {
-        await navigator.clipboard.writeText(url);
-      }
+      if (!await sharePostLink(post)) return;
       const res = await api.posts.sharePost(post.id);
       setPost((p: Post | null) => (p ? { ...p, share_count: res.shareCount } : p));
-      showToast('Link copied!');
+      showToast('Post link shared');
     };
 
     share().catch((err: unknown) => {
       // A post that isn't public is never counted as shared, but the link is already copied and opens for people who can see the post.
       if ((err as { code?: string } | null)?.code === 'SHARE_NOT_ALLOWED') {
-        showToast('Link copied! Only people who can see this post in Pantopus can open it.');
+        showToast('Post link shared. Only people who can see this post in Pantopus can open it.');
         return;
       }
       showToast('Failed to share post');
@@ -597,7 +593,7 @@ export default function PostDetailPage() {
 
           {/* Title */}
           {post.title && (
-            <h1 className="px-5 pb-1 text-lg font-bold text-app">{post.title}</h1>
+            <h1 className="px-5 pb-1 text-lg font-bold text-app break-words">{post.title}</h1>
           )}
 
           {/* Full content (no truncation) */}
@@ -607,63 +603,7 @@ export default function PostDetailPage() {
             </p>
           </div>
 
-          {/* Type-specific metadata cards */}
-          {post.post_type === 'event' && (post.event_date || post.event_venue) && (
-            <div className="mx-5 mb-3 p-3 bg-blue-50 rounded-xl border-l-4 border-blue-400 space-y-1">
-              {post.event_date && (
-                <div className="flex items-center gap-2 text-xs text-blue-800">
-                  <span>📅</span>
-                  <span>
-                    {/* Stored as the wall-clock time the poster picked, labelled UTC (every composer), so shown in UTC. */}
-                    {new Date(post.event_date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'UTC' })}
-                    {post.event_end_date && ` – ${new Date(post.event_end_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'UTC' })}`}
-                  </span>
-                </div>
-              )}
-              {post.event_venue && (
-                <div className="flex items-center gap-2 text-xs text-blue-800">
-                  <span>📍</span>
-                  <span>{post.event_venue}</span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {post.post_type === 'deal' && (post.deal_business_name || post.deal_expires_at) && (
-            <div className="mx-5 mb-3 p-3 bg-green-50 rounded-xl border-l-4 border-green-400 space-y-1">
-              {post.deal_business_name && (
-                <div className="flex items-center gap-2 text-xs text-green-800">
-                  <span>🏪</span>
-                  <span>{post.deal_business_name}</span>
-                </div>
-              )}
-              {post.deal_expires_at && (
-                <div className="flex items-center gap-2 text-xs text-green-800">
-                  <span>⏰</span>
-                  <span>Expires {new Date(post.deal_expires_at).toLocaleDateString(undefined, { timeZone: 'UTC' })}</span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {post.post_type === 'lost_found' && post.lost_found_type && (
-            <div className="mx-5 mb-3 p-3 bg-yellow-50 rounded-xl border-l-4 border-yellow-400">
-              <div className="flex items-center gap-2 text-xs text-yellow-800 font-bold">
-                <span>{post.lost_found_type === 'lost' ? '🔍' : '✅'}</span>
-                <span className="uppercase">{post.lost_found_type}</span>
-                {post.lost_found_contact_pref && <span className="font-normal">· Contact: {lostFoundContactLabel(post.lost_found_contact_pref)}</span>}
-              </div>
-            </div>
-          )}
-
-          {post.post_type === 'service_offer' && post.service_category && (
-            <div className="mx-5 mb-3 p-3 bg-violet-50 rounded-xl border-l-4 border-violet-400">
-              <div className="flex items-center gap-2 text-xs text-violet-800">
-                <span>🔧</span>
-                <span>{post.service_category}</span>
-              </div>
-            </div>
-          )}
+          <PostMetadata post={post} spacing="mx-5 mb-3" />
 
           {/* Cross-surface reference links */}
           {/* Launch cuts #3 (listings) and #4 (open tasks): their links are hidden. */}
@@ -709,6 +649,7 @@ export default function PostDetailPage() {
                   onClick={() => setLightboxIdx(idx)}
                 >
                   <PostMediaPreview url={url} thumbnailUrl={post.media_thumbnails?.[idx]} slot={resolvePostMediaSlots(post.media_urls!, post.media_types, post.media_live_urls)[idx]} onPress={() => setLightboxIdx(idx)} />
+
                 </div>
               ))}
             </div>

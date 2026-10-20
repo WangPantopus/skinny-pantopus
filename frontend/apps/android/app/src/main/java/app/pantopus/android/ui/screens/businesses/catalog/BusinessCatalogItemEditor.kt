@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.sp
 import app.pantopus.android.ui.components.ChipPicker
 import app.pantopus.android.ui.components.ChipPickerOption
 import app.pantopus.android.ui.components.ChipPickerStyle
+import app.pantopus.android.ui.components.PantopusFieldState
 import app.pantopus.android.ui.components.PantopusTextField
 import app.pantopus.android.ui.screens.shared.form.FormFieldGroup
 import app.pantopus.android.ui.screens.shared.form.FormShell
@@ -109,6 +110,7 @@ internal fun BusinessCatalogItemEditor(
                     PantopusTextField(
                         label = "Price (cents)",
                         value = draft.priceCents,
+                        state = draft.priceError?.let { PantopusFieldState.Error(it) } ?: PantopusFieldState.Default,
                         onValueChange = { draft = draft.copy(priceCents = it) },
                         placeholder = "1500 = $15.00",
                         keyboardType = KeyboardType.Number,
@@ -117,6 +119,7 @@ internal fun BusinessCatalogItemEditor(
                     PantopusTextField(
                         label = "Max price (cents)",
                         value = draft.priceMaxCents,
+                        state = draft.maxPriceError?.let { PantopusFieldState.Error(it) } ?: PantopusFieldState.Default,
                         onValueChange = { draft = draft.copy(priceMaxCents = it) },
                         placeholder = "For a price range",
                         keyboardType = KeyboardType.Number,
@@ -132,6 +135,7 @@ internal fun BusinessCatalogItemEditor(
                     PantopusTextField(
                         label = "Duration (minutes)",
                         value = draft.durationMinutes,
+                        state = draft.durationError?.let { PantopusFieldState.Error(it) } ?: PantopusFieldState.Default,
                         onValueChange = { draft = draft.copy(durationMinutes = it) },
                         placeholder = "e.g. 60",
                         keyboardType = KeyboardType.Number,

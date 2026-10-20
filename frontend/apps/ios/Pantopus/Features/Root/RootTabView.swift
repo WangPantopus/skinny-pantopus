@@ -191,6 +191,12 @@ public struct RootTabView: View {
         // The app-wide tint also reaches the dialogs UIKit presents; primaryTint resolves for dark mode there.
         .tint(Theme.Color.primaryTint)
         .environment(model)
+        .background {
+            if signedInUserID != nil, !AppLockManager.shared.isLocked,
+               !showProfile, pendingInviteToken == nil {
+                BriefingNoticeView().id(signedInUserID)
+            }
+        }
         .task {
             // Live updates (sync:changed, notification:new, reconnects) for every screen.
             ScreenStoreLive.start()
@@ -324,7 +330,7 @@ public struct RootTabView: View {
              .verifyLandlord, .postcardVerification,
              .notifications, .createBusiness, .businessProfile, .businessPage,
              .editBusinessPage,
-             .wallet, .paymentsSettings, .securityDevices,
+             .wallet, .paymentsSettings, .securityDevices, .notificationSettings,
              .businessOwner, .viewAs, .waitingRoom, .neighborMessage,
              .bookingDetail, .myBookings,
              .invoiceDetail:

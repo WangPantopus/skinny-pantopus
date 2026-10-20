@@ -78,7 +78,8 @@ async function postCards(rows, { viewerId, homes, areas, fallbackArea, blockedId
       media: (post.media_urls || []).map((url, i) => ({ url, type: post.media_types?.[i] || 'image',
         thumbnail_url: post.media_thumbnails?.[i] || null })),
       created_at: raw.created_at,
-      author: { id: publicResponse ? null : raw.user_id, display_name: name, label,
+      // A business post's card names the business to everyone but its writer (feedService.redactPrivateIdentityFields).
+      author: { id: publicResponse ? null : identityType === 'business' && !own ? post.user_id : raw.user_id, display_name: name, label,
         distance_text: await distance(raw), avatar_url: post.author?.avatarUrl || null,
         is_curator: raw.origin === 'curator' },
       // The place a Pulse post's author named ("Crown Park"); otherwise its area. An older

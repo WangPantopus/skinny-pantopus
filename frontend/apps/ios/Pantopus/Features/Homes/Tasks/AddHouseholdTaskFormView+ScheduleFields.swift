@@ -167,16 +167,25 @@ extension AddHouseholdTaskFormView {
                     .accessibilityIdentifier("field_dueAt_clear")
                 }
             }
-            DatePicker(
-                "Due date",
-                selection: Binding<Date>(
-                    get: { dueDatePickerSelection },
-                    set: { viewModel.setDueDate($0) }
-                ),
-                displayedComponents: .date
-            )
-            .environment(\.timeZone, TimeZone(secondsFromGMT: 0) ?? .current)
-            .labelsHidden()
+            Group {
+                if viewModel.dueDate == nil {
+                    Button("Set due date", action: presentDueDatePicker)
+                        .foregroundStyle(Theme.Color.primaryInk)
+                        .accessibilityIdentifier("field_dueAt_set")
+                } else {
+                    DatePicker(
+                        "Due date",
+                        selection: Binding<Date>(
+                            get: { dueDatePickerSelection },
+                            set: { viewModel.setDueDate($0) }
+                        ),
+                        displayedComponents: .date
+                    )
+                    .environment(\.timeZone, TimeZone(secondsFromGMT: 0) ?? .current)
+                    .labelsHidden()
+                    .accessibilityIdentifier("field_dueAt")
+                }
+            }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, Spacing.s3)
             .frame(minHeight: 44)
@@ -186,7 +195,6 @@ extension AddHouseholdTaskFormView {
                 RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
                     .stroke(Theme.Color.appBorder, lineWidth: 1)
             )
-            .accessibilityIdentifier("field_dueAt")
         }
     }
 

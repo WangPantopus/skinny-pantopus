@@ -43,6 +43,8 @@ interface LivePhotoTileProps {
   thumbnailUrl?: string | null;
   /** Companion clip (`media_live_urls[i]`) — callers resolve/validate it. */
   videoUrl: string;
+  /** Private chat images need the browser's cookies and must bypass feed URL rewriting. */
+  privateMedia?: boolean;
   /** `cover` for grid cells, `contain` for lightbox slides. */
   fit?: 'cover' | 'contain';
   /** Yellow indicator dot. Grid tiles show it; the lightbox shows the pill. */
@@ -58,6 +60,7 @@ export default function LivePhotoTile({
   stillUrl,
   thumbnailUrl,
   videoUrl,
+  privateMedia = false,
   fit = 'cover',
   showsDot = true,
   showsReplayPill = false,
@@ -198,7 +201,12 @@ export default function LivePhotoTile({
           playing ? 'scale-105' : 'scale-100'
         }`}
       >
-        <FeedMediaImage src={stillSrc} alt="" className={`h-full w-full ${objectFit}`} loading="lazy" />
+        {privateMedia ? (
+          // eslint-disable-next-line @next/next/no-img-element -- Private chat media needs browser cookies.
+          <img src={stillSrc} alt="" className={`h-full w-full ${objectFit}`} loading="lazy" />
+        ) : (
+          <FeedMediaImage src={stillSrc} alt="" className={`h-full w-full ${objectFit}`} loading="lazy" />
+        )}
         {mounted && (
           <video
             ref={videoRef}

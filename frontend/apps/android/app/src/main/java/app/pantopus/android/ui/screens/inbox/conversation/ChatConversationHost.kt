@@ -9,6 +9,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.routing.DeepLinkRouter
+import app.pantopus.android.data.ai.AIScreenContext
 import app.pantopus.android.data.auth.AuthRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.StateFlow
@@ -48,6 +49,9 @@ fun ChatConversationHost(
     arrivalRoomId: String? = null,
     onOpenProfile: (String) -> Unit = {},
     onOpenPlan: (String) -> Unit = {},
+    aiContext: AIScreenContext? = null,
+    aiNudgeId: String? = null,
+    aiConversationId: String? = null,
     authViewModel: ChatConversationHostViewModel = hiltViewModel(),
 ) {
     val state by authViewModel.authState.collectAsStateWithLifecycle()
@@ -68,6 +72,9 @@ fun ChatConversationHost(
                 scrollToMessageId = scrollToMessageId,
                 initialTopic = initialTopic,
                 gigId = gigId,
+                aiContext = aiContext,
+                aiNudgeId = aiNudgeId,
+                aiConversationId = aiConversationId,
             ),
         chrome = chrome,
         onBack = onBack,

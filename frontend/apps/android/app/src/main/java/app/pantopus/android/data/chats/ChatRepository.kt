@@ -86,7 +86,10 @@ class ChatRepository
 
         suspend fun stats(): NetworkResult<ChatStatsResponse> = safeApiCall { api.stats() }
 
-        suspend fun room(roomId: String): NetworkResult<ChatRoomDetailResponse> = safeApiCall { api.room(roomId) }
+        suspend fun room(
+            roomId: String,
+            asBusinessUserId: String? = null,
+        ): NetworkResult<ChatRoomDetailResponse> = safeApiCall { api.room(roomId, asBusinessUserId) }
 
         suspend fun roomMessages(
             roomId: String,
@@ -94,20 +97,24 @@ class ChatRepository
             after: String? = null,
             limit: Int = HISTORY_LIMIT,
             force: Boolean = false,
+            asBusinessUserId: String? = null,
         ): NetworkResult<ChatMessagesResponse> {
             if (before != null || after != null) {
-                return safeApiCall { api.roomMessages(roomId, limit, before, after) }
-                    .forgetRefusedHistory(StoreKeys.roomMessages(roomId, HISTORY_LIMIT))
+                return safeApiCall { api.roomMessages(roomId, limit, before, after, asBusinessUserId) }
+                    .forgetRefusedHistory(StoreKeys.roomMessages(roomId, HISTORY_LIMIT, asBusinessUserId))
             }
             val count = limit.coerceIn(1, HISTORY_LIMIT)
             val stored =
-                store.read(StoreKeys.roomMessages(roomId, count), force) { etag ->
-                    conditionalApiCall { api.roomMessagesConditional(roomId, count, etag) }.mapFresh(::boundedHistory)
+                store.read(StoreKeys.roomMessages(roomId, count, asBusinessUserId), force) { etag ->
+                    conditionalApiCall { api.roomMessagesConditional(roomId, count, etag, asBusinessUserId) }.mapFresh(::boundedHistory)
                 }
             return stored.data?.let { NetworkResult.Success(it) } ?: stored.asResult()
         }
 
-        fun roomMessagesCopy(roomId: String): ChatMessagesResponse? = store.peek(StoreKeys.roomMessages(roomId, HISTORY_LIMIT)).data
+        fun roomMessagesCopy(
+            roomId: String,
+            asBusinessUserId: String? = null,
+        ): ChatMessagesResponse? = store.peek(StoreKeys.roomMessages(roomId, HISTORY_LIMIT, asBusinessUserId)).data
 
         suspend fun conversationMessages(
             otherUserId: String,
@@ -134,8 +141,10 @@ class ChatRepository
             topicId: String?,
         ): ChatMessagesResponse? = store.peek(StoreKeys.conversationMessages(otherUserId, topicId, HISTORY_LIMIT)).data
 
-        fun roomHistoryUpdater(roomId: String): (ChatMessagesResponse) -> Unit =
-            historyUpdater(StoreKeys.roomMessages(roomId, HISTORY_LIMIT))
+        fun roomHistoryUpdater(
+            roomId: String,
+            asBusinessUserId: String? = null,
+        ): (ChatMessagesResponse) -> Unit = historyUpdater(StoreKeys.roomMessages(roomId, HISTORY_LIMIT, asBusinessUserId))
 
         fun conversationHistoryUpdater(
             otherUserId: String,
@@ -221,7 +230,13 @@ class ChatRepository
         ): NetworkResult<ReactToChatMessageResponse> =
             safeApiCall { api.reactToMessage(messageId, ReactToChatMessageBody(reaction, reacted)) }
 
-        suspend fun markRoomRead(roomId: String): NetworkResult<Unit> = safeApiCall { api.markRoomRead(roomId) }.chatsChanged()
+        suspend fun markRoomRead(
+            roomId: String,
+            asBusinessUserId: String? = null,
+        ): NetworkResult<Unit> =
+            safeApiCall {
+                api.markRoomRead(roomId, asBusinessUserId?.let { mapOf("asBusinessUserId" to it) }.orEmpty())
+            }.chatsChanged()
 
         suspend fun markConversationRead(otherUserId: String): NetworkResult<Unit> =
             safeApiCall { api.markConversationRead(otherUserId) }.chatsChanged()

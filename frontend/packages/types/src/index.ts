@@ -1008,6 +1008,8 @@ export interface ChatRoom {
   room_description?: string;
   room_image_url?: string;
   created_by?: string;
+  /** A Support Train's room (type `support_train`): the train it coordinates. */
+  support_train_id?: string | null;
   metadata?: Record<string, any>;
   created_at: string;
   updated_at: string;

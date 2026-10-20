@@ -52,7 +52,6 @@ public struct FaceIDConfirmSheet: View {
     public let recipientName: String
     public let homeAddress: String
     public let coOwnerNames: String
-    public let timestamp: String
     public let biometryLabel: String
     public let isAuthenticating: Bool
     public let onCancel: () -> Void
@@ -63,7 +62,6 @@ public struct FaceIDConfirmSheet: View {
         recipientName: String,
         homeAddress: String,
         coOwnerNames: String,
-        timestamp: String,
         biometryLabel: String = "Face ID",
         isAuthenticating: Bool,
         onCancel: @escaping () -> Void,
@@ -73,7 +71,6 @@ public struct FaceIDConfirmSheet: View {
         self.recipientName = recipientName
         self.homeAddress = homeAddress
         self.coOwnerNames = coOwnerNames
-        self.timestamp = timestamp
         self.biometryLabel = biometryLabel
         self.isAuthenticating = isAuthenticating
         self.onCancel = onCancel
@@ -216,7 +213,7 @@ public struct FaceIDConfirmSheet: View {
         return "you grant \(recipientName) ownership of \(homeAddress) and forfeit your own "
             + "owner record. They must verify ownership before the transfer completes. "
             + coOwnerClause
-            + "Recorded in this home's history at "
+            + "The request will be recorded in this home's history after confirmation."
     }
 
     private var legal: some View {
@@ -227,13 +224,8 @@ public struct FaceIDConfirmSheet: View {
                 + Text(legalGrantCopy)
                 .font(.system(size: 11))
                 .foregroundStyle(Theme.Color.appTextSecondary)
-                + Text(timestamp)
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundStyle(Theme.Color.appTextStrong)
-                + Text(".")
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.Color.appTextSecondary))
-                .lineSpacing(2)
+            )
+            .lineSpacing(2)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, Spacing.s2 + 2)
@@ -318,7 +310,6 @@ public struct FaceIDConfirmSheet: View {
         recipientName: "buyer@example.com",
         homeAddress: "412 Elm St.",
         coOwnerNames: "Mateo & Jin",
-        timestamp: "14:23 May 26",
         biometryLabel: "Face ID",
         isAuthenticating: false,
         onCancel: {},

@@ -9,6 +9,7 @@
 const supabaseAdmin = require('../../config/supabaseAdmin');
 const logger = require('../../utils/logger');
 const notificationService = require('../notificationService');
+const { assertListingInteractionAllowed } = require('./listingBlocks');
 
 // ─── Helpers ─────────────────────────────────────────────────
 
@@ -73,6 +74,8 @@ async function proposeTrade({ targetListingId, proposerId, offeredListingIds, me
     err.status = 400;
     throw err;
   }
+
+  await assertListingInteractionAllowed(proposerId, targetUserId);
 
   // 3. Verify all offered listings exist, are active, and owned by proposer
   if (!offeredListingIds || offeredListingIds.length === 0) {
@@ -160,6 +163,8 @@ async function respondToTrade({ tradeId, targetUserId, action }) {
   }
 
   if (action === 'accept') {
+    await assertListingInteractionAllowed(trade.target_user_id, trade.proposer_id);
+
     // Hold every listing in the trade first: active -> pending_pickup (the listing_status enum has no
     // 'reserved'). Only active listings match, so a listing already promised elsewhere stops the accept, and a
     // failed write fails it instead of leaving the listings on sale.
@@ -241,6 +246,9 @@ async function completeTrade({ tradeId, userId }) {
     err.status = 400;
     throw err;
   }
+
+  // Completing marks both people's listings sold and asks each for a review.
+  await assertListingInteractionAllowed(trade.proposer_id, trade.target_user_id);
 
   // Update trade status
   const { data: updated, error: updateErr } = await supabaseAdmin

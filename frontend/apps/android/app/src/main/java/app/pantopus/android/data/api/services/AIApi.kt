@@ -10,6 +10,7 @@ import app.pantopus.android.data.api.models.ai.AIListingVisionResponse
 import app.pantopus.android.data.api.models.ai.AIPostDraftResponse
 import app.pantopus.android.data.api.models.place.NeighborhoodPulse
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
@@ -77,4 +78,13 @@ interface AIApi {
     suspend fun draftPickupSchedule(
         @Body body: AIDraftPickupScheduleRequest,
     ): AIDraftPickupScheduleResponse
+
+    /**
+     * Delete one of the user's AI conversations (the assistant thread's "Delete conversation").
+     * Route `backend/routes/ai.js:451`.
+     */
+    @DELETE("api/ai/conversations/{id}")
+    suspend fun deleteConversation(
+        @Path("id") id: String,
+    ): Unit
 }

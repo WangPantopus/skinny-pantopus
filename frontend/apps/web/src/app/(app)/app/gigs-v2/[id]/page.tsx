@@ -443,14 +443,19 @@ function GigDetailV2Content() {
 
   // Derived
   const currentUserId = currentUser?.id;
+  // GET /api/gigs/:id names a business poster as a business identity (`creator.type`), with no account_type.
   const canManageGigAsBusinessMember = useBusinessGigAccess(
     currentUserId, gig?.user_id || gig?.poster_user_id || gig?.poster_id,
-    gig?.creator?.account_type === 'business', gig,
+    gig?.creator?.type === 'business', gig,
   );
-  const isMyGig = Boolean(
+  const isPoster = Boolean(
     currentUserId &&
-    (gig?.user_id === currentUserId || gig?.poster_id === currentUserId || gig?.poster_user_id === currentUserId || canManageGigAsBusinessMember)
+    (gig?.user_id === currentUserId || gig?.poster_id === currentUserId || gig?.poster_user_id === currentUserId)
   );
+  // A business's owner and staff manage its task as the business. Reviews, tips, change requests and live status
+  // sharing stay with the poster's own account and the worker, as on the server.
+  const asBusiness = !isPoster && canManageGigAsBusinessMember;
+  const isMyGig = isPoster || asBusiness;
   const acceptedBy = gig?.accepted_by || gig?.acceptedBy?.id || gig?.accepted_bid?.bidder_id || gig?.worker_id;
   const iAmWorker = Boolean(currentUserId && String(acceptedBy) === String(currentUserId));
   const gigStatus = gig?.status || '';
@@ -572,8 +577,10 @@ function GigDetailV2Content() {
     try {
       const res = await api.gigs.getGigChatRoom(gigId);
       if (!isSessionCurrent()) return;
-      // The chat page reads the room from its path; the Mailbox ignores `?roomId=`.
-      if (res?.roomId) router.push(`/app/chat/${res.roomId}`);
+      // The chat page reads the room from its path; the Mailbox ignores `?roomId=`. A business's owner and staff
+      // answer its task's room as the business.
+      const asBusiness = res?.asBusinessUserId ? `?asBusinessUserId=${encodeURIComponent(res.asBusinessUserId)}` : '';
+      if (res?.roomId) router.push(`/app/chat/${res.roomId}${asBusiness}`);
       else toast.info('Chat thread not available yet for this task.');
     } catch (err: unknown) {
       if (isSessionCurrent()) toast.error(err instanceof Error ? err.message : "Couldn't open the chat.");
@@ -709,6 +716,7 @@ function GigDetailV2Content() {
           <GigTimeline
             gig={gig}
             isMyGig={isMyGig}
+            asBusiness={asBusiness}
             iAmWorker={iAmWorker}
             onAction={handleStatusChange}
           />
@@ -719,8 +727,9 @@ function GigDetailV2Content() {
             <InstantAcceptButtonComp gigId={gigId!} onAccepted={handleStatusChange} />
           )}
 
-          {/* ETA tracker when assigned */}
-          {(gigStatus === 'assigned' || gigStatus === 'in_progress') && (isMyGig || iAmWorker) && (
+          {/* ETA tracker when assigned. Its Share Status link is the poster's or the worker's (the API answers 403 to
+              a business's team members). */}
+          {(gigStatus === 'assigned' || gigStatus === 'in_progress') && (isPoster || iAmWorker) && (
             <ETATrackerComp gig={gig} socket={socket} />
           )}
 
@@ -730,6 +739,7 @@ function GigDetailV2Content() {
               currentUserId={currentUserId}
               gig={gig}
               isOwner={isMyGig}
+              asBusiness={asBusiness}
               isWorker={iAmWorker}
               socket={socket}
               onOpenChat={handleOpenChat}
@@ -743,6 +753,7 @@ function GigDetailV2Content() {
             gigId={gigId!}
             gig={gig}
             isOwner={isMyGig}
+            asBusiness={asBusiness}
             isWorker={iAmWorker}
             currentUserId={currentUserId}
             gigStatus={gigStatus}
@@ -760,10 +771,10 @@ function GigDetailV2Content() {
           {/* Only the poster and the worker can read change requests (the API
               answers 403 to anyone else). Mounting it once someone becomes the
               worker also gives them a fresh read, not the earlier refusal. */}
-          {(isMyGig || iAmWorker) && (
+          {(isPoster || iAmWorker) && (
             <ChangeOrdersSection
               gigId={gigId!}
-              isMyGig={isMyGig}
+              isMyGig={isPoster}
               iAmWorker={iAmWorker}
               currentUserId={currentUserId}
               paymentId={gig?.payment_id}

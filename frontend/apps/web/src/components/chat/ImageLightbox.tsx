@@ -59,7 +59,7 @@ export default function ImageLightbox({ imageUrl, title, mimeType, liveUrl, onCl
         </object>
       ) : liveUrl ? (
         <div onClick={e => e.stopPropagation()}>
-          <LivePhotoTile stillUrl={imageUrl} videoUrl={liveUrl} fit="contain" showsReplayPill showsDot={false} className="h-[85vh] w-[90vw]" />
+          <LivePhotoTile stillUrl={imageUrl} videoUrl={liveUrl} privateMedia fit="contain" showsReplayPill showsDot={false} className="h-[85vh] w-[90vw]" />
         </div>
       ) : (
       /* Native img: arbitrary chat URLs; avoids next/image dev sizing warnings in lightbox. */

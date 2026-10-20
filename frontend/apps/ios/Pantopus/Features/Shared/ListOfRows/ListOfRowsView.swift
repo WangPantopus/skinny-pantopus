@@ -969,7 +969,6 @@ struct RowView: View {
             card
                 .onTapGesture(perform: row.onTap)
                 .accessibilityElement(children: .contain)
-                .accessibilityLabel(a11yLabel)
                 .rowDestructiveMenu(row.destructiveAction)
         }
     }

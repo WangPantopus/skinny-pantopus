@@ -47,7 +47,8 @@ final class PlaceResidencyLetterViewModel {
         defer { openingLetterId = nil }
         do {
             let data = try await api.requestData(ResidencyLettersEndpoints.pdf(homeId: homeId, letterId: letter.id))
-            let url = FileManager.default.temporaryDirectory
+            // With the other private exports, so it goes at sign-out and at the next launch.
+            let url = try HomeDocumentTemporaryFiles.makeDirectory()
                 .appendingPathComponent("pantopus-residency-letter-\(letter.id.prefix(8)).pdf")
             try data.write(to: url, options: [.atomic, .completeFileProtection])
             pdfURL = url

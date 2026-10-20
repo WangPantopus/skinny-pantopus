@@ -8,54 +8,14 @@
 //    expandable detail block, and a share sheet. Auto-expands when the
 //    profile is opened from the `monthly_receipt` push.
 //    Mirrors RN `components/profile/MonthlyReceiptCard.tsx`.
-//  * Invite progress — referral count against the unlock tiers, unlocked
-//    feature chips, next unlock, and a share CTA carrying the invite code.
+//  * Invite progress — confirmed referral joins and a share CTA carrying
+//    the invite code. No feature-access promises from the legacy reward ladder.
 //    Mirrors RN `components/profile/InviteProgressCard.tsx`.
 //
 
 // swiftlint:disable function_parameter_count
 
 import SwiftUI
-
-// MARK: - Invite tiers
-
-/// The unlock ladder, verbatim from `backend/services/inviteRewardService.js:19`.
-/// The server also returns the label on `next_unlock`; this table backs the
-/// milestone dots and the unlocked-feature chip labels.
-public enum InviteFeatureTier: String, CaseIterable, Sendable {
-    case activityMap = "activity_map"
-    case neighborhoodInsights = "neighborhood_insights"
-    case priorityMatching = "priority_matching"
-    case foundingBadge = "founding_badge"
-
-    public var threshold: Int {
-        switch self {
-        case .activityMap: 1
-        case .neighborhoodInsights: 3
-        case .priorityMatching: 5
-        case .foundingBadge: 10
-        }
-    }
-
-    public var label: String {
-        switch self {
-        case .activityMap: "Neighborhood Activity Map"
-        case .neighborhoodInsights: "Neighborhood Insights"
-        case .priorityMatching: "Priority Matching"
-        case .foundingBadge: "Founding Neighbor Badge"
-        }
-    }
-
-    /// Server keys we don't know fall back to the raw key rather than
-    /// being dropped, so a new backend tier still renders.
-    public static func label(forKey key: String) -> String {
-        InviteFeatureTier(rawValue: key)?.label ?? key
-    }
-
-    public static var maxThreshold: Int {
-        allCases.map(\.threshold).max() ?? 1
-    }
-}
 
 // MARK: - Monthly receipt card
 
@@ -295,16 +255,16 @@ public struct InviteProgressCard: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
-            Text("Invite neighbors, unlock features")
+            Text("Invite neighbors")
                 .font(.system(size: 16, weight: .bold))
                 .foregroundStyle(Theme.Color.appText)
-            progressTrack
-            if !progress.unlockedFeatures.isEmpty {
-                unlockedChips
-            }
-            if let next = progress.nextUnlock {
-                nextUnlockRow(next)
-            }
+            Text(joinedText)
+                .pantopusTextStyle(.small)
+                .foregroundStyle(Theme.Color.appTextSecondary)
+                .accessibilityIdentifier("inviteProgress.joined")
+            Text("Share your invite link to help neighbors find each other.")
+                .pantopusTextStyle(.small)
+                .foregroundStyle(Theme.Color.appTextMuted)
             if let onShare {
                 shareButton(onShare)
             }
@@ -321,74 +281,10 @@ public struct InviteProgressCard: View {
         .accessibilityIdentifier("inviteProgressCard")
     }
 
-    private var fraction: Double {
-        let maxThreshold = Double(InviteFeatureTier.maxThreshold)
-        guard maxThreshold > 0 else { return 0 }
-        return min(Double(progress.totalConverted) / maxThreshold, 1)
-    }
-
-    private var progressTrack: some View {
-        VStack(alignment: .leading, spacing: Spacing.s2) {
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Theme.Color.appSurfaceSunken)
-                    Capsule()
-                        .fill(Theme.Color.primary600)
-                        .frame(width: max(0, geo.size.width * fraction))
-                }
-            }
-            .frame(height: 6)
-            HStack {
-                ForEach(InviteFeatureTier.allCases, id: \.self) { tier in
-                    let unlocked = progress.totalConverted >= tier.threshold
-                    Text("\(tier.threshold)")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(
-                            unlocked ? Theme.Color.appTextInverse : Theme.Color.appTextMuted
-                        )
-                        .frame(width: 22, height: 22)
-                        .background(
-                            Circle().fill(
-                                unlocked ? Theme.Color.primary600 : Theme.Color.appSurfaceSunken
-                            )
-                        )
-                        .accessibilityIdentifier("inviteProgress.tier.\(tier.rawValue)")
-                    if tier != InviteFeatureTier.allCases.last {
-                        Spacer(minLength: Spacing.s1)
-                    }
-                }
-            }
-        }
-        .accessibilityIdentifier("inviteProgress.track")
-    }
-
-    private var unlockedChips: some View {
-        HStack(spacing: Spacing.s2) {
-            ForEach(progress.unlockedFeatures, id: \.self) { key in
-                HStack(spacing: Spacing.s1) {
-                    Icon(.checkCircle, size: 13, color: Theme.Color.success)
-                    Text(InviteFeatureTier.label(forKey: key))
-                        .font(.system(size: 11.5, weight: .semibold))
-                        .foregroundStyle(Theme.Color.success)
-                        .lineLimit(1)
-                }
-                .padding(.horizontal, Spacing.s2)
-                .padding(.vertical, Spacing.s1)
-                .background(Capsule().fill(Theme.Color.successBg))
-            }
-        }
-        .accessibilityIdentifier("inviteProgress.unlocked")
-    }
-
-    private func nextUnlockRow(_ next: InviteProgressDTO.NextUnlock) -> some View {
-        HStack(spacing: Spacing.s2) {
-            Icon(.lock, size: 13, color: Theme.Color.appTextMuted)
-            Text(Self.nextUnlockText(next))
-                .font(.system(size: 13))
-                .foregroundStyle(Theme.Color.appTextSecondary)
-            Spacer(minLength: Spacing.s0)
-        }
-        .accessibilityIdentifier("inviteProgress.nextUnlock")
+    private var joinedText: String {
+        let joined = max(0, progress.totalConverted)
+        if joined == 0 { return "No neighbors have joined through your invites yet." }
+        return "\(joined) neighbor\(joined == 1 ? " has" : "s have") joined through your invites."
     }
 
     private func shareButton(_ onShare: @escaping @MainActor () -> Void) -> some View {
@@ -409,11 +305,5 @@ public struct InviteProgressCard: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("inviteProgress.share")
-    }
-
-    static func nextUnlockText(_ next: InviteProgressDTO.NextUnlock) -> String {
-        let remaining = max(0, next.invitesRemaining)
-        let label = next.label ?? InviteFeatureTier.label(forKey: next.feature)
-        return "Invite \(remaining) more neighbor\(remaining == 1 ? "" : "s") to unlock \(label)"
     }
 }

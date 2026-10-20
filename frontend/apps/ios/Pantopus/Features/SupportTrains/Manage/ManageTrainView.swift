@@ -23,6 +23,11 @@
 
 import SwiftUI
 
+/// The fields outside the Send an update form that take the keyboard.
+private enum ManageCardField: Hashable {
+    case reminder, fundGoal
+}
+
 @MainActor
 public struct ManageTrainView: View {
     @State private var viewModel: ManageTrainViewModel
@@ -64,6 +69,8 @@ public struct ManageTrainView: View {
     @State private var showOrganizerPicker = false
     /// "Invite to Pantopus" in the picker shares the train once the picker closes.
     @State private var shareAfterPicker = false
+    /// Set while a card's own field (the reminder, the gift-fund goal) has the keyboard.
+    @FocusState private var focusedCardField: ManageCardField?
 
     public var body: some View {
         VStack(spacing: Spacing.s0) {
@@ -354,8 +361,15 @@ public struct ManageTrainView: View {
         }
         .scrollDismissesKeyboard(.interactively)
         .refreshable { await viewModel.refresh() }
-        .safeAreaInset(edge: .bottom, spacing: Spacing.s0) { stickyCTA(content: content) }
+        .safeAreaInset(edge: .bottom, spacing: Spacing.s0) {
+            // The bar sends the update message. It steps aside while a card's own field has the
+            // keyboard: riding the keyboard, it covered that card's buttons.
+            if focusedCardField == nil {
+                stickyCTA(content: content)
+            }
+        }
         .accessibilityIdentifier("manageTrainScroll")
+        .modifier(ManageReminderKeyboardReveal(isEditing: focusedCardField == .reminder))
     }
 
     /// S1 — dates / helpers / co-organizers / nudge / gift fund. Every
@@ -433,12 +447,15 @@ public struct ManageTrainView: View {
             openSlotCount: content.slotsOpen,
             hasDates: !viewModel.slotRows.isEmpty,
             draft: viewModel.nudgeDraft,
+            draftNote: viewModel.nudgeDraftNote,
             isBusy: viewModel.isSubmitting,
             onDraft: { Task { await viewModel.draftNudge() } },
             onEditDraft: { viewModel.nudgeDraft = $0 },
             onSend: { Task { await viewModel.sendNudge() } },
             onDiscard: { viewModel.discardNudge() }
         )
+        .id(ManageReminderKeyboardReveal.nudgeSectionID)
+        .focused($focusedCardField, equals: .reminder)
 
         // Launch cut #9: no app takes a contribution yet.
         if LaunchFeatures.giftFunds {
@@ -461,6 +478,7 @@ public struct ManageTrainView: View {
                     )
                 }
             )
+            .focused($focusedCardField, equals: .fundGoal)
         }
     }
 
@@ -575,6 +593,24 @@ public struct ManageTrainView: View {
                 }
                 .transition(.opacity.combined(with: .move(edge: .bottom)))
                 .accessibilityIdentifier("manageTrainToast")
+        }
+    }
+}
+
+/// Keeps the reminder's Send to chat and Discard in view above the keyboard while its text is
+/// being edited, as `LoginKeyboardReveal` does for Log in.
+private struct ManageReminderKeyboardReveal: ViewModifier {
+    static let nudgeSectionID = "manageTrainNudgeSection"
+    let isEditing: Bool
+
+    func body(content: Content) -> some View {
+        ScrollViewReader { proxy in
+            content.onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in
+                guard isEditing else { return }
+                withAnimation(.easeOut(duration: 0.2)) {
+                    proxy.scrollTo(Self.nudgeSectionID, anchor: .bottom)
+                }
+            }
         }
     }
 }

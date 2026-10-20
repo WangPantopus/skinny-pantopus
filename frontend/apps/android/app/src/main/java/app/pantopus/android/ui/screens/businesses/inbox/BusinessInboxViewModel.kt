@@ -62,7 +62,9 @@ class BusinessInboxViewModel
 
         fun refresh() {
             cache(null, _section.value)
-            viewModelScope.launch { fetch(_section.value) }
+            // Returning to the inbox re-reads it behind the rows already shown; only a first load or Retry shows the skeleton.
+            val showLoading = _state.value is BusinessInboxUiState.Loading || _state.value is BusinessInboxUiState.Error
+            viewModelScope.launch { fetch(_section.value, showLoading) }
         }
 
         fun selectSection(next: BusinessInboxSection) {
@@ -76,8 +78,11 @@ class BusinessInboxViewModel
             viewModelScope.launch { fetch(next) }
         }
 
-        private suspend fun fetch(target: BusinessInboxSection) {
-            _state.value = BusinessInboxUiState.Loading
+        private suspend fun fetch(
+            target: BusinessInboxSection,
+            showLoading: Boolean = true,
+        ) {
+            if (showLoading) _state.value = BusinessInboxUiState.Loading
             when (target) {
                 BusinessInboxSection.Messages -> fetchRooms()
                 BusinessInboxSection.Mentions -> fetchMentions()

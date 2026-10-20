@@ -33,24 +33,42 @@ const radonReport = require('./radonReport');
 const { getAuthorizedMail } = require('./mailAccess');
 const noaa = require('../external/noaa');
 const { isLaunchFeatureEnabled } = require('../../utils/featureFlags');
+const { isFeatureEnabled } = require('../featureFlagService');
+const { readToolDefinitions, playdateReadToolDefinitions, PLAN_TOOLS } = require('./readTools');
+const { actionCardDefinitions, playdateCardDefinitions, PLAN_CARD_TOOLS } = require('./actionCards');
+const { appGuide } = require('./appGuide');
+const { screenContextText, screenName } = require('./screenContext');
+const { checkChatBudget } = require('./assistantBudget');
+
+const READ_TOOL_NAMES = new Set(readToolDefinitions.map((tool) => tool.name));
+const CARD_TOOL_NAMES = new Set(actionCardDefinitions.map((tool) => tool.name));
+// The plan tools with playdates among their kinds, for people with plans_playdates.
+const PLAYDATE_TOOLS = new Map([...playdateReadToolDefinitions, ...playdateCardDefinitions].map((tool) => [tool.name, tool]));
 
 // Launch cuts #3 (Marketplace) and #4 (Open Gigs): while they are hidden, the
 // chat assistant neither offers nor drafts listings or open tasks (their
 // drafts would lead to hidden composers). The drafting code itself stays.
 // Launch cut #10 (Mailbox): it doesn't read or summarize mail either.
 // Gift funds (cut #9) aren't offered as a Support Train kind of help.
-// The pickup-days card goes only to apps that say they can show it (`cards`).
-function launchScopedChatTools({ pickupSchedule = false } = {}) {
+// Cards go only to apps that say they can show them (`cards`): the pickup days,
+// action cards ("action") and link buttons ("link"). Plans tools need the
+// person's `plans` flag, and playdates among their kinds `plans_playdates`.
+// The read tools answer in words, so every app gets them.
+function launchScopedChatTools({ pickupSchedule = false, actionCards = false, links = false, plans = false, playdates = false } = {}) {
   const giftFunds = isLaunchFeatureEnabled('gift_funds');
   return toolDefinitions
     .filter((tool) => {
       if (tool.name === 'draft_pickup_schedule') return pickupSchedule;
+      if (CARD_TOOL_NAMES.has(tool.name)) return actionCards && (plans || !PLAN_CARD_TOOLS.has(tool.name));
+      if (READ_TOOL_NAMES.has(tool.name)) return plans || !PLAN_TOOLS.has(tool.name);
+      if (tool.name === 'show_link') return links;
       if (tool.name === 'create_gig_draft') return isLaunchFeatureEnabled('open_gigs');
       if (tool.name === 'create_listing_draft') return isLaunchFeatureEnabled('marketplace');
       if (['get_mail_item', 'summarize_mail_item'].includes(tool.name)) return isLaunchFeatureEnabled('mailbox');
       return true;
     })
-    .map((tool) => (tool.name === 'draft_support_train_from_story' && !giftFunds ? withoutGiftFunds(tool) : tool));
+    .map((tool) => (tool.name === 'draft_support_train_from_story' && !giftFunds ? withoutGiftFunds(tool) : tool))
+    .map((tool) => (playdates && PLAYDATE_TOOLS.get(tool.name)) || tool);
 }
 
 function withoutGiftFunds(tool) {
@@ -67,13 +85,42 @@ function withoutGiftFunds(tool) {
   };
 }
 
-function launchScopedChatInstructions({ pickupSchedule = false } = {}) {
+function launchScopedChatInstructions({ pickupSchedule = false, actionCards = false, links = false, plans = false, playdates = false } = {}) {
   return prompts.chatAgentSystem({
     openGigs: isLaunchFeatureEnabled('open_gigs'),
     marketplace: isLaunchFeatureEnabled('marketplace'),
     mailbox: isLaunchFeatureEnabled('mailbox'),
     pickupSchedule,
+    actionCards,
+    links,
+    plans,
+    guide: appGuide({ plans, playdates, suggestions: actionCards }),
   });
+}
+
+/**
+ * The apps show replies as plain text, so bold markers (**like this**) would show as
+ * asterisks. Claude is told not to use them; this removes any that slip through, holding
+ * a trailing "*" until the next piece arrives in case a pair is split across two.
+ */
+function plainTextStream(write) {
+  let held = '';
+  return {
+    push(delta) {
+      let text = held + delta;
+      held = '';
+      if (text.endsWith('*')) {
+        held = '*';
+        text = text.slice(0, -1);
+      }
+      text = text.replace(/\*\*/g, '');
+      if (text) write(text);
+    },
+    flush() {
+      if (held) write(held);
+      held = '';
+    },
+  };
 }
 
 // What the person sees while a tool runs (SSE `status`; older apps ignore the event).
@@ -89,6 +136,32 @@ const TOOL_STATUS = {
   get_support_train_summary: 'Looking up that Support Train…',
   get_mail_item: 'Reading your mail…',
   summarize_mail_item: 'Summarizing your mail…',
+  find_plans: 'Looking at plans…',
+  get_plan: 'Looking at the plan…',
+  find_posts: 'Reading posts nearby…',
+  get_post: 'Reading the post…',
+  catch_up_nearby: 'Catching up on Nearby…',
+  find_recommendations: 'Looking at what neighbors recommend…',
+  get_place_facts: 'Checking your home…',
+  get_today: 'Checking today…',
+  list_home_tasks: 'Looking at your tasks…',
+  get_household: 'Looking at your household…',
+  get_notification_settings: 'Checking your settings…',
+  draft_plan: 'Drafting your plan…',
+  draft_plan_change: 'Drafting the change…',
+  draft_plan_cancel: 'Getting the plan ready to cancel…',
+  show_plan_requests: 'Looking at who asked…',
+  draft_plan_ask: 'Drafting your ask…',
+  draft_plan_message: 'Drafting your message…',
+  draft_post_reply: 'Drafting your reply…',
+  draft_post_solve: 'Getting it ready to mark solved…',
+  draft_home_task: 'Drafting the task…',
+  draft_home_task_update: 'Getting the task ready…',
+  draft_home_year: 'Planning your year…',
+  draft_home_system: 'Getting your home\'s record ready…',
+  draft_home_asset: 'Getting your home\'s record ready…',
+  draft_notification_settings: 'Drafting your settings…',
+  show_link: 'Finding the screen…',
 };
 
 // A draft Claude declined to write: not an outage, so not "try again later".
@@ -107,8 +180,8 @@ const DRAFT_EFFORT = resolveEffort(process.env.ANTHROPIC_DRAFT_EFFORT, 'low');
 // ceiling (billing follows what is generated), so leave generous room.
 const CHAT_MAX_TOKENS = 4096;
 const DRAFT_MAX_TOKENS = 4096;
-const MAX_TOOL_ROUNDS = 5;         // Maximum tool-call → response rounds
-const AGENT_TIMEOUT_MS = 20000;    // 20s total timeout for streaming chat
+const MAX_TOOL_ROUNDS = 8;         // Maximum tool-call → response rounds (look up, then draft)
+const AGENT_TIMEOUT_MS = 45000;    // 45s for a whole turn: a few reads and a card
 const DRAFT_TIMEOUT_MS = 30000;    // 30s for single-turn drafts
 
 // ─── Request Logging ────────────────────────────────────────────────────────
@@ -202,22 +275,48 @@ async function updateConversation(conversationId, { messages, messageCount, titl
   }
 }
 
+/**
+ * A turn saves the whole transcript it read when it started. A nudge Pantopus sent
+ * meanwhile (nudges/engine.js) was saved to the conversation after that read, so it
+ * is kept, after the turn's own messages.
+ */
+async function withNudgesSentMeanwhile(conversation, saved) {
+  try {
+    const { data, error } = await supabaseAdmin.from('AIConversation').select('messages').eq('id', conversation.id).maybeSingle();
+    if (error || !data) return saved;
+    // Required here: the engine loads the notification and push services, which a chat turn otherwise doesn't need.
+    const { nudgesSentDuring } = require('./nudges/engine');
+    const added = nudgesSentDuring(conversation.messages, data.messages);
+    return added.length ? compactForStorage([...saved, ...added]) : saved;
+  } catch (err) {
+    logger.warn('Nudges sent during the turn could not be checked', { conversationId: conversation.id, error: err.message });
+    return saved;
+  }
+}
+
 // ─── 1. Streaming Chat Agent ────────────────────────────────────────────────
 
+// A PDF's upload reference keeps its file's extension (routes/upload.js), so the chat can
+// tell a document from a photo before reading it.
+const isPdfReference = (source) => typeof source === 'string' && /\.pdf$/i.test(source);
+
 /**
- * The person's message as Claude's content: photos first, then the text, then
- * the app's lines (when it was sent, which the model can't know, and the coarse
- * location the client reports).
+ * The person's message as Claude's content: photos and documents first, then the
+ * text, then the app's lines (when it was sent, which the model can't know, the
+ * screen it was sent from, and the coarse location the client reports).
  */
-function buildUserContent({ message, photos, unreadable, timeZone, coarseLocation, contextText }) {
+function buildUserContent({ message, photos, unreadable, timeZone, askedFrom, coarseLocation, contextText }) {
   let text = message;
   if (unreadable) {
-    text += `\n\n[${unreadable} of the ${photos.length + unreadable} photos couldn't be opened, so they aren't included.]`;
+    const noun = photos.some((block) => block.type === 'document') ? 'files' : 'photos';
+    text += `\n\n[${unreadable} of the ${photos.length + unreadable} ${noun} couldn't be opened, so they aren't included.]`;
   }
   text += `\n\n[Sent: ${describeNow(timeZone)}]`;
   if (coarseLocation) {
     text += `\n[User location context: ${coarseLocation.city || ''}, ${coarseLocation.state || ''}]`;
   }
+  // Every message from a screen ends saying so, also when that screen's context isn't sent again.
+  if (askedFrom) text += `\n[Asked from: ${askedFrom}]`;
   // A model without system messages gets Pantopus's context at the top of the message instead.
   if (contextText) text = `${contextText}\n\n${text}`;
   return photos.length ? [...photos, { type: 'text', text }] : text;
@@ -234,11 +333,13 @@ function buildUserContent({ message, photos, unreadable, timeZone, coarseLocatio
  * @param {string} [params.conversationId]
  * @param {string} params.message
  * @param {object} [params.coarseLocation]
- * @param {string[]} [params.images] — Image URLs to include as vision input
+ * @param {string[]} [params.images] — Photos and PDFs to include: the person's uploads (ai-photo: references) or image URLs
  * @param {AbortSignal} [params.signal] — Aborts when the client disconnects, which stops the model call
  * @param {object} sseWriter — { write(event, data), end() }
  */
-async function streamChat({ userId, conversationId, message, coarseLocation, images, cards, signal }, sseWriter) {
+async function streamChat({
+  userId, conversationId, message, coarseLocation, images, cards, context: screen, sessionScope, user, signal,
+}, sseWriter) {
   const startTime = Date.now();
 
   const client = getAnthropicClient();
@@ -248,11 +349,33 @@ async function streamChat({ userId, conversationId, message, coarseLocation, ima
     return;
   }
 
-  // Pantopus's context and the photos are read while the conversation loads.
+  // The off switch and the daily budgets, which hold across servers.
+  const blocked = await checkChatBudget(userId);
+  if (blocked) {
+    sseWriter.write('error', blocked);
+    sseWriter.end();
+    await logRequest({
+      userId, conversationId: conversationId || null, endpoint: 'chat_blocked', model: CHAT_MODEL,
+      promptVersion: prompts.VERSIONS.chat, status: 'blocked', latencyMs: Date.now() - startTime, errorMessage: blocked.error,
+    });
+    return;
+  }
+
+  // What this app can show and what this person has.
+  const shown = new Set(Array.isArray(cards) ? cards : []);
+  const viewer = { id: userId, role: user?.role || null };
+  const plansRead = isFeatureEnabled('plans', viewer).catch(() => false);
+  // The tools list playdates only for people with the flag; planViewer reads it again for the plan rules.
+  const playdatesRead = isFeatureEnabled('plans_playdates', viewer).catch(() => false);
+
+  // Pantopus's context, the screen they asked from and the photos are read while the conversation loads.
   const contextRead = buildChatContext(userId).catch((err) => {
     logger.warn('Chat context failed', { userId, error: err.message });
     return { text: null, timeZone: undefined };
   });
+  const screenRead = Promise.all([contextRead, plansRead]).then(([home, plans]) => (screen
+    ? screenContextText(screen, { userId, user: viewer, timeZone: home.timeZone, plansEnabled: plans })
+    : null));
   const photosRead = images?.length ? photoBlocks(images, userId) : Promise.resolve([]);
 
   let conversation;
@@ -274,11 +397,32 @@ async function streamChat({ userId, conversationId, message, coarseLocation, ima
     ...fields,
   });
 
-  const [context, photoResults] = await Promise.all([contextRead, photosRead]);
+  const [homeContext, photoResults, plansEnabled, playdatesEnabled, screenText] = await Promise.all([
+    contextRead, photosRead, plansRead, playdatesRead, screenRead,
+  ]);
   const photos = photoResults.filter(Boolean);
+  // One context message: the home facts (remembered for a minute), whether they have
+  // Plans, and the screen they asked from. Added again only when it changes.
+  const plansLine = `- Plans: ${plansEnabled ? 'they have Plans (the Plans tab).' : "not available to them yet; don't offer plans."}`;
+  const context = {
+    timeZone: homeContext.timeZone,
+    text: homeContext.text || screenText
+      ? [homeContext.text || `${CONTEXT_HEADER}:`, plansLine, screenText].filter(Boolean).join('\n')
+      : null,
+  };
+  const toolContext = {
+    userId, user: viewer, sessionScope: sessionScope || null, timeZone: context.timeZone || undefined, plansEnabled,
+    // Apps with action cards have the Suggestions switch (phase 2); older builds aren't told about it.
+    suggestions: shown.has('action'),
+  };
   if (images?.length && photos.length === 0) {
-    // Answering without the photo would only confuse: say it couldn't be opened.
-    sseWriter.write('error', { error: 'AI_ERROR', message: "I couldn't open that photo. Try a JPEG or PNG, or a different photo." });
+    // Answering without the photo or PDF would only confuse: say it couldn't be opened.
+    sseWriter.write('error', {
+      error: 'AI_ERROR',
+      message: images.some(isPdfReference)
+        ? "I couldn't open that file. Try a PDF that isn't password-protected, or a photo of the page."
+        : "I couldn't open that photo. Try a JPEG or PNG, or a different photo.",
+    });
     sseWriter.end();
     await logChat({ status: 'error', errorMessage: 'unreadable_photos' });
     return;
@@ -298,6 +442,7 @@ async function streamChat({ userId, conversationId, message, coarseLocation, ima
         photos,
         unreadable: (images?.length || 0) - photos.length,
         timeZone: context.timeZone,
+        askedFrom: screenText ? screenName(screen) : null,
         coarseLocation,
         contextText: systemMessages ? null : newContext,
       }),
@@ -307,8 +452,14 @@ async function streamChat({ userId, conversationId, message, coarseLocation, ima
 
   // The tools this deployment offers, and the cards this app can show; a call to any
   // other name is answered as unknown.
-  const pickupSchedule = Array.isArray(cards) && cards.includes('pickup_schedule');
-  const tools = launchScopedChatTools({ pickupSchedule });
+  const capabilities = {
+    pickupSchedule: shown.has('pickup_schedule'),
+    actionCards: shown.has('action'),
+    links: shown.has('link'),
+    plans: plansEnabled,
+    playdates: plansEnabled && playdatesEnabled,
+  };
+  const tools = launchScopedChatTools(capabilities);
   const toolNames = tools.map((tool) => tool.name);
   const ran = new Map();
 
@@ -318,7 +469,10 @@ async function streamChat({ userId, conversationId, message, coarseLocation, ima
 
   // Filled in as rounds finish, so a timeout can still log what was used.
   const usage = emptyUsage();
+  const replyText = plainTextStream((delta) => sseWriter.write('text_delta', { delta }));
   let firstTextMs = null;
+  // Link buttons (show_link) go out after the reply's text, just before `done`.
+  const links = [];
   let turn;
   try {
     // Send conversation ID immediately
@@ -335,14 +489,14 @@ async function streamChat({ userId, conversationId, message, coarseLocation, ima
       maxRounds: MAX_TOOL_ROUNDS,
       // The tools and this prompt are the same for everyone, so one cache entry serves every
       // conversation; an hour keeps it warm between the pilot's sparse messages.
-      system: systemBlocks(launchScopedChatInstructions({ pickupSchedule }), { ttl: '1h' }),
+      system: systemBlocks(launchScopedChatInstructions(capabilities), { ttl: '1h' }),
       tools,
       messages,
       signal: turnSignal,
       usage,
       onText: (delta) => {
         if (firstTextMs === null) firstTextMs = Date.now() - startTime;
-        sseWriter.write('text_delta', { delta });
+        replyText.push(delta);
       },
       onToolStart: (name) => sseWriter.write('status', { tool: name, message: TOOL_STATUS[name] || 'Working on it…' }),
       // Run one tool Claude asked for; a draft goes to the client as soon as it exists.
@@ -350,9 +504,17 @@ async function streamChat({ userId, conversationId, message, coarseLocation, ima
         const name = toolNames.find((known) => known === use.name)
           || toolNames.find((known) => known.toLowerCase() === String(use.name).toLowerCase());
         const result = name
-          ? await executeTool(name, use.input || {}, userId)
+          ? await executeTool(name, use.input || {}, toolContext)
           : { error: `Unknown tool: ${use.name}. The tools are: ${toolNames.join(', ')}.` };
         ran.set(use.id, { name, result });
+        if (result.link) {
+          links.push(result.link);
+          // On Claude Sonnet 5.5, text written just before a tool call can come back as a
+          // hidden progress note, so the model is told what the person has actually seen.
+          result.next = firstTextMs === null
+            ? "They see only the button so far. Write your whole answer now; it shows above the button. Don't mention the button."
+            : "The button shows under your reply. Finish your reply if anything is missing, without repeating what you wrote or mentioning the button.";
+        }
         if (result.draftType) {
           sseWriter.write('draft', {
             type: result.draftType,
@@ -367,8 +529,15 @@ async function streamChat({ userId, conversationId, message, coarseLocation, ima
           ...(result.error ? { is_error: true } : {}),
         };
       },
-      // Drafts that came out valid are the answer: the turn ends at their cards.
-      finishAfterTools: (uses) => closingForDrafts(uses.map((use) => ran.get(use.id))),
+      // Drafts that came out valid are the answer: the turn ends at their cards. So does a
+      // reply that showed its answer and then its link buttons: another round would only
+      // describe the button or say the answer again.
+      finishAfterTools: (uses, { said }) => {
+        const calls = uses.map((use) => ran.get(use.id));
+        const linked = calls.length > 0 && calls.every((call) => call?.name === 'show_link' && call.result.link);
+        if (linked) return said && !said.endsWith(':') ? true : null;
+        return closingForDrafts(calls);
+      },
     });
   } catch (err) {
     const tokens = { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens };
@@ -391,12 +560,10 @@ async function streamChat({ userId, conversationId, message, coarseLocation, ima
     }
 
     logger.error('streamChat error', { userId, error: err.message, stack: err.stack });
-    sseWriter.write('error', {
-      error: 'AI_ERROR',
-      message: isImageError(err)
-        ? "I couldn't read that photo. Please try a different one."
-        : 'Something went wrong with the AI. Please try again.',
-    });
+    let message = 'Something went wrong with the AI. Please try again.';
+    if (images?.some(isPdfReference) && isDocumentError(err)) message = "I couldn't read that PDF. Try one that isn't password-protected, or a photo of the page.";
+    else if (isImageError(err)) message = "I couldn't read that photo. Please try a different one.";
+    sseWriter.write('error', { error: 'AI_ERROR', message });
     sseWriter.end();
     await logChat({ status: 'error', errorMessage: err.message, ...tokens });
     return;
@@ -447,14 +614,17 @@ async function streamChat({ userId, conversationId, message, coarseLocation, ima
     ? message.slice(0, 60) + (message.length > 60 ? '…' : '')
     : undefined;
 
+  // A turn that ran out of tool rounds has no answer to remember.
+  const saved = turn.outcome === 'complete' ? compactForStorage(turn.messages) : undefined;
   await updateConversation(conversation.id, {
-    // A turn that ran out of tool rounds has no answer to remember.
-    messages: turn.outcome === 'complete' ? compactForStorage(turn.messages) : undefined,
+    messages: saved && await withNudgesSentMeanwhile(conversation, saved),
     messageCount: newMessageCount,
     title,
   });
 
   // Send done event
+  replyText.flush();
+  for (const link of links) sseWriter.write('link', link);
   sseWriter.write('done', {
     conversationId: conversation.id,
     usage: { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens },
@@ -742,9 +912,10 @@ async function draftPost({ text, surface, coarseLocation, userId }) {
     const response = await complete({
       client,
       model: DRAFT_MODEL,
-      system: prompts.POST_DRAFT_SYSTEM,
+      // The nearby feed refuses some types other audiences take: draft only what it accepts.
+      system: surface === 'place' ? prompts.POST_DRAFT_PLACE_SYSTEM : prompts.POST_DRAFT_SYSTEM,
       messages: [{ role: 'user', content: userContent }],
-      schema: schemas.claudeSchemas.postDraft,
+      schema: surface === 'place' ? schemas.claudeSchemas.postDraftPlace : schemas.claudeSchemas.postDraft,
       effort: DRAFT_EFFORT,
       maxTokens: DRAFT_MAX_TOKENS,
       timeoutMs: DRAFT_TIMEOUT_MS,
@@ -1217,11 +1388,17 @@ const DRAFT_TYPES = {
 };
 // Lines the app adds to a person's message, which aren't theirs to see again.
 const APP_LINES = [
-  /\n*\[(?:Sent|User location context): [^\]\n]*\]/g,
-  /\n*\[\d+ of the \d+ photos couldn't be opened[^\]\n]*\]/g,
+  /\n*\[(?:Sent|Asked from|User location context): [^\]\n]*\]/g,
+  /\n*\[\d+ of the \d+ (?:photos|files) couldn't be opened[^\]\n]*\]/g,
+  // The line before a nudge Pantopus sent (nudges/engine.js); it is nobody's message.
+  /\n*\[Suggestion from Pantopus, sent as a notification: [^\]\n]*\]/g,
 ];
-// The note that stands in for a stored photo (agentLoop.compactForStorage).
+// The notes that stand in for a stored photo or document (agentLoop.compactForStorage).
 const PHOTO_NOTE = /^\[(?:Photo attached|(\d+) photos attached)\./;
+const DOCUMENT_NOTE = /^\[(?:Document attached|(\d+) documents attached)\./;
+// What the apps send for photos or documents sent without words: not the person's, so the apps
+// show "Sent a photo" instead.
+const ONLY_ATTACHED_QUESTIONS = new Set(['What can you tell me about this image?', 'What can you tell me about this document?']);
 
 function personText(text) {
   // A model without system messages got Pantopus's context at the top of the message.
@@ -1253,26 +1430,60 @@ function displayMessages(stored) {
   const items = [];
   const history = sanitizeHistory(stored);
   const results = storedResults(history);
+  // Link buttons (show_link) go on the last reply text of their turn, whichever round made them.
+  let turnStart = 0;
+  let turnLinks = [];
+  const flushLinks = () => {
+    if (!turnLinks.length) return;
+    const own = items.slice(turnStart).reverse().find((item) => item.role === 'assistant' && typeof item.text === 'string');
+    if (own) own.links = [...(own.links || []), ...turnLinks];
+    else items.push({ role: 'assistant', text: '', links: turnLinks });
+    turnLinks = [];
+  };
   for (const message of history) {
     if (message.role === 'system') continue;
     const blocks = typeof message.content === 'string' ? [{ type: 'text', text: message.content }] : message.content;
     if (message.role === 'user') {
       if (!blocks.some((block) => block.type !== 'tool_result')) continue;
+      flushLinks();
+      turnStart = items.length;
       let photos = 0;
+      let documents = 0;
       const texts = [];
       for (const block of blocks) {
         if (block.type !== 'text') continue;
-        const note = PHOTO_NOTE.exec(block.text);
-        if (note) photos += note[1] ? Number(note[1]) : 1;
+        const photo = PHOTO_NOTE.exec(block.text);
+        const document = DOCUMENT_NOTE.exec(block.text);
+        if (photo) photos += photo[1] ? Number(photo[1]) : 1;
+        else if (document) documents += document[1] ? Number(document[1]) : 1;
         else texts.push(block.text);
       }
-      items.push({ role: 'user', text: personText(texts.join('\n')), photos });
+      const said = personText(texts.join('\n'));
+      // Only app lines (a nudge's): nothing the person said.
+      if (!said && !photos && !documents) continue;
+      const onlyAttached = (photos || documents) && ONLY_ATTACHED_QUESTIONS.has(said);
+      items.push({ role: 'user', text: onlyAttached ? '' : said, photos, ...(documents ? { documents } : {}) });
       continue;
     }
+    // A nudge or brief Pantopus sent: its first item carries the notification id, which the
+    // notification's link (pantopus://assistant?nudge=<id>) scrolls to.
+    const nudge = blocks.map((block) => block.type === 'tool_use' && results.get(block.id)?.nudge).find((value) => value?.id);
+    const firstItem = items.length;
     let text = '';
     for (const block of blocks) {
-      if (block.type === 'text') text += (text ? '\n\n' : '') + block.text;
-      if (block.type !== 'tool_use' || !DRAFT_TYPES[block.name]) continue;
+      if (block.type === 'text') text += (text ? '\n\n' : '') + block.text.replace(/\*\*/g, '');
+      if (block.type !== 'tool_use') continue;
+      const result = results.get(block.id);
+      // A link button (show_link) goes with this reply's text.
+      if (block.name === 'show_link' && result?.link?.url) turnLinks.push(result.link);
+      // An action card is what its tool returned: the exact request the app sends.
+      if (result?.draftType === 'action' && result.draft?.card) {
+        if (text.trim()) items.push({ role: 'assistant', text: text.trim() });
+        text = '';
+        items.push({ role: 'assistant', draft: { type: 'action', draft: result.draft } });
+        continue;
+      }
+      if (!DRAFT_TYPES[block.name]) continue;
       if (text.trim()) items.push({ role: 'assistant', text: text.trim() });
       text = '';
       const { note: _note, ...fields } = block.input || {};
@@ -1287,7 +1498,9 @@ function displayMessages(stored) {
       items.push({ role: 'assistant', draft: { type: DRAFT_TYPES[block.name], draft } });
     }
     if (text.trim()) items.push({ role: 'assistant', text: text.trim() });
+    if (nudge && items[firstItem]) items[firstItem].nudge = { id: nudge.id, kind: nudge.kind };
   }
+  flushLinks();
   return items;
 }
 
@@ -1392,4 +1605,6 @@ module.exports = {
   listConversations,
   getConversationMessages,
   deleteConversation,
+  // For background model calls (background.js), which log to the same table.
+  logRequest,
 };

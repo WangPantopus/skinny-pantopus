@@ -61,6 +61,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SnackbarHost
@@ -120,13 +122,20 @@ import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.LaunchFeatures
+import app.pantopus.android.core.routing.DeepLinkRouter
+import app.pantopus.android.data.ai.AIPdfCheck
 import app.pantopus.android.data.links.LinkPreview
 import app.pantopus.android.ui.components.GhostButton
 import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.screens.inbox.conversation.ai.AiActionCard
 import app.pantopus.android.ui.screens.inbox.conversation.ai.AiCapabilityChip
+import app.pantopus.android.ui.screens.inbox.conversation.ai.AiContextStrip
 import app.pantopus.android.ui.screens.inbox.conversation.ai.AiEstimateCard
+import app.pantopus.android.ui.screens.inbox.conversation.ai.AiLinkButtons
+import app.pantopus.android.ui.screens.inbox.conversation.ai.AiStarterRow
 import app.pantopus.android.ui.screens.inbox.conversation.ai.ChatAiAvatar
+import app.pantopus.android.ui.screens.inbox.conversation.ai.starterChips
 import app.pantopus.android.ui.screens.plans.chat.PlanChatClosedBar
 import app.pantopus.android.ui.screens.plans.chat.PlanChatStrip
 import app.pantopus.android.ui.screens.plans.chat.rememberPlanChat
@@ -144,7 +153,6 @@ import coil.request.ImageRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
 import java.util.UUID
 import kotlin.math.roundToInt
 
@@ -203,8 +211,15 @@ fun ChatConversationScreen(
     val openFile by viewModel.openFile.collectAsStateWithLifecycle()
     val linkPreviews by viewModel.linkPreviews.collectAsStateWithLifecycle()
     val isAiStreaming by viewModel.isAiStreaming.collectAsStateWithLifecycle()
+    val isDeletingAi by viewModel.isDeletingAi.collectAsStateWithLifecycle()
+    val aiContext by viewModel.aiContext.collectAsStateWithLifecycle()
+    val aiStarters by viewModel.aiStarters.collectAsStateWithLifecycle()
     // Nearby Plans (A4): a plan room shows its plan under the header and closes after the plan.
-    val planChat = rememberPlanChat((args.mode as? ChatThreadMode.Room)?.id)
+    val planChat =
+        rememberPlanChat(
+            (args.mode as? ChatThreadMode.Room)?.id,
+            (state as? ChatConversationUiState.Loaded)?.rows?.filterIsInstance<ChatTimelineRow.SystemNote>()?.lastOrNull()?.id,
+        )
     val gigContext by viewModel.gigContext.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -224,6 +239,7 @@ fun ChatConversationScreen(
     var showReportFailed by remember { mutableStateOf(false) }
     var showBulkDeleteConfirm by remember { mutableStateOf(false) }
     var pendingDeleteId by remember { mutableStateOf<String?>(null) }
+    var showAiDeleteConfirm by remember { mutableStateOf(false) }
     // Photos (and the tapped index) shown in the full-screen viewer.
     var viewerPhotos by remember { mutableStateOf<Pair<List<String>, Int>?>(null) }
     var viewerFile by remember { mutableStateOf<ChatOpenFile?>(null) }
@@ -248,6 +264,7 @@ fun ChatConversationScreen(
                             filename = name ?: "chat-${UUID.randomUUID()}.$extension",
                             mimeType = mimeType,
                             bytes = bytes,
+                            sourceUri = uri.toString(),
                         )
                     }
                 }
@@ -268,15 +285,25 @@ fun ChatConversationScreen(
                                 }
                             val extension = mimeType.substringAfter('/', "bin").substringBefore('+')
                             val name = context.pickedFileName(uri) ?: "chat-${UUID.randomUUID()}.$extension"
-                            Triple(mimeType, name, bytes)
+                            uri to Triple(mimeType, name, bytes)
                         }
                     }
-                attachments.forEach { (mimeType, filename, bytes) ->
+                attachments.forEach { (uri, picked) ->
+                    val (mimeType, filename, bytes) = picked
+                    // The assistant reads a PDF only within the server's limits: say which one it can't, at once.
+                    if (args.mode is ChatThreadMode.Ai && mimeType == "application/pdf") {
+                        val problem = withContext(Dispatchers.IO) { AIPdfCheck.problem(bytes, context.cacheDir) }
+                        if (problem != null) {
+                            viewModel.refuseAttachment(problem)
+                            return@forEach
+                        }
+                    }
                     viewModel.queueAttachment(
                         kind = if (mimeType.startsWith("image/")) ChatQueuedAttachmentKind.Image else ChatQueuedAttachmentKind.Document,
                         filename = filename,
                         mimeType = mimeType,
                         bytes = bytes,
+                        sourceUri = uri.toString(),
                     )
                 }
             }
@@ -304,12 +331,13 @@ fun ChatConversationScreen(
                         filename = "camera-${UUID.randomUUID()}.jpg",
                         mimeType = "image/jpeg",
                         bytes = bytes,
+                        sourceUri = uri.toString(),
                     )
                 }
             }
         }
     val launchCamera = {
-        val photoFile = File(context.cacheDir, "chat-camera-${UUID.randomUUID()}.jpg")
+        val photoFile = ChatMediaUrl.cameraFile(context.cacheDir)
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", photoFile)
         pendingCameraUri = uri.toString()
         // No camera app (or a broken resolver) must not crash the thread —
@@ -338,6 +366,9 @@ fun ChatConversationScreen(
             args.scrollToMessageId,
             args.initialTopic,
             args.gigId,
+            args.aiContext,
+            args.aiNudgeId,
+            args.aiConversationId,
         )
         viewModel.load()
     }
@@ -347,6 +378,17 @@ fun ChatConversationScreen(
     val resolvedCreatorContext = chrome.creatorThread?.context ?: ChatCreatorThreadContext.defaults()
     val isCreatorThread = conversationMode == ChatConversationMode.CreatorThread
     val isCreatorQuotaLocked = isCreatorThread && resolvedCreatorContext.quota?.isMaxed == true
+
+    // AI assistant phase 1: action cards send through the view model; links open with the deep-link router.
+    val aiReplyActions =
+        remember(viewModel) {
+            ChatAIReplyActions(
+                onAction = viewModel::runAIAction,
+                onDismiss = viewModel::dismissAIAction,
+                onOpenLink = { url -> if (DeepLinkRouter.canRoute(url)) DeepLinkRouter.handle(url) },
+                canOpen = DeepLinkRouter::canRoute,
+            )
+        }
 
     // The chat sits on the keyboard: pad the bottom by the keyboard height
     // minus the space already below the chat (the tab bar).
@@ -380,6 +422,8 @@ fun ChatConversationScreen(
                     onOpenDetails = { showDetailsSheet = true },
                     onOpenProfile = profileTapFor(args.mode, conversationMode, onOpenProfile),
                     onNewAiChat = viewModel::startNewAiConversation,
+                    onDeleteAiChat = { showAiDeleteConfirm = true },
+                    isDeletingAiChat = isDeletingAi,
                     // Nearby Plans (A4): a plan room counts everyone in, parties too ("7 people", as on iOS).
                     planPeople = planChat.plan?.people?.takeIf { it.isNotEmpty() }?.sumOf { it.partySize.coerceAtLeast(1) },
                 )
@@ -388,6 +432,8 @@ fun ChatConversationScreen(
                 GigContextStrip(strip = strip, onTap = { onOpenGig(strip.gigId) })
             }
             PlanChatStrip(state = planChat, onOpenPlan = onOpenPlan)
+            // AI assistant phase 1: the screen Ask Pantopus was tapped on.
+            if (conversationMode == ChatConversationMode.AiAssistant) aiContext?.let { AiContextStrip(label = it.label) }
             if (conversationMode == ChatConversationMode.CreatorThread) {
                 CreatorAudienceStrip(
                     context = resolvedCreatorContext,
@@ -438,6 +484,7 @@ fun ChatConversationScreen(
                             conversationMode = conversationMode,
                             fanEntitlement = fanEntitlement,
                             onCapabilityTap = viewModel::sendCapabilityPrompt,
+                            aiStarters = aiStarters,
                         )
                     is ChatConversationUiState.Loaded ->
                         PopulatedFrame(
@@ -464,6 +511,7 @@ fun ChatConversationScreen(
                                     else -> viewModel.savePickupSchedule(draft)
                                 }
                             },
+                            aiReplyActions = aiReplyActions,
                             onOpenGig = onOpenGig,
                             onOpenListing = onOpenListing,
                             onOpenLocation = { lat, lng ->
@@ -478,7 +526,7 @@ fun ChatConversationScreen(
                             },
                             onOpenPhotos = { urls, index -> viewerPhotos = urls to index },
                             onOpenAttachment = { attachment ->
-                                viewModel.openAttachment(attachment, File(context.cacheDir, "chat-files").apply { mkdirs() })
+                                viewModel.openAttachment(attachment, ChatMediaUrl.openedFilesFolder(context.cacheDir).apply { mkdirs() })
                             },
                         )
                     is ChatConversationUiState.Error -> ErrorFrame(message = s.message, onRetry = viewModel::refresh)
@@ -518,6 +566,11 @@ fun ChatConversationScreen(
                     editing = editingMessageId != null,
                     onCancel = viewModel::cancelMessageAction,
                 )
+                // The empty thread offers them in its welcome instead.
+                val aiThreadIdle = state is ChatConversationUiState.Loaded && !isAiStreaming
+                if (conversationMode == ChatConversationMode.AiAssistant && aiStarters.isNotEmpty() && aiThreadIdle) {
+                    AiStarterRow(starters = aiStarters, onTap = viewModel::sendAiStarter)
+                }
                 Composer(
                     text = composerText,
                     placeholder =
@@ -569,8 +622,20 @@ fun ChatConversationScreen(
                             PackageManager.PERMISSION_GRANTED
                     if (granted) launchCamera() else cameraPermission.launch(Manifest.permission.CAMERA)
                 },
-                onPhotos = { photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) },
-                onDocument = { attachmentPicker.launch(arrayOf("*/*")) },
+                // The assistant reads photos and PDFs (AI assistant phase 2 §7.1): its thread's Photos picks photos and its
+                // Document picks PDFs.
+                onPhotos = {
+                    val media =
+                        if (args.mode is ChatThreadMode.Ai) {
+                            ActivityResultContracts.PickVisualMedia.ImageOnly
+                        } else {
+                            ActivityResultContracts.PickVisualMedia.ImageAndVideo
+                        }
+                    photoPicker.launch(PickVisualMediaRequest(media))
+                },
+                onDocument = {
+                    attachmentPicker.launch(if (args.mode is ChatThreadMode.Ai) arrayOf("application/pdf") else arrayOf("*/*"))
+                },
                 onLocation = { viewModel.sendCurrentLocation() },
                 onGig = { showGigPicker = true },
                 onListing = { showListingPicker = true },
@@ -628,6 +693,7 @@ fun ChatConversationScreen(
             ) {
                 MessageActionSheet(
                     content = target,
+                    canManageMessages = (args.mode as? ChatThreadMode.Room)?.asBusinessUserId == null,
                     onCopy = { actionTarget = null },
                     onReply = {
                         viewModel.beginReply(target.id)
@@ -757,6 +823,30 @@ fun ChatConversationScreen(
                 },
                 dismissButton = {
                     TextButton(onClick = { showBulkDeleteConfirm = false }) {
+                        Text(text = "Cancel", color = PantopusColors.appTextSecondary)
+                    }
+                },
+            )
+        }
+        if (showAiDeleteConfirm) {
+            AlertDialog(
+                onDismissRequest = { showAiDeleteConfirm = false },
+                containerColor = PantopusColors.appSurface,
+                title = { Text(text = "Delete this conversation?") },
+                text = { Text(text = "Pantopus AI won't remember it. Any earlier chats with Pantopus AI are deleted too.") },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showAiDeleteConfirm = false
+                            viewModel.deleteAiConversations()
+                        },
+                        modifier = Modifier.testTag("chatAIDeleteConfirm"),
+                    ) {
+                        Text(text = "Delete", color = PantopusColors.error)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showAiDeleteConfirm = false }) {
                         Text(text = "Cancel", color = PantopusColors.appTextSecondary)
                     }
                 },
@@ -892,7 +982,7 @@ private fun incomingInitialsFor(
     } else {
         when (counterparty) {
             is ChatCounterparty.Person -> counterparty.initials
-            is ChatCounterparty.Group -> counterparty.displayName.initials()
+            is ChatCounterparty.Group -> null
             is ChatCounterparty.Ai -> null
         }
     }
@@ -921,6 +1011,9 @@ internal fun ChatHeader(
     onOpenProfile: (() -> Unit)? = null,
     // The assistant's "New chat" (AI thread only).
     onNewAiChat: () -> Unit = {},
+    // The assistant's More menu: "Delete conversation" (AI thread only), and whether that delete is running.
+    onDeleteAiChat: () -> Unit = {},
+    isDeletingAiChat: Boolean = false,
     // A plan room's people (Nearby Plans, board A4): the second line reads "7 people" instead.
     planPeople: Int? = null,
 ) {
@@ -1028,7 +1121,7 @@ internal fun ChatHeader(
                 }
             }
             // A15.3 AI header: "New chat" (lucide square-pen; closest token
-            // icon is MessageSquarePlus) + overflow (decorative until it has actions).
+            // icon is MessageSquarePlus) + overflow, whose menu deletes the conversation.
             isAi -> {
                 Row {
                     Box(
@@ -1048,7 +1141,7 @@ internal fun ChatHeader(
                             tint = PantopusColors.appText,
                         )
                     }
-                    HeaderIcon(PantopusIcon.MoreHorizontal)
+                    AiMoreMenu(onDelete = onDeleteAiChat, enabled = !isDeletingAiChat)
                 }
             }
             else ->
@@ -1687,6 +1780,42 @@ private fun HeaderIcon(icon: PantopusIcon) {
     }
 }
 
+/** The assistant header's More (overflow) button and its menu: "Delete conversation". */
+@Composable
+private fun AiMoreMenu(
+    onDelete: () -> Unit,
+    enabled: Boolean,
+) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        Box(
+            modifier =
+                Modifier
+                    .size(34.dp)
+                    .clip(CircleShape)
+                    .clickable(enabled = enabled, onClickLabel = "More options") { open = true }
+                    .testTag("chatAIMore")
+                    .semantics { contentDescription = "More options" },
+            contentAlignment = Alignment.Center,
+        ) {
+            PantopusIconImage(icon = PantopusIcon.MoreHorizontal, contentDescription = null, size = 18.dp, tint = PantopusColors.appText)
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(
+                leadingIcon = {
+                    PantopusIconImage(icon = PantopusIcon.Trash2, contentDescription = null, size = 16.dp, tint = PantopusColors.error)
+                },
+                text = { Text(text = "Delete conversation", fontSize = 13.sp, color = PantopusColors.error) },
+                onClick = {
+                    open = false
+                    onDelete()
+                },
+                modifier = Modifier.testTag("chatAIDeleteConversation"),
+            )
+        }
+    }
+}
+
 @Composable
 private fun HeaderAvatar(
     isAi: Boolean,
@@ -2014,10 +2143,11 @@ internal fun EmptyFrame(
     conversationMode: ChatConversationMode = ChatConversationMode.Dm,
     fanEntitlement: ChatFanEntitlement? = null,
     onCapabilityTap: (ChatPromptChip) -> Unit = {},
+    aiStarters: List<String> = emptyList(),
 ) {
     val isAi = conversationMode == ChatConversationMode.AiAssistant || counterparty is ChatCounterparty.Ai
     when {
-        isAi -> AiWelcomeFrame(onCapabilityTap = onCapabilityTap)
+        isAi -> AiWelcomeFrame(onCapabilityTap = onCapabilityTap, starters = aiStarters)
         conversationMode == ChatConversationMode.FanThread ->
             FanEmptyFrame(
                 counterparty = counterparty,
@@ -2304,7 +2434,10 @@ private fun TrustPill(text: String) {
 
 /** A15.3 "Empty AI" frame: big avatar, "Ask me anything", trust pill, 2×2 prompt grid. */
 @Composable
-private fun AiWelcomeFrame(onCapabilityTap: (ChatPromptChip) -> Unit) {
+private fun AiWelcomeFrame(
+    onCapabilityTap: (ChatPromptChip) -> Unit,
+    starters: List<String> = emptyList(),
+) {
     Column(
         modifier =
             Modifier
@@ -2340,26 +2473,37 @@ private fun AiWelcomeFrame(onCapabilityTap: (ChatPromptChip) -> Unit) {
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(Spacing.s2),
         ) {
-            // Launch cut #3 (Marketplace): a Home prompt takes the Marketplace card's place.
-            launchPromptCards().chunked(2).forEach { rowCards ->
-                Row(
+            // Opened with Ask Pantopus: the starter prompts of the screen it was tapped on.
+            starterChips(starters).forEach { chip ->
+                AiCapabilityChip(
+                    chip = chip,
+                    onTap = onCapabilityTap,
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
-                ) {
-                    rowCards.forEach { card ->
-                        AiPromptCard(
-                            card = card,
-                            onTap = { tapped ->
-                                // Tapping sends the full question as the
-                                // thread's first message (iOS parity).
-                                onCapabilityTap(
-                                    ChatPromptChip(id = tapped.id, label = tapped.question, icon = tapped.icon),
-                                )
-                            },
-                            modifier = Modifier.weight(1f),
-                        )
+                    testTag = "chatAIStarter_${chip.id}",
+                )
+            }
+            // Launch cut #3 (Marketplace): a Home prompt takes the Marketplace card's place.
+            if (starters.isEmpty()) {
+                launchPromptCards().chunked(2).forEach { rowCards ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+                    ) {
+                        rowCards.forEach { card ->
+                            AiPromptCard(
+                                card = card,
+                                onTap = { tapped ->
+                                    // Tapping sends the full question as the
+                                    // thread's first message (iOS parity).
+                                    onCapabilityTap(
+                                        ChatPromptChip(id = tapped.id, label = tapped.question, icon = tapped.icon),
+                                    )
+                                },
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                        if (rowCards.size == 1) Spacer(modifier = Modifier.weight(1f))
                     }
-                    if (rowCards.size == 1) Spacer(modifier = Modifier.weight(1f))
                 }
             }
         }
@@ -2560,6 +2704,7 @@ internal fun PopulatedFrame(
     selectedMessageIds: Set<String> = emptySet(),
     onBubbleTap: (ChatBubbleContent) -> Unit = {},
     onUseAIDraft: (ChatAIDraftCard) -> Unit = {},
+    aiReplyActions: ChatAIReplyActions = ChatAIReplyActions(),
     onOpenGig: (String) -> Unit = {},
     onOpenListing: (String) -> Unit = {},
     onOpenLocation: (Double, Double) -> Unit = { _, _ -> },
@@ -2684,12 +2829,13 @@ internal fun PopulatedFrame(
                     is ChatTimelineRow.Bubble ->
                         BubbleRow(
                             content = row.content,
-                            incomingInitials = incomingInitials,
+                            incomingInitials = row.content.senderName?.initials() ?: incomingInitials,
                             onLockedAction = onLockedAction,
                             onLongPress = { onBubbleLongPress(row.content) },
                             isSelected = selectedMessageIds.contains(row.content.id),
                             onTap = { onBubbleTap(row.content) },
                             onUseAIDraft = onUseAIDraft,
+                            aiReplyActions = aiReplyActions,
                             onOpenGig = onOpenGig,
                             onOpenListing = onOpenListing,
                             onOpenLocation = onOpenLocation,
@@ -2862,6 +3008,7 @@ private fun BubbleRow(
     isSelected: Boolean = false,
     onTap: () -> Unit = {},
     onUseAIDraft: (ChatAIDraftCard) -> Unit,
+    aiReplyActions: ChatAIReplyActions = ChatAIReplyActions(),
     onOpenGig: (String) -> Unit,
     onOpenListing: (String) -> Unit,
     onOpenLocation: (Double, Double) -> Unit,
@@ -2922,6 +3069,11 @@ private fun BubbleRow(
             Spacer(modifier = Modifier.size(6.dp))
         }
         Column(horizontalAlignment = if (isOut) Alignment.End else Alignment.Start) {
+            if (!isOut && !content.isContinuation) {
+                content.senderName?.let { name ->
+                    Text(text = name, fontSize = 12.sp, color = PantopusColors.appTextSecondary)
+                }
+            }
             // Reactions float as pills overlapping the bubble's bottom
             // corner (design `.reaction { bottom: -10; left/right: 8 }`).
             Box {
@@ -2990,19 +3142,23 @@ private fun BubbleRow(
                                         onOpenUrl = onOpenUrl,
                                     )
                                 }
-                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    body.imageUrls.take(3).forEach { url ->
-                                        AsyncImage(
-                                            model = inlinePhotoRequest(url),
-                                            contentDescription = "AI prompt image",
-                                            contentScale = ContentScale.Crop,
-                                            modifier =
-                                                Modifier
-                                                    .size(72.dp)
-                                                    .clip(RoundedCornerShape(Radii.md)),
-                                        )
+                                if (body.imageUrls.isNotEmpty()) {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        body.imageUrls.take(3).forEach { url ->
+                                            AsyncImage(
+                                                model = inlinePhotoRequest(url),
+                                                contentDescription = "AI prompt image",
+                                                contentScale = ContentScale.Crop,
+                                                modifier =
+                                                    Modifier
+                                                        .size(72.dp)
+                                                        .clip(RoundedCornerShape(Radii.md)),
+                                            )
+                                        }
                                     }
                                 }
+                                // Documents sent to the assistant: a chip each, as a file in a chat shows.
+                                body.files.forEach { file -> SentFileChip(file = file, isOut = isOut, textColor = textColor) }
                             }
                         }
                     is ChatBubbleBody.Image -> {
@@ -3128,7 +3284,8 @@ private fun BubbleRow(
                             isOutgoing = isOut,
                             onOpen = { body.card.listingId.takeIf { it.isNotBlank() }?.let(onOpenListing) },
                         )
-                    is ChatBubbleBody.AiReply -> AiReplyBubble(body = body, hasTail = content.hasTail, onUseDraft = onUseAIDraft)
+                    is ChatBubbleBody.AiReply ->
+                        AiReplyBubble(body = body, hasTail = content.hasTail, onUseDraft = onUseAIDraft, actions = aiReplyActions)
                 }
                 if (content.reactions.isNotEmpty()) {
                     // Tapping a pill toggles the reaction (iOS parity).
@@ -3572,6 +3729,7 @@ private val ChatBubbleBody.copyableText: String?
 @Composable
 private fun MessageActionSheet(
     content: ChatBubbleContent,
+    canManageMessages: Boolean,
     // Invoked after the text has landed on the clipboard — dismisses the sheet.
     onCopy: () -> Unit,
     onReply: () -> Unit,
@@ -3616,10 +3774,8 @@ private fun MessageActionSheet(
         // for rows with no server id: in-flight optimistic sends
         // (`client_`) and AI-thread local rows (`ai_user_` /
         // `ai_assistant_`), whose edits/deletes can only ever 404.
-        if (content.side == ChatMessageSide.Outgoing &&
-            !content.id.startsWith("client_") &&
-            !content.id.startsWith("ai_")
-        ) {
+        val isPersistedMessage = !content.id.startsWith("client_") && !content.id.startsWith("ai_")
+        if (canManageMessages && content.side == ChatMessageSide.Outgoing && isPersistedMessage) {
             MessageActionRow(label = "Select", icon = PantopusIcon.CheckCircle, onClick = onSelect)
             MessageActionRow(label = "Edit", icon = PantopusIcon.Pencil, onClick = onEdit)
             MessageActionRow(label = "Delete", icon = PantopusIcon.Trash2, destructive = true, onClick = onDelete)
@@ -4424,6 +4580,7 @@ private fun AiReplyBubble(
     body: ChatBubbleBody.AiReply,
     hasTail: Boolean,
     onUseDraft: (ChatAIDraftCard) -> Unit,
+    actions: ChatAIReplyActions = ChatAIReplyActions(),
 ) {
     val shape =
         RoundedCornerShape(
@@ -4432,7 +4589,7 @@ private fun AiReplyBubble(
             bottomEnd = 18.dp,
             bottomStart = if (hasTail) Radii.sm else 18.dp,
         )
-    val isThinking = body.text.isEmpty() && body.estimate == null && body.drafts.isEmpty()
+    val isThinking = body.text.isEmpty() && body.estimate == null && body.drafts.isEmpty() && body.links.isEmpty()
     Column(
         modifier =
             Modifier
@@ -4453,8 +4610,20 @@ private fun AiReplyBubble(
             Text(text = body.text, fontSize = 13.5.sp, lineHeight = 18.sp, color = PantopusColors.appText)
             body.estimate?.let { AiEstimateCard(estimate = it, modifier = Modifier.fillMaxWidth()) }
             body.drafts.forEach { draft ->
-                AiDraftCard(draft = draft, onUse = onUseDraft)
+                val card = draft.action
+                if (card != null) {
+                    AiActionCard(
+                        card = card,
+                        onAction = { scope, action -> actions.onAction(draft, scope, action) },
+                        onDismiss = { actions.onDismiss(draft) },
+                        onOpenLink = actions.onOpenLink,
+                        canOpen = actions.canOpen,
+                    )
+                } else {
+                    AiDraftCard(draft = draft, onUse = onUseDraft)
+                }
             }
+            if (body.links.isNotEmpty()) AiLinkButtons(links = body.links, onOpen = actions.onOpenLink)
         }
     }
 }
@@ -5090,6 +5259,40 @@ internal fun AttachmentStripView(
         ) {
             attachments.forEach { attachment ->
                 AttachmentTile(attachment = attachment, onRemove = onRemove)
+            }
+        }
+    }
+}
+
+/** A document sent to the assistant, inside the person's bubble: the file's icon, name and size, as a chat file shows. */
+@Composable
+private fun SentFileChip(
+    file: ChatSentFile,
+    isOut: Boolean,
+    textColor: Color,
+) {
+    Row(
+        modifier = Modifier.semantics(mergeDescendants = true) {}.testTag("chatAISentFile"),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+    ) {
+        PantopusIconImage(
+            icon = PantopusIcon.FileText,
+            contentDescription = null,
+            size = 18.dp,
+            tint = if (isOut) PantopusColors.appTextInverse else PantopusColors.primary600,
+        )
+        Column {
+            Text(
+                text = file.name,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = textColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            file.sizeLabel?.let { size ->
+                Text(text = size, fontSize = 11.sp, color = textColor.copy(alpha = 0.75f))
             }
         }
     }

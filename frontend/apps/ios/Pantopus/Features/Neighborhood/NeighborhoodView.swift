@@ -15,6 +15,8 @@ import SwiftUI
 /// is internal, and the app is a single target.
 struct NeighborhoodView: View {
     @State private var viewModel: NeighborhoodViewModel
+    /// Ask Pantopus about recent posts nearby (AI assistant phase 1).
+    @State private var askTopic: AIAskTopic?
 
     /// Present a neighborhood surface (unlocked state) — wired by
     /// `NeighborhoodTabRoot` to its sheet presentation.
@@ -82,27 +84,7 @@ struct NeighborhoodView: View {
         .refreshable { await viewModel.refresh() }
         // A home added, claimed or verified (`homes`) can change the meter.
         .refreshesOnStoreChange(affects: { $0.names(topic: ScreenTopic.homes) }, perform: { await viewModel.load() })
-    }
-
-    // MARK: - Header
-
-    private var header: some View {
-        VStack(alignment: .leading, spacing: Spacing.s2) {
-            Text("Nearby")
-                .font(.system(size: 28, weight: .heavy))
-                .foregroundStyle(Theme.Color.appText)
-            // Launch cut #1 (Beacon): the copy drops Beacons for the first launch.
-            Text(
-                LaunchFeatures.beacon
-                    ? "Join conversations, find Beacons, and stay connected. Choose an area inside Pulse to browse local posts. "
-                    + "Following Beacons needs no home address."
-                    : "Join conversations and stay connected. Choose an area inside Pulse to browse local posts."
-            )
-            .pantopusTextStyle(.small)
-            .foregroundStyle(Theme.Color.appTextSecondary)
-            .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(.top, Spacing.s3)
+        .askPantopus($askTopic)
     }
 
     // MARK: - Loading / error
@@ -354,9 +336,41 @@ struct NeighborhoodView: View {
     }
 }
 
-/// The social-row builder lives outside the struct body to keep it inside the
-/// type-body length budget after the first-launch gates (2026-10-01).
+/// The header and the social-row builder live outside the struct body to keep
+/// it inside the type-body length budget (first-launch gates, 2026-10-01; Ask
+/// Pantopus, 2026-10-20).
 extension NeighborhoodView {
+    // MARK: - Header
+
+    /// "Nearby", with Ask Pantopus at the end of the line.
+    private var header: some View {
+        VStack(alignment: .leading, spacing: Spacing.s2) {
+            HStack(spacing: Spacing.s2) {
+                Text("Nearby")
+                    .font(.system(size: 28, weight: .heavy))
+                    .foregroundStyle(Theme.Color.appText)
+                Spacer(minLength: 0)
+                AskPantopusButton(accessibilityIdentifier: "nearbyAskPantopus") {
+                    askTopic = .nearby()
+                } label: {
+                    AskPantopusGlyph(size: 20)
+                        .frame(width: 44, height: 44)
+                }
+            }
+            // Launch cut #1 (Beacon): the copy drops Beacons for the first launch.
+            Text(
+                LaunchFeatures.beacon
+                    ? "Join conversations, find Beacons, and stay connected. Choose an area inside Pulse to browse local posts. "
+                    + "Following Beacons needs no home address."
+                    : "Join conversations and stay connected. Choose an area inside Pulse to browse local posts."
+            )
+            .pantopusTextStyle(.small)
+            .foregroundStyle(Theme.Color.appTextSecondary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.top, Spacing.s3)
+    }
+
     private func socialRow(_ title: String, detail: String, icon: PantopusIcon, action: @escaping @MainActor () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: Spacing.s3) {

@@ -20,6 +20,8 @@ struct PlaceDashboardView: View {
     @State private var showSwitcher = false
     @State private var showVerify = false
     @State private var ballotGovernments: BallotGovernmentsSheet?
+    /// The assistant, opened from the header about this home.
+    @State private var askTopic: AIAskTopic?
 
     private let isActive: Bool
     /// The Place tab's root has nothing to go back to: its loading and error
@@ -104,6 +106,7 @@ struct PlaceDashboardView: View {
         .refreshable { await viewModel.refresh() }
         .refreshesOnStoreChange(onBackground: viewModel.discardTemporaryCopy) { if isActive { await viewModel.load() } }
         .refreshFailureToast($viewModel.refreshFailureMessage)
+        .askPantopus($askTopic)
         .sheet(isPresented: $showSwitcher) {
             PlaceSwitcherSheet(
                 viewModel: PlaceSwitcherViewModel(
@@ -290,7 +293,19 @@ struct PlaceDashboardView: View {
                     .accessibilityIdentifier("place.menu")
                 }
             }
-            addressButton(intel.place.label)
+            // Ask sits at the end of the address row, under the bell and menu,
+            // so the title row keeps room for the status chip.
+            HStack(spacing: Spacing.s2) {
+                addressButton(intel.place.label)
+                Spacer(minLength: 0)
+                AskPantopusButton(accessibilityIdentifier: "place.askPantopus") {
+                    askTopic = .place(homeId: viewModel.homeId)
+                } label: {
+                    AskPantopusGlyph()
+                        .frame(width: Spacing.s12, height: 44)
+                        .contentShape(Rectangle())
+                }
+            }
         }
     }
 
@@ -334,7 +349,12 @@ struct PlaceDashboardView: View {
 
     /// The civic_election envelope's Ballot P0 card, when the server sent one.
     static func ballot(in intel: PlaceIntelligence) -> (card: BallotSummary, asOf: String?)? {
-        for section in intel.groups.flatMap(\.sections) where section.id == .civicElection {
+        ballot(in: intel.groups.flatMap(\.sections))
+    }
+
+    /// The same card among a preview's sections (a saved or looked-up address).
+    static func ballot(in sections: [PlaceSectionEnvelope]) -> (card: BallotSummary, asOf: String?)? {
+        for section in sections where section.id == .civicElection {
             if section.status == .ready, let card = section.civicElection?.ballotCard {
                 return (card, section.asOf)
             }
@@ -352,21 +372,13 @@ struct PlaceDashboardView: View {
     }
 
     private func seasonBlock(_ card: BallotSummary, asOf: String?) -> some View {
-        VStack(alignment: .leading, spacing: Spacing.s4) {
-            Text("This season")
-                .textCase(.uppercase)
-                .font(.system(size: 11, weight: .semibold))
-                .kerning(0.88)
-                .foregroundStyle(Theme.Color.appTextSecondary)
-                .accessibilityAddTraits(.isHeader)
-            BallotCardView(
-                card: card,
-                asOf: asOf,
-                onOpenGovernments: card.governments.map { governments in
-                    { ballotGovernments = BallotGovernmentsSheet(governments: governments) }
-                }
-            )
-        }
+        BallotSeasonBlock(
+            card: card,
+            asOf: asOf,
+            onOpenGovernments: card.governments.map { governments in
+                { ballotGovernments = BallotGovernmentsSheet(governments: governments) }
+            }
+        )
     }
 
     // MARK: - Group block
@@ -421,7 +433,7 @@ struct PlaceDashboardView: View {
                 PlaceMessagesActionRow(
                     icon: .messageSquarePlus,
                     title: "Message a neighbor",
-                    subtitle: "Send a verified heads-up to a home on your block."
+                    subtitle: "Send a private heads-up to a home on your block."
                 ) { viewModel.onComposeMessage(address) }
                 PlaceMessagesActionRow(
                     icon: .inbox,
@@ -465,7 +477,7 @@ struct PlaceDashboardView: View {
 
 /// The governments view's payload, identified so `.sheet(item:)` keeps its
 /// content on screen while the sheet slides away.
-private struct BallotGovernmentsSheet: Identifiable {
+struct BallotGovernmentsSheet: Identifiable {
     let governments: BallotGovernments
     var id: BallotGovernments {
         governments

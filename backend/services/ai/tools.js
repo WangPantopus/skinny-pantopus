@@ -15,6 +15,11 @@ const { listEffectivelyOpenSlots } = require('../supportTrainSlotAvailability');
 const { resolveLocation } = require('../context/locationResolver');
 const { escapeIlike } = require('../../utils/escapeIlike');
 const { draftPickupSchedule } = require('./pickupDraft');
+const { readToolDefinitions, runReadTool, PLACE_POST_TYPES } = require('./readTools');
+const { nearbyReadToolDefinitions, runNearbyReadTool } = require('./readToolsNearby');
+const { actionCardDefinitions, runCardTool } = require('./actionCards');
+const { showLinkDefinition, runShowLink } = require('./appGuide');
+const { homesOf, localToUtc } = require('./assistantKit');
 
 const {
   validateGigDraft,
@@ -36,7 +41,7 @@ const DRAFT_NOTE = 'One short sentence shown to the person under the draft card:
 const toolDefinitions = [
   {
     name:'get_user_context',
-    description: 'Get the current user\'s homes and saved places (label, city and state only), and recent activity counts. Never returns exact addresses.',
+    description: 'Get the current user\'s homes (id, city, state, role, which one Today shows) and saved places (label, city and state only), and recent activity counts. Never returns exact addresses.',
     input_schema: {
       type: 'object',
       properties: {},
@@ -127,13 +132,20 @@ const toolDefinitions = [
       properties: {
         content:    { type: 'string', description: 'Post text content, max 2000 chars' },
         title:      { type: ['string', 'null'], description: 'Optional title for events, alerts, announcements' },
-        postType:   { type: 'string', enum: ['general', 'event', 'alert', 'deal', 'ask_local', 'recommendation', 'lost_found', 'service_offer', 'announcement', 'personal_update', 'resources_howto', 'progress_wins'] },
+        // The types the nearby feed accepts from residents (posts.js PLACE types).
+        postType:   { type: 'string', enum: PLACE_POST_TYPES, description: 'ask_local is a question; alert is a heads-up; local_update is news about the area; neighborhood_win is good news.' },
         purpose:    { type: ['string', 'null'], enum: ['ask', 'offer', 'heads_up', 'recommend', 'event', 'deal', 'story', null] },
         visibility: { type: ['string', 'null'], enum: ['neighborhood', 'public', 'followers', 'connections', null] },
         tags:       { type: ['array', 'null'], items: { type: 'string' }, description: 'Up to 3 tags' },
+        eventDate:      { type: ['string', 'null'], description: 'Events: start, local time YYYY-MM-DDTHH:MM. Null otherwise.' },
+        eventEndDate:   { type: ['string', 'null'], description: 'Events: end, local time YYYY-MM-DDTHH:MM, or null.' },
+        eventVenue:     { type: ['string', 'null'], description: 'Events: where, as people say it ("Esther Short Park"), or null.' },
+        dealExpiresAt:  { type: ['string', 'null'], description: 'Deals (required for them): last day, YYYY-MM-DD. Null otherwise.' },
+        lostFoundType:  { type: ['string', 'null'], enum: ['lost', 'found', null], description: 'Lost and found posts only.' },
+        safetyAlertKind: { type: ['string', 'null'], enum: ['road_hazard', 'power_outage', 'weather_damage', 'missing_pet', 'hazard', 'other', null], description: 'Heads-ups (alert) only, required for them. Never crimes or suspicious people.' },
         note:       { type: ['string', 'null'], description: DRAFT_NOTE },
       },
-      required: ['content', 'title', 'postType', 'purpose', 'visibility', 'tags', 'note'],
+      required: ['content', 'title', 'postType', 'purpose', 'visibility', 'tags', 'eventDate', 'eventEndDate', 'eventVenue', 'dealExpiresAt', 'lostFoundType', 'safetyAlertKind', 'note'],
       additionalProperties: false,
     },
   },
@@ -257,6 +269,10 @@ const toolDefinitions = [
       additionalProperties: false,
     },
   },
+  ...readToolDefinitions,
+  ...nearbyReadToolDefinitions,
+  ...actionCardDefinitions,
+  showLinkDefinition,
 ];
 
 // ─── Tool Executors ─────────────────────────────────────────────────────────
@@ -278,11 +294,12 @@ const DRAFT_CLOSINGS = {
  * @param {Array<{name: string, result: object}|undefined>} calls  One per tool_use in the round.
  */
 function closingForDrafts(calls) {
-  const finished = calls.length > 0 && calls.every((call) => call && call.name in DRAFT_CLOSINGS
+  const isCard = (call) => call.result.draftType === 'action' && typeof call.result.closing === 'string';
+  const finished = calls.length > 0 && calls.every((call) => call && (call.name in DRAFT_CLOSINGS || isCard(call))
     && !call.result.error && call.result.valid !== false);
   if (!finished) return null;
   const notes = calls.map((call) => call.result.note).filter((note) => typeof note === 'string' && note.trim());
-  if (!notes.length) return DRAFT_CLOSINGS[calls[0].name];
+  if (!notes.length) return isCard(calls[0]) ? calls[0].result.closing : DRAFT_CLOSINGS[calls[0].name];
   // A note can read as if the change were made ("recycling is set to none"); the
   // pickup card changes nothing until it is saved.
   const saveFirst = calls.some((call) => call.name === 'draft_pickup_schedule') ? ' Nothing changes until you tap Save.' : '';
@@ -290,6 +307,39 @@ function closingForDrafts(calls) {
 }
 
 const TOOL_TIMEOUT_MS = 5000;
+// Reads that compose several providers, and the plan card's place search, need longer.
+const TOOL_TIMEOUTS_MS = {
+  get_place_facts: 12000,
+  get_today: 12000,
+  find_plans: 8000,
+  get_plan: 8000,
+  find_posts: 8000,
+  get_post: 8000,
+  // Two feed reads and their replies: as long as Place and Today, and a little more.
+  catch_up_nearby: 12000,
+  find_recommendations: 15000,
+  list_home_tasks: 8000,
+  get_household: 8000,
+  draft_plan: 15000,
+  draft_plan_change: 15000,
+  show_plan_requests: 8000,
+  draft_plan_ask: 8000,
+  draft_plan_message: 8000,
+  draft_home_task: 8000,
+  draft_home_task_update: 8000,
+  draft_home_year: 15000,
+  draft_home_system: 12000,
+  draft_home_asset: 8000,
+};
+
+/** The tool context: the person and what this turn knows. A bare user id still works (older callers, tests). */
+function toolContext(userOrCtx) {
+  if (userOrCtx && typeof userOrCtx === 'object') {
+    const userId = userOrCtx.userId || userOrCtx.user?.id;
+    return { ...userOrCtx, userId, user: userOrCtx.user || { id: userId } };
+  }
+  return { userId: userOrCtx, user: { id: userOrCtx } };
+}
 
 /** The declared tool a call means. Claude occasionally gets the letter case of a name wrong; an unambiguous match is taken. */
 function canonicalToolName(name) {
@@ -301,29 +351,43 @@ function canonicalToolName(name) {
 /**
  * Execute a tool call with a timeout.
  */
-async function executeTool(name, args, userId) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), TOOL_TIMEOUT_MS);
-
+async function executeTool(name, args, userOrCtx) {
+  const ctx = toolContext(userOrCtx);
+  const { userId } = ctx;
+  const tool = canonicalToolName(name);
+  const budget = TOOL_TIMEOUTS_MS[tool] || TOOL_TIMEOUT_MS;
+  let timer;
+  // The deadline is enforced here: a stuck read answers "timed out" and the turn goes on.
+  const late = new Promise((resolve) => {
+    timer = setTimeout(() => {
+      logger.warn('Tool execution timeout', { tool, userId });
+      resolve({ error: `Tool ${tool} timed out. Say it couldn't be checked just now.` });
+    }, budget);
+    timer.unref?.();
+  });
   try {
-    const result = await _executeToolImpl(canonicalToolName(name), args, userId, controller.signal);
-    clearTimeout(timeout);
-    return result;
+    return await Promise.race([_executeToolImpl(tool, args || {}, ctx), late]);
   } catch (err) {
-    clearTimeout(timeout);
-    if (err.name === 'AbortError') {
-      logger.warn('Tool execution timeout', { tool: name, userId });
-      return { error: `Tool ${name} timed out` };
-    }
-    logger.error('Tool execution error', { tool: name, userId, error: err.message });
-    return { error: `Tool ${name} failed: ${err.message}` };
+    logger.error('Tool execution error', { tool, userId, error: err.message });
+    return { error: `Tool ${tool} failed: ${err.message}` };
+  } finally {
+    clearTimeout(timer);
   }
 }
 
-async function _executeToolImpl(name, args, userId, _signal) {
+async function _executeToolImpl(name, args, ctx) {
+  const { userId } = ctx;
+  const read = await runReadTool(name, args, ctx);
+  if (read) return read;
+  const nearby = await runNearbyReadTool(name, args, ctx);
+  if (nearby) return nearby;
+  const drafted = await runCardTool(name, args, ctx);
+  if (drafted) return drafted;
+  if (name === 'show_link') return runShowLink(args, ctx);
   switch (name) {
     case 'get_user_context':
       return _getUserContext(userId);
+
 
     case 'get_place_alerts':
       return _getPlaceAlerts(userId, args.place_label);
@@ -370,6 +434,13 @@ async function _executeToolImpl(name, args, userId, _signal) {
       if (!draft.visibility) draft.visibility = 'neighborhood';
       if (!draft.tags) draft.tags = [];
       draft.clarifying_questions = draft.clarifying_questions || [];
+      // Fields that don't apply stay out of the card; event times go out as UTC.
+      for (const key of ['eventDate', 'eventEndDate', 'eventVenue', 'dealExpiresAt', 'lostFoundType', 'safetyAlertKind']) {
+        if (draft[key] == null || draft[key] === '') delete draft[key];
+      }
+      if (draft.eventDate) draft.eventDate = localToUtc(draft.eventDate, ctx.timeZone) || undefined;
+      if (draft.eventEndDate) draft.eventEndDate = localToUtc(draft.eventEndDate, ctx.timeZone) || undefined;
+      if (draft.postType === 'alert' && !draft.safetyAlertKind) draft.safetyAlertKind = 'other';
 
       const valid = validatePostDraft(draft);
       return { draft, valid, errors: valid ? null : validatePostDraft.errors, draftType: 'post', note: note || null };
@@ -556,22 +627,16 @@ async function _executeToolImpl(name, args, userId, _signal) {
 
 async function _getUserContext(userId) {
   try {
-    // Saved places and homes, coarse only (no exact addresses). Most homeowners never save a separate
-    // place, so their homes count too, as "Home" plus city and state: a home's name is often its address.
-    const [{ data: places }, { data: occupancies }] = await Promise.all([
+    // Saved places and homes, coarse only (no exact addresses): a home's name is often its address,
+    // so homes are named "Home" with their city and state, and carry their id for the other tools.
+    const [{ data: places }, { homes }] = await Promise.all([
       supabaseAdmin
         .from('SavedPlace')
         .select('id, label, place_type, city, state')
         .eq('user_id', userId)
         .limit(10),
-      supabaseAdmin
-        .from('HomeOccupancy')
-        .select('home:home_id(city, state)')
-        .eq('user_id', userId)
-        .eq('is_active', true)
-        .limit(5),
+      homesOf(userId),
     ]);
-    const homes = (occupancies || []).map((occupancy) => occupancy.home).filter(Boolean);
 
     // Fetch recent counts (last 30 days)
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
@@ -589,9 +654,12 @@ async function _getUserContext(userId) {
 
     return {
       homes: homes.map((home, index) => ({
+        home_id: home.id,
         label: homes.length > 1 ? `Home ${index + 1}` : 'Home',
         city: home.city || null,
         state: home.state || null,
+        role: home.role || null,
+        shown_on_today: home.is_default,
       })),
       saved_places: (places || []).map(p => ({
         label: p.label,

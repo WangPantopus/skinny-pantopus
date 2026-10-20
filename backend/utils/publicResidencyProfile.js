@@ -13,7 +13,7 @@
  */
 
 const supabaseAdmin = require('../config/supabaseAdmin');
-const { isVerifiedOwner } = require('./homePermissions');
+const { isVerifiedOwner, isVerifiedResident } = require('./homePermissions');
 
 /**
  * @param {string} userId - whose residency is being summarised
@@ -32,6 +32,7 @@ async function getPublicResidencySummary(userId, viewerId = null) {
       .from('HomeOccupancy')
       .select(`
         verification_status,
+        verification_source,
         verified_at,
         created_at,
         home:home_id ( id, city, state )
@@ -44,13 +45,9 @@ async function getPublicResidencySummary(userId, viewerId = null) {
     if (occ && occ.home) {
       const home = occ.home;
       const homeId = home.id;
-      // The public "verified resident" badge respects expiry when enforcement
-      // is on: a verification past its validity window stops being presented
-      // to strangers as current. Legacy rows without verified_at never demote.
-      // eslint-disable-next-line global-require
-      const verificationAge = require('./verificationAge');
-      let verified = occ.verification_status === 'verified'
-        && !verificationAge.staleAffectsTrust(occ.verified_at);
+      // Use the same attestation gate as home artifacts: an accepted household
+      // invitation grants household tools, not an address-verified badge.
+      let verified = isVerifiedResident({ occupancy: occ });
       if (!verified) {
         const ownerCheck = await isVerifiedOwner(homeId, userId);
         verified = ownerCheck.isOwner;

@@ -86,7 +86,7 @@ describe('composeForHome', () => {
   it('surfaces the yearly tax date with days_until when inside the window', async () => {
     seedCamas();
     const cal = await svc.composeForHome(home, { now: new Date('2026-10-20T18:00:00.000Z') });
-    expect(cal.upcoming.find((e) => e.kind === 'property_tax')).toMatchObject({ date: '2026-10-31', days_until: 11, confidence: 'official', scope: 'state' });
+    expect(cal.upcoming.find((e) => e.kind === 'property_tax')).toMatchObject({ date: '2026-11-02', days_until: 13, moved_from: '2026-10-31', confidence: 'official', scope: 'state' });
   });
 
   it('a household pickup day replaces the city default (narrowest scope wins per kind)', async () => {

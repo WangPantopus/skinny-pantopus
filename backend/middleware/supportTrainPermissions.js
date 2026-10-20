@@ -8,6 +8,16 @@
  */
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
+// The canonical form only: Joi's uuid() also takes (…), […] and colon-separated ids, which the
+// database rejects, so they would come back as a failed read (503) instead of a bad id (400).
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function unavailable(res, message = 'Could not load this Support Train right now. Please try again.') {
+  return res.status(503).json({
+    error: 'SUPPORT_TRAIN_UNAVAILABLE',
+    message,
+  });
+}
 
 /**
  * Fetch SupportTrain + Activity and attach to req.supportTrain / req.activity.
@@ -16,8 +26,8 @@ const logger = require('../utils/logger');
 function loadSupportTrain(req, res, next) {
   const supportTrainId = req.params.id;
 
-  if (!supportTrainId) {
-    return res.status(400).json({ error: 'BAD_REQUEST', message: 'Missing support train ID.' });
+  if (typeof supportTrainId !== 'string' || !UUID.test(supportTrainId)) {
+    return res.status(400).json({ error: 'BAD_REQUEST', message: 'A valid Support Train ID is required.' });
   }
 
   supabaseAdmin
@@ -27,9 +37,10 @@ function loadSupportTrain(req, res, next) {
       Activity!inner ( * )
     `)
     .eq('id', supportTrainId)
-    .single()
+    .maybeSingle()
     .then(({ data, error }) => {
-      if (error || !data) {
+      if (error) throw error;
+      if (!data) {
         return res.status(404).json({ error: 'NOT_FOUND', message: 'Support Train not found.' });
       }
       req.supportTrain = data;
@@ -38,7 +49,7 @@ function loadSupportTrain(req, res, next) {
     })
     .catch((err) => {
       logger.error('loadSupportTrain error', { supportTrainId, error: err.message });
-      res.status(500).json({ error: 'INTERNAL' });
+      unavailable(res);
     });
 }
 
@@ -70,9 +81,10 @@ function requireSupportTrainRole(roles) {
         .select('role')
         .eq('support_train_id', supportTrainId)
         .eq('user_id', userId)
-        .single();
+        .maybeSingle();
 
-      if (error || !data || !roles.includes(data.role)) {
+      if (error) throw error;
+      if (!data || !roles.includes(data.role)) {
         return res.status(403).json({
           error: 'FORBIDDEN',
           message: 'You do not have permission to perform this action on this Support Train.',
@@ -83,7 +95,7 @@ function requireSupportTrainRole(roles) {
       next();
     } catch (err) {
       logger.error('requireSupportTrainRole error', { supportTrainId, userId, error: err.message });
-      res.status(500).json({ error: 'INTERNAL' });
+      unavailable(res);
     }
   };
 }
@@ -119,12 +131,14 @@ async function requireSupportTrainViewer(req, res, next) {
     }
 
     // Check SupportTrainOrganizer (co-organizer or recipient_delegate)
-    const { data: orgRow } = await supabaseAdmin
+    const { data: orgRow, error: orgError } = await supabaseAdmin
       .from('SupportTrainOrganizer')
       .select('role')
       .eq('support_train_id', supportTrainId)
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
+
+    if (orgError) throw orgError;
 
     if (orgRow) {
       req.supportTrainRole = orgRow.role;
@@ -132,12 +146,14 @@ async function requireSupportTrainViewer(req, res, next) {
     }
 
     // Check active reservation
-    const { count } = await supabaseAdmin
+    const { count, error: reservationError } = await supabaseAdmin
       .from('SupportTrainReservation')
       .select('id', { count: 'exact', head: true })
       .eq('support_train_id', supportTrainId)
       .eq('user_id', userId)
       .in('status', ['reserved', 'delivered', 'confirmed']);
+
+    if (reservationError) throw reservationError;
 
     if ((count || 0) > 0) {
       req.supportTrainRole = 'helper';
@@ -150,7 +166,7 @@ async function requireSupportTrainViewer(req, res, next) {
     });
   } catch (err) {
     logger.error('requireSupportTrainViewer error', { supportTrainId, userId, error: err.message });
-    res.status(500).json({ error: 'INTERNAL' });
+    unavailable(res);
   }
 }
 
@@ -158,4 +174,5 @@ module.exports = {
   loadSupportTrain,
   requireSupportTrainRole,
   requireSupportTrainViewer,
+  supportTrainUnavailable: unavailable,
 };

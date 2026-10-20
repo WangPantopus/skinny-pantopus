@@ -70,6 +70,7 @@ public struct ReceivedNeighborMessage: Decodable, Sendable, Hashable, Identifiab
     public let sender: NeighborMessageSender
     public let reply: NeighborMessageReply?
     public let canReply: Bool
+    public let blockedByViewer: Bool?
     public let notHelpful: Bool
     public let reported: Bool
     public let readAt: String?
@@ -78,6 +79,7 @@ public struct ReceivedNeighborMessage: Decodable, Sendable, Hashable, Identifiab
         case id, category, body, sender, reply, reported
         case createdAt = "created_at"
         case canReply = "can_reply"
+        case blockedByViewer = "blocked_by_viewer"
         case notHelpful = "not_helpful"
         case readAt = "read_at"
     }

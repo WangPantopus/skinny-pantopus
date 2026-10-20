@@ -129,7 +129,7 @@ class MyBusinessesViewModelTest {
 
             val bayside = loaded.cards[1]
             assertEquals("Tutoring", bayside.categoryLabel)
-            assertEquals("Online only", bayside.locality)
+            assertEquals("Location not set", bayside.locality)
             assertTrue(bayside.localityIsPlaceholder)
             assertEquals("Manager", bayside.role?.label)
             assertFalse(bayside.verified)

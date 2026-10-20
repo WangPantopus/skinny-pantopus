@@ -23,6 +23,7 @@ import app.pantopus.android.data.api.models.businesses.UpdateBusinessRequest
 import app.pantopus.android.data.api.models.businesses.UsernameAvailabilityDto
 import retrofit2.Response
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.PATCH
@@ -43,6 +44,7 @@ import retrofit2.http.Query
  * cohesive surface; callers (and `NetworkModule`) keep depending on this one
  * type.
  */
+@Suppress("TooManyFunctions") // Keep the existing owner lifecycle operations on one API.
 interface BusinessesApi :
     BusinessVisitorApi,
     BusinessLocationsApi,
@@ -124,6 +126,12 @@ interface BusinessesApi :
      */
     @POST("api/businesses/{businessId}/publish")
     suspend fun publishBusiness(
+        @Path("businessId") businessId: String,
+    ): BusinessMutationMessageResponse
+
+    /** Owner-only closure: unpublish the business and deactivate team access. */
+    @DELETE("api/businesses/{businessId}")
+    suspend fun closeBusiness(
         @Path("businessId") businessId: String,
     ): BusinessMutationMessageResponse
 

@@ -54,6 +54,11 @@ class GeoCache {
     this._map.clear();
   }
 
+  /** Remove a value immediately when its source changes. */
+  delete(key) {
+    return this._map.delete(key);
+  }
+
   /**
    * Current number of entries (including possibly expired ones).
    */

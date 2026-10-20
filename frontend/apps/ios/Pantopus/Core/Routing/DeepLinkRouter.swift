@@ -142,6 +142,9 @@ final class DeepLinkRouter {
         /// reached from `https://pantopus.com/app/settings/security`, the
         /// link those notices carry.
         case securityDevices
+        /// `pantopus://settings/notifications` — Settings → Notifications
+        /// (quiet hours, briefings, alerts), from a Pantopus AI link button.
+        case notificationSettings
 
         // MARK: - B1.6 batch-2 routing seam
 
@@ -677,6 +680,12 @@ final class DeepLinkRouter {
             }
             return .unknown(url)
         case "invite":
+            // Business share links carry the token in the query; "seat" is
+            // the invitation kind, not the token itself.
+            if segments.dropFirst().first == "seat" {
+                guard segments.count == 2, let token = tokenQuery, !token.isEmpty else { return .unknown(url) }
+                return .invite(token: token)
+            }
             if segments.dropFirst().first == "lease" {
                 guard segments.count == 3, let token = segments.last,
                       token.range(of: "^[a-fA-F0-9]{64}$", options: .regularExpression) != nil else { return .unknown(url) }
@@ -695,8 +704,9 @@ final class DeepLinkRouter {
         case "verify-email", "verify_email":
             return verifyEmailDestination(url: url, token: tokenQuery, email: emailQuery)
         case "settings":
-            // `pantopus://settings/payments` — A14.6, and
-            // `pantopus://settings/security` — Devices & sessions. Other
+            // `pantopus://settings/payments` — A14.6,
+            // `pantopus://settings/security` — Devices & sessions, and
+            // `pantopus://settings/notifications` — Notifications. Other
             // settings sub-routes aren't deep-linkable yet; the bare host
             // `pantopus://settings` falls through to `.unknown`.
             if segments.dropFirst().first == "payments" {
@@ -704,6 +714,9 @@ final class DeepLinkRouter {
             }
             if segments.dropFirst().first == "security" {
                 return .securityDevices
+            }
+            if segments.dropFirst().first == "notifications", segments.count == 2 {
+                return .notificationSettings
             }
             return .unknown(url)
         default:

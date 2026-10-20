@@ -276,6 +276,8 @@ public struct ChatAIDraftCard: Identifiable, Sendable, Hashable {
     public var prefill: ChatAIDraftPrefill?
     /// A pickup-days card's schedule and where its Save stands.
     public var pickup: ChatAIPickupSchedule?
+    /// An action card: what one tap sends, and where it stands.
+    public var action: ChatAIActionCard?
 }
 
 /// The household's pickup days as the assistant read them. Save writes them
@@ -305,12 +307,75 @@ public struct ChatAIDraftPrefill: Sendable, Hashable {
     public let postType: String?
     /// A post's headline, when the draft has one.
     public let title: String?
+    /// A post's event, deal, Lost & Found and Heads Up fields, when it has them.
+    public var eventDate: String?
+    public var eventEndDate: String?
+    public var eventVenue: String?
+    public var dealExpiresAt: String?
+    public var lostFoundType: String?
+    public var safetyAlertKind: String?
 
     public init(body: String, postType: String? = nil, title: String? = nil) {
         self.body = body
         self.postType = postType
         self.title = title
     }
+
+    /// Everything the Pulse composer starts from.
+    public var postDraft: PulseComposeDraft {
+        PulseComposeDraft(
+            postType: postType,
+            title: title,
+            body: body,
+            eventDate: eventDate,
+            eventEndDate: eventEndDate,
+            eventVenue: eventVenue,
+            dealExpiresAt: dealExpiresAt,
+            lostFoundType: lostFoundType,
+            safetyAlertKind: safetyAlertKind
+        )
+    }
+}
+
+/// A link button under an assistant reply: a screen in the app, opened
+/// through the deep-link router.
+public struct ChatAILink: Identifiable, Sendable, Hashable {
+    public let label: String
+    public let url: String
+
+    public var id: String {
+        "\(label)|\(url)"
+    }
+
+    public init(label: String, url: String) {
+        self.label = label
+        self.url = url
+    }
+}
+
+/// An action card in the thread, and where its taps stand.
+public struct ChatAIActionCard: Sendable, Hashable {
+    public let envelope: AIActionCardDTO
+    /// Actions that went through, by `AIActionDoneStore.key`, with what the card shows for them.
+    public var done: [String: ChatAIActionDone] = [:]
+    /// The action whose request is in flight, by the same key.
+    public var running: String?
+    /// The last failure: "" for the card's own actions, else the row's id.
+    public var failures: [String: String] = [:]
+
+    public init(envelope: AIActionCardDTO) {
+        self.envelope = envelope
+    }
+}
+
+/// How a finished action reads on its card, kept on the device.
+public struct ChatAIActionDone: Codable, Sendable, Hashable {
+    /// "Plan posted".
+    public let label: String
+    /// An app link with the reply's values filled in, for the Open button.
+    public let link: String?
+    /// "The repeat wasn't set."
+    public let note: String?
 }
 
 public struct ChatReplyPreview: Sendable, Hashable {
@@ -500,6 +565,12 @@ public struct ChatBubbleContent: Identifiable, Sendable, Hashable {
     public let lockedTier: String?
     /// Paid support tier attached to outgoing fan replies.
     public let sentSupportTier: String?
+    /// Who sent an incoming message in a room with several people (a
+    /// group's, a Support Train's); never the room's title. `nil` in a
+    /// one-to-one thread.
+    public let senderName: String?
+    /// Link buttons under an assistant reply (`.aiReply` only).
+    public let aiLinks: [ChatAILink]
 
     public init(
         id: String,
@@ -513,6 +584,8 @@ public struct ChatBubbleContent: Identifiable, Sendable, Hashable {
         deliveryState: ChatDeliveryState? = nil,
         lockedTier: String? = nil,
         sentSupportTier: String? = nil,
+        senderName: String? = nil,
+        aiLinks: [ChatAILink] = [],
         attachments: [ChatAttachmentDTO] = []
     ) {
         self.id = id
@@ -526,6 +599,8 @@ public struct ChatBubbleContent: Identifiable, Sendable, Hashable {
         self.deliveryState = deliveryState
         self.lockedTier = lockedTier
         self.sentSupportTier = sentSupportTier
+        self.senderName = senderName
+        self.aiLinks = aiLinks
         self.attachments = attachments
     }
 }

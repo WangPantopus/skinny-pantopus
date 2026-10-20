@@ -20,13 +20,17 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -35,6 +39,9 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -44,6 +51,8 @@ import app.pantopus.android.ui.components.PantopusTextField
 import app.pantopus.android.ui.screens.businesses.create_business.BusinessHoursDay
 import app.pantopus.android.ui.screens.businesses.create_business.CreateBusinessLogoPick
 import app.pantopus.android.ui.screens.businesses.create_business.CreateBusinessUiState
+import app.pantopus.android.ui.screens.businesses.page_editor.EditBusinessPageHoursRow
+import app.pantopus.android.ui.screens.businesses.page_editor.components.BusinessHoursDayDialog
 import app.pantopus.android.ui.screens.shared.wizard.blocks.FormFieldsBlock
 import app.pantopus.android.ui.screens.shared.wizard.blocks.HeadlineBlock
 import app.pantopus.android.ui.screens.shared.wizard.blocks.SubcopyBlock
@@ -56,6 +65,9 @@ import app.pantopus.android.ui.theme.Spacing
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 /**
  * Create Business step 3 — Location Form + Hours + Logo. All three sections
@@ -329,6 +341,7 @@ private fun HoursSection(
             HoursEditor(
                 hours = state.hours,
                 onToggleDayClosed = callbacks.onToggleDayClosed,
+                onDayChange = callbacks.onHoursDayChange,
                 onSkipHours = callbacks.onSkipHours,
             )
         }
@@ -339,8 +352,10 @@ private fun HoursSection(
 private fun HoursEditor(
     hours: List<BusinessHoursDay>,
     onToggleDayClosed: (Int) -> Unit,
+    onDayChange: (BusinessHoursDay) -> Unit,
     onSkipHours: () -> Unit,
 ) {
+    var editingDay by remember { mutableStateOf<BusinessHoursDay?>(null) }
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
         Text(
             text = "Hours",
@@ -356,7 +371,7 @@ private fun HoursEditor(
                     .padding(horizontal = Spacing.s3),
         ) {
             hours.forEachIndexed { index, day ->
-                HoursRow(day = day, onToggle = { onToggleDayClosed(day.dayOfWeek) })
+                HoursRow(day = day, onToggle = { onToggleDayClosed(day.dayOfWeek) }, onEdit = { editingDay = day })
                 if (index < hours.lastIndex) {
                     HorizontalDivider(color = PantopusColors.appBorderSubtle)
                 }
@@ -375,18 +390,52 @@ private fun HoursEditor(
                     .padding(vertical = Spacing.s2),
         )
     }
+    editingDay?.let { day ->
+        val formatter = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
+        val row =
+            EditBusinessPageHoursRow(
+                id = day.dayOfWeek.toString(),
+                dayLabel = day.shortLabel,
+                state =
+                    if (day.isClosed) {
+                        EditBusinessPageHoursRow.State.Closed
+                    } else {
+                        EditBusinessPageHoursRow.State.Open(
+                            LocalTime.parse(day.openTime).format(formatter),
+                            LocalTime.parse(day.closeTime).format(formatter),
+                        )
+                    },
+            )
+        BusinessHoursDayDialog(
+            day = row,
+            onDismiss = { editingDay = null },
+            onApply = { value ->
+                val times = value as? EditBusinessPageHoursRow.State.Open
+                onDayChange(
+                    day.copy(
+                        isClosed = times == null,
+                        openTime = times?.let { LocalTime.parse(it.openLabel, formatter).toString() } ?: day.openTime,
+                        closeTime = times?.let { LocalTime.parse(it.closeLabel, formatter).toString() } ?: day.closeTime,
+                    ),
+                )
+                editingDay = null
+            },
+        )
+    }
 }
 
 @Composable
 private fun HoursRow(
     day: BusinessHoursDay,
     onToggle: () -> Unit,
+    onEdit: () -> Unit,
 ) {
     Row(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .padding(vertical = Spacing.s2)
+                .clickable(onClick = onEdit)
                 .testTag("createBusiness_hoursDay_${day.dayOfWeek}"),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
@@ -404,7 +453,8 @@ private fun HoursRow(
                         color = if (day.isClosed) PantopusColors.appBorder else PantopusColors.business,
                         shape = RoundedCornerShape(Radii.xs),
                     )
-                    .clickable(onClick = onToggle),
+                    .toggleable(value = !day.isClosed, role = Role.Checkbox, onValueChange = { onToggle() })
+                    .semantics { contentDescription = "${day.shortLabel} open" },
             contentAlignment = Alignment.Center,
         ) {
             if (!day.isClosed) {

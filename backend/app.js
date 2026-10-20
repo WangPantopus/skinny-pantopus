@@ -79,6 +79,7 @@ const { registerPgBossJobs } = require('./jobs/pgBossJobs');
 
 // Import logger
 const logger = require('./utils/logger');
+const { isUserFacing } = require('./utils/userFacingError');
 
 // Verify Supabase connection
 const supabaseAdmin = require('./config/supabaseAdmin');
@@ -522,14 +523,23 @@ app.use((req, res) => {
 app.use((err, req, res, next) => {
   // Refused origins and rejected uploads are the client's problem, not server faults.
   let status = err.status || err.statusCode || 500;
-  if (err.message === 'Not allowed by CORS') status = 403;
+  let safeMessage = err.message || 'Internal server error';
+  // JSON parser messages include fragments of the submitted body, which may
+  // contain credentials. Keep that content out of both responses and logs.
+  if (err.type === 'entity.parse.failed') {
+    status = 400;
+    safeMessage = 'Request body must contain valid JSON.';
+  } else if (err.type === 'entity.too.large') {
+    status = 413;
+    safeMessage = 'Request body is too large.';
+  } else if (err.message === 'Not allowed by CORS') status = 403;
   else if (err.name === 'MulterError') status = err.code === 'LIMIT_FILE_SIZE' ? 413 : 400;
   else if (/^File type not allowed/.test(err.message || '')) status = 415;
 
   if (status >= 500) {
     logger.error('Unhandled error', { error: err.message, stack: err.stack, path: req.path, method: req.method });
   } else {
-    logger.warn('Request rejected', { error: err.message, status, path: req.path, method: req.method });
+    logger.warn('Request rejected', { error: safeMessage, status, path: req.path, method: req.method });
   }
 
   if (res.headersSent) {
@@ -537,13 +547,19 @@ app.use((err, req, res, next) => {
   }
 
   // Internal error messages can describe the database or providers; production
-  // clients get a generic one for server faults.
-  const message = status >= 500 && process.env.NODE_ENV === 'production'
+  // clients get a generic one for server faults. Only an error the app marked
+  // as fixed copy (utils/userFacingError) keeps its message and code; the
+  // status alone never does, since provider SDK errors carry their own.
+  const userFacing = isUserFacing(err);
+  const message = status >= 500 && process.env.NODE_ENV === 'production' && !userFacing
     ? 'Internal server error'
-    : (err.message || 'Internal server error');
+    : safeMessage;
   return res.status(status).json({
     error: message,
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+    ...(userFacing && typeof err.code === 'string' && { code: err.code }),
+    ...(process.env.NODE_ENV === 'development'
+      && !['entity.parse.failed', 'entity.too.large'].includes(err.type)
+      && { stack: err.stack })
   });
 });
 

@@ -125,7 +125,8 @@ export default function InvoiceDetail({
   const canShare = status === "paid" || status === "void" || status === "refunded";
 
   const handleShare = async () => {
-    const url = typeof window !== "undefined" ? window.location.href : "";
+    if (!invoice) return;
+    const url = `${window.location.origin}/app/invoice/${encodeURIComponent(invoice.id)}`;
     try {
       if (navigator.share) {
         await navigator.share({ title: "Invoice", url });
@@ -133,8 +134,14 @@ export default function InvoiceDetail({
         await navigator.clipboard.writeText(url);
         toast.success("Invoice link copied.");
       }
-    } catch {
-      /* dismissed */
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      try {
+        await navigator.clipboard.writeText(url);
+        toast.success("Invoice link copied.");
+      } catch {
+        toast.error("Could not share the invoice link. Please try again.");
+      }
     }
   };
 

@@ -410,11 +410,13 @@ public struct BusinessAccessDTO: Decodable, Sendable, Hashable {
     public let hasAccess: Bool
     public let isOwner: Bool
     public let roleBase: String?
+    public let permissions: [String]?
 
     private enum CodingKeys: String, CodingKey {
         case hasAccess
         case isOwner
         case roleBase = "role_base"
+        case permissions
     }
 }
 

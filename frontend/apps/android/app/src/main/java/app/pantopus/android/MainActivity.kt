@@ -9,9 +9,14 @@ import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
@@ -25,11 +30,13 @@ import app.pantopus.android.data.auth.TokenStorage
 import app.pantopus.android.data.chats.ActiveChatThread
 import app.pantopus.android.data.plans.PlansFeature
 import app.pantopus.android.data.store.StoreSync
+import app.pantopus.android.push.ASSISTANT_RECIPIENT
 import app.pantopus.android.push.PushTokenSyncer
 import app.pantopus.android.push.ReminderActionReceiver
 import app.pantopus.android.ui.components.ToastController
 import app.pantopus.android.ui.components.ToastHost
 import app.pantopus.android.ui.navigation.PantopusNavHost
+import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusTheme
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.first
@@ -119,7 +126,19 @@ class MainActivity : FragmentActivity() {
         if (savedInstanceState == null) forwardDeepLink(intent)
         setContent {
             PantopusTheme {
-                Box(modifier = Modifier.fillMaxSize()) {
+                // A camera cutout can be taller than the status bar (and move to
+                // the side in landscape). Consume it here so every screen stays
+                // clear of it without adding its own system-bar padding twice.
+                // The app is always light: paint the band it leaves so a dark system
+                // theme's window background never sits behind dark status-bar icons.
+                Box(
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .background(PantopusColors.appSurface)
+                            .windowInsetsPadding(WindowInsets.displayCutout)
+                            .clipToBounds(),
+                ) {
                     PantopusNavHost()
                     ToastHost(controller = toastController)
                 }
@@ -209,8 +228,19 @@ class MainActivity : FragmentActivity() {
             OAuthSessionStore.deliver(uri)
             return
         }
-        if (forwardReminderAction(intent, uri)) return
+        if (forwardReminderAction(intent, uri) || forwardAssistantNudge(intent, uri)) return
         DeepLinkRouter.handle(uri)
+    }
+
+    /** A brief or nudge opens only for the account it was sent to; signed out, it waits for that account's sign-in. */
+    private fun forwardAssistantNudge(
+        intent: Intent,
+        uri: Uri,
+    ): Boolean {
+        val recipient = intent.getStringExtra(ASSISTANT_RECIPIENT) ?: return false
+        intent.removeExtra(ASSISTANT_RECIPIENT)
+        DeepLinkRouter.handle(uri.toString(), expectedUserId = recipient)
+        return true
     }
 
     /**

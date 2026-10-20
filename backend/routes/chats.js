@@ -17,7 +17,15 @@ const {
   serializeUserIdentityForViewer,
 } = require('../serializers/identitySerializers');
 const { verifiedResidentUserIds } = require('../utils/identityProfiles');
-const { hasPermission } = require('../utils/businessPermissions');
+const { isUnpublishedBusiness } = require('../utils/visibilityPolicy');
+const {
+  isBusinessAccount,
+  canActAsBusiness,
+  businessMembership,
+  actingBusinessInRoom,
+  taskBusinessInRoom,
+  dropStaffMembership,
+} = require('../services/chatBusinessAccess');
 const s3Service = require('../services/s3Service');
 const { isBlocked, blockCheckUnavailable } = require('../services/blockService');
 const {
@@ -212,24 +220,6 @@ const reactToMessageSchema = Joi.object({
   reacted: Joi.boolean(),
 });
 
-async function isBusinessAccount(userId) {
-  const { data: user } = await supabaseAdmin
-    .from('User')
-    .select('id, account_type')
-    .eq('id', userId)
-    .maybeSingle();
-  return Boolean(user && user.account_type === 'business');
-}
-
-async function canActAsBusiness(businessUserId, actorUserId) {
-  if (!businessUserId || !actorUserId) return false;
-  if (String(businessUserId) === String(actorUserId)) return true;
-  if (!(await isBusinessAccount(businessUserId))) return false;
-  const canManage = await hasPermission(businessUserId, actorUserId, 'gigs.manage');
-  if (canManage) return true;
-  return hasPermission(businessUserId, actorUserId, 'gigs.post');
-}
-
 // The business identity an actor may act as here, or none (their own id always counts).
 async function verifiedBusinessIdentity(asBusinessUserId, actorUserId) {
   if (!asBusinessUserId) return [];
@@ -281,42 +271,29 @@ async function getBusinessMessagingMemberIds(businessUserId) {
   return Array.from(ids);
 }
 
-async function ensureBusinessRoomActorAccess(roomId, actorUserId, businessUserId) {
-  if (!roomId || !actorUserId || !businessUserId) return false;
-
-  const canAct = await canActAsBusiness(businessUserId, actorUserId);
-  if (!canAct) return false;
-
-  const { data: businessParticipant } = await supabaseAdmin
+// The membership a request reads or writes the room through. Acting for a business, it is the business's own: its
+// owner and staff are never members of its conversations (services/chatBusinessAccess). They act for it when the
+// request says so (`asBusinessUserId`), and in the chat room of a task it posted, where they always answer as the
+// business. Otherwise it is the caller's own row; `activeOnly` refuses one they left.
+async function roomMembership(roomId, userId, asBusinessUserId, { activeOnly = false } = {}) {
+  const { data: own } = await supabaseAdmin
     .from('ChatParticipant')
-    .select('id')
+    .select('*')
     .eq('room_id', roomId)
-    .eq('user_id', businessUserId)
-    .eq('is_active', true)
+    .eq('user_id', userId)
     .maybeSingle();
-
-  if (!businessParticipant) return false;
-
-  await supabaseAdmin
-    .from('ChatParticipant')
-    .upsert(
-      {
-        room_id: roomId,
-        user_id: actorUserId,
-        role: 'member',
-        is_active: true,
-        left_at: null,
-      },
-      { onConflict: 'room_id,user_id', ignoreDuplicates: true }
-    );
-
-  await supabaseAdmin
-    .from('ChatParticipant')
-    .update({ is_active: true, left_at: null })
-    .eq('room_id', roomId)
-    .eq('user_id', actorUserId);
-
-  return true;
+  const businessUserId = asBusinessUserId && String(asBusinessUserId) !== String(userId)
+    ? asBusinessUserId
+    : await taskBusinessInRoom(roomId, userId);
+  if (businessUserId) {
+    const business = await businessMembership(roomId, userId, businessUserId);
+    if (business) {
+      if (own) await dropStaffMembership(roomId, userId, businessUserId);
+      return business;
+    }
+  }
+  if (!own || (activeOnly && own.is_active === false)) return null;
+  return own;
 }
 
 async function redactExpiredDeletedMessages(roomId) {
@@ -390,11 +367,32 @@ async function personRowUnread(userId, otherUserId, sentRoomId) {
     .reduce((sum, row) => sum + (Number(row.unread_count) || 0), 0);
 }
 
+// The owner and staff of a business in the room aren't members themselves, so their open business inbox hears its
+// messages here, on their own devices. Without other_user_id: a personal Messages list that gets one reloads instead
+// of filing it under a person.
+async function emitToBusinessStaff(emitTo, payload, businessIds, heard) {
+  if (businessIds.length === 0) return;
+  const { connectedUsers } = require('../socket/chatSocketio');
+  const { data: team, error } = await supabaseAdmin
+    .from('BusinessTeam')
+    .select('business_user_id, user_id')
+    .in('business_user_id', businessIds)
+    .eq('is_active', true);
+  if (error || !Array.isArray(team)) throw new Error(error?.message || 'business team unavailable');
+  for (const row of team) {
+    const staffId = String(row.user_id);
+    if (heard.has(staffId) || !connectedUsers.has(staffId)) continue;
+    if (!(await canActAsBusiness(row.business_user_id, staffId))) continue;
+    heard.add(staffId);
+    emitTo(staffId, payload);
+  }
+}
+
 async function emitNewMessage(io, { room, message, actorUserId, identityUserId }) {
   const { connectedUsers } = require('../socket/chatSocketio');
   const { data: members, error } = await supabaseAdmin
     .from('ChatParticipant')
-    .select('user_id, unread_count')
+    .select('user_id, unread_count, user:user_id(account_type)')
     .eq('room_id', room.id)
     .eq('is_active', true);
   if (error || !Array.isArray(members)) throw new Error(error?.message || 'members unavailable');
@@ -426,6 +424,100 @@ async function emitNewMessage(io, { room, message, actorUserId, identityUserId }
     if (unread !== null) own = { ...base, other_user_id: counterpart, unread_for: unread };
   }
   emitTo(actor, own);
+  // Staff hear what their business hears, and what a colleague sent as it. Members already heard it above.
+  const businessIds = members
+    .filter((row) => row.user?.account_type === 'business')
+    .map((row) => String(row.user_id))
+    .filter((id) => recipients.has(id) || id === identity);
+  const heard = new Set([actor, ...members.map((row) => String(row.user_id))]);
+  await emitToBusinessStaff(emitTo, base, businessIds, heard).catch((staffError) => {
+    logger.warn('message_new_business_staff_failed', { roomId: room.id, error: staffError.message });
+  });
+}
+
+// ── Delivery ─────────────────────────────────────────────────────────
+// A message just written to `room` (with its `sender`) goes out the same way
+// wherever it was written: every member hears it (message:new, without the
+// internal actor_user_id), the room moves up the lists, the sender's own row
+// stays read, and the other members get a badge update and a device push.
+// POST /messages and an organizer's Support Train reminder
+// (routes/supportTrains.js) both deliver through here.
+async function deliverNewMessage(io, { room, message, actorUserId, senderUserId = actorUserId, requestId = null }) {
+  const roomId = room.id;
+  if (io) {
+    const broadcast = serializeChatMessageForViewer(message);
+    emitNewMessage(io, { room, message: broadcast, actorUserId, identityUserId: senderUserId })
+      .catch((emitError) => {
+        // Without the members, the room still hears it as before (the lists reload).
+        logger.warn('message_new_personal_failed', { requestId, roomId, error: emitError.message });
+        io.to(roomId).emit('message:new', broadcast);
+      });
+  }
+
+  const stamp = new Date().toISOString();
+  await Promise.all([
+    supabaseAdmin
+      .from('ChatRoom')
+      .update({ updated_at: stamp })
+      .eq('id', roomId),
+    supabaseAdmin
+      .from('ChatParticipant')
+      .update({ unread_count: 0, last_read_at: stamp })
+      .eq('room_id', roomId)
+      .eq('user_id', actorUserId),
+  ]);
+
+  // Push fresh badge counts (including total message count) immediately.
+  const { data: participantRows } = await supabaseAdmin
+    .from('ChatParticipant')
+    .select('user_id')
+    .eq('room_id', roomId)
+    .eq('is_active', true);
+  const participantUserIds = Array.from(new Set((participantRows || []).map((row) => String(row.user_id)).filter(Boolean)));
+  // Exclude both the acting user and the message identity user.
+  const excludedUserIds = new Set([String(actorUserId), String(senderUserId)]);
+  let recipientUserIds = participantUserIds.filter((id) => !excludedUserIds.has(id));
+  try {
+    // Leftover members of an assigned task's gig room get no badge or push for it.
+    recipientUserIds = await gigRoomRecipients(room, recipientUserIds);
+  } catch (recipientErr) {
+    logger.warn('gig_room_recipients_unavailable', { requestId, roomId, error: recipientErr.message });
+    recipientUserIds = [];
+  }
+  if (recipientUserIds.length === 0) return;
+  badgeService.emitBadgeUpdateToMany(recipientUserIds);
+
+  // A device push to every recipient who has push on, so it arrives when the
+  // app is in the background or closed.
+  (async () => {
+    try {
+      // Skip recipients who turned push off; an account with no
+      // preference row has the default (on).
+      const { data: disabledRows, error: prefsError } = await supabaseAdmin
+        .from('MailPreferences')
+        .select('user_id')
+        .in('user_id', recipientUserIds)
+        .eq('push_notifications', false);
+      if (prefsError) return;
+      const disabled = new Set((disabledRows || []).map((r) => r.user_id));
+      const pushEnabledIds = recipientUserIds.filter((id) => !disabled.has(id));
+      if (pushEnabledIds.length === 0) return;
+
+      const senderName = serializeUserIdentityForViewer(message.sender)?.displayName || 'Someone';
+      const text = String(message.message || '');
+      const type = message.type || 'text';
+      const preview = type === 'text'
+        ? (text.length > 100 ? text.slice(0, 100) + '…' : text)
+        : type === 'file' ? '📎 Sent an attachment' : '💬 New message';
+      await pushService.sendToUsers(pushEnabledIds, {
+        title: senderName,
+        body: preview,
+        data: { type: 'chat_message', room_id: roomId, link: `/chat/${roomId}` },
+      });
+    } catch (err) {
+      logger.warn('Chat push delivery failed (non-blocking)', { error: err.message, roomId });
+    }
+  })();
 }
 
 async function resolveRoomPreviewMap(roomPreviews, requestId, logContext) {
@@ -504,6 +596,34 @@ function serializeChatRoomForViewer(room) {
       ? room.participants.map(serializeChatParticipantForViewer)
       : room.participants,
   };
+}
+
+async function loadPlanChatStates(rooms) {
+  const ids = rooms.filter((room) => room.type === 'plan').map((room) => room.id);
+  if (!ids.length) return new Map();
+  const { data, error } = await supabaseAdmin.from('Plan')
+    .select('post_id, chat_room_id, status, chat_closed_at')
+    .in('chat_room_id', ids);
+  if (error) {
+    logger.warn('Plan chat state lookup failed', { error: error.message });
+    throw Object.assign(new Error('Chat status is temporarily unavailable. Please try again.'), { code: 'CHAT_UNAVAILABLE' });
+  }
+  return new Map((data || []).map((plan) => [String(plan.chat_room_id), plan]));
+}
+
+function roomIsActive(room, planStates) {
+  if (room.type !== 'plan') return room.is_active;
+  const plan = planStates.get(String(room.id));
+  // A cancellation can be committed before the later ChatRoom update succeeds.
+  // Reads must reflect the same authoritative state as the write guard.
+  return room.is_active !== false && !!plan && plan.status !== 'cancelled' && !plan.chat_closed_at;
+}
+
+function sendChatReadError(res, error, fallback) {
+  if (error.code === 'CHAT_UNAVAILABLE') {
+    return res.status(503).json({ error: error.message, code: error.code });
+  }
+  return res.status(500).json({ error: fallback });
 }
 
 function serializeChatMessageForViewer(message, options = {}) {
@@ -676,7 +796,7 @@ router.get('/rooms', verifyToken, async (req, res) => {
     // Batch-fetch other participants and last messages for all rooms (2 queries instead of 2N)
     const allRoomIds = roomList.map(p => p.room.id);
 
-    const [{ data: allOtherParts }, { data: roomPreviews }] = await Promise.all([
+    const [{ data: allOtherParts }, { data: roomPreviews }, planStates] = await Promise.all([
       supabaseAdmin
         .from('ChatParticipant')
         .select('room_id, user:user_id(id, username, name, first_name, middle_name, last_name, profile_picture_url)')
@@ -684,6 +804,7 @@ router.get('/rooms', verifyToken, async (req, res) => {
         .neq('user_id', userId)
         .order('is_active', { ascending: false }),
       supabaseAdmin.rpc('get_room_previews', { p_room_ids: allRoomIds }),
+      loadPlanChatStates(roomList.map((p) => p.room)),
     ]);
 
     // Pick first (active-preferred) participant per room, never a leftover member of an assigned task's gig room
@@ -722,7 +843,7 @@ router.get('/rooms', verifyToken, async (req, res) => {
         description: p.room.description,
         gig_id: p.room.gig_id,
         home_id: p.room.home_id,
-        is_active: p.room.is_active,
+        is_active: roomIsActive(p.room, planStates),
         participant_active: p.is_active,
         created_at: p.room.created_at,
         updated_at: p.room.updated_at,
@@ -761,7 +882,7 @@ router.get('/rooms', verifyToken, async (req, res) => {
 
   } catch (err) {
     logger.error('Chat rooms fetch error', { requestId: req.requestId, userId: req.user?.id, error: err.message });
-    res.status(500).json({ error: 'Failed to fetch chat rooms' });
+    sendChatReadError(res, err, 'Failed to fetch chat rooms');
   }
 });
 
@@ -816,23 +937,20 @@ router.get('/business/:businessUserId/rooms', verifyToken, async (req, res) => {
     const closedRoomIds = await closedGigRoomIds(joinedRooms.map((p) => p.room), actorUserId, [businessUserId]);
     const roomList = joinedRooms.filter((p) => !closedRoomIds.has(String(p.room.id)));
 
-    // NOTE: We intentionally do NOT auto-upsert the actor as a participant
-    // across all business rooms on inbox load. That was too aggressive — it
-    // added the team member to every room the business owns, even rooms they
-    // never opened. Instead, the actor is added as a participant only when
-    // they explicitly open a specific room (via ensureBusinessRoomActorAccess
-    // called from GET /rooms/:roomId, GET /rooms/:roomId/messages, or
-    // POST /messages with asBusinessUserId).
+    // The actor never becomes a member of these rooms: opening, reading and
+    // replying with asBusinessUserId go through the business's own membership
+    // (roomMembership, services/chatBusinessAccess).
 
     // Batch-fetch participants and last messages for all rooms (2 queries instead of 2N)
     const allBizRoomIds = roomList.map(p => p.room.id);
-    const [{ data: allBizParts }, { data: bizRoomPreviews }] = await Promise.all([
+    const [{ data: allBizParts }, { data: bizRoomPreviews }, planStates] = await Promise.all([
       supabaseAdmin
         .from('ChatParticipant')
         .select('room_id, user:user_id(id, username, name, first_name, middle_name, last_name)')
         .in('room_id', allBizRoomIds)
         .eq('is_active', true),
       supabaseAdmin.rpc('get_room_previews', { p_room_ids: allBizRoomIds }),
+      loadPlanChatStates(roomList.map((p) => p.room)),
     ]);
 
     // Group participants by room, leaving out leftover members of assigned task gig rooms
@@ -876,7 +994,7 @@ router.get('/business/:businessUserId/rooms', verifyToken, async (req, res) => {
         description: p.room.description,
         gig_id: p.room.gig_id,
         home_id: p.room.home_id,
-        is_active: p.room.is_active,
+        is_active: roomIsActive(p.room, planStates),
         created_at: p.room.created_at,
         updated_at: p.room.updated_at,
         last_message_at: lastMessageAt || p.room.updated_at,
@@ -907,7 +1025,7 @@ router.get('/business/:businessUserId/rooms', verifyToken, async (req, res) => {
     });
   } catch (err) {
     logger.error('Business chat rooms fetch error', { requestId: req.requestId, userId: req.user?.id, error: err.message });
-    res.status(500).json({ error: 'Failed to fetch business chat rooms' });
+    sendChatReadError(res, err, 'Failed to fetch business chat rooms');
   }
 });
 
@@ -920,29 +1038,11 @@ router.get('/rooms/:roomId', verifyToken, async (req, res) => {
     const { roomId } = req.params;
     const userId = req.user.id;
     const asBusinessUserId = req.query.asBusinessUserId ? String(req.query.asBusinessUserId) : null;
-    
+
     // Verify access
-    let { data: participant } = await supabaseAdmin
-      .from('ChatParticipant')
-      .select('*')
-      .eq('room_id', roomId)
-      .eq('user_id', userId)
-      .maybeSingle();
-    
-    if (!participant) {
-      if (!asBusinessUserId) return res.status(403).json({ error: 'Access denied' });
-      const allowedViaBusiness = await ensureBusinessRoomActorAccess(roomId, userId, asBusinessUserId);
-      if (!allowedViaBusiness) return res.status(403).json({ error: 'Access denied' });
-      const refreshed = await supabaseAdmin
-        .from('ChatParticipant')
-        .select('*')
-        .eq('room_id', roomId)
-        .eq('user_id', userId)
-        .maybeSingle();
-      participant = refreshed.data || null;
-      if (!participant) return res.status(403).json({ error: 'Access denied' });
-    }
-    
+    const participant = await roomMembership(roomId, userId, asBusinessUserId);
+    if (!participant) return res.status(403).json({ error: 'Access denied' });
+
     if (await gigRoomClosed(roomId, userId, asBusinessUserId)) {
       return res.status(403).json({ error: 'Access denied' });
     }
@@ -986,16 +1086,27 @@ router.get('/rooms/:roomId', verifyToken, async (req, res) => {
         room.participants = room.participants.filter((p) => !hiddenMembers.has(`${room.id}:${p.user_id}`));
       }
     }
+    // A Support Train's room goes by the train's title as it is now, as in the Messages list.
+    if (room.type === 'support_train' && room.support_train_id) {
+      const { data: train } = await supabaseAdmin
+        .from('SupportTrain')
+        .select('Activity(title)')
+        .eq('id', room.support_train_id)
+        .maybeSingle();
+      room.name = train?.Activity?.title || room.name;
+    }
     // A plan's room names its plan, so the chat can show the plan strip and open it.
     if (room.type === 'plan') {
-      const { data: plan } = await supabaseAdmin.from('Plan').select('post_id').eq('chat_room_id', roomId).maybeSingle();
+      const planStates = await loadPlanChatStates([room]);
+      const plan = planStates.get(String(room.id));
       room.plan_id = plan?.post_id || null;
+      room.is_active = roomIsActive(room, planStates);
     }
     res.json({ room: serializeChatRoomForViewer(room) });
     
   } catch (err) {
     logger.error('Room fetch error', { requestId: req.requestId, userId: req.user?.id, roomId: req.params.roomId, error: err.message });
-    res.status(500).json({ error: 'Failed to fetch room' });
+    sendChatReadError(res, err, 'Failed to fetch room');
   }
 });
 
@@ -1041,7 +1152,8 @@ router.post('/direct', verifyToken, directChatLimiter, validate(createDirectChat
       .eq('id', otherUserId)
       .single();
     
-    if (userError || !otherUser) {
+    // A draft or closed business isn't public (its profile answers 404), so no chat names or reaches it.
+    if (userError || !otherUser || await isUnpublishedBusiness(otherUserId)) {
       return res.status(404).json({ error: 'User not found' });
     }
 
@@ -1061,16 +1173,9 @@ router.post('/direct', verifyToken, directChatLimiter, validate(createDirectChat
       return res.status(500).json({ error: 'Failed to create chat' });
     }
 
-    // Ensure actor + all authorized business members can access business direct chats.
-    const participantIds = new Set([String(initiatorIdentityUserId), String(otherUserId), String(userId)]);
-    if (await isBusinessAccount(initiatorIdentityUserId)) {
-      const memberIds = await getBusinessMessagingMemberIds(initiatorIdentityUserId);
-      for (const memberId of memberIds) participantIds.add(String(memberId));
-    }
-    if (otherUser.account_type === 'business') {
-      const memberIds = await getBusinessMessagingMemberIds(otherUserId);
-      for (const memberId of memberIds) participantIds.add(String(memberId));
-    }
+    // The two identities only. A business's owner and staff act for it in the room without joining it
+    // (services/chatBusinessAccess): as members they would be named to the customer and see it in their own Messages.
+    const participantIds = new Set([String(initiatorIdentityUserId), String(otherUserId)]);
 
     const participants = Array.from(participantIds).map((participantUserId) => ({
       room_id: roomId,
@@ -1325,7 +1430,7 @@ router.get('/rooms/:roomId/pre-bid-status', verifyToken, async (req, res) => {
 
 /**
  * GET /api/chat/conversations/:otherUserId/messages
- * Canonical person-conversation feed across all shared rooms.
+ * Person-conversation feed across shared direct and task rooms.
  */
 router.get('/conversations/:otherUserId/messages', verifyToken, async (req, res) => {
   try {
@@ -1335,18 +1440,20 @@ router.get('/conversations/:otherUserId/messages', verifyToken, async (req, res)
     const asBusinessUserId = req.query.asBusinessUserId ? String(req.query.asBusinessUserId) : null;
 
     const lim = Math.min(Math.max(parseInt(limit, 10) || 100, 1), 400);
-    const identityUserIds = new Set([String(userId)]);
+    let identityUserIds = new Set([String(userId)]);
 
     if (asBusinessUserId) {
       const canAct = await canActAsBusiness(asBusinessUserId, userId);
       if (!canAct) return res.status(403).json({ error: 'Access denied' });
-      identityUserIds.add(String(asBusinessUserId));
+      // Acting for a business reads the business's conversations with this person, never the actor's own.
+      identityUserIds = new Set([String(asBusinessUserId)]);
     }
 
     // Only rooms the caller is still in: a former member reads their history in the room itself.
     const { data: mineRows, error: mineErr } = await supabaseAdmin
       .from('ChatParticipant')
-      .select('room_id')
+      .select('room_id, room:room_id!inner(type)')
+      .in('room.type', ['direct', 'gig'])
       .in('user_id', Array.from(identityUserIds))
       .eq('is_active', true);
 
@@ -1358,7 +1465,8 @@ router.get('/conversations/:otherUserId/messages', verifyToken, async (req, res)
     const { data: otherRows, error: otherErr } = await supabaseAdmin
       .from('ChatParticipant')
       .select('room_id')
-      .eq('user_id', otherUserId);
+      .eq('user_id', otherUserId)
+      .eq('is_active', true);
 
     if (otherErr) {
       logger.error('Error loading target conversation rooms', { requestId: req.requestId, userId, otherUserId, error: otherErr.message });
@@ -1438,20 +1546,21 @@ router.get('/conversations/:otherUserId/messages', verifyToken, async (req, res)
 
 /**
  * POST /api/chat/conversations/:otherUserId/read
- * Mark all shared-room messages with a person as read.
+ * Mark shared direct/task-room messages with a person as read.
  */
 router.post('/conversations/:otherUserId/read', verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const { otherUserId } = req.params;
     const asBusinessUserId = req.body?.asBusinessUserId ? String(req.body.asBusinessUserId) : null;
-    const identityUserIds = new Set([String(userId)]);
+    let identityUserIds = new Set([String(userId)]);
     let readTargetUserId = userId;
 
     if (asBusinessUserId) {
       const canAct = await canActAsBusiness(asBusinessUserId, userId);
       if (!canAct) return res.status(403).json({ error: 'Access denied' });
-      identityUserIds.add(String(asBusinessUserId));
+      // Reading for a business marks the business's conversations with this person read, never the reader's own.
+      identityUserIds = new Set([String(asBusinessUserId)]);
       readTargetUserId = asBusinessUserId;
     }
 
@@ -1463,8 +1572,10 @@ router.post('/conversations/:otherUserId/read', verifyToken, async (req, res) =>
 
     const { data: mineRows, error: mineErr } = await supabaseAdmin
       .from('ChatParticipant')
-      .select('room_id')
-      .in('user_id', Array.from(identityUserIds));
+      .select('room_id, room:room_id!inner(type)')
+      .in('room.type', ['direct', 'gig'])
+      .in('user_id', Array.from(identityUserIds))
+      .eq('is_active', true);
 
     if (mineErr) {
       logger.error('Error loading actor rooms for conversation read', { requestId: req.requestId, userId, otherUserId, error: mineErr.message });
@@ -1474,7 +1585,8 @@ router.post('/conversations/:otherUserId/read', verifyToken, async (req, res) =>
     const { data: otherRows, error: otherErr } = await supabaseAdmin
       .from('ChatParticipant')
       .select('room_id')
-      .eq('user_id', otherUserId);
+      .eq('user_id', otherUserId)
+      .eq('is_active', true);
 
     if (otherErr) {
       logger.error('Error loading target rooms for conversation read', { requestId: req.requestId, userId, otherUserId, error: otherErr.message });
@@ -1494,9 +1606,7 @@ router.post('/conversations/:otherUserId/read', verifyToken, async (req, res) =>
     }
 
     const stamp = new Date().toISOString();
-    const usersToClear = asBusinessUserId
-      ? Array.from(new Set([String(readTargetUserId), String(userId)]))
-      : [String(readTargetUserId)];
+    const usersToClear = [String(readTargetUserId)];
 
     const { error: updateErr } = await supabaseAdmin
       .from('ChatParticipant')
@@ -1532,29 +1642,11 @@ router.get('/rooms/:roomId/messages', verifyToken, async (req, res) => {
     const userId = req.user.id;
     const { limit = 50, before, after } = req.query;
     const asBusinessUserId = req.query.asBusinessUserId ? String(req.query.asBusinessUserId) : null;
-    
+
     // Verify access
-    let { data: participant } = await supabaseAdmin
-      .from('ChatParticipant')
-      .select('*')
-      .eq('room_id', roomId)
-      .eq('user_id', userId)
-      .maybeSingle();
-    
-    if (!participant) {
-      if (!asBusinessUserId) return res.status(403).json({ error: 'Access denied' });
-      const allowedViaBusiness = await ensureBusinessRoomActorAccess(roomId, userId, asBusinessUserId);
-      if (!allowedViaBusiness) return res.status(403).json({ error: 'Access denied' });
-      const refreshed = await supabaseAdmin
-        .from('ChatParticipant')
-        .select('*')
-        .eq('room_id', roomId)
-        .eq('user_id', userId)
-        .maybeSingle();
-      participant = refreshed.data || null;
-      if (!participant) return res.status(403).json({ error: 'Access denied' });
-    }
-    
+    const participant = await roomMembership(roomId, userId, asBusinessUserId);
+    if (!participant) return res.status(403).json({ error: 'Access denied' });
+
     if (await gigRoomClosed(roomId, userId, asBusinessUserId)) {
       return res.status(403).json({ error: 'Access denied' });
     }
@@ -1649,28 +1741,8 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
     let senderUserId = userId;
     
     // Verify participant
-    let { data: participant } = await supabaseAdmin
-      .from('ChatParticipant')
-      .select('*')
-      .eq('room_id', roomId)
-      .eq('user_id', userId)
-      .eq('is_active', true)
-      .single();
-    
-    if (!participant) {
-      if (!asBusinessUserId) return res.status(403).json({ error: 'Not a participant' });
-      const allowedViaBusiness = await ensureBusinessRoomActorAccess(roomId, userId, asBusinessUserId);
-      if (!allowedViaBusiness) return res.status(403).json({ error: 'Not a participant' });
-      const refreshed = await supabaseAdmin
-        .from('ChatParticipant')
-        .select('*')
-        .eq('room_id', roomId)
-        .eq('user_id', userId)
-        .eq('is_active', true)
-        .single();
-      participant = refreshed.data || null;
-      if (!participant) return res.status(403).json({ error: 'Not a participant' });
-    }
+    const participant = await roomMembership(roomId, userId, asBusinessUserId, { activeOnly: true });
+    if (!participant) return res.status(403).json({ error: 'Not a participant' });
 
     if (await gigRoomClosed(roomId, userId, asBusinessUserId)) {
       return res.status(403).json({ error: 'Not a participant' });
@@ -1691,8 +1763,11 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
     // A task chat retired when its worker was released or bidding reopened keeps its
     // history for the owner and that worker but takes no new messages; direct messages
     // (with their block checks and business identity) carry the conversation on.
-    if (room.is_active === false) {
-      return res.status(403).json({ error: 'This chat has closed. Message them directly to keep talking.', code: 'ROOM_INACTIVE' });
+    if (await isRoomClosedForWrites(roomId, room)) {
+      return res.status(403).json({
+        error: room.type === 'plan' ? 'This chat has closed.' : 'This chat has closed. Message them directly to keep talking.',
+        code: 'ROOM_INACTIVE',
+      });
     }
 
     // ─── Block check for direct chats ───
@@ -1982,6 +2057,9 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
       ({ data: message, error } = await insertMessage(downgradedPayload));
     }
 
+    if (error?.code === 'PT403' && error.message === 'PLAN_CHAT_CLOSED') {
+      return res.status(403).json({ error: 'This chat has closed.', code: 'ROOM_INACTIVE' });
+    }
     if (error?.code === '23505' && clientMessageId) {
       // A concurrent same-scope insert may have won after the initial lookup.
       const existingMsg = await findRetryMessage();
@@ -1995,38 +2073,12 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
       return res.status(500).json({ error: 'Failed to send message' });
     }
 
-    // Broadcast the new message to all participants in the room via Socket.IO
-    // so that both sender and receivers see it in real-time without refreshing.
-    // Strip actor_user_id from broadcast — it's internal business data.
-    const io = req.app.get('io');
-    if (io) {
-      const broadcast = serializeChatMessageForViewer(message);
-      emitNewMessage(io, { room, message: broadcast, actorUserId: userId, identityUserId: senderUserId })
-        .catch((emitError) => {
-          // Without the members, the room still hears it as before (the lists reload).
-          logger.warn('message_new_personal_failed', { requestId, roomId, error: emitError.message });
-          io.to(roomId).emit('message:new', broadcast);
-        });
-    }
-
-    const sideEffectStamp = new Date().toISOString();
     await Promise.all([
-      supabaseAdmin
-        .from('ChatRoom')
-        .update({ updated_at: sideEffectStamp })
-        .eq('id', roomId),
-      supabaseAdmin
-        .from('ChatParticipant')
-        .update({
-          unread_count: 0,
-          last_read_at: sideEffectStamp
-        })
-        .eq('room_id', roomId)
-        .eq('user_id', userId),
+      deliverNewMessage(req.app.get('io'), { room, message, actorUserId: userId, senderUserId, requestId }),
       topicId
         ? supabaseAdmin
             .from('ConversationTopic')
-            .update({ last_activity_at: sideEffectStamp })
+            .update({ last_activity_at: new Date().toISOString() })
             .eq('id', topicId)
         : Promise.resolve(),
     ]);
@@ -2035,60 +2087,6 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
     incCounter('chat.message.sent', { room_type: room?.type || 'unknown' });
     recordHistogram('chat.message.send_latency_ms', sendDurationMs);
     logger.info('message_send_complete', { requestId, roomId, userId, senderUserId, messageId: message.id, durationMs: sendDurationMs });
-
-    // Push fresh badge counts (including total message count) immediately.
-    const { data: participantRows } = await supabaseAdmin
-      .from('ChatParticipant')
-      .select('user_id')
-      .eq('room_id', roomId)
-      .eq('is_active', true);
-    const participantUserIds = Array.from(new Set((participantRows || []).map((row) => String(row.user_id)).filter(Boolean)));
-    // Exclude both the acting user and the message identity user.
-    const excludedUserIds = new Set([String(userId), String(senderUserId)]);
-    let recipientUserIds = participantUserIds.filter((id) => !excludedUserIds.has(id));
-    try {
-      // Leftover members of an assigned task's gig room get no badge or push for it.
-      recipientUserIds = await gigRoomRecipients(room, recipientUserIds);
-    } catch (recipientErr) {
-      logger.warn('gig_room_recipients_unavailable', { requestId, roomId, error: recipientErr.message });
-      recipientUserIds = [];
-    }
-    if (recipientUserIds.length > 0) {
-      badgeService.emitBadgeUpdateToMany(recipientUserIds);
-    }
-
-    // ── Push notification for chat messages ──────────────────────────
-    // Send a device push to every recipient (who has push enabled) so
-    // they receive a notification when the app is backgrounded or killed.
-    if (recipientUserIds.length > 0) {
-      (async () => {
-        try {
-          // Skip recipients who turned push off; an account with no
-          // preference row has the default (on).
-          const { data: disabledRows, error: prefsError } = await supabaseAdmin
-            .from('MailPreferences')
-            .select('user_id')
-            .in('user_id', recipientUserIds)
-            .eq('push_notifications', false);
-          if (prefsError) return;
-          const disabled = new Set((disabledRows || []).map((r) => r.user_id));
-          const pushEnabledIds = recipientUserIds.filter((id) => !disabled.has(id));
-          if (pushEnabledIds.length === 0) return;
-
-          const senderName = serializeUserIdentityForViewer(message.sender)?.displayName || 'Someone';
-          const preview = resolvedType === 'text'
-            ? (resolvedMessage.length > 100 ? resolvedMessage.slice(0, 100) + '…' : resolvedMessage)
-            : resolvedType === 'file' ? '📎 Sent an attachment' : '💬 New message';
-          await pushService.sendToUsers(pushEnabledIds, {
-            title: senderName,
-            body: preview,
-            data: { type: 'chat_message', room_id: roomId, link: `/chat/${roomId}` },
-          });
-        } catch (err) {
-          logger.warn('Chat push delivery failed (non-blocking)', { error: err.message, roomId });
-        }
-      })();
-    }
 
     res.status(201).json({ message: serializeChatMessageForViewer(message) });
     
@@ -2141,6 +2139,9 @@ router.put('/messages/:messageId', verifyToken, messageEditLimiter, async (req, 
       .select()
       .single();
 
+    if (error?.code === 'PT403' && error.message === 'PLAN_CHAT_CLOSED') {
+      return res.status(403).json({ error: 'This chat has closed.', code: 'ROOM_INACTIVE' });
+    }
     if (error) {
       logger.error('Error editing message', { requestId: req.requestId, userId: req.user?.id, messageId, error: error.message });
       return res.status(500).json({ error: 'Failed to edit message' });
@@ -2257,38 +2258,36 @@ router.post('/rooms/:roomId/read', verifyToken, async (req, res) => {
     }
 
     if (asBusinessUserId) {
-      const allowedViaBusiness = await ensureBusinessRoomActorAccess(roomIdStr, userId, asBusinessUserId);
-      if (!allowedViaBusiness) return res.status(403).json({ error: 'Access denied' });
+      const businessRow = await businessMembership(roomIdStr, userId, asBusinessUserId);
+      if (!businessRow) return res.status(403).json({ error: 'Access denied' });
       readTargetUserId = asBusinessUserId;
     }
-    
+
     if (await gigRoomClosed(roomIdStr, userId, asBusinessUserId)) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
+    // Reading for a business marks the business's row read: the reader isn't a member of its conversations.
+    const usersToClear = [String(readTargetUserId)];
+
     // Update participant's read state directly; with nothing unread there is no row to change (count stays 0)
-    const { data, error } = await supabaseAdmin
+    const { error } = await supabaseAdmin
       .from('ChatParticipant')
       .update({
         unread_count: 0,
         last_read_at: new Date().toISOString()
       })
       .eq('room_id', roomIdStr)
-      .eq('user_id', readTargetUserId)
-      .or(HAS_UNREAD)
-      .select('unread_count')
-      .maybeSingle();
-    
+      .in('user_id', usersToClear)
+      .or(HAS_UNREAD);
+
     if (error) {
       logger.error('Error marking messages read', { requestId: req.requestId, userId: req.user?.id, roomId: roomIdStr, error: error.message });
       return res.status(500).json({ error: 'Failed to mark messages as read' });
     }
 
-    const badgeTargets = asBusinessUserId
-      ? Array.from(new Set([String(readTargetUserId), String(userId)]))
-      : [String(readTargetUserId)];
-    badgeService.emitBadgeUpdateToMany(badgeTargets);
-    res.json({ unreadCount: data?.unread_count ?? 0 });
+    badgeService.emitBadgeUpdateToMany(usersToClear);
+    res.json({ unreadCount: 0 });
     
   } catch (err) {
     logger.error('Mark read error', { requestId: req.requestId, userId: req.user?.id, error: err.message });
@@ -2559,7 +2558,10 @@ router.get('/unified-conversations', verifyToken, async (req, res) => {
         last_read_at,
         role,
         is_active,
-        room:room_id(id, type, name, description, gig_id, home_id, is_active, created_at, updated_at)
+        room:room_id(
+          id, type, name, description, gig_id, home_id, support_train_id, is_active, created_at, updated_at,
+          support_train:support_train_id(Activity(title))
+        )
       `)
       .eq('user_id', userId)
       .eq('is_active', true);
@@ -2574,16 +2576,16 @@ router.get('/unified-conversations', verifyToken, async (req, res) => {
     const closedRoomIds = await closedGigRoomIds(joinedRooms.map((p) => p.room), userId);
     const roomList = joinedRooms.filter((p) => !closedRoomIds.has(String(p.room.id)));
 
-    // Separate group/home/plan rooms (not mergeable) from direct/gig rooms (mergeable by person)
+    // Separate group/home/plan/Support Train rooms (not mergeable) from direct/gig rooms (mergeable by person)
     const mergeableParticipants = roomList.filter(p => p.room.type === 'direct' || p.room.type === 'gig');
-    const groupHomeParticipants = roomList.filter(p => ['group', 'home', 'plan'].includes(p.room.type));
+    const groupHomeParticipants = roomList.filter(p => ['group', 'home', 'plan', 'support_train'].includes(p.room.type));
 
     // Step 2: For mergeable rooms, find other participants. The messages and topics of steps 4-5
     // don't depend on them, so they're fetched in the same round trip (previews for every listed
     // room, including any that end up without a counterpart).
     const mergeableRoomIds = mergeableParticipants.map(p => p.room_id);
     const previewRoomIds = [...mergeableRoomIds, ...groupHomeParticipants.map(p => p.room_id)];
-    const [{ data: otherParts }, { data: allConvMsgs }, { data: allTopics }] = await Promise.all([
+    const [{ data: otherParts }, { data: allConvMsgs }, { data: allTopics }, planByRoom] = await Promise.all([
       mergeableRoomIds.length > 0
         ? supabaseAdmin
           .from('ChatParticipant')
@@ -2605,6 +2607,7 @@ router.get('/unified-conversations', verifyToken, async (req, res) => {
         .or(`conversation_user_id_1.eq.${userId},conversation_user_id_2.eq.${userId}`)
         .eq('status', 'active')
         .order('last_activity_at', { ascending: false }),
+      loadPlanChatStates(groupHomeParticipants.map((p) => p.room)),
     ]);
     let allOtherParticipants = otherParts || [];
     // Leftover members of an assigned task's gig room don't stand in for its counterpart.
@@ -2673,14 +2676,6 @@ router.get('/unified-conversations', verifyToken, async (req, res) => {
       conversations.push(conv);
     }
 
-    // A plan's room names its plan (one read for all of them).
-    const planRoomIds = groupHomeParticipants.filter(p => p.room.type === 'plan').map(p => p.room_id);
-    const planByRoom = new Map();
-    if (planRoomIds.length > 0) {
-      const { data: plans } = await supabaseAdmin.from('Plan').select('post_id, chat_room_id').in('chat_room_id', planRoomIds);
-      for (const plan of plans || []) planByRoom.set(String(plan.chat_room_id), plan.post_id);
-    }
-
     // Step 5: Process group/home rooms using batch-fetched messages
     for (const p of groupHomeParticipants) {
       const roomId = p.room_id;
@@ -2695,16 +2690,21 @@ router.get('/unified-conversations', verifyToken, async (req, res) => {
       conversations.push({
         id: roomId,
         room_type: p.room.type,
-        room_name: p.room.name,
+        // A Support Train's room goes by the train's title as it is now (the room was named at publish).
+        room_name: p.room.support_train?.Activity?.title || p.room.name,
         description: p.room.description,
         gig_id: p.room.gig_id,
         home_id: p.room.home_id,
+        support_train_id: p.room.support_train_id || null,
         total_unread: p.unread_count || 0,
         last_message_at: lastMessageAt || p.room.updated_at,
         last_message_preview: lastMessagePreview,
         topics: [],
         _type: 'room',
-        ...(p.room.type === 'plan' ? { plan_id: planByRoom.get(String(roomId)) || null, is_active: p.room.is_active !== false } : {}),
+        ...(p.room.type === 'plan' ? {
+          plan_id: planByRoom.get(String(roomId))?.post_id || null,
+          is_active: roomIsActive(p.room, planByRoom),
+        } : {}),
       });
     }
 
@@ -2750,7 +2750,7 @@ router.get('/unified-conversations', verifyToken, async (req, res) => {
     });
   } catch (err) {
     logger.error('Unified conversations list error', { requestId: req.requestId, userId: req.user?.id, error: err.message });
-    res.status(500).json({ error: 'Failed to fetch conversations' });
+    sendChatReadError(res, err, 'Failed to fetch conversations');
   }
 });
 
@@ -3086,7 +3086,8 @@ router.get('/files/:fileId', tokenFromQuery, verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'File is not associated with a chat room' });
     }
 
-    // Verify the requesting user is an active participant in the room
+    // Verify the requesting user is an active participant in the room, or acts for a business that is (its inbox
+    // shows the room's photos; owners and staff aren't members of their business's rooms)
     const { data: participant } = await supabaseAdmin
       .from('ChatParticipant')
       .select('id')
@@ -3094,11 +3095,12 @@ router.get('/files/:fileId', tokenFromQuery, verifyToken, async (req, res) => {
       .eq('user_id', userId)
       .eq('is_active', true)
       .maybeSingle();
+    const actingFor = participant ? null : await actingBusinessInRoom(roomId, userId);
 
-    if (!participant) {
+    if (!participant && !actingFor) {
       return res.status(403).json({ error: 'Not authorized to access this file' });
     }
-    if (await isGigRoomClosedTo(roomId, userId)) {
+    if (await isGigRoomClosedTo(roomId, userId, actingFor ? [actingFor] : [])) {
       return res.status(403).json({ error: 'Not authorized to access this file' });
     }
     if (thumbnail && !STREAMED_CHAT_IMAGE_TYPES.has(file.mime_type)) {
@@ -3163,3 +3165,5 @@ router.get('/metrics', verifyToken, (_req, res) => {
 });
 
 module.exports = router;
+// A Support Train organizer's reminder (routes/supportTrains.js) is delivered as a chat message.
+module.exports.deliverNewMessage = deliverNewMessage;

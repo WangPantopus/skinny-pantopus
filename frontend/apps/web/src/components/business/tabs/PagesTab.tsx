@@ -9,9 +9,11 @@ interface PagesTabProps {
   pages: Record<string, any>[];
   businessId: string;
   onUpdate: () => void;
+  canEdit: boolean;
+  canManage: boolean;
 }
 
-export default function PagesTab({ pages: initialPages, businessId, onUpdate }: PagesTabProps) {
+export default function PagesTab({ pages: initialPages, businessId, onUpdate, canEdit, canManage }: PagesTabProps) {
   const [pages, setPages] = useState<Record<string, any>[]>(initialPages);
   const [showAdd, setShowAdd] = useState(false);
   const [addForm, setAddForm] = useState({ title: '', slug: '' });
@@ -53,17 +55,18 @@ export default function PagesTab({ pages: initialPages, businessId, onUpdate }: 
 
   return (
     <div className="space-y-4">
+      {!canManage && !canEdit && <p className="text-sm text-app-secondary">You have view-only access to this section.</p>}
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-app">Pages</h2>
-        <button
+        {canManage && <button
           onClick={() => setShowAdd(!showAdd)}
           className="px-3 py-1.5 rounded-lg bg-violet-600 text-white text-sm font-semibold hover:bg-violet-700 transition"
         >
           {showAdd ? 'Cancel' : 'Add page'}
-        </button>
+        </button>}
       </div>
 
-      {showAdd && (
+      {canManage && showAdd && (
         <div className="rounded-xl border border-violet-200 bg-violet-50 p-5 space-y-3">
           <Field label="Page title *" value={addForm.title} onChange={(v) => setAddForm({ ...addForm, title: v })} placeholder="e.g. Menu, About Us" />
           <Field
@@ -105,13 +108,13 @@ export default function PagesTab({ pages: initialPages, businessId, onUpdate }: 
                 <div className="text-xs text-app-secondary mt-0.5">/{page.slug}</div>
               </div>
               <div className="flex items-center gap-2">
-                <Link
+                {canEdit && <Link
                   href={`/app/businesses/${businessId}/pages/${page.id}/edit`}
                   className="px-3 py-1.5 rounded-lg border border-app-strong text-xs font-medium text-app-strong hover:bg-surface-raised transition"
                 >
                   Edit blocks
-                </Link>
-                {!page.is_default && (
+                </Link>}
+                {canManage && !page.is_default && (
                   <button onClick={() => removePage(page.id)} className="text-xs text-red-500 hover:text-red-700">
                     Delete
                   </button>

@@ -66,17 +66,18 @@ public enum EmergencyFormCategory: String, CaseIterable, Sendable, Identifiable 
         }
     }
 
-    /// Mapping to the existing four-bucket palette for tile styling.
+    /// Mapping to the shared category palette for tile styling.
     /// Medical-flavoured rows (allergy / condition / medication /
-    /// pet-medical) re-use the rose-tinted medical palette; contact and
-    /// power-of-attorney use the sky contact palette; other falls back
-    /// to contact (the safest household default).
+    /// pet-medical) re-use the rose-tinted medical palette. Only contacts
+    /// use the contact palette; other records use the neutral palette.
     public var palette: EmergencyCategory {
         switch self {
         case .allergy, .medicalCondition, .medication, .petMedical:
             .medical
-        case .contact, .powerOfAttorney, .other:
+        case .contact:
             .contact
+        case .powerOfAttorney, .other:
+            .other
         }
     }
 

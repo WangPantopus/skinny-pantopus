@@ -297,11 +297,13 @@ const landlordLeaseLimiter = rateLimit({
 
 /**
  * Limiter for AI chat agent (streaming).
- * 20 requests per hour per user — LLM calls are expensive.
+ * 40 requests per hour per user: the Ask buttons on each tab make a few quick
+ * turns in a row normal. The daily budget per person and the global cap
+ * (services/ai/assistantBudget.js) bound the spend across servers.
  */
 const aiChatLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  limit: 20,
+  limit: 40,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   keyGenerator: (req) => req.user?.id || clientIpKey(req),

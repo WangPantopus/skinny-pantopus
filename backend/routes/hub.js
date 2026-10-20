@@ -100,12 +100,10 @@ router.get('/', verifyToken, async (req, res) => {
             .eq('user_id', userId)
             .eq('is_active', true);
         })(),
-        Promise.resolve(
-          supabaseAdmin
-            .from('UserProfessionalProfile')
-            .select('*', { count: 'exact', head: true })
-            .eq('user_id', userId)
-        ).catch(() => ({ count: 0 })),
+        supabaseAdmin
+          .from('UserSkill')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', userId),
         Promise.resolve(
           supabaseAdmin
             .from('StripeAccount')
@@ -222,7 +220,10 @@ router.get('/', verifyToken, async (req, res) => {
         roleBase: t.role_base,
       }));
 
-    const hasSkills = (skillsResult.count || 0) > 0;
+    if (skillsResult.error || skillsResult.count == null) {
+      return res.status(503).json({ error: 'Could not load your profile setup. Please retry.' });
+    }
+    const hasSkills = skillsResult.count > 0;
     // An account row exists from the moment onboarding starts; the step is done only once Stripe can pay out.
     const hasPayoutAccount = !!stripeResult.data;
     const hasPayoutMethod = !!stripeResult.data?.payouts_enabled;
@@ -786,7 +787,7 @@ router.get('/preferences', verifyToken, async (req, res) => {
       evening_briefing_time_local: data.evening_briefing_time_local || '18:00',
     } : {
       user_id: req.user.id,
-      daily_briefing_enabled: false,
+      daily_briefing_enabled: true,
       daily_briefing_time_local: '07:30',
       daily_briefing_timezone: null,
       daily_briefing_prompted_at: null,
@@ -804,6 +805,9 @@ router.get('/preferences', verifyToken, async (req, res) => {
       custom_latitude: null,
       custom_longitude: null,
       custom_label: null,
+      // Suggestions from Pantopus: null until the person chooses (treated as off).
+      suggestions_enabled: null,
+      suggestions_muted: {},
     };
 
     prefs.daily_briefing_timezone = await resolveNotificationTimezone(req.user.id, prefs) || 'UTC';
@@ -819,13 +823,16 @@ router.get('/preferences', verifyToken, async (req, res) => {
 // Update notification preferences (partial update via upsert).
 // ============================================================
 const preferencesSchema = Joi.object({
+  expected_user_id: Joi.string().uuid(),
   daily_briefing_enabled: Joi.boolean(),
   daily_briefing_time_local: Joi.string().pattern(/^(?:[01]\d|2[0-3]):[0-5]\d$/),
   daily_briefing_timezone: Joi.string().max(100).custom((value, helpers) => validTimezone(value) ? value : helpers.error('any.invalid')).allow(null),
-  // Records that the morning-briefing opt-in was SHOWN. Sent as a boolean so
+  // Records that the briefing notice was shown. Sent as a boolean so
   // the server stamps the time — a client-supplied timestamp would let a
   // skewed clock re-arm or permanently suppress the ask.
   daily_briefing_prompted: Joi.boolean(),
+  // Device fallback only fills an unset clock; the selected place still wins.
+  device_timezone: Joi.string().max(100).custom((value, helpers) => validTimezone(value) ? value : helpers.error('any.invalid')),
   evening_briefing_enabled: Joi.boolean(),
   evening_briefing_time_local: Joi.string().pattern(/^(?:[01]\d|2[0-3]):[0-5]\d$/),
   weather_alerts_enabled: Joi.boolean(),
@@ -840,12 +847,20 @@ const preferencesSchema = Joi.object({
   custom_latitude: Joi.number().min(-90).max(90).allow(null),
   custom_longitude: Joi.number().min(-180).max(180).allow(null),
   custom_label: Joi.string().max(255).allow(null, ''),
+  // Suggestions from Pantopus (the AI morning brief and nudges). Only new app builds send it.
+  suggestions_enabled: Joi.boolean(),
+  // "Reset 'Fewer like this'": an empty object clears every mute; mutes are set by
+  // POST /api/ai/nudges/:id/fewer, never here.
+  suggestions_muted: Joi.object().max(0),
 }).min(1);
 
 router.put('/preferences', verifyToken, validate(preferencesSchema), async (req, res) => {
   try {
     const userId = req.user.id;
     const updates = req.body;
+    if (updates.expected_user_id && updates.expected_user_id !== userId) {
+      return res.status(409).json({ error: 'Your account changed. Reload notification settings.' });
+    }
 
     // If location_mode is 'custom', require custom coords
     if (updates.location_mode === 'custom') {
@@ -860,7 +875,7 @@ router.put('/preferences', verifyToken, validate(preferencesSchema), async (req,
     // `daily_briefing_prompted` is a client-facing boolean; the stored
     // value is a server-stamped timestamp. Translate it here so a skewed
     // client clock can neither re-arm the ask nor suppress it forever.
-    const { daily_briefing_prompted: prompted, ...rest } = updates;
+    const { daily_briefing_prompted: prompted, device_timezone: deviceTimezone, expected_user_id: _expectedUserId, ...rest } = updates;
     const patch = { ...rest };
     // Choosing a new briefing location also chooses its local clock. Older
     // accounts may still have the former database-wide Pacific default.
@@ -875,15 +890,20 @@ router.put('/preferences', verifyToken, validate(preferencesSchema), async (req,
       .from('UserNotificationPreferences').select('user_id').eq('user_id', userId).maybeSingle();
     if (readError) throw readError;
     if (!existing) {
-      const { data: saved, error: savedError } = await supabaseAdmin
-        .from('SavedPlace').select('id').eq('user_id', userId).limit(1);
-      if (savedError) throw savedError;
-      const savedOnly = saved?.length > 0 && !(await homeListService.read(userId)).homes
-        .some(home => ['shared', 'private_setup'].includes(home.access_kind));
+      // Default on for new preferences, without changing any existing choice.
       const { error: createError } = await supabaseAdmin.from('UserNotificationPreferences')
-        .upsert({ user_id: userId, daily_briefing_enabled: false, evening_briefing_enabled: !savedOnly },
+        .upsert({ user_id: userId, daily_briefing_enabled: true, evening_briefing_enabled: true,
+          daily_briefing_timezone: deviceTimezone || null },
           { onConflict: 'user_id', ignoreDuplicates: true });
       if (createError) throw createError;
+    }
+    if (deviceTimezone && !Object.hasOwn(rest, 'daily_briefing_timezone')) {
+      // The notice may initialize a row created by saving a place. Never replace
+      // a clock already saved by settings or a concurrent write.
+      const { error: timezoneError } = await supabaseAdmin.from('UserNotificationPreferences')
+        .update({ daily_briefing_timezone: deviceTimezone }).eq('user_id', userId)
+        .is('daily_briefing_timezone', null);
+      if (timezoneError) throw timezoneError;
     }
     // Apply only explicit choices. The insert-only default above cannot
     // overwrite a row created concurrently by another preference write.

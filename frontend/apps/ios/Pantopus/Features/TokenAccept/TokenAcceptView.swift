@@ -84,6 +84,13 @@ public struct TokenAcceptView: View {
                 acceptedFrame(offer: offer, message: message)
             case .declined:
                 declinedFrame
+            case .wrongAccount:
+                expiredFrame(
+                    message: "This invitation was sent to a different email address. Close this invitation, "
+                        + "sign in with the invited email, then open the link again.",
+                    title: "Use the invited account",
+                    identifier: "tokenAcceptWrongAccount"
+                )
             case let .expired(message):
                 expiredFrame(message: message)
             case let .error(message):
@@ -345,11 +352,15 @@ public struct TokenAcceptView: View {
         .accessibilityIdentifier("tokenAcceptDeclined")
     }
 
-    private func expiredFrame(message: String) -> some View {
+    private func expiredFrame(
+        message: String,
+        title: String = "Link no longer valid",
+        identifier: String = "tokenAcceptExpiredFrame"
+    ) -> some View {
         VStack(spacing: Spacing.s3) {
             Spacer()
             Icon(.alertCircle, size: 36, color: Theme.Color.warning)
-            Text("Link no longer valid")
+            Text(title)
                 .font(.system(size: 18, weight: .bold))
                 .foregroundStyle(Theme.Color.appText)
             Text(message)
@@ -359,7 +370,7 @@ public struct TokenAcceptView: View {
                 .padding(.horizontal, Spacing.s8)
             Spacer()
         }
-        .accessibilityIdentifier("tokenAcceptExpiredFrame")
+        .accessibilityIdentifier(identifier)
     }
 
     private func errorFrame(message: String) -> some View {
