@@ -80,7 +80,11 @@ not enforced yet. SwiftLint, SwiftFormat and the icon guard are enforced.
    containers. This is a short stop/start deployment, so existing sockets may
    disconnect; it is not a zero-downtime load-balancer rollout.
 8. Keep stopped previous containers/images and record the release digest in the
-   Actions summary. Never automatically prune the only rollback image.
+   Actions summary. Never automatically prune the only rollback image. Before
+   each pull, remove this repository's untagged release images that no
+   container uses (both targets' current and `*-previous` releases stay; older
+   ones remain in the registry for rollback), and stop before pulling unless
+   the disk has twice the size of the running release free.
 
 Deploy and rollback share `backend-production` / `backend-staging` concurrency
 groups. A host `flock` also prevents overlapping script invocations. Database
