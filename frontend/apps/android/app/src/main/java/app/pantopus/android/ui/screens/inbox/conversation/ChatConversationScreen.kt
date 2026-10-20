@@ -252,10 +252,13 @@ fun ChatConversationScreen(
                 uris.take(5).forEach { uri ->
                     withContext(Dispatchers.IO) {
                         val mimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
-                        val bytes = readChatAttachment(context, uri, mimeType) ?: run {
-                            snackbarHostState.showSnackbar("Couldn’t read this file. Images: 10 MB, videos: 100 MB, documents: 25 MB maximum.")
-                            return@withContext
-                        }
+                        val bytes =
+                            readChatAttachment(context, uri, mimeType) ?: run {
+                                snackbarHostState.showSnackbar(
+                                    "Couldn’t read this file. Images: 10 MB, videos: 100 MB, documents: 25 MB maximum.",
+                                )
+                                return@withContext
+                            }
                         val extension = mimeType.substringAfter('/', "jpg").substringBefore('+')
                         val isVideo = mimeType.startsWith("video/")
                         val name = if (isVideo) context.pickedFileName(uri) else null
@@ -280,7 +283,9 @@ fun ChatConversationScreen(
                             val mimeType = context.contentResolver.getType(uri) ?: "application/octet-stream"
                             val bytes =
                                 readChatAttachment(context, uri, mimeType) ?: run {
-                                    snackbarHostState.showSnackbar("Couldn’t read this file. Images: 10 MB, videos: 100 MB, documents: 25 MB maximum.")
+                                    snackbarHostState.showSnackbar(
+                                        "Couldn’t read this file. Images: 10 MB, videos: 100 MB, documents: 25 MB maximum.",
+                                    )
                                     return@mapNotNull null
                                 }
                             val extension = mimeType.substringAfter('/', "bin").substringBefore('+')
@@ -910,13 +915,28 @@ fun ChatConversationScreen(
         }
         viewerFile?.let { opened ->
             DisposableEffect(opened) { onDispose { opened.file.parentFile?.deleteRecursively() } }
-            val kind = when {
-                opened.liveFile != null -> PostMediaKind.LivePhoto
-                opened.mimeType == "application/pdf" -> PostMediaKind.Document
-                else -> PostMediaKind.Video
-            }
+            val kind =
+                when {
+                    opened.liveFile != null -> PostMediaKind.LivePhoto
+                    opened.mimeType == "application/pdf" -> PostMediaKind.Document
+                    else -> PostMediaKind.Video
+                }
             MediaViewerDialog(
-                items = listOf(PostMediaItem(id = opened.file.name, kind = kind, url = Uri.fromFile(opened.file).toString(), liveVideoUrl = opened.liveFile?.let { Uri.fromFile(it).toString() })),
+                items =
+                    listOf(
+                        PostMediaItem(
+                            id = opened.file.name,
+                            kind = kind,
+                            url =
+                                Uri.fromFile(
+                                    opened.file,
+                                ).toString(),
+                            liveVideoUrl =
+                                opened.liveFile?.let {
+                                    Uri.fromFile(it).toString()
+                                },
+                        ),
+                    ),
                 startIndex = 0,
                 localPdfFile = opened.file.takeIf { kind == PostMediaKind.Document },
                 onDismiss = { viewerFile = null },
@@ -3077,7 +3097,10 @@ private fun BubbleRow(
             // Reactions float as pills overlapping the bubble's bottom
             // corner (design `.reaction { bottom: -10; left/right: 8 }`).
             Box {
-                if (content.attachments.any { !it.mimeType.orEmpty().startsWith("image/") || it.liveVideoFileId != null } && (content.lockedTier == null || isOut)) {
+                if (content.attachments.any {
+                        !it.mimeType.orEmpty().startsWith("image/") || it.liveVideoFileId != null
+                    } && (content.lockedTier == null || isOut)
+                ) {
                     BubbleContainer(
                         isOut = isOut,
                         hasTail = content.hasTail,
@@ -3089,17 +3112,39 @@ private fun BubbleRow(
                     ) {
                         ChatAttachmentRows(content, isOut, textColor, onOpenAttachment, onOpenPhotos, onOpenUrl)
                     }
-                } else when (val body = content.body) {
-                    is ChatBubbleBody.Text ->
-                        if (isEmojiOnly(body.text)) {
-                            // Emoji-only messages render large with no bubble (RN).
-                            Text(
-                                text = body.text,
-                                fontSize = 48.sp,
-                                lineHeight = 56.sp,
-                                color = textColor,
-                            )
-                        } else {
+                } else {
+                    when (val body = content.body) {
+                        is ChatBubbleBody.Text ->
+                            if (isEmojiOnly(body.text)) {
+                                // Emoji-only messages render large with no bubble (RN).
+                                Text(
+                                    text = body.text,
+                                    fontSize = 48.sp,
+                                    lineHeight = 56.sp,
+                                    color = textColor,
+                                )
+                            } else {
+                                BubbleContainer(
+                                    isOut = isOut,
+                                    hasTail = content.hasTail,
+                                    isContinuation = content.isContinuation,
+                                    bubbleColor = bubbleColor,
+                                    lockedTier = content.lockedTier?.takeIf { !isOut },
+                                    onLockedAction = onLockedAction,
+                                    contentId = content.id,
+                                ) {
+                                    Column(modifier = Modifier.widthIn(max = bubbleMaxWidth)) {
+                                        ReplyPreview(preview = content.replyPreview, isOut = isOut)
+                                        LinkifiedBubbleText(
+                                            text = body.text,
+                                            isOut = isOut,
+                                            textColor = textColor,
+                                            onOpenUrl = onOpenUrl,
+                                        )
+                                    }
+                                }
+                            }
+                        is ChatBubbleBody.TextWithImages ->
                             BubbleContainer(
                                 isOut = isOut,
                                 hasTail = content.hasTail,
@@ -3109,91 +3154,134 @@ private fun BubbleRow(
                                 onLockedAction = onLockedAction,
                                 contentId = content.id,
                             ) {
-                                Column(modifier = Modifier.widthIn(max = bubbleMaxWidth)) {
-                                    ReplyPreview(preview = content.replyPreview, isOut = isOut)
-                                    LinkifiedBubbleText(
-                                        text = body.text,
-                                        isOut = isOut,
-                                        textColor = textColor,
-                                        onOpenUrl = onOpenUrl,
-                                    )
+                                Column(
+                                    modifier = Modifier.widthIn(max = bubbleMaxWidth),
+                                    verticalArrangement = Arrangement.spacedBy(Spacing.s2),
+                                ) {
+                                    if (body.text.isNotBlank()) {
+                                        LinkifiedBubbleText(
+                                            text = body.text,
+                                            isOut = isOut,
+                                            textColor = textColor,
+                                            onOpenUrl = onOpenUrl,
+                                        )
+                                    }
+                                    if (body.imageUrls.isNotEmpty()) {
+                                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            body.imageUrls.take(3).forEach { url ->
+                                                AsyncImage(
+                                                    model = inlinePhotoRequest(url),
+                                                    contentDescription = "AI prompt image",
+                                                    contentScale = ContentScale.Crop,
+                                                    modifier =
+                                                        Modifier
+                                                            .size(72.dp)
+                                                            .clip(RoundedCornerShape(Radii.md)),
+                                                )
+                                            }
+                                        }
+                                    }
+                                    // Documents sent to the assistant: a chip each, as a file in a chat shows.
+                                    body.files.forEach { file -> SentFileChip(file = file, isOut = isOut, textColor = textColor) }
                                 }
                             }
-                        }
-                    is ChatBubbleBody.TextWithImages ->
-                        BubbleContainer(
-                            isOut = isOut,
-                            hasTail = content.hasTail,
-                            isContinuation = content.isContinuation,
-                            bubbleColor = bubbleColor,
-                            lockedTier = content.lockedTier?.takeIf { !isOut },
-                            onLockedAction = onLockedAction,
-                            contentId = content.id,
-                        ) {
+                        is ChatBubbleBody.Image -> {
+                            val photos = listOfNotNull(body.url) + body.moreUrls
+                            val lockedTier = content.lockedTier?.takeIf { !isOut }
                             Column(
-                                modifier = Modifier.widthIn(max = bubbleMaxWidth),
-                                verticalArrangement = Arrangement.spacedBy(Spacing.s2),
+                                horizontalAlignment = if (isOut) Alignment.End else Alignment.Start,
+                                verticalArrangement = Arrangement.spacedBy(2.dp),
                             ) {
-                                if (body.text.isNotBlank()) {
-                                    LinkifiedBubbleText(
-                                        text = body.text,
+                                PhotoBubble(
+                                    url = body.url,
+                                    isOut = isOut,
+                                    hasTail = content.hasTail && body.caption == null,
+                                    isContinuation = content.isContinuation,
+                                    lockedTier = lockedTier,
+                                    onLockedAction = onLockedAction,
+                                    contentId = content.id,
+                                    moreCount = body.moreUrls.size,
+                                    onOpen =
+                                        onOpenPhotos
+                                            ?.takeIf { photos.isNotEmpty() && lockedTier == null }
+                                            ?.let { open -> { open(photos, 0) } },
+                                    onLongPress = onLongPress,
+                                )
+                                if (body.caption != null && lockedTier == null) {
+                                    BubbleContainer(
                                         isOut = isOut,
-                                        textColor = textColor,
-                                        onOpenUrl = onOpenUrl,
-                                    )
-                                }
-                                if (body.imageUrls.isNotEmpty()) {
-                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        body.imageUrls.take(3).forEach { url ->
-                                            AsyncImage(
-                                                model = inlinePhotoRequest(url),
-                                                contentDescription = "AI prompt image",
-                                                contentScale = ContentScale.Crop,
-                                                modifier =
-                                                    Modifier
-                                                        .size(72.dp)
-                                                        .clip(RoundedCornerShape(Radii.md)),
+                                        hasTail = content.hasTail,
+                                        isContinuation = true,
+                                        bubbleColor = bubbleColor,
+                                        contentId = content.id,
+                                    ) {
+                                        Column(modifier = Modifier.widthIn(max = bubbleMaxWidth)) {
+                                            LinkifiedBubbleText(
+                                                text = body.caption,
+                                                isOut = isOut,
+                                                textColor = textColor,
+                                                onOpenUrl = onOpenUrl,
                                             )
                                         }
                                     }
                                 }
-                                // Documents sent to the assistant: a chip each, as a file in a chat shows.
-                                body.files.forEach { file -> SentFileChip(file = file, isOut = isOut, textColor = textColor) }
                             }
                         }
-                    is ChatBubbleBody.Image -> {
-                        val photos = listOfNotNull(body.url) + body.moreUrls
-                        val lockedTier = content.lockedTier?.takeIf { !isOut }
-                        Column(
-                            horizontalAlignment = if (isOut) Alignment.End else Alignment.Start,
-                            verticalArrangement = Arrangement.spacedBy(2.dp),
-                        ) {
-                            PhotoBubble(
-                                url = body.url,
+                        is ChatBubbleBody.Attachment ->
+                            BubbleContainer(
                                 isOut = isOut,
-                                hasTail = content.hasTail && body.caption == null,
+                                hasTail = content.hasTail,
                                 isContinuation = content.isContinuation,
-                                lockedTier = lockedTier,
+                                bubbleColor = bubbleColor,
+                                lockedTier = content.lockedTier?.takeIf { !isOut },
                                 onLockedAction = onLockedAction,
                                 contentId = content.id,
-                                moreCount = body.moreUrls.size,
-                                onOpen =
-                                    onOpenPhotos
-                                        ?.takeIf { photos.isNotEmpty() && lockedTier == null }
-                                        ?.let { open -> { open(photos, 0) } },
-                                onLongPress = onLongPress,
-                            )
-                            if (body.caption != null && lockedTier == null) {
-                                BubbleContainer(
-                                    isOut = isOut,
-                                    hasTail = content.hasTail,
-                                    isContinuation = true,
-                                    bubbleColor = bubbleColor,
-                                    contentId = content.id,
+                            ) {
+                                val openFile = onOpenAttachment?.takeIf { body.fileUrl != null }
+                                Column(
+                                    modifier = Modifier.widthIn(max = bubbleMaxWidth),
+                                    verticalArrangement = Arrangement.spacedBy(Spacing.s1),
                                 ) {
-                                    Column(modifier = Modifier.widthIn(max = bubbleMaxWidth)) {
+                                    Row(
+                                        modifier =
+                                            if (openFile != null) {
+                                                Modifier
+                                                    .combinedClickable(
+                                                        onClickLabel = "Open ${body.filename}",
+                                                        onClick = { openFile(body) },
+                                                        onLongClick = onLongPress,
+                                                    ).testTag("chatAttachmentOpen")
+                                            } else {
+                                                Modifier
+                                            },
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+                                    ) {
+                                        PantopusIconImage(
+                                            icon = PantopusIcon.File,
+                                            contentDescription = null,
+                                            size = 18.dp,
+                                            tint = if (isOut) PantopusColors.appTextInverse else PantopusColors.primary600,
+                                        )
+                                        Column {
+                                            Text(
+                                                text = body.filename,
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = textColor,
+                                            )
+                                            body.sizeLabel?.let { size ->
+                                                Text(
+                                                    text = size,
+                                                    fontSize = 11.sp,
+                                                    color = textColor.copy(alpha = 0.75f),
+                                                )
+                                            }
+                                        }
+                                    }
+                                    body.caption?.let { caption ->
                                         LinkifiedBubbleText(
-                                            text = body.caption,
+                                            text = caption,
                                             isOut = isOut,
                                             textColor = textColor,
                                             onOpenUrl = onOpenUrl,
@@ -3201,91 +3289,28 @@ private fun BubbleRow(
                                     }
                                 }
                             }
-                        }
+                        is ChatBubbleBody.SystemLink -> SystemLinkPill(body)
+                        is ChatBubbleBody.LocationCard ->
+                            ChatLocationCardView(
+                                card = body.card,
+                                isOutgoing = isOut,
+                                onOpen = { onOpenLocation(body.card.latitude, body.card.longitude) },
+                            )
+                        is ChatBubbleBody.GigOfferCard ->
+                            ChatGigOfferCardView(
+                                card = body.card,
+                                isOutgoing = isOut,
+                                onOpen = { body.card.gigId.takeIf { it.isNotBlank() }?.let(onOpenGig) },
+                            )
+                        is ChatBubbleBody.ListingOfferCard ->
+                            ChatListingOfferCardView(
+                                card = body.card,
+                                isOutgoing = isOut,
+                                onOpen = { body.card.listingId.takeIf { it.isNotBlank() }?.let(onOpenListing) },
+                            )
+                        is ChatBubbleBody.AiReply ->
+                            AiReplyBubble(body = body, hasTail = content.hasTail, onUseDraft = onUseAIDraft, actions = aiReplyActions)
                     }
-                    is ChatBubbleBody.Attachment ->
-                        BubbleContainer(
-                            isOut = isOut,
-                            hasTail = content.hasTail,
-                            isContinuation = content.isContinuation,
-                            bubbleColor = bubbleColor,
-                            lockedTier = content.lockedTier?.takeIf { !isOut },
-                            onLockedAction = onLockedAction,
-                            contentId = content.id,
-                        ) {
-                            val openFile = onOpenAttachment?.takeIf { body.fileUrl != null }
-                            Column(
-                                modifier = Modifier.widthIn(max = bubbleMaxWidth),
-                                verticalArrangement = Arrangement.spacedBy(Spacing.s1),
-                            ) {
-                                Row(
-                                    modifier =
-                                        if (openFile != null) {
-                                            Modifier
-                                                .combinedClickable(
-                                                    onClickLabel = "Open ${body.filename}",
-                                                    onClick = { openFile(body) },
-                                                    onLongClick = onLongPress,
-                                                ).testTag("chatAttachmentOpen")
-                                        } else {
-                                            Modifier
-                                        },
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
-                                ) {
-                                    PantopusIconImage(
-                                        icon = PantopusIcon.File,
-                                        contentDescription = null,
-                                        size = 18.dp,
-                                        tint = if (isOut) PantopusColors.appTextInverse else PantopusColors.primary600,
-                                    )
-                                    Column {
-                                        Text(
-                                            text = body.filename,
-                                            fontSize = 13.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = textColor,
-                                        )
-                                        body.sizeLabel?.let { size ->
-                                            Text(
-                                                text = size,
-                                                fontSize = 11.sp,
-                                                color = textColor.copy(alpha = 0.75f),
-                                            )
-                                        }
-                                    }
-                                }
-                                body.caption?.let { caption ->
-                                    LinkifiedBubbleText(
-                                        text = caption,
-                                        isOut = isOut,
-                                        textColor = textColor,
-                                        onOpenUrl = onOpenUrl,
-                                    )
-                                }
-                            }
-                        }
-                    is ChatBubbleBody.SystemLink -> SystemLinkPill(body)
-                    is ChatBubbleBody.LocationCard ->
-                        ChatLocationCardView(
-                            card = body.card,
-                            isOutgoing = isOut,
-                            onOpen = { onOpenLocation(body.card.latitude, body.card.longitude) },
-                        )
-                    is ChatBubbleBody.GigOfferCard ->
-                        ChatGigOfferCardView(
-                            card = body.card,
-                            isOutgoing = isOut,
-                            onOpen = { body.card.gigId.takeIf { it.isNotBlank() }?.let(onOpenGig) },
-                        )
-                    is ChatBubbleBody.ListingOfferCard ->
-                        ChatListingOfferCardView(
-                            card = body.card,
-                            isOutgoing = isOut,
-                            onOpen = { body.card.listingId.takeIf { it.isNotBlank() }?.let(onOpenListing) },
-                        )
-                    is ChatBubbleBody.AiReply ->
-                        AiReplyBubble(body = body, hasTail = content.hasTail, onUseDraft = onUseAIDraft, actions = aiReplyActions)
                 }
                 if (content.reactions.isNotEmpty()) {
                     // Tapping a pill toggles the reaction (iOS parity).
@@ -5539,7 +5564,6 @@ private tailrec fun Context.findActivity(): Activity? =
         else -> null
     }
 
-
 /** Every logical attachment remains reachable, including mixed photo/video/document sends. */
 @Composable
 private fun ChatAttachmentRows(
@@ -5557,44 +5581,65 @@ private fun ChatAttachmentRows(
             val clip = files.firstOrNull { it.id == file.liveVideoFileId && it.livePhotoFileId == file.id }
             val mime = file.mimeType.orEmpty()
             val image = mime.startsWith("image/")
-            val label = when {
-                clip != null -> "LIVE · Tap to play"
-                mime.startsWith("video/") -> "Video · Tap to play"
-                mime == "application/pdf" -> "PDF · Tap to read"
-                else -> file.originalFilename ?: "Attachment"
-            }
-            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(Radii.md)).background(PantopusColors.appSurfaceSunken).clickable {
-                if (image && clip == null) {
-                    ChatMediaUrl.resolve(file.fileUrl)?.let { onOpenPhotos?.invoke(listOf(it), 0) }
-                } else {
-                    onOpenAttachment?.invoke(ChatBubbleBody.Attachment(filename = file.originalFilename ?: "Attachment", fileUrl = file.fileUrl, mimeType = file.mimeType, liveVideoFileId = clip?.id))
+            val label =
+                when {
+                    clip != null -> "LIVE · Tap to play"
+                    mime.startsWith("video/") -> "Video · Tap to play"
+                    mime == "application/pdf" -> "PDF · Tap to read"
+                    else -> file.originalFilename ?: "Attachment"
                 }
-            }.padding(8.dp)) {
+            Column(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(Radii.md)).background(PantopusColors.appSurfaceSunken).clickable {
+                    if (image && clip == null) {
+                        ChatMediaUrl.resolve(file.fileUrl)?.let { onOpenPhotos?.invoke(listOf(it), 0) }
+                    } else {
+                        onOpenAttachment?.invoke(
+                            ChatBubbleBody.Attachment(
+                                filename = file.originalFilename ?: "Attachment",
+                                fileUrl = file.fileUrl,
+                                mimeType = file.mimeType,
+                                liveVideoFileId = clip?.id,
+                            ),
+                        )
+                    }
+                }.padding(8.dp),
+            ) {
                 if (image) {
                     ChatMediaUrl.resolve(file.fileUrl)?.let { url ->
-                        AsyncImage(model = inlinePhotoRequest(url), contentDescription = "Photo", contentScale = ContentScale.Fit, modifier = Modifier.fillMaxWidth().height(140.dp))
+                        AsyncImage(
+                            model = inlinePhotoRequest(url),
+                            contentDescription = "Photo",
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier.fillMaxWidth().height(140.dp),
+                        )
                     }
                 }
                 Text(label, color = PantopusColors.appText, fontSize = 13.sp)
             }
         }
-        val caption = when (val body = content.body) {
-            is ChatBubbleBody.Image -> body.caption
-            is ChatBubbleBody.Attachment -> body.caption
-            else -> null
-        }
+        val caption =
+            when (val body = content.body) {
+                is ChatBubbleBody.Image -> body.caption
+                is ChatBubbleBody.Attachment -> body.caption
+                else -> null
+            }
         caption?.let { LinkifiedBubbleText(text = it, isOut = isOut, textColor = textColor, onOpenUrl = onOpenUrl) }
     }
 }
 
 /** Bound picker reads before allocating media bytes; remote uploads use the same limits. */
-private fun readChatAttachment(context: Context, uri: Uri, mime: String): ByteArray? =
+private fun readChatAttachment(
+    context: Context,
+    uri: Uri,
+    mime: String,
+): ByteArray? =
     runCatching {
-        val limit = when {
-            mime.startsWith("video/") -> 100 * 1024 * 1024
-            mime.startsWith("image/") -> 10 * 1024 * 1024
-            else -> 25 * 1024 * 1024
-        }
+        val limit =
+            when {
+                mime.startsWith("video/") -> 100 * 1024 * 1024
+                mime.startsWith("image/") -> 10 * 1024 * 1024
+                else -> 25 * 1024 * 1024
+            }
         context.contentResolver.openInputStream(uri)?.use { stream ->
             val output = java.io.ByteArrayOutputStream()
             val buffer = ByteArray(8192)

@@ -49,7 +49,10 @@ private val postPdfClient = OkHttpClient.Builder().callTimeout(30, TimeUnit.SECO
 
 /** Every page is rendered locally; no document is sent to a third-party viewer. */
 @Composable
-internal fun PostPdfSlide(url: String, localFile: File? = null) {
+internal fun PostPdfSlide(
+    url: String,
+    localFile: File? = null,
+) {
     val context = LocalContext.current
     val file = remember(url, localFile) { localFile ?: File(context.cacheDir, "pulse-pdf-${UUID.randomUUID()}.pdf") }
     var pages by remember(url) { mutableIntStateOf(0) }
@@ -67,7 +70,9 @@ internal fun PostPdfSlide(url: String, localFile: File? = null) {
         try {
             pages =
                 withContext(Dispatchers.IO) {
-                    if (localFile == null) downloadPdf(url, file) else {
+                    if (localFile == null) {
+                        downloadPdf(url, file)
+                    } else {
                         require(file.length() <= 25 * 1024 * 1024)
                         PdfRenderer(ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)).use {
                             require(it.pageCount > 0)
