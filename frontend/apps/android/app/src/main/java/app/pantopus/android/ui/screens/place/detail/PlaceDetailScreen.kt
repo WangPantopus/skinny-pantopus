@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.data.ai.AIScreenContext
 import app.pantopus.android.data.api.models.place.PlaceBand
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.place.PlaceSectionAccess
@@ -62,6 +63,8 @@ fun PlaceDetailScreen(
     onStartVerify: ((PlaceVerifyMethod) -> Unit)? = null,
     // The status of a residency document already in review (the Waiting Room).
     onOpenVerificationStatus: (() -> Unit)? = null,
+    // Ask Pantopus about this section (AI assistant phase 1); null hides the button.
+    onAsk: ((AIScreenContext) -> Unit)? = null,
     viewModel: PlaceDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -81,6 +84,7 @@ fun PlaceDetailScreen(
             title = viewModel.group.title,
             address = (state as? PlaceDetailUiState.Loaded)?.intelligence?.place?.let { placeDetailAddress(it) }.orEmpty(),
             onBack = onBack,
+            onAsk = onAsk?.let { ask -> askAboutSection(viewModel, ask) },
         )
         refreshNotice?.let { RefreshFailedLine(it) }
         PullToRefreshBox(isRefreshing = refreshing, onRefresh = viewModel::refresh, modifier = Modifier.weight(1f)) {
@@ -264,3 +268,14 @@ fun PlaceDetailFallbackCard(
 }
 
 fun PlaceSectionEnvelope.isLive(): Boolean = status == PlaceSectionStatus.READY || status == PlaceSectionStatus.STALE
+
+/** Ask Pantopus about a section the assistant reads (contract section 6): not Identity. */
+private fun askAboutSection(
+    viewModel: PlaceDetailViewModel,
+    ask: (AIScreenContext) -> Unit,
+): (() -> Unit)? =
+    if (viewModel.group == PlaceDetailGroup.IDENTITY) {
+        null
+    } else {
+        { ask(AIScreenContext.place(viewModel.calendarHomeId, viewModel.group.slug, viewModel.group.title)) }
+    }

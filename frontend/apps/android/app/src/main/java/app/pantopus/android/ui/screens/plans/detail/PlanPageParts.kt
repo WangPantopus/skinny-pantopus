@@ -36,6 +36,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -78,6 +80,8 @@ fun PlanPageScaffold(
     onShare: (() -> Unit)? = null,
     menu: List<PlanMenuItem> = emptyList(),
     footer: (@Composable ColumnScope.() -> Unit)? = null,
+    /** Ask Pantopus about this plan (AI assistant phase 1); null hides the button. */
+    onAsk: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Column(modifier = modifier.fillMaxSize().background(PantopusColors.appBg)) {
@@ -104,7 +108,7 @@ fun PlanPageScaffold(
                     content = content,
                 )
             }
-            PlanPageTopButtons(onBack = onBack, onShare = onShare, menu = menu)
+            PlanPageTopButtons(onBack = onBack, onShare = onShare, menu = menu, onAsk = onAsk)
         }
         if (footer != null) PlanFooter(content = footer)
     }
@@ -162,6 +166,7 @@ private fun PlanPageTopButtons(
     onBack: () -> Unit,
     onShare: (() -> Unit)?,
     menu: List<PlanMenuItem>,
+    onAsk: (() -> Unit)? = null,
 ) {
     Row(
         modifier =
@@ -173,6 +178,15 @@ private fun PlanPageTopButtons(
         PlanRoundButton(icon = PantopusIcon.ChevronLeft, label = "Back", onClick = onBack)
         Spacer(modifier = Modifier.weight(1f))
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+            if (onAsk != null) {
+                PlanRoundButton(
+                    icon = PantopusIcon.Sparkles,
+                    label = "Ask Pantopus",
+                    onClick = onAsk,
+                    modifier = Modifier.testTag("planAskPantopus"),
+                    iconTint = PantopusColors.magic,
+                )
+            }
             if (onShare != null) PlanRoundButton(icon = PantopusIcon.Share, label = "Share", onClick = onShare)
             if (menu.isNotEmpty()) PlanMoreMenu(menu)
         }
@@ -205,10 +219,12 @@ fun PlanRoundButton(
     label: String,
     onClick: () -> Unit,
     glass: Boolean = true,
+    modifier: Modifier = Modifier,
+    iconTint: Color = PantopusColors.appText,
 ) {
     Box(
         modifier =
-            Modifier
+            modifier
                 .size(44.dp)
                 .then(if (glass) Modifier.pantopusShadow(PantopusElevations.md, CircleShape) else Modifier)
                 .clip(CircleShape)
@@ -220,7 +236,7 @@ fun PlanRoundButton(
                 },
         contentAlignment = Alignment.Center,
     ) {
-        PantopusIconImage(icon = icon, contentDescription = null, size = 20.dp, tint = PantopusColors.appText)
+        PantopusIconImage(icon = icon, contentDescription = null, size = 20.dp, tint = iconTint)
     }
 }
 
