@@ -560,7 +560,28 @@ function redactPrivateIdentityFields(post, author, viewerUserId = null) {
   return post;
 }
 
-// The persona, local profile and user rows of these posts' authors.
+const isBusinessPost = (post) => post.identity_context_type === 'business' || post.post_as === 'business';
+// The business a business post was written for.
+const businessIdOfPost = (post) => post.business_id || post.business_author_id || post.business_author?.id
+  || post.identity_context_id || null;
+
+// The businesses these posts were written for, as their posts show them: the name and avatar, and the handle (a link
+// to the business page) only while the business is published. A failed read leaves the generic "Business".
+async function loadBusinessAuthors(ids) {
+  try {
+    const [{ data, error }, hidden] = await Promise.all([
+      supabaseAdmin.from('User').select('id, username, name, profile_picture_url').in('id', ids).eq('account_type', 'business'),
+      unpublishedBusinessIds(ids),
+    ]);
+    if (error) throw error;
+    return new Map((data || []).map((row) => [String(row.id), { ...row, published: !hidden.has(String(row.id)) }]));
+  } catch (err) {
+    logger.warn('Business post authors unavailable', { error: err.message });
+    return new Map();
+  }
+}
+
+// The persona, local profile and user rows of these posts' authors, and the businesses of business posts.
 function loadIdentityAuthorRows(posts) {
   const personaIds = [...new Set(posts
     .filter(p => p.identity_context_type === 'persona' && p.identity_context_id)
@@ -569,6 +590,7 @@ function loadIdentityAuthorRows(posts) {
     .filter(p => !p.identity_context_type || p.identity_context_type === 'local' || p.post_as === 'personal')
     .map(p => p.author_user_id || p.user_id)
     .filter(Boolean))];
+  const businessIds = [...new Set(posts.filter(isBusinessPost).map(businessIdOfPost).filter(Boolean).map(String))];
 
   return Promise.all([
     personaIds.length
@@ -580,6 +602,7 @@ function loadIdentityAuthorRows(posts) {
     localUserIds.length
       ? supabaseAdmin.from('User').select(LOCAL_AUTHOR_USER_SELECT).in('id', localUserIds)
       : Promise.resolve({ data: [] }),
+    businessIds.length ? loadBusinessAuthors(businessIds) : Promise.resolve(new Map()),
   ]);
 }
 
@@ -587,7 +610,7 @@ function loadIdentityAuthorRows(posts) {
 async function attachIdentityAuthors(posts, viewerUserId, authorRows = null) {
   if (!posts.length) return posts;
 
-  const [personaResult, localResult, localUserResult] = authorRows || await loadIdentityAuthorRows(posts);
+  const [personaResult, localResult, localUserResult, businessesById = new Map()] = authorRows || await loadIdentityAuthorRows(posts);
 
   const personasById = new Map((personaResult.data || []).map(row => [row.id, row]));
   const localsByUserId = new Map((localResult.data || []).map(row => [String(row.user_id), row]));
@@ -603,11 +626,15 @@ async function attachIdentityAuthors(posts, viewerUserId, authorRows = null) {
           isOwner: persona.user_id === viewerUserId,
         });
       }
-    } else if (post.identity_context_type === 'business' || post.post_as === 'business') {
+    } else if (isBusinessPost(post)) {
+      const businessId = businessIdOfPost(post);
+      const business = businessId ? businessesById.get(String(businessId)) : null;
       author = serializeBusinessSeatForViewer({
-        id: post.business_id || post.business_author?.id || post.identity_context_id || 'business',
-        display_name: post.business_author?.name || post.business_author?.username || 'Business',
-        display_avatar_url: post.business_author?.profile_picture_url || null,
+        id: businessId || 'business',
+        business_user_id: businessId,
+        business_username: business?.published ? business.username : null,
+        display_name: business?.name || post.business_author?.name || post.business_author?.username || 'Business',
+        display_avatar_url: business?.profile_picture_url || post.business_author?.profile_picture_url || null,
         role_base: 'business',
       });
     } else if (post.identity_context_type === 'home' || post.post_as === 'home') {
