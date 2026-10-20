@@ -67,6 +67,8 @@ import java.util.Locale
 fun MailDetailScreen(
     onBack: () -> Unit,
     onOpenSenderProfile: (String) -> Unit = {},
+    // Opens a business's page from the sender card of a letter sent as that business.
+    onOpenSenderBusiness: (String) -> Unit = {},
     onTranslate: (() -> Unit)? = null,
     // A17.12 — opens the Elf-extracted task for this mail (certified
     // notices only). Receives the mail id so the host can resolve the
@@ -157,7 +159,7 @@ fun MailDetailScreen(
                         onPartyClaimBring = { index -> viewModel.togglePartyBringClaim(index, "You") },
                         onPartyReleaseBring = { index -> viewModel.togglePartyBringClaim(index, null) },
                         onFileRecord = viewModel::fileRecordToVault,
-                        onOpenSenderProfile = onOpenSenderProfile,
+                        onOpenSenderProfile = if (current.content.senderIsBusiness) onOpenSenderBusiness else onOpenSenderProfile,
                         onSaveToVault = viewModel::openSaveToVaultPicker,
                         onArchive = viewModel::archive,
                         categoryActionInFlight = categoryActionInFlight,

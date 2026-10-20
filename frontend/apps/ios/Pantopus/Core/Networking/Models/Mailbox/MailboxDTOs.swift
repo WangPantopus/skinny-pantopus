@@ -31,6 +31,9 @@ public struct MailItem: Decodable, Sendable, Hashable, Identifiable {
     public let subject: String?
     public let content: String?
     public let senderUserId: String?
+    /// The business a letter was sent as (`Mail.sender_entity_id`); nil for a
+    /// person's own letter and for letters stored before it was recorded.
+    public let senderEntityId: String?
     public let senderBusinessName: String?
     public let senderAddress: String?
     /// Who it's from as printed on the item (`Mail.sender_display`). The
@@ -80,6 +83,7 @@ public struct MailItem: Decodable, Sendable, Hashable, Identifiable {
         case ackStatus = "ack_status"
         case type, subject, content
         case senderUserId = "sender_user_id"
+        case senderEntityId = "sender_entity_id"
         case senderBusinessName = "sender_business_name"
         case senderAddress = "sender_address"
         case senderDisplay = "sender_display"
@@ -120,6 +124,7 @@ public struct MailItem: Decodable, Sendable, Hashable, Identifiable {
         subject = try c.decodeIfPresent(String.self, forKey: .subject)
         content = try c.decodeIfPresent(String.self, forKey: .content)
         senderUserId = try c.decodeIfPresent(String.self, forKey: .senderUserId)
+        senderEntityId = try c.decodeIfPresent(String.self, forKey: .senderEntityId)
         senderBusinessName = try c.decodeIfPresent(String.self, forKey: .senderBusinessName)
         senderAddress = try c.decodeIfPresent(String.self, forKey: .senderAddress)
         senderDisplay = try c.decodeIfPresent(String.self, forKey: .senderDisplay)
@@ -236,9 +241,12 @@ public struct MailDetailResponse: Decodable, Sendable, Hashable {
             removed = try c.decodeIfPresent(MailRemovedDTO.self, forKey: .removed)
         }
 
+        /// The person who sent it, or, for a letter sent as a business, the
+        /// business (`backend/utils/mailSenderView.js`): its id (nil on letters
+        /// stored before the business was recorded) and name, no username.
         public struct Sender: Decodable, Sendable, Hashable, Identifiable {
-            public let id: String
-            public let username: String
+            public let id: String?
+            public let username: String?
             /// Raw `users.name`; nil for slim sign-up accounts.
             public let name: String?
         }

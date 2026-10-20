@@ -345,6 +345,7 @@ private fun FeedPost.detailSeed(): PostDetailResponse? {
                         projectedDisplayName = it.authorDisplayName,
                         handle = it.handle,
                         avatarUrl = it.avatarUrl,
+                        identityType = it.type,
                     )
                 },
             userHasLiked = userHasLiked,
