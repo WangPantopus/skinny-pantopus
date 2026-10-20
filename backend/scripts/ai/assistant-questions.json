@@ -240,6 +240,42 @@
       "note": "Run it once per seed: the second time the dishwasher is already in the home's records, and the answer says so."
     },
     {
+      "id": "home-task-mark-done",
+      "as": "owner",
+      "say": "Mark the furnace filter task done.",
+      "setup": "An open task titled \"Change the furnace filter\" that the owner made (seed it before running).",
+      "expect": {
+        "card": "home_task_update",
+        "noError": true,
+        "bodyIncludes": {
+          "status": "done"
+        }
+      }
+    },
+    {
+      "id": "home-plan-our-year",
+      "as": "owner",
+      "context": {
+        "surface": "place",
+        "home_id": "<owner.home>"
+      },
+      "say": "Can you plan our year for the house?",
+      "expect": {
+        "card": "home_year",
+        "noError": true
+      },
+      "note": "Up to 12 tasks from the systems record (built 1998, so the roof and heating are past their usual life) and the Pacific Northwest seasonal checklist."
+    },
+    {
+      "id": "radon-high-result",
+      "as": "owner",
+      "say": "Our radon test came back at 5.2 pCi/L. What should we do?",
+      "expect": {
+        "textMatches": "(4(\\.0)? pCi/L|EPA)",
+        "textNotMatches": "(cancer|smok|lungs?\\b)"
+      }
+    },
+    {
       "id": "doc-not-a-home-paper",
       "as": "owner",
       "attach": [
