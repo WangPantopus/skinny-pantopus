@@ -33,10 +33,9 @@ const {
   PRECIP_LIKELY, PRECIP_POSSIBLE, GRILL_MAX_WIND_MPH, AQI_SENSITIVE,
 } = require('../../goodDayEngine');
 const { EXTREME_HEAT_F } = require('../../context/usefulnessEngine');
-const { runCardTool, card, action, KIND_LABELS } = require('../actionCards');
+const { card, action, KIND_LABELS } = require('../actionCards');
 const { linkFor } = require('../appGuide');
 const { clip, whenLabel } = require('../assistantKit');
-const { isResting, noteResult } = require('./resting');
 const { fit, capitalized, listText } = require('./words');
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -65,40 +64,41 @@ const CONDITIONS = ['rain', 'wind', 'heat', 'air'];
 /** The nudge engine (contract §3.5). Required when used, so the Plans tick runs without it. */
 const engine = () => require('./engine');
 
-const hostCtx = (plan) => ({
-  userId: String(plan.host_user_id),
-  user: { id: String(plan.host_user_id), role: null },
-  timeZone: rules.timezoneForPlan(plan),
-});
+const hostOf = (plan) => String(plan.host_user_id);
 
 // "20261022T0100Z": a plan's start inside a nudge key, so a moved plan is checked afresh.
 const startKey = (iso) => DateTime.fromISO(String(iso), { zone: 'utc' }).toFormat("yyyyLLdd'T'HHmm'Z'");
 
-async function sendForHost(plan, { kind, checkpoint, title, body, cards, links, expiresAt }) {
-  const shown = cards.filter(Boolean);
+/**
+ * Whether the host would get this kind of nudge about this plan now (Suggestions, "Fewer like
+ * this", the day's cap), asked before reading forecasts and drafting cards.
+ */
+async function hostWouldHear(plan, kind, checkpoint) {
+  const verdict = await engine().canNudge({ userId: hostOf(plan), kind, subject: { type: 'plan', id: plan.post_id }, checkpoint });
+  if (!verdict.ok) logger.debug('plans.nudge.not_now', { kind, planId: plan.post_id, reason: verdict.reason });
+  return verdict.ok;
+}
+
+async function sendForHost(plan, { kind, checkpoint, title, body, cards, expiresAt }) {
   const result = await engine().sendNudge({
-    userId: String(plan.host_user_id),
+    userId: hostOf(plan),
     kind,
     subject: { type: 'plan', id: plan.post_id },
     checkpoint,
     title: fit(title, 60),
     body: fit(body, 160),
-    card: shown[0] || null,
-    cards: shown,
-    links: (links || []).filter((link) => link && link.url),
+    cards: cards.filter(Boolean),
     expiresAt,
   });
-  noteResult(String(plan.host_user_id), kind, result);
-  if (!result || !result.sent) logger.debug('plans.nudge.not_sent', { kind, planId: plan.post_id, reason: result?.reason || null });
+  if (!result || !result.sent) logger.info('plans.nudge.not_sent', { kind, planId: plan.post_id, reason: result?.reason || null });
   return result;
 }
 
-/** A card from the chat's own drafter, as the host; null when it can't be offered (the drafter says why in the log). */
-async function hostCard(plan, tool, args) {
-  const drafted = await runCardTool(tool, args, hostCtx(plan));
-  if (drafted && drafted.draftType === 'action' && drafted.draft) return drafted.draft;
-  logger.info('plans.nudge.card_skipped', { tool, planId: plan.post_id, reason: drafted?.error || drafted?.message || null });
-  return null;
+/** A card from the chat's own drafter, as the host (engine.nudgeCard); null when it can't be offered. */
+async function hostCard(plan, tool, args, expiresAt) {
+  const { card: drafted, error } = await engine().nudgeCard(tool, args, { userId: hostOf(plan), expiresAt });
+  if (!drafted) logger.info('plans.nudge.card_skipped', { tool, planId: plan.post_id, reason: error || null });
+  return drafted || null;
 }
 
 // ─── Weather and air ───────────────────────────────────────────────────────
@@ -295,7 +295,7 @@ async function checkWeather(plan, now) {
   if (!checkpoint) return null;
   const key = startKey(plan.post.event_date);
   const earlier = await earlierWeatherNudges(plan, key);
-  if (earlier.has(checkpoint)) return null;
+  if (earlier.has(checkpoint) || !(await hostWouldHear(plan, 'plan_weather', `${checkpoint}@${key}`))) return null;
   const forecast = await forecastAt(plan, checkpoint);
   if (!forecast) return null;
   const tz = rules.timezoneForPlan(plan);
@@ -318,19 +318,20 @@ async function checkWeather(plan, now) {
   const requests = await planActions.activeRequests(plan.post_id);
   const going = planService.seatsTaken(plan, requests);
 
+  const expiresAt = new Date(startMs);
   const message = plan.chat_room_id && going > 0
     ? await hostCard(plan, 'draft_plan_message', {
       plan_id: plan.post_id,
       text: `Heads up: the forecast shows ${listText(factsOf(found, { guests: true }))} for ${when}. I'll post here if we move it.`,
       note: null,
-    })
+    }, expiresAt)
     : null;
   let move = null;
   if (better) {
     const startsLocal = DateTime.fromMillis(better.startMs, { zone: tz }).toFormat("yyyy-LL-dd'T'HH:mm");
     move = await hostCard(plan, 'draft_plan_change', {
       plan_id: plan.post_id, title: null, starts_local: startsLocal, ends_local: null, spots: null, place_name: null, about: null, guest_note: null, note: null,
-    });
+    }, expiresAt);
     const then = clearText(better.found);
     if (move && then) move.lines.push({ label: 'Forecast then', value: then });
   }
@@ -343,8 +344,7 @@ async function checkWeather(plan, now) {
     title: weatherTitle([...fresh, ...present.filter((c) => !fresh.includes(c))], found, noun),
     body: `${capitalized(when)}: ${listText(factsOf(found))}.${ask}`,
     cards: [message, move],
-    links: [{ label: 'Open the plan', url: linkFor('plan', plan.post_id) }],
-    expiresAt: new Date(startMs),
+    expiresAt,
   });
 }
 
@@ -360,7 +360,6 @@ async function weatherWatch(now) {
   if (error) throw new Error(`Failed to read upcoming outdoor plans: ${error.message}`);
   let sent = 0;
   for (const plan of (data || []).filter(isOutdoor)) {
-    if (isResting(String(plan.host_user_id), 'plan_weather')) continue;
     try {
       const result = await checkWeather(plan, now);
       if (result?.sent) sent += 1;
@@ -386,7 +385,6 @@ async function requestsWaiting(now) {
   if (error) throw new Error(`Failed to read plans closing soon: ${error.message}`);
   let sent = 0;
   for (const plan of data || []) {
-    if (isResting(String(plan.host_user_id), 'plan_requests_waiting')) continue;
     try {
       const closes = rules.askingClosesAt(plan.kind, plan.post.event_date, plan.post.event_end_date);
       if (closes.getTime() <= now || closes.getTime() > now + ASKING_CLOSES_WITHIN_MS) continue;
@@ -394,7 +392,9 @@ async function requestsWaiting(now) {
       if (plan.spots - planService.seatsTaken(plan, requests) <= 0) continue;
       const waiting = await planActions.waitingRequests(plan, requests);
       if (!waiting.some((r) => Date.parse(r.queued_at || r.created_at) <= now - WAITED_MS)) continue;
-      const requestsCard = await hostCard(plan, 'show_plan_requests', { plan_id: plan.post_id, note: null });
+      const checkpoint = `closes@${startKey(closes.toISOString())}`;
+      if (!(await hostWouldHear(plan, 'plan_requests_waiting', checkpoint))) continue;
+      const requestsCard = await hostCard(plan, 'show_plan_requests', { plan_id: plan.post_id, note: null }, closes);
       if (!requestsCard) continue;
       const tz = rules.timezoneForPlan(plan);
       const noun = planNotify.noun(plan);
@@ -406,11 +406,10 @@ async function requestsWaiting(now) {
       const closesAt = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit' }).format(closes);
       const result = await sendForHost(plan, {
         kind: 'plan_requests_waiting',
-        checkpoint: `closes@${startKey(closes.toISOString())}`,
+        checkpoint,
         title: `${who} waiting to join your ${noun}`,
         body: `Asking closes at ${closesAt}. Answer ${waiting.length === 1 ? 'them' : 'everyone'} before then?`,
         cards: [requestsCard],
-        links: [{ label: 'See who asked', url: linkFor('plan_requests', plan.post_id) }],
         expiresAt: closes,
       });
       if (result?.sent) sent += 1;
@@ -439,9 +438,9 @@ const WHO_GETS_IN_TEXT = (autoRules, placeKind) => {
  * is. Null when the plan rules refuse it (three upcoming plans, say).
  */
 async function sameNextWeekCard(plan) {
-  const ctx = hostCtx(plan);
-  const start = DateTime.fromISO(plan.post.event_date, { zone: 'utc' }).setZone(ctx.timeZone).plus({ weeks: 1 });
-  const end = DateTime.fromISO(plan.post.event_end_date, { zone: 'utc' }).setZone(ctx.timeZone).plus({ weeks: 1 });
+  const tz = rules.timezoneForPlan(plan);
+  const start = DateTime.fromISO(plan.post.event_date, { zone: 'utc' }).setZone(tz).plus({ weeks: 1 });
+  const end = DateTime.fromISO(plan.post.event_end_date, { zone: 'utc' }).setZone(tz).plus({ weeks: 1 });
   const place = plan.place_kind === 'home'
     ? { kind: 'home', home_id: plan.place_home_id }
     : {
@@ -463,7 +462,7 @@ async function sameNextWeekCard(plan) {
   };
   let checked;
   try {
-    checked = await planActions.previewPlan(ctx.user, input);
+    checked = await planActions.previewPlan({ id: hostOf(plan), role: null }, input);
   } catch (err) {
     if (err instanceof planActions.PlanError) {
       logger.info('plans.nudge.card_skipped', { tool: 'plan_create', planId: plan.post_id, reason: err.message });
@@ -527,11 +526,11 @@ async function afterPlans(now) {
   if (error) throw new Error(`Failed to read ended plans: ${error.message}`);
   let sent = 0;
   for (const plan of data || []) {
-    if (isResting(String(plan.host_user_id), 'plan_after')) continue;
     try {
       const requests = await planActions.activeRequests(plan.post_id);
       const cameCount = requests.filter((r) => r.status === 'accepted').length;
-      if (cameCount === 0) continue;
+      if (cameCount === 0 || !(await hostWouldHear(plan, 'plan_after', 'after'))) continue;
+      const expiresAt = new Date(Date.parse(plan.ended_at || plan.post.event_end_date) + CHAT_OPEN_AFTER_END_MS);
       // Hosting it again is offered only when they haven't already posted another of its kind.
       const { count: hostedAgain } = await supabaseAdmin.from('Plan')
         .select('post_id', { count: 'exact', head: true })
@@ -539,7 +538,7 @@ async function afterPlans(now) {
         .gt('created_at', plan.created_at);
       const again = hostedAgain ? null : await sameNextWeekCard(plan);
       const thanks = plan.chat_room_id && !plan.chat_closed_at
-        ? await hostCard(plan, 'draft_plan_message', { plan_id: plan.post_id, text: THANKS[plan.kind] || THANKS.walk_coffee, note: null })
+        ? await hostCard(plan, 'draft_plan_message', { plan_id: plan.post_id, text: THANKS[plan.kind] || THANKS.walk_coffee, note: null }, expiresAt)
         : null;
       if (!again && !thanks) continue;
       const tz = rules.timezoneForPlan(plan);
@@ -555,8 +554,7 @@ async function afterPlans(now) {
         title: again ? `Host your ${noun} again next week?` : `Thank everyone for the ${noun}?`,
         body: `${people}${ask}`,
         cards: [thanks, again],
-        links: [{ label: 'Open the plan', url: linkFor('plan', plan.post_id) }],
-        expiresAt: new Date(Date.parse(plan.ended_at || plan.post.event_end_date) + CHAT_OPEN_AFTER_END_MS),
+        expiresAt,
       });
       if (result?.sent) sent += 1;
     } catch (err) {

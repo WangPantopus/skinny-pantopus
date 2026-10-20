@@ -146,6 +146,49 @@
         "textMatches": "(two|2) (nudges|a day)|morning (brief|briefing)"
       },
       "note": "Phase 2: the guide's sentence on Suggestions (appGuide.js)."
+    },
+    {
+      "id": "nearby-catch-up",
+      "as": "host",
+      "context": {
+        "surface": "nearby"
+      },
+      "say": "What did I miss this week?",
+      "expect": {
+        "noCard": true,
+        "textMatches": "(lost|found|missing|heads-up|dog|cat)"
+      },
+      "note": "Phase 2 (contract §6.1): catch_up_nearby, with heads-ups and lost and found first. Seed the P2P Nearby posts first (a lost dog, a found dog, a question, a recommendation, the attack heads-up)."
+    },
+    {
+      "id": "nearby-catch-up-link",
+      "as": "host",
+      "say": "Is anyone nearby missing a dog? Give me a button to the post.",
+      "expect": {
+        "noCard": true,
+        "linkContains": "pantopus://posts/"
+      },
+      "note": "Phase 2 (contract §6.1): catch-up items carry their post ids for link buttons."
+    },
+    {
+      "id": "nearby-recommendations",
+      "as": "guest",
+      "say": "Who do neighbors recommend for a plumber?",
+      "expect": {
+        "noCard": true,
+        "textMatches": "Joe['’]s Plumbing"
+      },
+      "note": "Phase 2 (contract §6.4): find_recommendations groups the names in recommendation posts, questions and their replies. Seeded: two replies name Joe's Plumbing, one Camas Plumbing Co."
+    },
+    {
+      "id": "nearby-recommendations-none",
+      "as": "guest",
+      "say": "Who do neighbors recommend for a piano tuner?",
+      "expect": {
+        "noCard": true,
+        "textNotMatches": "Joe['’]s Plumbing|Rose City Roofing"
+      },
+      "note": "Phase 2: no matching posts means no names, not names from other posts."
     }
   ]
 }

@@ -21,7 +21,7 @@ const logger = require('../../../utils/logger');
 const { haversineMeters } = require('../../../utils/geo');
 const { timezoneFromCoordinates } = require('../../../utils/timezone');
 const { localDisplayNames } = require('../../../utils/identityProfiles');
-const { getAnthropicClient, resolveEffort, DRAFT_MODEL } = require('../../../config/anthropic');
+const { resolveEffort, DRAFT_MODEL } = require('../../../config/anthropic');
 const feedService = require('../../feedService');
 const blockService = require('../../blockService');
 const { canReadPost, POST_READ_SELECT } = require('../../pulse/readAccess');
@@ -29,12 +29,10 @@ const { writeRow } = require('../../placeSectionCache');
 const { normalizeTitle, jaccardSimilarity } = require('../../gig/jaccardUtils');
 const rules = require('../../plans/planRules');
 const prompts = require('../prompts');
-const { complete, AIRefusalError } = require('../llm');
+const { complete } = require('../llm');
 const { toClaudeSchema } = require('../schemas');
-const { runCardTool } = require('../actionCards');
-const { linkFor } = require('../appGuide');
+const { backgroundCall } = require('../background');
 const { clip, firstNameOf, distanceWords } = require('../assistantKit');
-const { isResting, noteResult } = require('./resting');
 const { fit, capitalized } = require('./words');
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -44,21 +42,25 @@ const MILE_METERS = 1609.344;
 /** The nudge engine (contract §3.5). Required when used, so the job runs without it. */
 const engine = () => require('./engine');
 
+/** Whether this person would get this nudge now (Suggestions, "Fewer like this", the day's cap, a duplicate). */
+async function wouldHear(userId, kind, subject, checkpoint) {
+  const verdict = await engine().canNudge({ userId, kind, subject, checkpoint });
+  if (!verdict.ok) logger.debug('nearby.nudge.not_now', { kind, reason: verdict.reason });
+  return verdict.ok;
+}
+
 async function send(userId, nudge) {
-  const result = await engine().sendNudge({ userId, ...nudge, card: nudge.cards[0] || null });
-  noteResult(userId, nudge.kind, result);
-  if (!result || !result.sent) logger.debug('nearby.nudge.not_sent', { kind: nudge.kind, reason: result?.reason || null });
+  const result = await engine().sendNudge({ userId, ...nudge, title: fit(nudge.title, 60), body: fit(nudge.body, 160) });
+  if (!result || !result.sent) logger.info('nearby.nudge.not_sent', { kind: nudge.kind, reason: result?.reason || null });
   return result;
 }
 
-/** A card from the chat's own drafter, as the recipient; null when it can't be offered. */
-async function cardFor(userId, tool, args) {
-  const drafted = await runCardTool(tool, args, { userId, user: { id: userId, role: null } });
-  if (drafted && drafted.draftType === 'action' && drafted.draft) return drafted.draft;
-  logger.info('nearby.nudge.card_skipped', { tool, reason: drafted?.error || drafted?.message || null });
-  return null;
+/** A card from the chat's own drafter, as the recipient (engine.nudgeCard); null when it can't be offered. */
+async function cardFor(userId, tool, args, expiresAt) {
+  const { card, error } = await engine().nudgeCard(tool, args, { userId, expiresAt });
+  if (!card) logger.info('nearby.nudge.card_skipped', { tool, reason: error || null });
+  return card || null;
 }
-
 
 // ─── Lost and found ────────────────────────────────────────────────────────
 
@@ -129,8 +131,11 @@ function wordsOf(post) {
 
 /** Where a post really is: its stored point, server-side only (never shown or sent to the model). */
 function pointOf(post) {
-  const latitude = Number(post.latitude ?? post.effective_latitude);
-  const longitude = Number(post.longitude ?? post.effective_longitude);
+  const [lat, lng] = post.latitude != null && post.longitude != null
+    ? [post.latitude, post.longitude] : [post.effective_latitude, post.effective_longitude];
+  if (lat == null || lng == null) return null;
+  const latitude = Number(lat);
+  const longitude = Number(lng);
   return Number.isFinite(latitude) && Number.isFinite(longitude) ? { latitude, longitude } : null;
 }
 
@@ -206,37 +211,18 @@ function batchText(batch) {
   ].join('\n')).join('\n\n');
 }
 
-async function logCall(fields) {
-  try {
-    await supabaseAdmin.from('AIRequestLog').insert({
-      user_id: null,
-      endpoint: 'lostfound',
-      model: DRAFT_MODEL,
-      prompt_version: prompts.VERSIONS.lostFound,
-      ...fields,
-    });
-  } catch (err) {
-    logger.error('Failed to log AI request', { error: err.message });
-  }
-}
-
 /**
- * The engine's background budget (contract §2.6): the AI_ASSISTANT switch and the shared daily
- * cap. True when this call may go ahead.
+ * The model's verdicts for one batch, by pair number. One text-only call through the background
+ * budget (background.js: AI_ASSISTANT, the shared daily cap, the AIRequestLog row as lostfound).
+ * Null when it didn't run or didn't answer: the batch is tried again next hour.
  */
-async function backgroundCallAllowed() {
-  const budget = engine();
-  if (typeof budget.backgroundCallAllowed === 'function') return budget.backgroundCallAllowed({ endpoint: 'lostfound', userId: null });
-  return false;
-}
-
-/** The model's verdicts for one batch, by pair number; null when the call failed (the batch is tried next hour). */
 async function judge(batch) {
-  const client = getAnthropicClient();
-  if (!client || !(await backgroundCallAllowed())) return null;
-  const started = Date.now();
-  try {
-    const response = await complete({
+  const call = await backgroundCall({
+    userId: null,
+    endpoint: 'lostfound',
+    model: DRAFT_MODEL,
+    promptVersion: prompts.VERSIONS.lostFound,
+    run: (client) => complete({
       client,
       model: DRAFT_MODEL,
       system: prompts.LOST_FOUND_MATCH_SYSTEM,
@@ -245,42 +231,27 @@ async function judge(batch) {
       effort: LOST_FOUND_EFFORT,
       maxTokens: LOST_FOUND_MAX_TOKENS,
       timeoutMs: LOST_FOUND_TIMEOUT_MS,
-    });
-    let parsed = null;
-    try {
-      parsed = JSON.parse(response.text);
-    } catch {
-      // Logged as a schema error below.
-    }
-    const results = Array.isArray(parsed?.results) ? parsed.results : null;
-    await logCall({
-      status: results ? 'ok' : 'schema_error',
-      schema_valid: Boolean(results),
-      latency_ms: Date.now() - started,
-      input_tokens: response.inputTokens || null,
-      output_tokens: response.outputTokens || null,
-    });
-    if (!results) return null;
-    const verdicts = new Map();
-    for (const result of results) {
-      if (Number.isInteger(result.pair) && result.pair >= 1 && result.pair <= batch.length) {
-        verdicts.set(result.pair, {
-          likely: result.verdict === 'likely',
-          item: ITEMS.includes(result.item) ? result.item : 'item',
-          reason: clip(result.reason, 200),
-        });
-      }
-    }
-    return verdicts;
-  } catch (err) {
-    logger.warn('nearby.lostfound.judge_failed', { error: err.message });
-    await logCall({
-      status: err instanceof AIRefusalError ? 'refusal' : 'error',
-      latency_ms: Date.now() - started,
-      error_message: clip(err.message, 300),
-    });
+    }),
+  });
+  if (!call.ok) return null;
+  let parsed = null;
+  try {
+    parsed = JSON.parse(call.value.text);
+  } catch {
+    logger.warn('nearby.lostfound.unreadable_answer');
     return null;
   }
+  const verdicts = new Map();
+  for (const result of Array.isArray(parsed?.results) ? parsed.results : []) {
+    if (Number.isInteger(result.pair) && result.pair >= 1 && result.pair <= batch.length) {
+      verdicts.set(result.pair, {
+        likely: result.verdict === 'likely',
+        item: ITEMS.includes(result.item) ? result.item : 'item',
+        reason: clip(result.reason, 200),
+      });
+    }
+  }
+  return verdicts;
 }
 
 /** The day a post went up, as a nudge says it: "Tuesday" this week, else "Oct 14". */
@@ -296,28 +267,31 @@ function dayOf(post, now) {
  */
 async function tellAuthor({ own, other, item, meters, lostSide, now }) {
   const userId = String(own.user_id);
-  if (isResting(userId, 'lost_found_match')) return null;
+  const subject = { type: 'post', id: own.id };
+  // The other post's id without dashes keeps the key under the engine's 40 characters.
+  const checkpoint = `match.${String(other.id).replace(/-/g, '')}`;
   // The other post's audience and blocks either way, as its page checks them (a failed check is a no).
   if (!(await canReadPost(other, userId).catch(() => false))) return null;
+  if (!(await wouldHear(userId, 'lost_found_match', subject, checkpoint))) return null;
+  const expiresAt = new Date(now + 7 * DAY_MS);
   const apart = (distanceWords(rules.distanceBandFromMeters(meters)) || 'nearby').toLowerCase();
   const reply = await cardFor(userId, 'draft_post_reply', {
     post_id: other.id,
     reply_to: null,
     text: lostSide ? `Hi! I think this might be ${MINE[item]}. Could we connect?` : `Hi! I may have found ${YOURS[item]}. Could we connect?`,
     note: null,
-  });
+  }, expiresAt);
   const kindWord = item === 'item' ? 'what you found' : `the ${item} you found`;
   return send(userId, {
     kind: 'lost_found_match',
-    subject: { type: 'post', id: own.id },
-    checkpoint: `match.${other.id}`,
-    title: fit(lostSide ? capitalized(`${FOUND_PHRASE[item]} nearby may be yours`) : `Someone nearby may be missing ${kindWord}`, 60),
-    body: fit(lostSide
+    subject,
+    checkpoint,
+    title: lostSide ? capitalized(`${FOUND_PHRASE[item]} nearby may be yours`) : `Someone nearby may be missing ${kindWord}`,
+    body: lostSide
       ? `Posted ${dayOf(other, now)}, ${apart} from your post. Take a look, and reply if it's yours.`
-      : `A ${other.post_type === 'alert' ? 'missing pet heads-up' : 'lost post'} from ${dayOf(other, now)}, ${apart} from yours. Take a look, and reply if it's theirs.`, 160),
+      : `A ${other.post_type === 'alert' ? 'missing pet heads-up' : 'lost post'} from ${dayOf(other, now)}, ${apart} from yours. Take a look, and reply if it's theirs.`,
     cards: reply ? [reply] : [],
-    links: [{ label: 'Open the post', url: linkFor('post', other.id) }],
-    expiresAt: new Date(now + 7 * DAY_MS),
+    expiresAt,
   });
 }
 
@@ -410,7 +384,6 @@ async function questionsAnswered(now = Date.now()) {
   let sent = 0;
   for (const ask of asks) {
     const authorId = String(ask.user_id);
-    if (isResting(authorId, 'question_answered')) continue;
     try {
       const all = byPost.get(ask.id) || [];
       // Replies the author can see: not their own, and nobody on either side of a block.
@@ -418,6 +391,10 @@ async function questionsAnswered(now = Date.now()) {
       const theirs = all.filter((reply) => String(reply.user_id) !== authorId && !blocked.has(String(reply.user_id)));
       const ready = theirs.length >= 2 || (theirs.length === 1 && Date.parse(theirs[0].created_at) <= now - ONE_REPLY_WAIT_MS);
       if (!ready || (await askedRecently(authorId, ask.id, now))) continue;
+      const subject = { type: 'post', id: ask.id };
+      const checkpoint = `r${theirs.length}`;
+      if (!(await wouldHear(authorId, 'question_answered', subject, checkpoint))) continue;
+      const expiresAt = new Date(now + 3 * DAY_MS);
 
       const people = [...new Set(theirs.map((reply) => String(reply.user_id)))];
       const shown = await localDisplayNames(people).catch(() => new Map());
@@ -426,23 +403,22 @@ async function questionsAnswered(now = Date.now()) {
       // They already said thanks after the latest reply: only Mark solved is offered.
       const lastTheirs = theirs[theirs.length - 1];
       const thankedAfter = all.some((reply) => String(reply.user_id) === authorId && Date.parse(reply.created_at) > Date.parse(lastTheirs.created_at));
-      const solve = await cardFor(authorId, 'draft_post_solve', { post_id: ask.id, note: null });
+      const solve = await cardFor(authorId, 'draft_post_solve', { post_id: ask.id, note: null }, expiresAt);
       if (!solve) continue;
       const thanks = thankedAfter ? null : await cardFor(authorId, 'draft_post_reply', {
         post_id: ask.id,
         reply_to: null,
         text: names.length <= 2 ? `Thanks, ${namesText(names)}! This helped.` : 'Thanks, everyone! This helped.',
         note: null,
-      });
+      }, expiresAt);
       const result = await send(authorId, {
         kind: 'question_answered',
-        subject: { type: 'post', id: ask.id },
-        checkpoint: `r${theirs.length}`,
+        subject,
+        checkpoint,
         title: `Your question got ${theirs.length} ${theirs.length === 1 ? 'reply' : 'replies'}`,
-        body: fit(`${namesText(names)} replied to “${question}”. Mark it solved${thanks ? ', or say thanks' : ''}?`, 160),
+        body: `${namesText(names)} replied to “${question}”. Mark it solved${thanks ? ', or say thanks' : ''}?`,
         cards: [solve, thanks].filter(Boolean),
-        links: [{ label: 'Open the post', url: linkFor('post', ask.id) }],
-        expiresAt: new Date(now + 3 * DAY_MS),
+        expiresAt,
       });
       if (result?.sent) sent += 1;
     } catch (err) {
