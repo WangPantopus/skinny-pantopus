@@ -2071,19 +2071,6 @@ private fun NavHostController.navigateToRootTab(
     }
 }
 
-/**
- * Where Pulse opens: its own tab with the Pulse redesign on; with it off, the Nearby tab on its Pulse segment (founder
- * decision 2026-10-20), or its Neighborhood segment for a `/nearby` link.
- */
-private fun NavHostController.openNearbySegment(segment: NearbySegment) {
-    if (LaunchFeatures.pulseRedesign) {
-        navigateToRootTab(PantopusRoute.Pulse)
-    } else {
-        NearbySegmentRequests.request(segment)
-        navigateToRootTab(PantopusRoute.Nearby)
-    }
-}
-
 /** A verify-sheet door opens its real flow (Wedge v2 D3); the Place dashboard and the Place detail pages share it. */
 private fun NavHostController.openPlaceVerify(
     method: PlaceVerifyMethod,
@@ -2237,6 +2224,17 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
     val navDrawerScope = rememberCoroutineScope()
     // The side menu opens from every tab's top screen (founder decision 2026-10-20).
     val openMenu: () -> Unit = { navDrawerScope.launch { navDrawerState.open() } }
+
+    // Where Pulse opens: its own tab with the Pulse redesign on; with it off, the Nearby tab on its Pulse segment
+    // (founder decision 2026-10-20), or its Neighborhood segment for a `/nearby` link.
+    val openNearbySegment: (NearbySegment) -> Unit = { segment ->
+        if (LaunchFeatures.pulseRedesign) {
+            navController.navigateToRootTab(PantopusRoute.Pulse)
+        } else {
+            NearbySegmentRequests.request(segment)
+            navController.navigateToRootTab(PantopusRoute.Nearby)
+        }
+    }
     // Place tapped again on its root: one event, which scrolls the root back to the top.
     val placeReselects = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
     var ballotHomeId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -2316,7 +2314,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 DeepLinkRouter.consume()
             }
             DeepLinkRouter.Destination.Feed -> {
-                navController.openNearbySegment(NearbySegment.Pulse)
+                openNearbySegment(NearbySegment.Pulse)
                 DeepLinkRouter.consume()
             }
             DeepLinkRouter.Destination.Home -> {
@@ -2327,7 +2325,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
             // redesign off Nearby is the tab, and a `/nearby` link (the neighborhood milestone push among them) opens
             // its Neighborhood segment (founder decision 2026-10-20).
             DeepLinkRouter.Destination.Nearby -> {
-                navController.openNearbySegment(NearbySegment.Neighborhood)
+                openNearbySegment(NearbySegment.Neighborhood)
                 DeepLinkRouter.consume()
             }
             DeepLinkRouter.Destination.PlansTab -> {
@@ -2370,7 +2368,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 DeepLinkRouter.consume()
             }
             is DeepLinkRouter.Destination.Post -> {
-                navController.openNearbySegment(NearbySegment.Pulse)
+                openNearbySegment(NearbySegment.Pulse)
                 navController.navigate(ChildRoutes.pulsePost(pending.id))
                 DeepLinkRouter.consume()
             }
@@ -2946,7 +2944,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     // With the Pulse redesign off the October 13 feed is the Nearby tab's Pulse segment (founder
                     // decision 2026-10-20): this route (saved state, a stale entry) opens it there.
                     if (!LaunchFeatures.pulseRedesign) {
-                        LaunchedEffect(Unit) { navController.openNearbySegment(NearbySegment.Pulse) }
+                        LaunchedEffect(Unit) { openNearbySegment(NearbySegment.Pulse) }
                         return@composable
                     }
                     val quietMeter: NearbyViewModel = hiltViewModel()

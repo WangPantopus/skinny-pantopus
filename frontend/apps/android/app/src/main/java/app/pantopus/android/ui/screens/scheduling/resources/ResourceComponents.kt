@@ -793,7 +793,7 @@ fun <T> SegmentedControl(
                         .background(if (isOn) PantopusColors.appSurface else Color.Transparent)
                         .clickable(onClickLabel = label(option), role = Role.Button) {
                             onSelect(option)
-                        }.semantics { selected = isOn }
+                        }.semantics { this.selected = isOn }
                         .then(optionTag?.let { Modifier.testTag(it(option)) } ?: Modifier)
                         .padding(vertical = 7.dp),
                 contentAlignment = Alignment.Center,
