@@ -126,6 +126,8 @@ function check(question, got) {
   if (e.card && !types.includes(e.card)) fails.push(`no ${e.card} card (got ${types.join(',') || 'none'})`);
   if (e.cardKind && !got.cards.some((c) => (c.actions || []).some((a) => a.request?.body?.kind === e.cardKind))) fails.push(`no ${e.cardKind} plan card`);
   if (e.then && !got.cards.some((c) => (c.actions || []).some((a) => a.then))) fails.push('card has no follow-up request');
+  if (e.cardBodyHas && !got.cards.some((c) => (c.actions || []).some((a) => Object.entries(e.cardBodyHas)
+    .every(([key, value]) => a.request?.body?.[key] === value)))) fails.push(`no card request with ${JSON.stringify(e.cardBodyHas)}`);
   if (e.noCard && got.cards.length) fails.push(`unexpected card ${types.join(',')}`);
   if (e.noCardType && types.includes(e.noCardType)) fails.push(`unexpected ${e.noCardType} card`);
   for (const type of e.noCardTypes || []) if (types.includes(type)) fails.push(`unexpected ${type} card`);
@@ -134,6 +136,10 @@ function check(question, got) {
   if (e.linkContains && !got.links.some((url) => url.includes(e.linkContains))) fails.push(`no link containing ${e.linkContains}`);
   if (e.textMatches && !new RegExp(e.textMatches, 'i').test(got.text)) fails.push(`text lacks /${e.textMatches}/`);
   if (e.textNotMatches && new RegExp(e.textNotMatches, 'im').test(got.text)) fails.push(`text matches /${e.textNotMatches}/`);
+  // What everyone nearby would read: the title and about a card would post.
+  if (e.publicNotMatches && bodies.some((body) => body && new RegExp(e.publicNotMatches, 'i').test(`${body.title || ''}\n${body.about || ''}`))) {
+    fails.push(`public title or about matches /${e.publicNotMatches}/`);
+  }
   return fails;
 }
 

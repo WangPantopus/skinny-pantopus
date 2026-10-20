@@ -71,6 +71,8 @@ const reconcileHomeHouseholdResolution = require('./reconcileHomeHouseholdResolu
 // Chat jobs
 const chatRedactionJob = require('./chatRedactionJob');
 const aiChatPhotoSweep = require('./aiChatPhotoSweep');
+// Assistant suggestions about homes: waiting tasks, papers ending, radon follow-through
+const { runHomeNudges } = require('../services/ai/nudges/home');
 // Business cleanup
 const cleanupGhostBusinesses = require('./cleanupGhostBusinesses');
 // Pop-up business expiry
@@ -105,6 +107,8 @@ const authRegistryPrune = require('./authRegistryPrune');
 const { runSupportTrainReminders } = require('./supportTrainReminders');
 // Nearby Plans: held pushes, reminders, lifecycle and the host's summary
 const { runPlansTick } = require('./planJobs');
+// Assistant nudges and briefs: pushes held for quiet hours
+const { releaseHeldNudges } = require('../services/ai/nudges/engine');
 const { runBookingReminders } = require('./bookingReminders');
 // Payment health alerting
 const { checkAndAlertStuckPayments } = require('../routes/paymentOps');
@@ -546,6 +550,15 @@ function startJobs(options = {}) {
     timezone: 'UTC',
   });
 
+  // ─── Assistant: Home nudges ───
+  // Every 15 minutes at :07/:22/:37/:52, for people who turned Suggestions on, once a day after
+  // their brief time: Monday's waiting tasks, papers ending in 30 and 7 days, radon follow-through
+  // (services/ai/nudges/home.js; the engine keeps to the day's cap and holds pushes in quiet hours).
+  scheduleCron('7,22,37,52 * * * *', wrapJob('homeNudges', runHomeNudges), {
+    scheduled: true,
+    timezone: 'UTC',
+  });
+
   // ─── Auth registry prune (persistent login) ───
   // Runs hourly at :50. Drops expired DPoP jtis and challenges.
   scheduleCron('50 * * * *', wrapJob('authRegistryPrune', authRegistryPrune), {
@@ -702,6 +715,15 @@ function startJobs(options = {}) {
   // plans, closing chats 24h after the end, reminders and the 8 AM host summary.
   // Every send is claimed first, so overlapping runners don't repeat a notice.
   scheduleCron('*/5 * * * *', wrapJob('plansTick', runPlansTick), {
+    scheduled: true,
+    timezone: 'UTC',
+  });
+
+  // ─── Assistant suggestions ───
+  // Every 5 minutes: nudge and brief pushes held for quiet hours go out once they end,
+  // or are dropped if the nudge expired or Suggestions was turned off meanwhile.
+  // Each send is claimed first, like the Plans tick's.
+  scheduleCron('*/5 * * * *', wrapJob('assistantHeldPushes', releaseHeldNudges), {
     scheduled: true,
     timezone: 'UTC',
   });
