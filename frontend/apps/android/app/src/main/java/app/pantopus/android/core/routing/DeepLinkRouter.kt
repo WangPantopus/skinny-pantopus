@@ -999,7 +999,14 @@ object DeepLinkRouter {
             }
             "invite" -> {
                 val token = segments.getOrNull(1)
-                if (token == "lease") {
+                if (token == "seat") {
+                    // Business share links carry the token in the query; "seat" is the invitation kind, not the token.
+                    if (segments.size == 2 && !tokenQuery.isNullOrEmpty()) {
+                        Destination.Invite(tokenQuery)
+                    } else {
+                        Destination.Unknown(raw)
+                    }
+                } else if (token == "lease") {
                     val proof = segments.getOrNull(2)
                     if (segments.size == 3 && proof?.matches(Regex("[a-fA-F0-9]{64}")) == true) {
                         Destination.Invite(proof, leaseInvitation = true)
