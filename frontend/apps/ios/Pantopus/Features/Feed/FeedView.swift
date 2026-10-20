@@ -312,11 +312,14 @@ public struct FeedView: View {
                 .accessibilityLabel("Back")
                 .accessibilityIdentifier("pulseBackButton")
             }
+            // One line, shrinking a little where the Ask button leaves less room.
             Text(viewModel.surface.title)
                 .font(.system(size: 22, weight: .bold))
                 .foregroundStyle(Theme.Color.appText)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
                 .accessibilityAddTraits(.isHeader)
-            Spacer()
+            Spacer(minLength: Spacing.s1)
             if viewModel.surface.supportsMapMode {
                 viewModeToggle.fixedSize(horizontal: true, vertical: false)
             }
@@ -325,7 +328,7 @@ public struct FeedView: View {
                     askTopic = .nearby()
                 } label: {
                     AskPantopusGlyph(size: 19)
-                        .frame(width: 36, height: 36)
+                        .frame(width: 32, height: 36)
                         .hitArea(horizontal: 4, vertical: 4)
                 }
             }
