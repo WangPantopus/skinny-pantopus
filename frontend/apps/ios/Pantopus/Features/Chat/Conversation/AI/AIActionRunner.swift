@@ -235,7 +235,9 @@ enum AIActionRunner {
 /// Which action cards' taps went through, kept on the device so a card
 /// restored from history still shows as done after a relaunch (contract
 /// section 4.3, step 5), and which cards were put away with "Not now". Card
-/// ids are uuids, so one account's records never match another's cards.
+/// ids are uuids, so one account's records never match another's cards. They
+/// stay through a sign-out: signing back in must not offer a finished card
+/// again, since a plan or a message sent from one would go out twice.
 @MainActor
 final class AIActionDoneStore {
     static let shared = AIActionDoneStore()

@@ -202,6 +202,7 @@ public struct PulsePostDetailView: View {
         .accessibilityIdentifier("pulsePostDetail")
         .task { await viewModel.load() }
         .task { await viewModel.loadNearbyProviders() }
+        .refreshesAfterAssistant(postId: viewModel.postId) { await viewModel.refresh() }
         .onAppear { isVisible = true }
         .onDisappear {
             isVisible = false
@@ -457,5 +458,13 @@ extension PostDetailDTO {
             }
         }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+}
+
+private extension View {
+    /// A reply or "solved" sent from Ask Pantopus about this post shows here
+    /// (the action card's request signals the post's topic).
+    func refreshesAfterAssistant(postId: String, perform: @escaping @MainActor () async -> Void) -> some View {
+        refreshesOnStoreChange(affects: { $0.names(topic: ScreenTopic.post(postId)) }, perform: perform)
     }
 }
