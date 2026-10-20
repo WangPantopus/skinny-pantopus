@@ -4097,17 +4097,17 @@ router.patch('/:businessId/private', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'No permission to edit sensitive data' });
     }
 
-    const { error: validationError, value: validatedBody } = updateBusinessPrivateSchema.validate(req.body, { abortEarly: false });
-    if (validationError) {
+    const privateFields = updateBusinessPrivateSchema.validate(req.body, { abortEarly: false });
+    if (privateFields.error) {
       // Legal/contact values must not be echoed into error responses or logs.
-      const details = validationError.details.map(({ path, message }) => ({ field: path.join('.'), message }));
+      const details = privateFields.error.details.map(({ path, message }) => ({ field: path.join('.'), message }));
       return res.status(400).json({ error: details[0].message, code: 'INVALID_BUSINESS_PRIVATE', details });
     }
 
     const allowed = ['legal_name', 'tax_id_last4', 'support_email', 'banking_info', 'legal_doc_ids'];
     const updates = {};
     for (const key of allowed) {
-      if (validatedBody[key] !== undefined) updates[key] = validatedBody[key];
+      if (privateFields.value[key] !== undefined) updates[key] = privateFields.value[key];
     }
     updates.updated_at = new Date().toISOString();
 
