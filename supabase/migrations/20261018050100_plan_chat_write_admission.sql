@@ -10,6 +10,23 @@ LANGUAGE plpgsql VOLATILE SECURITY DEFINER
 SET search_path = public, pg_temp SET lock_timeout = '5s' AS $$
 DECLARE v_plan public."Plan"%ROWTYPE; v_active boolean; v_type text;
 BEGIN
+  -- Upkeep changes nothing anyone wrote, so it continues in a closed chat:
+  -- redacting a deleted message (the retention job), and clearing a link to
+  -- a removed message, topic or account (ON DELETE SET NULL keys and account
+  -- deletion). Refusing it would stall the retention job for every room and
+  -- refuse account deletion to anyone whose message was replied to.
+  IF TG_OP = 'UPDATE' AND ((OLD.deleted IS TRUE AND NEW.deleted IS TRUE)
+    OR (NEW.room_id = OLD.room_id AND NEW.user_id = OLD.user_id
+      AND NEW.message IS NOT DISTINCT FROM OLD.message
+      AND NEW.type IS NOT DISTINCT FROM OLD.type
+      AND NEW.attachments IS NOT DISTINCT FROM OLD.attachments
+      AND NEW.metadata IS NOT DISTINCT FROM OLD.metadata
+      AND (NEW.actor_user_id IS NULL OR NEW.actor_user_id = OLD.actor_user_id)
+      AND (NEW.reply_to_id IS NULL OR NEW.reply_to_id = OLD.reply_to_id)
+      AND (NEW.topic_id IS NULL OR NEW.topic_id = OLD.topic_id))) THEN
+    RETURN NEW;
+  END IF;
+
   SELECT type INTO v_type FROM public."ChatRoom" WHERE id = NEW.room_id;
   IF v_type IS DISTINCT FROM 'plan' THEN RETURN NEW; END IF;
 
