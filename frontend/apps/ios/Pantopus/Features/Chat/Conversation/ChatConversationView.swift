@@ -56,6 +56,8 @@ public struct ChatConversationView: View {
     @State private var bulkDeleteConfirmPresented = false
     /// Message awaiting the single-delete confirm.
     @State private var pendingDeleteId: String?
+    /// The assistant's "Delete conversation" awaiting its confirm.
+    @State private var aiDeleteConfirmPresented = false
     /// Photos shown in the full-screen viewer.
     @State private var viewerPhotos: ChatPhotoViewerItem?
     /// Gates the scroll-to-top pagination trigger: armed ~0.5s after the
@@ -139,6 +141,8 @@ public struct ChatConversationView: View {
                 onBack: onBack,
                 onOpenDetails: { detailsPresented = true },
                 onNewAIChat: { viewModel.startNewAIConversation() },
+                onDeleteAIChat: { aiDeleteConfirmPresented = true },
+                isDeletingAIChat: viewModel.isDeletingAIConversation,
                 onOpenProfile: headerProfileTap
             )
             if isSelecting {
@@ -364,6 +368,14 @@ public struct ChatConversationView: View {
             }
         } message: { _ in
             Text("Deleted messages are removed for everyone in this conversation.")
+        }
+        .alert("Delete this conversation?", isPresented: $aiDeleteConfirmPresented) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) {
+                Task { await viewModel.deleteAIConversations() }
+            }
+        } message: {
+            Text("Pantopus AI won\u{2019}t remember it. Any earlier chats with Pantopus AI are deleted too.")
         }
         .fullScreenCover(item: $viewerPhotos) { photos in
             MediaViewerView(
@@ -1665,6 +1677,10 @@ private struct ChatConversationHeader: View {
     var onOpenDetails: @MainActor () -> Void = {}
     /// The assistant's "New chat" (AI thread only).
     var onNewAIChat: @MainActor () -> Void = {}
+    /// The assistant's More menu: "Delete conversation" (AI thread only).
+    var onDeleteAIChat: @MainActor () -> Void = {}
+    /// True while that delete runs.
+    var isDeletingAIChat = false
     /// Opens the other person's profile from their avatar and name (person DMs only).
     var onOpenProfile: (@MainActor () -> Void)?
 
@@ -1803,7 +1819,7 @@ private struct ChatConversationHeader: View {
                 .accessibilityLabel("Conversation details")
             case .ai:
                 // A15.3 header actions: square-pen "New chat" then
-                // more-horizontal (decorative until it has actions).
+                // more-horizontal, whose menu deletes the conversation.
                 HStack(spacing: 2) {
                     Button {
                         onNewAIChat()
@@ -1815,9 +1831,21 @@ private struct ChatConversationHeader: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel("New chat")
                     .accessibilityIdentifier("chatAINewChat")
-                    Icon(.moreHorizontal, size: 18, color: Theme.Color.appTextStrong)
-                        .frame(width: 34, height: 34)
-                        .accessibilityHidden(true)
+                    Menu {
+                        Button(role: .destructive) {
+                            onDeleteAIChat()
+                        } label: {
+                            Label("Delete conversation", systemImage: "trash")
+                        }
+                        .accessibilityIdentifier("chatAIDeleteConversation")
+                    } label: {
+                        Icon(.moreHorizontal, size: 18, color: Theme.Color.appTextStrong)
+                            .frame(width: 34, height: 34)
+                            .contentShape(Rectangle())
+                    }
+                    .disabled(isDeletingAIChat)
+                    .accessibilityLabel("More options")
+                    .accessibilityIdentifier("chatAIMore")
                 }
             case .group:
                 Icon(.moreVertical, size: 18, color: Theme.Color.appText)

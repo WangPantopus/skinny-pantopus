@@ -21,12 +21,11 @@ function businessSender(mail) {
   return { id: mail.sender_entity_id || null, name: name ? name.trim() : null };
 }
 
-// The MailObject row without what identifies its uploader: who created it and the storage key and URL, which carry
-// the uploader's id in their path.
+// The MailObject row (already without its storage location, mailObjectStorage.clientFields) naming the business, not
+// the person, as its creator.
 function objectForRecipient(object, businessId) {
   if (!object || typeof object !== 'object') return object;
-  const { object_key: _key, bucket_name: _bucket, object_meta: _meta, ...rest } = object;
-  return 'created_by_user_id' in object ? { ...rest, created_by_user_id: businessId } : rest;
+  return 'created_by_user_id' in object ? { ...object, created_by_user_id: businessId } : object;
 }
 
 // The stored mail.json payload names its sender in sender.senderUserId.

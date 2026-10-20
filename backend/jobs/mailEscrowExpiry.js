@@ -97,3 +97,5 @@ function maskContact(contact) {
 }
 
 module.exports = mailEscrowExpiry;
+// The claim page (routes/mailbox.js GET /claim/:mailId) masks the address the same way.
+module.exports.maskContact = maskContact;

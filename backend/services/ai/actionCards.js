@@ -1478,7 +1478,8 @@ module.exports = {
   CARD_EXECUTORS,
   PLAN_CARD_TOOLS,
   KIND_LABELS,
-  // For the nudges (nudges/home.js), tests and scripts.
+  WHO_GETS_IN,
+  // For the nudges (nudges/home.js, nudges/plans.js), tests and scripts.
   card,
   action,
   line,

@@ -75,8 +75,9 @@ describe('POST /api/internal/briefing/send', () => {
 
   // The briefing push used to route to '/hub/today' while both mobile
   // clients auto-land the Home tab on Place — so tapping it dropped the
-  // user on the secondary address surface.
-  it('deep links the push to the Place dashboard for the briefing home', async () => {
+  // user on the secondary address surface. The morning push now opens its
+  // stored briefing (AI phase 2 contract §4); the evening one still opens Place.
+  it('deep links the morning push to its stored briefing', async () => {
     seedTable('UserNotificationPreferences', [{
       id: 'pref-2',
       user_id: USER_ID,
@@ -111,10 +112,11 @@ describe('POST /api/internal/briefing/send', () => {
     const payload = pushService.sendToUserWithReceipt.mock.calls[0][1];
     // BOTH clients read `link` (then `deepLink`) and neither reads `route`,
     // so a route-only payload produces no deep link at all.
-    expect(payload.data.link).toBe('/place/home-abc');
-    expect(payload.data.route).toBe('/place/home-abc');
+    const stored = `/hub-today?kind=morning&deliveryId=${getTable('DailyBriefingDelivery')[0].id}`;
+    expect(payload.data.link).toBe(stored);
+    expect(payload.data.route).toBe(stored);
     expect(payload.data.homeId).toBe('home-abc');
-    expect(payload.data.link).not.toContain('/hub');
+    expect(payload.data.link).not.toContain('/hub/');
     const taskLink = '/app/homes/home-abc/tasks/task-1';
     const reminder = await request(app)
       .post('/api/internal/briefing/reminder-push')
@@ -195,7 +197,7 @@ describe('POST /api/internal/briefing/send', () => {
     }
   });
 
-  it('falls back to a bare Place link when the briefing has no home', async () => {
+  it('opens the stored briefing when the briefing has no home', async () => {
     seedTable('UserNotificationPreferences', [{
       id: 'pref-3',
       user_id: USER_ID,
@@ -224,9 +226,9 @@ describe('POST /api/internal/briefing/send', () => {
       .set('x-internal-api-key', 'test-internal-key')
       .send({ userId: USER_ID, briefingKind: 'morning' });
 
-    // The client resolves the primary home, exactly as the auto-land does.
-    expect(pushService.sendToUserWithReceipt.mock.calls[0][1].data.link).toBe('/place');
-    expect(pushService.sendToUserWithReceipt.mock.calls[0][1].data.route).toBe('/place');
+    const stored = `/hub-today?kind=morning&deliveryId=${getTable('DailyBriefingDelivery')[0].id}`;
+    expect(pushService.sendToUserWithReceipt.mock.calls[0][1].data.link).toBe(stored);
+    expect(pushService.sendToUserWithReceipt.mock.calls[0][1].data.route).toBe(stored);
     for (const receipt of [undefined, { acceptedCount: 0, unresolvedCount: 1 }, { acceptedCount: -1 }, { acceptedCount: 0.5 }]) {
       seedTable('DailyBriefingDelivery', []);
       pushService.sendToUserWithReceipt.mockResolvedValueOnce(receipt);
