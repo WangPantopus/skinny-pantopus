@@ -588,12 +588,7 @@ private fun LoadedBody(
             }
 
             Spacer(modifier = Modifier.height(Spacing.s3))
-            // The train's chat, for the people in it; rechecked with the train's other private details.
-            val chatRoomId = content.chatRoomId
-            if (content.privateDetailsAvailable && chatRoomId != null && onOpenChat != null) {
-                GroupChatRow(onOpen = { onOpenChat(chatRoomId, content.typeDates.title) })
-                Spacer(modifier = Modifier.height(Spacing.s3))
-            }
+            GroupChatEntry(content, onOpenChat)
             if (content.privateDetailsAvailable) HostedByRow(content.hostedBy, onMessageHost = onMessageHost)
             Spacer(modifier = Modifier.height(Spacing.s3))
         }
@@ -1050,6 +1045,18 @@ private fun HostedByRow(
             )
         }
     }
+}
+
+/** The train's chat, for the people in it; rechecked with the train's other private details. */
+@Composable
+private fun GroupChatEntry(
+    content: SupportTrainDetailContent,
+    onOpenChat: ((roomId: String, title: String) -> Unit)?,
+) {
+    val chatRoomId = content.chatRoomId
+    if (!content.privateDetailsAvailable || chatRoomId == null || onOpenChat == null) return
+    GroupChatRow(onOpen = { onOpenChat(chatRoomId, content.typeDates.title) })
+    Spacer(modifier = Modifier.height(Spacing.s3))
 }
 
 /** Opens the train's chat with its organizers and helpers; styled as the "Hosted by" row below it. */
