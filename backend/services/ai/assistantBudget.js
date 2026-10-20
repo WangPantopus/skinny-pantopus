@@ -10,6 +10,16 @@
  *
  * A count that can't be read lets the turn through: the in-process rate limiter
  * still applies, and an outage of the log must not take the assistant down.
+ *
+ * Model calls nobody is waiting for (the morning brief, a nudge's draft or judgment,
+ * lost-and-found matching) have their own caps, counted from their own endpoint
+ * names (brief, nudge:<kind>, document, lostfound); see background.js:
+ *
+ *   AI_BACKGROUND_DAILY_CALLS=3000  background calls everyone together may make since midnight UTC
+ *   6 background calls per person in 24 hours
+ *
+ * AI_ASSISTANT=off stops them too. A count that can't be read skips the call:
+ * nobody is waiting for it, and the job sends its plain-text version or nothing.
  */
 const supabaseAdmin = require('../../config/supabaseAdmin');
 const logger = require('../../utils/logger');
@@ -71,9 +81,61 @@ async function checkChatBudget(userId) {
   return null;
 }
 
-/** For tests: forget the cached global count. */
-function resetBudgetMemo() {
-  globalMemo = { count: 0, until: 0 };
+// ─── Background calls ───────────────────────────────────────────────────────
+
+const BACKGROUND_PERSON_DAILY_CALLS = 6;
+// The endpoint names background calls log under; nudges log as nudge:<kind>.
+const BACKGROUND_ENDPOINTS = ['brief', 'document', 'lostfound'];
+const backgroundCalls = (query) => query.or(`endpoint.in.(${BACKGROUND_ENDPOINTS.join(',')}),endpoint.like."nudge:*"`);
+
+let backgroundMemo = { count: 0, until: 0 };
+
+async function personBackgroundCalls(userId) {
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const { count, error } = await backgroundCalls(supabaseAdmin.from('AIRequestLog')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .gte('created_at', since));
+  if (error) throw new Error(error.message);
+  return count || 0;
 }
 
-module.exports = { checkChatBudget, resetBudgetMemo };
+async function globalBackgroundCalls() {
+  if (backgroundMemo.until > Date.now()) return backgroundMemo.count;
+  const midnight = new Date();
+  midnight.setUTCHours(0, 0, 0, 0);
+  const { count, error } = await backgroundCalls(supabaseAdmin.from('AIRequestLog')
+    .select('id', { count: 'exact', head: true })
+    .gte('created_at', midnight.toISOString()));
+  if (error) throw new Error(error.message);
+  backgroundMemo = { count: count || 0, until: Date.now() + GLOBAL_MEMO_MS };
+  return backgroundMemo.count;
+}
+
+/**
+ * Whether a background model call for this person (or for no one in particular) may run now.
+ * @param {string|null} userId
+ * @returns {Promise<null|{reason: 'off'|'budget'}>} null to go ahead.
+ */
+async function checkBackgroundBudget(userId) {
+  if (isDisabled()) return { reason: 'off' };
+  try {
+    const [mine, everyone] = await Promise.all([userId ? personBackgroundCalls(userId) : 0, globalBackgroundCalls()]);
+    if (mine >= BACKGROUND_PERSON_DAILY_CALLS) return { reason: 'budget' };
+    if (everyone >= positiveInt(process.env.AI_BACKGROUND_DAILY_CALLS, 3000)) return { reason: 'budget' };
+  } catch (err) {
+    logger.warn('AI background budget check failed; skipping the call', { userId, error: err.message });
+    return { reason: 'budget' };
+  }
+  return null;
+}
+
+/** For tests: forget the cached global counts. */
+function resetBudgetMemo() {
+  globalMemo = { count: 0, until: 0 };
+  backgroundMemo = { count: 0, until: 0 };
+}
+
+module.exports = {
+  checkChatBudget, checkBackgroundBudget, isAssistantOff: isDisabled, resetBudgetMemo, BACKGROUND_ENDPOINTS,
+};
