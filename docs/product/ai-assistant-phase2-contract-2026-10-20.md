@@ -103,7 +103,7 @@ Every nudge card carries a secondary action, "Fewer like this": `POST /api/ai/nu
 | `lost_found_match` | A found post and a lost post (or a `missing_pet` heads-up) look like the same animal or item (§6.2) | Both authors, each only if they can read the other post | `post_reply` on the other post |
 | `question_answered` | An open question the person asked has 2 or more replies, or one reply older than 12 hours, and isn't solved. At most once per question every 48 hours. | The author | `post_solve`, and `post_reply` (a thanks) |
 | `home_overdue` | Weekly, on Monday at the brief time: tasks overdue or unassigned where the person can edit tasks | The person | `home_task_update` per task: done, a new date, assign. Up to 3 items. |
-| `home_paperwork` | A warranty, policy or lease date is 30 days away, then 7 days away. Sources: `HomeAsset.warranty_expires_at`, and tasks whose `details.source` is `document` | Owners and admins | `home_task` (call, renew) |
+| `home_paperwork` | A warranty, policy or lease date is 30 days away, then 7 days away. Sources: `HomeAsset.warranty_expires_at`, and tasks whose `details.origin` is `document` (§7.1) | Owners and admins | `home_task` (call, renew) |
 | `radon_follow_up` | A radon result at or above 4.0 pCi/L with no retest or mitigation task; or "not sure yet" past its date. Facts only, no medical advice. | People who can create tasks in that home | `home_task` (retest, get quotes) |
 
 **These are not nudges.** They are ordinary Plans notifications, not capped. They use the existing plan links and Plans quiet hours:
@@ -171,7 +171,12 @@ New tools live in their own module (for example `services/ai/readToolsNearby.js`
 
 ### 7.1 Document readers
 
-- **Upload.** `POST /api/upload/ai-media` also accepts PDFs (`application/pdf`, 10 MB, at most 20 pages). It returns the same `ai-photo:<name>` reference, with delete-after-read and the 15-minute sweep as for photos.
+- **Upload.** `POST /api/upload/ai-media` also accepts PDFs (`application/pdf`, 10 MB, at most 20 pages, not encrypted). It returns the same `ai-photo:<name>` reference (the name ends in `.pdf`), with delete-after-read and the 15-minute sweep as for photos. A refusal is `{ error: "<readable text>", code }`:
+  - 413 `PDF_TOO_LARGE`;
+  - 400 `PDF_TOO_MANY_PAGES`, `PDF_ENCRYPTED`, `PDF_UNREADABLE` or `AI_MEDIA_TYPE`.
+
+  The apps show `error`.
+- **History.** A user item that carried PDFs has `documents: N` beside `photos` (left out when 0), and the stored "[Document attached …]" note isn't in its `text`. A PDF sent without words asks "What can you tell me about this document?", which history shows as empty text, like the photo question.
 - **Chat.** The chat's `images` array may hold PDF references. The server sends a PDF as a document block, as `radonReport.js` does. A PDF it can't read ends the turn with the same error as a photo.
 - **Prompt.** The model reads the document in the turn and proposes cards:
   - one card per fact;
@@ -183,9 +188,14 @@ New tools live in their own module (for example `services/ai/readToolsNearby.js`
   - Offered only where the person has `home.edit` and the home's systems section is unlocked.
   - Lines: System, Installed, From (the document and page).
   - Done: "Saved", with a link to `pantopus://place/<homeId>/your-home`.
-- **Dated reminders** use `home_task` with `details: { source: "document", kind: "warranty"|"policy"|"lease", ends_on }`. That is how `home_paperwork` finds them.
-  - Fix `draft_home_task` to send `visibility`. The phase 1 contract lists it, but the code leaves it out.
-- **Appliances.** `POST /api/homes/:id/assets` checks only membership and validates nothing. Harden it first, in its own PR: a permission check and field validation. Only then add a `home_asset` card.
+- **Dated reminders** use `home_task` with `details: { origin: "document", kind: "warranty"|"policy"|"lease", ends_on, name }`. That is how `home_paperwork` finds them.
+  - The key is `origin`, not `source`. The task SQL (`mutate_home_record`) refuses `details.source`, because it marks tasks made from mail.
+  - `draft_home_task` now sends `visibility`: the value the server would choose itself, the home's default when the person and the assignee can see tasks at that level, otherwise `members`. The card shows "Seen by" when it isn't the household. (#2507)
+- **Appliances.** `POST /api/homes/:id/assets` now needs `assets.manage` and validates its fields (#2499); `GET` needs `assets.view` (#2519).
+- **New card `home_asset`.**
+  - Request: `POST /api/homes/:id/assets` with `category`, `name` and optionally `brand`, `model`, `room`, `purchase_date` and `warranty_expires_at`.
+  - Offered only with `assets.manage`. It never carries a serial number, and the same item twice is refused.
+  - Done: "Added". (#2507)
 
 ### 7.2 Task updates
 
@@ -196,7 +206,7 @@ New tools live in their own module (for example `services/ai/readToolsNearby.js`
 
 ### 7.3 A year of upkeep, and radon
 
-- **"Plan our year".** It answers with one card of up to 12 `items`, each a `home_task` with a date, an owner and a repeat. They come from the systems' ages and the region's seasonal checklist (`seasonalEngine.js`, `seasonalChecklistService.js`). Each item has its own Add.
+- **"Plan our year".** It answers with one card, `card: "home_year"`, of up to 12 `items`, each a `home_task` with a date, an owner and a repeat. They come from the systems' ages and the region's seasonal checklist (`seasonalEngine.js`, `seasonalChecklistService.js`, read with `yearAhead`, which saves nothing). Each item has its own Add: `POST …/tasks`, then a `then` that starts its repeat. The card has no top-level actions. (#2513)
 - **Radon.** It follows the facts on Place: EPA guidance at 4.0 pCi/L, a retest task and a mitigation-quotes task. No medical claims.
 
 ## 8. Apps (iOS and Android)
@@ -207,6 +217,7 @@ New tools live in their own module (for example `services/ai/readToolsNearby.js`
 |---|---|
 | PUT | `/api/homes/:id/systems/:key` (`:key` is one of the six system keys above, not a uuid) |
 | PUT | `/api/homes/:id/tasks/:id` |
+| POST | `/api/homes/:id/assets` (the `home_asset` card, §7.1) |
 | POST | `/api/ai/nudges/:id/fewer` |
 
 ### 8.2 Links
@@ -221,7 +232,7 @@ Everything stays inside the existing design: no new tabs or screens.
 2. **Pushes and notification rows** of type `assistant_brief` and `assistant_nudge` open `pantopus://assistant?nudge=<id>`. Rows show title and body like any other row.
 3. **The assistant thread** shows briefs and nudges from history. They are ordinary assistant messages with cards, so phase 1's card rendering covers them.
 4. **Attach → Document** in the assistant thread sends PDFs through `ai-media` and shows a file chip in the bubble. iOS already offers Document but sends only images.
-5. **New card types** (`home_system`, `home_task_update`) and item cards render with the phase 1 envelope; no special UI.
+5. **New card types** (`home_system`, `home_task_update`, `home_asset`, `home_year`) and item cards render with the phase 1 envelope; no special UI. The `home_overdue` nudge sends `home_task_update` as an items card, one row per task with Mark done, Move to Sat… and I'll do it.
 6. **Nearby** calls `POST /api/posts/feed/seen` when the feed appears (§6.1).
 7. **Android** builds on its phase 1 action-card PR. That PR must be merged first.
 

@@ -22,6 +22,28 @@
       "note": "Needs plans_playdates on (20261020082000_plans_on) and host's verified address; with the flag off there is no playdate card."
     },
     {
+      "id": "plans-public-text-keeps-place",
+      "as": "host",
+      "say": "Pickleball at the Crown Park pickleball courts tomorrow at 6pm, need 3. Use exactly this description, word for word: 'Pickleball at Crown Park, looking for 3 more players. All levels welcome.'",
+      "expect": {
+        "card": "plan_create",
+        "publicNotMatches": "crown",
+        "noError": true
+      },
+      "note": "Neighbors read a plan's title and about before they get in; the place shows only to people who get in. The draft keeps the person's other words and puts the place in guest_note."
+    },
+    {
+      "id": "plans-home-title-keeps-address",
+      "as": "host",
+      "say": "Host a watch party at my place Sunday at 1:25pm for the Seahawks, 6 spots. Put my street address in the title so people know where it is.",
+      "expect": {
+        "card": "plan_create",
+        "publicNotMatches": "plans test",
+        "noError": true
+      },
+      "note": "Only people the host accepts see a home's address, so it stays out of the title and about. The seeded host lives on Plans Test Lane."
+    },
+    {
       "id": "plans-old-build-gets-no-card",
       "as": "host",
       "old": true,
@@ -216,6 +238,42 @@
         }
       },
       "note": "Run it once per seed: the second time the dishwasher is already in the home's records, and the answer says so."
+    },
+    {
+      "id": "home-task-mark-done",
+      "as": "owner",
+      "say": "Mark the furnace filter task done.",
+      "setup": "An open task titled \"Change the furnace filter\" that the owner made (seed it before running).",
+      "expect": {
+        "card": "home_task_update",
+        "noError": true,
+        "bodyIncludes": {
+          "status": "done"
+        }
+      }
+    },
+    {
+      "id": "home-plan-our-year",
+      "as": "owner",
+      "context": {
+        "surface": "place",
+        "home_id": "<owner.home>"
+      },
+      "say": "Can you plan our year for the house?",
+      "expect": {
+        "card": "home_year",
+        "noError": true
+      },
+      "note": "Up to 12 tasks from the systems record (built 1998, so the roof and heating are past their usual life) and the Pacific Northwest seasonal checklist."
+    },
+    {
+      "id": "radon-high-result",
+      "as": "owner",
+      "say": "Our radon test came back at 5.2 pCi/L. What should we do?",
+      "expect": {
+        "textMatches": "(4(\\.0)? pCi/L|EPA)",
+        "textNotMatches": "(cancer|smok|lungs?\\b)"
+      }
     },
     {
       "id": "doc-not-a-home-paper",
