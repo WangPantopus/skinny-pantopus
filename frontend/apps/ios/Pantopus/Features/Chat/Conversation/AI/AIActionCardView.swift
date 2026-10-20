@@ -87,6 +87,7 @@ struct AIActionCardView: View {
     let cardId: String
     let card: ChatAIActionCard
     @Environment(\.chatAIActions) private var handlers
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
@@ -188,11 +189,19 @@ struct AIActionCardView: View {
         }
     }
 
-    /// Two buttons share a row; three or more (a nudge's, with "Fewer like
-    /// this") stack, so none is squeezed.
+    /// One button per row when side by side would wrap a label ("Fewer like this"), as on
+    /// Android: three or more buttons, a label over 12 characters, or large text.
+    private func stacks(_ actions: [AIActionCardDTO.Action]) -> Bool {
+        if actions.count > 2 { return true }
+        guard actions.count == 2 else { return false }
+        return dynamicTypeSize >= .xxxLarge || actions.contains { $0.label.count > 12 }
+    }
+
+    /// Two short buttons share a row; otherwise (`stacks`) each gets its own,
+    /// so none is squeezed.
     @ViewBuilder
     private func buttons(_ actions: [AIActionCardDTO.Action], itemId: String?, size: CompactButtonSize) -> some View {
-        if actions.count > 2 {
+        if stacks(actions) {
             VStack(spacing: 6) { buttonRow(actions, itemId: itemId, size: size) }
         } else {
             HStack(spacing: Spacing.s2) { buttonRow(actions, itemId: itemId, size: size) }

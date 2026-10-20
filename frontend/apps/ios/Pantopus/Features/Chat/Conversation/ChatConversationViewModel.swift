@@ -922,6 +922,8 @@ public final class ChatConversationViewModel {
             var drafts: [String: [ChatAIDraftCard]] = [:]
             var links: [String: [ChatAILink]] = [:]
             var openReplyId: String?
+            // The open reply already shows a brief's or nudge's line, so a later line starts its own.
+            var openReplyHasText = false
             var nudgeMessageId: String?
             for (index, item) in history.messages.enumerated() {
                 let id = "ai_history_\(index)"
@@ -931,11 +933,14 @@ public final class ChatConversationViewModel {
                     restored.append(localMessage(id: id, text: shown, userId: currentUserId, type: "text"))
                     continue
                 }
+                // A brief or nudge starts its own reply, and its cards join it.
+                if item.nudge != nil { openReplyId = nil }
                 var replyId = openReplyId ?? id
                 if let draft = item.draft {
                     if openReplyId == nil {
                         restored.append(localMessage(id: replyId, text: "", userId: "ai", type: "ai_reply"))
                         openReplyId = replyId
+                        openReplyHasText = false
                     }
                     let object: [String: Any] = [
                         "type": draft.type,
@@ -946,12 +951,14 @@ public final class ChatConversationViewModel {
                         drafts[replyId, default: []].append(card)
                     }
                 } else if let text = item.text, !text.isEmpty {
-                    if let open = openReplyId, let at = restored.firstIndex(where: { $0.id == open }) {
+                    if let open = openReplyId, !openReplyHasText, let at = restored.firstIndex(where: { $0.id == open }) {
                         restored[at] = localMessage(id: open, text: text, userId: "ai", type: "ai_reply")
                         openReplyId = nil
                     } else {
                         replyId = id
                         restored.append(localMessage(id: id, text: text, userId: "ai", type: "ai_reply"))
+                        openReplyId = item.nudge != nil ? id : nil
+                        openReplyHasText = item.nudge != nil
                     }
                 }
                 // A reply's link buttons stay under it after a relaunch.
