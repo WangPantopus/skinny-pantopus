@@ -305,6 +305,12 @@ class ChatConversationViewModel
         private val aiSentPhotos = mutableMapOf<String, List<String>>()
 
         private var aiConversationId: String? = null
+
+        // The brief or nudge the thread was opened for (its notification id): the thread scrolls to its message once.
+        private var aiNudgeId: String? = null
+
+        // The conversation that brief or nudge was added to (its notification says which).
+        private var aiNudgeConversationId: String? = null
         private val aiDraftsByMessageId = mutableMapOf<String, List<ChatAIDraftCard>>()
 
         // Buttons to screens of the app under each reply (`link` events and history `links`).
@@ -369,6 +375,8 @@ class ChatConversationViewModel
             initialTopic: ChatInitialTopic? = null,
             gigId: String? = null,
             aiContext: AIScreenContext? = null,
+            aiNudgeId: String? = null,
+            aiConversationId: String? = null,
         ) {
             this.mode = mode
             this.currentUserId = currentUserId
@@ -376,6 +384,10 @@ class ChatConversationViewModel
             this.scrollToMessageId = scrollToMessageId
             this.initialTopic = initialTopic
             this.gigId = gigId
+            if (mode is ChatThreadMode.Ai) {
+                this.aiNudgeId = aiNudgeId
+                this.aiNudgeConversationId = aiConversationId
+            }
             // Configured again after a rotation: the starters already used stay gone.
             if (mode is ChatThreadMode.Ai && aiContext != _aiContext.value) {
                 _aiContext.value = aiContext
@@ -400,9 +412,13 @@ class ChatConversationViewModel
                 fetch(initial = true, quiet = true)
                 return
             }
-            // Seed AI continuity: a new VM instance for the AI thread keeps
-            // appending to the conversation the app session already opened.
-            if (mode is ChatThreadMode.Ai && aiConversationId == null) {
+            // A brief or nudge opens the conversation it was added to, at its message (AI assistant phase 2 §8.2).
+            val openedForNudge = aiNudgeId != null || aiNudgeConversationId != null
+            if (mode is ChatThreadMode.Ai && aiConversationId == null && openedForNudge) {
+                openAtNudge()
+            } else if (mode is ChatThreadMode.Ai && aiConversationId == null) {
+                // Seed AI continuity: a new VM instance for the AI thread keeps
+                // appending to the conversation the app session already opened.
                 aiConversationId = aiSession.conversationId
                 // Cold relaunch: the session holder is empty — restore the
                 // latest backend conversation id so the thread continues
@@ -441,6 +457,26 @@ class ChatConversationViewModel
                     is NetworkResult.Failure ->
                         Timber.w("restore AI conversation failed: ${result.error.message}")
                 }
+            }
+        }
+
+        /**
+         * A brief or nudge was tapped (a push or a notification row): the conversation its notification names opens and
+         * continues while the person still has it (else the newest, which a nudge's arrival lists first), scrolled to
+         * the message whose history item carries the notification's id. A server without that id opens it at its newest
+         * message.
+         */
+        private fun openAtNudge() {
+            viewModelScope.launch {
+                val listed = (aiRepo.conversations() as? NetworkResult.Success)?.data?.conversations.orEmpty()
+                val named = aiNudgeConversationId?.takeIf { id -> listed.any { it.id == id } }
+                val id = named ?: listed.firstOrNull()?.id ?: aiSession.conversationId ?: return@launch
+                // A message sent while the list loaded keeps its own conversation.
+                if (aiConversationId != null || messages.isNotEmpty()) return@launch
+                aiConversationId = id
+                aiSession.conversationId = id
+                aiSession.freshStartUserId = null
+                loadAiHistory(id)
             }
         }
 
@@ -487,6 +523,7 @@ class ChatConversationViewModel
          * after it share one reply, as they did when it streamed. A server
          * without the route leaves the thread empty, as before.
          */
+        @Suppress("CyclomaticComplexMethod")
         private suspend fun loadAiHistory(conversationId: String) {
             if (messages.isNotEmpty()) return
             val history =
@@ -502,6 +539,8 @@ class ChatConversationViewModel
             val restored = mutableListOf<ChatMessageDto>()
             val drafts = mutableMapOf<String, List<ChatAIDraftCard>>()
             val links = mutableMapOf<String, List<ChatAILink>>()
+            // A brief's or nudge's notification id, by the reply its first item opened.
+            val nudgeReplies = mutableMapOf<String, String>()
             var openReplyId: String? = null
             history.messages.forEachIndexed { index, item ->
                 val id = "ai_history_$index"
@@ -514,6 +553,9 @@ class ChatConversationViewModel
                 val draft = item.draft?.let { aiRepo.draftCard(it.type, it.draft) }
                 val itemLinks = item.links.orEmpty().mapNotNull { aiRepo.link(it.label, it.url) }
                 if (draft == null && text.isEmpty() && itemLinks.isEmpty()) return@forEachIndexed
+                // A brief or nudge (its line, then its cards) is a reply of its own, never the note of the one before.
+                val nudge = item.nudgeNotificationId
+                if (nudge != null) openReplyId = null
                 // A draft, its link buttons and the note after it share one reply, as they did when it streamed.
                 val replyId =
                     openReplyId?.takeIf { open -> restored.any { it.id == open } }
@@ -522,13 +564,23 @@ class ChatConversationViewModel
                     val at = restored.indexOfFirst { it.id == replyId }
                     restored[at] = localMessage(id = replyId, text = text, userId = "ai", type = "ai_reply")
                 }
-                openReplyId = replyId.takeIf { text.isEmpty() }
+                // A brief's or nudge's cards join its line.
+                openReplyId = if (nudge != null) replyId else replyId.takeIf { text.isEmpty() }
                 draft?.let { drafts[replyId] = drafts[replyId].orEmpty() + withSavedRuns(it) }
                 if (itemLinks.isNotEmpty()) links[replyId] = links[replyId].orEmpty() + itemLinks
+                nudge?.let { nudgeReplies.putIfAbsent(it, replyId) }
             }
             messages.addAll(restored)
             aiDraftsByMessageId.putAll(drafts)
             aiLinksByMessageId.putAll(links)
+            // Opened for a brief or nudge: its message comes into view (the Chat Search scroll), once.
+            aiNudgeId?.let { nudge ->
+                aiNudgeId = null
+                nudgeReplies[nudge]?.let { replyId ->
+                    scrollToMessageId = replyId
+                    didResolveScrollTarget = false
+                }
+            }
             rebuild()
         }
 
