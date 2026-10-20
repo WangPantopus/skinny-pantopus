@@ -4,6 +4,7 @@ import org.json.JSONObject
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.LocalTime
 import java.time.OffsetDateTime
 import java.time.ZoneId
 
@@ -88,6 +89,17 @@ data class PulseComposeDraftFields(
                         ?: runCatching { LocalDate.parse(raw) }.getOrNull()?.let { DraftTime(it.atStartOfDay(), null) }
             }
         }
+
+        /** A draft end on this phone's clock, like [localTime], except that a plain date lasts through that day. */
+        fun localEnd(
+            raw: String,
+            zone: ZoneId = ZoneId.systemDefault(),
+        ): LocalDateTime? =
+            localTime(raw, zone)?.let { time ->
+                if (time.instant == null) time.local.toLocalDate().atTime(LAST_MINUTE) else time.local
+            }
+
+        private val LAST_MINUTE: LocalTime = LocalTime.of(23, 59)
     }
 
     /** A draft date on the local clock; [instant] is null for a date without a time. */

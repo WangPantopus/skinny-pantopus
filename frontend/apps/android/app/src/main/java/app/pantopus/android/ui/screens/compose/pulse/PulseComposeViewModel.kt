@@ -304,7 +304,7 @@ class PulseComposeViewModel
         /** Deal expiry — required by the backend for `postType == deal`. */
         private val _dealExpiresAt =
             MutableStateFlow(
-                prefillDraft?.dealExpiresAt?.let { PulseComposeDraftFields.localTime(it) }?.local
+                prefillDraft?.dealExpiresAt?.let { PulseComposeDraftFields.localEnd(it) }
                     ?: LocalDateTime.now().plusDays(DEAL_DEFAULT_EXPIRY_DAYS),
             )
         val dealExpiresAt: StateFlow<LocalDateTime> = _dealExpiresAt.asStateFlow()
