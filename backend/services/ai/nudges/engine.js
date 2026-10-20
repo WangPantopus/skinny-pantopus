@@ -289,6 +289,20 @@ async function latestConversation(userId, title) {
   return { conversation: created, created: true };
 }
 
+/**
+ * Whether a nudge's messages are in the conversation, read again after a save that failed.
+ * A read that fails too counts as not stored: the row is then removed, as for any failed save.
+ */
+async function nudgeStored(conversationId, notificationId) {
+  const ownId = `toolu_nudge_${notificationId.replace(/-/g, '')}_0`;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const { data, error } = await supabaseAdmin.from('AIConversation').select('messages').eq('id', conversationId).maybeSingle();
+    if (!error) return Boolean(data) && nudgeIdsIn(data.messages).has(ownId);
+    await new Promise((resolve) => { setTimeout(resolve, 1000); });
+  }
+  return false;
+}
+
 /** Append messages to a conversation, retrying when a chat turn or another nudge saved it meanwhile. */
 async function appendToConversation(conversation, added) {
   let current = conversation;
@@ -417,8 +431,13 @@ async function deliver(nudge, { window }) {
       notificationId, kind, message: nudge.message, cards, sentAt: new Date(row.created_at), timeZone: window.timeZone,
     }));
   } catch (err) {
-    logger.warn('nudge.conversation_failed', { userId, kind, error: err.message });
-    return undo('error', { row: true });
+    // A save whose answer timed out may still have reached the database: then the nudge stands,
+    // or its message would be left in the conversation with a "Fewer like this" that has no row.
+    if (!(await nudgeStored(conversation.id, notificationId))) {
+      logger.warn('nudge.conversation_failed', { userId, kind, error: err.message });
+      return undo('error', { row: true });
+    }
+    logger.info('nudge.conversation_saved_late', { userId, kind, error: err.message });
   }
 
   try {
@@ -498,7 +517,9 @@ async function canNudge(params) {
 
 /**
  * A card for a nudge, built exactly as the chat builds it (actionCards.js), as the recipient:
- * the same fields, checks and requests. Session-scoped requests go without the scope header.
+ * the same fields, checks and requests. Session-scoped requests go without the scope header, so
+ * a follow-up that requires it (starting a repeating task's recurrence) answers 409: build nudge
+ * cards without repeats.
  *   const { card, error } = await nudgeCard('draft_plan_message', { plan_id, text, note: null }, { userId, expiresAt });
  * @returns {Promise<{card: object}|{error: string}>}
  */
