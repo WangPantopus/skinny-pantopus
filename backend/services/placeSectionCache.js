@@ -51,7 +51,7 @@ const TIMEOUT_COOLDOWN_MS = 2 * 60 * 1000;
 const timedOutUntil = new Map(); // sectionId → epoch ms
 
 function isTimeout(err) {
-  return Boolean(err) && err.name === 'AbortError';
+  return Boolean(err) && (err.name === 'AbortError' || err.name === 'TimeoutError');
 }
 
 function isMissingTableError(error) {
