@@ -51,6 +51,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -70,6 +71,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.R
+import app.pantopus.android.data.ai.AIScreenContext
 import app.pantopus.android.data.api.models.plans.PlanDto
 import app.pantopus.android.data.api.models.plans.PlanGameDto
 import app.pantopus.android.data.api.models.plans.PlanPinDto
@@ -129,6 +131,8 @@ data class PlansMapActions(
     val onOpenPulse: () -> Unit,
     val onOpenConnections: () -> Unit,
     val onInvite: () -> Unit,
+    /** Ask Pantopus about plans (AI assistant phase 1); null hides the button. */
+    val onAskPantopus: ((AIScreenContext) -> Unit)? = null,
 )
 
 /**
@@ -201,6 +205,7 @@ fun PlansMapScreen(
                 },
                 onUseHome = viewModel::useHome,
                 onBackFromCard = { viewModel.select(null) },
+                onAskPantopus = actions.onAskPantopus?.let { ask -> { ask(AIScreenContext.plans()) } },
                 modifier =
                     Modifier.align(Alignment.TopCenter).onSizeChanged { size ->
                         // Measured with the full controls only, so selecting a pin doesn't shift the map.
@@ -319,6 +324,7 @@ private fun PlansSheetHost(
                     onOpenPulse = actions.onOpenPulse,
                     onOpenConnections = actions.onOpenConnections,
                     onRetry = viewModel::refresh,
+                    onAskPantopus = actions.onAskPantopus?.let { ask -> { ask(AIScreenContext.plans()) } },
                 )
         }
     }
@@ -644,6 +650,7 @@ private fun PlansTopChrome(
     onUseHome: () -> Unit,
     onBackFromCard: () -> Unit,
     modifier: Modifier = Modifier,
+    onAskPantopus: (() -> Unit)? = null,
 ) {
     Column(
         modifier =
@@ -676,6 +683,15 @@ private fun PlansTopChrome(
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
             AreaPill(state = state, onWindow = onWindow, onLocate = onLocate, onUseHome = onUseHome, modifier = Modifier.weight(1f))
             if (!state.isEmpty) GlassCircleButton(icon = PantopusIcon.Navigation, label = "Show my location", onClick = onLocate)
+            onAskPantopus?.let {
+                GlassCircleButton(
+                    icon = PantopusIcon.Sparkles,
+                    label = "Ask Pantopus",
+                    onClick = it,
+                    modifier = Modifier.testTag("plansAskPantopus"),
+                    iconTint = PantopusColors.magic,
+                )
+            }
         }
         if (!state.isEmpty) KindChips(state = state, onKind = onKind)
     }
@@ -830,10 +846,12 @@ private fun GlassCircleButton(
     icon: PantopusIcon,
     label: String,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    iconTint: Color = PantopusColors.appText,
 ) {
     Box(
         modifier =
-            Modifier
+            modifier
                 .size(48.dp)
                 .pantopusShadow(PantopusElevations.md, CircleShape)
                 .clip(CircleShape)
@@ -845,7 +863,7 @@ private fun GlassCircleButton(
                 },
         contentAlignment = Alignment.Center,
     ) {
-        PantopusIconImage(icon = icon, contentDescription = null, size = 20.dp, tint = PantopusColors.appText)
+        PantopusIconImage(icon = icon, contentDescription = null, size = 20.dp, tint = iconTint)
     }
 }
 

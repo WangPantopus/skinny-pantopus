@@ -21,6 +21,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
@@ -49,6 +50,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.LaunchFeature
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.core.perf.ReportContentShown
+import app.pantopus.android.data.ai.AIScreenContext
 import app.pantopus.android.data.api.models.neighborhood.NeighborhoodCells
 import app.pantopus.android.data.api.models.neighborhood.NeighborhoodMeter
 import app.pantopus.android.ui.components.ErrorState
@@ -82,6 +84,8 @@ private val SURFACES =
 private val launchSurfaces: List<NearbySurface>
     get() = SURFACES.filter { LaunchFeatures.isEnabled(it.feature) }
 
+// Keep each destination callback explicit at this screen boundary.
+@Suppress("LongParameterList")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NearbyScreen(
@@ -91,6 +95,8 @@ fun NearbyScreen(
     onOpenConnections: () -> Unit,
     onOpenMarketplace: () -> Unit,
     onOpenTasks: () -> Unit,
+    /** Ask Pantopus about posts nearby (AI assistant phase 1); null hides the button. */
+    onAsk: ((AIScreenContext) -> Unit)? = null,
     viewModel: NearbyViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -105,7 +111,17 @@ fun NearbyScreen(
     Column(Modifier.fillMaxSize()) {
         refreshNotice?.let { RefreshFailedLine(it) }
         PullToRefreshBox(isRefreshing = refreshing, onRefresh = viewModel::refresh, modifier = Modifier.weight(1f)) {
-            NearbyContent(state, onClaim, onOpenPulse, onOpenBeacons, onOpenConnections, onOpenMarketplace, onOpenTasks, viewModel::refresh)
+            NearbyContent(
+                state,
+                onClaim,
+                onOpenPulse,
+                onOpenBeacons,
+                onOpenConnections,
+                onOpenMarketplace,
+                onOpenTasks,
+                viewModel::refresh,
+                onAsk = onAsk?.let { ask -> { ask(AIScreenContext.nearby()) } },
+            )
         }
     }
 }
@@ -181,6 +197,31 @@ private fun QuietMeterCard(
     }
 }
 
+/** "Nearby", with Ask Pantopus at the end of the line when [onAsk] is set (AI assistant phase 1). */
+@Composable
+private fun NearbyTitle(onAsk: (() -> Unit)?) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            "Nearby",
+            fontSize = 22.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = (-0.4).sp,
+            color = PantopusColors.appText,
+            modifier = Modifier.weight(1f),
+        )
+        if (onAsk != null) {
+            IconButton(onClick = onAsk, modifier = Modifier.size(48.dp).testTag("nearbyAskPantopus")) {
+                PantopusIconImage(
+                    icon = PantopusIcon.Sparkles,
+                    contentDescription = "Ask Pantopus",
+                    size = 20.dp,
+                    tint = PantopusColors.magic,
+                )
+            }
+        }
+    }
+}
+
 // Keep each destination callback explicit at this screen boundary.
 @Suppress("LongParameterList")
 @Composable
@@ -193,12 +234,13 @@ internal fun NearbyContent(
     onOpenMarketplace: () -> Unit,
     onOpenTasks: () -> Unit,
     onRetry: () -> Unit,
+    onAsk: (() -> Unit)? = null,
 ) {
     Column(
         modifier = Modifier.fillMaxSize().background(PantopusColors.appBg).verticalScroll(rememberScrollState()).testTag("nearbyTab"),
     ) {
         Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp)) {
-            Text("Nearby", fontSize = 22.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.4).sp, color = PantopusColors.appText)
+            NearbyTitle(onAsk)
             // Launch cut #1 (Beacon): the copy drops Beacons for the first launch.
             Text(
                 if (LaunchFeatures.beacon) {

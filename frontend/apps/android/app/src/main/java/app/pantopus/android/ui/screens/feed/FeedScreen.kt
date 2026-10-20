@@ -56,6 +56,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -77,6 +78,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
+import app.pantopus.android.data.ai.AIScreenContext
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
 import app.pantopus.android.ui.screens.feed.map.FeedMapQuery
@@ -130,6 +132,8 @@ fun FeedScreen(
     quietStateCard: (@Composable () -> Unit)? = null,
     /** Re-reads what the quiet-state card shows (the meter) when the Nearby posts are pulled to refresh or retried. */
     onRefreshQuietStateCard: (() -> Unit)? = null,
+    /** Ask Pantopus about posts nearby (AI assistant phase 1); null hides the button. */
+    onAsk: ((AIScreenContext) -> Unit)? = null,
     viewModel: PulseFeedViewModel = hiltViewModel(),
     contextBarViewModel: FeedContextBarViewModel = hiltViewModel(),
 ) {
@@ -247,6 +251,7 @@ fun FeedScreen(
                 topMenu = topMenu,
                 viewMode = viewMode.takeIf { surface.supportsMapMode },
                 onViewModeChange = { viewMode = it },
+                onAskTap = onAsk?.takeIf { surface == FeedSurface.Pulse }?.let { ask -> { ask(AIScreenContext.nearby()) } },
             )
             if (surface == FeedSurface.Beacons) {
                 Row(modifier = Modifier.padding(horizontal = Spacing.s4)) {
@@ -915,6 +920,9 @@ private fun ViewModeToggle(
 /** Above this font scale the Pulse bar's List / Map segment moves under the title. */
 private const val LARGE_TEXT_SCALE = 1.3f
 
+/** With Ask Pantopus as a fourth button, the bar's one line needs about this width (dp) at 100 % text. */
+private const val ASK_ONE_LINE_WIDTH_DP = 420
+
 @Composable
 private fun TopBar(
     title: String,
@@ -927,9 +935,14 @@ private fun TopBar(
     /** Non-null renders the List / Map segment (hidden on Beacons). */
     viewMode: FeedViewMode? = null,
     onViewModeChange: (FeedViewMode) -> Unit = {},
+    /** Non-null shows Ask Pantopus (AI assistant phase 1). */
+    onAskTap: (() -> Unit)? = null,
 ) {
-    // With large text the title, the List / Map segment and three 48 dp buttons don't fit on one line.
-    val stackToggle = viewMode != null && LocalDensity.current.fontScale > LARGE_TEXT_SCALE
+    // With large text the title, the List / Map segment and three 48 dp buttons don't fit on one line;
+    // with Ask as a fourth button they don't fit on most phones, so the segment moves under the title there too.
+    val fontScale = LocalDensity.current.fontScale
+    val askCrowds = onAskTap != null && LocalConfiguration.current.screenWidthDp < ASK_ONE_LINE_WIDTH_DP * fontScale
+    val stackToggle = viewMode != null && (fontScale > LARGE_TEXT_SCALE || askCrowds)
     Box(modifier = Modifier.fillMaxWidth().background(PantopusColors.appBg)) {
         Column(
             modifier =
@@ -970,6 +983,24 @@ private fun TopBar(
                 if (viewMode != null && !stackToggle) {
                     ViewModeToggle(active = viewMode, onSelect = onViewModeChange)
                     Spacer(modifier = Modifier.size(Spacing.s2))
+                }
+                if (onAskTap != null) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .size(48.dp)
+                                .clickable(onClick = onAskTap)
+                                .testTag("pulseAskPantopus")
+                                .semantics { contentDescription = "Ask Pantopus" },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        PantopusIconImage(
+                            icon = PantopusIcon.Sparkles,
+                            contentDescription = null,
+                            size = 20.dp,
+                            tint = PantopusColors.magic,
+                        )
+                    }
                 }
                 if (onSearchTap != null) {
                     Box(
