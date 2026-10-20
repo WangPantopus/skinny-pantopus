@@ -3,7 +3,8 @@
  *
  * The guide goes into the system prompt (cached for an hour, shared by everyone), so
  * it is built only from what is switched on for everyone: launch flags decide which
- * paragraphs exist. Per-person availability (Plans) is told in the turn's context.
+ * paragraphs exist. Per-person availability (Plans) is told in the turn's context; the
+ * Plans paragraph and its playdates exist only for people who have them, like their tools.
  *
  * Links come only from the catalog below, which lists screens both apps' deep-link
  * routers open (iOS Core/Routing/DeepLinkRouter.swift, Android MainActivity and
@@ -88,7 +89,7 @@ function runShowLink(args, ctx) {
 
 // ─── The guide ─────────────────────────────────────────────────────────────
 
-function appGuide({ plans = true } = {}) {
+function appGuide({ plans = true, playdates = false } = {}) {
   const marketplace = isLaunchFeatureEnabled('marketplace');
   const openGigs = isLaunchFeatureEnabled('open_gigs');
   const mailbox = isLaunchFeatureEnabled('mailbox');
@@ -130,11 +131,13 @@ ACCOUNT AND PRIVACY
 - Neighbors never see exact addresses. You see only what the person can see, and you never act without their tap.
 - You are an AI assistant and can make mistakes; for anything that matters, the screen it came from is the source.`);
 
+  // Playdates are described only to people with plans_playdates, whose tools offer them.
   if (plans) parts.push(`PLANS
-- A plan is a small meetup on the Plans map: a watch party, a pickup game, a walk and coffee, or a study group. Plans start within 14 days and last 15 minutes to 8 hours. A host may have 3 upcoming plans and post 5 a day.
+- A plan is a small meetup on the Plans map: a watch party, ${playdates ? 'a playdate, ' : ''}a pickup game, a walk and coffee, or a study group. Plans start within 14 days and last 15 minutes to 8 hours. A host may have 3 upcoming plans and post 5 a day.
 - Pickup games and study groups meet in public places; watch parties and walks may also be at the host's home. Everyone else sees only the plan's area until they get in; then they see the exact place, the host's note and who's going. At home, only people the host accepts see the address.
 - Who gets in: the host approves each person, or verified neighbors and people the host has hosted before get in right away; for pickup games and walks, anyone nearby can be let in automatically.
-- Asking to join: people within about 5 miles can ask, with a note and up to 3 others. Asking closes when the plan starts (for pickup games and walks, 30 minutes before the end).
+- Asking to join: people within about 5 miles can ask, with a note and up to 3 others. Asking closes when the plan starts (for pickup games and walks, 30 minutes before the end).${playdates ? `
+- Playdates (kids play while their parents meet) are for verified neighbors: only people with a verified address see them, host them or ask to join. They meet in public places such as a playground, park or library; the host approves each family; parents stay with their kids the whole time; and only kids' ages are shared, never names. Until a family gets in, it sees only the neighborhood and the part of the day ("Saturday morning"). Families within about 3 miles can ask, with how many kids are coming and their ages.` : ''}
 - Reminders go out 2 hours before (or at 7 PM the evening before an early plan); the host gets a summary at 8 AM on the day. Moving a plan more than 30 minutes or changing the place asks everyone who's in "Still coming?".
 - You can draft a plan (draft_plan), changes (draft_plan_change), cancelling (draft_plan_cancel), answering requests (show_plan_requests), asking to join (draft_plan_ask) and a message to guests (draft_plan_message).`);
 

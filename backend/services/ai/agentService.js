@@ -34,14 +34,16 @@ const { getAuthorizedMail } = require('./mailAccess');
 const noaa = require('../external/noaa');
 const { isLaunchFeatureEnabled } = require('../../utils/featureFlags');
 const { isFeatureEnabled } = require('../featureFlagService');
-const { readToolDefinitions, PLAN_TOOLS } = require('./readTools');
-const { actionCardDefinitions, PLAN_CARD_TOOLS } = require('./actionCards');
+const { readToolDefinitions, playdateReadToolDefinitions, PLAN_TOOLS } = require('./readTools');
+const { actionCardDefinitions, playdateCardDefinitions, PLAN_CARD_TOOLS } = require('./actionCards');
 const { appGuide } = require('./appGuide');
 const { screenContextText, screenName } = require('./screenContext');
 const { checkChatBudget } = require('./assistantBudget');
 
 const READ_TOOL_NAMES = new Set(readToolDefinitions.map((tool) => tool.name));
 const CARD_TOOL_NAMES = new Set(actionCardDefinitions.map((tool) => tool.name));
+// The plan tools with playdates among their kinds, for people with plans_playdates.
+const PLAYDATE_TOOLS = new Map([...playdateReadToolDefinitions, ...playdateCardDefinitions].map((tool) => [tool.name, tool]));
 
 // Launch cuts #3 (Marketplace) and #4 (Open Gigs): while they are hidden, the
 // chat assistant neither offers nor drafts listings or open tasks (their
@@ -50,8 +52,9 @@ const CARD_TOOL_NAMES = new Set(actionCardDefinitions.map((tool) => tool.name));
 // Gift funds (cut #9) aren't offered as a Support Train kind of help.
 // Cards go only to apps that say they can show them (`cards`): the pickup days,
 // action cards ("action") and link buttons ("link"). Plans tools need the
-// person's `plans` flag. The read tools answer in words, so every app gets them.
-function launchScopedChatTools({ pickupSchedule = false, actionCards = false, links = false, plans = false } = {}) {
+// person's `plans` flag, and playdates among their kinds `plans_playdates`.
+// The read tools answer in words, so every app gets them.
+function launchScopedChatTools({ pickupSchedule = false, actionCards = false, links = false, plans = false, playdates = false } = {}) {
   const giftFunds = isLaunchFeatureEnabled('gift_funds');
   return toolDefinitions
     .filter((tool) => {
@@ -64,7 +67,8 @@ function launchScopedChatTools({ pickupSchedule = false, actionCards = false, li
       if (['get_mail_item', 'summarize_mail_item'].includes(tool.name)) return isLaunchFeatureEnabled('mailbox');
       return true;
     })
-    .map((tool) => (tool.name === 'draft_support_train_from_story' && !giftFunds ? withoutGiftFunds(tool) : tool));
+    .map((tool) => (tool.name === 'draft_support_train_from_story' && !giftFunds ? withoutGiftFunds(tool) : tool))
+    .map((tool) => (playdates && PLAYDATE_TOOLS.get(tool.name)) || tool);
 }
 
 function withoutGiftFunds(tool) {
@@ -81,7 +85,7 @@ function withoutGiftFunds(tool) {
   };
 }
 
-function launchScopedChatInstructions({ pickupSchedule = false, actionCards = false, links = false, plans = false } = {}) {
+function launchScopedChatInstructions({ pickupSchedule = false, actionCards = false, links = false, plans = false, playdates = false } = {}) {
   return prompts.chatAgentSystem({
     openGigs: isLaunchFeatureEnabled('open_gigs'),
     marketplace: isLaunchFeatureEnabled('marketplace'),
@@ -90,7 +94,7 @@ function launchScopedChatInstructions({ pickupSchedule = false, actionCards = fa
     actionCards,
     links,
     plans,
-    guide: appGuide({ plans }),
+    guide: appGuide({ plans, playdates }),
   });
 }
 
@@ -331,6 +335,8 @@ async function streamChat({
   const shown = new Set(Array.isArray(cards) ? cards : []);
   const viewer = { id: userId, role: user?.role || null };
   const plansRead = isFeatureEnabled('plans', viewer).catch(() => false);
+  // The tools list playdates only for people with the flag; planViewer reads it again for the plan rules.
+  const playdatesRead = isFeatureEnabled('plans_playdates', viewer).catch(() => false);
 
   // Pantopus's context, the screen they asked from and the photos are read while the conversation loads.
   const contextRead = buildChatContext(userId).catch((err) => {
@@ -361,7 +367,9 @@ async function streamChat({
     ...fields,
   });
 
-  const [homeContext, photoResults, plansEnabled, screenText] = await Promise.all([contextRead, photosRead, plansRead, screenRead]);
+  const [homeContext, photoResults, plansEnabled, playdatesEnabled, screenText] = await Promise.all([
+    contextRead, photosRead, plansRead, playdatesRead, screenRead,
+  ]);
   const photos = photoResults.filter(Boolean);
   // One context message: the home facts (remembered for a minute), whether they have
   // Plans, and the screen they asked from. Added again only when it changes.
@@ -412,6 +420,7 @@ async function streamChat({
     actionCards: shown.has('action'),
     links: shown.has('link'),
     plans: plansEnabled,
+    playdates: plansEnabled && playdatesEnabled,
   };
   const tools = launchScopedChatTools(capabilities);
   const toolNames = tools.map((tool) => tool.name);
