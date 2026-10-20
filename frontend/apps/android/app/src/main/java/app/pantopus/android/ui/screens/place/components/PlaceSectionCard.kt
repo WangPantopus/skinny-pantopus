@@ -132,7 +132,9 @@ fun PlaceSectionCard(
                     reading()
                 }
             }
-            PlaceChevron()
+            // The chevron says the card opens its detail page; without onTap
+            // it would promise a page it can't open.
+            if (onTap != null) PlaceChevron()
         }
         return
     }
@@ -186,7 +188,7 @@ fun PlaceSectionCard(
                     )
                 }
             }
-            if (state != PlaceSectionCardState.LOADING) {
+            if (onTap != null && state != PlaceSectionCardState.LOADING) {
                 PlaceChevron()
             }
         }
