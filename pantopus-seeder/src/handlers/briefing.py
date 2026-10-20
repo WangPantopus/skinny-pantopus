@@ -46,7 +46,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         raise
     if result.get("error") or result.get("failed"):
         # Fail the invocation so the Lambda Errors metric and its alarm see it.
-        # Failed deliveries are retried by the daily briefing cleanup.
+        # The next minute can retry failures inside the same local slot.
         raise RuntimeError(f"Briefing scheduler run failed: {result}")
     return result
 
@@ -188,6 +188,8 @@ def _find_eligible_users(supabase, *, secrets=None) -> list[dict[str, Any]]:
         )
 
     # Query deliveries for all relevant dates in one batch
+    # A failed attempt stays eligible only within this local date/time window.
+    # Daily cleanup never retries it at an unrelated hour or on a later day.
     already_processed: set[tuple[str, str, str]] = set()
     try:
         for date_str in today_dates:
@@ -196,7 +198,7 @@ def _find_eligible_users(supabase, *, secrets=None) -> list[dict[str, Any]]:
                 .select("user_id, briefing_kind, status")
                 .in_("user_id", user_ids)
                 .eq("briefing_date_local", date_str)
-                .in_("status", ["sent", "skipped", "failed"])
+                .in_("status", ["sent", "skipped", "composing"])
                 .execute()
             )
             for row in result.data or []:
