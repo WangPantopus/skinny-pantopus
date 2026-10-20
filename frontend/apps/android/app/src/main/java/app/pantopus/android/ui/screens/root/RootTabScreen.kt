@@ -5433,13 +5433,14 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     GigDetailScreen(
                         onBack = { navController.popBackStack() },
                         onOpenPayouts = { navController.navigate(ChildRoutes.SETTINGS_PAYMENTS) },
-                        onOpenChat = { roomId, displayName, initials, verified ->
+                        onOpenChat = { roomId, displayName, initials, verified, asBusinessUserId ->
                             navController.navigate(
                                 ChildRoutes.chatConversationRoom(
                                     roomId = roomId,
                                     displayName = displayName,
                                     initials = initials,
                                     verified = verified,
+                                    asBusinessUserId = asBusinessUserId,
                                 ),
                             )
                         },

@@ -572,8 +572,10 @@ function GigDetailV2Content() {
     try {
       const res = await api.gigs.getGigChatRoom(gigId);
       if (!isSessionCurrent()) return;
-      // The chat page reads the room from its path; the Mailbox ignores `?roomId=`.
-      if (res?.roomId) router.push(`/app/chat/${res.roomId}`);
+      // The chat page reads the room from its path; the Mailbox ignores `?roomId=`. A business's owner and staff
+      // answer its task's room as the business.
+      const asBusiness = res?.asBusinessUserId ? `?asBusinessUserId=${encodeURIComponent(res.asBusinessUserId)}` : '';
+      if (res?.roomId) router.push(`/app/chat/${res.roomId}${asBusiness}`);
       else toast.info('Chat thread not available yet for this task.');
     } catch (err: unknown) {
       if (isSessionCurrent()) toast.error(err instanceof Error ? err.message : "Couldn't open the chat.");
