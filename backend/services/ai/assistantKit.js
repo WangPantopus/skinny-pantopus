@@ -117,7 +117,8 @@ function firstNameOf(user) {
   if (!user) return null;
   const first = clip(user.first_name, 40);
   if (first) return first;
-  const name = clip(user.display_name, 80) || clip(user.local_display_name, 80) || clip(user.name, 80);
+  // Feed posts carry their author as a typed identity, whose name is `displayName`.
+  const name = clip(user.display_name, 80) || clip(user.displayName, 80) || clip(user.local_display_name, 80) || clip(user.name, 80);
   return name ? name.split(' ')[0] : null;
 }
 

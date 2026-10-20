@@ -183,6 +183,10 @@ class ChatConversationViewModel
         private val _isAiStreaming = MutableStateFlow(false)
         val isAiStreaming: StateFlow<Boolean> = _isAiStreaming.asStateFlow()
 
+        // True while "Delete conversation" runs; the header's menu and sending wait.
+        private val _isDeletingAi = MutableStateFlow(false)
+        val isDeletingAi: StateFlow<Boolean> = _isDeletingAi.asStateFlow()
+
         // AI assistant phase 1: the screen the thread was opened from ("About: …"), sent with its messages.
         private val _aiContext = MutableStateFlow<AIScreenContext?>(null)
         val aiContext: StateFlow<AIScreenContext?> = _aiContext.asStateFlow()
@@ -1035,7 +1039,7 @@ class ChatConversationViewModel
             // stop button can abort generation (A15.3) without blocking
             // [isSending] for the whole stream.
             if (_editingMessageId.value == null && mode is ChatThreadMode.Ai) {
-                if (_isAiStreaming.value) return
+                if (_isAiStreaming.value || _isDeletingAi.value) return
                 _composerText.value = ""
                 _aiStarters.value = emptyList()
                 startAiStream(trimmed)
@@ -1295,6 +1299,62 @@ class ChatConversationViewModel
                 }
             }
         }
+
+        /**
+         * "Delete conversation" (the header's More menu): every conversation the assistant keeps for this person goes
+         * (`DELETE /api/ai/conversations/:id`), the one on screen and any earlier one "New chat" or another device
+         * left, which the next launch would otherwise show. Each one's cards are read first, so their records on this
+         * phone go with it. Then the thread starts over, as "New chat" does.
+         */
+        fun deleteAiConversations() {
+            if (mode !is ChatThreadMode.Ai || _isDeletingAi.value) return
+            _isDeletingAi.value = true
+            cancelAiStream()
+            viewModelScope.launch {
+                val failure = deleteEveryAiConversation()
+                _isDeletingAi.value = false
+                if (failure == null) {
+                    startNewAiConversation()
+                } else {
+                    _actionFailure.value = failure
+                }
+            }
+        }
+
+        /** Null once none is left, else what to tell the person. */
+        private suspend fun deleteEveryAiConversation(): String? =
+            try {
+                val deleted = mutableSetOf<String>()
+                var listed = aiRepo.conversations().orThrow().conversations.map { it.id }
+                var rounds = 1
+                // The list holds the newest 50, so a long history takes a few rounds. One listed again after its
+                // delete went through stops it.
+                while (listed.any { it !in deleted } && rounds < AI_DELETE_ROUNDS) {
+                    for (id in listed.filterNot { it in deleted }) {
+                        val cardIds = aiActionCardIds(id)
+                        aiRepo.deleteConversation(id).orThrow()
+                        aiCards.forget(cardIds)
+                        deleted += id
+                    }
+                    listed = aiRepo.conversations().orThrow().conversations.map { it.id }
+                    rounds++
+                }
+                if (listed.isEmpty()) null else AI_DELETE_FAILED
+            } catch (error: NetworkError) {
+                Timber.w("AI conversation delete failed: ${error.message}")
+                if (error.code == HTTP_TOO_MANY_REQUESTS) AI_DELETE_TOO_MANY else AI_DELETE_FAILED
+            }
+
+        /** The action cards in one conversation, by card id; none when it is already gone. */
+        private suspend fun aiActionCardIds(conversationId: String): Set<String> =
+            when (val history = aiRepo.conversationMessages(conversationId)) {
+                is NetworkResult.Success ->
+                    history.data.messages
+                        .mapNotNull { item -> item.draft?.takeIf { it.type == "action" } }
+                        .mapNotNull { aiRepo.draftCard(it.type, it.draft)?.action?.id }
+                        .toSet()
+                is NetworkResult.Failure -> if (history.error is NetworkError.NotFound) emptySet() else throw history.error
+            }
 
         /**
          * A15.3 "New chat": stop a reply in progress, clear the thread back to its starter prompts, and
@@ -3007,3 +3067,19 @@ private const val REACTION_REFETCH_DEBOUNCE_MS = 300L
 
 /** Refresh cadence while the socket is disconnected (fallback polling). */
 private const val SOCKET_FALLBACK_POLL_MS = 30_000L
+
+/** How many lists of 50 "Delete conversation" works through before it gives up. */
+private const val AI_DELETE_ROUNDS = 20
+
+private const val AI_DELETE_FAILED = "Couldn't delete the conversation. Try again."
+
+private const val AI_DELETE_TOO_MANY = "Couldn't delete it all yet. Try again in a minute."
+
+private const val HTTP_TOO_MANY_REQUESTS = 429
+
+/** The body, or the failure thrown, for a run of calls that stops at the first one. */
+private fun <T> NetworkResult<T>.orThrow(): T =
+    when (this) {
+        is NetworkResult.Success -> data
+        is NetworkResult.Failure -> throw error
+    }
