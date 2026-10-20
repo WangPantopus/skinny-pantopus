@@ -25,7 +25,7 @@ public enum AIEndpoints {
     /// (`AIChatStreamRequest.supportedCards`): the server leaves out the
     /// cards an app doesn't list, so builds without action cards never get
     /// one back from history (contract section 4.1).
-    /// Route `backend/routes/ai.js:443`.
+    /// Route `backend/routes/ai.js:445`.
     public static func conversationMessages(id: String, cards: [String]) -> Endpoint {
         Endpoint(
             method: .get,
