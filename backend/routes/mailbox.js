@@ -18,7 +18,7 @@ const s3 = require('../services/s3Service');
 const notificationService = require('../services/notificationService');
 const emailService = require('../services/emailService');
 const smsService = require('../services/smsService');
-const { skipForLaunchCut } = require('../utils/featureFlags');
+const { skipForLaunchCut, areLaunchFeaturesEnabled } = require('../utils/featureFlags');
 const { chosenUsernameOrNull } = require('../utils/personalUsername');
 const { maskContact } = require('../jobs/mailEscrowExpiry');
 // A letter sent as a business names the business to everyone it reaches, never the person who sent it.
@@ -1987,6 +1987,12 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
     }
 
     if (isEscrowSend) {
+      // Launch cuts #8 and #10: a letter to someone who isn't on Pantopus is a surface of both, and its page
+      // (web /open) is hidden until both are on.
+      if (!areLaunchFeaturesEnabled(['mailbox', 'mail_extras'])) {
+        return res.status(403).json({ error: 'This isn\u2019t available yet.', code: 'MAIL_EXTRAS_UNAVAILABLE' });
+      }
+
       // Pantopus emails or texts the person about it, so only a letter goes to someone who isn't on Pantopus: never
       // an ad, bill, notice or promotion to an address the sender typed in.
       if (type !== 'letter') {

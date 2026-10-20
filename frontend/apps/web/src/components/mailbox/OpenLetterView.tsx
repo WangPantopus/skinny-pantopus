@@ -103,8 +103,9 @@ export default function OpenLetterView({ mailId, token }: { mailId: string; toke
   const [state, setState] = useState<ViewState>({ phase: 'loading' });
   const [attempt, setAttempt] = useState(0);
   const [claiming, setClaiming] = useState(false);
-  const [problem, setProblem] = useState<'MAIL_CONTACT_MISMATCH' | 'MAIL_OWN_LETTER' | 'FAILED' | 'SIGN_OUT' | null>(null);
-  // The signed-in account's email, shown when the letter was sent to another address.
+  const [problem, setProblem] = useState<'MAIL_OWN_LETTER' | 'FAILED' | 'SIGN_OUT' | null>(null);
+  // Signed in with an account the letter wasn't sent to, and that account's email.
+  const [wrongAccount, setWrongAccount] = useState(false);
   const [account, setAccount] = useState('');
   const [switching, setSwitching] = useState(false);
 
@@ -137,7 +138,7 @@ export default function OpenLetterView({ mailId, token }: { mailId: string; toke
       if (typeof code === 'string' && CLOSED_CODES.has(code)) {
         setState({ phase: 'closed', code: code as ClosedCode });
       } else if (code === 'MAIL_CONTACT_MISMATCH') {
-        setProblem('MAIL_CONTACT_MISMATCH');
+        setWrongAccount(true);
         api.users.getMyProfile().then((profile) => setAccount(profile.email || '')).catch(() => setAccount(''));
       } else if (code === 'MAIL_OWN_LETTER') {
         setProblem('MAIL_OWN_LETTER');
@@ -157,12 +158,15 @@ export default function OpenLetterView({ mailId, token }: { mailId: string; toke
     if (!yes) return;
     setSwitching(true);
     try {
+      // Signed out, this page offers signing in and creating an account, both coming back here.
       await api.auth.logout();
-      router.push(loginHref);
+      setWrongAccount(false);
+      setAccount('');
+      setProblem(null);
     } catch {
       setProblem('SIGN_OUT');
-      setSwitching(false);
     }
+    setSwitching(false);
   };
 
   if (state.phase === 'loading') {
@@ -246,22 +250,34 @@ export default function OpenLetterView({ mailId, token }: { mailId: string; toke
         </div>
       )}
 
-      {signedIn === true && (
+      {signedIn === true && wrongAccount && (
         <div className="mt-5 flex flex-col gap-2.5">
-          <button type="button" onClick={() => void claim()} disabled={claiming || switching} className={primaryButton}>
+          <div role="alert" className="rounded-xl border border-app-border bg-app-surface-sunken p-3.5 text-[13px] text-app-text leading-[19px]">
+            This letter was sent to {letter.sentTo}
+            {account ? <>, and you’re signed in as <span className="font-semibold break-all">{account}</span></> : null}.
+            {' '}Sign in or create an account with that {byNumber ? 'number' : 'address'} to read it.
+          </div>
+          <button type="button" onClick={() => void switchAccount()} disabled={switching} className={primaryButton}>
+            {switching && <Loader2 size={18} className="animate-spin" />}
+            Use another account
+          </button>
+          {problem === 'SIGN_OUT' && (
+            <p role="alert" className="text-[13px] text-app-error leading-[19px] text-center">
+              Sign-out couldn’t be confirmed. Try again before using another account.
+            </p>
+          )}
+        </div>
+      )}
+
+      {signedIn === true && !wrongAccount && (
+        <div className="mt-5 flex flex-col gap-2.5">
+          <button type="button" onClick={() => void claim()} disabled={claiming} className={primaryButton}>
             {claiming ? <Loader2 size={18} className="animate-spin" /> : <MailCheck size={18} strokeWidth={2.25} />}
             Read the letter
           </button>
           <p className="text-[13px] text-app-text-secondary leading-[19px] text-center">
             It goes into your Pantopus mailbox, where only you can read it.
           </p>
-          {problem === 'MAIL_CONTACT_MISMATCH' && (
-            <div role="alert" className="rounded-xl border border-app-border bg-app-surface-sunken p-3.5 text-[13px] text-app-text leading-[19px]">
-              This letter was sent to {letter.sentTo}
-              {account ? <>, and you’re signed in as <span className="font-semibold break-all">{account}</span></> : null}.
-              {' '}Sign in or create an account with that {byNumber ? 'number' : 'address'} to read it.
-            </div>
-          )}
           {problem === 'MAIL_OWN_LETTER' && (
             <div role="alert" className="rounded-xl border border-app-border bg-app-surface-sunken p-3.5 text-[13px] text-app-text leading-[19px]">
               You sent this letter. It’s waiting for the person you wrote to.
@@ -271,17 +287,6 @@ export default function OpenLetterView({ mailId, token }: { mailId: string; toke
             <p role="alert" className="text-[13px] text-app-error leading-[19px] text-center">
               Couldn’t add the letter to your mailbox. Check your connection and try again.
             </p>
-          )}
-          {problem === 'SIGN_OUT' && (
-            <p role="alert" className="text-[13px] text-app-error leading-[19px] text-center">
-              Sign-out couldn’t be confirmed. Try again before using another account.
-            </p>
-          )}
-          {(problem === 'MAIL_CONTACT_MISMATCH' || problem === 'SIGN_OUT') && (
-            <button type="button" onClick={() => void switchAccount()} disabled={switching} className={secondaryButton}>
-              {switching && <Loader2 size={18} className="animate-spin" />}
-              Use another account
-            </button>
           )}
         </div>
       )}
