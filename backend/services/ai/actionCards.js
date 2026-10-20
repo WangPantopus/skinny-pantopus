@@ -22,14 +22,26 @@ const rules = require('../plans/planRules');
 const { canReadPost, POST_READ_SELECT } = require('../pulse/readAccess');
 const homeRecordService = require('../homeRecordService');
 const homeDetailService = require('../homeDetailService');
+const { SYSTEM_DEFS } = require('../homeSystemsService');
+const { createHomeAssetSchema } = require('../../utils/homeAssetFields');
+const { checkHomePermission, getUserAccess } = require('../../utils/homePermissions');
+const { ROLE_RANK } = require('../../utils/homeAccessPolicy');
 const { localDisplayNames } = require('../../utils/identityProfiles');
-const { planKinds } = require('./readTools');
+const { escapeIlike } = require('../../utils/escapeIlike');
+const { planKinds, readSections } = require('./readTools');
 const { linkFor } = require('./appGuide');
 const {
-  isUuid, clip, chosenHome, localToUtc, whenLabel, dayPartLabel, dayLabel, firstNameOf, distanceWords,
+  isUuid, clip, chosenHome, localToUtc, whenLabel, dayPartLabel, dayLabel, todayIn, firstNameOf, distanceWords,
 } = require('./assistantKit');
 
 const NOTE = 'One short sentence shown under the card: the assumption that matters most or a detail worth adding. Nothing happens until they tap, so write about the card, never as if it were already done. Null when there is nothing to say.';
+// What a home paper's end date can be (a task's details.kind; the home_paperwork nudge reads it).
+const DOCUMENT_KINDS = ['warranty', 'policy', 'lease'];
+// The kinds of item the assistant records (HomeAsset categories, without consumables).
+const ASSET_KINDS = ['appliance', 'electronics', 'furniture', 'tool', 'valuable', 'fixture', 'other'];
+const ASSET_KIND_LABELS = {
+  appliance: 'Appliance', electronics: 'Electronics', furniture: 'Furniture', tool: 'Tool', valuable: 'Valuable', fixture: 'Fixture', other: 'Other',
+};
 const HHMM = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
 const KIND_LABELS = {
   watch_party: 'Watch party', pickup_game: 'Pickup game', walk_coffee: 'Walk & coffee', study_group: 'Study group', playdate: 'Playdate',
@@ -225,9 +237,76 @@ const actionCardDefinitions = [
           additionalProperties: false,
         },
         priority: nullable({ type: 'string', enum: ['low', 'medium', 'high', 'urgent'] }),
+        document: {
+          type: ['object', 'null'],
+          description: 'For a reminder about a home paper they sent (a warranty, policy or lease that ends): what it is, what ends and when, and the page. Null otherwise.',
+          properties: {
+            name: { type: 'string', description: 'What the paper is, in a few words ("Water heater warranty", "Home insurance policy"). Never a number from it.' },
+            kind: { type: 'string', enum: DOCUMENT_KINDS },
+            ends_on: { type: 'string', description: 'The day it ends, YYYY-MM-DD, as printed.' },
+            page: { type: ['integer', 'null'], minimum: 1, description: 'The page the date is on; null for a photo.' },
+          },
+          required: ['name', 'kind', 'ends_on', 'page'],
+          additionalProperties: false,
+        },
         note: { type: ['string', 'null'], description: NOTE },
       },
-      required: ['home_id', 'title', 'description', 'task_type', 'assignee_user_id', 'due_date', 'due_time', 'repeat', 'priority', 'note'],
+      required: ['home_id', 'title', 'description', 'task_type', 'assignee_user_id', 'due_date', 'due_time', 'repeat', 'priority', 'document', 'note'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'draft_home_system',
+    description: "Draft recording the year one of the home's six building systems was installed, in the systems record on the Place tab (it replaces the estimate from the year the home was built). Use the year they tell you, or the install or manufacture date on a label, an invoice or an inspection report they sent. One card per system.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        home_id: nullable({ type: 'string', description: 'Null for the home Today shows.' }),
+        system: { type: 'string', enum: SYSTEM_DEFS.map((def) => def.key), description: 'hvac is heating and cooling (a furnace, a heat pump, central air).' },
+        installed_year: { type: 'integer', minimum: 1900, maximum: 2100 },
+        source: {
+          type: ['object', 'null'],
+          description: 'The paper or photo the year comes from; null when they told you.',
+          properties: {
+            name: { type: 'string', description: 'What it is, in a few words ("Water heater label", "Inspection report"). Never a number from it.' },
+            page: { type: ['integer', 'null'], minimum: 1, description: 'The page the year is on; null for a photo.' },
+          },
+          required: ['name', 'page'],
+          additionalProperties: false,
+        },
+        note: { type: ['string', 'null'], description: NOTE },
+      },
+      required: ['home_id', 'system', 'installed_year', 'source', 'note'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'draft_home_asset',
+    description: "Draft adding an appliance or another item to the home's records: its make and model, when it was bought and until when its warranty runs, from what they tell you or a receipt, a label or a warranty they sent. The six building systems (roof, heating and cooling, water heater, electrical panel, sewer or septic, windows) go in draft_home_system instead.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        home_id: nullable({ type: 'string', description: 'Null for the home Today shows.' }),
+        name: { type: 'string', description: 'What it is, e.g. "Dishwasher" or "Refrigerator", up to 120 characters.' },
+        category: { type: 'string', enum: ASSET_KINDS },
+        brand: nullable({ type: 'string' }),
+        model: nullable({ type: 'string', description: 'The model name or number on the label. Never the serial number.' }),
+        room: nullable({ type: 'string', description: 'Where it is, e.g. "Kitchen".' }),
+        purchase_date: nullable({ type: 'string', description: 'The day it was bought or installed, YYYY-MM-DD.' }),
+        warranty_ends: nullable({ type: 'string', description: 'The last day of its warranty, YYYY-MM-DD.' }),
+        source: {
+          type: ['object', 'null'],
+          description: 'The paper or photo these come from; null when they told you.',
+          properties: {
+            name: { type: 'string', description: 'What it is, in a few words ("Dishwasher receipt"). Never a number from it.' },
+            page: { type: ['integer', 'null'], minimum: 1, description: 'The page; null for a photo.' },
+          },
+          required: ['name', 'page'],
+          additionalProperties: false,
+        },
+        note: { type: ['string', 'null'], description: NOTE },
+      },
+      required: ['home_id', 'name', 'category', 'brand', 'model', 'room', 'purchase_date', 'warranty_ends', 'source', 'note'],
       additionalProperties: false,
     },
   },
@@ -772,15 +851,66 @@ async function draftPostSolve(args, ctx) {
   return finished(draft, args.note, 'Tap Mark solved to close the question.');
 }
 
+// ─── Home papers ───────────────────────────────────────────────────────────
+
+// Account, policy and serial numbers stay out of cards, and so out of the stored conversation:
+// a word with six or more digits in it looks like one (phone numbers and dates are written in parts).
+const numberLike = (...texts) => texts.some((text) => typeof text === 'string'
+  && text.split(/[^A-Za-z0-9]+/).some((word) => (word.match(/\d/g) || []).length >= 6));
+const NO_NUMBERS = { error: 'Leave account, policy and serial numbers out of the card (write "the policy number on page 1" instead), then draft it again.' };
+
+function isCalendarDay(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const day = new Date(`${value}T12:00:00Z`);
+  return Number.isFinite(day.getTime()) && day.toISOString().slice(0, 10) === value;
+}
+const longDay = (day) => new Date(`${day}T12:00:00Z`).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'long', day: 'numeric', year: 'numeric' });
+
+/** "Water heater warranty, page 2": where a card's fact comes from. */
+function sourceText(source) {
+  const name = clip(source?.name, 80);
+  if (!name) return null;
+  return Number.isInteger(source.page) && source.page > 0 ? `${name}, page ${source.page}` : name;
+}
+
 // ─── Home tasks ────────────────────────────────────────────────────────────
 
 const REPEAT_WORDS = { daily: ['day', 'DAILY'], weekly: ['week', 'WEEKLY'], monthly: ['month', 'MONTHLY'] };
+const SEEN_BY = { managers: "The home's managers", sensitive: 'People who see private home records' };
+
+/**
+ * Who sees a new task: what the server gives one that names no visibility (mutate_home_record),
+ * so the card can say it. That is the home's default when the person and the assignee can see
+ * tasks at that level (managers rank 40 and up, or sensitive.view), else the household. A read
+ * that fails stops the card rather than guess wider.
+ */
+async function newTaskVisibility(homeId, actorId, assigneeId) {
+  const { data: home, error } = await supabaseAdmin.from('Home').select('default_visibility').eq('id', homeId).maybeSingle();
+  if (error) throw new Error(`Home read failed: ${error.message}`);
+  const steps = { sensitive: ['sensitive', 'managers'], managers: ['managers'] }[home?.default_visibility] || [];
+  if (!steps.length) return 'members';
+  const people = [...new Set([actorId, assigneeId].filter(Boolean))];
+  const accesses = await Promise.all(people.map((id) => getUserAccess(homeId, id)));
+  const sees = (access, step) => Boolean(access?.hasAccess && access.permissions.includes('tasks.view')
+    && (step === 'sensitive' ? access.permissions.includes('sensitive.view')
+      : (ROLE_RANK[access.effective_role_base] || 0) >= ROLE_RANK.manager));
+  return steps.find((step) => accesses.every((access) => sees(access, step))) || 'members';
+}
 
 async function draftHomeTask(args, ctx) {
   const home = await chosenHome(ctx.userId, args.home_id);
   if (!home) return { error: 'They have no home in Pantopus yet. Tasks belong to a home; they can add one on the Place tab.' };
   const title = clip(args.title, 255);
   if (!title) return { error: 'The task needs a title.' };
+  const paper = args.document || null;
+  if (numberLike(args.title, args.description, paper?.name)) return NO_NUMBERS;
+  if (paper) {
+    if (!DOCUMENT_KINDS.includes(paper.kind)) return { error: 'document.kind must be warranty, policy or lease.' };
+    if (!isCalendarDay(paper.ends_on)) return { error: 'document.ends_on must be the day it ends, YYYY-MM-DD.' };
+    if (paper.ends_on < todayIn(ctx.timeZone)) {
+      return { error: `It ended on ${longDay(paper.ends_on)}. Tell them it has ended instead of drafting a reminder.` };
+    }
+  }
 
   const collection = await homeRecordService.listCollection({ homeId: home.id, actorId: ctx.userId, kind: 'task' })
     .catch(() => null);
@@ -798,15 +928,18 @@ async function draftHomeTask(args, ctx) {
 
   const zone = ctx.timeZone;
   let dueAt = null;
-  if (args.due_date) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(args.due_date)) return { error: 'due_date must be YYYY-MM-DD.' };
+  // A paper's reminder is due the day it ends, unless they asked for another day.
+  const dueDate = args.due_date || paper?.ends_on || null;
+  if (dueDate) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) return { error: 'due_date must be YYYY-MM-DD.' };
     const time = args.due_time && HHMM.test(args.due_time) ? args.due_time : '09:00';
-    dueAt = localToUtc(`${args.due_date}T${time}`, zone);
+    dueAt = localToUtc(`${dueDate}T${time}`, zone);
     if (!dueAt) return { error: 'That due date is not a real date.' };
   }
   const repeat = args.repeat && REPEAT_WORDS[args.repeat.frequency] ? args.repeat : null;
   if (repeat && !dueAt) return { error: 'A repeating task needs its first due date.' };
 
+  const visibility = await newTaskVisibility(home.id, ctx.userId, assignee?.id);
   const sessionScope = sessionHeaders(ctx);
   const body = {
     ...(sessionScope ? { request_id: null } : {}),
@@ -816,18 +949,26 @@ async function draftHomeTask(args, ctx) {
     ...(assignee ? { assigned_to: assignee.id } : {}),
     ...(dueAt ? { due_at: dueAt } : {}),
     ...(args.priority ? { priority: args.priority } : {}),
+    visibility,
+    // How home_paperwork finds it. The server keeps details.source for tasks made from mail.
+    ...(paper ? { details: { origin: 'document', kind: paper.kind, ends_on: paper.ends_on } } : {}),
   };
   const every = repeat ? Math.min(Math.max(Number(repeat.every) || 1, 1), 365) : null;
   const repeatText = repeat
     ? (every === 1 ? `Every ${REPEAT_WORDS[repeat.frequency][0]}` : `Every ${every} ${REPEAT_WORDS[repeat.frequency][0]}s`)
     : null;
 
+  const thisYear = todayIn(zone).slice(0, 4);
+  const dueYear = dueAt ? dueDate.slice(0, 4) : null;
   const draft = card('home_task', {
     title,
     lines: [
       line('For', assignee ? assignee.name : 'Anyone at home'),
-      line('Due', dueAt ? `${dayLabel(dueAt, zone)}${args.due_time ? '' : ', 9:00 AM'}` : 'No date'),
+      line('Due', dueAt ? `${dayLabel(dueAt, zone)}${dueYear && dueYear !== thisYear ? `, ${dueYear}` : ''}${args.due_time ? '' : ', 9:00 AM'}` : 'No date'),
       line('Repeats', repeatText),
+      paper ? line({ warranty: 'Warranty ends', policy: 'Policy ends', lease: 'Lease ends' }[paper.kind], longDay(paper.ends_on)) : null,
+      line('From', sourceText(paper)),
+      line('Seen by', SEEN_BY[visibility]),
       line('Home', [home.city, home.state].filter(Boolean).join(', ')),
       line('Details', args.description),
     ],
@@ -855,6 +996,105 @@ async function draftHomeTask(args, ctx) {
     method: 'POST', path: `/api/homes/${home.id}/tasks`, body, ...(sessionScope ? { headers: sessionScope } : {}),
   }, { label: 'Added', link: linkFor('home_tasks', home.id) }, { then }));
   return finished(draft, args.note, 'Tap Add task to save it.');
+}
+
+// ─── Home systems ──────────────────────────────────────────────────────────
+
+/**
+ * The year a building system went in, for the Place tab's systems record (PUT
+ * /api/homes/:id/systems/:key, the household's own correction). Offered where the person
+ * may edit the home's details (home.edit, as the route checks) and the systems section is
+ * open to them, as the Place screen shows it.
+ */
+async function draftHomeSystem(args, ctx) {
+  const home = await chosenHome(ctx.userId, args.home_id);
+  if (!home) return { error: 'They have no home in Pantopus yet. They can add one on the Place tab.' };
+  const def = SYSTEM_DEFS.find((system) => system.key === args.system);
+  if (!def) return { error: 'Choose one of the six systems.' };
+  const year = Number(args.installed_year);
+  if (!Number.isInteger(year) || year < 1900 || year > Number(todayIn(ctx.timeZone).slice(0, 4))) {
+    return { error: `${args.installed_year} can't be the year it was installed. Ask them for the year.` };
+  }
+  if (numberLike(args.source?.name)) return NO_NUMBERS;
+  const access = await checkHomePermission(home.id, ctx.userId, 'home.edit');
+  if (!access.hasAccess) {
+    return { error: "They can't change this home's systems record: it takes permission to edit the home's details, which the home's owner has. Tell them the year you found so they can pass it on." };
+  }
+  const intelligence = await readSections(home.id, ctx.userId, ['home_systems'], ctx.user);
+  const section = (intelligence?.groups || []).flatMap((group) => group.sections || []).find((item) => item.id === 'home_systems');
+  if (!section || section.access !== 'available' || !section.data) {
+    return { error: `Their home's systems record isn't open to them yet${section?.unavailable_reason ? ` (${section.unavailable_reason})` : ''}.` };
+  }
+  const current = (section.data.systems || []).find((system) => system.key === def.key);
+  if (current && current.source === 'resident' && current.installed_year === year) {
+    return { message: `Their record already says the ${def.label.toLowerCase()} went in in ${year}.` };
+  }
+  const draft = card('home_system', {
+    title: def.label,
+    lines: [
+      line('System', def.label),
+      line('Installed', `${year}`),
+      current?.installed_year ? line('On record now', `${current.installed_year} (${String(current.source_label || '').toLowerCase()})`) : null,
+      line('From', sourceText(args.source)),
+      line('Home', [home.city, home.state].filter(Boolean).join(', ')),
+    ],
+    warnings: current?.source === 'resident' ? [`This replaces ${current.installed_year}, the year your household entered.`] : [],
+    actions: [action('confirm', 'Save', {
+      method: 'PUT', path: `/api/homes/${home.id}/systems/${def.key}`, body: { installed_year: year },
+    }, { label: 'Saved', link: linkFor('place_section', home.id, { section: 'your-home' }) })],
+  });
+  return finished(draft, args.note, 'Tap Save to put it on your home\'s record.');
+}
+
+// ─── Home records (appliances and other items) ─────────────────────────────
+
+/**
+ * An appliance or another item for the home's records (POST /api/homes/:id/assets, which
+ * needs assets.manage and checks the fields with homeAssetFields, as this does first). Its
+ * warranty date is what home_paperwork reminds the household about.
+ */
+async function draftHomeAsset(args, ctx) {
+  const home = await chosenHome(ctx.userId, args.home_id);
+  if (!home) return { error: 'They have no home in Pantopus yet. They can add one on the Place tab.' };
+  if (numberLike(args.name, args.room, args.source?.name)) return NO_NUMBERS;
+  const access = await checkHomePermission(home.id, ctx.userId, 'assets.manage');
+  if (!access.hasAccess) {
+    return { error: "They can't add items to this home's records: it takes permission to manage them, which the home's owner has. Tell them what you found so they can pass it on." };
+  }
+  const body = {
+    category: ASSET_KINDS.includes(args.category) ? args.category : 'other',
+    name: clip(args.name, 120),
+    ...(clip(args.brand, 80) ? { brand: clip(args.brand, 80) } : {}),
+    ...(clip(args.model, 80) ? { model: clip(args.model, 80) } : {}),
+    ...(clip(args.room, 80) ? { room: clip(args.room, 80) } : {}),
+    ...(args.purchase_date ? { purchase_date: args.purchase_date } : {}),
+    ...(args.warranty_ends ? { warranty_expires_at: args.warranty_ends } : {}),
+  };
+  const { error } = createHomeAssetSchema.validate(body);
+  if (error) return { error: `${error.details[0].message.replace(/"/g, '')}. Fix it and draft the card again.` };
+  if (body.purchase_date && body.purchase_date > todayIn(ctx.timeZone)) return { error: 'purchase_date is in the future. Use the day it was bought.' };
+  // The same item twice would remind them twice.
+  const { data: existing } = await supabaseAdmin.from('HomeAsset').select('id, name, brand, model')
+    .eq('home_id', home.id).ilike('name', escapeIlike(body.name)).limit(5);
+  const same = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+  if ((existing || []).some((item) => same(item.brand, body.brand) && same(item.model, body.model))) {
+    return { message: `${body.name} is already in their home's records.` };
+  }
+  const draft = card('home_asset', {
+    title: body.name,
+    lines: [
+      line('Kind', ASSET_KIND_LABELS[body.category]),
+      line('Brand', body.brand),
+      line('Model', body.model),
+      line('Room', body.room),
+      body.purchase_date ? line('Bought', longDay(body.purchase_date)) : null,
+      body.warranty_expires_at ? line('Warranty until', longDay(body.warranty_expires_at)) : null,
+      line('From', sourceText(args.source)),
+      line('Home', [home.city, home.state].filter(Boolean).join(', ')),
+    ],
+    actions: [action('confirm', 'Add', { method: 'POST', path: `/api/homes/${home.id}/assets`, body }, { label: 'Added' })],
+  });
+  return finished(draft, args.note, "Tap Add to put it in your home's records.");
 }
 
 // ─── Notification settings ─────────────────────────────────────────────────
@@ -932,6 +1172,8 @@ const CARD_EXECUTORS = {
   draft_post_reply: draftPostReply,
   draft_post_solve: draftPostSolve,
   draft_home_task: draftHomeTask,
+  draft_home_system: draftHomeSystem,
+  draft_home_asset: draftHomeAsset,
   draft_notification_settings: draftNotificationSettings,
 };
 
