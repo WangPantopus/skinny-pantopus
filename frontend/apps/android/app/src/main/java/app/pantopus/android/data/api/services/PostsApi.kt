@@ -76,6 +76,13 @@ interface PostsApi {
     ): Response<FeedResponse>
 
     /**
+     * `POST /api/posts/feed/seen` (no body) — moves the person's Nearby marker to now, the "since you last looked" the
+     * assistant catches them up from (AI assistant phase 2 contract §6.1).
+     */
+    @POST("api/posts/feed/seen")
+    suspend fun markFeedSeen(): Response<Unit>
+
+    /**
      * `POST /api/posts` — create a new post. Body keys are validated
      * by `createPostSchema` at `backend/routes/posts.js:196-300`.
      * Route `backend/routes/posts.js:862`.
