@@ -71,6 +71,8 @@ const reconcileHomeHouseholdResolution = require('./reconcileHomeHouseholdResolu
 // Chat jobs
 const chatRedactionJob = require('./chatRedactionJob');
 const aiChatPhotoSweep = require('./aiChatPhotoSweep');
+// Assistant suggestions about homes: waiting tasks, papers ending, radon follow-through
+const { runHomeNudges } = require('../services/ai/nudges/home');
 // Business cleanup
 const cleanupGhostBusinesses = require('./cleanupGhostBusinesses');
 // Pop-up business expiry
@@ -544,6 +546,15 @@ function startJobs(options = {}) {
   // Runs every 15 minutes at :04/:19/:34/:49.
   // Deletes photos uploaded for the assistant that no request read within an hour.
   scheduleCron('4,19,34,49 * * * *', wrapJob('aiChatPhotoSweep', aiChatPhotoSweep), {
+    scheduled: true,
+    timezone: 'UTC',
+  });
+
+  // ─── Assistant: Home nudges ───
+  // Every 15 minutes at :07/:22/:37/:52, for people who turned Suggestions on, once a day after
+  // their brief time: Monday's waiting tasks, papers ending in 30 and 7 days, radon follow-through
+  // (services/ai/nudges/home.js; the engine keeps to the day's cap and holds pushes in quiet hours).
+  scheduleCron('7,22,37,52 * * * *', wrapJob('homeNudges', runHomeNudges), {
     scheduled: true,
     timezone: 'UTC',
   });

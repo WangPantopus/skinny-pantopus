@@ -4328,14 +4328,18 @@ router.post('/:id/devices', verifyToken, async (req, res) => {
 
 /**
  * GET /api/homes/:id/assets
+ * The home's records of appliances and valuables (with serial numbers, prices and warranty
+ * dates) need assets.view, as the table's own policy and the records photo reads require;
+ * being in the home (a guest, a service provider) isn't enough.
  */
 router.get('/:id/assets', verifyToken, async (req, res) => {
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
+    if (Joi.string().uuid().validate(homeId).error) return res.status(400).json({ error: 'Invalid Home id' });
 
-    const access = await checkHomePermission(homeId, userId);
-    if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
+    const access = await checkHomePermission(homeId, userId, 'assets.view');
+    if (!access.hasAccess) return res.status(403).json({ error: "You do not have permission to see this home's records." });
 
     const { data, error } = await supabaseAdmin
       .from('HomeAsset')
@@ -4348,8 +4352,10 @@ router.get('/:id/assets', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch assets' });
     }
 
+    res.set('Cache-Control', 'private, no-store');
     res.json({ assets: data || [] });
   } catch (err) {
+    if (err.code === 'HOME_ACCESS_UNAVAILABLE') return res.status(503).json({ error: err.message, code: err.code });
     logger.error('Assets fetch error', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch assets' });
   }
