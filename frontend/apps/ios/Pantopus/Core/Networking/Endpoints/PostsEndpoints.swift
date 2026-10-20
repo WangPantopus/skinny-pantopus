@@ -45,6 +45,14 @@ public enum PostsEndpoints {
         return Endpoint(method: .get, path: "/api/posts/feed", query: query)
     }
 
+    /// `POST /api/posts/feed/seen` — moves the person's Nearby marker to now,
+    /// so the assistant's catch-up and the morning brief start after what the
+    /// feed has shown (`docs/product/ai-assistant-phase2-contract-2026-10-20.md`
+    /// §6.1). No body.
+    public static func feedSeen() -> Endpoint {
+        Endpoint(method: .post, path: "/api/posts/feed/seen")
+    }
+
     /// `POST /api/posts` — create a new post. Body keys are validated
     /// by `createPostSchema` at `backend/routes/posts.js:196-300`. Route
     /// `backend/routes/posts.js:862`.
