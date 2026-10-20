@@ -8,9 +8,9 @@
  *
  * The day is read as the person, through the chat's own read tools: get_today (weather, air,
  * alerts, plans today, tasks due or overdue), find_plans (people waiting to join a plan they
- * host), the Nearby catch-up (heads-ups and lost-and-found since they last looked), plus the
- * pickup days their household set (never a city schedule nobody confirmed) and their own open
- * questions that have replies. The model writes up to four short lines and picks up to three
+ * host), catch_up_nearby (heads-ups and lost-and-found since they last looked at Nearby), plus
+ * the pickup days their household set (never a city schedule nobody confirmed) and their own
+ * open questions that have replies. The model writes up to four short lines and picks up to three
  * of the actions offered here; their cards are built with the chat's card tools (nudgeCard),
  * so a card is checked exactly as in a chat.
  */
@@ -20,9 +20,8 @@ const supabaseAdmin = require('../../../config/supabaseAdmin');
 const { DRAFT_MODEL } = require('../../../config/anthropic');
 const { composeForHomeId } = require('../../addressCalendarService');
 const { isFeatureEnabled } = require('../../featureFlagService');
-const { executeTool } = require('../tools');
 const { runReadTool } = require('../readTools');
-const { CARD_EXECUTORS } = require('../actionCards');
+const { runNearbyReadTool } = require('../readToolsNearby');
 const { complete, describeNow } = require('../llm');
 const { toClaudeSchema } = require('../schemas');
 const { clip, isUuid, OTHERS_WORDS } = require('../assistantKit');
@@ -102,19 +101,12 @@ async function openQuestions(userId) {
   return (data || []).map((post) => ({ post_id: post.id, question_text: clip(post.title, 120) || clip(post.content, 120), replies: post.comment_count }));
 }
 
-/**
- * Heads-ups and lost-and-found nearby since they last looked: the Nearby catch-up when this
- * server has it (catch_up_nearby, §6.1), else the feed's last two days of those two kinds.
- */
+/** Heads-ups and lost-and-found nearby since they last looked at Nearby (the catch-up of §6.1). */
 async function nearbyNews(ctx) {
-  // Through the chat's dispatcher, which knows catch_up_nearby once it exists (#2509).
-  const caughtUp = await executeTool('catch_up_nearby', { days: null }, ctx).catch((err) => ({ error: err.message }));
-  if (!caughtUp.error) {
-    const posts = (caughtUp.posts || []).filter((post) => ['alert', 'lost_found'].includes(post.type));
-    return { since: caughtUp.since || null, posts: posts.slice(0, 5) };
-  }
-  const feed = await read('find_posts', { days: 2, types: ['alert', 'lost_found'], query: null }, ctx);
-  return feed.error ? null : { since: 'the last 2 days', posts: (feed.posts || []).slice(0, 5) };
+  const caughtUp = await runNearbyReadTool('catch_up_nearby', { days: null }, ctx);
+  if (!caughtUp || caughtUp.error) return null;
+  const posts = (caughtUp.posts || []).filter((post) => ['alert', 'lost_found'].includes(post.type));
+  return { since: caughtUp.since || null, posts: posts.slice(0, 5) };
 }
 
 /**
@@ -140,19 +132,18 @@ async function dayFacts(userId, { timeZone }) {
   const waiting = (mine?.hosting || []).filter((plan) => plan?.waiting_requests > 0);
   const actions = [];
   const offer = (id, type, about, extra = {}) => actions.push({ id, type, about, ...extra });
+  // The card checks the plan's chat is open (it opens when the host lets someone in); a list
+  // card doesn't carry that, so a plan whose chat is closed simply gets no card.
   for (const plan of plansToday) {
-    if (plan.your_role === 'host' && plan.chat_open) {
+    if (plan.your_role === 'host') {
       offer(`m${actions.length + 1}`, 'plan_message', `Message everyone in "${plan.title_text}"`, { plan_id: plan.plan_id });
     }
   }
   for (const plan of waiting.slice(0, 2)) {
     offer(`r${actions.length + 1}`, 'plan_requests', `Answer the ${plan.waiting_requests} waiting to join "${plan.title_text}"`, { plan_id: plan.plan_id });
   }
-  // Marking a task done needs the task-update card (phase 2 §7.2); until it exists, tasks are lines only.
-  if (CARD_EXECUTORS.draft_home_task_update) {
-    for (const task of (today.tasks_due || []).slice(0, 2)) {
-      offer(`t${actions.length + 1}`, 'home_task_update', `Mark "${task.title_text}" done`, { task_id: task.task_id, home_id: today.home.home_id });
-    }
+  for (const task of (today.tasks_due || []).slice(0, 2)) {
+    offer(`t${actions.length + 1}`, 'home_task_update', `Mark "${task.title_text}" done`, { task_id: task.task_id, home_id: today.home.home_id });
   }
   for (const question of questions.slice(0, 1)) {
     offer(`q${actions.length + 1}`, 'post_solve', `Mark your question solved: "${question.question_text}"`, { post_id: question.post_id });
