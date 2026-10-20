@@ -245,7 +245,9 @@ async function placesNear({ latitude, longitude, q = '' }) {
 function parkNameOf(name) {
   const text = String(name || '').trim();
   const what = FACILITY_NAMES.find((facility) => text.toLowerCase().endsWith(` ${facility}`));
-  return what ? text.slice(0, -(what.length + 1)).trim() || null : null;
+  const park = what ? text.slice(0, -(what.length + 1)).trim() : '';
+  // One word ("Community playground") describes the place rather than naming a park.
+  return park.includes(' ') ? park : null;
 }
 
 module.exports = { placesNear, toPlaces, parkNameOf, ATTRIBUTION };
