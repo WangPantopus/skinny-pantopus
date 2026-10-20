@@ -65,16 +65,22 @@ class VerificationCenterViewModel
                 emailAddress = authState.user.email
             }
             viewModelScope.launch {
-                when (val result = identity.overview()) {
-                    is NetworkResult.Success -> emailVerified = result.data.privateAccount?.verified ?: false
-                    is NetworkResult.Failure -> emailVerified = false
+                val verified =
+                    when (val result = identity.overview()) {
+                        is NetworkResult.Success -> result.data.privateAccount?.verified
+                        is NetworkResult.Failure -> null
+                    }
+                if (verified == null) {
+                    _state.value = GroupedListUiState.Error("Couldn't load verification status. Please try again.")
+                    return@launch
                 }
+                emailVerified = verified
                 rebuild()
             }
         }
 
         fun onRow(rowId: String) {
-            if (rowId != "email.resend") return
+            if (rowId != "email.resend" || emailVerified || _state.value !is GroupedListUiState.Loaded) return
             val email = emailAddress ?: return
             if (isSendingVerification) return
             isSendingVerification = true

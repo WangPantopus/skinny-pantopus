@@ -5,9 +5,11 @@ package app.pantopus.android.ui.screens.homes.documents
 import androidx.lifecycle.SavedStateHandle
 import app.pantopus.android.data.api.models.homes.CreateDocumentResponse
 import app.pantopus.android.data.api.models.homes.GetHomeDocumentsResponse
+import app.pantopus.android.data.api.models.homes.HomeAccessDto
 import app.pantopus.android.data.api.models.homes.HomeDocumentDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.homes.HomeAdminRepository
 import app.pantopus.android.data.homes.HomesRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -33,6 +35,7 @@ import java.util.UUID
 @OptIn(ExperimentalCoroutinesApi::class)
 class DocumentReplacementTest {
     private val repo: HomesRepository = mockk()
+    private val adminRepo: HomeAdminRepository = mockk()
     private val original =
         HomeDocumentDto(
             id = "doc-1", homeId = "home-1", fileId = "doc-1", docType = "receipt", title = "Original title",
@@ -44,6 +47,8 @@ class DocumentReplacementTest {
 
     @Before fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        coEvery { adminRepo.myAccess("home-1") } returns
+            NetworkResult.Success(HomeAccessDto(hasAccess = true, permissions = listOf("docs.upload", "docs.manage")))
         allow(original)
     }
 
@@ -51,7 +56,7 @@ class DocumentReplacementTest {
         Dispatchers.resetMain()
     }
 
-    private fun vm() = DocumentDetailViewModel(repo, SavedStateHandle(mapOf("homeId" to "home-1", "documentId" to "doc-1")))
+    private fun vm() = DocumentDetailViewModel(repo, adminRepo, SavedStateHandle(mapOf("homeId" to "home-1", "documentId" to "doc-1")))
 
     private fun allow(document: HomeDocumentDto) {
         coEvery { repo.getHomeDocuments("home-1") } returns NetworkResult.Success(GetHomeDocumentsResponse(listOf(document)))

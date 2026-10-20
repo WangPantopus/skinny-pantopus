@@ -628,7 +628,7 @@ internal object RadonToday {
                     "The EPA recommends testing every home. " +
                         "Short-term test kits are sold at hardware stores and online. https://www.epa.gov/radon"
                 },
-            dueAt = dueAt(if (tested && !hasDate) LocalDate.now() else date),
+            dueAt = if (tested && !hasDate) null else dueAt(date),
             status = if (tested) "done" else null,
             details = details,
             visibility = "members",
@@ -644,8 +644,8 @@ internal object RadonToday {
         }
         val tested = task.details?.get("tested_on") as? String
         val prefix = if (tested != null || task.title == "Radon test") "Radon tested" else "Radon test done"
-        val value = if (prefix == "Radon tested") tested ?: task.dueAt else task.completedAt
-        val text = label(value)?.let { "$prefix $it" } ?: prefix
+        val value = if (prefix == "Radon tested") tested else task.completedAt
+        val text = label(value)?.let { "$prefix $it" } ?: if (prefix == "Radon tested") "$prefix · date not recorded" else prefix
         val result = (task.details?.get("result_pci") as? Number)?.toDouble()?.takeIf { it.isFinite() && it >= 0 }
         return if (prefix == "Radon tested" && result != null) "$text · $result pCi/L" else text
     }

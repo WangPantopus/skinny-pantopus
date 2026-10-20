@@ -8,6 +8,7 @@
 
 package app.pantopus.android.ui.screens.businesses.catalog
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -91,58 +92,75 @@ fun BusinessCatalogScreen(
     var showsCategories by remember { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<BusinessCatalogItemRow?>(null) }
 
+    BackHandler {
+        when {
+            isMutating -> Unit
+            editorTarget != null -> editorTarget = null
+            showsCategories -> showsCategories = false
+            else -> onBack()
+        }
+    }
+
     LaunchedEffect(Unit) { viewModel.load() }
     LaunchedEffect(toast) {
-        if (toast != null) {
+        if (toast?.kind == BusinessCatalogToastKind.Success) {
             delay(2_000)
             viewModel.dismissToast()
         }
     }
 
     val target = editorTarget
-    when {
-        target != null ->
-            BusinessCatalogItemEditor(
-                initialDraft =
-                    when (target) {
-                        CatalogEditorTarget.Create -> BusinessCatalogItemDraft()
-                        is CatalogEditorTarget.Edit -> BusinessCatalogItemDraft.from(target.row)
+    Box(Modifier.fillMaxSize()) {
+        when {
+            target != null ->
+                BusinessCatalogItemEditor(
+                    initialDraft =
+                        when (target) {
+                            CatalogEditorTarget.Create -> BusinessCatalogItemDraft()
+                            is CatalogEditorTarget.Edit -> BusinessCatalogItemDraft.from(target.row)
+                        },
+                    isEditing = target is CatalogEditorTarget.Edit,
+                    categories = state.categoryRows,
+                    isSaving = isMutating,
+                    onClose = { editorTarget = null },
+                    onSave = { draft ->
+                        when (target) {
+                            CatalogEditorTarget.Create ->
+                                viewModel.createItem(draft) { ok -> if (ok) editorTarget = null }
+                            is CatalogEditorTarget.Edit ->
+                                viewModel.updateItem(target.row.id, draft) { ok -> if (ok) editorTarget = null }
+                        }
                     },
-                isEditing = target is CatalogEditorTarget.Edit,
-                categories = state.categoryRows,
-                isSaving = isMutating,
-                onClose = { editorTarget = null },
-                onSave = { draft ->
-                    when (target) {
-                        CatalogEditorTarget.Create ->
-                            viewModel.createItem(draft) { ok -> if (ok) editorTarget = null }
-                        is CatalogEditorTarget.Edit ->
-                            viewModel.updateItem(target.row.id, draft) { ok -> if (ok) editorTarget = null }
-                    }
-                },
+                )
+            showsCategories ->
+                BusinessCatalogCategoriesPanel(
+                    categories = state.categoryRows,
+                    isSaving = isMutating,
+                    onClose = { showsCategories = false },
+                    onCreate = { name, done -> viewModel.createCategory(name, done) },
+                    onRename = viewModel::renameCategory,
+                    onDelete = { id -> viewModel.deleteCategory(id) },
+                    errorMessage = toast?.takeIf { it.kind == BusinessCatalogToastKind.Error }?.text,
+                )
+            else ->
+                CatalogListFrame(
+                    state = state,
+                    isMutating = isMutating,
+                    onBack = onBack,
+                    onOpenCategories = { showsCategories = true },
+                    onAddItem = { editorTarget = CatalogEditorTarget.Create },
+                    onEditItem = { row -> editorTarget = CatalogEditorTarget.Edit(row) },
+                    onMove = viewModel::move,
+                    onRequestDelete = { row -> pendingDelete = row },
+                    onRetry = viewModel::refresh,
+                )
+        }
+        toast?.let {
+            CatalogToast(
+                toast = it,
+                modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 88.dp),
             )
-        showsCategories ->
-            BusinessCatalogCategoriesPanel(
-                categories = state.categoryRows,
-                isSaving = isMutating,
-                onClose = { showsCategories = false },
-                onCreate = { name, done -> viewModel.createCategory(name, done) },
-                onRename = { id, name -> viewModel.renameCategory(id, name) },
-                onDelete = { id -> viewModel.deleteCategory(id) },
-            )
-        else ->
-            CatalogListFrame(
-                state = state,
-                isMutating = isMutating,
-                toast = toast,
-                onBack = onBack,
-                onOpenCategories = { showsCategories = true },
-                onAddItem = { editorTarget = CatalogEditorTarget.Create },
-                onEditItem = { row -> editorTarget = CatalogEditorTarget.Edit(row) },
-                onMove = viewModel::move,
-                onRequestDelete = { row -> pendingDelete = row },
-                onRetry = viewModel::refresh,
-            )
+        }
     }
 
     pendingDelete?.let { row ->
@@ -172,7 +190,6 @@ fun BusinessCatalogScreen(
 private fun CatalogListFrame(
     state: BusinessCatalogUiState,
     isMutating: Boolean,
-    toast: BusinessCatalogToast?,
     onBack: () -> Unit,
     onOpenCategories: () -> Unit,
     onAddItem: () -> Unit,
@@ -242,16 +259,6 @@ private fun CatalogListFrame(
             onAddItem = onAddItem,
             modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding(),
         )
-        toast?.let {
-            CatalogToast(
-                toast = it,
-                modifier =
-                    Modifier
-                        .align(Alignment.BottomCenter)
-                        .navigationBarsPadding()
-                        .padding(bottom = 88.dp),
-            )
-        }
     }
 }
 

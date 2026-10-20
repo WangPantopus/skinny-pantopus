@@ -98,8 +98,8 @@ fun TransferOwnershipScreen(
 
     LaunchedEffect(state.shouldDismiss) {
         if (state.shouldDismiss) {
-            viewModel.acknowledgeDismiss()
             delay(700)
+            viewModel.acknowledgeDismiss()
             onBack()
         }
     }
@@ -682,9 +682,8 @@ private fun ConfirmOverlay(
                 recipientName = state.recipientEmail,
                 homeAddress = state.homeAddress,
                 coOwnerNames = state.coOwnerNames,
-                timestamp = state.confirmationTimestamp,
                 biometryLabel = state.biometryLabel,
-                isAuthenticating = state.sheetPhase == ConfirmSheetPhase.Authenticating,
+                isAuthenticating = state.sheetPhase == ConfirmSheetPhase.Authenticating || state.sheetPhase == ConfirmSheetPhase.Dismissing,
                 onCancel = onCancel,
                 onConfirm = onConfirm,
             )

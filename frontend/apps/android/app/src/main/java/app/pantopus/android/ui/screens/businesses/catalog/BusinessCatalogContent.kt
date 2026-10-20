@@ -120,7 +120,34 @@ data class BusinessCatalogItemDraft(
     val isDraft: Boolean = false,
     val categoryId: String? = null,
 ) {
-    val isValid: Boolean get() = name.trim().isNotEmpty()
+    val priceError: String?
+        get() = if (kind == BusinessCatalogKind.Donation) null else wholeNumberError(priceCents)
+
+    val maxPriceError: String?
+        get() {
+            if (kind == BusinessCatalogKind.Donation) return null
+            wholeNumberError(priceMaxCents)?.let { return it }
+            val price = priceCents.trim().toIntOrNull()
+            val maximum = priceMaxCents.trim().toIntOrNull()
+            return if (price != null && maximum != null && maximum < price) "Max price must be at least the price." else null
+        }
+
+    val durationError: String?
+        get() = if (kind == BusinessCatalogKind.Donation) null else wholeNumberError(durationMinutes)
+
+    val validationError: String?
+        get() = if (name.isBlank()) "Name is required" else priceError ?: maxPriceError ?: durationError
+
+    val isValid: Boolean get() = validationError == null
+
+    private fun wholeNumberError(value: String): String? {
+        if (value.isBlank()) return null
+        return if (value.trim().toIntOrNull()?.let { it >= 0 } == true) {
+            null
+        } else {
+            "Enter a whole number from 0 to 2147483647, or leave blank."
+        }
+    }
 
     /**
      * Donation items reject a fixed price server-side

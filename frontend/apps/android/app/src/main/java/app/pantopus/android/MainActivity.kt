@@ -10,8 +10,12 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
@@ -119,7 +123,10 @@ class MainActivity : FragmentActivity() {
         if (savedInstanceState == null) forwardDeepLink(intent)
         setContent {
             PantopusTheme {
-                Box(modifier = Modifier.fillMaxSize()) {
+                // A camera cutout can be taller than the status bar (and move to
+                // the side in landscape). Consume it here so every screen stays
+                // clear of it without adding its own system-bar padding twice.
+                Box(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.displayCutout).clipToBounds()) {
                     PantopusNavHost()
                     ToastHost(controller = toastController)
                 }

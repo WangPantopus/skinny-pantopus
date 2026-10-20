@@ -43,6 +43,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.analytics.Analytics
@@ -62,7 +63,7 @@ import coil.compose.AsyncImage
  * A08 — "My businesses". Bespoke avatar-first row list tinted with the
  * Business identity violet. Renders the enriched
  * `GET /api/businesses/my-businesses` projection (stats / team /
- * verification) as A08 cards, with a violet building FAB and a proof-led
+ * verification) as A08 cards, with a violet building FAB and setup guidance in the
  * empty state. Mirrors the iOS `MyBusinessesView`. The "Primary" badge
  * from the design is omitted (no primary-business concept in the backend).
  */
@@ -77,8 +78,12 @@ fun MyBusinessesScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) {
         viewModel.configureNavigation(onOpenBusiness = onOpenBusiness, onRegister = onRegister, onClaim = onClaim)
-        viewModel.load()
         Analytics.track(AnalyticsEvent.ScreenMyBusinessesViewed)
+    }
+
+    LifecycleResumeEffect(Unit) {
+        viewModel.refresh()
+        onPauseOrDispose { }
     }
 
     Scaffold(
@@ -299,7 +304,7 @@ private fun BusinessLogoTile(card: BusinessCard) {
             ) {
                 PantopusIconImage(
                     icon = if (card.verified) PantopusIcon.Check else PantopusIcon.Hourglass,
-                    contentDescription = if (card.verified) "Verified" else "Verification pending",
+                    contentDescription = if (card.verified) "Verified" else "Not verified",
                     size = 11.dp,
                     strokeWidth = 3f,
                     tint = if (card.verified) PantopusColors.appTextInverse else PantopusColors.warning,
@@ -409,8 +414,8 @@ private fun PendingStrip(onResume: () -> Unit) {
     ) {
         PantopusIconImage(PantopusIcon.Hourglass, null, size = 14.dp, tint = PantopusColors.warning)
         Column(modifier = Modifier.weight(1f)) {
-            Text("Verification pending", fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = PantopusColors.warning)
-            Text("Earn the violet verified mark", fontSize = 10.5.sp, color = PantopusColors.warning.copy(alpha = 0.85f))
+            Text("Not verified", fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = PantopusColors.warning)
+            Text("View your business details", fontSize = 10.5.sp, color = PantopusColors.warning.copy(alpha = 0.85f))
         }
         Row(
             modifier =
@@ -422,7 +427,7 @@ private fun PendingStrip(onResume: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
         ) {
-            Text("Verify", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.warning)
+            Text("Manage", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.warning)
             PantopusIconImage(PantopusIcon.ArrowRight, null, size = 11.dp, tint = PantopusColors.warning)
         }
     }
@@ -451,11 +456,11 @@ private fun MyBusinessesEmpty(
     onCreate: () -> Unit,
     onClaim: () -> Unit,
 ) {
-    val proofs =
+    val setupSteps =
         listOf(
-            Triple(PantopusIcon.IdCard, "EIN / Tax ID", "IRS-issued · verified within 1 business day"),
-            Triple(PantopusIcon.FileText, "State registration certificate", "Upload Articles of Incorporation or DBA"),
-            Triple(PantopusIcon.CreditCard, "Linked payment processor", "Stripe, Square, or Toast · instant"),
+            Triple(PantopusIcon.IdCard, "Business details", "Choose a category, name, and username"),
+            Triple(PantopusIcon.FileText, "Location and hours", "Add optional details or set them up later"),
+            Triple(PantopusIcon.Check, "Review your page", "Publish when ready or save a draft"),
         )
     Column(
         modifier =
@@ -483,21 +488,21 @@ private fun MyBusinessesEmpty(
             }
         }
         Text(
-            "Create your first verified business page",
+            "Create your first business page",
             style = PantopusTextStyle.h3,
             color = PantopusColors.appText,
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth(),
         )
         Text(
-            "Reach repeat clients who know you, take quotes inside Pantopus, and earn the violet verified mark. Pick a proof to start.",
+            "Set up your business page so neighbors can learn about your services. Creating a page does not verify the business.",
             fontSize = 13.sp,
             color = PantopusColors.appTextSecondary,
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth(),
         )
         Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Spacing.s1)) {
-            proofs.forEach { (icon, title, sub) -> ProofRow(icon, title, sub, onCreate) }
+            setupSteps.forEach { (icon, title, sub) -> SetupRow(icon, title, sub, onCreate) }
         }
         // Gradient CTA.
         Row(
@@ -529,7 +534,7 @@ private fun MyBusinessesEmpty(
 }
 
 @Composable
-private fun ProofRow(
+private fun SetupRow(
     icon: PantopusIcon,
     title: String,
     sub: String,

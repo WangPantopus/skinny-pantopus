@@ -335,11 +335,11 @@ internal object EditBusinessPageMapper {
         }
         return EditBusinessPageHoursState.Rows(
             rows = rows,
-            footerHint = "Holiday hours can be added per date — neighbors see a banner.",
+            footerHint = "Tap a day to edit its hours. Save to apply your changes.",
         )
     }
 
-    private fun mapServices(catalog: List<BusinessCatalogItemDto>): EditBusinessPageServicesState {
+    fun mapServices(catalog: List<BusinessCatalogItemDto>): EditBusinessPageServicesState {
         val chips =
             catalog.take(12).map { item ->
                 EditBusinessPageServiceChip(
@@ -353,7 +353,7 @@ internal object EditBusinessPageMapper {
                 EditBusinessPagePrompt(
                     iconKey = "sparkles",
                     title = "Add at least one service",
-                    subtitle = "Required to appear in category search results.",
+                    subtitle = "Show neighbors what this business offers.",
                     ctaLabel = "Add",
                 ),
             )
@@ -371,7 +371,7 @@ internal object EditBusinessPageMapper {
         val hasHours =
             when (val hours = content.hours) {
                 is EditBusinessPageHoursState.Rows ->
-                    hours.rows.any { it.state is EditBusinessPageHoursRow.State.Open }
+                    hours.rows.any { it.state !is EditBusinessPageHoursRow.State.NotSet }
                 is EditBusinessPageHoursState.QuickApply -> false
             }
         val services = content.services

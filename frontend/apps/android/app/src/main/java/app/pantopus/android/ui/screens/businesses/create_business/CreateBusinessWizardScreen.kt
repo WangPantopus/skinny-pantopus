@@ -35,21 +35,7 @@ fun CreateBusinessWizardScreen(
     viewModel: CreateBusinessWizardViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val pendingEvent by viewModel.pendingEvent.collectAsStateWithLifecycle()
-
-    LaunchedEffect(pendingEvent) {
-        when (val event = pendingEvent) {
-            CreateBusinessOutboundEvent.Dismiss -> {
-                viewModel.acknowledgeEvent()
-                onDismiss()
-            }
-            is CreateBusinessOutboundEvent.OpenBusinessDashboard -> {
-                viewModel.acknowledgeEvent()
-                onOpenBusiness(event.businessId)
-            }
-            null -> Unit
-        }
-    }
+    BusinessCreationNavigation(viewModel, onDismiss, onOpenBusiness)
 
     LaunchedEffect(Unit) {
         Analytics.track(
@@ -105,6 +91,7 @@ fun CreateBusinessWizardScreen(
                             onSkipHours = viewModel::skipHours,
                             onUnskipHours = viewModel::unskipHours,
                             onToggleDayClosed = viewModel::toggleDayClosed,
+                            onHoursDayChange = viewModel::setHoursDay,
                             onLogoPicked = viewModel::setLogoPick,
                             onClearLogo = viewModel::clearLogoPick,
                             onSkipLogo = viewModel::skipLogo,
@@ -112,6 +99,28 @@ fun CreateBusinessWizardScreen(
                         ),
                 )
             CreateBusinessStep.Confirm -> ConfirmStep(state = state)
+        }
+    }
+}
+
+@Composable
+private fun BusinessCreationNavigation(
+    viewModel: CreateBusinessWizardViewModel,
+    onDismiss: () -> Unit,
+    onOpenBusiness: (String) -> Unit,
+) {
+    val pendingEvent by viewModel.pendingEvent.collectAsStateWithLifecycle()
+    LaunchedEffect(pendingEvent) {
+        when (val event = pendingEvent) {
+            CreateBusinessOutboundEvent.Dismiss -> {
+                viewModel.acknowledgeEvent()
+                onDismiss()
+            }
+            is CreateBusinessOutboundEvent.OpenBusinessDashboard -> {
+                viewModel.acknowledgeEvent()
+                onOpenBusiness(event.businessId)
+            }
+            null -> Unit
         }
     }
 }

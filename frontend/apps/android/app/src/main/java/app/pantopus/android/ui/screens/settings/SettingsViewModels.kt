@@ -675,7 +675,7 @@ class PrivacySettingsViewModel
         private fun loadOrganizedLiveTrainCount() {
             _organizedLiveTrainCount.value = 0
             viewModelScope.launch {
-                val result = supportTrains.mine(role = "organizer", limit = 50)
+                val result = supportTrains.mineAll(role = "organizer")
                 if (result is NetworkResult.Success) {
                     _organizedLiveTrainCount.value =
                         result.data.supportTrains.count { it.myRole == "organizer" && it.status in LIVE_TRAIN_STATUSES }

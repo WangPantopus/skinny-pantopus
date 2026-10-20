@@ -204,7 +204,11 @@ fun ChatConversationScreen(
     val linkPreviews by viewModel.linkPreviews.collectAsStateWithLifecycle()
     val isAiStreaming by viewModel.isAiStreaming.collectAsStateWithLifecycle()
     // Nearby Plans (A4): a plan room shows its plan under the header and closes after the plan.
-    val planChat = rememberPlanChat((args.mode as? ChatThreadMode.Room)?.id)
+    val planChat =
+        rememberPlanChat(
+            (args.mode as? ChatThreadMode.Room)?.id,
+            (state as? ChatConversationUiState.Loaded)?.rows?.filterIsInstance<ChatTimelineRow.SystemNote>()?.lastOrNull()?.id,
+        )
     val gigContext by viewModel.gigContext.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -621,6 +625,7 @@ fun ChatConversationScreen(
             ) {
                 MessageActionSheet(
                     content = target,
+                    canManageMessages = (args.mode as? ChatThreadMode.Room)?.asBusinessUserId == null,
                     onCopy = { actionTarget = null },
                     onReply = {
                         viewModel.beginReply(target.id)
@@ -867,7 +872,7 @@ private fun incomingInitialsFor(
     } else {
         when (counterparty) {
             is ChatCounterparty.Person -> counterparty.initials
-            is ChatCounterparty.Group -> counterparty.displayName.initials()
+            is ChatCounterparty.Group -> null
             is ChatCounterparty.Ai -> null
         }
     }
@@ -2659,7 +2664,7 @@ internal fun PopulatedFrame(
                     is ChatTimelineRow.Bubble ->
                         BubbleRow(
                             content = row.content,
-                            incomingInitials = incomingInitials,
+                            incomingInitials = row.content.senderName?.initials() ?: incomingInitials,
                             onLockedAction = onLockedAction,
                             onLongPress = { onBubbleLongPress(row.content) },
                             isSelected = selectedMessageIds.contains(row.content.id),
@@ -2897,6 +2902,11 @@ private fun BubbleRow(
             Spacer(modifier = Modifier.size(6.dp))
         }
         Column(horizontalAlignment = if (isOut) Alignment.End else Alignment.Start) {
+            if (!isOut && !content.isContinuation) {
+                content.senderName?.let { name ->
+                    Text(text = name, fontSize = 12.sp, color = PantopusColors.appTextSecondary)
+                }
+            }
             // Reactions float as pills overlapping the bubble's bottom
             // corner (design `.reaction { bottom: -10; left/right: 8 }`).
             Box {
@@ -3539,6 +3549,7 @@ private val ChatBubbleBody.copyableText: String?
 @Composable
 private fun MessageActionSheet(
     content: ChatBubbleContent,
+    canManageMessages: Boolean,
     // Invoked after the text has landed on the clipboard — dismisses the sheet.
     onCopy: () -> Unit,
     onReply: () -> Unit,
@@ -3583,10 +3594,8 @@ private fun MessageActionSheet(
         // for rows with no server id: in-flight optimistic sends
         // (`client_`) and AI-thread local rows (`ai_user_` /
         // `ai_assistant_`), whose edits/deletes can only ever 404.
-        if (content.side == ChatMessageSide.Outgoing &&
-            !content.id.startsWith("client_") &&
-            !content.id.startsWith("ai_")
-        ) {
+        val isPersistedMessage = !content.id.startsWith("client_") && !content.id.startsWith("ai_")
+        if (canManageMessages && content.side == ChatMessageSide.Outgoing && isPersistedMessage) {
             MessageActionRow(label = "Select", icon = PantopusIcon.CheckCircle, onClick = onSelect)
             MessageActionRow(label = "Edit", icon = PantopusIcon.Pencil, onClick = onEdit)
             MessageActionRow(label = "Delete", icon = PantopusIcon.Trash2, destructive = true, onClick = onDelete)

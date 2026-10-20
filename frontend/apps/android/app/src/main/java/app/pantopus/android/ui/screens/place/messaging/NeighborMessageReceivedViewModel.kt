@@ -88,7 +88,8 @@ class NeighborMessageReceivedViewModel
         }
 
         fun reply(replyTemplateId: String) {
-            if (_replying.value) return
+            if (_replying.value || _flags.value.busy) return
+            _flags.value = _flags.value.copy(error = null)
             _replying.value = true
             viewModelScope.launch {
                 when (val r = repo.replyToNeighborMessage(messageId, replyTemplateId)) {
@@ -96,7 +97,8 @@ class NeighborMessageReceivedViewModel
                         _editingReply.value = false
                         _state.value = NeighborReceivedUiState.Loaded(r.data)
                     }
-                    is NetworkResult.Failure -> Unit // stay on the quick-reply bar
+                    is NetworkResult.Failure ->
+                        _flags.value = _flags.value.copy(error = "Your reply wasn't confirmed. Please try again.")
                 }
                 _replying.value = false
             }
@@ -108,25 +110,48 @@ class NeighborMessageReceivedViewModel
 
         fun markNotHelpful() {
             if (_flags.value.notHelpful) return
-            viewModelScope.launch {
-                repo.markNeighborMessageNotHelpful(messageId)
-                _flags.value = _flags.value.copy(notHelpful = true)
-            }
+            manage(
+                "Your feedback wasn't confirmed. Please try again.",
+                { repo.markNeighborMessageNotHelpful(messageId) },
+                { it.copy(notHelpful = true) },
+            )
         }
 
         fun block() {
             if (_flags.value.blocked) return
-            viewModelScope.launch {
-                repo.blockNeighborMessageSender(messageId)
-                _flags.value = _flags.value.copy(blocked = true)
-            }
+            manage(
+                "Blocking this neighbor wasn't confirmed. Please try again.",
+                { repo.blockNeighborMessageSender(messageId) },
+                { it.copy(blocked = true) },
+            )
         }
 
         fun report() {
             if (_flags.value.reported) return
+            manage(
+                "Your report wasn't confirmed. Please try again.",
+                { repo.reportNeighborMessage(messageId, null) },
+                { it.copy(reported = true) },
+            )
+        }
+
+        private fun manage(
+            errorMessage: String,
+            request: suspend () -> NetworkResult<*>,
+            confirmed: (NeighborManageFlags) -> NeighborManageFlags,
+        ) {
+            if (_flags.value.busy || _replying.value) return
+            _flags.value = _flags.value.copy(busy = true, error = null)
             viewModelScope.launch {
-                repo.reportNeighborMessage(messageId, null)
-                _flags.value = _flags.value.copy(reported = true)
+                try {
+                    _flags.value =
+                        when (request()) {
+                            is NetworkResult.Success -> confirmed(_flags.value)
+                            is NetworkResult.Failure -> _flags.value.copy(error = errorMessage)
+                        }
+                } finally {
+                    _flags.value = _flags.value.copy(busy = false)
+                }
             }
         }
     }

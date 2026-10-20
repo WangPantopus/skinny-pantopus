@@ -18,6 +18,7 @@ import app.pantopus.android.ui.screens.shared.form.FormAggregate
 import app.pantopus.android.ui.screens.shared.form.FormFieldState
 import app.pantopus.android.ui.screens.shared.form.FormValidator
 import app.pantopus.android.ui.screens.shared.form.all
+import app.pantopus.android.ui.screens.shared.form.isoDateOrEmpty
 import app.pantopus.android.ui.screens.shared.form.maxLength
 import app.pantopus.android.ui.screens.shared.form.required
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -735,6 +736,7 @@ class AddHouseholdTaskFormViewModel
 
         private fun validator(field: AddHouseholdTaskField): FormValidator =
             when (field) {
+                AddHouseholdTaskField.DueAt -> FormValidator.isoDateOrEmpty()
                 AddHouseholdTaskField.Title ->
                     FormValidator.all(listOf(FormValidator.required("Title"), FormValidator.maxLength(80)))
                 AddHouseholdTaskField.Recurrence ->

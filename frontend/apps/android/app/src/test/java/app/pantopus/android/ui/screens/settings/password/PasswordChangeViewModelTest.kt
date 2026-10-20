@@ -113,7 +113,7 @@ class PasswordChangeViewModelTest {
             assertTrue(vm.strength.breached)
             assertFalse(vm.isValid)
             assertEquals(
-                "Too common — appeared in 2.3M public records.",
+                "Too common. Choose a less predictable password.",
                 vm.fields.value[PasswordChangeViewModel.FieldKey.New]?.error,
             )
         }

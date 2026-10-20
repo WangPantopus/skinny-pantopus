@@ -50,6 +50,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.BizStatusBadge
 import app.pantopus.android.ui.components.EmptyState
@@ -122,7 +123,10 @@ fun BusinessOwnerScreen(
     val toast by viewModel.toast.collectAsStateWithLifecycle()
     var mode by remember { mutableStateOf(OwnerViewMode.Owner) }
 
-    LaunchedEffect(Unit) { viewModel.load() }
+    LifecycleResumeEffect(Unit) {
+        viewModel.refresh()
+        onPauseOrDispose { }
+    }
 
     Box(
         modifier =
@@ -281,6 +285,8 @@ internal fun OwnerEditFrame(
                     handle = profile.header.handle?.let { "@$it" } ?: "",
                     locality = profile.header.locality ?: "",
                     logoIcon = profile.header.logoIcon,
+                    logoUrl = profile.header.logoUrl,
+                    bannerUrl = profile.header.bannerUrl,
                     status = bannerStatus(profile.status),
                     onEdit = onEditPage,
                     isVerified = content.isVerified,
@@ -644,7 +650,7 @@ private fun ManageServiceRow(
     service: BusinessServiceRow,
     onClick: () -> Unit,
 ) {
-    val subtitle = listOfNotNull(service.detail, service.priceLabel).joinToString(" · ")
+    val subtitle = listOfNotNull(service.detail, service.priceLabel).filter(String::isNotBlank).joinToString(" · ")
     Row(
         modifier =
             Modifier

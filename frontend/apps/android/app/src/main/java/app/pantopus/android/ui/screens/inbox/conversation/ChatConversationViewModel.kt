@@ -214,6 +214,10 @@ class ChatConversationViewModel
         private var mode: ChatThreadMode = ChatThreadMode.Ai
         private var initialTopic: ChatInitialTopic? = null
         private var currentUserId: String = ""
+        private val asBusinessUserId: String?
+            get() = (mode as? ChatThreadMode.Room)?.asBusinessUserId
+        private val messageIdentityId: String
+            get() = asBusinessUserId ?: currentUserId
         private var gigId: String? = null
         private var scrollToMessageId: String? = null
         private var didResolveScrollTarget = false
@@ -850,7 +854,7 @@ class ChatConversationViewModel
             ChatMessageDto(
                 id = "client_$clientId",
                 roomId = roomId,
-                userId = currentUserId,
+                userId = messageIdentityId,
                 messageText = text,
                 messageType = messageType,
                 metadata = metadata,
@@ -858,7 +862,7 @@ class ChatConversationViewModel
                 createdAt = Instant.now().toString(),
                 sender =
                     ChatMessageSender(
-                        id = currentUserId,
+                        id = messageIdentityId,
                         username = null,
                         name = null,
                         profilePictureUrl = null,
@@ -995,6 +999,7 @@ class ChatConversationViewModel
                         replyToId = sanitizedReplyToId(context.replyToId, roomId),
                         topicId = context.topicId,
                         metadata = context.metadata,
+                        asBusinessUserId = asBusinessUserId,
                     ),
                 )
             return when (result) {
@@ -1249,7 +1254,7 @@ class ChatConversationViewModel
             _replyingTo.value =
                 ChatReplyPreview(
                     messageId = message.id,
-                    senderName = message.sender?.name ?: if (message.userId == currentUserId) "You" else "Message",
+                    senderName = message.sender?.displayLabel ?: if (message.userId == currentUserId) "You" else "Message",
                     text = message.resolvedText,
                 )
             _editingMessageId.value = null
@@ -1479,7 +1484,7 @@ class ChatConversationViewModel
                 viewModelScope.launch {
                     delay(600)
                     when (val target = mode) {
-                        is ChatThreadMode.Room -> repo.markRoomRead(target.id)
+                        is ChatThreadMode.Room -> repo.markRoomRead(target.id, target.asBusinessUserId)
                         is ChatThreadMode.Person -> repo.markConversationRead(target.otherUserId)
                         ChatThreadMode.Ai -> Unit
                     }
@@ -1573,7 +1578,13 @@ class ChatConversationViewModel
                 }
                 val response =
                     when (val target = context.mode) {
-                        is ChatThreadMode.Room -> repo.roomMessages(target.id, before, force = force)
+                        is ChatThreadMode.Room ->
+                            repo.roomMessages(
+                                target.id,
+                                before,
+                                force = force,
+                                asBusinessUserId = target.asBusinessUserId,
+                            )
                         is ChatThreadMode.Person ->
                             repo.conversationMessages(target.otherUserId, before, topicId = context.topicId, force = force)
                         ChatThreadMode.Ai -> return@launch
@@ -1591,7 +1602,7 @@ class ChatConversationViewModel
             historyCopyContext = context
             updateHistoryCopy =
                 when (val target = context.mode) {
-                    is ChatThreadMode.Room -> repo.roomHistoryUpdater(target.id)
+                    is ChatThreadMode.Room -> repo.roomHistoryUpdater(target.id, target.asBusinessUserId)
                     is ChatThreadMode.Person -> repo.conversationHistoryUpdater(target.otherUserId, context.topicId)
                     ChatThreadMode.Ai -> null
                 }
@@ -1651,7 +1662,7 @@ class ChatConversationViewModel
         private fun showHistoryCopy(): Boolean {
             val copy =
                 when (val target = mode) {
-                    is ChatThreadMode.Room -> repo.roomMessagesCopy(target.id)
+                    is ChatThreadMode.Room -> repo.roomMessagesCopy(target.id, target.asBusinessUserId)
                     is ChatThreadMode.Person -> repo.conversationMessagesCopy(target.otherUserId, _selectedTopicId.value)
                     ChatThreadMode.Ai -> null
                 } ?: return false
@@ -2009,7 +2020,8 @@ class ChatConversationViewModel
                     do {
                         val result =
                             when (target) {
-                                is ChatThreadMode.Room -> repo.roomMessages(target.id, before = before, after = after)
+                                is ChatThreadMode.Room ->
+                                    repo.roomMessages(target.id, before = before, after = after, asBusinessUserId = target.asBusinessUserId)
                                 is ChatThreadMode.Person ->
                                     repo.conversationMessages(target.otherUserId, before = before, after = after, topicId = topic)
                                 ChatThreadMode.Ai -> return@launch
@@ -2349,15 +2361,9 @@ class ChatConversationViewModel
                     rows.add(ChatTimelineRow.SystemNote(message.id, message.resolvedText))
                     return@forEachIndexed
                 }
-                val side = if (message.userId == currentUserId) ChatMessageSide.Outgoing else ChatMessageSide.Incoming
-                val previousSameSide =
-                    index > 0 &&
-                        combined[index - 1].userId == message.userId &&
-                        dayKey(combined[index - 1].createdAt) == dayKey
-                val nextSameSide =
-                    index + 1 < combined.size &&
-                        combined[index + 1].userId == message.userId &&
-                        dayKey(combined[index + 1].createdAt) == dayKey
+                val side = if (message.userId == messageIdentityId) ChatMessageSide.Outgoing else ChatMessageSide.Incoming
+                val previousSameSide = sharesBubbleGroup(message, combined.getOrNull(index - 1))
+                val nextSameSide = sharesBubbleGroup(message, combined.getOrNull(index + 1))
                 val hasTail = !nextSameSide
                 val deliveryState =
                     if (side != ChatMessageSide.Outgoing) {
@@ -2409,6 +2415,12 @@ class ChatConversationViewModel
                             lockedTier = lockedTierOf(message),
                             sentSupportTier = sentSupportTierOf(message),
                             isContinuation = previousSameSide,
+                            senderName =
+                                if (mode is ChatThreadMode.Room && side == ChatMessageSide.Incoming) {
+                                    message.sender?.displayLabel?.takeIf { it.isNotBlank() } ?: "Participant"
+                                } else {
+                                    null
+                                },
                         ),
                     ),
                 )
@@ -2548,7 +2560,7 @@ class ChatConversationViewModel
             val original = allMessages.firstOrNull { it.id == replyToId } ?: return null
             return ChatReplyPreview(
                 messageId = original.id,
-                senderName = original.sender?.name ?: "Message",
+                senderName = original.sender?.displayLabel ?: "Message",
                 text = original.resolvedText,
             )
         }
@@ -2597,14 +2609,14 @@ class ChatConversationViewModel
             ChatMessageDto(
                 id = "client_$clientId",
                 roomId = roomId,
-                userId = currentUserId,
+                userId = messageIdentityId,
                 messageText = text,
                 messageType = "text",
                 clientMessageId = clientId,
                 createdAt = Instant.now().toString(),
                 sender =
                     ChatMessageSender(
-                        id = currentUserId,
+                        id = messageIdentityId,
                         username = null,
                         name = null,
                         profilePictureUrl = null,
@@ -2690,6 +2702,14 @@ class ChatConversationViewModel
                 }
             }.getOrDefault(iso)
 
+        /** System notices break message groups even when they carry the same actor id. */
+        private fun sharesBubbleGroup(
+            message: ChatMessageDto,
+            neighbor: ChatMessageDto?,
+        ): Boolean =
+            neighbor != null && neighbor.resolvedType !in setOf("system", "broadcast_reference") &&
+                neighbor.userId == message.userId && dayKey(neighbor.createdAt) == dayKey(message.createdAt)
+
         private fun stampLabel(message: ChatMessageDto): String? =
             runCatching {
                 val time =
@@ -2700,7 +2720,7 @@ class ChatConversationViewModel
                 if (message.userId == currentUserId) {
                     time
                 } else {
-                    val sender = message.sender?.name?.takeIf { it.isNotEmpty() }
+                    val sender = message.sender?.displayLabel?.takeIf { it.isNotEmpty() }
                     sender?.let { "$it · $time" } ?: time
                 }
             }.getOrNull()

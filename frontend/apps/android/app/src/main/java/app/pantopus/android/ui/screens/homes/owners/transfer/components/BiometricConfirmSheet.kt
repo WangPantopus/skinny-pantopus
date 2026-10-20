@@ -65,7 +65,6 @@ fun BiometricConfirmSheet(
     recipientName: String,
     homeAddress: String,
     coOwnerNames: String,
-    timestamp: String,
     biometryLabel: String,
     isAuthenticating: Boolean,
     onCancel: () -> Unit,
@@ -98,7 +97,6 @@ fun BiometricConfirmSheet(
             recipientName = recipientName,
             homeAddress = homeAddress,
             coOwnerNames = coOwnerNames,
-            timestamp = timestamp,
             modifier = Modifier.padding(horizontal = Spacing.s4),
         )
         Spacer(modifier = Modifier.heightIn(min = Spacing.s3 + 2.dp))
@@ -259,7 +257,6 @@ private fun LegalBlock(
     recipientName: String,
     homeAddress: String,
     coOwnerNames: String,
-    timestamp: String,
     modifier: Modifier = Modifier,
 ) {
     val text =
@@ -270,9 +267,7 @@ private fun LegalBlock(
             if (coOwnerNames.isNotEmpty()) {
                 append("$coOwnerNames must approve before it takes effect. ")
             }
-            append("Recorded in this home's history at ")
-            append(timestamp)
-            append(".")
+            append("The transfer will be recorded in this home's history.")
         }
     Text(
         text = text,

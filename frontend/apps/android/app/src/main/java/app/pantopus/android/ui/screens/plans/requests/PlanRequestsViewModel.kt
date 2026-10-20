@@ -13,6 +13,7 @@ import app.pantopus.android.data.plans.planCode
 import app.pantopus.android.data.plans.planMessage
 import app.pantopus.android.ui.screens.plans.PlansRoutes
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -50,26 +51,31 @@ class PlanRequestsViewModel
         private val _ui = MutableStateFlow(PlanRequestsUi(plan = repository.card(planId)))
         val ui: StateFlow<PlanRequestsUi> = _ui.asStateFlow()
         private var sharedAddressOk = false
+        private var loadJob: Job? = null
 
         fun load() {
-            viewModelScope.launch {
-                val planRead = async { repository.plan(planId) }
-                val requestsRead = async { repository.requests(planId) }
-                val plan = planRead.await()
-                val requests = requestsRead.await()
-                _ui.update { current ->
-                    current.copy(
-                        loading = false,
-                        plan = (plan as? NetworkResult.Success)?.data ?: current.plan,
-                        pending = (requests as? NetworkResult.Success)?.data?.pending ?: current.pending,
-                        waitlisted = (requests as? NetworkResult.Success)?.data?.waitlisted ?: current.waitlisted,
-                        failed =
-                            (requests as? NetworkResult.Failure)?.error?.planMessage?.takeIf {
-                                current.pending.isEmpty() && current.waitlisted.isEmpty()
-                            },
-                    )
-                }
+            loadJob?.cancel()
+            _ui.update {
+                it.copy(loading = true, failed = null, pending = emptyList(), waitlisted = emptyList())
             }
+            loadJob =
+                viewModelScope.launch {
+                    val planRead = async { repository.plan(planId) }
+                    val requestsRead = async { repository.requests(planId) }
+                    val plan = planRead.await()
+                    val requests = requestsRead.await()
+                    _ui.update { current ->
+                        current.copy(
+                            loading = false,
+                            plan = (plan as? NetworkResult.Success)?.data,
+                            pending = (requests as? NetworkResult.Success)?.data?.pending.orEmpty(),
+                            waitlisted = (requests as? NetworkResult.Success)?.data?.waitlisted.orEmpty(),
+                            failed =
+                                (plan as? NetworkResult.Failure)?.error?.planMessage
+                                    ?: (requests as? NetworkResult.Failure)?.error?.planMessage,
+                        )
+                    }
+                }
         }
 
         /**
