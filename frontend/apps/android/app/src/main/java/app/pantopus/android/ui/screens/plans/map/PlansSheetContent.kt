@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -33,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -239,11 +241,12 @@ internal fun PlansListContent(
     onOpenPulse: () -> Unit,
     onOpenConnections: () -> Unit,
     onRetry: () -> Unit,
+    onAskPantopus: (() -> Unit)? = null,
 ) {
     val sections = remember(state.others, state.mineShown) { daySections(state.others) }
     LazyColumn(modifier = Modifier.fillMaxWidth()) {
         item(key = "header") {
-            PlansListHeader(state, onBackToMap)
+            PlansListHeader(state, onBackToMap, onAskPantopus)
         }
         if (state.listStatus is PlansListStatus.Failed && state.list.isEmpty()) {
             item(key = "failed") { PlansFailed(state.listStatus.message, onRetry) }
@@ -289,6 +292,7 @@ internal fun PlansListContent(
 private fun PlansListHeader(
     state: PlansMapUiState,
     onBackToMap: () -> Unit,
+    onAskPantopus: (() -> Unit)? = null,
 ) {
     Row(modifier = Modifier.fillMaxWidth().padding(bottom = Spacing.s2), verticalAlignment = Alignment.CenterVertically) {
         Column(modifier = Modifier.weight(1f)) {
@@ -318,6 +322,24 @@ private fun PlansListHeader(
             contentAlignment = Alignment.Center,
         ) {
             PantopusIconImage(icon = PantopusIcon.Map, contentDescription = null, size = 20.dp, tint = PantopusColors.appText)
+        }
+        if (onAskPantopus != null) {
+            Spacer(modifier = Modifier.width(Spacing.s2))
+            Box(
+                modifier =
+                    Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(PantopusColors.appSurfaceSunken)
+                        .clickable(role = Role.Button, onClick = onAskPantopus)
+                        .clearAndSetSemantics {
+                            contentDescription = "Ask Pantopus"
+                            role = Role.Button
+                        }.testTag("plansListAskPantopus"),
+                contentAlignment = Alignment.Center,
+            ) {
+                PantopusIconImage(icon = PantopusIcon.Sparkles, contentDescription = null, size = 20.dp, tint = PantopusColors.magic)
+            }
         }
     }
 }

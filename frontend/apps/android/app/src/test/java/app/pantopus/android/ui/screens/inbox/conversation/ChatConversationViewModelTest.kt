@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.ai.AIChatRepository
 import app.pantopus.android.data.ai.AIChatStreamEvent
 import app.pantopus.android.data.ai.AIConversationSession
+import app.pantopus.android.data.api.models.ai.AIConversationMessagesResponse
 import app.pantopus.android.data.api.models.ai.AIConversationsResponse
 import app.pantopus.android.data.api.models.chats.ChatAttachmentDto
 import app.pantopus.android.data.api.models.chats.ChatMediaUploadResponse
@@ -106,6 +107,8 @@ class ChatConversationViewModelTest {
             linkPreviewRepo,
             aiSession,
             activeChatThread,
+            mockk(relaxed = true),
+            mockk(relaxed = true),
             mockk(relaxed = true),
         ).also { viewModels.add(it) }
 
@@ -1290,6 +1293,8 @@ class ChatConversationViewModelTest {
             assertEquals("c42", aiSession.conversationId)
             every { aiRepo.streamChat("Again", "c42", emptyList()) } returns
                 flowOf(AIChatStreamEvent.TextDelta("Welcome back"), AIChatStreamEvent.Done)
+            // The reopened thread shows the conversation's earlier turns (none here).
+            coEvery { aiRepo.conversationMessages("c42") } returns NetworkResult.Success(AIConversationMessagesResponse("c42"))
             val second = makeViewModel()
             second.configure(mode = ChatThreadMode.Ai, counterparty = counterpartyAi, currentUserId = "u_me")
             second.load()
