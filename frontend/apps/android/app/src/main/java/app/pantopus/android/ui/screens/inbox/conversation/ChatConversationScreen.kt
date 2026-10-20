@@ -249,6 +249,7 @@ fun ChatConversationScreen(
                             filename = name ?: "chat-${UUID.randomUUID()}.$extension",
                             mimeType = mimeType,
                             bytes = bytes,
+                            sourceUri = uri.toString(),
                         )
                     }
                 }
@@ -267,15 +268,17 @@ fun ChatConversationScreen(
                                     ?: return@mapNotNull null
                             val extension = mimeType.substringAfter('/', "bin").substringBefore('+')
                             val name = context.pickedFileName(uri) ?: "chat-${UUID.randomUUID()}.$extension"
-                            Triple(mimeType, name, bytes)
+                            uri to Triple(mimeType, name, bytes)
                         }
                     }
-                attachments.forEach { (mimeType, filename, bytes) ->
+                attachments.forEach { (uri, picked) ->
+                    val (mimeType, filename, bytes) = picked
                     viewModel.queueAttachment(
                         kind = if (mimeType.startsWith("image/")) ChatQueuedAttachmentKind.Image else ChatQueuedAttachmentKind.Document,
                         filename = filename,
                         mimeType = mimeType,
                         bytes = bytes,
+                        sourceUri = uri.toString(),
                     )
                 }
             }
@@ -301,6 +304,7 @@ fun ChatConversationScreen(
                         filename = "camera-${UUID.randomUUID()}.jpg",
                         mimeType = "image/jpeg",
                         bytes = bytes,
+                        sourceUri = uri.toString(),
                     )
                 }
             }
