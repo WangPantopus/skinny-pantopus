@@ -17,6 +17,7 @@ const {
   serializeUserIdentityForViewer,
 } = require('../serializers/identitySerializers');
 const { verifiedResidentUserIds } = require('../utils/identityProfiles');
+const { isUnpublishedBusiness } = require('../utils/visibilityPolicy');
 const {
   isBusinessAccount,
   canActAsBusiness,
@@ -1146,7 +1147,8 @@ router.post('/direct', verifyToken, directChatLimiter, validate(createDirectChat
       .eq('id', otherUserId)
       .single();
     
-    if (userError || !otherUser) {
+    // A draft or closed business isn't public (its profile answers 404), so no chat names or reaches it.
+    if (userError || !otherUser || await isUnpublishedBusiness(otherUserId)) {
       return res.status(404).json({ error: 'User not found' });
     }
 

@@ -25,6 +25,7 @@ const notificationService = require('../services/notificationService');
 const blockService = require('../services/blockService');
 const { isBlocked, getRelationshipStatus } = require('../utils/visibilityPolicy');
 const { invalidateFilterCache } = require('../services/feedService');
+const marketplaceService = require('../services/marketplace/marketplaceService');
 const { writeIdentityAuditLog } = require('../utils/identityAudit');
 const rateLimit = require('express-rate-limit');
 const { chosenUsernameOrNull } = require('../utils/personalUsername');
@@ -70,8 +71,7 @@ async function blockSomeoneWhoBlockedYou(req, res, userId, otherUserId, reason) 
     return res.status(500).json({ error: 'Failed to block user' });
   }
   blockService.invalidateBlockCache(userId, otherUserId);
-  invalidateFilterCache(userId);
-  invalidateFilterCache(otherUserId);
+  invalidateBlockFilters(userId, otherUserId);
   // Same personal-block cascade as POST /api/users/:userId/block (P1.14).
   setImmediate(async () => {
     try {
@@ -116,6 +116,15 @@ const USER_SELECT = 'id, username, name, first_name, last_name, profile_picture_
 // email kind shows part of their email address, so the lists send null instead (clients link by id then).
 function withChosenUsername(user) {
   return user ? { ...user, username: chosenUsernameOrNull(user.username) } : user;
+}
+
+// Blocks hide content in both directions (the feed and marketplace filters read them
+// both ways), so a block or unblock drops both people's cached filters.
+function invalidateBlockFilters(userId, otherUserId) {
+  for (const id of [userId, otherUserId]) {
+    invalidateFilterCache(id);
+    marketplaceService.invalidateFilterCache(id);
+  }
 }
 
 /**
@@ -514,7 +523,7 @@ router.post('/:id/block', verifyToken, async (req, res) => {
       supabaseAdmin.from('UserFollow').delete().eq('follower_id', otherUserId).eq('following_id', userId),
     ]);
 
-    invalidateFilterCache(userId);
+    invalidateBlockFilters(userId, otherUserId);
     await writeIdentityAuditLog({
       req,
       actorUserId: userId,
@@ -589,7 +598,7 @@ router.post('/block-user', verifyToken, async (req, res) => {
         supabaseAdmin.from('UserFollow').delete().eq('follower_id', targetId).eq('following_id', userId),
       ]);
 
-      invalidateFilterCache(userId);
+      invalidateBlockFilters(userId, targetId);
       await writeIdentityAuditLog({
         req,
         actorUserId: userId,
@@ -629,7 +638,7 @@ router.post('/block-user', verifyToken, async (req, res) => {
       supabaseAdmin.from('UserFollow').delete().eq('follower_id', targetId).eq('following_id', userId),
     ]);
 
-    invalidateFilterCache(userId);
+    invalidateBlockFilters(userId, targetId);
     await writeIdentityAuditLog({
       req,
       actorUserId: userId,
@@ -681,7 +690,7 @@ router.post('/:id/unblock', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to unblock user' });
     }
 
-    invalidateFilterCache(userId);
+    invalidateBlockFilters(userId, otherUserId);
     await writeIdentityAuditLog({
       req,
       actorUserId: userId,
