@@ -8,8 +8,9 @@
  */
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
-const Joi = require('joi');
-const trainIdSchema = Joi.string().uuid().required();
+// The canonical form only: Joi's uuid() also takes (…), […] and colon-separated ids, which the
+// database rejects, so they would come back as a failed read (503) instead of a bad id (400).
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function unavailable(res) {
   return res.status(503).json({
@@ -25,7 +26,7 @@ function unavailable(res) {
 function loadSupportTrain(req, res, next) {
   const supportTrainId = req.params.id;
 
-  if (trainIdSchema.validate(supportTrainId).error) {
+  if (typeof supportTrainId !== 'string' || !UUID.test(supportTrainId)) {
     return res.status(400).json({ error: 'BAD_REQUEST', message: 'A valid Support Train ID is required.' });
   }
 
