@@ -232,6 +232,13 @@ enum class ChatSystemLinkAccent { Primary, Success, Warning, Error }
 
 enum class ChatQueuedAttachmentKind { Image, Document }
 
+/** A document sent to the assistant (a PDF), as its chip shows it: the file's name and size. */
+@Immutable
+data class ChatSentFile(
+    val name: String,
+    val sizeLabel: String? = null,
+)
+
 @Immutable
 data class ChatQueuedAttachment(
     val id: String,
@@ -401,6 +408,8 @@ sealed interface ChatBubbleBody {
     data class TextWithImages(
         val text: String,
         val imageUrls: List<String>,
+        /** Documents (PDFs) sent to the assistant with the message, shown as file chips. */
+        val files: List<ChatSentFile> = emptyList(),
     ) : ChatBubbleBody
 
     /**
