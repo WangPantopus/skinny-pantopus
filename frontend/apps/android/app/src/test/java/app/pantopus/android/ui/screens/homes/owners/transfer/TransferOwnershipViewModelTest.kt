@@ -3,6 +3,9 @@
 package app.pantopus.android.ui.screens.homes.owners.transfer
 
 import androidx.lifecycle.SavedStateHandle
+import app.pantopus.android.data.api.models.homes.HomeDetail
+import app.pantopus.android.data.api.models.homes.HomeDetailResponse
+import app.pantopus.android.data.api.models.homes.OwnersResponse
 import app.pantopus.android.data.api.models.homes.TransferOwnerRequest
 import app.pantopus.android.data.api.models.homes.TransferOwnerResponse
 import app.pantopus.android.data.api.net.NetworkError
@@ -48,7 +51,26 @@ class TransferOwnershipViewModelTest {
         coEvery { ownersRepo.transfer(any(), any()) } returns
             NetworkResult.Success(TransferOwnerResponse(message = "Transfer initiated."))
         coEvery { homesRepo.detail(any()) } returns
-            NetworkResult.Failure(NetworkError.Server(500, null))
+            NetworkResult.Success(
+                HomeDetailResponse(
+                    HomeDetail(
+                        id = "preview",
+                        name = "Test home",
+                        address = "1 Test Street",
+                        city = "Camas",
+                        state = "WA",
+                        zipcode = "98607",
+                        homeType = "house",
+                        visibility = "members",
+                        description = null,
+                        createdAt = null,
+                        owner = null,
+                        location = null,
+                        pendingClaimId = null,
+                    ),
+                ),
+            )
+        coEvery { ownersRepo.list(any()) } returns NetworkResult.Success(OwnersResponse(emptyList()))
     }
 
     @After fun tearDown() {
@@ -61,7 +83,10 @@ class TransferOwnershipViewModelTest {
             ownersRepo,
             homesRepo,
             authRepository,
-        )
+        ).also {
+            it.load()
+            dispatcher.scheduler.runCurrent()
+        }
 
     private fun armedViewModel(): TransferOwnershipViewModel =
         makeViewModel().apply {
@@ -205,12 +230,20 @@ class TransferOwnershipViewModelTest {
         }
 
     @Test
-    fun context_load_failure_surfaces_error_but_keeps_cta_live() =
+    fun context_load_failure_blocks_confirmation_until_retry_succeeds() =
         runTest(dispatcher) {
             val vm = armedViewModel()
-            vm.load()
+            val loadedHome = homesRepo.detail("preview")
+            coEvery { homesRepo.detail(any()) } returns NetworkResult.Failure(NetworkError.Server(500, null))
+            vm.refresh()
             advanceUntilIdle()
             assertTrue(vm.state.value.contextState is TransferContextState.Error)
+            assertFalse(vm.state.value.isReadyToCommit)
+            vm.presentConfirmSheet()
+            assertEquals(ConfirmSheetPhase.Hidden, vm.state.value.sheetPhase)
+            coEvery { homesRepo.detail(any()) } returns loadedHome
+            vm.refresh()
+            advanceUntilIdle()
             assertTrue(vm.state.value.isReadyToCommit)
         }
 

@@ -8,10 +8,13 @@ import app.pantopus.android.data.account.AccountRepository
 import app.pantopus.android.data.api.models.settings.PasswordUpdateBody
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.displayMessage
+import app.pantopus.android.data.auth.AuthError
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.ui.components.PasswordStrength
 import app.pantopus.android.ui.screens.shared.form.FormFieldState
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -28,8 +31,8 @@ import javax.inject.Inject
  * `POST /api/users/password` (users.js:1771).
  *
  * Beyond the original three-field form, the reshape adds a live
- * [PasswordStrength] for the new password, breach detection against a small
- * sample list of common passwords (HIBP is out of scope — see
+ * [PasswordStrength] for the new password, rejection of a small
+ * list of common passwords (HIBP is out of scope — see
  * [COMMON_PASSWORDS]), a form-level error banner shown after a rejected
  * submit, and a quiet identity context band (email + last-changed — sample
  * data).
@@ -37,7 +40,7 @@ import javax.inject.Inject
  * Validation:
  * - current required when `hasPassword == true`
  * - new ≥ [MIN_LENGTH] chars (matches `PASSWORD_MIN_LENGTH` = 12 in users.js)
- * - new not on the breach list
+ * - new not on the common-password list
  * - new ≠ current (server also enforces; we catch early for clarity)
  * - confirm == new
  */
@@ -46,7 +49,7 @@ class PasswordChangeViewModel
     @Inject
     constructor(
         private val account: AccountRepository,
-        auth: AuthRepository,
+        private val auth: AuthRepository,
     ) : ViewModel() {
         sealed interface FormState {
             data object Loading : FormState
@@ -70,6 +73,9 @@ class PasswordChangeViewModel
 
         private val _isSaving = MutableStateFlow(false)
         val isSaving: StateFlow<Boolean> = _isSaving.asStateFlow()
+
+        private val _isRequestingReset = MutableStateFlow(false)
+        val isRequestingReset: StateFlow<Boolean> = _isRequestingReset.asStateFlow()
 
         private val _fields =
             MutableStateFlow(
@@ -103,7 +109,7 @@ class PasswordChangeViewModel
 
         private fun fieldValue(key: FieldKey): String = _fields.value[key]?.value.orEmpty()
 
-        /** True when the new password matches an entry on the breach list. */
+        /** True when the new password matches the local common-password list. */
         val isNewPasswordBreached: Boolean
             get() {
                 val candidate = fieldValue(FieldKey.New)
@@ -183,6 +189,7 @@ class PasswordChangeViewModel
         fun save() {
             if (!isValid || _isSaving.value) return
             _formError.value = null
+            _fields.value = _fields.value.mapValues { (key, field) -> field.copy(error = inlineError(key, field.value)) }
             val currentValue = fieldValue(FieldKey.Current)
             val newValue = fieldValue(FieldKey.New)
             _isSaving.value = true
@@ -197,19 +204,37 @@ class PasswordChangeViewModel
                         _toast.value = "Password updated"
                         _shouldDismiss.value = true
                     }
-                    is NetworkResult.Failure -> mapServerError(result.error)
+                    is NetworkResult.Failure -> {
+                        mapServerError(result.error)
+                        _isSaving.value = false
+                    }
                 }
-                _isSaving.value = false
             }
         }
 
-        /**
-         * Stub for the "Email me a reset link instead" shortcut on the current
-         * field. A real implementation would POST to the password-reset route;
-         * for now we acknowledge the request so the affordance is wired.
-         */
         fun requestResetLink() {
-            _toast.value = "We'll email you a reset link."
+            if (_isRequestingReset.value || _isSaving.value) return
+            val email = accountEmail?.takeIf(String::isNotBlank)
+            if (email == null) {
+                _formError.value = FormBannerContent("Couldn't request reset link", "Sign in again to confirm your email address.")
+                return
+            }
+            _isRequestingReset.value = true
+            _formError.value = null
+            viewModelScope.launch {
+                try {
+                    auth.forgotPassword(email)
+                    _toast.value = "If this account can be reset, check your email for a link."
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: AuthError) {
+                    _formError.value = FormBannerContent("Couldn't request reset link", error.message)
+                } catch (_: Exception) {
+                    _formError.value = FormBannerContent("Couldn't request reset link", "Something went wrong. Please try again.")
+                } finally {
+                    _isRequestingReset.value = false
+                }
+            }
         }
 
         fun acknowledgeDismiss() {
@@ -232,7 +257,7 @@ class PasswordChangeViewModel
                     when {
                         value.isEmpty() -> null
                         COMMON_PASSWORDS.contains(value.lowercase()) ->
-                            "Too common — appeared in 2.3M public records."
+                            "Too common. Choose a less predictable password."
                         value.length < MIN_LENGTH -> "At least $MIN_LENGTH characters"
                         requiresCurrent && current.isNotEmpty() && value == current ->
                             "Choose something different from your current password"
@@ -264,44 +289,27 @@ class PasswordChangeViewModel
 
         private fun applyServerRejection(currentError: String) {
             markError(FieldKey.Current, currentError)
-            _formError.value = STANDARD_BANNER
+            _formError.value =
+                FormBannerContent("Couldn't update password", "Check your current password and try again, or request a reset link.")
         }
 
         private fun mapServerError(error: NetworkError) {
             when (error) {
                 is NetworkError.Unauthorized ->
                     applyServerRejection("That doesn't match the password on file.")
-                is NetworkError.ClientError ->
-                    if (error.code == 429) {
-                        _formError.value =
-                            FormBannerContent(
-                                title = "Too many attempts",
-                                message = "Wait a moment before trying again.",
-                            )
-                    } else {
-                        markError(FieldKey.New, error.body ?: "Couldn't update your password")
-                        _formError.value = STANDARD_BANNER
-                    }
-                is NetworkError.NotFound -> {
-                    markError(FieldKey.New, "We couldn't find your account. Try signing back in.")
-                    _formError.value = STANDARD_BANNER
-                }
-                else -> {
-                    markError(FieldKey.New, "Couldn't update your password. Try again.")
-                    _formError.value = STANDARD_BANNER
-                }
+                else ->
+                    _formError.value =
+                        FormBannerContent(
+                            title = if (error.code == 429) "Too many attempts" else "Couldn't update password",
+                            message = error.displayMessage("Couldn't update your password. Try again."),
+                        )
             }
         }
 
         companion object {
             const val MIN_LENGTH: Int = 12
 
-            /**
-             * Sample list of breached/common passwords. A real integration would
-             * check Have I Been Pwned's k-anonymity range API; that is out of
-             * scope, so we ship a hardcoded list good enough to demo the breach
-             * state. Mirrors the iOS list.
-             */
+            /** Local common-password denylist; this is not a live breach lookup. */
             val COMMON_PASSWORDS: Set<String> =
                 setOf(
                     "password",
@@ -316,15 +324,6 @@ class PasswordChangeViewModel
                     "admin123",
                     "welcome123",
                     "abc12345",
-                )
-
-            private val STANDARD_BANNER =
-                FormBannerContent(
-                    title = "Couldn't update password",
-                    // Sample copy mirroring the design frame. The "two fields" /
-                    // "three attempts" counts are static until the backend returns a
-                    // real rate-limit signal.
-                    message = "Fix the two highlighted fields and try again. Three more attempts before a 15-minute cooldown.",
                 )
         }
     }

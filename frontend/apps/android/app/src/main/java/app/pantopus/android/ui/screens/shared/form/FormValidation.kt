@@ -139,7 +139,7 @@ fun FormValidator.Companion.isoDateOrEmpty(): FormValidator =
         } else if (ISO_DATE_PATTERN.matches(trimmed) && isCalendarDate(trimmed)) {
             null
         } else {
-            "Use the format YYYY-MM-DD."
+            "Enter a valid date (YYYY-MM-DD)."
         }
     }
 

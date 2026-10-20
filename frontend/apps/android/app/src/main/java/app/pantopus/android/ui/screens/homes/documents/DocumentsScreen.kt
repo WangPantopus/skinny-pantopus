@@ -43,6 +43,7 @@ fun DocumentsScreen(
     val selectedFilter by viewModel.selectedFilter.collectAsStateWithLifecycle()
     val chipStrip by viewModel.chipStrip.collectAsStateWithLifecycle()
     val banner by viewModel.banner.collectAsStateWithLifecycle()
+    val canUpload by viewModel.canUpload.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
         viewModel.configureNavigation(
@@ -64,7 +65,7 @@ fun DocumentsScreen(
             onEndReached = { },
             chipStrip = chipStrip.copy(selectedId = selectedFilter),
             topBarAction = viewModel.topBarAction,
-            fab = viewModel.fab(),
+            fab = if (canUpload) viewModel.fab() else null,
             onBack = onBack,
             banner = banner,
         )

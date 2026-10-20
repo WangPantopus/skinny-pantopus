@@ -7,9 +7,11 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.businesses.BusinessDashboardResponse
+import app.pantopus.android.data.api.models.businesses.BusinessDetailResponse
 import app.pantopus.android.data.api.models.businesses.BusinessInsightsResponse
 import app.pantopus.android.data.api.models.businesses.BusinessOnboardingDto
 import app.pantopus.android.data.api.models.businesses.BusinessOwnerReviewDto
+import app.pantopus.android.data.api.models.businesses.BusinessPublicResponse
 import app.pantopus.android.data.api.models.businessfounding.FoundingOfferStatusDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
@@ -93,7 +95,7 @@ class BusinessOwnerViewModel
         }
 
         fun refresh() {
-            _state.value = BusinessOwnerUiState.Loading
+            if (_state.value !is BusinessOwnerUiState.Loaded) _state.value = BusinessOwnerUiState.Loading
             viewModelScope.launch { fetch() }
         }
 
@@ -217,8 +219,18 @@ class BusinessOwnerViewModel
                         }
                     val reviewsDeferred =
                         async { (profiles.publicProfile(businessId) as? NetworkResult.Success)?.data }
-                    BusinessProfileMapper.build(payload, publicDeferred.await(), reviewsDeferred.await())
-                }
+                    val publicData = publicDeferred.await()
+                    val renderData =
+                        publicData ?: when (val result = ownerProfileData(payload)) {
+                            is NetworkResult.Success -> result.data
+                            is NetworkResult.Failure -> {
+                                _state.value = mapDetailFailure(result.error)
+                                return@coroutineScope null
+                            }
+                        }
+                    BusinessProfileMapper.build(payload, renderData, reviewsDeferred.await())
+                        .copy(hasPublicPage = publicData != null)
+                } ?: return
 
             // 2. Owner-scoped dashboard (required) — publish state + strength.
             val dash = businesses.dashboard(businessId)
@@ -241,6 +253,27 @@ class BusinessOwnerViewModel
                 BusinessOwnerUiState.Loaded(
                     buildContent(publicProfile, dashboard, insights, ownerReviews, foundingOffer),
                 )
+        }
+
+        /** Drafts have no public projection, but their saved hours and services still exist. */
+        private suspend fun ownerProfileData(payload: BusinessDetailResponse): NetworkResult<BusinessPublicResponse> {
+            val location =
+                payload.profile?.primaryLocation
+                    ?: payload.locations.firstOrNull { it.isPrimary == true }
+                    ?: payload.locations.firstOrNull()
+            val hours =
+                if (location != null) {
+                    when (val result = businesses.locationHours(businessId, location.id)) {
+                        is NetworkResult.Success -> result.data.hours
+                        is NetworkResult.Failure -> return result
+                    }
+                } else {
+                    emptyList()
+                }
+            return when (val result = businesses.catalogItems(businessId)) {
+                is NetworkResult.Success -> NetworkResult.Success(BusinessPublicResponse(hours = hours, catalog = result.data.items))
+                is NetworkResult.Failure -> result
+            }
         }
 
         private fun mapDetailFailure(error: NetworkError): BusinessOwnerUiState =

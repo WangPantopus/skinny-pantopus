@@ -115,6 +115,7 @@ class PlanDetailViewModel
         val ui: StateFlow<PlanDetailUi> = _ui.asStateFlow()
 
         private var loadJob: Job? = null
+        private var requestsJob: Job? = null
         private var askedOnOpen = false
 
         init {
@@ -165,9 +166,12 @@ class PlanDetailViewModel
         }
 
         private fun loadRequests() {
-            viewModelScope.launch {
-                (repository.requests(planId) as? NetworkResult.Success)?.data?.let { reply -> _ui.update { it.copy(requests = reply) } }
-            }
+            requestsJob?.cancel()
+            _ui.update { it.copy(requests = null) }
+            requestsJob =
+                viewModelScope.launch {
+                    (repository.requests(planId) as? NetworkResult.Success)?.data?.let { reply -> _ui.update { it.copy(requests = reply) } }
+                }
         }
 
         fun hasLocationPermission(): Boolean = locations.hasLocationPermission()

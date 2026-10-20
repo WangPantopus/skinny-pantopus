@@ -31,6 +31,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,12 +55,17 @@ import app.pantopus.android.ui.components.PantopusTextField
 import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.screens.businesses.payments.ActionToast
+import app.pantopus.android.ui.screens.homes.documents.readDocumentBytes
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailTopBar
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** Test tag on the Business Legal root container. */
 const val BUSINESS_LEGAL_TAG = "businessLegal.screen"
@@ -87,6 +93,7 @@ fun BusinessLegalScreen(
     val addressConfirmed by viewModel.addressConfirmed.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var pendingEvidenceType by remember { mutableStateOf<BusinessEvidenceType?>(null) }
     var showAttestConfirm by remember { mutableStateOf(false) }
 
@@ -95,22 +102,28 @@ fun BusinessLegalScreen(
             val type = pendingEvidenceType
             pendingEvidenceType = null
             if (uri == null || type == null) return@rememberLauncherForActivityResult
-            val resolver = context.contentResolver
-            val mime = resolver.getType(uri) ?: "application/octet-stream"
-            var filename = uri.lastPathSegment?.substringAfterLast('/') ?: "document"
-            resolver.query(uri, null, null, null, null)?.use { cursor ->
-                if (cursor.moveToFirst()) {
-                    val nameIdx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                    if (nameIdx >= 0) filename = cursor.getString(nameIdx)
+            scope.launch {
+                try {
+                    val file =
+                        withContext(Dispatchers.IO) {
+                            val resolver = context.contentResolver
+                            val mime = resolver.getType(uri) ?: "application/octet-stream"
+                            var filename = "document"
+                            resolver.query(uri, null, null, null, null)?.use { cursor ->
+                                if (cursor.moveToFirst()) {
+                                    val nameIdx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                                    if (nameIdx >= 0) filename = cursor.getString(nameIdx) ?: filename
+                                }
+                            }
+                            PickedEvidenceFile(filename, mime, readDocumentBytes { resolver.openInputStream(uri) }.toByteArray())
+                        }
+                    viewModel.uploadEvidence(type, file)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    viewModel.evidenceReadFailed()
                 }
             }
-            val bytes =
-                resolver.openInputStream(uri)?.use { it.readBytes() }
-                    ?: return@rememberLauncherForActivityResult
-            viewModel.uploadEvidence(
-                type = type,
-                file = PickedEvidenceFile(filename = filename, mimeType = mime, bytes = bytes),
-            )
         }
 
     LaunchedEffect(Unit) { viewModel.load() }

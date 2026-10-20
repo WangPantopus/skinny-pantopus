@@ -161,6 +161,7 @@ fun DocumentDetailScreen(
                         dto = current.document,
                         content = current.content,
                         isMutating = current.isMutating,
+                        canManage = current.canManage,
                         onBack = onBack,
                         onOpenExternally = {
                             viewModel.export { dto, bytes -> scope.launch { exportDocument(context, dto, bytes, false, exports) } }
@@ -344,6 +345,7 @@ private fun LoadedShell(
     dto: HomeDocumentDto,
     content: ByteString?,
     isMutating: Boolean,
+    canManage: Boolean,
     onBack: () -> Unit,
     onOpenExternally: () -> Unit,
     onShare: () -> Unit,
@@ -399,6 +401,7 @@ private fun LoadedShell(
             isMutating = isMutating,
             hasFile = content != null,
             canReplace = dto.fileVersion != null,
+            canManage = canManage,
             onOpenExternally = onOpenExternally,
             onShare = onShare,
             onReplace = onReplace,
@@ -808,6 +811,7 @@ private fun StickyActionFooter(
     isMutating: Boolean,
     hasFile: Boolean,
     canReplace: Boolean,
+    canManage: Boolean,
     onOpenExternally: () -> Unit,
     onShare: () -> Unit,
     onReplace: () -> Unit,
@@ -844,26 +848,28 @@ private fun StickyActionFooter(
                 enabled = !isMutating && hasFile,
                 onClick = onShare,
             )
-            FooterButton(
-                icon = PantopusIcon.RefreshCw,
-                label = "Replace",
-                contentDesc = "Replace file",
-                testTag = "documentDetailReplace",
-                tint = PantopusColors.appText,
-                modifier = Modifier.weight(1f),
-                enabled = !isMutating && canReplace,
-                onClick = onReplace,
-            )
-            FooterButton(
-                icon = PantopusIcon.Trash2,
-                label = "Delete",
-                contentDesc = "Delete document",
-                testTag = "documentDetailDelete",
-                tint = PantopusColors.error,
-                modifier = Modifier.weight(1f),
-                enabled = !isMutating,
-                onClick = onDelete,
-            )
+            if (canManage) {
+                FooterButton(
+                    icon = PantopusIcon.RefreshCw,
+                    label = "Replace",
+                    contentDesc = "Replace file",
+                    testTag = "documentDetailReplace",
+                    tint = PantopusColors.appText,
+                    modifier = Modifier.weight(1f),
+                    enabled = !isMutating && canReplace,
+                    onClick = onReplace,
+                )
+                FooterButton(
+                    icon = PantopusIcon.Trash2,
+                    label = "Delete",
+                    contentDesc = "Delete document",
+                    testTag = "documentDetailDelete",
+                    tint = PantopusColors.error,
+                    modifier = Modifier.weight(1f),
+                    enabled = !isMutating,
+                    onClick = onDelete,
+                )
+            }
         }
     }
 }

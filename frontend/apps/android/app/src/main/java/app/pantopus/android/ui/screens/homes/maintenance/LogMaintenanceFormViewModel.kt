@@ -74,8 +74,16 @@ data class LogMaintenanceFormState(
     val hasLoadedExisting: Boolean = true,
     val submitError: String? = null,
 ) {
+    val costError: String?
+        get() =
+            if (costText.isNotBlank() && LogMaintenanceFormViewModel.parseCost(costText) == null) {
+                "Enter a cost from $0 to $9,999,999,999.99 with up to two decimal places."
+            } else {
+                null
+            }
+
     val canSubmit: Boolean
-        get() = title.isNotBlank() && !isSubmitting && !isLoadingExisting && hasLoadedExisting
+        get() = title.isNotBlank() && costError == null && !isSubmitting && !isLoadingExisting && hasLoadedExisting
 
     /** Slot grid for the 2x2 photos card — pads up to four slots. */
     fun photoSlots(): List<PhotoSlot> =
@@ -405,19 +413,22 @@ class LogMaintenanceFormViewModel
         // MARK: - Static helpers exposed for tests
 
         companion object {
+            private val costPattern = Regex("""^\$?(?:(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d{1,2})?|\.\d{1,2})$""")
+            private val maximumCost = BigDecimal("9999999999.99")
             private val dayFormatter: DateTimeFormatter =
                 DateTimeFormatter.ISO_LOCAL_DATE.withZone(ZoneOffset.UTC)
             private val timestampFormatter: DateTimeFormatter =
                 DateTimeFormatter.ISO_INSTANT
 
             fun parseCost(text: String): BigDecimal? {
+                if (!costPattern.matches(text.trim())) return null
                 val cleaned =
                     text
                         .trim()
                         .replace("$", "")
                         .replace(",", "")
                 if (cleaned.isEmpty()) return null
-                return runCatching { BigDecimal(cleaned) }.getOrNull()
+                return runCatching { BigDecimal(cleaned) }.getOrNull()?.takeIf { it <= maximumCost }
             }
 
             fun formatCost(cost: BigDecimal): String =

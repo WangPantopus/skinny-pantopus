@@ -204,7 +204,7 @@ class MaintenanceListViewModelTest {
         assertEquals(MaintenanceCategory.Generic, MaintenanceListViewModel.project(generic, fixedNow).category)
     }
 
-    @Test fun projection_diy_zero_cost_renders_as_DIY() {
+    @Test fun projection_zero_cost_renders_as_zero() {
         val projection =
             MaintenanceListViewModel.project(
                 makeTask(
@@ -217,7 +217,7 @@ class MaintenanceListViewModelTest {
                 ),
                 fixedNow,
             )
-        assertEquals("DIY", projection.amount)
+        assertEquals("$0", projection.amount)
         assertEquals("Self-managed · Quarterly", projection.subtitle)
         assertEquals(MaintenanceCategory.Safety, projection.category)
     }

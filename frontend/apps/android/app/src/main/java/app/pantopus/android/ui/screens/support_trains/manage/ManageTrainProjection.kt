@@ -67,6 +67,7 @@ object ManageTrainProjection {
                 ),
             status = dto.status ?: "",
             viewerRole = SupportTrainDetailProjection.viewerRole(dto),
+            deliveryAddressAvailable = !dto.address?.address.isNullOrBlank(),
         )
     }
 

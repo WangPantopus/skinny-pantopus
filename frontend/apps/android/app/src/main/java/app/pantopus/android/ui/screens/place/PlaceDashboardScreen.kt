@@ -118,6 +118,8 @@ fun PlaceDashboardScreen(
     onDefaultHomeChange: () -> Unit = {},
     /** The Place tab tapped again while this dashboard is its root: back to the top. */
     scrollToTop: Flow<Unit>? = null,
+    scrollToBallot: Boolean = false,
+    onBallotOpened: () -> Unit = {},
     /** The status of a residency document already in review (the Waiting Room). */
     onOpenVerificationStatus: () -> Unit = {},
     viewModel: PlaceDashboardViewModel = hiltViewModel(key = "place-$homeId"),
@@ -193,6 +195,8 @@ fun PlaceDashboardScreen(
                     onRetry = viewModel::refresh,
                     refreshNotice = refreshNotice,
                     listState = listState,
+                    scrollToBallot = scrollToBallot,
+                    onBallotOpened = onBallotOpened,
                 )
         }
     }
@@ -261,6 +265,8 @@ internal fun PlaceDashboardContent(
     onRetry: (() -> Unit)? = null,
     refreshNotice: RefreshNotice? = null,
     listState: LazyListState = rememberLazyListState(),
+    scrollToBallot: Boolean = false,
+    onBallotOpened: () -> Unit = {},
 ) {
     val isVerified = intel.tier == PlaceTier.T4
     // Verifying is the next step for a claimed resident and for a private setup (by mail). Guests and service
@@ -269,6 +275,16 @@ internal fun PlaceDashboardContent(
     val pulse = PlacePresentation.derivePulse(intel)
     val ballot = BallotPlacement.ballot(intel)
     var ballotGovernments by remember { mutableStateOf<BallotGovernments?>(null) }
+    LaunchedEffect(scrollToBallot, ballot) {
+        if (scrollToBallot) {
+            if (ballot != null) {
+                // Header, tools, moving checklist, Pulse, spacer and privacy row always precede the card.
+                val precedingItems = BALLOT_PRECEDING_FIXED_ITEMS + listOf(refreshNotice != null, showsVerify, isVerified).count { it }
+                listState.scrollToItem(precedingItems)
+            }
+            onBallotOpened()
+        }
+    }
 
     LazyColumn(state = listState, modifier = modifier.fillMaxSize()) {
         item {
@@ -399,6 +415,8 @@ internal fun PlaceDashboardContent(
         )
     }
 }
+
+private const val BALLOT_PRECEDING_FIXED_ITEMS = 6
 
 /** "Private by default. See what neighbors see of this address." (Wedge v2 §2). */
 @Composable

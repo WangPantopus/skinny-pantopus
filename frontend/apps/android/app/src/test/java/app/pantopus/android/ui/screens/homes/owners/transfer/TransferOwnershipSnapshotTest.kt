@@ -63,7 +63,6 @@ class TransferOwnershipSnapshotTest {
                     recipientName = state.recipientEmail,
                     homeAddress = state.homeAddress,
                     coOwnerNames = state.coOwnerNames,
-                    timestamp = state.confirmationTimestamp,
                     biometryLabel = state.biometryLabel,
                     isAuthenticating = false,
                     onCancel = {},
@@ -106,6 +105,5 @@ class TransferOwnershipSnapshotTest {
                     touched = true,
                 ),
             biometryLabel = "Face ID",
-            confirmationTimestamp = "14:23 May 26",
         )
 }

@@ -89,7 +89,7 @@ private fun ServiceChip(chip: EditBusinessPageServiceChip) {
             color = fg,
         )
         PantopusIconImage(
-            icon = PantopusIcon.X,
+            icon = PantopusIcon.ChevronRight,
             contentDescription = null,
             size = 11.dp,
             tint = fg,
