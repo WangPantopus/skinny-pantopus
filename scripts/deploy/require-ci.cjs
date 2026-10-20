@@ -1,11 +1,11 @@
 // Used by actions/github-script; never checks out code from a workflow_run PR.
 // Sets `deploy` to 'true' or 'false'. Automatic deploys skip quietly when the
 // green commit is no longer the branch head, or when nothing that goes into the
-// backend image or its rollout changed since the environment's last release
+// backend image, database migrations or rollout changed since the environment's last release
 // (each rollout restarts the API). A manual run always deploys the head. The
 // release job rechecks with { recheck: true }: CI and the branch head only, so a
 // commit superseded during the build sets `deploy` to 'false' before cutover.
-const BACKEND_PATHS = [/^backend\//, /^scripts\/deploy\//, /^package\.json$/, /^pnpm-lock\.yaml$/,
+const BACKEND_PATHS = [/^backend\//, /^supabase\/migrations\//, /^scripts\/deploy\//, /^package\.json$/, /^pnpm-lock\.yaml$/,
   /^pnpm-workspace\.yaml$/, /^\.dockerignore$/, /^\.github\/workflows\/deploy-backend\.yml$/];
 const touchesBackend = (file) => BACKEND_PATHS.some((pattern) => pattern.test(file));
 // deploy-backend.yml's run-name ends with "(<branch> <commit>)". A workflow_run job runs in the

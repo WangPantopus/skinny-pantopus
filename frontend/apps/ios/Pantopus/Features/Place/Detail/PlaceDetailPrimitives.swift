@@ -17,6 +17,8 @@ struct PlaceDetailHeader: View {
     let title: String
     let address: String
     var onBack: () -> Void
+    /// A section page's "Ask Pantopus" about that section (nil: none).
+    var onAsk: (() -> Void)?
 
     var body: some View {
         HStack(spacing: 10) {
@@ -40,6 +42,17 @@ struct PlaceDetailHeader: View {
                     .lineLimit(1)
             }
             Spacer(minLength: 0)
+            if let onAsk {
+                AskPantopusButton(accessibilityIdentifier: "placeDetail.askPantopus", action: onAsk) {
+                    AskPantopusGlyph(size: 18)
+                        .frame(width: 34, height: 34)
+                        .background(Theme.Color.appSurface)
+                        .clipShape(Circle())
+                        .shadow(color: .black.opacity(0.06), radius: 1, x: 0, y: 1)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+            }
         }
         .padding(.horizontal, 14)
         .padding(.top, 6)

@@ -2357,7 +2357,11 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         ),
                     )
                 } else if (pending.id.isNotBlank()) {
-                    val display = pending.name?.takeIf { it.isNotBlank() } ?: "Conversation"
+                    // A room the Messages list shows under its own name (a Support Train's) opens under it.
+                    val display =
+                        deepLinkChatResolver.roomName(pending.id)
+                            ?: pending.name?.takeIf { it.isNotBlank() }
+                            ?: "Conversation"
                     val initials =
                         display
                             .split(" ")
@@ -6153,6 +6157,18 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                             initials = host.organizerInitials,
                                             verified = false,
                                             locality = null,
+                                        ),
+                                    )
+                                },
+                                // The train's group chat opens under the train's title.
+                                onOpenChat = { roomId, title ->
+                                    val initials = title.split(" ").take(2).mapNotNull { it.firstOrNull()?.uppercase() }
+                                    navController.navigate(
+                                        ChildRoutes.chatConversationRoom(
+                                            roomId = roomId,
+                                            displayName = title,
+                                            initials = initials.joinToString(""),
+                                            verified = false,
                                         ),
                                     )
                                 },

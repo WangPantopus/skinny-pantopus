@@ -42,19 +42,26 @@ public struct ChatInitialTopic: Sendable, Hashable {
 
 public struct AIChatStreamRequest: Encodable, Sendable {
     /// Draft cards this app shows beyond the original ones; the server offers
-    /// the matching tools only to apps that list them.
-    public static let supportedCards = ["pickup_schedule"]
+    /// the matching tools only to apps that list them. `action` cards are
+    /// one-tap requests through endpoints the app already uses, and `link`
+    /// buttons open screens in the app (contract
+    /// `docs/product/ai-assistant-phase1-contract-2026-10-20.md`, section 3).
+    public static let supportedCards = ["pickup_schedule", "action", "link"]
 
     public let message: String
     public let conversationId: String?
     public let images: [String]?
     public let cards: [String]
+    /// What the person was looking at when they tapped Ask, for a thread
+    /// opened from a screen.
+    public let context: AIChatContext?
 
-    public init(message: String, conversationId: String? = nil, images: [String]? = nil) {
+    public init(message: String, conversationId: String? = nil, images: [String]? = nil, context: AIChatContext? = nil) {
         self.message = message
         self.conversationId = conversationId
         self.images = images
         cards = Self.supportedCards
+        self.context = context
     }
 }
 
@@ -64,6 +71,8 @@ public enum AIChatStreamEvent: Sendable, Equatable {
     case status(String)
     case textDelta(String)
     case draft(ChatAIDraftCard)
+    /// A button under the reply that opens a screen in the app.
+    case link(ChatAILink)
     case done
     case error(String)
 }
@@ -103,10 +112,15 @@ final class AIChatStreamClient: AIChatStreaming, @unchecked Sendable {
                     let (bytes, response) = try await session.bytes(for: urlRequest)
                     guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
                         let status = (response as? HTTPURLResponse)?.statusCode
-                        // 429: the hourly limit (backend/middleware/rateLimiter.js aiChatLimiter), not a connection problem.
-                        continuation.yield(.error(status == 429
-                                ? "You've reached this hour's limit for Pantopus AI. Please try again later."
-                                : "Failed to connect to AI."))
+                        // The day's budget and the off switch say so in their own words.
+                        if let message = await Self.pausedMessage(bytes) {
+                            continuation.yield(.error(message))
+                        } else {
+                            // 429: the hourly limit (backend/middleware/rateLimiter.js aiChatLimiter), not a connection problem.
+                            continuation.yield(.error(status == 429
+                                    ? "You've reached this hour's limit for Pantopus AI. Please try again later."
+                                    : "Failed to connect to AI."))
+                        }
                         continuation.finish()
                         return
                     }
@@ -159,19 +173,46 @@ final class AIChatStreamClient: AIChatStreaming, @unchecked Sendable {
             if let draft = Self.parseDraft(object) {
                 continuation.yield(.draft(draft))
             }
+        case "link":
+            if let label = object["label"] as? String, !label.isEmpty, let url = object["url"] as? String, !url.isEmpty {
+                continuation.yield(.link(ChatAILink(label: label, url: url)))
+            }
         case "done":
             continuation.yield(.done)
         case "error":
+            // AI_BUDGET and AI_DISABLED, like every error, show their message as sent.
             continuation.yield(.error((object["message"] as? String) ?? (object["error"] as? String) ?? "AI error."))
         default:
             break
         }
     }
 
+    /// A refused stream's own message when it is the day's budget
+    /// (`AI_BUDGET`) or the off switch (`AI_DISABLED`); nil otherwise.
+    private static func pausedMessage(_ bytes: URLSession.AsyncBytes) async -> String? {
+        var data = Data()
+        do {
+            for try await byte in bytes {
+                data.append(byte)
+                if data.count > 8192 { break }
+            }
+        } catch {
+            return nil
+        }
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let code = (object["code"] as? String) ?? (object["error"] as? String),
+              code == "AI_BUDGET" || code == "AI_DISABLED",
+              let message = object["message"] as? String, !message.isEmpty else { return nil }
+        return message
+    }
+
     static func parseDraft(_ object: [String: Any]) -> ChatAIDraftCard? {
         let type = (object["type"] as? String) ?? "draft"
         let valid = (object["valid"] as? Bool) ?? true
         let draft = object["draft"] as? [String: Any] ?? [:]
+        if type == "action" {
+            return actionCard(from: draft)
+        }
         let story = (draft["story"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
         let content = (draft["content"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
         let title = type == "support_train"
@@ -193,8 +234,7 @@ final class AIChatStreamClient: AIChatStreaming, @unchecked Sendable {
         let headline = (draft["title"] as? String).flatMap { $0.isEmpty ? nil : $0 }
         let prefill: ChatAIDraftPrefill? =
             switch type {
-            case "post":
-                content.flatMap { $0.isEmpty ? nil : ChatAIDraftPrefill(body: $0, postType: draft["postType"] as? String, title: headline) }
+            case "post": content.flatMap { $0.isEmpty ? nil : postPrefill(body: $0, title: headline, draft: draft) }
             case "support_train": story.flatMap { $0.isEmpty ? nil : ChatAIDraftPrefill(body: $0) }
             default: nil
             }
@@ -207,6 +247,38 @@ final class AIChatStreamClient: AIChatStreaming, @unchecked Sendable {
             valid: valid,
             prefill: prefill,
             pickup: type == "pickup_schedule" ? pickupSchedule(from: draft) : nil
+        )
+    }
+
+    /// A post card's text with every field it carries for the composer: the
+    /// event's times and place, when a deal ends, lost or found, the Heads Up kind.
+    static func postPrefill(body: String, title: String?, draft: [String: Any]) -> ChatAIDraftPrefill {
+        let text: (String) -> String? = { key in
+            (draft[key] as? String).flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 }
+        }
+        var prefill = ChatAIDraftPrefill(body: body, postType: text("postType"), title: title)
+        prefill.eventDate = text("eventDate")
+        prefill.eventEndDate = text("eventEndDate")
+        prefill.eventVenue = text("eventVenue")
+        prefill.dealExpiresAt = text("dealExpiresAt")
+        prefill.lostFoundType = text("lostFoundType")
+        prefill.safetyAlertKind = text("safetyAlertKind")
+        return prefill
+    }
+
+    /// An action card (`type: "action"`), or nil when its envelope can't be read.
+    static func actionCard(from draft: [String: Any]) -> ChatAIDraftCard? {
+        guard JSONSerialization.isValidJSONObject(draft),
+              let data = try? JSONSerialization.data(withJSONObject: draft),
+              let envelope = try? JSONDecoder().decode(AIActionCardDTO.self, from: data) else { return nil }
+        return ChatAIDraftCard(
+            id: "action_\(envelope.id)",
+            type: "action",
+            title: envelope.title,
+            summary: nil,
+            priceLabel: nil,
+            valid: true,
+            action: ChatAIActionCard(envelope: envelope)
         )
     }
 
@@ -406,8 +478,13 @@ public final class ChatConversationViewModel {
     public private(set) var shareOptionsError: String?
     public private(set) var isSharingLocation = false
 
-    /// Capability chips for the AI welcome card (tap-to-send).
+    /// Capability chips for the AI welcome card (tap-to-send). A thread
+    /// opened from a screen's Ask offers that screen's starter prompts.
     public let aiPrompts: [ChatPromptChip]
+
+    /// The screen a thread was opened from with Ask: sent with each message
+    /// as `context`, and shown above the conversation ("About: …").
+    public let aiTopic: AIAskTopic?
 
     /// Quick-start chips for the empty state.
     public let emptyChips: [ChatPromptChip]
@@ -555,6 +632,8 @@ public final class ChatConversationViewModel {
     private var aiStreamTask: Task<Void, Never>?
     private var aiConversationId: String?
     private var aiDraftsByMessageId: [String: [ChatAIDraftCard]] = [:]
+    private var aiLinksByMessageId: [String: [ChatAILink]] = [:]
+    private let actionDoneStore: AIActionDoneStore
     /// Person-mode direct room — resolved once via `POST /api/chat/direct`
     /// (find-or-create, idempotent server-side) and cached for the VM's
     /// lifetime. Person threads must always send here, never to a shared
@@ -605,6 +684,8 @@ public final class ChatConversationViewModel {
         uploader: MultipartUploader = .shared,
         aiClient: any AIChatStreaming = AIChatStreamClient.shared,
         aiConversationStore: AIConversationStore = .shared,
+        aiTopic: AIAskTopic? = nil,
+        actionDoneStore: AIActionDoneStore = .shared,
         locationProvider: any LocationProviding = DeviceLocationProvider.shared,
         activeThreadTracker: ActiveChatThreadTracker = .shared
     ) {
@@ -626,13 +707,17 @@ public final class ChatConversationViewModel {
         self.uploader = uploader
         self.aiClient = aiClient
         self.aiConversationStore = aiConversationStore
+        self.actionDoneStore = actionDoneStore
         self.locationProvider = locationProvider
         self.activeThreadTracker = activeThreadTracker
-        aiPrompts = Self.launchAICapabilities
+        let topic: AIAskTopic? = if case .ai = mode { aiTopic } else { nil }
+        self.aiTopic = topic
+        aiPrompts = topic?.starterChips ?? Self.launchAICapabilities
         emptyChips = Self.launchEmptyChips
         // Continue the user's existing AI conversation across thread
-        // opens within this app session.
-        if case .ai = mode {
+        // opens within this app session. Ask on a screen starts a new one
+        // with its first message; until then the earlier one stays current.
+        if case .ai = mode, topic == nil {
             aiConversationId = aiConversationStore.conversationId(forUserId: currentUserId)
         }
     }
@@ -662,9 +747,11 @@ public final class ChatConversationViewModel {
         uploader = .shared
         aiClient = AIChatStreamClient.shared
         aiConversationStore = .shared
+        actionDoneStore = .shared
         locationProvider = DeviceLocationProvider.shared
         activeThreadTracker = .shared
         aiPrompts = Self.launchAICapabilities
+        aiTopic = nil
         emptyChips = Self.launchEmptyChips
         self.fanEntitlement = fanEntitlement
         state = previewState
@@ -712,17 +799,26 @@ public final class ChatConversationViewModel {
     /// newest-updated first, and `POST /api/ai/chat` resumes server-side
     /// state when handed that conversation id. Its earlier turns are shown
     /// too, so the assistant never refers to something the person can't
-    /// see. No-op when the session store already holds an id (same-session
-    /// reopen).
+    /// see. When the session store already holds an id (a same-session
+    /// reopen), only that conversation's turns are read. A thread opened
+    /// with Ask on a screen continues the same conversation but shows only
+    /// what is asked there, so its starters stay in view.
     private func restoreAIConversationIfNeeded() async {
-        guard case .ai = mode, aiConversationId == nil,
-              !aiConversationStore.didStartFresh(forUserId: currentUserId) else { return }
+        guard case .ai = mode else { return }
+        // Reopened this session (or after an Ask on a screen): show the
+        // conversation it continues, as a relaunch does.
+        if let aiConversationId {
+            if aiTopic == nil { await loadAIHistory(conversationId: aiConversationId) }
+            return
+        }
+        guard !aiConversationStore.didStartFresh(forUserId: currentUserId) else { return }
         do {
             let response: AIConversationsResponse = try await api.request(AIEndpoints.conversations())
-            guard let latest = response.conversations.first else { return }
+            // A message sent meanwhile already has its conversation.
+            guard let latest = response.conversations.first, aiConversationId == nil else { return }
             aiConversationId = latest.id
             aiConversationStore.setConversationId(latest.id, forUserId: currentUserId)
-            await loadAIHistory(conversationId: latest.id)
+            if aiTopic == nil { await loadAIHistory(conversationId: latest.id) }
         } catch {
             // Non-fatal — the thread simply starts a fresh conversation.
             logger.warning("AI conversation restore failed: \(error)")
@@ -743,6 +839,7 @@ public final class ChatConversationViewModel {
             guard messages.isEmpty, aiConversationId == conversationId else { return }
             var restored: [ChatMessageDTO] = []
             var drafts: [String: [ChatAIDraftCard]] = [:]
+            var links: [String: [ChatAILink]] = [:]
             var openReplyId: String?
             for (index, item) in history.messages.enumerated() {
                 let id = "ai_history_\(index)"
@@ -752,8 +849,10 @@ public final class ChatConversationViewModel {
                     let photos = item.photos ?? 0
                     let shown = text.isEmpty && photos > 0 ? (photos == 1 ? "Sent a photo" : "Sent \(photos) photos") : text
                     restored.append(localMessage(id: id, text: shown, userId: currentUserId, type: "text"))
-                } else if let draft = item.draft {
-                    let replyId = openReplyId ?? id
+                    continue
+                }
+                var replyId = openReplyId ?? id
+                if let draft = item.draft {
                     if openReplyId == nil {
                         restored.append(localMessage(id: replyId, text: "", userId: "ai", type: "ai_reply"))
                         openReplyId = replyId
@@ -763,20 +862,31 @@ public final class ChatConversationViewModel {
                         "valid": true,
                         "draft": draft.draft.mapValues { AIChatStreamClient.foundationValue($0) }
                     ]
-                    if let card = AIChatStreamClient.parseDraft(object) {
+                    if let card = AIChatStreamClient.parseDraft(object).flatMap({ withSavedState($0) }) {
                         drafts[replyId, default: []].append(card)
                     }
                 } else if let text = item.text, !text.isEmpty {
-                    if let replyId = openReplyId, let at = restored.firstIndex(where: { $0.id == replyId }) {
-                        restored[at] = localMessage(id: replyId, text: text, userId: "ai", type: "ai_reply")
+                    if let open = openReplyId, let at = restored.firstIndex(where: { $0.id == open }) {
+                        restored[at] = localMessage(id: open, text: text, userId: "ai", type: "ai_reply")
                         openReplyId = nil
                     } else {
+                        replyId = id
                         restored.append(localMessage(id: id, text: text, userId: "ai", type: "ai_reply"))
                     }
+                }
+                // A reply's link buttons stay under it after a relaunch.
+                let itemLinks: [AIChatLinkDTO] = (item.links ?? []).filter { !$0.label.isEmpty && !$0.url.isEmpty }
+                var target: String? = replyId
+                if !restored.contains(where: { $0.id == replyId }) {
+                    target = restored.last { $0.messageType == "ai_reply" }?.id
+                }
+                if !itemLinks.isEmpty, let target {
+                    links[target, default: []] += itemLinks.map { ChatAILink(label: $0.label, url: $0.url) }
                 }
             }
             messages = restored
             aiDraftsByMessageId = drafts
+            aiLinksByMessageId = links
             rebuild()
         } catch {
             logger.warning("AI conversation history unavailable: \(error)")
@@ -1080,7 +1190,9 @@ public final class ChatConversationViewModel {
         let request = AIChatStreamRequest(
             message: text.isEmpty ? "What can you tell me about this image?" : text,
             conversationId: aiConversationId,
-            images: imageURLs.isEmpty ? nil : imageURLs
+            images: imageURLs.isEmpty ? nil : imageURLs,
+            // Every message of a thread opened from a screen says which screen.
+            context: aiTopic?.context
         )
         // The stream is consumed in a stored Task so the composer's stop
         // button (A15.3) can cancel it mid-generation via
@@ -1106,7 +1218,12 @@ public final class ChatConversationViewModel {
                         replaceLocalMessage(id: assistantId, text: streamedText, type: "ai_reply", userId: "ai")
                     case let .draft(draft):
                         aiStatus = nil
-                        aiDraftsByMessageId[assistantId, default: []].append(draft)
+                        if let card = withSavedState(draft) {
+                            aiDraftsByMessageId[assistantId, default: []].append(card)
+                        }
+                        rebuild()
+                    case let .link(link):
+                        aiLinksByMessageId[assistantId, default: []].append(link)
                         rebuild()
                     case let .error(message):
                         aiStatus = nil
@@ -1154,6 +1271,7 @@ public final class ChatConversationViewModel {
         try? FileManager.default.removeItem(at: aiPhotoFolder)
         messages = []
         aiDraftsByMessageId = [:]
+        aiLinksByMessageId = [:]
         rebuild()
     }
 
@@ -1361,6 +1479,70 @@ public final class ChatConversationViewModel {
         rebuild()
     }
 
+    // MARK: - Action cards
+
+    /// A card as this device remembers it: taps that went through show as
+    /// done, and a card put away with "Not now" stays away (nil).
+    private func withSavedState(_ card: ChatAIDraftCard) -> ChatAIDraftCard? {
+        guard var action = card.action else { return card }
+        if actionDoneStore.isDismissed(cardId: action.envelope.id) { return nil }
+        for key in action.actionKeys {
+            if let done = actionDoneStore.done(forKey: key) { action.done[key] = done }
+        }
+        var updated = card
+        updated.action = action
+        return updated
+    }
+
+    /// One tap on an action card's button (`itemId` for a row's own buttons):
+    /// the card's request through the signed-in client, if it is on the
+    /// allowlist. While it runs the card's buttons are off; once it went
+    /// through, that row (or the card) stays done, here and after a relaunch.
+    public func runAIAction(cardId: String, itemId: String?, actionId: String) async {
+        guard let state = aiDraftsByMessageId.values.joined().first(where: { $0.id == cardId })?.action,
+              state.running == nil, !state.isSettled(itemId: itemId), !state.isExpired,
+              let tapped = state.actions(itemId: itemId).first(where: { $0.id == actionId }) else { return }
+        let key = AIActionDoneStore.key(cardId: state.envelope.id, itemId: itemId, actionId: actionId)
+        updateAction(cardId) {
+            $0.running = key
+            $0.failures[itemId ?? ""] = nil
+        }
+        let outcome = await AIActionRunner.run(tapped, api: api)
+        updateAction(cardId) {
+            $0.running = nil
+            switch outcome {
+            case let .done(done): $0.done[key] = done
+            case let .failed(message): $0.failures[itemId ?? ""] = message
+            }
+        }
+        if case let .done(done) = outcome {
+            actionDoneStore.record(done, forKey: key)
+        }
+    }
+
+    /// "Not now": nothing is sent; the card goes away here and after a relaunch.
+    public func dismissAIAction(cardId: String) {
+        guard let state = aiDraftsByMessageId.values.joined().first(where: { $0.id == cardId })?.action,
+              state.running == nil else { return }
+        actionDoneStore.dismiss(cardId: state.envelope.id)
+        for (messageId, cards) in aiDraftsByMessageId {
+            aiDraftsByMessageId[messageId] = cards.filter { $0.id != cardId }
+        }
+        rebuild()
+    }
+
+    private func updateAction(_ cardId: String, _ change: (inout ChatAIActionCard) -> Void) {
+        guard let messageId = aiDraftsByMessageId.first(where: { $0.value.contains { $0.id == cardId } })?.key else { return }
+        aiDraftsByMessageId[messageId] = aiDraftsByMessageId[messageId]?.map { card in
+            guard card.id == cardId, var action = card.action else { return card }
+            change(&action)
+            var updated = card
+            updated.action = action
+            return updated
+        }
+        rebuild()
+    }
+
     // MARK: - Typing (A15)
 
     /// Composer text changed — emit `typing:start` at most once per ≥6s
@@ -1444,6 +1626,11 @@ public final class ChatConversationViewModel {
     /// thread's first message (transitions the AI thread out of the
     /// welcome/empty state).
     public func sendCapabilityPrompt(_ chip: ChatPromptChip) async {
+        // An unfinished starter ("Remind us…") goes into the composer for the person to finish.
+        if chip.label.hasSuffix("\u{2026}") {
+            setComposerTextSilently(String(chip.label.dropLast()) + " ")
+            return
+        }
         setComposerTextSilently(chip.label)
         await send()
     }
@@ -2311,10 +2498,7 @@ public final class ChatConversationViewModel {
             let showStamp = hasTail || deliveryState == .failed || deliveryState == .refused
                 || deliveryState == .sending
             let stamp: String? = showStamp ? Self.stampLabel(for: message, currentUserId: sendingIdentityId) : nil
-            var body = sentPhotosBody(for: message) ?? Self.bodyForMessage(message)
-            if message.messageType == "ai_reply" {
-                body = .aiReply(text: message.messageText ?? "", estimate: nil, drafts: aiDraftsByMessageId[message.id] ?? [])
-            }
+            let body = bubbleBody(for: message)
             let replyPreview = Self.replyPreview(for: message, in: combined)
             let reactions = message.reactions.map {
                 ChatBubbleReaction(id: $0.reaction, reaction: $0.reaction, count: $0.count, reactedByMe: $0.reactedByMe)
@@ -2331,11 +2515,22 @@ public final class ChatConversationViewModel {
                 deliveryState: deliveryState,
                 lockedTier: Self.lockedTier(for: message),
                 sentSupportTier: Self.sentSupportTier(for: message),
-                senderName: side == .incoming ? roomSenderName(for: message) : nil
+                senderName: side == .incoming ? roomSenderName(for: message) : nil,
+                aiLinks: message.messageType == "ai_reply" ? aiLinksByMessageId[message.id] ?? [] : []
             )))
         }
         state = .loaded(rows: rows)
         resolveScrollTargetIfNeeded(rows: rows)
+    }
+
+    /// An assistant reply carries the draft cards that came with it, and a message sent to the
+    /// assistant with photos shows the phone's copies of them.
+    private func bubbleBody(for message: ChatMessageDTO) -> ChatBubbleContent.Body {
+        if let photos = aiSentPhotos[message.id], !photos.isEmpty {
+            return .textWithImages(text: message.messageText ?? "", imageURLs: photos)
+        }
+        guard message.messageType == "ai_reply" else { return Self.bodyForMessage(message) }
+        return .aiReply(text: message.messageText ?? "", estimate: nil, drafts: aiDraftsByMessageId[message.id] ?? [])
     }
 
     /// A room's incoming messages name their sender, as on Android: a room
@@ -2404,12 +2599,6 @@ public final class ChatConversationViewModel {
             readAt: nil,
             sender: nil
         )
-    }
-
-    /// A message sent to the assistant with photos shows the phone's copies of them.
-    private func sentPhotosBody(for message: ChatMessageDTO) -> ChatBubbleContent.Body? {
-        guard let photos = aiSentPhotos[message.id], !photos.isEmpty else { return nil }
-        return .textWithImages(text: message.messageText ?? "", imageURLs: photos)
     }
 
     private func localMessage(id: String, text: String, userId: String, type: String) -> ChatMessageDTO {

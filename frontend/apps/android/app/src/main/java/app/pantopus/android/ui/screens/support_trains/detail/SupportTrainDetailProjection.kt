@@ -98,6 +98,7 @@ object SupportTrainDetailProjection {
             exactAddress = dto.address?.singleLineLabel?.takeIf { it.isNotBlank() },
             deliveryInstructions = dto.deliveryInstructions,
             updates = updateCards(dto.updates.orEmpty(), organizers),
+            chatRoomId = dto.chatThreadId?.takeIf { it.isNotBlank() },
         )
     }
 

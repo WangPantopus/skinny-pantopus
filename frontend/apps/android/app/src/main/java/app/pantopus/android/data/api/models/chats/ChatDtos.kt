@@ -282,6 +282,8 @@ data class ChatRoomDetailResponse(
 @JsonClass(generateAdapter = true)
 data class ChatRoomDetail(
     val type: String? = null,
+    /** The room's name; a Support Train's room goes by the train's title. */
+    val name: String? = null,
     val participants: List<ChatRoomParticipant>? = null,
     /** False once the room is read-only (a plan's chat after the plan, or a cancelled plan). */
     @Json(name = "is_active") val isActive: Boolean? = null,
