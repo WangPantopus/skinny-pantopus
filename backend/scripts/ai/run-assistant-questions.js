@@ -135,8 +135,7 @@ function check(question, got) {
   if (e.textMatches && !new RegExp(e.textMatches, 'i').test(got.text)) fails.push(`text lacks /${e.textMatches}/`);
   if (e.textNotMatches && new RegExp(e.textNotMatches, 'im').test(got.text)) fails.push(`text matches /${e.textNotMatches}/`);
   // What everyone nearby would read: the title and about a card would post.
-  const posted = got.cards.flatMap((c) => (c.actions || []).map((a) => a.request?.body)).filter(Boolean);
-  if (e.publicNotMatches && posted.some((b) => new RegExp(e.publicNotMatches, 'i').test(`${b.title || ''}\n${b.about || ''}`))) {
+  if (e.publicNotMatches && bodies.some((body) => body && new RegExp(e.publicNotMatches, 'i').test(`${body.title || ''}\n${body.about || ''}`))) {
     fails.push(`public title or about matches /${e.publicNotMatches}/`);
   }
   return fails;
