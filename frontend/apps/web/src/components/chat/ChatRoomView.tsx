@@ -135,6 +135,9 @@ export default function ChatRoomView({
   // receipt load once per person: keyed on the room object, each receipt's own signal reloaded them in a loop.
   const historyPeerId = useMemo(() => {
     if (!roomInfo || !currentUserId || !representedUserIds.includes(String(currentUserId))) return null;
+    // Only a room with one other person (a direct or task chat) has a history with them; a group's room,
+    // such as a Support Train's, is with everyone in it.
+    if (roomInfo.type !== 'direct' && roomInfo.type !== 'gig') return null;
     const participants = roomInfo?.participants || [];
     const nonCurrent = participants.filter((p: Record<string, any>) => !isRepresented((p.user_id as string) || ((p.user as Record<string, any>)?.id as string)));
     const ownerParticipant = participants.find((p: Record<string, any>) => p.role === 'owner');
@@ -280,10 +283,13 @@ export default function ChatRoomView({
           : ownerParticipant || nonCurrentParticipants[0])
       : (nonCurrentParticipants.find((p: Record<string, any>) => p.role !== 'owner') || nonCurrentParticipants[0]);
   const otherUser = (otherParticipant as Record<string, any>)?.user as Record<string, any> | undefined;
-  const chatTitle = chatPersonName(otherUser)
+  // A Support Train's chat goes by the train's title, and its title opens the train.
+  const supportTrainId = roomInfo?.type === 'support_train' ? roomInfo.support_train_id || null : null;
+  const chatTitle = (supportTrainId ? roomInfo?.name : null)
+    || chatPersonName(otherUser)
     || roomInfo?.name
     || 'Conversation';
-  const otherProfileHref = chatPersonHref(otherUser);
+  const otherProfileHref = supportTrainId ? `/app/support-trains/${supportTrainId}` : chatPersonHref(otherUser);
 
   // ── Historical messages header ────────────────────────
   const historicalHeader = historicalMessages.length > 0 ? (
@@ -415,6 +421,9 @@ export default function ChatRoomView({
                 </h1>
                 {roomInfo?.type === 'gig' && chatTitle !== 'Conversation' && (
                   <div className="text-xs text-app-muted">Task Chat</div>
+                )}
+                {supportTrainId && (
+                  <div className="text-xs text-app-muted">Support Train</div>
                 )}
               </div>
             </div>

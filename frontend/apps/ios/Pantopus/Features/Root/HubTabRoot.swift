@@ -2728,6 +2728,9 @@ public struct HubTabRoot: View {
                 // (Leave / Mark delivered cover a helper's own slot).
                 onMessageHost: { host in
                     Task { @MainActor in push(Self.chatRoute(toHost: host)) }
+                },
+                onOpenChat: { destination in
+                    Task { @MainActor in push(.chatConversation(destination)) }
                 }
             )
         case let .reviewSignups(supportTrainId):

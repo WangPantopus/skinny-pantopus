@@ -201,8 +201,9 @@ public struct InboxTabRoot: View {
     /// A chat link (`/chat/:roomId`, what chat pushes carry) names only the
     /// room. A direct room with exactly one other person, who the viewer has
     /// not blocked, opens that person's thread as the Messages list does, so
-    /// its details keep Report and Block. Anything else, or a failed read,
-    /// opens the room exactly as before.
+    /// its details keep Report and Block. A room the list shows under its own
+    /// name (a Support Train's, a group's) opens under that name. Anything
+    /// else, or a failed read, opens the room exactly as before.
     private static func linkedConversation(roomId: String, viewerId: String) async -> InboxConversationDestination {
         let room = InboxConversationDestination(
             mode: .room(id: roomId),
@@ -215,9 +216,20 @@ public struct InboxTabRoot: View {
         guard !viewerId.isEmpty,
               let detail = try? await APIClient.shared.request(
                   ChatEndpoints.room(roomId: roomId), as: ChatRoomDetailResponse.self
-              ),
-              detail.room.type == "direct"
+              )
         else { return room }
+        guard detail.room.type == "direct" else {
+            guard detail.room.type != "gig", let name = detail.room.name, !name.isEmpty else { return room }
+            let initials = name.split(separator: " ").prefix(2).compactMap { $0.first.map(String.init) }.joined().uppercased()
+            return InboxConversationDestination(
+                mode: .room(id: roomId),
+                kind: .dm,
+                displayName: name,
+                initials: initials.isEmpty ? "?" : initials,
+                identityKind: nil,
+                verified: false
+            )
+        }
         let others = (detail.room.participants ?? []).filter { $0.userId != viewerId }
         guard others.count == 1,
               let otherId = others.first?.userId, !otherId.isEmpty,

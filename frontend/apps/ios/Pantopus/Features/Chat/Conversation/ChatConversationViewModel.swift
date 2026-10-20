@@ -2474,10 +2474,7 @@ public final class ChatConversationViewModel {
             let showStamp = hasTail || deliveryState == .failed || deliveryState == .refused
                 || deliveryState == .sending
             let stamp: String? = showStamp ? Self.stampLabel(for: message, currentUserId: sendingIdentityId) : nil
-            var body = Self.bodyForMessage(message)
-            if message.messageType == "ai_reply" {
-                body = .aiReply(text: message.messageText ?? "", estimate: nil, drafts: aiDraftsByMessageId[message.id] ?? [])
-            }
+            let body = bubbleBody(for: message)
             let replyPreview = Self.replyPreview(for: message, in: combined)
             let reactions = message.reactions.map {
                 ChatBubbleReaction(id: $0.reaction, reaction: $0.reaction, count: $0.count, reactedByMe: $0.reactedByMe)
@@ -2494,11 +2491,33 @@ public final class ChatConversationViewModel {
                 deliveryState: deliveryState,
                 lockedTier: Self.lockedTier(for: message),
                 sentSupportTier: Self.sentSupportTier(for: message),
+                senderName: side == .incoming ? roomSenderName(for: message) : nil,
                 aiLinks: message.messageType == "ai_reply" ? aiLinksByMessageId[message.id] ?? [] : []
             )))
         }
         state = .loaded(rows: rows)
         resolveScrollTargetIfNeeded(rows: rows)
+    }
+
+    /// An assistant reply carries the draft cards that came with it.
+    private func bubbleBody(for message: ChatMessageDTO) -> ChatBubbleContent.Body {
+        guard message.messageType == "ai_reply" else { return Self.bodyForMessage(message) }
+        return .aiReply(text: message.messageText ?? "", estimate: nil, drafts: aiDraftsByMessageId[message.id] ?? [])
+    }
+
+    /// A room's incoming messages name their sender, as on Android: a room
+    /// has several people, and its avatar alone doesn't say who wrote what.
+    /// A made-up username is never shown.
+    private func roomSenderName(for message: ChatMessageDTO) -> String? {
+        guard case .room = mode else { return nil }
+        for name in [message.sender?.displayName, message.sender?.name] {
+            if let name = name?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
+                return name
+            }
+        }
+        return MadeUpUsername.chosen(message.sender?.handle)
+            ?? MadeUpUsername.chosen(message.sender?.username)
+            ?? "Participant"
     }
 
     /// Resolve the Chat Search scroll target once: if the deep-linked
