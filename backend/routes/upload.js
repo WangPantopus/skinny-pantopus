@@ -20,6 +20,7 @@ const { calculateAndStoreCompleteness } = require('../utils/businessCompleteness
 const { requirePersonaEnabled } = require('../utils/featureFlags');
 const { writeIdentityAuditLog } = require('../utils/identityAudit');
 const { syncLocalProfileFromAccount } = require('../utils/identityProfiles');
+const { actingBusinessInRoom } = require('../services/chatBusinessAccess');
 
 // Rate limit: 30 uploads per 15 minutes per IP
 const uploadLimiter = rateLimit({
@@ -659,7 +660,8 @@ router.post('/chat-media/:roomId', uploadLimiter, verifyToken, upload.array('fil
       .eq('is_active', true)
       .maybeSingle();
 
-    if (!participant) {
+    // A business's owner and staff attach files to its conversations without being members of them.
+    if (!participant && !(await actingBusinessInRoom(roomId, userId))) {
       return res.status(403).json({ error: 'Not authorized to upload files to this room' });
     }
 
