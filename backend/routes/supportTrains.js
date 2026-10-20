@@ -3231,7 +3231,7 @@ router.post(
           userId,
           error: orgErr.message,
         });
-        throw Object.assign(new Error('Could not check organizer access. Please try again.'), { status: 503 });
+        return supportTrainUnavailable(res, 'Could not check organizer access. Please try again.');
       }
       if (orgRow && (orgRow.role === 'primary' || orgRow.role === 'co_organizer')) {
         isOrganizer = true;
@@ -3264,7 +3264,7 @@ router.post(
         reservationId,
         error: resErr.message,
       });
-      throw Object.assign(new Error('Could not load the reservation. Please try again.'), { status: 503 });
+      return supportTrainUnavailable(res, 'Could not load the reservation. Please try again.');
     }
     if (!reservation) {
       return res.status(404).json({ error: 'NOT_FOUND', message: 'Reservation not found.' });
@@ -3286,9 +3286,17 @@ router.post(
 
     // Both account helpers and email guests need an actual street address.
     // Check before creating a grant or claiming that a repeated share worked.
-    const delivery = await getSupportTrainExactDeliveryDetails(st, st.id, {
-      includeInstructions: !reservation.user_id,
-    });
+    let delivery;
+    try {
+      delivery = await getSupportTrainExactDeliveryDetails(st, st.id, {
+        includeInstructions: !reservation.user_id,
+      });
+    } catch (err) {
+      // A failed read throws a "try again" 503. Answer it here: app.js replaces every 5xx message in production.
+      if (err.status !== 503) throw err;
+      logger.error('Reveal Support Train address delivery details failed', { supportTrainId: st.id, reservationId });
+      return supportTrainUnavailable(res, err.message);
+    }
     if (!delivery.address?.address?.trim()) {
       return res.status(409).json({
         error: 'ADDRESS_UNAVAILABLE',
@@ -3390,7 +3398,14 @@ router.post(
       });
     }
 
-    const alreadyShared = await hasSupportTrainAddressGrant(st.id, reservation.user_id);
+    let alreadyShared;
+    try {
+      alreadyShared = await hasSupportTrainAddressGrant(st.id, reservation.user_id);
+    } catch (err) {
+      if (err.status !== 503) throw err;
+      logger.error('Reveal Support Train address grant check failed', { supportTrainId: st.id, reservationId });
+      return supportTrainUnavailable(res, err.message);
+    }
 
     if (!alreadyShared) {
       const { error: grantErr } = await supabaseAdmin.from('SupportTrainAddressGrant').insert({

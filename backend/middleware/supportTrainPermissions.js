@@ -11,10 +11,10 @@ const logger = require('../utils/logger');
 const Joi = require('joi');
 const trainIdSchema = Joi.string().uuid().required();
 
-function unavailable(res) {
+function unavailable(res, message = 'Could not load this Support Train right now. Please try again.') {
   return res.status(503).json({
     error: 'SUPPORT_TRAIN_UNAVAILABLE',
-    message: 'Could not load this Support Train right now. Please try again.',
+    message,
   });
 }
 
