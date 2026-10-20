@@ -1,7 +1,7 @@
 # Pantopus — Privacy Data Inventory
 
 **Status:** Pre-launch (Bucket 2, Block RR-A)
-**Last reviewed:** 2026-10-06 (launch review: health details in emergency info §2.10, location wired §2.4, system boot time and App Group defaults §3)
+**Last reviewed:** 2026-10-20 (AI processing by Anthropic §2.11, §4, §5; draft for the founder's review). Before that 2026-10-06 (launch review: health details in emergency info §2.10, location wired §2.4, system boot time and App Group defaults §3)
 **Owner:** Mobile / Compliance
 
 This is the single source of truth for **what personal data the Pantopus
@@ -187,6 +187,33 @@ Keychain/Keystore review, not for the labels):**
 Optional and user-entered; never used for analytics or shared with third parties.
 Apple: **Health**. Google Play: **Health info**.
 
+### 2.11 AI processing (Anthropic) — *App Functionality, Linked, not Tracking* — *new 2026-10*
+
+The Pantopus assistant (`POST /api/ai/chat`) and the AI drafting, photo-reading and
+briefing features send data from the **backend** to **Anthropic** (Claude Sonnet 5.5,
+`backend/config/anthropic.js`), which processes it on our behalf. The apps never call
+Anthropic themselves; no Anthropic code ships in them.
+
+| Data | Evidence | Sent to | Kept by Pantopus |
+|------|----------|---------|------------------|
+| Messages to the assistant | `backend/routes/ai.js` `/chat` → `services/ai/agentService.js` `streamChat` | Anthropic | `AIConversation.messages`, with the replies |
+| Photos and files attached to the assistant or a draft (a hauler's flyer, a radon lab report) | `POST /api/upload/ai-media` → `services/ai/photos.js`; `/api/ai/draft/pickup-schedule`, `/api/ai/draft/radon-result` | Anthropic (inline) | `ai-chat/` storage objects: private and deleted right after the read; a sweep deletes leftovers older than 1 hour (#2458) |
+| What was on screen when the person tapped Ask (a plan, a post, a Place section, Today) | `services/ai/screenContext.js`, loaded with the screen's own access checks | Anthropic | in the conversation |
+| What the assistant looks up | `services/ai/readTools.js`: the person's homes, Place facts with their sources, household tasks and members' names, plans (other people's plans as an area only until accepted), Nearby posts and replies (other people's words are labeled as data), notification settings | Anthropic | in the conversation (each tool result clipped to 4,000 characters) |
+| City, time zone and approximate location | the context message (home city, pickup days, weather alerts) and the `[Sent: …]` / `[User location context: …]` lines | Anthropic | in the conversation |
+| Briefing and local-update text | `services/context/briefingComposer.js`, `services/context/localUpdateProvider.js`: the day's facts for the home (weather, alerts, pickup days) and nearby local updates | Anthropic | the briefing itself |
+| Draft requests (posts, Support Trains, tasks; property suggestions only when `PROPERTY_SUGGESTIONS_LLM=1`) | `/api/ai/draft/*`, `services/ai/supportTrainDraftService.js`, `services/magicTaskService.js`, `services/ai/propertySuggestionsService.js` | Anthropic | the draft only, if the person saves it |
+| Request log (no message content) | `AIRequestLog`: feature, model, tokens, latency, status, error message | — | kept; `user_id` set to null when the account is deleted |
+
+**Not sent:** passwords, payment details, emergency and medical info (the assistant has
+no tool that reads it), chat messages between people (phase 1 doesn't read chats),
+and the exact address of anyone else's home.
+
+> **Labels:** no new data type. Messages, photos and other user content (§2.5) and
+> location (§2.4) are already declared. Anthropic is a service provider processing on
+> our behalf, so Play "Data shared" stays **No** (the service-provider exemption) and
+> Apple needs no tracking entry. Compliance owner to confirm at submission time.
+
 ---
 
 ## 3. Required-reason API audit (iOS — Apple "privacy-impacting" APIs)
@@ -236,6 +263,19 @@ manifests and are **out of scope** for this file.
 | Google Play services **Block Store** (`play-services-auth-blockstore`) — *2026-08* | — | `data/auth/AccountHintStore.kt` | Stores the account hint + single-use resume grant **on the device only** (`setShouldBackupToCloud(false)`); Google does not receive the bytes in a readable form and no cloud copy is made. Not "collected" by us; not "shared". | Yes (Google) |
 | Apple `LocalAuthentication` / `CryptoKit` Secure Enclave; Android `BiometricPrompt` / Keystore — *2026-08* | system frameworks | system frameworks | Biometric / passcode presence check and hardware-backed keys. **Biometric templates never leave the OS**; the app only receives a yes/no and a signature. | n/a (OS) |
 
+> **Server-side AI processor (not an SDK) — 2026-10:** **Anthropic** (Claude Sonnet 5.5)
+> processes the AI features' data for the backend (§2.11), and the privacy policy names it
+> (section 5). **Founder to confirm before the policy ships:** the Anthropic account's
+> data-retention setting (standard retention or zero data retention), and that
+> Anthropic's commercial terms (no training on API data, data processing addendum) cover
+> this account. The policy's sentence on Anthropic must match both.
+>
+> **Founder-only, production storage:** the production bucket `pantopus-uploads` is public
+> (`/storage/v1/object/public/...`). Assistant photos uploaded before #2458 sit under
+> `ai-chat/` with `public, max-age=31536000, immutable` and were never deleted, so they
+> may still be fetchable and cached in the CDN. Delete the old `ai-chat/` objects and
+> purge them from the CDN, or move uploads to a private bucket.
+
 ---
 
 ## 5. Retention & deletion
@@ -267,6 +307,13 @@ manifests and are **out of scope** for this file.
   Keychain items intentionally **survive uninstall** (the reinstall path
   requires the OS lock — design §2 principle 1); on Android nothing in app
   storage survives uninstall and the Block Store item is same-device only.
+- **AI (2026-10):** `AIConversation` rows are deleted with the account
+  (`ON DELETE CASCADE` from `User`). No app offers deleting one conversation
+  yet (the API has `DELETE /api/ai/conversations/:id`), so the policy promises
+  deletion with the account or on request. `AIRequestLog` keeps no content;
+  its `user_id` becomes null when the account is deleted. Assistant photos
+  (`ai-chat/`) are deleted after the read or within an hour (#2458). At
+  Anthropic: per the account's retention setting (founder to confirm, §4).
 
 ---
 
@@ -278,6 +325,9 @@ regenerate the three outputs and re-verify they agree:
 - A new field is added to `RegisterRequest` / profile DTOs.
 - A new permission string (Info.plist) or `uses-permission` (manifest).
 - A new SDK that collects data, or a new analytics vendor.
+- A new AI feature, or new data sent to the AI processor (a new assistant
+  read tool, screen context or draft type) — §2.11, and section 5 of the
+  privacy policy.
 - A new first-party use of a required-reason API.
 - A new identifier or device/session record (e.g. the 2026-08 device id /
   install id / device public key / security events — §2.6, §2.9), a new
