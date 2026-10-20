@@ -38,9 +38,10 @@ env_file=${PANTOPUS_ENV_FILE:-$HOME/pantopus/.env.$suffix}
 log_options=(--log-driver local --log-opt max-size=20m --log-opt max-file=5)
 health_attempts=${PANTOPUS_HEALTH_ATTEMPTS:-40}
 health_interval=${PANTOPUS_HEALTH_INTERVAL:-3}
+lock_dir=${PANTOPUS_LOCK_DIR:-$HOME/pantopus}
 
 # Also serializes manual host invocations, independently of GitHub concurrency.
-exec 9>"${PANTOPUS_LOCK_DIR:-$HOME/pantopus}/deploy-$target.lock"
+exec 9>"$lock_dir/deploy-$target.lock"
 flock -n 9 || { echo 'Another rollout holds the host lock' >&2; exit 1; }
 
 candidate=$api-candidate
@@ -98,7 +99,52 @@ trap 'exit 129' HUP
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-if [[ "$image_mode" == registry ]]; then docker pull "$image"; fi
+# Every release pulls a new image, so remove this repository's release images
+# that no container uses. Every container keeps its image: both targets' services
+# and their stopped -previous release (the recovery path), and anything started
+# by hand. Tagged images, images without a name (such as a --local-image load),
+# other repositories and the release being deployed stay. Rollback Backend pulls
+# an older release from the registry again.
+prune_releases() {
+  local reference tag id
+  while read -r reference tag id; do
+    [[ "$tag" == '<none>' && "${reference#*@}" != "${image#*@}" ]] || continue
+    [[ -z "$(docker ps -aq --filter "ancestor=$id")" ]] || continue
+    if docker image rm "$reference" >/dev/null; then echo "Removed unused release image $reference"; fi
+  done < <(docker image ls --digests --no-trunc --format '{{.Repository}}@{{.Digest}} {{.Tag}} {{.ID}}' "${image%@*}")
+}
+# A pull unpacks each layer next to its compressed download. Rather than run out
+# of disk partway, stop before the pull unless the disk holds twice the size of
+# the release this target runs (2 GB on a first deployment).
+require_free_space() {
+  local current size root free inodes need
+  docker image inspect "$image" >/dev/null 2>&1 && return 0 # Nothing to download.
+  current=$(docker inspect --format '{{.Image}}' "$api" 2>/dev/null) &&
+    size=$(docker image inspect --format '{{.Size}}' "$current") || size=$((1 << 30))
+  root=$(docker info --format '{{.DockerRootDir}}')
+  free=$(df -Pk "$root" | awk 'NR == 2 { print int($4 / 1024) }')
+  # Shown, not checked: Docker can't say how many files a layer holds, and a
+  # full inode table fails a pull the same way.
+  inodes=$(df -Pi "$root" | awk 'NR == 2 { print $4 }')
+  need=$(( (size * 2 + 1048575) / 1048576 ))
+  if (( free < need )); then
+    echo "Not enough disk space to pull $image: $free MB ($inodes inodes) free in $root, about $need MB needed. Free space on the host, then rerun." >&2
+    exit 1
+  fi
+  echo "Disk: $free MB ($inodes inodes) free in $root; this pull needs about $need MB."
+}
+
+if [[ "$image_mode" == registry ]]; then
+  # Both targets share the host's images, and a new release has no container
+  # between its pull and its start. Each rollout holds this lock shared from its
+  # pull until it exits, so cleanup never runs while another rollout is under
+  # way. Lock the directory itself: on a full disk, creating a file can fail.
+  exec 8<"$lock_dir"
+  if flock -xn 8; then prune_releases; else echo 'Another rollout is under way; skipping image cleanup'; fi
+  flock -s 8
+  require_free_space
+  docker pull "$image"
+fi
 # The candidate is unexposed and runs no background jobs. Verify DB readiness
 # before interrupting the old API or worker, even on a first-ever deployment.
 docker rm -f "$candidate" >/dev/null 2>&1 || true
