@@ -2,7 +2,6 @@ package app.pantopus.android.data.auth
 
 import android.content.Context
 import androidx.datastore.preferences.core.edit
-import app.pantopus.android.data.ai.AIActionCardStore
 import app.pantopus.android.data.chats.ChatBadgeCoordinator
 import app.pantopus.android.data.chats.ChatConversationPreferences
 import app.pantopus.android.data.gigs.GigDraftQueue
@@ -25,12 +24,9 @@ import javax.inject.Singleton
  * What the device keeps for the signed-in account besides its tokens and the HTTP cache: the screens' store
  * (Instant Screens), Coil's image caches (chat and mail photos, avatars), the home-screen widgets' snapshots, the chat badge
  * snapshot, chat mute/hide choices, Support Train reservation patches, the broadcast seed, queued
- * offline task drafts, the Today cards' per-home dismissals and the assistant's finished action cards. Sign-out
- * clears all of it so the next person on the device finds nothing of the last account, as iOS `clearLocalSession`
- * does.
+ * offline task drafts and the Today cards' per-home dismissals. Sign-out clears all of it so the next
+ * person on the device finds nothing of the last account, as iOS `clearLocalSession` does.
  */
-// One dependency per kind of device data, so sign-out can clear each.
-@Suppress("LongParameterList")
 @Singleton
 class AccountDeviceData
     @Inject
@@ -44,7 +40,6 @@ class AccountDeviceData
         private val broadcastSeeds: BroadcastDetailSeedCache,
         private val gigDrafts: GigDraftQueue,
         private val screenStore: ScreenStore,
-        private val aiCards: AIActionCardStore,
     ) {
         /** Never throws: a part that fails is logged and the rest is still cleared. */
         @OptIn(ExperimentalCoilApi::class)
@@ -66,8 +61,6 @@ class AccountDeviceData
                 }.onFailure { Timber.w(it, "Sign-out could not clear the widget snapshots") }
                 runCatching { chatPreferences.clear() }
                     .onFailure { Timber.w(it, "Sign-out could not clear the chat preferences") }
-                runCatching { aiCards.clear() }
-                    .onFailure { Timber.w(it, "Sign-out could not clear the assistant's card states") }
                 runCatching { context.homeTodayPreferences.edit { it.clear() } }
                     .onFailure { Timber.w(it, "Sign-out could not clear the Today preferences") }
             }

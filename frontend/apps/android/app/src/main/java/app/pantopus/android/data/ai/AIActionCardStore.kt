@@ -12,7 +12,9 @@ import javax.inject.Singleton
  * The assistant's action cards this phone has finished or set aside (AI assistant phase 1 contract,
  * section 4.3): which button of a card (or of one of its rows) succeeded, with the screen it opened,
  * and which cards got "Not now". A card restored from the conversation's history after a relaunch reads
- * this, so it shows as done instead of offering the same request again. Cleared at sign-out.
+ * this, so it shows as done instead of offering the same request again. It holds only card and button ids,
+ * in-app links and short notes, and it outlives sign-out on purpose: "Post plan", a reply and "Message everyone" carry no
+ * idempotency key, so offering them again after signing back in would send them twice (iOS keeps them too).
  */
 @Singleton
 class AIActionCardStore
@@ -67,11 +69,6 @@ class AIActionCardStore
         @Synchronized
         fun dismiss(cardId: String) {
             if (!isDismissed(cardId)) append(JSONObject().put(KEY_CARD, cardId).put(KEY_DISMISSED, true))
-        }
-
-        @Synchronized
-        fun clear() {
-            prefs.edit { remove(KEY_ENTRIES) }
         }
 
         private fun append(entry: JSONObject) {
