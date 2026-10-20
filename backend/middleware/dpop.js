@@ -107,7 +107,7 @@ async function rememberJti(jti) {
     throw new DpopError('DPOP_REPLAY', 'DPoP proof replayed');
   }
   logger.error('auth.dpop.jti_store_failed', { error: error.message });
-  throw new DpopError('DPOP_INVALID', 'Could not verify DPoP proof');
+  throw new DpopError('AUTH_UNAVAILABLE', 'Could not verify this device right now. Please try again.', 503);
 }
 
 /**
@@ -149,6 +149,11 @@ async function verifyDpop(req, opts = {}) {
     return { ok: true, dpop };
   } catch (err) {
     req.dpop = null;
+    // A failed replay-cache write says nothing about the proof's validity.
+    // Refuse admission, but let clients keep their credentials and retry.
+    if (err instanceof DpopError && err.status === 503) {
+      return { ok: false, status: 503, code: err.code, error: err.message };
+    }
     const code = err instanceof DpopError ? err.code : 'DPOP_INVALID';
     logger.warn('auth.dpop.invalid', {
       errorCode: code,

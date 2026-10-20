@@ -25,6 +25,14 @@ const authPolicy = require('../config/authPolicy');
 const authEvents = new EventEmitter();
 authEvents.setMaxListeners(50);
 
+// An unreadable security record is not an absent, pre-registry record. Keep
+// the session intact, but refuse admission until its policy can be checked.
+function authUnavailableError(cause) {
+  return Object.assign(new Error('Could not verify this session right now. Please try again.', { cause }), {
+    status: 503, code: 'AUTH_UNAVAILABLE', authBusy: true,
+  });
+}
+
 const SUPABASE_AUTH_CLIENT_OPTIONS = {
   auth: { persistSession: false, autoRefreshToken: false },
 };
@@ -190,7 +198,7 @@ async function getSessionById(sessionId) {
     .maybeSingle();
   if (error) {
     logger.warn('auth.session.lookup_failed', { sessionId, error: error.message });
-    return null;
+    throw authUnavailableError(error);
   }
   return data || null;
 }
@@ -204,7 +212,7 @@ async function findSessionByRefreshHash(hash) {
     .maybeSingle();
   if (error) {
     logger.warn('auth.session.hash_lookup_failed', { error: error.message });
-    return null;
+    throw authUnavailableError(error);
   }
   return data || null;
 }
@@ -218,7 +226,7 @@ async function findSessionByPrevRefreshHash(hash) {
     .maybeSingle();
   if (error) {
     logger.warn('auth.session.prev_hash_lookup_failed', { error: error.message });
-    return null;
+    throw authUnavailableError(error);
   }
   return data || null;
 }
@@ -279,8 +287,8 @@ const _sessionStateCache = new Map(); // sessionId -> { value, ts }
 
 /**
  * @returns {Promise<{known:boolean, revoked:boolean, context:string|null, row:object|null}>}
- *   `known:false` ⇒ pre-registry session (no row) or lookup failure — callers
- *   treat that as "allow" (getUser stays the authority).
+ *   `known:false` means a successful read found no pre-registry session row.
+ *   Lookup failures throw and are never cached as an absent session.
  */
 async function getSessionStateCached(sessionId) {
   if (!isUuid(sessionId)) return { known: false, revoked: false, context: null, row: null };
@@ -442,7 +450,8 @@ async function getSessionsValidAfter(userId) {
     .select('sessions_valid_after')
     .eq('id', userId)
     .maybeSingle();
-  if (error || !data?.sessions_valid_after) return null;
+  if (error) throw authUnavailableError(error);
+  if (!data?.sessions_valid_after) return null;
   const d = new Date(data.sessions_valid_after);
   return Number.isNaN(d.getTime()) ? null : d;
 }
@@ -689,6 +698,7 @@ async function listSecurityEvents(userId, limit = 20) {
 
 module.exports = {
   authEvents,
+  authUnavailableError,
   createAuthClient,
   isAuthServiceBusy,
   hashToken,

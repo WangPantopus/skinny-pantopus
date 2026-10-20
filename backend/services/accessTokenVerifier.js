@@ -98,7 +98,13 @@ async function verifyAccessToken(token, { authClient }) {
   const local = await verifyLocally(token);
   if (local.status === 'expired') return { ok: false, reason: 'invalid' };
   if (local.status === 'valid') {
-    const state = await authSessionService.getSessionStateCached(local.claims.session_id);
+    let state;
+    try {
+      state = await authSessionService.getSessionStateCached(local.claims.session_id);
+    } catch (error) {
+      if (error.authBusy) return { ok: false, reason: 'busy', error };
+      throw error;
+    }
     if (state.known) {
       if (!loggedActive) {
         loggedActive = true;
