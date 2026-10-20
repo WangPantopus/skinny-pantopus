@@ -185,18 +185,19 @@ function candidatePairs({ found, lost }) {
   return pairs.sort((a, b) => b.overlap - a.overlap);
 }
 
+/** The verdicts of the last 7 days, by pair key: { verdict: 'likely'|'unlikely', item, reason }. */
 async function judgedRecently(pairs) {
-  if (pairs.length === 0) return new Set();
+  const judged = new Map();
+  if (pairs.length === 0) return judged;
   const keys = pairs.map((pair) => pairKey(pair.found, pair.lost));
-  const judged = new Set();
   for (let i = 0; i < keys.length; i += 100) {
     const { data, error } = await supabaseAdmin.from('PlaceSectionCache')
-      .select('cache_key')
+      .select('cache_key, payload')
       .eq('section_id', JUDGED_SECTION)
       .in('cache_key', keys.slice(i, i + 100))
       .gt('expires_at', new Date().toISOString());
     if (error) throw new Error(`Failed to read judged pairs: ${error.message}`);
-    for (const row of data || []) judged.add(row.cache_key);
+    for (const row of data || []) judged.set(row.cache_key, row.payload || {});
   }
   return judged;
 }
@@ -328,13 +329,33 @@ async function pairsToJudge(pairs, limit) {
   return kept;
 }
 
+/** Tell both authors of a likely pair, each when they'd hear of it; how many were told. */
+async function tellBoth(pair, item, now) {
+  let sent = 0;
+  for (const [own, other, lostSide] of [[pair.lost, pair.found, true], [pair.found, pair.lost, false]]) {
+    try {
+      const result = await tellAuthor({ own, other, item, meters: pair.meters, lostSide, now });
+      if (result?.sent) sent += 1;
+    } catch (err) {
+      logger.warn('nearby.lostfound.nudge_failed', { postId: own.id, error: err.message });
+    }
+  }
+  return sent;
+}
+
 async function lostFoundMatch(now = Date.now()) {
   const pairs = candidatePairs(await openLostAndFound(now));
   if (pairs.length === 0) return { judged: 0, likely: 0, sent: 0 };
   const judged = await judgedRecently(pairs);
+  const counts = { judged: 0, likely: 0, sent: 0 };
+  // A likely pair stays worth telling for its 7 days: an author who couldn't hear of it when it
+  // was judged (the day's cap, Suggestions off) hears on a later run. The engine never sends one twice.
+  for (const pair of pairs) {
+    const earlier = judged.get(pairKey(pair.found, pair.lost));
+    if (earlier?.verdict === 'likely' && ITEMS.includes(earlier.item)) counts.sent += await tellBoth(pair, earlier.item, now);
+  }
   const unjudged = pairs.filter((pair) => !judged.has(pairKey(pair.found, pair.lost)));
   const fresh = await pairsToJudge(unjudged, PAIRS_PER_CALL * CALLS_PER_RUN);
-  const counts = { judged: 0, likely: 0, sent: 0 };
   for (let i = 0; i < fresh.length; i += PAIRS_PER_CALL) {
     const batch = fresh.slice(i, i + PAIRS_PER_CALL);
     const verdicts = await judge(batch);
@@ -348,14 +369,7 @@ async function lostFoundMatch(now = Date.now()) {
         { verdict: verdict.likely ? 'likely' : 'unlikely', item: verdict.item, reason: verdict.reason }, JUDGED_TTL_MS, new Date().toISOString());
       if (!verdict.likely) continue;
       counts.likely += 1;
-      for (const [own, other, lostSide] of [[pair.lost, pair.found, true], [pair.found, pair.lost, false]]) {
-        try {
-          const result = await tellAuthor({ own, other, item: verdict.item, meters: pair.meters, lostSide, now });
-          if (result?.sent) counts.sent += 1;
-        } catch (err) {
-          logger.warn('nearby.lostfound.nudge_failed', { postId: own.id, error: err.message });
-        }
-      }
+      counts.sent += await tellBoth(pair, verdict.item, now);
     }
   }
   return counts;
