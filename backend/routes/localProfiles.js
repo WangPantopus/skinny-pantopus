@@ -21,7 +21,7 @@ const {
 } = require('../serializers/identitySerializers');
 const { applyLocationPrecision, leastPrecise } = require('../utils/locationPrivacy');
 const { requireIdentityFirewallEnabled } = require('../utils/featureFlags');
-const { isSearchable, isScopedBlocked } = require('../utils/visibilityPolicy');
+const { isSearchable, isScopedBlocked, isUnpublishedBusiness } = require('../utils/visibilityPolicy');
 const { hasBlocked } = require('../services/blockService');
 const { isPublicStorageUrl } = require('../services/s3Service');
 const { readablePosts, postScopeAccess } = require('../services/pulse/readAccess');
@@ -228,7 +228,9 @@ async function canViewLocalProfile(profile, context) {
 
 async function resolveViewableLocalProfile(handle, viewerId) {
   const profile = await getLocalProfileByHandle(handle);
-  if (!profile) return { errorStatus: 404, error: 'Local profile not found' };
+  if (!profile || await isUnpublishedBusiness(profile.user_id)) {
+    return { errorStatus: 404, error: 'Local profile not found' };
+  }
   const viewerContext = await getLocalProfileViewerContext(profile, viewerId);
   if (!(await canViewLocalProfile(profile, viewerContext))) {
     return { errorStatus: 404, error: 'Local profile not found' };

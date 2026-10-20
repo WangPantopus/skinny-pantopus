@@ -15,7 +15,7 @@ const Joi = require('joi');
 const logger = require('../utils/logger');
 const { getPublicResidencySummary } = require('../utils/publicResidencyProfile');
 const { generateCsrfToken } = require('../utils/csrf');
-const { isConnected, isSearchable, isScopedBlocked } = require('../utils/visibilityPolicy');
+const { isConnected, isSearchable, isScopedBlocked, isUnpublishedBusiness, unpublishedBusinessIds } = require('../utils/visibilityPolicy');
 const affinityService = require('../services/gig/affinityService');
 const inviteRewardService = require('../services/inviteRewardService');
 const emailService = require('../services/emailService');
@@ -3291,6 +3291,9 @@ router.get('/search', verifyToken, async (req, res) => {
     }
 
     const blockers = await personalBlockersOf(userId);
+    const unpublishedBusinesses = await unpublishedBusinessIds(
+      [...candidateByProfileId.values()].map(({ profile }) => profile.user_id),
+    );
     const visibleCandidates = [];
     for (const candidate of candidateByProfileId.values()) {
       const { profile } = candidate;
@@ -3298,6 +3301,7 @@ router.get('/search', verifyToken, async (req, res) => {
       const accountType = account.account_type || 'individual';
       if (accountType === 'curator') continue;
       if (blockers.has(String(profile.user_id))) continue;
+      if (unpublishedBusinesses.has(String(profile.user_id))) continue;
       if (normalizedType === 'people' && accountType === 'business') continue;
       if (normalizedType === 'business' && accountType !== 'business') continue;
       if (!(await canDiscoverLocalProfileForUserSearch(profile, userId, account))) continue;
@@ -3520,7 +3524,7 @@ router.get('/id/:id', optionalAuth, async (req, res) => {
       }
     }
 
-    if (!userData) {
+    if (!userData || await isUnpublishedBusiness(userData.id)) {
       return res.status(404).json({ error: 'User not found' });
     }
 
@@ -3884,7 +3888,7 @@ router.get('/:username', optionalAuth, async (req, res) => {
       .eq('username', username)
       .single();
 
-    if (error || !userData) {
+    if (error || !userData || await isUnpublishedBusiness(userData.id)) {
       return res.status(404).json({ error: 'User not found' });
     }
 
@@ -4400,7 +4404,7 @@ router.get('/username/:username', optionalAuth, async (req, res) => {
       }
     }
 
-    if (!userData) {
+    if (!userData || await isUnpublishedBusiness(userData.id)) {
       return res.status(404).json({ error: 'User not found' });
     }
 

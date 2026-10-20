@@ -17,6 +17,7 @@ const { escapeIlike } = require('../utils/escapeIlike');
 // Who lives in a Home, for compose, is the household mail rule's: an active occupancy in a trusted
 // verification state. A pending claim (anyone can file one on any Home) is not a household member.
 const { getAccessibleHomeIds, MAIL_TRUSTED_VERIFICATION_STATUSES } = require('../utils/homeMailAccess');
+const { unpublishedBusinessIds } = require('../utils/visibilityPolicy');
 
 // ─── Helpers ───────────────────────────────────────────────
 
@@ -267,10 +268,12 @@ router.get('/recipients', verifyToken, async (req, res) => {
         .limit(remaining);
 
       if (generalUsers) {
+        const unpublishedBusinesses = await unpublishedBusinessIds(generalUsers.map((user) => user.id));
         // Someone who is neither a housemate nor a connection is matched by name
         // only: their Home, address and photo stay private.
         for (const user of generalUsers) {
           if (seenUserIds.has(user.id)) continue;
+          if (unpublishedBusinesses.has(String(user.id))) continue;
           seenUserIds.add(user.id);
           results.push(buildRecipientResult(user, null, null, null, 2));
         }
