@@ -624,9 +624,8 @@ public final class ChatConversationViewModel {
     /// Photos sent to the assistant, by the message that carried them: copies on the phone,
     /// because the server deletes each photo once it has read it and its reference never loads.
     private var aiSentPhotos: [String: [URL]] = [:]
-    /// Where those copies are kept. It goes with "New chat" and with the view-model.
-    private let aiPhotoFolder = FileManager.default.temporaryDirectory
-        .appendingPathComponent("ai-photos-\(UUID().uuidString)", isDirectory: true)
+    /// Where those copies are kept. It goes with "New chat", with the view-model, and at the next launch.
+    private let aiPhotoFolder = ChatMediaURL.sentPhotosRoot.appendingPathComponent(UUID().uuidString, isDirectory: true)
     /// In-flight AI reply stream, held so the composer's stop button can
     /// cancel it mid-generation.
     private var aiStreamTask: Task<Void, Never>?

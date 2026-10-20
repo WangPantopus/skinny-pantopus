@@ -42,6 +42,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         URLCache.shared.removeAllCachedResponses()
         URLCache.shared = URLCache(memoryCapacity: 32 * 1024 * 1024, diskCapacity: 0)
         try? HomeDocumentTemporaryFiles.clearPreviousLaunch()
+        // Copies of photos sent to the assistant that an earlier run left.
+        try? FileManager.default.removeItem(at: ChatMediaURL.sentPhotosRoot)
         APIClient.removeLegacyDiskCache()
         MainActor.assumeIsolated {
             Observability.shared.start(environment: AppEnvironment.current)

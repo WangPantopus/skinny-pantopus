@@ -14,6 +14,9 @@ import UniformTypeIdentifiers
 enum ChatMediaURL {
     /// Longest side of a sent photo's copy: its 72-pt tile at 3x, with room to crop it square.
     static let sentPhotoPixels = 384
+    /// Copies of photos sent to the assistant, a folder per thread inside this one. They belong to
+    /// one app process: the next launch clears whatever a run left.
+    static let sentPhotosRoot = FileManager.default.temporaryDirectory.appendingPathComponent("ai-photos", isDirectory: true)
 
     /// Turn a stored attachment URL into something `AsyncImage` can fetch.
     @MainActor
