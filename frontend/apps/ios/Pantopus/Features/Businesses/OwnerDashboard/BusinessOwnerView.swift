@@ -227,8 +227,10 @@ struct OwnerEditFrame: View {
         VStack(spacing: Spacing.s0) {
             OwnerTopBar(
                 onBack: onBack,
-                onOpenInsights: onOpenInsights,
-                onOpenSettings: onOpenSettings
+                onOpenInsights: content.allows("insights.view") ? onOpenInsights : nil,
+                onOpenSettings: onOpenSettings,
+                canEdit: content.allows("profile.edit"),
+                roleLabel: "\(BusinessRole.parse(content.access.roleBase).label.uppercased()) VIEW"
             )
             OwnerLiveBar(
                 isLive: content.isLive,
@@ -244,8 +246,11 @@ struct OwnerEditFrame: View {
                         logoIcon: profile.header.logoIcon,
                         status: bannerStatus,
                         isVerified: content.isVerified,
+                        logoImageURL: profile.header.logoImageURL,
+                        bannerImageURL: profile.header.bannerImageURL,
                         onEdit: onEditPage
                     )
+                    .disabled(!content.allows("profile.edit"))
                     scrollBody(in: profile)
                         .padding(.horizontal, Spacing.s4)
                         .padding(.bottom, 130)
@@ -254,7 +259,7 @@ struct OwnerEditFrame: View {
         }
         .background(Theme.Color.appBg)
         .overlay(alignment: .bottom) {
-            OwnerDock(onPreview: onPreview, onEditPage: onEditPage)
+            OwnerDock(onPreview: onPreview, onEditPage: onEditPage, canEdit: content.allows("profile.edit"))
         }
         .accessibilityIdentifier("businessOwner.edit")
     }
@@ -266,7 +271,7 @@ struct OwnerEditFrame: View {
 
     private func scrollBody(in profile: BusinessProfileContent) -> some View {
         VStack(alignment: .leading, spacing: Spacing.s0) {
-            if let offer = content.foundingOffer {
+            if let offer = content.foundingOffer, content.access.isOwner == true {
                 FoundingOfferBanner(
                     offer: offer,
                     onClaim: onClaimFounding,
@@ -274,22 +279,30 @@ struct OwnerEditFrame: View {
                 )
                 .padding(.top, 14)
             }
-            InsightTiles(insights: content.insights, onOpenInsights: onOpenInsights)
+            InsightTiles(insights: content.insights, onOpenInsights: content.allows("insights.view") ? onOpenInsights : nil)
                 .padding(.top, 14)
             ProfileStrengthCard(strength: content.profileStrength) { _ in onEditPage() }
+                .disabled(!content.allows("profile.edit"))
                 .padding(.top, Spacing.s3)
 
             OwnerSectionHeader(title: "Categories", actionLabel: "Edit", actionIcon: .pencil, onAction: onEditPage)
+                .disabled(!content.allows("profile.edit"))
             BizCategoryRow(categories: profile.categories)
 
             OwnerSectionHeader(title: "About", actionLabel: "Edit", actionIcon: .pencil, onAction: onEditPage)
+                .disabled(!content.allows("profile.edit"))
             aboutSection
+                .disabled(!content.allows("profile.edit"))
 
             OwnerSectionHeader(title: "Hours", actionLabel: "Edit", actionIcon: .pencil, onAction: onEditPage)
+                .disabled(!content.allows("profile.edit"))
             hoursSection
+                .disabled(!content.allows("profile.edit"))
 
             OwnerSectionHeader(title: "Service area", actionLabel: "Edit", actionIcon: .pencil, onAction: onEditPage)
+                .disabled(!content.allows("profile.edit"))
             serviceAreaSection
+                .disabled(!content.allows("profile.edit"))
 
             OwnerSectionHeader(
                 title: "Services",
@@ -297,50 +310,40 @@ struct OwnerEditFrame: View {
                 actionIcon: .slidersHorizontal,
                 onAction: onManageCatalog
             )
+            .disabled(!content.allows("catalog.edit"))
             ManageServicesList(services: profile.services, onManage: onManageCatalog)
+                .disabled(!content.allows("catalog.edit"))
 
             // No gallery backend yet: the Photos rail only offered "Add photo", which
             // opens the page editor, where the gallery is hidden too (#552).
 
-            OwnerSectionHeader(title: "Team", actionLabel: "Manage", actionIcon: .users, onAction: onOpenTeam)
-            TeamSummaryRow(onOpen: onOpenTeam)
+            if content.allows("team.view") {
+                OwnerSectionHeader(
+                    title: "Team",
+                    actionLabel: content.allows("team.manage") ? "Manage" : "View",
+                    actionIcon: .users,
+                    onAction: onOpenTeam
+                )
+                TeamSummaryRow(onOpen: onOpenTeam, canManage: content.allows("team.manage"))
+            }
 
             OwnerSectionHeader(title: "Pages", actionLabel: "Manage", actionIcon: .fileText, onAction: onOpenPages)
+                .disabled(!content.allows("pages.edit"))
             PagesSummaryRow(onOpen: onOpenPages)
+                .disabled(!content.allows("pages.edit"))
 
-            OwnerSectionHeader(title: "Inbox", actionLabel: "Open", actionIcon: .inbox, onAction: onOpenInbox)
-            OwnerNavRow(
-                icon: .inbox,
-                title: "Messages & mentions",
-                subtitle: "Conversations with this business and posts that mention it",
-                identifier: "businessOwner.inboxRow",
-                onOpen: onOpenInbox
-            )
-
-            OwnerSectionHeader(title: "Money & legal")
-            VStack(spacing: Spacing.s2) {
+            if content.allows("mail.view") {
+                OwnerSectionHeader(title: "Inbox", actionLabel: "Open", actionIcon: .inbox, onAction: onOpenInbox)
                 OwnerNavRow(
-                    icon: .creditCard,
-                    title: "Payments",
-                    subtitle: "Connect Stripe so this business can get paid",
-                    identifier: "businessOwner.paymentsRow",
-                    onOpen: onOpenPayments
-                )
-                OwnerNavRow(
-                    icon: .receiptText,
-                    title: "Invoices",
-                    subtitle: "Bill a customer and track what's been paid",
-                    identifier: "businessOwner.invoicesRow",
-                    onOpen: onOpenInvoices
-                )
-                OwnerNavRow(
-                    icon: .shieldCheck,
-                    title: "Legal & verification",
-                    subtitle: "Legal name, tax ID and verification documents",
-                    identifier: "businessOwner.legalRow",
-                    onOpen: onOpenLegal
+                    icon: .inbox,
+                    title: "Messages & mentions",
+                    subtitle: "Conversations with this business and posts that mention it",
+                    identifier: "businessOwner.inboxRow",
+                    onOpen: onOpenInbox
                 )
             }
+
+            moneyAndLegalSection
 
             OwnerSectionHeader(
                 title: "Reviews",
@@ -348,6 +351,39 @@ struct OwnerEditFrame: View {
                 actionIcon: .messageSquare
             )
             reviewsSection
+        }
+    }
+
+    @ViewBuilder private var moneyAndLegalSection: some View {
+        if content.access.isOwner == true || content.allows("sensitive.view") {
+            OwnerSectionHeader(title: "Money & legal")
+            VStack(spacing: Spacing.s2) {
+                if content.access.isOwner == true {
+                    OwnerNavRow(
+                        icon: .creditCard,
+                        title: "Payments",
+                        subtitle: "Connect Stripe so this business can get paid",
+                        identifier: "businessOwner.paymentsRow",
+                        onOpen: onOpenPayments
+                    )
+                    OwnerNavRow(
+                        icon: .receiptText,
+                        title: "Invoices",
+                        subtitle: "Bill a customer and track what's been paid",
+                        identifier: "businessOwner.invoicesRow",
+                        onOpen: onOpenInvoices
+                    )
+                }
+                if content.allows("sensitive.view") {
+                    OwnerNavRow(
+                        icon: .shieldCheck,
+                        title: "Legal & verification",
+                        subtitle: "Legal name, tax ID and verification documents",
+                        identifier: "businessOwner.legalRow",
+                        onOpen: onOpenLegal
+                    )
+                }
+            }
         }
     }
 
@@ -408,6 +444,7 @@ struct OwnerEditFrame: View {
             ReviewReplyComposer(review: review, businessName: shortBusinessName) { text in
                 onSubmitReply(review.id, text)
             }
+            .disabled(!content.allows("reviews.respond"))
             .padding(.top, Spacing.s2)
         }
     }
@@ -675,6 +712,7 @@ struct PagesSummaryRow: View {
 @MainActor
 struct TeamSummaryRow: View {
     let onOpen: @MainActor () -> Void
+    var canManage = true
 
     var body: some View {
         Button { onOpen() } label: {
@@ -690,7 +728,7 @@ struct TeamSummaryRow: View {
                         .font(.system(size: 13, weight: .semibold))
                         .tracking(-0.1)
                         .foregroundStyle(Theme.Color.appText)
-                    Text("Invite teammates and manage what each role can do")
+                    Text(canManage ? "Invite teammates and manage what each role can do" : "View your business teammates and their roles")
                         .font(.system(size: 11))
                         .foregroundStyle(Theme.Color.appTextSecondary)
                         .lineLimit(1)
@@ -719,6 +757,7 @@ struct TeamSummaryRow: View {
 struct OwnerDock: View {
     let onPreview: @MainActor () -> Void
     let onEditPage: @MainActor () -> Void
+    var canEdit = true
 
     var body: some View {
         HStack(spacing: Spacing.s2) {
@@ -741,6 +780,7 @@ struct OwnerDock: View {
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("businessOwner.editPage")
+            .disabled(!canEdit)
         }
         .padding(.horizontal, 14)
         .padding(.top, 10)

@@ -100,6 +100,14 @@ public final class TokenAcceptViewModel {
             return
         }
         if case let .success(value) = seat, let id = value.seatId, HomePostalValidation.uuid(id) {
+            if let invitedEmail = value.inviteEmail?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+               !invitedEmail.isEmpty {
+                guard case let .signedIn(user) = auth.state,
+                      user.email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == invitedEmail else {
+                    state = .wrongAccount
+                    return
+                }
+            }
             state = .ready(Self.makeSeatOffer(seat: value, identity: identity))
             return
         }
@@ -201,7 +209,7 @@ public final class TokenAcceptViewModel {
             expiry: nil,
             safetyBand: SafetyBand(
                 icon: .shieldCheck,
-                text: "Your seat is firewalled — coworkers see your business profile, not your local identity."
+                text: "Teammates with team access can see your name, email, and role."
             ),
             primaryCtaLabel: "Add me to \(venue)",
             secondaryCtaLabel: "Decline",
@@ -274,17 +282,11 @@ public final class TokenAcceptViewModel {
     }
 
     static func seatBenefits(role: String?) -> [String] {
-        let lower = role?.lowercased() ?? ""
-        var benefits: [String] = [
-            "Post and respond as \(humanRole(role ?? "member"))",
-            "Access the business dashboard and team feed"
+        [
+            "Access the business dashboard as \(humanRole(role ?? "member"))",
+            "Available actions follow your role and permissions",
+            "Find this business under Menu → My Businesses"
         ]
-        if lower.contains("admin") || lower.contains("manager") {
-            benefits.append("Invite teammates and manage seats")
-        } else {
-            benefits.append("Switch identities anytime in the You tab")
-        }
-        return benefits
     }
 
     static func guestBenefits(welcomeMessage: String?, expiresAt: String?) -> [String] {

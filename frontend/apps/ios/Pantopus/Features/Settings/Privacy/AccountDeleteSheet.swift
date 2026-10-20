@@ -85,6 +85,12 @@ public struct AccountDeleteSheet: View {
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .multilineTextAlignment(.center)
                     .padding(.top, Spacing.s3)
+                Text("Business profiles are managed separately. "
+                    + "Close businesses you own or hand off ownership before deleting your account.")
+                    .pantopusTextStyle(.small)
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.top, Spacing.s3)
                 if organizedLiveTrainCount > 0 {
                     Text(Self.organizerNotice(count: organizedLiveTrainCount))
                         .pantopusTextStyle(.small)
@@ -208,12 +214,11 @@ public struct AccountDeleteSheet: View {
             + "To keep a train going, add a co-organizer first."
     }
 
-    /// RN's bullet list, verbatim (`AccountDeleteSheet.tsx:64-68`).
+    /// Personal data removed with the account; business ownership is handled separately.
     static let bulletItems: [String] = [
         "Your profile and all personal data",
         "Your task history and reviews",
         "Your home memberships",
-        "Your business profiles",
         "Your messages and connections"
     ]
 }

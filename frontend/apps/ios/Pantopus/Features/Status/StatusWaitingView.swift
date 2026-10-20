@@ -100,11 +100,12 @@ public struct StatusWaitingView: View {
                         }
                         .frame(maxWidth: .infinity)
                         .frame(height: 50)
-                        .background(Theme.Color.primarySolid)
+                        .background(primary.isDisabled ? Theme.Color.appBorderStrong : Theme.Color.primarySolid)
                         .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
                         .shadow(color: Theme.Color.primary600.opacity(0.3), radius: 9, x: 0, y: 8)
                     }
                     .buttonStyle(.plain)
+                    .disabled(primary.isDisabled)
                     .accessibilityIdentifier("statusPrimaryCta")
                 }
                 if let secondary = content.secondaryCta {

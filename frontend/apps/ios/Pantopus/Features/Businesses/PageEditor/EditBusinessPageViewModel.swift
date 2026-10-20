@@ -55,6 +55,7 @@ private enum SaveBlock {
 public final class EditBusinessPageViewModel {
     public private(set) var state: EditBusinessPageState
     public var toastMessage: String?
+    public var mediaUploadError: String?
     public var showsDiscardConfirm = false
     /// The banner or logo upload in flight, if any.
     public private(set) var uploadingMedia: BusinessMediaKind?
@@ -185,6 +186,7 @@ public final class EditBusinessPageViewModel {
     /// doesn't count it as an unsaved edit.
     public func uploadMedia(_ kind: BusinessMediaKind, data: Data, mimeType: String) async {
         guard uploadingMedia == nil, case .loaded = state else { return }
+        mediaUploadError = nil
         uploadingMedia = kind
         defer { uploadingMedia = nil }
         let ext = mimeType == "image/png" ? "png" : "jpg"
@@ -222,7 +224,7 @@ public final class EditBusinessPageViewModel {
             toastMessage = kind == .banner ? "Banner updated." : "Logo updated."
         } catch {
             let reason = (error as? APIError)?.errorDescription ?? "Please try again."
-            toastMessage = "Couldn't upload the \(kind.rawValue). \(reason)"
+            mediaUploadError = "Couldn't upload the \(kind.rawValue). \(reason)"
         }
     }
 
@@ -321,8 +323,8 @@ public final class EditBusinessPageViewModel {
             toastMessage = "Published"
             return
         }
-        if case let .setup(_, _, remaining, _) = content.mode, remaining > 0 {
-            toastMessage = "Finish the remaining sections before publishing."
+        if content.publishRequirementsRemaining > 0 {
+            toastMessage = "Add a business name and category before publishing."
             return
         }
         let saved = await persist(successToast: nil)

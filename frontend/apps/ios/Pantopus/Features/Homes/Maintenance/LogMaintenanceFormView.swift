@@ -327,6 +327,7 @@ private struct CostAndNextDueGroup: View {
                     }
                 ),
                 placeholder: "$0",
+                state: viewModel.costError.map(PantopusFieldState.error) ?? .default,
                 keyboardType: .decimalPad,
                 identifier: "logMaintenance_cost"
             )

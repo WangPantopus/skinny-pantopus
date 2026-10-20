@@ -2101,7 +2101,8 @@ public struct YouTabRoot: View {
                     mode: Self.chatMode(for: dest.mode),
                     counterparty: Self.chatCounterparty(for: dest),
                     currentUserId: currentUserId ?? "",
-                    initialTopic: dest.initialTopic
+                    initialTopic: dest.initialTopic,
+                    asBusinessUserId: dest.asBusinessUserId
                 ),
                 mode: dest.kind,
                 onOpenProfile: { userId in
@@ -2897,7 +2898,8 @@ public struct YouTabRoot: View {
                             displayName: name,
                             initials: Self.initials(from: name),
                             identityKind: nil,
-                            verified: false
+                            verified: false,
+                            asBusinessUserId: businessId
                         )))
                     }
                 },

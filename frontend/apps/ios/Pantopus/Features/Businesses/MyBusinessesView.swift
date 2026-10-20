@@ -32,7 +32,7 @@ struct MyBusinessesView: View {
         .navigationBarTitleDisplayMode(.inline)
         .accessibilityIdentifier("myBusinessesContainer")
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
-        .task { await viewModel.load() }
+        .task { await viewModel.refresh() }
         .onAppear { Analytics.track(.screenMyBusinessesViewed) }
     }
 
@@ -97,7 +97,7 @@ private struct BusinessesIntroCard: View {
                 Text(count == 1 ? "1 business" : "\(count) businesses")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Theme.Color.appText)
-                Text("Tap any business to manage its inbox, gigs, and reviews")
+                Text("Tap a business to open its dashboard")
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.Color.appTextSecondary)
             }

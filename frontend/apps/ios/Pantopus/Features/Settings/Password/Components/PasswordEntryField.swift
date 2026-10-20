@@ -210,7 +210,7 @@ private struct PasswordEntryFieldIdentifier: ViewModifier {
         PasswordEntryField(
             "New password",
             text: $bad,
-            state: .error("Too common — appeared in 2.3M public records."),
+            state: .error("This password is too common. Choose a less predictable one."),
             isRequired: true,
             revealedByDefault: true
         )

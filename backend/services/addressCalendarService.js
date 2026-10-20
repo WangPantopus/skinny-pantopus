@@ -136,6 +136,18 @@ function applyPrecedence(rules) {
   return rules.filter((r) => SCOPE_RANK[r.scope_type] === bestRank.get(r.kind));
 }
 
+// RCW 1.12.070(3): weekend tax remittances are timely the next business day.
+// Limit this adjustment to Washington's two regular statutory installments;
+// their following Mondays are not Washington legal holidays. County/home
+// overrides and other states retain their own published rules.
+function weekendTaxShift(rule, day) {
+  if (rule.kind !== 'property_tax' || rule.scope_type !== 'state'
+    || rule.scope_key !== 'WA' || rule.confidence !== 'official') return 0;
+  const monthDay = isoDate(day).slice(5);
+  if (monthDay !== '04-30' && monthDay !== '10-31') return 0;
+  return day.getUTCDay() === 6 ? 2 : day.getUTCDay() === 0 ? 1 : 0;
+}
+
 function expandRule(rule, fromDay, toDay, { holidays = [], moved = new Map() } = {}) {
   let options;
   try {
@@ -173,11 +185,19 @@ function expandRule(rule, fromDay, toDay, { holidays = [], moved = new Map() } =
   const days = new Set();
   for (const original of rr.between(lookback, to, true)) {
     const holiday = applicable.find(h => original >= h.start && original <= h.end);
-    const actual = holiday ? new Date(original.getTime() + holiday.params.shift_days * 86400000) : original;
+    const taxShift = weekendTaxShift(rule, original);
+    const shiftDays = holiday ? holiday.params.shift_days : taxShift;
+    const actual = shiftDays ? new Date(original.getTime() + shiftDays * 86400000) : original;
     if (actual < from || actual > to) continue;
     const day = isoDate(actual);
     days.add(day);
     if (holiday) moved.set(day, { moved_from: isoDate(original), holiday: holiday.params.holiday, shift_days: holiday.params.shift_days });
+    if (taxShift) moved.set(day, {
+      moved_from: isoDate(original),
+      detail: 'Weekend deadline moved to the next business day. Confirm your tax statement with your county treasurer.',
+      source: 'Washington State (RCW 84.56.020; RCW 1.12.070)',
+      source_url: 'https://app.leg.wa.gov/rcw/default.aspx?cite=1.12.070',
+    });
   }
   return [...days].sort();
 }

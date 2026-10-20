@@ -2913,7 +2913,8 @@ public struct HubTabRoot: View {
                     mode: Self.chatMode(for: dest.mode),
                     counterparty: Self.chatCounterparty(for: dest),
                     currentUserId: currentUserId,
-                    initialTopic: dest.initialTopic
+                    initialTopic: dest.initialTopic,
+                    asBusinessUserId: dest.asBusinessUserId
                 ),
                 mode: dest.kind,
                 onOpenProfile: { userId in
@@ -3313,7 +3314,8 @@ public struct HubTabRoot: View {
                             displayName: name,
                             initials: Self.initials(from: name),
                             identityKind: nil,
-                            verified: false
+                            verified: false,
+                            asBusinessUserId: businessId
                         )))
                     }
                 },
@@ -3431,7 +3433,6 @@ public struct HubTabRoot: View {
                     recipient: recipient
                 ),
                 onBack: { pop() },
-                onChangeRecipient: { pop() },
                 onDone: { pop() }
             )
         case .neighborInbox:

@@ -22,8 +22,8 @@ public enum EditBusinessPageMode: Sendable, Hashable {
     /// Established business with light edits in flight. `unsavedCount`
     /// is the badge in the sticky save bar's "N unsaved" pill.
     case published(unsavedCount: Int, lastPublishedLabel: String)
-    /// Newly-claimed business in setup. `done`/`total` drive the
-    /// progress meter, `remaining` is the "Publish · N to go" badge.
+    /// Newly-claimed business in setup. These counts describe profile
+    /// completeness, including optional sections, not publishing requirements.
     case setup(done: Int, total: Int, remaining: Int, items: [EditBusinessPageSetupItem])
 }
 
@@ -298,6 +298,15 @@ public struct EditBusinessPageContent: Sendable, Hashable {
 
     /// Location
     public let location: EditBusinessPageLocation
+
+    /// Match the creation flow: location, hours, media and services can be
+    /// added later. Keep required identity fields separate from completeness.
+    public var publishRequirementsRemaining: Int {
+        let missingName = name.current.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let missingCategory = categoryRequired
+            && category.current.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        return (missingName ? 1 : 0) + (missingCategory ? 1 : 0)
+    }
 
     public init(
         businessId: String,

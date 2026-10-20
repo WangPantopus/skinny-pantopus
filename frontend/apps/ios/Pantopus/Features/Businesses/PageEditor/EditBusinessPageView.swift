@@ -71,6 +71,17 @@ public struct EditBusinessPageView: View {
             }
             Button("Keep editing", role: .cancel) {}
         }
+        .alert(
+            "Image wasn't updated",
+            isPresented: Binding(
+                get: { viewModel.mediaUploadError != nil },
+                set: { if !$0 { viewModel.mediaUploadError = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) { viewModel.mediaUploadError = nil }
+        } message: {
+            Text(viewModel.mediaUploadError ?? "")
+        }
     }
 
     @ViewBuilder private var content: some View {
@@ -262,7 +273,7 @@ public struct EditBusinessPageLoadedView: View {
     private var stickyMode: EditBusinessStickySaveMode {
         switch content.mode {
         case let .published(count, _): .dirty(count: count)
-        case let .setup(_, _, remaining, _): .setup(remaining: remaining)
+        case .setup: .setup(remaining: content.publishRequirementsRemaining)
         }
     }
 
@@ -607,6 +618,8 @@ struct BizField: View {
                 .padding(.vertical, 11)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .disabled(onChange == nil)
+                .accessibilityLabel(a11yLabel)
+                .accessibilityIdentifier(identifier ?? "")
                 trailingIcon
             }
             .frame(minHeight: 44)
@@ -622,9 +635,7 @@ struct BizField: View {
                     .foregroundStyle(Theme.Color.error)
             }
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(a11yLabel)
-        .accessibilityIdentifier(identifier ?? "")
+        .accessibilityElement(children: .contain)
     }
 
     @ViewBuilder private var trailingIcon: some View {
@@ -657,7 +668,6 @@ struct BizField: View {
     private var a11yLabel: String {
         var parts = [label]
         if required { parts.append("required") }
-        if !field.current.isEmpty { parts.append("value: \(field.current)") }
         if field.isDirty { parts.append("unsaved") }
         if case let .error(message) = state { parts.append("error: \(message)") }
         return parts.joined(separator: ", ")
@@ -691,6 +701,9 @@ private struct BizTextarea: View {
                 .foregroundStyle(Theme.Color.appText)
                 .scrollContentBackground(.hidden)
                 .frame(minHeight: 72, alignment: .topLeading)
+                .accessibilityLabel("Description")
+                .accessibilityHint("\(field.current.count) of \(charLimit) characters")
+                .accessibilityIdentifier("editBusinessPage.description")
                 HStack {
                     Spacer()
                     Text("\(field.current.count) / \(charLimit)")
@@ -701,8 +714,7 @@ private struct BizTextarea: View {
             .padding(12)
         }
         .frame(minHeight: 124)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Description, \(field.current.count) of \(charLimit) characters")
+        .accessibilityElement(children: .contain)
     }
 }
 

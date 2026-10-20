@@ -56,6 +56,8 @@ public struct InboxConversationDestination: Hashable, Sendable {
     /// The room a chat link named when it opened as a person thread, so the
     /// link's arrival still completes for that room.
     public let arrivalRoomId: String?
+    /// Explicit business-inbox context; ordinary chats keep the person's identity.
+    public let asBusinessUserId: String?
 
     public init(
         mode: Mode,
@@ -67,7 +69,8 @@ public struct InboxConversationDestination: Hashable, Sendable {
         scrollToMessageId: String? = nil,
         initialTopic: ChatInitialTopic? = nil,
         gigId: String? = nil,
-        arrivalRoomId: String? = nil
+        arrivalRoomId: String? = nil,
+        asBusinessUserId: String? = nil
     ) {
         self.mode = mode
         self.kind = kind
@@ -79,6 +82,7 @@ public struct InboxConversationDestination: Hashable, Sendable {
         self.initialTopic = initialTopic
         self.gigId = gigId
         self.arrivalRoomId = arrivalRoomId
+        self.asBusinessUserId = asBusinessUserId
     }
 }
 
@@ -243,7 +247,8 @@ public struct InboxTabRoot: View {
                     currentUserId: currentUserId,
                     scrollToMessageId: dest.scrollToMessageId,
                     initialTopic: dest.initialTopic,
-                    gigId: dest.gigId
+                    gigId: dest.gigId,
+                    asBusinessUserId: dest.asBusinessUserId
                 ),
                 mode: dest.kind,
                 onUseAIDraft: { draft in

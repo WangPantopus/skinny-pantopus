@@ -2,7 +2,7 @@
 //  MyBusinessesStates.swift
 //  Pantopus
 //
-//  A08 — non-loaded states for My businesses: the proof-led empty state,
+//  A08 — non-loaded states for My businesses: the setup empty state,
 //  the loading skeleton, and the error view. Split out of
 //  MyBusinessesView.swift to keep each file under the 500-line limit.
 //
@@ -23,9 +23,9 @@ struct MyBusinessesEmptyView: View {
     }
 
     private let proofs: [Proof] = [
-        Proof(icon: .idCard, title: "EIN / Tax ID", sub: "IRS-issued · verified within 1 business day"),
-        Proof(icon: .fileText, title: "State registration certificate", sub: "Upload Articles of Incorporation or DBA"),
-        Proof(icon: .creditCard, title: "Linked payment processor", sub: "Stripe, Square, or Toast · instant")
+        Proof(icon: .idCard, title: "Business profile", sub: "Start with a category and business name"),
+        Proof(icon: .fileText, title: "Business details", sub: "Add your description and contact details"),
+        Proof(icon: .check, title: "Review your page", sub: "Check your details before publishing")
     ]
 
     var body: some View {
@@ -33,14 +33,14 @@ struct MyBusinessesEmptyView: View {
             VStack(spacing: Spacing.s0) {
                 disc
                     .padding(.bottom, Spacing.s5)
-                Text("Create your first verified business page")
+                Text("Create your first business page")
                     .pantopusTextStyle(.h3)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(Theme.Color.appText)
                     .padding(.bottom, Spacing.s2)
                 Text(
-                    "Reach repeat clients who know you, take quotes inside Pantopus, "
-                        + "and earn the violet verified mark. Pick a proof to start."
+                    "Start with a category and profile details. "
+                        + "Creating a page does not verify the business."
                 )
                 .font(.system(size: 13))
                 .multilineTextAlignment(.center)

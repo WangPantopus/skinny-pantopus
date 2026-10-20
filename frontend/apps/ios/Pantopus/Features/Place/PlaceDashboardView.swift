@@ -421,7 +421,7 @@ struct PlaceDashboardView: View {
                 PlaceMessagesActionRow(
                     icon: .messageSquarePlus,
                     title: "Message a neighbor",
-                    subtitle: "Send a verified heads-up to a home on your block."
+                    subtitle: "Send a private heads-up to a home on your block."
                 ) { viewModel.onComposeMessage(address) }
                 PlaceMessagesActionRow(
                     icon: .inbox,

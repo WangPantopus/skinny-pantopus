@@ -1357,7 +1357,7 @@ router.get('/rooms/:roomId/pre-bid-status', verifyToken, async (req, res) => {
 
 /**
  * GET /api/chat/conversations/:otherUserId/messages
- * Canonical person-conversation feed across all shared rooms.
+ * Person-conversation feed across shared direct and task rooms.
  */
 router.get('/conversations/:otherUserId/messages', verifyToken, async (req, res) => {
   try {
@@ -1378,7 +1378,8 @@ router.get('/conversations/:otherUserId/messages', verifyToken, async (req, res)
     // Only rooms the caller is still in: a former member reads their history in the room itself.
     const { data: mineRows, error: mineErr } = await supabaseAdmin
       .from('ChatParticipant')
-      .select('room_id')
+      .select('room_id, room:room_id!inner(type)')
+      .in('room.type', ['direct', 'gig'])
       .in('user_id', Array.from(identityUserIds))
       .eq('is_active', true);
 
@@ -1390,7 +1391,8 @@ router.get('/conversations/:otherUserId/messages', verifyToken, async (req, res)
     const { data: otherRows, error: otherErr } = await supabaseAdmin
       .from('ChatParticipant')
       .select('room_id')
-      .eq('user_id', otherUserId);
+      .eq('user_id', otherUserId)
+      .eq('is_active', true);
 
     if (otherErr) {
       logger.error('Error loading target conversation rooms', { requestId: req.requestId, userId, otherUserId, error: otherErr.message });
@@ -1470,7 +1472,7 @@ router.get('/conversations/:otherUserId/messages', verifyToken, async (req, res)
 
 /**
  * POST /api/chat/conversations/:otherUserId/read
- * Mark all shared-room messages with a person as read.
+ * Mark shared direct/task-room messages with a person as read.
  */
 router.post('/conversations/:otherUserId/read', verifyToken, async (req, res) => {
   try {
@@ -1495,8 +1497,10 @@ router.post('/conversations/:otherUserId/read', verifyToken, async (req, res) =>
 
     const { data: mineRows, error: mineErr } = await supabaseAdmin
       .from('ChatParticipant')
-      .select('room_id')
-      .in('user_id', Array.from(identityUserIds));
+      .select('room_id, room:room_id!inner(type)')
+      .in('room.type', ['direct', 'gig'])
+      .in('user_id', Array.from(identityUserIds))
+      .eq('is_active', true);
 
     if (mineErr) {
       logger.error('Error loading actor rooms for conversation read', { requestId: req.requestId, userId, otherUserId, error: mineErr.message });
@@ -1506,7 +1510,8 @@ router.post('/conversations/:otherUserId/read', verifyToken, async (req, res) =>
     const { data: otherRows, error: otherErr } = await supabaseAdmin
       .from('ChatParticipant')
       .select('room_id')
-      .eq('user_id', otherUserId);
+      .eq('user_id', otherUserId)
+      .eq('is_active', true);
 
     if (otherErr) {
       logger.error('Error loading target rooms for conversation read', { requestId: req.requestId, userId, otherUserId, error: otherErr.message });
