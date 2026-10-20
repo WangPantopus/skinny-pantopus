@@ -60,6 +60,8 @@ interface CompletionFlowProps {
   gigId: string;
   gig: CompletionGigData;
   isOwner: boolean;
+  /** The owner manages the task as the business that posted it (its owner or staff), not as the poster. */
+  asBusiness?: boolean;
   isWorker: boolean;
   currentUserId: string | undefined;
   gigStatus: string;
@@ -78,6 +80,7 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
   gigId,
   gig,
   isOwner,
+  asBusiness = false,
   isWorker,
   currentUserId,
   gigStatus,
@@ -183,7 +186,8 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
       void tipRecoverySlot(origin, currentUserId, gigId).load().then(async original => {
         if (!current()) return;
         if (original) { setTipRecoveryRequestId(original.value.requestId); setShowTipModal(true); return; }
-        if (!isOwner || !isCompleted) return;
+        // Tips come from the poster's own account; a business's team members have none to recover.
+        if (!isOwner || asBusiness || !isCompleted) return;
         // A fresh browser has no retained UUID for an older payment. Discover
         // only an existing local payment; the picker still verifies and retains
         // its exact identity before any explicit check or cancellation.
@@ -195,7 +199,7 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
       }).catch(() => { /* Explicit tip entry still shows retained-storage errors before sending. */ });
     }
     return () => { active = false; unsubscribe(); };
-  }, [currentUserId, gigId, router, isOwner, isCompleted]);
+  }, [currentUserId, gigId, router, isOwner, asBusiness, isCompleted]);
 
   const handleReopenBidding = () => setStopAction('reopen_bidding');
 
@@ -363,7 +367,8 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
       if (!current()) return;
       setShowConfirmModal(false);
       onStatusChange?.();
-      if (!current()) return;
+      // The tip that follows is the poster's: the tips API refuses a business's team members.
+      if (!current() || asBusiness) return;
       setTipRecoveryRequestId(undefined);
       setShowTipModal(true);
     } catch (err: unknown) {
