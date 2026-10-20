@@ -1357,6 +1357,8 @@ const APP_LINES = [
 ];
 // The note that stands in for a stored photo (agentLoop.compactForStorage).
 const PHOTO_NOTE = /^\[(?:Photo attached|(\d+) photos attached)\./;
+// What the apps send for photos sent without words: not the person's, so the apps show "Sent a photo" instead.
+const PHOTO_ONLY_QUESTION = 'What can you tell me about this image?';
 
 function personText(text) {
   // A model without system messages got Pantopus's context at the top of the message.
@@ -1413,7 +1415,8 @@ function displayMessages(stored) {
         if (note) photos += note[1] ? Number(note[1]) : 1;
         else texts.push(block.text);
       }
-      items.push({ role: 'user', text: personText(texts.join('\n')), photos });
+      const said = personText(texts.join('\n'));
+      items.push({ role: 'user', text: photos && said === PHOTO_ONLY_QUESTION ? '' : said, photos });
       continue;
     }
     let text = '';

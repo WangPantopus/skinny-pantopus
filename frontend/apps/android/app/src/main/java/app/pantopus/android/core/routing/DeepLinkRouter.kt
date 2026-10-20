@@ -224,6 +224,12 @@ object DeepLinkRouter {
         data object SecurityDevices : Destination
 
         /**
+         * `pantopus://settings/notifications` — Settings → Notifications, where the assistant's
+         * "Open notification settings" button goes (AI assistant phase 1 link catalog).
+         */
+        data object NotificationSettings : Destination
+
+        /**
          * A14.8 — `pantopus://mailbox/vacation` opens the Vacation hold
          * screen (scheduling or active variant depending on server state
          * once the persistence layer lands).
@@ -1069,13 +1075,15 @@ object DeepLinkRouter {
                     Destination.VerifyEmail(token = tokenQuery, email = emailQuery)
                 }
             "settings" ->
-                // `pantopus://settings/payments` — A14.6, and
-                // `pantopus://settings/security` — Devices & sessions. Other
-                // settings sub-routes aren't deep-linkable yet; the bare host
+                // `pantopus://settings/payments` — A14.6,
+                // `pantopus://settings/security` — Devices & sessions, and
+                // `pantopus://settings/notifications`. Other settings
+                // sub-routes aren't deep-linkable yet; the bare host
                 // `pantopus://settings` falls through to `.Unknown`.
                 when (segments.getOrNull(1)) {
                     "payments" -> Destination.PaymentsSettings
                     "security" -> Destination.SecurityDevices
+                    "notifications" -> Destination.NotificationSettings
                     else -> Destination.Unknown(raw)
                 }
             else -> Destination.Unknown(raw)

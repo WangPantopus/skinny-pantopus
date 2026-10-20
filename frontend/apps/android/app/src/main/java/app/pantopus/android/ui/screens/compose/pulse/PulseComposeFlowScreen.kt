@@ -29,6 +29,8 @@ fun PulseComposeFlowScreen(
     onPosted: (String?) -> Unit = {},
     prefillFeedIntent: PulseIntent? = null,
     editingPostId: String? = null,
+    /** A Pantopus AI post draft's exact type picks the purpose; its other fields seed the draft step. */
+    prefillDraft: PulseComposeDraftFields? = null,
 ) {
     var step by remember {
         mutableStateOf<PulseComposeFlowStep>(
@@ -44,7 +46,7 @@ fun PulseComposeFlowScreen(
         when (val current = step) {
             PulseComposeFlowStep.TargetPicker ->
                 PulsePostTargetPickerScreen(
-                    onSelect = { target -> handleTargetSelected(target, prefillFeedIntent) { step = it } },
+                    onSelect = { target -> handleTargetSelected(target, prefillFeedIntent, prefillDraft) { step = it } },
                     onCancel = onBack,
                 )
             is PulseComposeFlowStep.PurposePicker ->
@@ -55,7 +57,7 @@ fun PulseComposeFlowScreen(
                 )
             is PulseComposeFlowStep.Draft -> {
                 val resolvedPurpose =
-                    current.purpose ?: prefillPurpose(current.target, prefillFeedIntent)
+                    current.purpose ?: prefillPurpose(current.target, prefillFeedIntent, prefillDraft)
                 PulseComposeScreen(
                     onBack = onBack,
                     onPosted = onPosted,
@@ -70,13 +72,14 @@ fun PulseComposeFlowScreen(
 private fun handleTargetSelected(
     target: PulsePostingTarget,
     prefillFeedIntent: PulseIntent?,
+    prefillDraft: PulseComposeDraftFields?,
     setStep: (PulseComposeFlowStep) -> Unit,
 ) {
     if (target.isNetworkTarget) {
         setStep(PulseComposeFlowStep.Draft(target, null))
         return
     }
-    prefillPurpose(target, prefillFeedIntent)?.let { prefill ->
+    prefillPurpose(target, prefillFeedIntent, prefillDraft)?.let { prefill ->
         setStep(PulseComposeFlowStep.Draft(target, prefill))
         return
     }
@@ -86,7 +89,10 @@ private fun handleTargetSelected(
 private fun prefillPurpose(
     target: PulsePostingTarget,
     feedIntent: PulseIntent?,
+    draft: PulseComposeDraftFields? = null,
 ): PulseComposePurpose? {
+    // A deal, a local update or a win is its own purpose, not the first one sharing its form.
+    draft?.purposeFor(target)?.let { return it }
     if (feedIntent == null || feedIntent == PulseIntent.All || feedIntent == PulseIntent.Generic) return null
     val composeIntent = PulseComposeIntent.fromFeedIntent(feedIntent)
     val candidate = PulseComposePurpose.entries.firstOrNull { it.legacyIntent == composeIntent } ?: return null

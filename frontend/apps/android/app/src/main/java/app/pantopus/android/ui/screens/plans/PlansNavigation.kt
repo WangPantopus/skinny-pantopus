@@ -6,6 +6,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import app.pantopus.android.data.ai.AIScreenContext
 import app.pantopus.android.ui.screens.place.HubVerificationTarget
 import app.pantopus.android.ui.screens.plans.change.PlanChangeScreen
 import app.pantopus.android.ui.screens.plans.detail.PlanDetailScreen
@@ -63,6 +64,8 @@ data class PlansExternalRoutes(
     val openVerification: (HubVerificationTarget) -> Unit,
     /** Back to the Plans tab (the map), closing the Plans pages on top of it. */
     val openNearby: () -> Unit,
+    /** Ask Pantopus about a plan (AI assistant phase 1); null hides the button. */
+    val askPantopus: ((AIScreenContext) -> Unit)? = null,
 )
 
 /** Registers every Plans page. Call inside the root `NavHost`. */
@@ -94,6 +97,7 @@ fun NavGraphBuilder.plansRoutes(
             onOpenChat = external.openChat,
             onOpenVerification = external.openVerification,
             onSeeAllPlans = external.openNearby,
+            onAskPantopus = external.askPantopus,
         )
     }
     composable(
