@@ -174,4 +174,5 @@ module.exports = {
   loadSupportTrain,
   requireSupportTrainRole,
   requireSupportTrainViewer,
+  supportTrainUnavailable: unavailable,
 };

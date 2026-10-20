@@ -17,6 +17,7 @@ const {
   loadSupportTrain,
   requireSupportTrainRole,
   requireSupportTrainViewer,
+  supportTrainUnavailable,
 } = require('../middleware/supportTrainPermissions');
 const { emitSupportTrainEvent, formatSupportTrainSlotTime } = require('../services/supportTrainNotifications');
 const {
@@ -3277,6 +3278,8 @@ router.post(
 
 // A guest's address email repeated within this window is one share, not a resend.
 const GUEST_ADDRESS_REPEAT_WINDOW_MS = 60 * 1000;
+// A malformed id fails the database read; it is checked first so only a real read failure answers 503.
+const RESERVATION_ID =/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Manually reveal the exact address to a specific helper reservation
 router.post(
@@ -3318,6 +3321,10 @@ router.post(
       });
     }
 
+    if (!RESERVATION_ID.test(reservationId)) {
+      return res.status(404).json({ error: 'NOT_FOUND', message: 'Reservation not found.' });
+    }
+
     const { data: reservation, error: resErr } = await supabaseAdmin
       .from('SupportTrainReservation')
       .select(
@@ -3325,9 +3332,17 @@ router.post(
       )
       .eq('id', reservationId)
       .eq('support_train_id', st.id)
-      .single();
+      .maybeSingle();
 
-    if (resErr || !reservation) {
+    if (resErr) {
+      logger.error('Reveal Support Train address reservation read failed', {
+        supportTrainId: st.id,
+        reservationId,
+        error: resErr.message,
+      });
+      throw Object.assign(new Error('Could not load the reservation. Please try again.'), { status: 503 });
+    }
+    if (!reservation) {
       return res.status(404).json({ error: 'NOT_FOUND', message: 'Reservation not found.' });
     }
 
@@ -3949,12 +3964,21 @@ router.get(
     if (st.organizer_user_id === userId) {
       role = 'organizer';
     } else {
-      const { data: orgRow } = await supabaseAdmin
+      const { data: orgRow, error: orgErr } = await supabaseAdmin
         .from('SupportTrainOrganizer')
         .select('role')
         .eq('support_train_id', st.id)
         .eq('user_id', userId)
-        .single();
+        .maybeSingle();
+      // A failed read is not a refusal: an organizer must not be told they have no access.
+      if (orgErr) {
+        logger.error('List reservations organizer check failed', {
+          supportTrainId: st.id,
+          userId,
+          error: orgErr.message,
+        });
+        return supportTrainUnavailable(res);
+      }
       if (orgRow) role = 'organizer';
     }
 
@@ -3964,12 +3988,20 @@ router.get(
 
     if (role === 'none') {
       // Check if helper
-      const { count } = await supabaseAdmin
+      const { count, error: helperErr } = await supabaseAdmin
         .from('SupportTrainReservation')
         .select('id', { count: 'exact', head: true })
         .eq('support_train_id', st.id)
         .eq('user_id', userId)
         .neq('status', 'canceled');
+      if (helperErr) {
+        logger.error('List reservations helper check failed', {
+          supportTrainId: st.id,
+          userId,
+          error: helperErr.message,
+        });
+        return supportTrainUnavailable(res);
+      }
       if ((count || 0) > 0) role = 'helper';
     }
 
