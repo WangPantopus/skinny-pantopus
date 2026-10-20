@@ -239,10 +239,11 @@ struct AIActionCardView: View {
         case "home_task": ("Task", .checkCircle)
         case "home_task_update": ("Task update", .checkCheck)
         case "home_system": ("Home system", .wrench)
+        case "home_asset": ("Appliance", .refrigerator)
         // A nudge with nothing to do but "Fewer like this" (phase 2 §3.6).
         case "suggestion": ("Suggestion", .sparkles)
         case "notification_settings": ("Notifications", .bell)
-        // An appliance, the year's plan and any later home card.
+        // The year's plan and any later home card.
         case let other where other.hasPrefix("home_"): ("Home", .home)
         default: ("Action", .sparkles)
         }
