@@ -73,6 +73,8 @@ export default function BusinessSettingsLegalPage() {
   const [legalForm, setLegalForm] = useState({ legal_name: '', tax_id_last4: '', support_email: '' });
   const [savingLegal, setSavingLegal] = useState(false);
   const [legalLoaded, setLegalLoaded] = useState(false);
+  // Only the owner (sensitive.view) can read the private legal record.
+  const [legalDenied, setLegalDenied] = useState(false);
 
   // Self-attestation form
   const [attestForm, setAttestForm] = useState({ legal_name: '', address_confirmed: false });
@@ -95,28 +97,39 @@ export default function BusinessSettingsLegalPage() {
     setLoading(true);
     setError('');
     setLegalLoaded(false);
+    setLegalDenied(false);
     try {
-      const [verRes, privateRes] = await Promise.all([
+      // Every member can read the verification status; the private record needs
+      // sensitive.view. Each section shows its own read, so one can't blank the other.
+      const [verResult, privateResult] = await Promise.allSettled([
         api.businesses.getVerificationStatus(businessId),
         api.businesses.getBusinessPrivate(businessId),
       ]);
-      setVerificationData(verRes);
+      setVerificationData(verResult.status === 'fulfilled' ? verResult.value : null);
+      const privateDenied = privateResult.status === 'rejected'
+        && (privateResult.reason as { statusCode?: number } | null)?.statusCode === 403;
 
-      const priv: Partial<api.businesses.BusinessPrivateData> = privateRes.private || {};
-      const privLegalName = typeof priv.legal_name === 'string' ? priv.legal_name : '';
-      setLegalForm({
-        legal_name: privLegalName,
-        tax_id_last4: typeof priv.tax_id_last4 === 'string' ? priv.tax_id_last4 : '',
-        support_email: typeof priv.support_email === 'string' ? priv.support_email : '',
-      });
-      setLegalLoaded(true);
+      if (privateResult.status === 'fulfilled') {
+        const priv: Partial<api.businesses.BusinessPrivateData> = privateResult.value.private || {};
+        const privLegalName = typeof priv.legal_name === 'string' ? priv.legal_name : '';
+        setLegalForm({
+          legal_name: privLegalName,
+          tax_id_last4: typeof priv.tax_id_last4 === 'string' ? priv.tax_id_last4 : '',
+          support_email: typeof priv.support_email === 'string' ? priv.support_email : '',
+        });
+        setLegalLoaded(true);
 
-      // Pre-fill attestation form with legal name if available
-      if (!attestForm.legal_name && privLegalName) {
-        setAttestForm((f) => ({ ...f, legal_name: privLegalName }));
+        // Pre-fill attestation form with legal name if available
+        if (!attestForm.legal_name && privLegalName) {
+          setAttestForm((f) => ({ ...f, legal_name: privLegalName }));
+        }
+      } else if (privateDenied) {
+        setLegalDenied(true);
       }
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to load verification data');
+
+      const failure = verResult.status === 'rejected' ? verResult
+        : privateResult.status === 'rejected' && !privateDenied ? privateResult : null;
+      if (failure) setError(failure.reason instanceof Error ? failure.reason.message : 'Failed to load verification data');
     } finally {
       setLoading(false);
     }
@@ -260,7 +273,7 @@ export default function BusinessSettingsLegalPage() {
         {error && (
           <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {error}
-            {!legalLoaded && <button onClick={() => void load()} className="ml-3 underline">Retry</button>}
+            {((!legalLoaded && !legalDenied) || !verificationData) && <button onClick={() => void load()} className="ml-3 underline">Retry</button>}
           </div>
         )}
 
@@ -443,6 +456,7 @@ export default function BusinessSettingsLegalPage() {
         <div className="bg-app-surface border border-app-border rounded-xl p-5">
           <h2 className="text-sm font-semibold text-app-text mb-1">Legal Settings</h2>
           <p className="text-xs text-app-text-muted mb-3">Private. Only visible to the business owner.</p>
+          {legalDenied && <p className="text-sm text-app-text-secondary mb-3">Only the business owner can view and edit these details.</p>}
           <div className="space-y-3">
             <label className="block">
               <div className="text-sm font-medium text-app-text-strong mb-1">Legal Business Name</div>
