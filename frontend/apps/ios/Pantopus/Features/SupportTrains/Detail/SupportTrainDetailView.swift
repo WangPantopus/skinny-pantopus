@@ -233,7 +233,8 @@ public struct SupportTrainDetailView: View {
                     if let address = content.exactAddress {
                         overline("Delivery address")
                         exactAddressCard(address, instructions: content.deliveryInstructions)
-                    } else if content.viewerRole != .viewer {
+                    } else if content.viewerRole != .viewer, content.viewerRole != .recipient {
+                        // Organizers and helpers coordinate delivery; recipients don't head out.
                         overline("Delivery address")
                         Text(content.viewerRole.isOrganizer
                             ? "No delivery address is available for this train. Coordinate delivery details with your helpers."

@@ -355,7 +355,8 @@ struct OwnerEditFrame: View {
     }
 
     @ViewBuilder private var moneyAndLegalSection: some View {
-        if content.access.isOwner == true || content.allows("sensitive.view") {
+        // Invoices follow the server's profile.edit gate for creating and voiding them.
+        if content.access.isOwner == true || content.allows("profile.edit") || content.allows("sensitive.view") {
             OwnerSectionHeader(title: "Money & legal")
             VStack(spacing: Spacing.s2) {
                 if content.access.isOwner == true {
@@ -366,6 +367,8 @@ struct OwnerEditFrame: View {
                         identifier: "businessOwner.paymentsRow",
                         onOpen: onOpenPayments
                     )
+                }
+                if content.allows("profile.edit") {
                     OwnerNavRow(
                         icon: .receiptText,
                         title: "Invoices",
