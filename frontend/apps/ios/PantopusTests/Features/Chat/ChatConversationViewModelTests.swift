@@ -320,7 +320,7 @@ final class ChatConversationViewModelTests: XCTestCase {
         URLProtocolStub.stub(
             path: "/api/upload/ai-media",
             response: .json("""
-            {"message":"1 image(s) uploaded","images":[{"url":"https://cdn.example/image.jpg","key":"k","name":"photo.jpg","mime_type":"image/jpeg","size":3}]}
+            {"message":"1 image(s) uploaded","images":[{"url":"ai-photo:photo.jpg","name":"photo.jpg","mime_type":"image/jpeg","size":3}]}
             """)
         )
         let fakeAI = FakeAIChatStreamClient(events: [.textDelta("Nice image"), .done])
@@ -336,7 +336,7 @@ final class ChatConversationViewModelTests: XCTestCase {
         vm.queueAttachment(kind: .image, filename: "photo.jpg", mimeType: "image/jpeg", data: Data("jpg".utf8))
         vm.composerText = "Look"
         await vm.send()
-        XCTAssertEqual(fakeAI.lastRequest?.images, ["https://cdn.example/image.jpg"])
+        XCTAssertEqual(fakeAI.lastRequest?.images, ["ai-photo:photo.jpg"])
         guard case let .loaded(rows) = vm.state,
               case let .bubble(content)? = rows.first(where: { $0.id.hasPrefix("bubble_ai_user_") }),
               case let .textWithImages(text, urls) = content.body else {
@@ -344,7 +344,9 @@ final class ChatConversationViewModelTests: XCTestCase {
             return
         }
         XCTAssertEqual(text, "Look")
-        XCTAssertEqual(urls.first?.absoluteString, "https://cdn.example/image.jpg")
+        // The phone's own copy: the server deletes the photo once read, and its reference never loads.
+        XCTAssertEqual(urls.count, 1)
+        XCTAssertEqual(urls.first?.isFileURL, true)
     }
 
     func testAIActiveSampleRendersStructuredReplyWithEstimate() {

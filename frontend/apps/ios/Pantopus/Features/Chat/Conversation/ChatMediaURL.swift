@@ -7,10 +7,14 @@
 //  and auth (Bearer header is not sent by AsyncImage — use ?token=).
 //
 
-import Foundation
+import ImageIO
+import UIKit
 import UniformTypeIdentifiers
 
 enum ChatMediaURL {
+    /// Longest side of a sent photo's copy: its 72-pt tile at 3x, with room to crop it square.
+    static let sentPhotoPixels = 384
+
     /// Turn a stored attachment URL into something `AsyncImage` can fetch.
     @MainActor
     static func resolve(
@@ -82,6 +86,29 @@ enum ChatMediaURL {
         try? FileManager.default.removeItem(at: target)
         try FileManager.default.moveItem(at: temporary, to: target)
         return target
+    }
+
+    /// A small copy of a photo sent to the assistant, for its bubble: the server deletes the
+    /// photo once it has read it. The bytes as they are when they can't be shrunk; nil when
+    /// the copy can't be written.
+    static func sentPhotoCopy(of data: Data, in folder: URL) -> URL? {
+        let small = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary)
+            .flatMap { source in
+                CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                    kCGImageSourceCreateThumbnailFromImageAlways: true,
+                    kCGImageSourceCreateThumbnailWithTransform: true,
+                    kCGImageSourceThumbnailMaxPixelSize: sentPhotoPixels
+                ] as CFDictionary)
+            }
+            .flatMap { UIImage(cgImage: $0).jpegData(compressionQuality: 0.8) }
+        let file = folder.appendingPathComponent("\(UUID().uuidString).jpg")
+        do {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            try (small ?? data).write(to: file, options: [.atomic, .completeFileProtection])
+            return file
+        } catch {
+            return nil
+        }
     }
 
     /// The sender's filename, reduced to its last path component, with an
