@@ -15,6 +15,7 @@
  *   GET  /pulse                  — Neighborhood Pulse (cold-start)
  *   GET  /conversations          — List user's AI conversations
  *   DELETE /conversations/:id    — Delete a conversation
+ *   POST /nudges/:id/fewer       — "Fewer like this" on a nudge or the morning brief
  */
 const express = require('express');
 const Joi = require('joi');
@@ -26,6 +27,7 @@ const validate = require('../middleware/validate');
 const { aiChatLimiter, aiDraftLimiter } = require('../middleware/rateLimiter');
 const { asyncHandler } = require('../errorHandler');
 const agentService = require('../services/ai/agentService');
+const nudgeEngine = require('../services/ai/nudges/engine');
 const radonReport = require('../services/ai/radonReport');
 const { CHAT_MODEL, DRAFT_MODEL } = require('../config/anthropic');
 const propertyIntelligenceService = require('../services/ai/propertyIntelligenceService');
@@ -455,6 +457,16 @@ router.delete('/conversations/:id', verifyToken, asyncHandler(async (req, res) =
     return res.status(404).json({ error: 'Conversation not found' });
   }
   res.json({ message: 'Conversation deleted' });
+}));
+
+// ─── "Fewer like this" ──────────────────────────────────────────────────────
+// The secondary action on every nudge's card (phase 2 contract §3.6): mutes that kind
+// of suggestion for 30 days; on the morning brief, the plain briefing comes back.
+
+router.post('/nudges/:notificationId/fewer', verifyToken, asyncHandler(async (req, res) => {
+  const result = await nudgeEngine.fewerLikeThis(req.user.id, req.params.notificationId);
+  if (!result) return res.status(404).json({ error: 'Suggestion not found' });
+  res.json(result);
 }));
 
 // ─── Audio Transcription ─────────────────────────────────────────────────────

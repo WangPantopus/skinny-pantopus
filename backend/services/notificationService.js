@@ -321,6 +321,7 @@ async function shouldSuppressAudienceNotification(userId, type, metadata) {
  * @param {Object} [opts.metadata] - extra data (home_id, gig_id, etc.)
  * @param {string} [opts.idempotencyKey] - stable event identity; existing notices are never re-emitted
  * @param {boolean} [opts.sendPush] - false leaves transport to the caller's durable quiet-hours queue
+ * @param {string} [opts.id] - the row's id, for a caller whose link or metadata names it (assistant nudges)
  * @param {string} [opts.contextType] - 'personal' or 'business' (Identity Firewall)
  * @param {string} [opts.contextId] - business_user_id when contextType='business'
  * @param {string} [opts.context] - 'personal' | 'audience' | 'platform'
@@ -329,7 +330,7 @@ async function shouldSuppressAudienceNotification(userId, type, metadata) {
  *   pass `context: 'audience'` explicitly).
  * @returns {Promise<Object|null>} notification or null on error
  */
-async function createNotification({ userId, type, title, body, icon, link, metadata, contextType, contextId, context, idempotencyKey, sendPush = true }) {
+async function createNotification({ id, userId, type, title, body, icon, link, metadata, contextType, contextId, context, idempotencyKey, sendPush = true }) {
   if (!userId || !type || !title) {
     logger.warn('createNotification called with missing required fields', { userId, type, title });
     return null;
@@ -353,6 +354,7 @@ async function createNotification({ userId, type, title, body, icon, link, metad
     const { data, error } = await supabaseAdmin
       .from('Notification')
       .insert({
+        ...(id ? { id } : {}),
         user_id: userId,
         type,
         title,

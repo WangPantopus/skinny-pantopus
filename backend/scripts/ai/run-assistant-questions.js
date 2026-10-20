@@ -10,6 +10,8 @@
  * The accounts file holds <PREFIX><LABEL>_EMAIL, _PASSWORD and _HOME_ID lines (the local
  * launch kit's format). Passwords and tokens are never printed. Every run costs a few
  * cents of model usage; run it when prompts or tools change, and before raising limits.
+ * A question's `attach` files (in scripts/ai/fixtures) are uploaded through
+ * POST /api/upload/ai-media first and sent as the message's images, as the apps do.
  */
 const fs = require('fs');
 const path = require('path');
@@ -36,15 +38,21 @@ const { questions } = JSON.parse(fs.readFileSync(path.join(__dirname, 'assistant
 const tokens = new Map();
 async function token(label) {
   if (tokens.has(label)) return tokens.get(label);
-  const res = await fetch(`${API}/api/users/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: field(label, 'EMAIL'), password: field(label, 'PASSWORD') }),
-  });
-  const json = await res.json();
-  if (!json.accessToken) throw new Error(`sign-in failed for ${label} (${res.status})`);
-  tokens.set(label, json.accessToken);
-  return json.accessToken;
+  // A busy local stack answers 503 now and then; try a few times before failing the question.
+  for (let attempt = 1; ; attempt += 1) {
+    const res = await fetch(`${API}/api/users/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: field(label, 'EMAIL'), password: field(label, 'PASSWORD') }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (json.accessToken) {
+      tokens.set(label, json.accessToken);
+      return json.accessToken;
+    }
+    if (res.status !== 503 || attempt === 3) throw new Error(`sign-in failed for ${label} (${res.status})`);
+    await new Promise((resolve) => { setTimeout(resolve, 5000 * attempt); });
+  }
 }
 
 function fillContext(context) {
@@ -55,11 +63,29 @@ function fillContext(context) {
   }));
 }
 
+const MEDIA_TYPES = { '.pdf': 'application/pdf', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg' };
+
+/** Upload a question's fixtures the way the apps do; their references go in the message's images. */
+async function upload(question) {
+  const form = new FormData();
+  for (const name of question.attach) {
+    const file = path.join(__dirname, 'fixtures', name);
+    form.append('files', new Blob([fs.readFileSync(file)], { type: MEDIA_TYPES[path.extname(name).toLowerCase()] }), name);
+  }
+  const res = await fetch(`${API}/api/upload/ai-media`, {
+    method: 'POST', headers: { Authorization: `Bearer ${await token(question.as)}` }, body: form,
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(`upload failed (${res.status} ${json.code || json.error || ''})`);
+  return json.images.map((image) => image.url);
+}
+
 async function ask(question) {
   const body = {
     message: question.say,
     cards: question.old ? ['pickup_schedule'] : ['pickup_schedule', 'action', 'link'],
   };
+  if (question.attach) body.images = await upload(question);
   const context = fillContext(question.context);
   if (context) body.context = context;
   const res = await fetch(`${API}/api/ai/chat`, {
@@ -82,15 +108,31 @@ async function ask(question) {
   return out;
 }
 
+/** True when `whole` has every key of `part` with the same value, nested objects compared the same way. */
+function includes(whole, part) {
+  if (part && typeof part === 'object') {
+    return Boolean(whole) && typeof whole === 'object' && Object.entries(part).every(([key, value]) => includes(whole[key], value));
+  }
+  return whole === part;
+}
+
 function check(question, got) {
   const e = question.expect || {};
   const fails = [];
   const types = got.cards.map((c) => c.card);
+  const bodies = got.cards.flatMap((c) => [...(c.actions || []), ...(c.items || []).flatMap((item) => item.actions || [])])
+    .map((a) => a.request?.body);
   if (e.noError && got.errors.length) fails.push(`error ${got.errors.join(',')}`);
   if (e.card && !types.includes(e.card)) fails.push(`no ${e.card} card (got ${types.join(',') || 'none'})`);
+  if (e.cardKind && !got.cards.some((c) => (c.actions || []).some((a) => a.request?.body?.kind === e.cardKind))) fails.push(`no ${e.cardKind} plan card`);
   if (e.then && !got.cards.some((c) => (c.actions || []).some((a) => a.then))) fails.push('card has no follow-up request');
+  if (e.cardBodyHas && !got.cards.some((c) => (c.actions || []).some((a) => Object.entries(e.cardBodyHas)
+    .every(([key, value]) => a.request?.body?.[key] === value)))) fails.push(`no card request with ${JSON.stringify(e.cardBodyHas)}`);
   if (e.noCard && got.cards.length) fails.push(`unexpected card ${types.join(',')}`);
   if (e.noCardType && types.includes(e.noCardType)) fails.push(`unexpected ${e.noCardType} card`);
+  for (const type of e.noCardTypes || []) if (types.includes(type)) fails.push(`unexpected ${type} card`);
+  for (const type of e.cards || []) if (!types.includes(type)) fails.push(`no ${type} card (got ${types.join(',') || 'none'})`);
+  if (e.bodyIncludes && !bodies.some((body) => includes(body, e.bodyIncludes))) fails.push(`no card request with ${JSON.stringify(e.bodyIncludes)}`);
   if (e.linkContains && !got.links.some((url) => url.includes(e.linkContains))) fails.push(`no link containing ${e.linkContains}`);
   if (e.textMatches && !new RegExp(e.textMatches, 'i').test(got.text)) fails.push(`text lacks /${e.textMatches}/`);
   if (e.textNotMatches && new RegExp(e.textNotMatches, 'im').test(got.text)) fails.push(`text matches /${e.textNotMatches}/`);
@@ -107,7 +149,7 @@ function check(question, got) {
       const fails = check(question, got);
       if (fails.length) failed += 1;
       console.log(`${fails.length ? 'FAIL' : 'pass'}  ${question.id}  ${Date.now() - started} ms${fails.length ? `  — ${fails.join('; ')}` : ''}`);
-      if (fails.length) console.log(`      reply: ${got.text.replace(/\s+/g, ' ').slice(0, 240)}`);
+      if (fails.length) console.log(`      reply: ${got.text.replace(/\s+/g, ' ').slice(0, 240)}${got.errors.length ? `  (errors: ${got.errors.join(', ')})` : ''}`);
     } catch (err) {
       failed += 1;
       console.log(`FAIL  ${question.id}  — ${err.message}`);

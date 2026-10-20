@@ -87,6 +87,12 @@ function whenLabel(startIso, endIso, zone) {
   return `${day} · ${start.toFormat(sameHalf ? 'h:mm' : 'h:mm a')}–${end.toFormat('h:mm a')}`;
 }
 
+/** "Sat, Oct 24 · morning" for a plan whose time shows only to people who are in (a playdate). */
+function dayPartLabel(date, part) {
+  const day = DateTime.fromISO(String(date || ''), { zone: 'utc' });
+  return day.isValid && part ? `${day.toFormat('ccc, LLL d')} · ${part}` : null;
+}
+
 /** "Tuesday, October 20" for an ISO time, in `zone`. */
 function dayLabel(iso, zone) {
   const at = DateTime.fromISO(String(iso || ''), { zone: 'utc' }).setZone(zoneOr(zone));
@@ -124,6 +130,7 @@ module.exports = {
   zoneOr,
   localToUtc,
   whenLabel,
+  dayPartLabel,
   dayLabel,
   todayIn,
   firstNameOf,

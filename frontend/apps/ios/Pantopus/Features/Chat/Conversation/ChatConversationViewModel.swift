@@ -621,6 +621,11 @@ public final class ChatConversationViewModel {
     /// Suppresses the typing emitter so only real keystrokes broadcast
     /// `typing:start` to the room.
     private var isProgrammaticComposerWrite = false
+    /// Photos sent to the assistant, by the message that carried them: copies on the phone,
+    /// because the server deletes each photo once it has read it and its reference never loads.
+    private var aiSentPhotos: [String: [URL]] = [:]
+    /// Where those copies are kept. It goes with "New chat", with the view-model, and at the next launch.
+    private let aiPhotoFolder = ChatMediaURL.sentPhotosRoot.appendingPathComponent(UUID().uuidString, isDirectory: true)
     /// In-flight AI reply stream, held so the composer's stop button can
     /// cancel it mid-generation.
     private var aiStreamTask: Task<Void, Never>?
@@ -759,6 +764,11 @@ public final class ChatConversationViewModel {
     // nonisolated `deinit`. The view calls `teardown()` from
     // `.onDisappear`, and each task captures `[weak self]` so it
     // exits cleanly once the VM is deallocated.
+
+    /// The copies of photos sent to the assistant go with the view-model (their folder is a constant).
+    deinit {
+        try? FileManager.default.removeItem(at: aiPhotoFolder)
+    }
 
     // MARK: - Public API
 
@@ -1157,14 +1167,18 @@ public final class ChatConversationViewModel {
     }
 
     private func sendAIMessage(_ text: String) async {
+        // The photos the upload sends (images only), taken before it starts.
+        let photos = queuedAttachments.compactMap { $0.mimeType.hasPrefix("image/") ? $0.data : nil }
         let imageURLs = await (try? uploadQueuedAIImagesIfNeeded()) ?? []
         let userMessage = localMessage(
             id: "ai_user_\(UUID().uuidString)",
             text: text,
             userId: currentUserId,
-            type: "text",
-            imageURLs: imageURLs
+            type: "text"
         )
+        if !imageURLs.isEmpty {
+            aiSentPhotos[userMessage.id] = await Self.sentPhotoCopies(of: photos, in: aiPhotoFolder)
+        }
         let assistantId = "ai_assistant_\(UUID().uuidString)"
         let assistantMessage = localMessage(id: assistantId, text: "", userId: "ai", type: "ai_reply")
         messages.append(userMessage)
@@ -1252,6 +1266,8 @@ public final class ChatConversationViewModel {
         aiStreamTask?.cancel()
         aiConversationId = nil
         aiConversationStore.startFresh(forUserId: currentUserId)
+        aiSentPhotos = [:]
+        try? FileManager.default.removeItem(at: aiPhotoFolder)
         messages = []
         aiDraftsByMessageId = [:]
         aiLinksByMessageId = [:]
@@ -1872,6 +1888,11 @@ public final class ChatConversationViewModel {
         guard !files.isEmpty else { return [] }
         let response = try await uploader.uploadAIMedia(files: files)
         return response.images.map(\.url)
+    }
+
+    /// Off the main actor: shrinking full-size photos takes a moment.
+    private nonisolated static func sentPhotoCopies(of photos: [Data], in folder: URL) async -> [URL] {
+        photos.compactMap { ChatMediaURL.sentPhotoCopy(of: $0, in: folder) }
     }
 
     // MARK: - Fetch
@@ -2501,8 +2522,12 @@ public final class ChatConversationViewModel {
         resolveScrollTargetIfNeeded(rows: rows)
     }
 
-    /// An assistant reply carries the draft cards that came with it.
+    /// An assistant reply carries the draft cards that came with it, and a message sent to the
+    /// assistant with photos shows the phone's copies of them.
     private func bubbleBody(for message: ChatMessageDTO) -> ChatBubbleContent.Body {
+        if let photos = aiSentPhotos[message.id], !photos.isEmpty {
+            return .textWithImages(text: message.messageText ?? "", imageURLs: photos)
+        }
         guard message.messageType == "ai_reply" else { return Self.bodyForMessage(message) }
         return .aiReply(text: message.messageText ?? "", estimate: nil, drafts: aiDraftsByMessageId[message.id] ?? [])
     }
@@ -2575,14 +2600,14 @@ public final class ChatConversationViewModel {
         )
     }
 
-    private func localMessage(id: String, text: String, userId: String, type: String, imageURLs: [String] = []) -> ChatMessageDTO {
+    private func localMessage(id: String, text: String, userId: String, type: String) -> ChatMessageDTO {
         ChatMessageDTO(
             id: id,
             roomId: "ai",
             userId: userId,
             messageText: text,
             messageType: type,
-            metadata: imageURLs.isEmpty ? nil : .object(["image_urls": .array(imageURLs.map(JSONValue.string))]),
+            metadata: nil,
             replyToId: nil,
             clientMessageId: nil,
             createdAt: ISO8601DateFormatter().string(from: Date()),

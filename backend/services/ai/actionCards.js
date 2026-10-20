@@ -11,6 +11,7 @@
  * be refused.
  */
 const crypto = require('crypto');
+const { DateTime } = require('luxon');
 const supabaseAdmin = require('../../config/supabaseAdmin');
 const logger = require('../../utils/logger');
 const { isFeatureEnabled } = require('../featureFlagService');
@@ -22,18 +23,35 @@ const rules = require('../plans/planRules');
 const { canReadPost, POST_READ_SELECT } = require('../pulse/readAccess');
 const homeRecordService = require('../homeRecordService');
 const homeDetailService = require('../homeDetailService');
+const { SYSTEM_DEFS } = require('../homeSystemsService');
+const { yearAhead } = require('../seasonalChecklistService');
+const { createHomeAssetSchema } = require('../../utils/homeAssetFields');
+const { checkHomePermission, getUserAccess } = require('../../utils/homePermissions');
+const { ROLE_RANK } = require('../../utils/homeAccessPolicy');
 const { localDisplayNames } = require('../../utils/identityProfiles');
-const { PLAN_KINDS } = require('./readTools');
+const { escapeIlike } = require('../../utils/escapeIlike');
+const { normalizeTitle, jaccardSimilarity } = require('../gig/jaccardUtils');
+const { planKinds, readSections } = require('./readTools');
 const { linkFor } = require('./appGuide');
 const {
-  isUuid, clip, chosenHome, localToUtc, whenLabel, dayLabel, firstNameOf, distanceWords,
+  isUuid, clip, chosenHome, zoneOr, localToUtc, whenLabel, dayPartLabel, dayLabel, todayIn, firstNameOf, distanceWords,
 } = require('./assistantKit');
 
 const NOTE = 'One short sentence shown under the card: the assumption that matters most or a detail worth adding. Nothing happens until they tap, so write about the card, never as if it were already done. Null when there is nothing to say.';
+// What a home paper's end date can be (a task's details.kind; the home_paperwork nudge reads it).
+const DOCUMENT_KINDS = ['warranty', 'policy', 'lease'];
+// The kinds of item the assistant records (HomeAsset categories, without consumables).
+const ASSET_KINDS = ['appliance', 'electronics', 'furniture', 'tool', 'valuable', 'fixture', 'other'];
+const ASSET_KIND_LABELS = {
+  appliance: 'Appliance', electronics: 'Electronics', furniture: 'Furniture', tool: 'Tool', valuable: 'Valuable', fixture: 'Fixture', other: 'Other',
+};
 const HHMM = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
 const KIND_LABELS = {
   watch_party: 'Watch party', pickup_game: 'Pickup game', walk_coffee: 'Walk & coffee', study_group: 'Study group', playdate: 'Playdate',
 };
+// Kids' age bands as the apps write them (Android KidsAgeBand).
+const AGE_LABELS = { under_2: 'Under 2', '2_3': '2–3', '4_5': '4–5', '6_8': '6–8', '9_12': '9–12' };
+const agesText = (bands) => (Array.isArray(bands) && bands.length ? bands.map((band) => AGE_LABELS[band] || band).join(', ') : null);
 const WHO_GETS_IN = {
   host_approves: { rules: [], text: 'You approve each person' },
   verified_neighbors: { rules: ['verified'], text: 'Verified neighbors get in right away; you approve everyone else' },
@@ -45,19 +63,21 @@ const WHO_GETS_IN = {
 // ─── Definitions ───────────────────────────────────────────────────────────
 
 const nullable = (schema) => ({ ...schema, type: [schema.type, 'null'] });
+const kidsAges = (description) => ({ type: ['array', 'null'], items: { type: 'string', enum: rules.KIDS_AGE_BANDS }, description });
 
-const actionCardDefinitions = [
-  {
+/** draft_plan; with `playdates`, for people who have plans_playdates (the kind, its kids' ages and its rules). */
+function draftPlanDefinition({ playdates = false } = {}) {
+  return {
     name: 'draft_plan',
-    description: 'Draft a new plan (a small meetup on the Plans map) for the person to post with one tap. Kinds: watch_party (a game or show to watch together), pickup_game (a sport), walk_coffee (a walk, dog walk, stroller walk or coffee), study_group (studying together; public places only). Plans start within the next 14 days and last 15 minutes to 8 hours. Pickup games, study groups and walks in public need a public place: give its name and the server finds it near them. Watch parties and walks may be at their own home. Make sensible assumptions (an hour and a half for games, 8 spots) and name the main one in the note.',
+    description: `Draft a new plan (a small meetup on the Plans map) for the person to post with one tap. Kinds: watch_party (a game or show to watch together), ${playdates ? 'playdate (kids play while their parents meet; only for people with a verified address), ' : ''}pickup_game (a sport), walk_coffee (a walk, dog walk, stroller walk or coffee), study_group (studying together; public places only). Plans start within the next 14 days and last 15 minutes to 8 hours. Pickup games, ${playdates ? 'playdates, ' : ''}study groups and walks in public need a public place: give its name and the server finds it near them. Watch parties and walks may be at their own home. Neighbors read the title and about before they get in, while the place shows only to people who get in, so keep the place's name and any address out of them; where exactly to meet goes in guest_note. ${playdates ? "A playdate needs the ages of the kids it's for (details.kids_age_bands): use what they said, or ask in one short question. Its host approves each family, and its spots count families. Others see only its neighborhood until the host accepts them. " : ''}Make sensible assumptions (an hour and a half for games, 8 spots${playdates ? '; for a playdate, an hour and a half and 4 families' : ''}) and name the main one in the note.`,
     input_schema: {
       type: 'object',
       properties: {
-        kind: { type: 'string', enum: PLAN_KINDS },
-        title: { type: 'string', description: 'Short title, up to 80 characters, e.g. "Pickleball, need 3".' },
+        kind: { type: 'string', enum: planKinds(playdates) },
+        title: { type: 'string', description: 'Short title, up to 80 characters, e.g. "Pickleball, need 3". Public: never the place or an address.' },
         starts_local: { type: 'string', description: 'Start in their local time, YYYY-MM-DDTHH:MM.' },
         ends_local: { type: 'string', description: 'End in their local time, YYYY-MM-DDTHH:MM.' },
-        spots: { type: 'integer', minimum: 1, maximum: 30, description: 'How many people can join, not counting the host.' },
+        spots: { type: 'integer', minimum: 1, maximum: 30, description: `How many people can join, not counting the host${playdates ? ' (for a playdate, how many families besides theirs)' : ''}.` },
         place_name: nullable({ type: 'string', description: 'A public place near them (a park, court, library, café), or null when at_home.' }),
         at_home: nullable({ type: 'boolean', description: 'True to host at their own home (watch parties and walks only).' }),
         who_gets_in: nullable({ type: 'string', enum: Object.keys(WHO_GETS_IN), description: 'Who gets in without the host approving. Null for the usual: verified neighbors in public, approval at home.' }),
@@ -73,17 +93,46 @@ const actionCardDefinitions = [
             subject: nullable({ type: 'string', description: 'Study groups: what they study, up to 60 characters.' }),
             study_style: nullable({ type: 'string', enum: rules.STUDY_STYLES }),
             game_label: nullable({ type: 'string', description: 'Watch parties: the game or show, e.g. "Seahawks vs. 49ers".' }),
+            ...(playdates ? { kids_age_bands: kidsAges("Playdates: the ages of the kids it's for.") } : {}),
           },
           additionalProperties: false,
         },
-        about: nullable({ type: 'string', description: 'A line about the plan, up to 500 characters.' }),
+        about: nullable({ type: 'string', description: 'A line about the plan, up to 500 characters. Public like the title: never the place or an address.' }),
         guest_note: nullable({ type: 'string', description: 'A note only people who get in see (where exactly to meet, what to bring).' }),
         note: { type: ['string', 'null'], description: NOTE },
       },
       required: ['kind', 'title', 'starts_local', 'ends_local', 'spots', 'place_name', 'at_home', 'who_gets_in', 'details', 'about', 'guest_note', 'note'],
       additionalProperties: false,
     },
-  },
+  };
+}
+
+/** draft_plan_ask; with `playdates`, a playdate's ask carries the family's kids and their ages. */
+function draftPlanAskDefinition({ playdates = false } = {}) {
+  const kids = playdates ? {
+    kids_count: nullable({ type: 'integer', minimum: 1, maximum: 8, description: 'Playdates: how many of their kids are coming. Null for other plans.' }),
+    kids_age_bands: kidsAges("Playdates: their kids' ages. Null for other plans."),
+  } : {};
+  return {
+    name: 'draft_plan_ask',
+    description: `Draft asking to join someone else's plan, with an optional short note to the host.${playdates ? " For a playdate their family asks: give how many of their kids are coming and their ages, or ask in one short question. Parents stay with their kids, and the host sees the kids' ages, never their names." : ''}`,
+    input_schema: {
+      type: 'object',
+      properties: {
+        plan_id: { type: 'string' },
+        party_size: { type: 'integer', minimum: 1, maximum: 4, description: 'People coming including them.' },
+        ...kids,
+        ask_note: nullable({ type: 'string', description: 'Up to 280 characters to the host.' }),
+        note: { type: ['string', 'null'], description: NOTE },
+      },
+      required: ['plan_id', 'party_size', ...Object.keys(kids), 'ask_note', 'note'],
+      additionalProperties: false,
+    },
+  };
+}
+
+const actionCardDefinitions = [
+  draftPlanDefinition(),
   {
     name: 'draft_plan_change',
     description: 'Draft a change to a plan the person hosts: the time, the place, spots, title or notes. Only the fields that change. Moving the start more than 30 minutes or changing the place asks everyone who is in "Still coming?".',
@@ -91,13 +140,13 @@ const actionCardDefinitions = [
       type: 'object',
       properties: {
         plan_id: { type: 'string' },
-        title: nullable({ type: 'string' }),
+        title: nullable({ type: 'string', description: 'A new title. Public: never the place or an address.' }),
         starts_local: nullable({ type: 'string', description: 'New start, local time YYYY-MM-DDTHH:MM.' }),
         ends_local: nullable({ type: 'string', description: 'New end, local time YYYY-MM-DDTHH:MM.' }),
         spots: nullable({ type: 'integer', minimum: 1, maximum: 30 }),
         place_name: nullable({ type: 'string', description: 'A new public place near them.' }),
-        about: nullable({ type: 'string' }),
-        guest_note: nullable({ type: 'string' }),
+        about: nullable({ type: 'string', description: 'A new about line. Public: never the place or an address.' }),
+        guest_note: nullable({ type: 'string', description: 'A new note for people who are in (where exactly to meet).' }),
         note: { type: ['string', 'null'], description: NOTE },
       },
       required: ['plan_id', 'title', 'starts_local', 'ends_local', 'spots', 'place_name', 'about', 'guest_note', 'note'],
@@ -128,21 +177,7 @@ const actionCardDefinitions = [
       additionalProperties: false,
     },
   },
-  {
-    name: 'draft_plan_ask',
-    description: "Draft asking to join someone else's plan, with an optional short note to the host.",
-    input_schema: {
-      type: 'object',
-      properties: {
-        plan_id: { type: 'string' },
-        party_size: { type: 'integer', minimum: 1, maximum: 4, description: 'People coming including them.' },
-        ask_note: nullable({ type: 'string', description: 'Up to 280 characters to the host.' }),
-        note: { type: ['string', 'null'], description: NOTE },
-      },
-      required: ['plan_id', 'party_size', 'ask_note', 'note'],
-      additionalProperties: false,
-    },
-  },
+  draftPlanAskDefinition(),
   {
     name: 'draft_plan_message',
     description: "Draft a message to everyone in a plan's group chat (the host and the people who are in). The chat exists once the host has let someone in.",
@@ -205,15 +240,115 @@ const actionCardDefinitions = [
           additionalProperties: false,
         },
         priority: nullable({ type: 'string', enum: ['low', 'medium', 'high', 'urgent'] }),
+        document: {
+          type: ['object', 'null'],
+          description: 'For a reminder about a home paper they sent (a warranty, policy or lease that ends): what it is, what ends and when, and the page. Null otherwise.',
+          properties: {
+            name: { type: 'string', description: 'What the paper is, in a few words ("Water heater warranty", "Home insurance policy"). Never a number from it.' },
+            kind: { type: 'string', enum: DOCUMENT_KINDS },
+            ends_on: { type: 'string', description: 'The day it ends, YYYY-MM-DD, as printed.' },
+            page: { type: ['integer', 'null'], minimum: 1, description: 'The page the date is on; null for a photo.' },
+          },
+          required: ['name', 'kind', 'ends_on', 'page'],
+          additionalProperties: false,
+        },
         note: { type: ['string', 'null'], description: NOTE },
       },
-      required: ['home_id', 'title', 'description', 'task_type', 'assignee_user_id', 'due_date', 'due_time', 'repeat', 'priority', 'note'],
+      required: ['home_id', 'title', 'description', 'task_type', 'assignee_user_id', 'due_date', 'due_time', 'repeat', 'priority', 'document', 'note'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'draft_home_task_update',
+    description: "Draft a change to one of the household's tasks: mark it done, move its due date, or give it to someone in the household. Use list_home_tasks for the task_id and get_household for a person's id. Only what changes.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        home_id: nullable({ type: 'string', description: 'The home the task is in (list_home_tasks gives it), or null for the home Today shows.' }),
+        task_id: { type: 'string' },
+        done: nullable({ type: 'boolean', description: 'True to mark it done.' }),
+        due_date: nullable({ type: 'string', description: 'A new due date, local YYYY-MM-DD.' }),
+        due_time: nullable({ type: 'string', description: 'Local time HH:MM, or null for 9:00 AM.' }),
+        assignee_user_id: nullable({ type: 'string', description: 'Who it is for now: a user_id from get_household.' }),
+        note: { type: ['string', 'null'], description: NOTE },
+      },
+      required: ['home_id', 'task_id', 'done', 'due_date', 'due_time', 'assignee_user_id', 'note'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'draft_home_year',
+    description: "Plan a year of upkeep for one of the person's homes (\"plan our year\", \"what should we do to the house this year\"): one card with up to 12 tasks, each with a date, who it's for and a repeat, from the ages in the home's systems record and the region's seasonal checklist. Each task has its own Add. Leave out what they say they already do.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        home_id: nullable({ type: 'string', description: 'Null for the home Today shows.' }),
+        assignee_user_id: nullable({ type: 'string', description: 'Someone from get_household the tasks are for, when they say so; null for anyone at home.' }),
+        leave_out: { type: ['array', 'null'], items: { type: 'string' }, description: 'Words naming tasks to leave out, e.g. ["gutters"] when a service does them. Null for none.' },
+        note: { type: ['string', 'null'], description: NOTE },
+      },
+      required: ['home_id', 'assignee_user_id', 'leave_out', 'note'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'draft_home_system',
+    description: "Draft recording the year one of the home's six building systems was installed, in the systems record on the Place tab (it replaces the estimate from the year the home was built). Use the year they tell you, or the install or manufacture date on a label, an invoice or an inspection report they sent. One card per system.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        home_id: nullable({ type: 'string', description: 'Null for the home Today shows.' }),
+        system: { type: 'string', enum: SYSTEM_DEFS.map((def) => def.key), description: 'hvac is heating and cooling (a furnace, a heat pump, central air).' },
+        installed_year: { type: 'integer', minimum: 1900, maximum: 2100 },
+        source: {
+          type: ['object', 'null'],
+          description: 'The paper or photo the year comes from; null when they told you.',
+          properties: {
+            name: { type: 'string', description: 'What it is, in a few words ("Water heater label", "Inspection report"). Never a number from it.' },
+            page: { type: ['integer', 'null'], minimum: 1, description: 'The page the year is on; null for a photo.' },
+          },
+          required: ['name', 'page'],
+          additionalProperties: false,
+        },
+        note: { type: ['string', 'null'], description: NOTE },
+      },
+      required: ['home_id', 'system', 'installed_year', 'source', 'note'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'draft_home_asset',
+    description: "Draft adding an appliance or another item to the home's records: its make and model, when it was bought and until when its warranty runs, from what they tell you or a receipt, a label or a warranty they sent. The six building systems (roof, heating and cooling, water heater, electrical panel, sewer or septic, windows) go in draft_home_system instead.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        home_id: nullable({ type: 'string', description: 'Null for the home Today shows.' }),
+        name: { type: 'string', description: 'What it is, e.g. "Dishwasher" or "Refrigerator", up to 120 characters.' },
+        category: { type: 'string', enum: ASSET_KINDS },
+        brand: nullable({ type: 'string' }),
+        model: nullable({ type: 'string', description: 'The model name or number on the label. Never the serial number.' }),
+        room: nullable({ type: 'string', description: 'Where it is, e.g. "Kitchen".' }),
+        purchase_date: nullable({ type: 'string', description: 'The day it was bought or installed, YYYY-MM-DD.' }),
+        warranty_ends: nullable({ type: 'string', description: 'The last day of its warranty, YYYY-MM-DD.' }),
+        source: {
+          type: ['object', 'null'],
+          description: 'The paper or photo these come from; null when they told you.',
+          properties: {
+            name: { type: 'string', description: 'What it is, in a few words ("Dishwasher receipt"). Never a number from it.' },
+            page: { type: ['integer', 'null'], minimum: 1, description: 'The page; null for a photo.' },
+          },
+          required: ['name', 'page'],
+          additionalProperties: false,
+        },
+        note: { type: ['string', 'null'], description: NOTE },
+      },
+      required: ['home_id', 'name', 'category', 'brand', 'model', 'room', 'purchase_date', 'warranty_ends', 'source', 'note'],
       additionalProperties: false,
     },
   },
   {
     name: 'draft_notification_settings',
-    description: 'Draft a change to the person\'s notification settings: quiet hours (HH:MM, 24-hour), the morning and evening briefings and their times, weather and air alerts, and home reminders. Only the fields that change.',
+    description: 'Draft a change to the person\'s notification settings: quiet hours (HH:MM, 24-hour), the morning and evening briefings and their times, weather and air alerts, home reminders, and Suggestions from Pantopus. Only the fields that change.',
     input_schema: {
       type: 'object',
       properties: {
@@ -226,13 +361,17 @@ const actionCardDefinitions = [
         weather_alerts: nullable({ type: 'boolean' }),
         air_quality_alerts: nullable({ type: 'boolean' }),
         home_reminders: nullable({ type: 'boolean' }),
+        suggestions_enabled: nullable({ type: 'boolean', description: 'Suggestions from Pantopus: a morning brief with buttons, and at most two nudges a day, never during quiet hours.' }),
         note: { type: ['string', 'null'], description: NOTE },
       },
-      required: ['quiet_hours_start', 'quiet_hours_end', 'morning_briefing', 'morning_briefing_time', 'evening_briefing', 'evening_briefing_time', 'weather_alerts', 'air_quality_alerts', 'home_reminders', 'note'],
+      required: ['quiet_hours_start', 'quiet_hours_end', 'morning_briefing', 'morning_briefing_time', 'evening_briefing', 'evening_briefing_time', 'weather_alerts', 'air_quality_alerts', 'home_reminders', 'suggestions_enabled', 'note'],
       additionalProperties: false,
     },
   },
 ];
+
+// The card tools that differ for people with plans_playdates.
+const playdateCardDefinitions = [draftPlanDefinition({ playdates: true }), draftPlanAskDefinition({ playdates: true })];
 
 const PLAN_CARD_TOOLS = new Set(['draft_plan', 'draft_plan_change', 'draft_plan_cancel', 'show_plan_requests', 'draft_plan_ask', 'draft_plan_message']);
 
@@ -285,12 +424,17 @@ async function planFor(planId, ctx) {
 
 // ─── Plans ─────────────────────────────────────────────────────────────────
 
+// The place picker's order for a playdate (PlanPlaceFit).
+const PLAYDATE_PLACES = ['playground', 'park', 'library', 'community_center'];
+
 /**
  * The first public place matching `name` near the person, from the place picker's own search
- * (OpenStreetMap, cached for a day per area). { loading: true } when that search has no answer
- * yet (an area seen for the first time, or its servers are slow), so the person can be told.
+ * (OpenStreetMap, cached for a day per area): the nearest, or for a playdate the picker's order
+ * (PlanPlaceFit: playgrounds, parks, libraries and community centers first, never a bar).
+ * { loading: true } when that search has no answer yet (an area seen for the first time, or its
+ * servers are slow), so the person can be told.
  */
-async function findPublicPlace(name, origin) {
+async function findPublicPlace(name, origin, kind = null) {
   const query = clip(name, 60);
   if (!query || !origin) return null;
   try {
@@ -298,7 +442,12 @@ async function findPublicPlace(name, origin) {
       planPlaces.placesNear({ latitude: origin.latitude, longitude: origin.longitude, q: query }),
       new Promise((resolve) => { setTimeout(() => resolve({ places: [], loading: true }), 9000).unref?.(); }),
     ]);
-    if (result?.places?.length) return result.places[0];
+    let places = result?.places || [];
+    if (kind === 'playdate') {
+      const rank = (place) => (PLAYDATE_PLACES.includes(place.category) ? PLAYDATE_PLACES.indexOf(place.category) : PLAYDATE_PLACES.length);
+      places = places.filter((place) => place.category !== 'bar').sort((a, b) => rank(a) - rank(b));
+    }
+    if (places.length) return places[0];
     return result?.loading ? { loading: true } : null;
   } catch (err) {
     logger.warn('assistant place search failed', { error: err.message });
@@ -308,12 +457,44 @@ async function findPublicPlace(name, origin) {
 
 const PLACES_LOADING = "Places near them aren't loading right now (the map's place search is slow or busy). Say so, and offer to try again in a minute, or link them to plan_new to pick the place themselves.";
 
+// A plan's title and about show to everyone nearby; the place shows only to people who get in.
+// The person may name the place when they ask ("pickleball at Crown Park"), so the assistant's
+// draft must not copy it where everyone reads it.
+const plainWords = (value) => String(value || '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '')
+  .replace(/[^a-z0-9]+/g, ' ').trim();
+
+/** The ways a place can be named: its name, its street line and that street without the number. */
+function placeNames(...places) {
+  const names = [];
+  for (const place of places) {
+    if (!place) continue;
+    if (typeof place === 'string') {
+      names.push(place);
+      continue;
+    }
+    const street = String(place.address || '').split(',')[0].trim();
+    names.push(place.name, street, street.replace(/^\d+[a-z]?\s+/i, ''));
+  }
+  return [...new Set(names.map(plainWords).filter((words) => words.length >= 5))];
+}
+
+/** The name or address in `names` that the public text gives away, or null. */
+function placeGivenAway(texts, names) {
+  const text = ` ${texts.map(plainWords).filter(Boolean).join(' ')} `;
+  return names.find((words) => text.includes(` ${words} `)) || null;
+}
+
+const keepPlacePrivate = (named) => ({
+  error: `The title and about are public: neighbors read them before they get in, and the place shows only to people who get in. Write them again without "${named}"; where exactly to meet goes in guest_note.`,
+});
+
 function detailsInput(kind, details) {
   const d = details || {};
   if (kind === 'pickup_game') return { sport: d.sport || undefined, level: d.level || undefined, extra_gear: d.extra_gear ?? undefined };
   if (kind === 'walk_coffee') return { walk_kind: d.walk_kind || undefined, pace: d.pace || undefined, dogs_welcome: d.dogs_welcome ?? undefined };
   if (kind === 'study_group') return { subject: d.subject || undefined, study_style: d.study_style || undefined };
   if (kind === 'watch_party') return d.game_label ? { game: { label: d.game_label } } : {};
+  if (kind === 'playdate') return { kids_age_bands: d.kids_age_bands || undefined };
   return {};
 }
 
@@ -323,13 +504,21 @@ function detailLines(kind, details) {
   if (kind === 'walk_coffee') return [line('Kind', d.walk_kind && d.walk_kind.replace('_', ' ')), line('Pace', d.pace), d.dogs_welcome ? line('Dogs', 'Welcome') : null];
   if (kind === 'study_group') return [line('Subject', d.subject), line('Style', d.study_style === 'together' ? 'Working through it together' : 'Quiet study')];
   if (kind === 'watch_party') return [line('Watching', d.game?.label)];
+  if (kind === 'playdate') return [line('Kids’ ages', agesText(d.kids_age_bands))];
   return [];
 }
 
 async function draftPlan(args, ctx) {
   if (!(await plansOn(ctx))) return { error: "Plans aren't available for this person yet." };
-  if (!PLAN_KINDS.includes(args.kind)) return { error: 'Choose one of the plan kinds.' };
+  if (!rules.KINDS.includes(args.kind)) return { error: 'Choose one of the plan kinds.' };
   const viewer = await loadViewer(userFor(ctx));
+  // A playdate needs plans_playdates and a verified address (planActions checks both again, with the rest).
+  const playdate = args.kind === 'playdate';
+  if (playdate && !viewer.playdatesFlag) return { error: 'Choose one of the plan kinds.' };
+  if (playdate && !viewer.verified) return { error: 'Verify your address to host a playdate.' };
+  if (playdate && !args.details?.kids_age_bands?.length) {
+    return { error: "A playdate needs the ages of the kids it's for. Ask how old the kids are, in one short question." };
+  }
   const startsAt = localToUtc(args.starts_local, ctx.timeZone);
   const endsAt = localToUtc(args.ends_local, ctx.timeZone);
   if (!startsAt || !endsAt) return { error: 'Give the start and end as local times, YYYY-MM-DDTHH:MM.' };
@@ -341,7 +530,7 @@ async function draftPlan(args, ctx) {
     place = { kind: 'home', home_id: home.id };
   } else {
     if (!args.place_name) return { error: 'A public place is needed. Ask where, or suggest a park, court, library or café near them.' };
-    const found = await findPublicPlace(args.place_name, viewer.origin);
+    const found = await findPublicPlace(args.place_name, viewer.origin, args.kind);
     if (found?.loading) return { error: PLACES_LOADING };
     if (!found) return { error: `No public place called "${args.place_name}" was found near them. Ask for another place or a nearby landmark.` };
     place = { kind: 'public', name: found.name, address: found.address || null, latitude: found.latitude, longitude: found.longitude };
@@ -369,6 +558,9 @@ async function draftPlan(args, ctx) {
     if (err instanceof planActions.PlanError) return { error: err.message };
     throw err;
   }
+  const publicText = [checked.title, checked.about, args.details?.subject, args.details?.game_label];
+  const named = placeGivenAway(publicText, placeNames(checked.place, args.place_name));
+  if (named) return keepPlacePrivate(named);
   const appliedWho = Object.values(WHO_GETS_IN).find((w) => w.rules.join() === checked.autoRules.join()) || WHO_GETS_IN.host_approves;
   const body = {
     kind: checked.kind,
@@ -394,16 +586,22 @@ async function draftPlan(args, ctx) {
       line('Kind', KIND_LABELS[checked.kind]),
       line('When', whenLabel(checked.startsAt, checked.endsAt, checked.timezone)),
       line('Where', where),
-      line('Spots', `${checked.spots}`),
-      line('Who gets in', appliedWho.text),
+      line(playdate ? 'Families' : 'Spots', `${checked.spots}`),
+      line('Who gets in', playdate ? 'You approve each family' : appliedWho.text),
       ...detailLines(checked.kind, checked.details),
-      line('Note for guests', checked.guestNote),
+      line('About', checked.about),
+      line(playdate ? 'Note for families' : 'Note for guests', checked.guestNote),
     ],
-    warnings: [
-      checked.place.kind === 'home'
-        ? 'Only people you accept see your address.'
-        : 'Neighbors see only the area until they get in; then they see the exact place.',
-    ],
+    warnings: playdate
+      ? [
+        'Only verified neighbors see playdates. Until you accept a family, they see only the neighborhood and the part of the day.',
+        'Parents stay with their kids the whole time; only kids’ ages are shared, never names.',
+      ]
+      : [
+        checked.place.kind === 'home'
+          ? 'Neighbors see the title and about. Only people you accept see your address.'
+          : 'Neighbors see the title, about and area; they see the exact place once they get in.',
+      ],
     actions: [action('confirm', 'Post plan', { method: 'POST', path: '/api/plans', body },
       { label: 'Plan posted', link: linkFor('plan', '{{response.id}}') })],
     expiresAt: checked.startsAt,
@@ -418,6 +616,8 @@ async function draftPlanChange(args, ctx) {
   const { body: plan, viewer } = found;
   if (plan.viewer.role !== 'host') return { error: 'Only the host can change this plan.' };
   if (plan.state === 'ended' || plan.state === 'cancelled') return { error: 'This plan is over.' };
+  // Seats taken by people who are in (PlanCard going_count), as planActions.editPlan counts them.
+  const going = plan.going_count || 0;
 
   const patch = {};
   const lines = [];
@@ -433,26 +633,31 @@ async function draftPlanChange(args, ctx) {
     patch.starts_at = startsAt;
     patch.ends_at = endsAt;
     lines.push(line('When', whenLabel(startsAt, endsAt, zone)));
-    if (Math.abs(new Date(startsAt) - new Date(plan.starts_at)) > 30 * 60 * 1000 && (plan.going || 0) > 0) {
+    if (Math.abs(new Date(startsAt) - new Date(plan.starts_at)) > 30 * 60 * 1000 && going > 0) {
       warnings.push('Everyone who is in will be asked "Still coming?".');
     }
   }
   if (Number.isInteger(args.spots)) {
-    if (args.spots < (plan.going || 0)) return { error: `${plan.going} people are already in, so spots can't go below that.` };
+    if (args.spots < going) return { error: `${going} ${going === 1 ? 'person is' : 'people are'} in, so spots can't go below that.` };
     patch.spots = args.spots;
     lines.push(line('Spots', `${args.spots}`));
   }
   if (args.place_name) {
-    const place = await findPublicPlace(args.place_name, viewer.origin);
+    const place = await findPublicPlace(args.place_name, viewer.origin, plan.kind);
     if (place?.loading) return { error: PLACES_LOADING };
     if (!place) return { error: `No public place called "${args.place_name}" was found near them.` };
     patch.place = { kind: 'public', name: place.name, address: place.address || null, latitude: place.latitude, longitude: place.longitude };
     lines.push(line('Where', [place.name, place.address].filter(Boolean).join(', ')));
-    if ((plan.going || 0) > 0) warnings.push('Everyone who is in will be asked "Still coming?".');
+    if (going > 0) warnings.push('Everyone who is in will be asked "Still coming?".');
   }
   if (args.about) { patch.about = args.about; lines.push(line('About', args.about)); }
   if (args.guest_note) { patch.guest_note = args.guest_note; lines.push(line('Note for guests', args.guest_note)); }
   if (!Object.keys(patch).length) return { error: 'Nothing to change. Ask what they want to change.' };
+  if (patch.title || patch.about) {
+    const current = { name: found.plan.place_name, address: found.plan.place_address };
+    const named = placeGivenAway([patch.title, patch.about], placeNames(current, patch.place, args.place_name));
+    if (named) return keepPlacePrivate(named);
+  }
 
   const draft = card('plan_edit', {
     title: `Change "${clip(plan.title, 60)}"`,
@@ -513,6 +718,10 @@ async function showPlanRequests(args, ctx) {
         r.user.mutual_connections ? line('Mutual connections', `${r.user.mutual_connections}`) : null,
         r.user.hosted_before ? line('Before', "You've hosted them") : null,
         r.user.new_to_pantopus ? line('New', 'New to Pantopus') : null,
+        // A playdate's family: its kids and their ages (never names), as the app's requests screen.
+        plan.kind === 'playdate'
+          ? line('Kids', [`${r.kids_count || 1} ${(r.kids_count || 1) === 1 ? 'kid' : 'kids'}`, agesText(r.kids_age_bands)].filter(Boolean).join(' · '))
+          : null,
         line('Their note', r.note),
         requests.waitlisted.includes(r) ? line('Status', 'On the waitlist') : null,
       ].filter(Boolean),
@@ -542,22 +751,39 @@ async function draftPlanAsk(args, ctx) {
   if (!plan.viewer.can_ask) {
     return { error: `They can't ask to join this plan (${plan.viewer.cannot_ask_reason || 'not available'}).` };
   }
-  const partySize = Math.min(Math.max(Number(args.party_size) || 1, 1), 4);
   const askNote = clip(args.ask_note, 280);
+  // A playdate is asked for by a family: its kids and their ages, with the parent staying (planActions.cleanAsk).
+  const playdate = plan.kind === 'playdate';
+  const kids = Number(args.kids_count);
+  const ages = Array.isArray(args.kids_age_bands) ? rules.KIDS_AGE_BANDS.filter((band) => args.kids_age_bands.includes(band)) : [];
+  if (playdate && (!Number.isInteger(kids) || kids < 1 || kids > 8 || !ages.length)) {
+    return { error: 'Asking to join a playdate needs how many of their kids are coming (1 to 8) and their ages. Ask them in one short question.' };
+  }
+  const partySize = playdate ? 1 : Math.min(Math.max(Number(args.party_size) || 1, 1), 4);
+  const body = playdate
+    ? { party_size: 1, kids_count: kids, kids_age_bands: ages, stays_with_kids: true, ...(askNote ? { note: askNote } : {}) }
+    : { party_size: partySize, ...(askNote ? { note: askNote } : {}) };
+  const zone = plan.timezone || ctx.timeZone;
   const draft = card('plan_ask', {
     title: `Ask to join "${clip(plan.title, 60)}"`,
     lines: [
-      line('When', plan.starts_at ? whenLabel(plan.starts_at, plan.ends_at, plan.timezone || ctx.timeZone) : null),
+      // A playdate shows its time only to families who are in: the day and its part until then.
+      line('When', plan.starts_at ? whenLabel(plan.starts_at, plan.ends_at, zone) : dayPartLabel(plan.starts_on, plan.day_part)),
       line('Where', plan.area?.label ? `Near ${plan.area.label}` : null),
       line('Host', plan.host?.display_name),
-      line('Coming', partySize > 1 ? `You + ${partySize - 1}` : 'Just you'),
+      line('Coming', playdate ? `You + ${kids} ${kids === 1 ? 'kid' : 'kids'}` : (partySize > 1 ? `You + ${partySize - 1}` : 'Just you')),
+      playdate ? line('Kids’ ages', agesText(ages)) : null,
       line('Your note', askNote),
       line('Getting in', plan.viewer.auto_rule ? 'You get in right away' : 'The host decides'),
     ],
+    warnings: playdate ? [
+      'You stay with your kids the whole time.',
+      `${firstNameOf({ display_name: plan.host?.display_name }) || 'The host'} sees your first name, your verified badge, about how far away you live and your kids’ ages, never their names.`,
+    ] : [],
     actions: [action('confirm', 'Ask to join', {
-      method: 'POST', path: `/api/plans/${plan.id}/requests`, body: { party_size: partySize, ...(askNote ? { note: askNote } : {}) },
+      method: 'POST', path: `/api/plans/${plan.id}/requests`, body,
     }, { label: 'Asked', link: linkFor('plan', plan.id) })],
-    expiresAt: plan.asking_closes_at || plan.starts_at,
+    expiresAt: plan.asking_closes_at || plan.starts_at || (plan.starts_on ? localToUtc(`${plan.starts_on}T23:59`, zone) : null),
   });
   return finished(draft, args.note, 'Tap Ask to join to send it.');
 }
@@ -642,15 +868,105 @@ async function draftPostSolve(args, ctx) {
   return finished(draft, args.note, 'Tap Mark solved to close the question.');
 }
 
+// ─── Home papers ───────────────────────────────────────────────────────────
+
+// Account, policy and serial numbers stay out of cards, and so out of the stored conversation:
+// a word with six or more digits in it looks like one (phone numbers and dates are written in parts).
+const numberLike = (...texts) => texts.some((text) => typeof text === 'string'
+  && text.split(/[^A-Za-z0-9]+/).some((word) => (word.match(/\d/g) || []).length >= 6));
+const NO_NUMBERS = { error: 'Leave account, policy and serial numbers out of the card (write "the policy number on page 1" instead), then draft it again.' };
+
+function isCalendarDay(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const day = new Date(`${value}T12:00:00Z`);
+  return Number.isFinite(day.getTime()) && day.toISOString().slice(0, 10) === value;
+}
+const longDay = (day) => new Date(`${day}T12:00:00Z`).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'long', day: 'numeric', year: 'numeric' });
+
+/** "Water heater warranty, page 2": where a card's fact comes from. */
+function sourceText(source) {
+  const name = clip(source?.name, 80);
+  if (!name) return null;
+  return Number.isInteger(source.page) && source.page > 0 ? `${name}, page ${source.page}` : name;
+}
+
 // ─── Home tasks ────────────────────────────────────────────────────────────
 
 const REPEAT_WORDS = { daily: ['day', 'DAILY'], weekly: ['week', 'WEEKLY'], monthly: ['month', 'MONTHLY'] };
+const SEEN_BY = { managers: "The home's managers", sensitive: 'People who see private home records' };
+
+/** "Every month", "Every 3 months", "Every year" for a repeat ({ frequency, every }), or null. */
+function repeatText(repeat) {
+  if (!repeat || !REPEAT_WORDS[repeat.frequency]) return null;
+  const every = Math.min(Math.max(Number(repeat.every) || 1, 1), 365);
+  if (repeat.frequency === 'monthly' && every === 12) return 'Every year';
+  return every === 1 ? `Every ${REPEAT_WORDS[repeat.frequency][0]}` : `Every ${every} ${REPEAT_WORDS[repeat.frequency][0]}s`;
+}
+
+/**
+ * The action that adds a task: POST /api/homes/:id/tasks (with `requestId` as its request_id
+ * and the session header, when the app sent one), then, for a repeating task, the request
+ * that starts the repeat from the new task's id.
+ */
+function addTaskAction({ homeId, ctx, requestId, body, repeat = null, label = 'Add task' }) {
+  const sessionScope = sessionHeaders(ctx);
+  const then = repeat && REPEAT_WORDS[repeat.frequency] ? {
+    request: {
+      method: 'POST',
+      path: `/api/homes/${homeId}/tasks/{{response.task.id}}/recurrence`,
+      body: {
+        request_id: crypto.randomUUID(),
+        action: 'start',
+        expected_revision: 0,
+        expected_task_updated_at: '{{response.task.updated_at}}',
+        frequency: REPEAT_WORDS[repeat.frequency][1],
+        interval: Math.min(Math.max(Number(repeat.every) || 1, 1), 365),
+        timezone: ctx.timeZone,
+      },
+      ...(sessionScope ? { headers: sessionScope } : {}),
+    },
+  } : null;
+  return action('confirm', label, {
+    method: 'POST',
+    path: `/api/homes/${homeId}/tasks`,
+    body: { ...(sessionScope ? { request_id: requestId } : {}), ...body },
+    ...(sessionScope ? { headers: sessionScope } : {}),
+  }, { label: 'Added', link: linkFor('home_tasks', homeId) }, { then });
+}
+
+/**
+ * Who sees a new task: what the server gives one that names no visibility (mutate_home_record),
+ * so the card can say it. That is the home's default when the person and the assignee can see
+ * tasks at that level (managers rank 40 and up, or sensitive.view), else the household. A read
+ * that fails stops the card rather than guess wider.
+ */
+async function newTaskVisibility(homeId, actorId, assigneeId) {
+  const { data: home, error } = await supabaseAdmin.from('Home').select('default_visibility').eq('id', homeId).maybeSingle();
+  if (error) throw new Error(`Home read failed: ${error.message}`);
+  const steps = { sensitive: ['sensitive', 'managers'], managers: ['managers'] }[home?.default_visibility] || [];
+  if (!steps.length) return 'members';
+  const people = [...new Set([actorId, assigneeId].filter(Boolean))];
+  const accesses = await Promise.all(people.map((id) => getUserAccess(homeId, id)));
+  const sees = (access, step) => Boolean(access?.hasAccess && access.permissions.includes('tasks.view')
+    && (step === 'sensitive' ? access.permissions.includes('sensitive.view')
+      : (ROLE_RANK[access.effective_role_base] || 0) >= ROLE_RANK.manager));
+  return steps.find((step) => accesses.every((access) => sees(access, step))) || 'members';
+}
 
 async function draftHomeTask(args, ctx) {
   const home = await chosenHome(ctx.userId, args.home_id);
   if (!home) return { error: 'They have no home in Pantopus yet. Tasks belong to a home; they can add one on the Place tab.' };
   const title = clip(args.title, 255);
   if (!title) return { error: 'The task needs a title.' };
+  const paper = args.document || null;
+  if (numberLike(args.title, args.description, paper?.name)) return NO_NUMBERS;
+  if (paper) {
+    if (!DOCUMENT_KINDS.includes(paper.kind)) return { error: 'document.kind must be warranty, policy or lease.' };
+    if (!isCalendarDay(paper.ends_on)) return { error: 'document.ends_on must be the day it ends, YYYY-MM-DD.' };
+    if (paper.ends_on < todayIn(ctx.timeZone)) {
+      return { error: `It ended on ${longDay(paper.ends_on)}. Tell them it has ended instead of drafting a reminder.` };
+    }
+  }
 
   const collection = await homeRecordService.listCollection({ homeId: home.id, actorId: ctx.userId, kind: 'task' })
     .catch(() => null);
@@ -668,63 +984,376 @@ async function draftHomeTask(args, ctx) {
 
   const zone = ctx.timeZone;
   let dueAt = null;
-  if (args.due_date) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(args.due_date)) return { error: 'due_date must be YYYY-MM-DD.' };
+  // A paper's reminder is due the day it ends, unless they asked for another day.
+  const dueDate = args.due_date || paper?.ends_on || null;
+  if (dueDate) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) return { error: 'due_date must be YYYY-MM-DD.' };
     const time = args.due_time && HHMM.test(args.due_time) ? args.due_time : '09:00';
-    dueAt = localToUtc(`${args.due_date}T${time}`, zone);
+    dueAt = localToUtc(`${dueDate}T${time}`, zone);
     if (!dueAt) return { error: 'That due date is not a real date.' };
   }
   const repeat = args.repeat && REPEAT_WORDS[args.repeat.frequency] ? args.repeat : null;
   if (repeat && !dueAt) return { error: 'A repeating task needs its first due date.' };
 
-  const sessionScope = sessionHeaders(ctx);
+  const visibility = await newTaskVisibility(home.id, ctx.userId, assignee?.id);
   const body = {
-    ...(sessionScope ? { request_id: null } : {}),
     task_type: args.task_type || 'reminder',
     title,
     ...(args.description ? { description: clip(args.description, 2000) } : {}),
     ...(assignee ? { assigned_to: assignee.id } : {}),
     ...(dueAt ? { due_at: dueAt } : {}),
     ...(args.priority ? { priority: args.priority } : {}),
+    visibility,
+    // How home_paperwork finds it, and what it calls it. The server keeps details.source for tasks made from mail.
+    ...(paper ? { details: { origin: 'document', kind: paper.kind, ends_on: paper.ends_on, name: clip(paper.name, 80) } } : {}),
   };
-  const every = repeat ? Math.min(Math.max(Number(repeat.every) || 1, 1), 365) : null;
-  const repeatText = repeat
-    ? (every === 1 ? `Every ${REPEAT_WORDS[repeat.frequency][0]}` : `Every ${every} ${REPEAT_WORDS[repeat.frequency][0]}s`)
-    : null;
-
+  const thisYear = todayIn(zone).slice(0, 4);
+  const dueYear = dueAt ? dueDate.slice(0, 4) : null;
   const draft = card('home_task', {
     title,
     lines: [
       line('For', assignee ? assignee.name : 'Anyone at home'),
-      line('Due', dueAt ? `${dayLabel(dueAt, zone)}${args.due_time ? '' : ', 9:00 AM'}` : 'No date'),
-      line('Repeats', repeatText),
+      line('Due', dueAt ? `${dayLabel(dueAt, zone)}${dueYear && dueYear !== thisYear ? `, ${dueYear}` : ''}${args.due_time ? '' : ', 9:00 AM'}` : 'No date'),
+      line('Repeats', repeatText(repeat)),
+      paper ? line({ warranty: 'Warranty ends', policy: 'Policy ends', lease: 'Lease ends' }[paper.kind], longDay(paper.ends_on)) : null,
+      line('From', sourceText(paper)),
+      line('Seen by', SEEN_BY[visibility]),
       line('Home', [home.city, home.state].filter(Boolean).join(', ')),
       line('Details', args.description),
     ],
     warnings: assignee && String(assignee.id) !== String(ctx.userId) ? [`${assignee.name} gets a notification.`] : [],
     actions: [],
   });
-  if (sessionScope) body.request_id = draft.id;
-  const then = repeat ? {
-    request: {
-      method: 'POST',
-      path: `/api/homes/${home.id}/tasks/{{response.task.id}}/recurrence`,
-      body: {
-        request_id: crypto.randomUUID(),
-        action: 'start',
-        expected_revision: 0,
-        expected_task_updated_at: '{{response.task.updated_at}}',
-        frequency: REPEAT_WORDS[repeat.frequency][1],
-        interval: every,
-        timezone: zone,
-      },
-      ...(sessionScope ? { headers: sessionScope } : {}),
-    },
-  } : null;
-  draft.actions.push(action('confirm', 'Add task', {
-    method: 'POST', path: `/api/homes/${home.id}/tasks`, body, ...(sessionScope ? { headers: sessionScope } : {}),
-  }, { label: 'Added', link: linkFor('home_tasks', home.id) }, { then }));
+  draft.actions.push(addTaskAction({ homeId: home.id, ctx, requestId: draft.id, body, repeat }));
   return finished(draft, args.note, 'Tap Add task to save it.');
+}
+
+/** The home's tasks as the person sees them, or null when they may not (a busy database throws, so it is retried, not refused). */
+async function taskCollection(homeId, actorId) {
+  try {
+    return await homeRecordService.listCollection({ homeId, actorId, kind: 'task' });
+  } catch (err) {
+    if (err.statusCode === 403 || err.statusCode === 404) return null;
+    throw err;
+  }
+}
+
+/** Someone in the household, as get_household names them, or null. */
+async function householdMember(homeId, userId, actorId) {
+  const { occupants } = await homeDetailService.members(homeId, actorId).catch(() => ({ occupants: [] }));
+  const member = (occupants || []).find((o) => String(o.user_id) === userId && o.is_active !== false);
+  return member ? { id: member.user_id, name: firstNameOf({ name: member.display_name }) || 'Household member' } : null;
+}
+
+/**
+ * A change to one task (PUT /api/homes/:id/tasks/:id, the generic record route): done, a new
+ * due date or someone else to do it, sent with only what changes. The task is read as the
+ * person sees it, with its own capabilities: can_complete to mark it done, can_edit for the rest.
+ */
+async function draftHomeTaskUpdate(args, ctx) {
+  const home = await chosenHome(ctx.userId, args.home_id);
+  if (!home) return { error: 'They have no home in Pantopus yet.' };
+  if (!isUuid(args.task_id)) return { error: 'task_id must come from list_home_tasks.' };
+  let task;
+  try {
+    task = (await homeRecordService.list({ homeId: home.id, actorId: ctx.userId, kind: 'task', recordId: args.task_id })).records[0];
+  } catch (err) {
+    if (err.statusCode === 403 || err.statusCode === 404) return { error: "That task isn't in this home, or they can't see it. Use list_home_tasks (it gives each task's home)." };
+    throw err;
+  }
+  if (task.status === 'done' || task.status === 'canceled') return { error: `That task is already ${task.status === 'done' ? 'done' : 'canceled'}.` };
+  const can = task.capabilities || {};
+  const zone = ctx.timeZone;
+  const patch = {};
+  const lines = [line('Task', task.title)];
+  if (args.done === true) {
+    if (!can.can_complete) return { error: "They can't mark this task done (only the person who made it, the person it's for, or someone who manages tasks can)." };
+    patch.status = 'done';
+    lines.push(line('Change', 'Mark it done'));
+  }
+  if (args.due_date || args.assignee_user_id) {
+    if (!can.can_edit) return { error: "They can't change this task's date or who it's for (only the person who made it or someone who manages tasks can). They can still mark it done if it's theirs." };
+  }
+  if (args.due_date) {
+    if (!isCalendarDay(args.due_date)) return { error: 'due_date must be a day, YYYY-MM-DD.' };
+    const time = args.due_time && HHMM.test(args.due_time) ? args.due_time : '09:00';
+    patch.due_at = localToUtc(`${args.due_date}T${time}`, zone);
+    if (!patch.due_at) return { error: 'That due date is not a real date.' };
+    const year = args.due_date.slice(0, 4) !== todayIn(zone).slice(0, 4) ? `, ${args.due_date.slice(0, 4)}` : '';
+    lines.push(line('Due', `${dayLabel(patch.due_at, zone)}${year}${args.due_time ? '' : ', 9:00 AM'}`));
+  }
+  let assignee = null;
+  if (args.assignee_user_id) {
+    if (!isUuid(args.assignee_user_id)) return { error: 'assignee_user_id must come from get_household.' };
+    assignee = await householdMember(home.id, args.assignee_user_id, ctx.userId);
+    if (!assignee) return { error: "That person isn't in this household. Use get_household." };
+    if (String(task.assigned_to || '') !== String(assignee.id)) {
+      patch.assigned_to = assignee.id;
+      lines.push(line('For', assignee.name));
+    }
+  }
+  if (!Object.keys(patch).length) return { error: 'Nothing to change. Ask what they want to change.' };
+  const onlyDone = Object.keys(patch).length === 1 && patch.status === 'done';
+  const sessionScope = sessionHeaders(ctx);
+  const draft = card('home_task_update', {
+    title: clip(task.title, 80),
+    lines,
+    actions: [action('confirm', onlyDone ? 'Mark done' : 'Save', {
+      method: 'PUT', path: `/api/homes/${home.id}/tasks/${task.id}`, body: patch, ...(sessionScope ? { headers: sessionScope } : {}),
+    }, { label: 'Updated', link: linkFor('home_task', task.id, { home: home.id }) })],
+  });
+  return finished(draft, args.note, onlyDone ? 'Tap Mark done to check it off.' : 'Tap Save to update the task.');
+}
+
+// ─── A year of upkeep ──────────────────────────────────────────────────────
+
+const YEAR_ITEMS = 12;
+// Checklist items that are reminders to look something up or to decorate, not upkeep.
+const NOT_UPKEEP = new Set(['check_aqi_setup', 'pollen_forecast', 'light_installation', 'deep_clean', 'package_security']);
+// When a system that is near or past its usual life is best looked at (months, 1-12; any
+// month when empty), how, whether it is a yearly job, and the seasonal checklist's own item
+// for the same job, which it replaces.
+const YEARLY = { frequency: 'monthly', every: 12 };
+const SYSTEM_CHECKS = {
+  roof: { months: [8, 9, 10], title: 'Have the roof looked at', type: 'project', repeat: YEARLY, replaces: ['roof_inspection'] },
+  hvac: { months: [9, 10], title: 'Have the heating and cooling serviced', type: 'repair', repeat: YEARLY, replaces: ['furnace_inspection', 'ac_service'] },
+  water_heater: { months: [], title: 'Have the water heater checked', type: 'repair', repeat: null, replaces: [] },
+  electrical_panel: { months: [], title: 'Have an electrician check the panel', type: 'repair', repeat: null, replaces: [] },
+  sewer_septic: { months: [], title: 'Have the sewer line or septic checked', type: 'repair', repeat: null, replaces: [] },
+  windows: { months: [9, 10, 11], title: 'Check window seals and caulking', type: 'chore', repeat: YEARLY, replaces: ['seal_windows'] },
+};
+// Months apart, around the year (December and January are one apart).
+const monthsApart = (a, b) => Math.min(Math.abs(a - b), 12 - Math.abs(a - b));
+
+/** The first Saturday on or after the later of `month`'s first day (1-12, this year or next) and two days from now. */
+function firstSaturday(month, zone) {
+  const today = DateTime.now().setZone(zoneOr(zone)).startOf('day');
+  let start = month ? today.set({ month, day: 1 }) : today;
+  if (start < today.startOf('month')) start = start.plus({ years: 1 });
+  if (start < today.plus({ days: 2 })) start = today.plus({ days: 2 });
+  return start.plus({ days: (6 - start.weekday + 7) % 7 }).toISODate();
+}
+
+/**
+ * "Plan our year": up to 12 tasks, each with its own Add, from the home's systems record (the
+ * systems near or past their usual life, as the Place screen shows them, and a yearly water
+ * heater flush) and the region's seasonal checklist over the next 12 months
+ * (seasonalChecklistService.yearAhead, which saves nothing). Tasks already open are left out.
+ */
+async function draftHomeYear(args, ctx) {
+  const home = await chosenHome(ctx.userId, args.home_id);
+  if (!home) return { error: 'They have no home in Pantopus yet. They can add one on the Place tab.' };
+  const collection = await taskCollection(home.id, ctx.userId);
+  if (!collection) return { error: "They can't see this home's tasks." };
+  if (!collection.can_create) return { error: "They can't add tasks in this home." };
+  let assignee = null;
+  if (args.assignee_user_id) {
+    if (!isUuid(args.assignee_user_id)) return { error: 'assignee_user_id must come from get_household.' };
+    assignee = await householdMember(home.id, args.assignee_user_id, ctx.userId);
+    if (!assignee) return { error: "That person isn't in this household. Use get_household." };
+  }
+  const zone = ctx.timeZone;
+  const [intelligence, seasons] = await Promise.all([
+    readSections(home.id, ctx.userId, ['home_systems'], ctx.user).catch(() => null),
+    yearAhead(home.id),
+  ]);
+  const systems = (intelligence?.groups || []).flatMap((group) => group.sections || [])
+    .find((section) => section.id === 'home_systems' && section.access === 'available')?.data?.systems || [];
+
+  const plan = [];
+  const replaced = new Set();
+  const thisMonth = DateTime.now().setZone(zoneOr(zone)).month;
+  for (const system of systems) {
+    const check = SYSTEM_CHECKS[system.key];
+    if (!check || !['aging', 'past_expected'].includes(system.status)) continue;
+    const now = !check.months.length || check.months.includes(thisMonth);
+    check.replaces.forEach((key) => replaced.add(key));
+    plan.push({
+      system: true,
+      title: check.title,
+      type: check.type,
+      date: firstSaturday(now ? null : check.months[0], zone),
+      repeat: check.repeat,
+      why: `About ${system.age_years} years old${system.source === 'estimated' ? ' (estimated from the year built)' : ''}. ${system.note}`,
+    });
+  }
+  if (systems.some((system) => system.key === 'water_heater')) {
+    plan.push({ system: true, title: 'Flush the water heater', type: 'chore', date: firstSaturday(null, zone), repeat: YEARLY, why: 'A yearly flush clears the sediment that shortens a tank\'s life.' });
+  }
+  for (const item of seasons.items) {
+    if (NOT_UPKEEP.has(item.item_key) || replaced.has(item.item_key)) continue;
+    // A filter every 3 months; a job its checklist asks for twice a year, every 6.
+    const twice = item.months.some((month) => monthsApart(month, item.month) >= 4);
+    const every = item.item_key === 'hvac_filter' ? 3 : twice ? 6 : 12;
+    plan.push({
+      title: item.title,
+      type: 'chore',
+      date: firstSaturday(item.month, zone),
+      repeat: { frequency: 'monthly', every },
+      why: item.description || null,
+    });
+  }
+  // Left out: what they named, and what is already on their list (an open task whose title
+  // shares half its words with the job, as gig titles are compared).
+  const skip = (args.leave_out || []).flatMap(normalizeTitle);
+  const open = (collection.records || []).filter((task) => task.status === 'open' || task.status === 'in_progress')
+    .map((task) => normalizeTitle(task.title));
+  const wanted = plan.filter((item) => {
+    const words = normalizeTitle(item.title);
+    if (skip.some((word) => words.some((w) => w.startsWith(word) || word.startsWith(w)))) return false;
+    return !open.some((title) => jaccardSimilarity(words, title) >= 0.5);
+  });
+  // The systems' checks first, then the seasons' jobs soonest first, in date order.
+  const byDate = (a, b) => a.date.localeCompare(b.date);
+  const keep = [...wanted.filter((item) => item.system), ...wanted.filter((item) => !item.system).sort(byDate)]
+    .slice(0, YEAR_ITEMS).sort(byDate);
+  // One job a weekend: a Saturday already taken moves the next job a week on.
+  const taken = new Set();
+  for (const item of keep) {
+    let date = DateTime.fromISO(item.date);
+    while (taken.has(date.toISODate())) date = date.plus({ weeks: 1 });
+    item.date = date.toISODate();
+    taken.add(item.date);
+  }
+  if (!keep.length) {
+    return { error: plan.length ? 'Everything a year plan would add is already on their list or left out.' : "Not enough is known about this home to plan its year (no climate region and no systems record). Offer reminders they name instead." };
+  }
+
+  const visibility = await newTaskVisibility(home.id, ctx.userId, assignee?.id);
+  const items = keep.map((item) => {
+    const id = crypto.randomUUID();
+    const dueAt = localToUtc(`${item.date}T09:00`, zone);
+    const body = {
+      task_type: item.type,
+      title: clip(item.title, 255),
+      ...(item.why ? { description: clip(item.why, 2000) } : {}),
+      ...(assignee ? { assigned_to: assignee.id } : {}),
+      due_at: dueAt,
+      visibility,
+    };
+    return {
+      id,
+      title: clip(item.title, 80),
+      lines: [
+        line('When', `${DateTime.fromISO(item.date).toFormat('ccc, LLL d')}${item.date.slice(0, 4) !== todayIn(zone).slice(0, 4) ? `, ${item.date.slice(0, 4)}` : ''}`),
+        line('Repeats', repeatText(item.repeat)),
+        line('For', assignee ? assignee.name : 'Anyone at home'),
+        line('Why', item.why),
+      ].filter(Boolean),
+      actions: [addTaskAction({ homeId: home.id, ctx, requestId: id, body, repeat: item.repeat, label: 'Add' })],
+    };
+  });
+  const draft = card('home_year', {
+    title: 'A year of upkeep',
+    lines: [
+      line('Home', [home.city, home.state].filter(Boolean).join(', ')),
+      line('From', [systems.length ? "Your home's systems record" : null, seasons.region_label ? `the ${seasons.region_label} seasonal checklist` : null].filter(Boolean).join(' and ')),
+      line('Seen by', SEEN_BY[visibility]),
+    ],
+    warnings: assignee && String(assignee.id) !== String(ctx.userId) ? [`${assignee.name} gets a notification for each task you add.`] : [],
+    actions: [],
+    items,
+  });
+  return finished(draft, args.note, `Here are ${items.length} tasks for the year. Tap Add on the ones you want.`);
+}
+
+// ─── Home systems ──────────────────────────────────────────────────────────
+
+/**
+ * The year a building system went in, for the Place tab's systems record (PUT
+ * /api/homes/:id/systems/:key, the household's own correction). Offered where the person
+ * may edit the home's details (home.edit, as the route checks) and the systems section is
+ * open to them, as the Place screen shows it.
+ */
+async function draftHomeSystem(args, ctx) {
+  const home = await chosenHome(ctx.userId, args.home_id);
+  if (!home) return { error: 'They have no home in Pantopus yet. They can add one on the Place tab.' };
+  const def = SYSTEM_DEFS.find((system) => system.key === args.system);
+  if (!def) return { error: 'Choose one of the six systems.' };
+  const year = Number(args.installed_year);
+  if (!Number.isInteger(year) || year < 1900 || year > Number(todayIn(ctx.timeZone).slice(0, 4))) {
+    return { error: `${args.installed_year} can't be the year it was installed. Ask them for the year.` };
+  }
+  if (numberLike(args.source?.name)) return NO_NUMBERS;
+  const access = await checkHomePermission(home.id, ctx.userId, 'home.edit');
+  if (!access.hasAccess) {
+    return { error: "They can't change this home's systems record: it takes permission to edit the home's details, which the home's owner has. Tell them the year you found so they can pass it on." };
+  }
+  const intelligence = await readSections(home.id, ctx.userId, ['home_systems'], ctx.user);
+  const section = (intelligence?.groups || []).flatMap((group) => group.sections || []).find((item) => item.id === 'home_systems');
+  if (!section || section.access !== 'available' || !section.data) {
+    return { error: `Their home's systems record isn't open to them yet${section?.unavailable_reason ? ` (${section.unavailable_reason})` : ''}.` };
+  }
+  const current = (section.data.systems || []).find((system) => system.key === def.key);
+  if (current && current.source === 'resident' && current.installed_year === year) {
+    return { message: `Their record already says the ${def.label.toLowerCase()} went in in ${year}.` };
+  }
+  const draft = card('home_system', {
+    title: def.label,
+    lines: [
+      line('System', def.label),
+      line('Installed', `${year}`),
+      current?.installed_year ? line('On record now', `${current.installed_year} (${String(current.source_label || '').toLowerCase()})`) : null,
+      line('From', sourceText(args.source)),
+      line('Home', [home.city, home.state].filter(Boolean).join(', ')),
+    ],
+    warnings: current?.source === 'resident' ? [`This replaces ${current.installed_year}, the year your household entered.`] : [],
+    actions: [action('confirm', 'Save', {
+      method: 'PUT', path: `/api/homes/${home.id}/systems/${def.key}`, body: { installed_year: year },
+    }, { label: 'Saved', link: linkFor('place_section', home.id, { section: 'your-home' }) })],
+  });
+  return finished(draft, args.note, 'Tap Save to put it on your home\'s record.');
+}
+
+// ─── Home records (appliances and other items) ─────────────────────────────
+
+/**
+ * An appliance or another item for the home's records (POST /api/homes/:id/assets, which
+ * needs assets.manage and checks the fields with homeAssetFields, as this does first). Its
+ * warranty date is what home_paperwork reminds the household about.
+ */
+async function draftHomeAsset(args, ctx) {
+  const home = await chosenHome(ctx.userId, args.home_id);
+  if (!home) return { error: 'They have no home in Pantopus yet. They can add one on the Place tab.' };
+  if (numberLike(args.name, args.room, args.source?.name)) return NO_NUMBERS;
+  const access = await checkHomePermission(home.id, ctx.userId, 'assets.manage');
+  if (!access.hasAccess) {
+    return { error: "They can't add items to this home's records: it takes permission to manage them, which the home's owner has. Tell them what you found so they can pass it on." };
+  }
+  const body = {
+    category: ASSET_KINDS.includes(args.category) ? args.category : 'other',
+    name: clip(args.name, 120),
+    ...(clip(args.brand, 80) ? { brand: clip(args.brand, 80) } : {}),
+    ...(clip(args.model, 80) ? { model: clip(args.model, 80) } : {}),
+    ...(clip(args.room, 80) ? { room: clip(args.room, 80) } : {}),
+    ...(args.purchase_date ? { purchase_date: args.purchase_date } : {}),
+    ...(args.warranty_ends ? { warranty_expires_at: args.warranty_ends } : {}),
+  };
+  const { error } = createHomeAssetSchema.validate(body);
+  if (error) return { error: `${error.details[0].message.replace(/"/g, '')}. Fix it and draft the card again.` };
+  if (body.purchase_date && body.purchase_date > todayIn(ctx.timeZone)) return { error: 'purchase_date is in the future. Use the day it was bought.' };
+  // The same item twice would remind them twice.
+  const { data: existing } = await supabaseAdmin.from('HomeAsset').select('id, name, brand, model')
+    .eq('home_id', home.id).ilike('name', escapeIlike(body.name)).limit(5);
+  const same = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+  if ((existing || []).some((item) => same(item.brand, body.brand) && same(item.model, body.model))) {
+    return { message: `${body.name} is already in their home's records.` };
+  }
+  const draft = card('home_asset', {
+    title: body.name,
+    lines: [
+      line('Kind', ASSET_KIND_LABELS[body.category]),
+      line('Brand', body.brand),
+      line('Model', body.model),
+      line('Room', body.room),
+      body.purchase_date ? line('Bought', longDay(body.purchase_date)) : null,
+      body.warranty_expires_at ? line('Warranty until', longDay(body.warranty_expires_at)) : null,
+      line('From', sourceText(args.source)),
+      line('Home', [home.city, home.state].filter(Boolean).join(', ')),
+    ],
+    actions: [action('confirm', 'Add', { method: 'POST', path: `/api/homes/${home.id}/assets`, body }, { label: 'Added' })],
+  });
+  return finished(draft, args.note, "Tap Add to put it in your home's records.");
 }
 
 // ─── Notification settings ─────────────────────────────────────────────────
@@ -772,6 +1401,7 @@ async function draftNotificationSettings(args, ctx) {
     ['weather_alerts', 'weather_alerts_enabled', 'Weather alerts'],
     ['air_quality_alerts', 'aqi_alerts_enabled', 'Air quality alerts'],
     ['home_reminders', 'home_reminders_enabled', 'Home reminders'],
+    ['suggestions_enabled', 'suggestions_enabled', 'Suggestions from Pantopus'],
   ];
   for (const [arg, field, label] of toggles) {
     if (typeof args[arg] === 'boolean') {
@@ -802,6 +1432,10 @@ const CARD_EXECUTORS = {
   draft_post_reply: draftPostReply,
   draft_post_solve: draftPostSolve,
   draft_home_task: draftHomeTask,
+  draft_home_task_update: draftHomeTaskUpdate,
+  draft_home_year: draftHomeYear,
+  draft_home_system: draftHomeSystem,
+  draft_home_asset: draftHomeAsset,
   draft_notification_settings: draftNotificationSettings,
 };
 
@@ -819,11 +1453,13 @@ async function runCardTool(name, args, ctx) {
 
 module.exports = {
   actionCardDefinitions,
+  playdateCardDefinitions,
   runCardTool,
   CARD_EXECUTORS,
   PLAN_CARD_TOOLS,
   KIND_LABELS,
-  // For tests and scripts.
+  // For the nudges (nudges/home.js), tests and scripts.
   card,
   action,
+  line,
 };

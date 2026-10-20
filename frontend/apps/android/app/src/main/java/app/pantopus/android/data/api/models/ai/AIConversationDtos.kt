@@ -46,11 +46,19 @@ data class AIConversationMessageDto(
     /** How many photos a person's message carried (they aren't kept). */
     val photos: Int? = null,
     val draft: AIConversationDraftDto? = null,
+    /** The reply's buttons to screens of the app (AI assistant phase 1 contract, section 5). */
+    val links: List<AIConversationLinkDto>? = null,
 )
 
 @JsonClass(generateAdapter = true)
 data class AIConversationDraftDto(
-    /** `post`, `support_train`, `gig`, `listing`. */
+    /** `post`, `support_train`, `pickup_schedule`, `action`, … */
     val type: String,
     val draft: Map<String, Any?> = emptyMap(),
+)
+
+@JsonClass(generateAdapter = true)
+data class AIConversationLinkDto(
+    val label: String? = null,
+    val url: String? = null,
 )

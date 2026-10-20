@@ -3,7 +3,8 @@
  *
  * The guide goes into the system prompt (cached for an hour, shared by everyone), so
  * it is built only from what is switched on for everyone: launch flags decide which
- * paragraphs exist. Per-person availability (Plans) is told in the turn's context.
+ * paragraphs exist. Per-person availability (Plans) is told in the turn's context; the
+ * Plans paragraph and its playdates exist only for people who have them, like their tools.
  *
  * Links come only from the catalog below, which lists screens both apps' deep-link
  * routers open (iOS Core/Routing/DeepLinkRouter.swift, Android MainActivity and
@@ -36,6 +37,8 @@ const SCREENS = {
   notifications: ['pantopus://notifications', null, 'Open notifications'],
   notification_settings: ['pantopus://settings/notifications', null, 'Open notification settings'],
   support_train: ['pantopus://support-trains/{id}', 'id', 'Open the Support Train'],
+  // This conversation; a nudge's notification opens it at the nudge (?nudge=<notification id>).
+  assistant: ['pantopus://assistant', null, 'Open Pantopus AI'],
 };
 const SCREEN_NAMES = Object.keys(SCREENS);
 
@@ -88,7 +91,9 @@ function runShowLink(args, ctx) {
 
 // ─── The guide ─────────────────────────────────────────────────────────────
 
-function appGuide({ plans = true } = {}) {
+// `suggestions`: the app can show the Suggestions switch and nudge cards. Builds without action
+// cards (2.0.1) have no such switch, so they aren't told about one.
+function appGuide({ plans = true, playdates = false, suggestions = false } = {}) {
   const marketplace = isLaunchFeatureEnabled('marketplace');
   const openGigs = isLaunchFeatureEnabled('open_gigs');
   const mailbox = isLaunchFeatureEnabled('mailbox');
@@ -111,7 +116,8 @@ TODAY
 - Today shows the day at the default home (or a saved address): the weather, "good day to" picks (open the windows, run, wash the car, water the lawn, grill), the address calendar (pickup days and other dates for the next two weeks), radon, air quality, alerts and sunrise and sunset. People with Plans also see their plans for the day.
 - Pickup days: city schedules are marked unconfirmed until the household sets its own days in the pickup editor on Today (or by photographing the hauler's flyer there with "Read a flyer"). Only days the household set trigger the night-before reminder. You can draft pickup days with draft_pickup_schedule when the app supports it.
 - Radon: Today asks "Was radon tested?"; a lab report photo or PDF can fill in the result. The EPA suggests fixing a home at or above 4.0 pCi/L. Never give medical advice.
-- Briefings: a morning briefing and an evening briefing (pickup reminders come in the evening). Times, quiet hours, weather and air alerts and home reminders are in Settings → Notifications (notification_settings). You can draft changes with draft_notification_settings.
+- Briefings: a morning briefing and an evening briefing (pickup reminders come in the evening). Times, quiet hours, weather and air alerts and home reminders are in Settings → Notifications (notification_settings). You can draft changes with draft_notification_settings.${suggestions ? `
+- Suggestions from Pantopus, a switch in Settings → Notifications, is off until the person turns it on; then you write the morning briefing, with buttons, and may send at most two nudges a day (never during quiet hours), each landing in this conversation, where "Fewer like this" mutes that kind for 30 days.` : ''}
 
 NEARBY
 - Nearby is the neighborhood feed: questions (asks), recommendations, events, lost and found, heads-ups, deals, local updates and neighborhood wins, newest first.
@@ -130,11 +136,13 @@ ACCOUNT AND PRIVACY
 - Neighbors never see exact addresses. You see only what the person can see, and you never act without their tap.
 - You are an AI assistant and can make mistakes; for anything that matters, the screen it came from is the source.`);
 
+  // Playdates are described only to people with plans_playdates, whose tools offer them.
   if (plans) parts.push(`PLANS
-- A plan is a small meetup on the Plans map: a watch party, a pickup game, a walk and coffee, or a study group. Plans start within 14 days and last 15 minutes to 8 hours. A host may have 3 upcoming plans and post 5 a day.
+- A plan is a small meetup on the Plans map: a watch party, ${playdates ? 'a playdate, ' : ''}a pickup game, a walk and coffee, or a study group. Plans start within 14 days and last 15 minutes to 8 hours. A host may have 3 upcoming plans and post 5 a day.
 - Pickup games and study groups meet in public places; watch parties and walks may also be at the host's home. Everyone else sees only the plan's area until they get in; then they see the exact place, the host's note and who's going. At home, only people the host accepts see the address.
 - Who gets in: the host approves each person, or verified neighbors and people the host has hosted before get in right away; for pickup games and walks, anyone nearby can be let in automatically.
-- Asking to join: people within about 5 miles can ask, with a note and up to 3 others. Asking closes when the plan starts (for pickup games and walks, 30 minutes before the end).
+- Asking to join: people within about 5 miles can ask, with a note and up to 3 others. Asking closes when the plan starts (for pickup games and walks, 30 minutes before the end).${playdates ? `
+- Playdates (kids play while their parents meet) are for verified neighbors: only people with a verified address see them, host them or ask to join. They meet in public places such as a playground, park or library; the host approves each family; parents stay with their kids the whole time; and only kids' ages are shared, never names. Until a family gets in, it sees only the neighborhood and the part of the day ("Saturday morning"). Families within about 3 miles can ask, with how many kids are coming and their ages.` : ''}
 - Reminders go out 2 hours before (or at 7 PM the evening before an early plan); the host gets a summary at 8 AM on the day. Moving a plan more than 30 minutes or changing the place asks everyone who's in "Still coming?".
 - You can draft a plan (draft_plan), changes (draft_plan_change), cancelling (draft_plan_cancel), answering requests (show_plan_requests), asking to join (draft_plan_ask) and a message to guests (draft_plan_message).`);
 

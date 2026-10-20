@@ -35,6 +35,7 @@ const {
   assertCanMutateTarget,
 } = require('../utils/homePermissions');
 const { HOME_DOCUMENT_VISIBILITIES, HOME_DOCUMENT_TYPES, homeDocumentVisibilities, serializeHomeDocument } = require('../utils/homeDocumentAccess');
+const { createHomeAssetSchema } = require('../utils/homeAssetFields');
 const { unpublishedBusinessIds, isUnpublishedBusiness } = require('../utils/visibilityPolicy');
 const homeClaimMergeService = require('../services/homeClaimMergeService');
 const homeClaimRoutingService = require('../services/homeClaimRoutingService');
@@ -4356,20 +4357,19 @@ router.get('/:id/assets', verifyToken, async (req, res) => {
 
 /**
  * POST /api/homes/:id/assets
+ * Adding an appliance or other item to the Home's records needs assets.manage, as the
+ * table's own policy and the records photo route require.
  */
-router.post('/:id/assets', verifyToken, async (req, res) => {
+router.post('/:id/assets', verifyToken, validate(createHomeAssetSchema), async (req, res) => {
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
+    if (Joi.string().uuid().validate(homeId).error) return res.status(400).json({ error: 'Invalid Home id' });
 
-    const access = await checkHomePermission(homeId, userId);
-    if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
+    const access = await checkHomePermission(homeId, userId, 'assets.manage');
+    if (!access.hasAccess) return res.status(403).json({ error: 'You do not have permission to add items to this home.' });
 
     const { category, name, room, brand, model, serial_number, purchase_date, purchase_price, warranty_expires_at, notes, details } = req.body;
-
-    if (!category || !name) {
-      return res.status(400).json({ error: 'category and name are required' });
-    }
 
     const { data, error } = await supabaseAdmin
       .from('HomeAsset')
@@ -4398,6 +4398,7 @@ router.post('/:id/assets', verifyToken, async (req, res) => {
 
     res.status(201).json({ asset: data });
   } catch (err) {
+    if (err.code === 'HOME_ACCESS_UNAVAILABLE') return res.status(503).json({ error: err.message, code: err.code });
     logger.error('Asset creation error', { error: err.message });
     res.status(500).json({ error: 'Failed to create asset' });
   }
