@@ -49,12 +49,12 @@ const nullable = (schema) => ({ ...schema, type: [schema.type, 'null'] });
 const actionCardDefinitions = [
   {
     name: 'draft_plan',
-    description: 'Draft a new plan (a small meetup on the Plans map) for the person to post with one tap. Kinds: watch_party (a game or show to watch together), pickup_game (a sport), walk_coffee (a walk, dog walk, stroller walk or coffee), study_group (studying together; public places only). Plans start within the next 14 days and last 15 minutes to 8 hours. Pickup games, study groups and walks in public need a public place: give its name and the server finds it near them. Watch parties and walks may be at their own home. Make sensible assumptions (an hour and a half for games, 8 spots) and name the main one in the note.',
+    description: 'Draft a new plan (a small meetup on the Plans map) for the person to post with one tap. Kinds: watch_party (a game or show to watch together), pickup_game (a sport), walk_coffee (a walk, dog walk, stroller walk or coffee), study_group (studying together; public places only). Plans start within the next 14 days and last 15 minutes to 8 hours. Pickup games, study groups and walks in public need a public place: give its name and the server finds it near them. Watch parties and walks may be at their own home. Neighbors read the title and about before they get in, while the place shows only to people who get in, so keep the place\'s name and any address out of them. Make sensible assumptions (an hour and a half for games, 8 spots) and name the main one in the note.',
     input_schema: {
       type: 'object',
       properties: {
         kind: { type: 'string', enum: PLAN_KINDS },
-        title: { type: 'string', description: 'Short title, up to 80 characters, e.g. "Pickleball, need 3".' },
+        title: { type: 'string', description: 'Short title, up to 80 characters, e.g. "Pickleball, need 3". Public: never the place or an address.' },
         starts_local: { type: 'string', description: 'Start in their local time, YYYY-MM-DDTHH:MM.' },
         ends_local: { type: 'string', description: 'End in their local time, YYYY-MM-DDTHH:MM.' },
         spots: { type: 'integer', minimum: 1, maximum: 30, description: 'How many people can join, not counting the host.' },
@@ -76,7 +76,7 @@ const actionCardDefinitions = [
           },
           additionalProperties: false,
         },
-        about: nullable({ type: 'string', description: 'A line about the plan, up to 500 characters.' }),
+        about: nullable({ type: 'string', description: 'A line about the plan, up to 500 characters. Public like the title: never the place or an address.' }),
         guest_note: nullable({ type: 'string', description: 'A note only people who get in see (where exactly to meet, what to bring).' }),
         note: { type: ['string', 'null'], description: NOTE },
       },
@@ -91,13 +91,13 @@ const actionCardDefinitions = [
       type: 'object',
       properties: {
         plan_id: { type: 'string' },
-        title: nullable({ type: 'string' }),
+        title: nullable({ type: 'string', description: 'A new title. Public: never the place or an address.' }),
         starts_local: nullable({ type: 'string', description: 'New start, local time YYYY-MM-DDTHH:MM.' }),
         ends_local: nullable({ type: 'string', description: 'New end, local time YYYY-MM-DDTHH:MM.' }),
         spots: nullable({ type: 'integer', minimum: 1, maximum: 30 }),
         place_name: nullable({ type: 'string', description: 'A new public place near them.' }),
-        about: nullable({ type: 'string' }),
-        guest_note: nullable({ type: 'string' }),
+        about: nullable({ type: 'string', description: 'A new about line. Public: never the place or an address.' }),
+        guest_note: nullable({ type: 'string', description: 'A new note for people who are in (where exactly to meet).' }),
         note: { type: ['string', 'null'], description: NOTE },
       },
       required: ['plan_id', 'title', 'starts_local', 'ends_local', 'spots', 'place_name', 'about', 'guest_note', 'note'],
@@ -308,6 +308,37 @@ async function findPublicPlace(name, origin) {
 
 const PLACES_LOADING = "Places near them aren't loading right now (the map's place search is slow or busy). Say so, and offer to try again in a minute, or link them to plan_new to pick the place themselves.";
 
+// A plan's title and about show to everyone nearby; the place shows only to people who get in.
+// The person may name the place when they ask ("pickleball at Crown Park"), so the assistant's
+// draft must not copy it where everyone reads it.
+const plainWords = (value) => String(value || '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '')
+  .replace(/[^a-z0-9]+/g, ' ').trim();
+
+/** The ways a place can be named: its name, its street line and that street without the number. */
+function placeNames(...places) {
+  const names = [];
+  for (const place of places) {
+    if (!place) continue;
+    if (typeof place === 'string') {
+      names.push(place);
+      continue;
+    }
+    const street = String(place.address || '').split(',')[0].trim();
+    names.push(place.name, street, street.replace(/^\d+[a-z]?\s+/i, ''));
+  }
+  return [...new Set(names.map(plainWords).filter((words) => words.length >= 5))];
+}
+
+/** The name or address in `names` that the public text gives away, or null. */
+function placeGivenAway(texts, names) {
+  const text = ` ${texts.map(plainWords).filter(Boolean).join(' ')} `;
+  return names.find((words) => text.includes(` ${words} `)) || null;
+}
+
+const keepPlacePrivate = (named) => ({
+  error: `The title and about are public: neighbors read them before they get in, and the place shows only to people who get in. Write them again without "${named}"; where exactly to meet goes in guest_note.`,
+});
+
 function detailsInput(kind, details) {
   const d = details || {};
   if (kind === 'pickup_game') return { sport: d.sport || undefined, level: d.level || undefined, extra_gear: d.extra_gear ?? undefined };
@@ -369,6 +400,9 @@ async function draftPlan(args, ctx) {
     if (err instanceof planActions.PlanError) return { error: err.message };
     throw err;
   }
+  const publicText = [checked.title, checked.about, args.details?.subject, args.details?.game_label];
+  const named = placeGivenAway(publicText, placeNames(checked.place, args.place_name));
+  if (named) return keepPlacePrivate(named);
   const appliedWho = Object.values(WHO_GETS_IN).find((w) => w.rules.join() === checked.autoRules.join()) || WHO_GETS_IN.host_approves;
   const body = {
     kind: checked.kind,
@@ -397,12 +431,13 @@ async function draftPlan(args, ctx) {
       line('Spots', `${checked.spots}`),
       line('Who gets in', appliedWho.text),
       ...detailLines(checked.kind, checked.details),
+      line('About', checked.about),
       line('Note for guests', checked.guestNote),
     ],
     warnings: [
       checked.place.kind === 'home'
-        ? 'Only people you accept see your address.'
-        : 'Neighbors see only the area until they get in; then they see the exact place.',
+        ? 'Neighbors see the title and about. Only people you accept see your address.'
+        : 'Neighbors see the title, about and area; they see the exact place once they get in.',
     ],
     actions: [action('confirm', 'Post plan', { method: 'POST', path: '/api/plans', body },
       { label: 'Plan posted', link: linkFor('plan', '{{response.id}}') })],
@@ -453,6 +488,11 @@ async function draftPlanChange(args, ctx) {
   if (args.about) { patch.about = args.about; lines.push(line('About', args.about)); }
   if (args.guest_note) { patch.guest_note = args.guest_note; lines.push(line('Note for guests', args.guest_note)); }
   if (!Object.keys(patch).length) return { error: 'Nothing to change. Ask what they want to change.' };
+  if (patch.title || patch.about) {
+    const current = { name: found.plan.place_name, address: found.plan.place_address };
+    const named = placeGivenAway([patch.title, patch.about], placeNames(current, patch.place, args.place_name));
+    if (named) return keepPlacePrivate(named);
+  }
 
   const draft = card('plan_edit', {
     title: `Change "${clip(plan.title, 60)}"`,
