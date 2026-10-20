@@ -149,6 +149,19 @@ const updateBusinessSchema = Joi.object({
   bio: Joi.string().max(5000).allow('', null),
 }).min(1);
 
+const updateBusinessPrivateSchema = Joi.object({
+  tax_id_last4: Joi.string().trim().pattern(/^[0-9]{4}$/).allow('', null)
+    .messages({
+      'string.base': 'Tax ID must contain exactly the last four digits.',
+      'string.pattern.base': 'Tax ID must contain exactly the last four digits.',
+    }),
+  support_email: Joi.string().trim().email().allow('', null)
+    .messages({
+      'string.base': 'Please enter a valid support email address.',
+      'string.email': 'Please enter a valid support email address.',
+    }),
+}).unknown(true).required();
+
 const validateAddressSchema = Joi.object({
   address: Joi.string().min(5).max(255).required(),
   address2: Joi.string().max(255).optional().allow('', null),
@@ -4084,10 +4097,17 @@ router.patch('/:businessId/private', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'No permission to edit sensitive data' });
     }
 
+    const { error: validationError, value: validatedBody } = updateBusinessPrivateSchema.validate(req.body, { abortEarly: false });
+    if (validationError) {
+      // Legal/contact values must not be echoed into error responses or logs.
+      const details = validationError.details.map(({ path, message }) => ({ field: path.join('.'), message }));
+      return res.status(400).json({ error: details[0].message, code: 'INVALID_BUSINESS_PRIVATE', details });
+    }
+
     const allowed = ['legal_name', 'tax_id_last4', 'support_email', 'banking_info', 'legal_doc_ids'];
     const updates = {};
     for (const key of allowed) {
-      if (req.body[key] !== undefined) updates[key] = req.body[key];
+      if (validatedBody[key] !== undefined) updates[key] = validatedBody[key];
     }
     updates.updated_at = new Date().toISOString();
 
