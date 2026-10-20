@@ -11,6 +11,7 @@ import app.pantopus.android.data.ai.AIActionRunner
 import app.pantopus.android.data.ai.AIChatRepository
 import app.pantopus.android.data.ai.AIChatStreamEvent
 import app.pantopus.android.data.ai.AIConversationSession
+import app.pantopus.android.data.ai.AIPdfCheck
 import app.pantopus.android.data.ai.AIScreenContext
 import app.pantopus.android.data.api.models.chats.ChatMessageDto
 import app.pantopus.android.data.api.models.chats.ChatMessageSender
@@ -307,6 +308,9 @@ class ChatConversationViewModel
 
         // The brief or nudge the thread was opened for (its notification id): the thread scrolls to its message once.
         private var aiNudgeId: String? = null
+
+        // The conversation that brief or nudge was added to (its notification says which).
+        private var aiNudgeConversationId: String? = null
         private val aiDraftsByMessageId = mutableMapOf<String, List<ChatAIDraftCard>>()
 
         // Buttons to screens of the app under each reply (`link` events and history `links`).
@@ -372,6 +376,7 @@ class ChatConversationViewModel
             gigId: String? = null,
             aiContext: AIScreenContext? = null,
             aiNudgeId: String? = null,
+            aiConversationId: String? = null,
         ) {
             this.mode = mode
             this.currentUserId = currentUserId
@@ -379,7 +384,10 @@ class ChatConversationViewModel
             this.scrollToMessageId = scrollToMessageId
             this.initialTopic = initialTopic
             this.gigId = gigId
-            if (mode is ChatThreadMode.Ai) this.aiNudgeId = aiNudgeId
+            if (mode is ChatThreadMode.Ai) {
+                this.aiNudgeId = aiNudgeId
+                this.aiNudgeConversationId = aiConversationId
+            }
             // Configured again after a rotation: the starters already used stay gone.
             if (mode is ChatThreadMode.Ai && aiContext != _aiContext.value) {
                 _aiContext.value = aiContext
@@ -405,7 +413,7 @@ class ChatConversationViewModel
                 return
             }
             // A brief or nudge opens the conversation it was added to, at its message (AI assistant phase 2 §8.2).
-            if (mode is ChatThreadMode.Ai && aiConversationId == null && aiNudgeId != null) {
+            if (mode is ChatThreadMode.Ai && aiConversationId == null && (aiNudgeId != null || aiNudgeConversationId != null)) {
                 openAtNudge()
             } else if (mode is ChatThreadMode.Ai && aiConversationId == null) {
                 // Seed AI continuity: a new VM instance for the AI thread keeps
@@ -452,16 +460,18 @@ class ChatConversationViewModel
         }
 
         /**
-         * A brief or nudge was tapped (a push or a notification row): it was added to the person's newest conversation,
-         * which then lists first, so that conversation opens and continues, scrolled to the message whose history item
-         * carries the notification's id. A server without that id opens it at its newest message.
+         * A brief or nudge was tapped (a push or a notification row): the conversation its notification names opens and
+         * continues while the person still has it (else the newest, which a nudge's arrival lists first), scrolled to
+         * the message whose history item carries the notification's id. A server without that id opens it at its newest
+         * message.
          */
         private fun openAtNudge() {
             viewModelScope.launch {
-                val newest = (aiRepo.conversations() as? NetworkResult.Success)?.data?.conversations?.firstOrNull()?.id
+                val listed = (aiRepo.conversations() as? NetworkResult.Success)?.data?.conversations.orEmpty()
+                val named = aiNudgeConversationId?.takeIf { id -> listed.any { it.id == id } }
+                val id = named ?: listed.firstOrNull()?.id ?: aiSession.conversationId ?: return@launch
                 // A message sent while the list loaded keeps its own conversation.
                 if (aiConversationId != null || messages.isNotEmpty()) return@launch
-                val id = newest ?: aiSession.conversationId ?: return@launch
                 aiConversationId = id
                 aiSession.conversationId = id
                 aiSession.freshStartUserId = null
@@ -783,8 +793,8 @@ class ChatConversationViewModel
             sourceUri: String? = null,
         ) {
             // The assistant reads a PDF of up to 10 MB (`POST /api/upload/ai-media`); a bigger one is turned away here.
-            if (mode is ChatThreadMode.Ai && mimeType == PDF_MIME && bytes.size > AI_PDF_MAX_BYTES) {
-                _actionFailure.value = "That PDF is over 10 MB. Try a smaller one."
+            if (mode is ChatThreadMode.Ai && mimeType == PDF_MIME && bytes.size > AIPdfCheck.MAX_BYTES) {
+                refuseAttachment(AIPdfCheck.TOO_LARGE)
                 return
             }
             appendQueuedAttachment(
@@ -797,6 +807,11 @@ class ChatConversationViewModel
                     sourceUri = sourceUri,
                 ),
             )
+        }
+
+        /** A picked file the assistant can't take: the reason, in the server's words, and nothing queued. */
+        fun refuseAttachment(reason: String) {
+            _actionFailure.value = reason
         }
 
         private fun appendQueuedAttachment(attachment: ChatQueuedAttachment) {
@@ -3019,9 +3034,6 @@ private const val SEND_REFUSED_NOTICE = "You can't send messages in this convers
 
 /** The documents the assistant reads (AI assistant phase 2 §7.1). */
 private const val PDF_MIME = "application/pdf"
-
-/** `POST /api/upload/ai-media` takes a PDF of up to 10 MB. */
-private const val AI_PDF_MAX_BYTES = 10 * 1024 * 1024
 
 /**
  * Text the server fills in for a message that is only attachments ("Photo",

@@ -388,9 +388,13 @@ object DeepLinkRouter {
 
         /**
          * `pantopus://assistant` opens the assistant thread; `?nudge=<notificationId>` opens it at that brief's or
-         * nudge's message (AI assistant phase 2 contract §8.2). [nudgeId] is null without one, or when it isn't a UUID.
+         * nudge's message (AI assistant phase 2 contract §8.2), and `&conversation=<id>` names the conversation it was
+         * added to. Each is null without one, or when it isn't a UUID.
          */
-        data class Assistant(val nudgeId: String? = null) : Destination
+        data class Assistant(
+            val nudgeId: String? = null,
+            val conversationId: String? = null,
+        ) : Destination
 
         data class Unknown(val uri: String) : Destination
     }
@@ -764,7 +768,10 @@ object DeepLinkRouter {
             "today" -> if (segments.size == 1) Destination.TodayTab else Destination.Unknown(raw)
             "assistant" ->
                 if (segments.size == 1) {
-                    Destination.Assistant(Paths.queryParam(queryPart, "nudge")?.takeIf(MAIL_UUID::matches))
+                    Destination.Assistant(
+                        nudgeId = Paths.queryParam(queryPart, "nudge")?.takeIf(MAIL_UUID::matches),
+                        conversationId = Paths.queryParam(queryPart, "conversation")?.takeIf(MAIL_UUID::matches),
+                    )
                 } else {
                     Destination.Unknown(raw)
                 }
@@ -1122,18 +1129,21 @@ object DeepLinkRouter {
 
     /**
      * A brief or nudge (a push or a notification row) opens the assistant at its message, whatever its stored link
-     * says (AI assistant phase 2 contract §8.3): `pantopus://assistant?nudge=<notificationId>`. Null for other types.
+     * says (AI assistant phase 2 contract §8.3): `pantopus://assistant?nudge=<notificationId>`, with
+     * `&conversation=<id>` when the notification names the conversation it was added to. Null for other types.
      */
     fun assistantNotificationPath(
         type: String?,
         notificationId: String?,
         link: String?,
+        conversationId: String? = null,
     ): String? {
         if (type?.lowercase() !in ASSISTANT_NOTIFICATION_TYPES) return null
-        val nudgeId =
-            notificationId?.takeIf(MAIL_UUID::matches)
-                ?: link?.let { (resolveString(Paths.normalizeIncoming(it)) as? Destination.Assistant)?.nudgeId }
-        return if (nudgeId != null) "pantopus://assistant?nudge=$nudgeId" else "pantopus://assistant"
+        val linked = link?.let { resolveString(Paths.normalizeIncoming(it)) as? Destination.Assistant }
+        val nudgeId = notificationId?.takeIf(MAIL_UUID::matches) ?: linked?.nudgeId
+        val conversation = conversationId?.takeIf(MAIL_UUID::matches) ?: linked?.conversationId
+        val query = listOfNotNull(nudgeId?.let { "nudge=$it" }, conversation?.let { "conversation=$it" }).joinToString("&")
+        return if (query.isEmpty()) "pantopus://assistant" else "pantopus://assistant?$query"
     }
 
     /**

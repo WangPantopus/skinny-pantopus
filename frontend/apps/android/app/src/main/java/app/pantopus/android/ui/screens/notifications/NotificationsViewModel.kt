@@ -981,9 +981,10 @@ class NotificationsViewModel
         private fun openNotification(dto: NotificationDto) {
             if (dto.isRead != true) markRead(dto.id)
             if (!mayOpenTask(dto)) return
+            // A brief or nudge opens the assistant at its message, in the conversation it was added to.
+            val conversationId = (dto.metadata as? Map<*, *>)?.get("conversation_id") as? String
             val link =
-                // A brief or nudge opens the assistant at its message.
-                DeepLinkRouter.assistantNotificationPath(dto.type, dto.id, dto.link)
+                DeepLinkRouter.assistantNotificationPath(dto.type, dto.id, dto.link, conversationId)
                     ?: HomeTaskNotificationRoute.metadataPath(dto.type, dto.metadata)
                     ?: DeepLinkRouter.notificationPath(dto.type, dto.link)
             if (!link.isNullOrEmpty()) {
