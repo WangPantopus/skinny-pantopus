@@ -145,7 +145,7 @@ const actionCardDefinitions = [
       type: 'object',
       properties: {
         plan_id: { type: 'string' },
-        cancel_note: nullable({ type: 'string', description: 'Up to 280 characters, e.g. "Rained out, sorry! Next week?"' }),
+        cancel_note: nullable({ type: 'string', description: 'Up to 280 characters, e.g. "Rained out, sorry! Next week?" People who asked but aren\'t in read it too: never the place or an address.' }),
         note: { type: ['string', 'null'], description: NOTE },
       },
       required: ['plan_id', 'cancel_note', 'note'],
@@ -344,20 +344,36 @@ const PLACES_LOADING = "Places near them aren't loading right now (the map's pla
 // A plan's title and about show to everyone nearby; the place shows only to people who get in.
 // The person may name the place when they ask ("pickleball at Crown Park"), so the assistant's
 // draft must not copy it where everyone reads it.
-const plainWords = (value) => String(value || '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '')
-  .replace(/[^a-z0-9]+/g, ' ').trim();
 
-/** The ways a place can be named: its name, its street line and that street without the number. */
+// Street words as people shorten them. Public text and place names both go through plainWords,
+// so "625 NE 4th Ave" matches a place at "625 Northeast 4th Avenue", and "Ln" a home's "Lane".
+const SHORT_WORDS = {
+  avenue: 'ave', street: 'st', road: 'rd', drive: 'dr', lane: 'ln', court: 'ct', boulevard: 'blvd', place: 'pl',
+  parkway: 'pkwy', highway: 'hwy', terrace: 'ter', circle: 'cir',
+  northeast: 'ne', northwest: 'nw', southeast: 'se', southwest: 'sw', north: 'n', south: 's', east: 'e', west: 'w',
+};
+const STREET_ENDINGS = new Set(['ave', 'st', 'rd', 'dr', 'ln', 'ct', 'blvd', 'pl', 'pkwy', 'hwy', 'ter', 'cir', 'way']);
+const plainWords = (value) => String(value || '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '')
+  .replace(/[^a-z0-9]+/g, ' ').trim().split(' ').map((word) => SHORT_WORDS[word] || word).join(' ');
+
+/**
+ * The ways a place can be named: its name and the park a court or playground is named after; its
+ * street line (without a unit), that street without the number, and the number and street without
+ * the "Ave" or "Ln".
+ */
 function placeNames(...places) {
   const names = [];
   for (const place of places) {
     if (!place) continue;
-    if (typeof place === 'string') {
-      names.push(place);
-      continue;
-    }
-    const street = String(place.address || '').split(',')[0].trim();
-    names.push(place.name, street, street.replace(/^\d+[a-z]?\s+/i, ''));
+    const name = typeof place === 'string' ? place : place.name;
+    names.push(name, planPlaces.parkNameOf(name));
+    if (typeof place === 'string') continue;
+    const street = plainWords(String(place.address || '').split(',')[0]
+      .replace(/\s+(?:#|(?:apt|apartment|unit|suite|ste)\b).*$/i, ''));
+    const words = street.split(' ');
+    const numbered = words.length > 1 && /^\d+[a-z]?$/.test(words[0]);
+    names.push(street, numbered ? words.slice(1).join(' ') : null);
+    if (numbered && STREET_ENDINGS.has(words[words.length - 1])) names.push(words.slice(0, -1).join(' '));
   }
   return [...new Set(names.map(plainWords).filter((words) => words.length >= 5))];
 }
@@ -443,7 +459,8 @@ async function draftPlan(args, ctx) {
     throw err;
   }
   const publicText = [checked.title, checked.about, args.details?.subject, args.details?.game_label];
-  const named = placeGivenAway(publicText, placeNames(checked.place, args.place_name));
+  // At home, the home's address is what stays out; a place_name there would be words like "my place".
+  const named = placeGivenAway(publicText, placeNames(checked.place, checked.place.kind === 'home' ? null : args.place_name));
   if (named) return keepPlacePrivate(named);
   const appliedWho = Object.values(WHO_GETS_IN).find((w) => w.rules.join() === checked.autoRules.join()) || WHO_GETS_IN.host_approves;
   const body = {
@@ -562,6 +579,9 @@ async function draftPlanCancel(args, ctx) {
   if (plan.viewer.role !== 'host') return { error: 'Only the host can cancel this plan.' };
   if (plan.state === 'ended' || plan.state === 'cancelled') return { error: 'This plan is already over.' };
   const note = clip(args.cancel_note, 280);
+  // The note also goes to people who asked and were never let in, who don't see the place.
+  const named = note && placeGivenAway([note], placeNames({ name: found.plan.place_name, address: found.plan.place_address }));
+  if (named) return { error: `People who asked but aren't in get this note too, and they don't see the place. Write it again without "${named}".` };
   const draft = card('plan_cancel', {
     title: `Cancel "${clip(plan.title, 60)}"`,
     lines: [line('When', whenLabel(plan.starts_at, plan.ends_at, plan.timezone || ctx.timeZone)), line('Note', note)],
