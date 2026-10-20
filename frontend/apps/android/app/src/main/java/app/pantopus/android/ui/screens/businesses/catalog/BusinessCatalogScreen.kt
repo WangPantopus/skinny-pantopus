@@ -91,12 +91,17 @@ fun BusinessCatalogScreen(
     var editorTarget by remember { mutableStateOf<CatalogEditorTarget?>(null) }
     var showsCategories by remember { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<BusinessCatalogItemRow?>(null) }
+    // An editor's or panel's failed save stays visible while it is open, but not over the list after it closes.
+    val closeSubview = {
+        editorTarget = null
+        showsCategories = false
+        viewModel.dismissErrorToast()
+    }
 
     BackHandler {
         when {
             isMutating -> Unit
-            editorTarget != null -> editorTarget = null
-            showsCategories -> showsCategories = false
+            editorTarget != null || showsCategories -> closeSubview()
             else -> onBack()
         }
     }
@@ -122,7 +127,7 @@ fun BusinessCatalogScreen(
                     isEditing = target is CatalogEditorTarget.Edit,
                     categories = state.categoryRows,
                     isSaving = isMutating,
-                    onClose = { editorTarget = null },
+                    onClose = closeSubview,
                     onSave = { draft ->
                         when (target) {
                             CatalogEditorTarget.Create ->
@@ -136,7 +141,7 @@ fun BusinessCatalogScreen(
                 BusinessCatalogCategoriesPanel(
                     categories = state.categoryRows,
                     isSaving = isMutating,
-                    onClose = { showsCategories = false },
+                    onClose = closeSubview,
                     onCreate = { name, done -> viewModel.createCategory(name, done) },
                     onRename = viewModel::renameCategory,
                     onDelete = { id -> viewModel.deleteCategory(id) },

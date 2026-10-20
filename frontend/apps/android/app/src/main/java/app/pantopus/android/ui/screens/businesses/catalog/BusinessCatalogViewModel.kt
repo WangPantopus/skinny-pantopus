@@ -90,6 +90,11 @@ class BusinessCatalogViewModel
             _toast.value = null
         }
 
+        /** An editor's or panel's failure, cleared when it closes; success toasts keep their own timer. */
+        fun dismissErrorToast() {
+            if (_toast.value?.kind == BusinessCatalogToastKind.Error) _toast.value = null
+        }
+
         // ---- Fetch ----------------------------------------------------
 
         private suspend fun fetch() {

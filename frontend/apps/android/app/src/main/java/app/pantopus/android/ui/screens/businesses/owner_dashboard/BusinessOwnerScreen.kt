@@ -9,6 +9,7 @@
 
 package app.pantopus.android.ui.screens.businesses.owner_dashboard
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -36,7 +37,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -121,7 +122,10 @@ fun BusinessOwnerScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val toast by viewModel.toast.collectAsStateWithLifecycle()
-    var mode by remember { mutableStateOf(OwnerViewMode.Owner) }
+    // Saved, so returning from a customer conversation lands back in the inbox it was opened from.
+    var mode by rememberSaveable { mutableStateOf(OwnerViewMode.Owner) }
+    // System Back leaves the inbox or preview for the dashboard, like their top-bar Back.
+    BackHandler(enabled = mode != OwnerViewMode.Owner) { mode = OwnerViewMode.Owner }
 
     LifecycleResumeEffect(Unit) {
         viewModel.refresh()

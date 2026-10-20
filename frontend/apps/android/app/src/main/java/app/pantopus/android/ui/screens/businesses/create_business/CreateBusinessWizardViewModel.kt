@@ -477,12 +477,25 @@ open class CreateBusinessWizardViewModel
                         }
                         finishCreation(businessId, publish)
                     }
-                    is NetworkResult.Failure -> {
-                        _state.update {
-                            it.copy(isCreating = false, submitError = createErrorMessage(result.error))
-                        }
-                    }
+                    is NetworkResult.Failure -> applyCreateFailure(result.error)
                 }
+            }
+        }
+
+        private fun applyCreateFailure(error: NetworkError) {
+            // A username taken after its availability check must not still read "Available" on Basic info.
+            val unavailable =
+                when (createErrorCode(error)) {
+                    "USERNAME_TAKEN" -> UsernameCheckStatus.Unavailable("taken")
+                    "USERNAME_RESERVED" -> UsernameCheckStatus.Unavailable("reserved")
+                    else -> null
+                }
+            _state.update {
+                it.copy(
+                    isCreating = false,
+                    submitError = createErrorMessage(error),
+                    usernameStatus = unavailable ?: it.usernameStatus,
+                )
             }
         }
 
@@ -658,12 +671,14 @@ open class CreateBusinessWizardViewModel
                 else -> "Please choose a valid username."
             }
 
+        private fun createErrorCode(error: NetworkError): String? =
+            (error as? NetworkError.ClientError)?.body?.let { body ->
+                runCatching { JSONObject(body).optString("code").takeIf { it.isNotBlank() } }
+                    .getOrNull()
+            }
+
         private fun createErrorMessage(error: NetworkError): String {
-            val code =
-                (error as? NetworkError.ClientError)?.body?.let { body ->
-                    runCatching { JSONObject(body).optString("code").takeIf { it.isNotBlank() } }
-                        .getOrNull()
-                }
+            val code = createErrorCode(error)
             return when (code) {
                 "EMAIL_IS_PERSONAL" ->
                     "This email is already used by your personal account. " +

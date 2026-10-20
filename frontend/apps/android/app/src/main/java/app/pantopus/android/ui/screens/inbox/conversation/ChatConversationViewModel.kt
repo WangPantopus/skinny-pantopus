@@ -1681,6 +1681,10 @@ class ChatConversationViewModel
             quiet: Boolean,
         ): Boolean {
             if (quiet) return mergeNewestPage(page)
+            // A socket join's backfill can land before this page; its rows carry no sender,
+            // attachments or reactions, so the page's copy of the same message replaces them.
+            val pageIds = page.mapTo(HashSet()) { it.id }
+            messages.removeAll { it.sender == null && it.id in pageIds }
             // Drop ids we already hold — a send completing while
             // this fetch was in flight may have upserted its
             // message ahead of us.
@@ -2717,7 +2721,8 @@ class ChatConversationViewModel
                         .parse(message.createdAt)
                         .atZone(ZoneId.systemDefault())
                         .format(DateTimeFormatter.ofPattern("h:mm a"))
-                if (message.userId == currentUserId) {
+                // Replies sent as the business are this viewer's own outgoing messages here.
+                if (message.userId == messageIdentityId) {
                     time
                 } else {
                     val sender = message.sender?.displayLabel?.takeIf { it.isNotEmpty() }
