@@ -393,6 +393,16 @@ function weatherForModel(data, zone) {
   };
 }
 
+/**
+ * When a section's data is from, to the hour in the home's time ("2026-10-20 3 AM"): enough to say how current
+ * it is, and steady, so a screen's context isn't added to the conversation again on every turn just because a
+ * timestamp moved (the weather's and the address calendar's are the time they were read).
+ */
+function asOfHour(iso, zone) {
+  const at = iso ? DateTime.fromISO(String(iso), { zone: 'utc' }).setZone(zoneOr(zone)) : null;
+  return at && at.isValid ? at.toFormat('yyyy-LL-dd h a') : null;
+}
+
 function sectionForModel(section, zone, dataChars = SECTION_DATA_CHARS) {
   let data = null;
   if (section.data != null && section.id === 'weather') {
@@ -406,7 +416,7 @@ function sectionForModel(section, zone, dataChars = SECTION_DATA_CHARS) {
     status: section.status,
     access: section.access,
     source: section.source || null,
-    as_of: section.as_of || null,
+    as_of: asOfHour(section.as_of, zone),
     coverage: section.coverage,
     unavailable_reason: section.unavailable_reason || null,
     data,
