@@ -16,7 +16,7 @@ const verifyToken = require('../middleware/verifyToken');
 const logger = require('../utils/logger');
 const s3 = require('../services/s3Service');
 const imageResizeService = require('../services/marketplace/imageResizeService');
-const { photoReference } = require('../services/ai/photos');
+const { photoReference, pdfFacts, MAX_PDF_BYTES, MAX_PDF_PAGES } = require('../services/ai/photos');
 const { calculateAndStoreCompleteness } = require('../utils/businessCompleteness');
 const { requirePersonaEnabled } = require('../utils/featureFlags');
 const { writeIdentityAuditLog } = require('../utils/identityAudit');
@@ -1694,9 +1694,10 @@ router.post('/business-media/:businessId', uploadLimiter, verifyToken, upload.si
 
 /**
  * POST /api/upload/ai-media
- * Upload images for AI assistant chat (up to 5 images).
+ * Upload photos and PDFs for AI assistant chat (up to 5 files). A PDF (a warranty, a policy,
+ * a lease) may be up to 10 MB and 20 pages, and not encrypted, since the assistant couldn't read it.
  * Returns a reference for each (`url`, `ai-photo:<name>`) to pass to the AI chat endpoint or the
- * flyer reader. The photos are private: no address to them is handed out, and the request that
+ * flyer reader. The files are private: no address to them is handed out, and the request that
  * reads one deletes it (services/ai/photos.js).
  */
 router.post('/ai-media', uploadLimiter, verifyToken, upload.array('files', 5), enforceFileSizeLimits, validateAndStripUploads, async (req, res) => {
@@ -1708,19 +1709,35 @@ router.post('/ai-media', uploadLimiter, verifyToken, upload.array('files', 5), e
       return res.status(400).json({ error: 'No files provided' });
     }
 
-    // Only allow images for AI vision
-    const nonImages = files.filter((f) => !f.mimetype.startsWith('image/'));
-    if (nonImages.length > 0) {
-      return res.status(400).json({ error: 'Only image files are allowed for AI chat' });
+    // Photos, and PDFs of home papers
+    const unsupported = files.filter((f) => !f.mimetype.startsWith('image/') && f.mimetype !== 'application/pdf');
+    if (unsupported.length > 0) {
+      return res.status(400).json({ error: 'Only photos and PDFs can be sent to the assistant', code: 'AI_MEDIA_TYPE' });
+    }
+    for (const file of files.filter((f) => f.mimetype === 'application/pdf')) {
+      if (file.size > MAX_PDF_BYTES) {
+        return res.status(413).json({ error: 'That PDF is over 10 MB. Try a smaller one, or photos of the pages that matter.', code: 'PDF_TOO_LARGE' });
+      }
+      const facts = pdfFacts(file.buffer);
+      if (!facts || facts.pages === 0) {
+        return res.status(400).json({ error: "That PDF can't be read. Try saving it again as a PDF, or send photos of the pages.", code: 'PDF_UNREADABLE' });
+      }
+      if (facts.encrypted) {
+        return res.status(400).json({ error: 'That PDF is password-protected. Send a copy without a password, or photos of the pages.', code: 'PDF_ENCRYPTED' });
+      }
+      if (facts.pages > MAX_PDF_PAGES) {
+        return res.status(400).json({ error: `That PDF has ${facts.pages} pages; the assistant reads up to ${MAX_PDF_PAGES}. Send the pages that matter.`, code: 'PDF_TOO_MANY_PAGES' });
+      }
     }
 
     const uploaded = [];
     for (const file of files) {
       // The stored name becomes the reference, so keep only a plain extension from the phone's file name.
       const extension = /^\.[a-z0-9]{1,10}$/.exec(path.extname(file.originalname || '').toLowerCase())?.[0] || '';
+      const pdf = file.mimetype === 'application/pdf';
       const { key } = await s3.uploadGeneral(
         file.buffer,
-        `photo${extension}`,
+        pdf ? 'document.pdf' : `photo${extension}`,
         userId,
         'ai-chat',
         file.mimetype
@@ -1736,7 +1753,8 @@ router.post('/ai-media', uploadLimiter, verifyToken, upload.array('files', 5), e
     }
 
     return res.json({
-      message: `${uploaded.length} image(s) uploaded`,
+      message: `${uploaded.length} file(s) uploaded`,
+      // Still named images: released apps read this key.
       images: uploaded,
     });
   } catch (err) {

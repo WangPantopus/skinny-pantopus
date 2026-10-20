@@ -17,6 +17,8 @@ const notificationService = require('../services/notificationService');
 const taskMediaStorage = require('../services/homeTaskMediaStorage');
 const { checkHomePermission } = require('../utils/homePermissions');
 const { getAccessibleHomeIds, canAccessMail, readableMail, visibleMailFilter } = require('../utils/homeMailAccess');
+// A letter sent as a business names the business to everyone it reaches, never the person who sent it.
+const { presentMailSenders } = require('../utils/mailSenderView');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
 const Joi = require('joi');
@@ -406,7 +408,7 @@ router.get('/records/asset/:id/mail', verifyToken, async (req, res) => {
       linked_gig_count: 0,
     };
 
-    res.json({ asset: enrichedAsset, mail, gigs: [], photos: photos || [] });
+    res.json({ asset: enrichedAsset, mail: presentMailSenders(mail, userId), gigs: [], photos: photos || [] });
   } catch (err) {
     logger.error('[P3] GET /records/asset/:id/mail failed', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch asset details' });
@@ -1223,8 +1225,8 @@ router.get('/mailday/summary', verifyToken, async (req, res) => {
     res.json({
       greeting,
       total_new: (newMail || []).length,
-      arrivals: newMail || [],
-      needs_attention: attention || [],
+      arrivals: presentMailSenders(newMail || [], userId),
+      needs_attention: presentMailSenders(attention || [], userId),
       earn_count: earnCount || 0,
       community_count: communityCount,
       memory,

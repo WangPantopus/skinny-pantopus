@@ -20,6 +20,8 @@ const emailService = require('../services/emailService');
 const smsService = require('../services/smsService');
 const { skipForLaunchCut } = require('../utils/featureFlags');
 const { chosenUsernameOrNull } = require('../utils/personalUsername');
+// A letter sent as a business names the business to everyone it reaches, never the person who sent it.
+const { presentMailSender, presentMailSenders, objectForRecipient, payloadForRecipient, sentAsBusiness, claimPageSender } = require('../utils/mailSenderView');
 
 // ============ VALIDATION SCHEMAS ============
 
@@ -820,15 +822,18 @@ const applyMailboxScopeToQuery = (query, { scope, userId, homeId, accessibleHome
   return query.eq('recipient_user_id', userId);
 };
 
+// A letter sent as a business (businessId) names the business in its payload and is stored under the business's id:
+// recipients read both, and the storage key and URL carry the uploader's id. created_by_user_id keeps the person.
 const createMailObject = async ({
   senderId,
+  businessId = null,
   objectPayload
 }) => {
   const payload = {
     ...objectPayload,
     sender: {
       ...(objectPayload?.sender || {}),
-      senderUserId: senderId
+      senderUserId: businessId || senderId
     }
   };
 
@@ -839,7 +844,7 @@ const createMailObject = async ({
   const { url, key } = await s3.uploadGeneral(
     buffer,
     'mail.json',
-    senderId,
+    businessId || senderId,
     MAIL_OBJECT_FOLDER,
     'application/json'
   );
@@ -1440,8 +1445,10 @@ router.get('/', verifyToken, async (req, res) => {
         subject,
         content,
         sender_user_id,
+        sender_entity_id,
         sender_display,
         sender_business_name,
+        sender_trust,
         sender_address,
         viewed,
         viewed_at,
@@ -1529,7 +1536,7 @@ router.get('/', verifyToken, async (req, res) => {
     }
 
     res.json({
-      mail: mail || [],
+      mail: presentMailSenders(mail || [], userId),
       summary,
       pagination: {
         limit: parseInt(limit),
@@ -1642,7 +1649,7 @@ router.get('/deleted', verifyToken, async (req, res) => {
     const since = new Date(Date.now() - MAIL_RESTORE_DAYS * 24 * 60 * 60 * 1000).toISOString();
     const { data: rows, error } = await supabaseAdmin
       .from('Mail')
-      .select('id, display_title, subject, preview_text, sender_business_name, sender_address, sender_user_id, recipient_user_id, recipient_home_id, drawer, created_at, deleted_at, deleted_by')
+      .select('id, display_title, subject, preview_text, sender_business_name, sender_address, sender_user_id, sender_entity_id, sender_display, recipient_user_id, recipient_home_id, drawer, created_at, deleted_at, deleted_by')
       .not('deleted_at', 'is', null)
       .gte('deleted_at', since)
       .or(visibleMailFilter(userId, accessibleHomeIds))
@@ -1664,7 +1671,7 @@ router.get('/deleted', verifyToken, async (req, res) => {
     }
 
     res.json({
-      mail: (rows || []).map((row) => ({
+      mail: presentMailSenders(rows || [], userId).map((row) => ({
         ...row,
         deleted_by_name: names.get(row.deleted_by) || null,
         deleted_by_me: row.deleted_by === userId,
@@ -1744,7 +1751,7 @@ router.get('/:id', verifyToken, async (req, res) => {
 
     mail.links = await getMailLinksSafely(mail.id);
 
-    res.json({ mail });
+    res.json({ mail: presentMailSender(mail, userId) });
 
   } catch (err) {
     logger.error('Mail fetch error', { error: err.message, mailId: req.params.id });
@@ -1833,7 +1840,7 @@ router.get('/:id/object', verifyToken, async (req, res) => {
 
     const { data: mail, error } = await supabaseAdmin
       .from('Mail')
-      .select('id, object_id, recipient_user_id, recipient_home_id')
+      .select('id, object_id, recipient_user_id, recipient_home_id, sender_user_id, sender_entity_id, sender_business_name')
       .eq('id', id)
       .single();
 
@@ -1855,9 +1862,11 @@ router.get('/:id/object', verifyToken, async (req, res) => {
       return res.status(404).json({ error: 'Mail object not found' });
     }
 
+    // A letter sent as a business: see presentMailSender.
+    const hideSender = sentAsBusiness(mail) && String(mail.sender_user_id) !== String(userId);
     res.json({
-      object: objectData.metadata,
-      payload: objectData.payload
+      object: hideSender ? objectForRecipient(objectData.metadata, mail.sender_entity_id || null) : objectData.metadata,
+      payload: hideSender ? payloadForRecipient(objectData.payload, mail.sender_entity_id || null) : objectData.payload
     });
   } catch (err) {
     logger.error('Mail object fetch error', { error: err.message, mailId: req.params.id });
@@ -1960,7 +1969,7 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
       // Create mail object (S3) if applicable
       let objectResult = null;
       try {
-        objectResult = await createMailObject({ senderId, objectPayload });
+        objectResult = await createMailObject({ senderId, businessId: senderBusiness?.id || null, objectPayload });
       } catch (objectErr) {
         logger.warn('Escrow mail object creation fallback to inline', { senderId, error: objectErr.message });
       }
@@ -1971,6 +1980,8 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
         recipient_user_id: null,
         recipient_home_id: null,
         sender_user_id: senderId,
+        // The business the letter is from (null: the sender's own letter); recipients see it, never the person.
+        sender_entity_id: senderBusiness?.id || null,
         sender_display: senderDisplayName,
         sender_trust: senderTrust,
         sender_business_name: senderBusinessName || null,
@@ -2162,6 +2173,7 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
     try {
       objectResult = await createMailObject({
         senderId,
+        businessId: senderBusiness?.id || null,
         objectPayload
       });
     } catch (objectErr) {
@@ -2177,6 +2189,8 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
       recipient_user_id: recipientUserId || null,
       recipient_home_id: recipientHomeId || null,
       sender_user_id: senderId,
+      // The business the letter is from (null: the sender's own letter); recipients see it, never the person.
+      sender_entity_id: senderBusiness?.id || null,
       sender_display: senderDisplayName,
       sender_trust: senderTrust,
       sender_business_name: senderBusinessName || null,
@@ -2414,7 +2428,7 @@ router.get('/claim/:mailId', async (req, res) => {
 
     const { data: mail, error } = await supabaseAdmin
       .from('Mail')
-      .select('id, sender_user_id, sender_business_name, type, subject, content, content_excerpt, preview_text, display_title, mail_type, primary_action, ack_required, attachments, object_id, escrow_recipient_contact, escrow_status, escrow_claim_token, escrow_expires_at, created_at')
+      .select('id, sender_user_id, sender_entity_id, sender_business_name, sender_display, sender_trust, type, subject, content, content_excerpt, preview_text, display_title, mail_type, primary_action, ack_required, attachments, object_id, escrow_recipient_contact, escrow_status, escrow_claim_token, escrow_expires_at, created_at')
       .eq('id', mailId)
       .single();
 
@@ -2438,21 +2452,27 @@ router.get('/claim/:mailId', async (req, res) => {
       return res.status(409).json({ error: 'This mail has already been claimed.' });
     }
 
-    // Fetch sender display name (safe — no address or private data)
-    const { data: senderUser } = await supabaseAdmin
-      .from('User')
-      .select('name, username')
-      .eq('id', mail.sender_user_id)
-      .single();
-
-    const senderName = senderUser?.name || senderUser?.username || mail.sender_business_name || 'Someone';
-
-    // Fetch sender verification status
-    const { data: senderProfile } = await supabaseAdmin
-      .from('UserProfile')
-      .select('identity_verified')
-      .eq('user_id', mail.sender_user_id)
-      .single();
+    // The sender as this public page shows it: a letter sent as a business shows the business (its name and whether
+    // it is verified), never the person who sent it for the business; otherwise the sender's display name.
+    let sender;
+    if (sentAsBusiness(mail)) {
+      sender = claimPageSender(mail);
+    } else {
+      const { data: senderUser } = await supabaseAdmin
+        .from('User')
+        .select('name, username')
+        .eq('id', mail.sender_user_id)
+        .single();
+      const { data: senderProfile } = await supabaseAdmin
+        .from('UserProfile')
+        .select('identity_verified')
+        .eq('user_id', mail.sender_user_id)
+        .single();
+      sender = {
+        senderName: senderUser?.name || senderUser?.username || 'Someone',
+        senderVerified: Boolean(senderProfile?.identity_verified),
+      };
+    }
 
     // Fetch object payload (stationery metadata) if available
     let stationeryTheme = null;
@@ -2495,8 +2515,8 @@ router.get('/claim/:mailId', async (req, res) => {
     return res.json({
       mail: {
         id: mail.id,
-        senderName,
-        senderVerified: Boolean(senderProfile?.identity_verified),
+        senderName: sender.senderName,
+        senderVerified: sender.senderVerified,
         subject: mail.subject || mail.display_title || null,
         previewText: mail.preview_text || mail.content_excerpt || null,
         mailType: mail.mail_type || mail.type || null,
