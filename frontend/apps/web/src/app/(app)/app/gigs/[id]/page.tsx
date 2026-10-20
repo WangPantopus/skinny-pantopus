@@ -230,9 +230,10 @@ export default function GigDetailsPage() {
   // ---------- Derived ----------
   const currentUserId = user?.id;
 
+  // GET /api/gigs/:id names a business poster as a business identity (`creator.type`), with no account_type.
   const canManageGigAsBusinessMember = useBusinessGigAccess(
     currentUserId, gig?.user_id || gig?.poster_user_id || gig?.poster_id,
-    gig?.creator?.account_type === 'business', gig,
+    gig?.creator?.type === 'business', gig,
   );
 
   const gigStatus = String(gig?.status ?? '');
@@ -242,16 +243,19 @@ export default function GigDetailsPage() {
   const acceptedBy = gig?.accepted_by ?? gig?.acceptedBy ?? null;
   const iAmWorker = Boolean(currentUserId && acceptedBy === currentUserId);
 
-  const isMyGig = Boolean(
+  const isPoster = Boolean(
     currentUserId &&
       gig &&
       ((gig.user_id === currentUserId) ||
         (gig.poster_user_id === currentUserId) ||
         (gig.poster_id === currentUserId) ||
         (gig.creator_id === currentUserId) ||
-        (gig.creator?.id === currentUserId) ||
-        canManageGigAsBusinessMember)
+        (gig.creator?.id === currentUserId))
   );
+  // A business's owner and staff manage its task as the business. Reviews, tips and change requests stay with the
+  // poster's own account and the worker, as on the server, and they see the exact address only when it's sent.
+  const asBusiness = !isPoster && canManageGigAsBusinessMember;
+  const isMyGig = isPoster || asBusiness;
 
   const budget = gig?.price || gig?.budget_min || 0;
   const budgetMax = gig?.budget_max;
@@ -486,6 +490,7 @@ export default function GigDetailsPage() {
               <GigTimeline
                 gig={gig}
                 isMyGig={isMyGig}
+                asBusiness={asBusiness}
                 iAmWorker={iAmWorker}
                 myReviewAt={myReviewAt}
                 onAction={(action) => {
@@ -627,7 +632,7 @@ export default function GigDetailsPage() {
                   // Format location nicely. Owners always see the full address;
                   // others see it only after they're accepted (gig.locationUnlocked is set
                   // by the backend's resolveGigPrecision when assignment happens).
-                  const canSeeExactAddress = isMyGig || iAmWorker || Boolean(gig.locationUnlocked);
+                  const canSeeExactAddress = isPoster || iAmWorker || Boolean(gig.locationUnlocked);
                   const exactParts = [
                     gig.exact_address,
                     gig.exact_city,
@@ -685,7 +690,7 @@ export default function GigDetailsPage() {
                   const lat = Number(gig.latitude ?? gig.location?.latitude);
                   const lng = Number(gig.longitude ?? gig.location?.longitude);
                   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-                  const canSeeExactAddress = isMyGig || iAmWorker || Boolean(gig.locationUnlocked);
+                  const canSeeExactAddress = isPoster || iAmWorker || Boolean(gig.locationUnlocked);
                   return (
                     <div className="py-2">
                       <div className="h-64 w-full rounded-xl overflow-hidden border border-app-border">
@@ -758,11 +763,11 @@ export default function GigDetailsPage() {
             </ErrorBoundary>}
 
             {/* ─── Change Orders Section ─── */}
-            {(isAssigned || isInProgress) && (isMyGig || iAmWorker) && (
+            {(isAssigned || isInProgress) && (isPoster || iAmWorker) && (
               <ErrorBoundary>
                 <ChangeOrdersSection
                   gigId={gigId}
-                  isMyGig={isMyGig}
+                  isMyGig={isPoster}
                   iAmWorker={iAmWorker}
                   currentUserId={currentUserId}
                   paymentId={gig?.payment_id}
@@ -823,6 +828,7 @@ export default function GigDetailsPage() {
                 gigId={gigId}
                 gig={gig as any}
                 isOwner={isMyGig}
+                asBusiness={asBusiness}
                 isWorker={iAmWorker}
                 currentUserId={currentUserId}
                 gigStatus={gigStatus}

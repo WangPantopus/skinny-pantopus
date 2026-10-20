@@ -19,16 +19,31 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 const { quietHoursOf, inQuietHours, nextQuietEnd } = require('./plans/planNotifications');
 
+/** Whether the person set quiet hours of their own (a start and an end that differ). */
+async function hasOwnQuietHours(userId) {
+  const { data, error } = await supabaseAdmin.from('UserNotificationPreferences')
+    .select('quiet_hours_start_local, quiet_hours_end_local')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) throw new Error(`Quiet hours read failed: ${error.message}`);
+  const start = String(data?.quiet_hours_start_local || '').slice(0, 5);
+  const end = String(data?.quiet_hours_end_local || '').slice(0, 5);
+  return Boolean(start && end && start !== end);
+}
+
 /**
  * When a push to this person may go: null for now, else the end of their quiet hours.
  * @param {string} userId
  * @param {object} [opts]
  * @param {string} [opts.fallbackTz]  Their zone when none is known.
  * @param {Date} [opts.now]
+ * @param {boolean} [opts.ownOnly]    Only quiet hours they set themselves hold it, not the 9 PM to 8 AM
+ *                                    default: for a push at a time they chose (the morning brief).
  * @returns {Promise<{ until: Date|null, timeZone: string }>}
  */
-async function pushWindow(userId, { fallbackTz, now = new Date() } = {}) {
+async function pushWindow(userId, { fallbackTz, now = new Date(), ownOnly = false } = {}) {
   const quiet = await quietHoursOf(userId, fallbackTz);
+  if (ownOnly && !(await hasOwnQuietHours(userId))) return { until: null, timeZone: quiet.tz };
   return { until: inQuietHours(quiet, now) ? nextQuietEnd(quiet, now) : null, timeZone: quiet.tz };
 }
 
@@ -58,10 +73,11 @@ async function claim(row, patch) {
  * @param {object} opts
  * @param {(row: object) => Promise<unknown>} opts.send  Sends the push.
  * @param {string} [opts.fallbackTz]
+ * @param {boolean} [opts.ownOnly]  See pushWindow.
  * @returns {Promise<{ sent: boolean, heldUntil: Date|null }>}
  */
-async function pushOrHold(row, { send, fallbackTz }) {
-  const { until } = await pushWindow(row.user_id, { fallbackTz });
+async function pushOrHold(row, { send, fallbackTz, ownOnly = false }) {
+  const { until } = await pushWindow(row.user_id, { fallbackTz, ownOnly });
   if (until) {
     await claim(row, { push_deferred_until: until.toISOString() });
     return { sent: false, heldUntil: until };

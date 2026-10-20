@@ -54,7 +54,8 @@ const NUDGE_KINDS = [
   'home_overdue', 'home_paperwork', 'radon_follow_up',
 ];
 const KINDS = ['brief', ...NUDGE_KINDS];
-const SUBJECT_TYPES = ['plan', 'post', 'home', 'task'];
+// The brief is about the person's day: its subject is the person.
+const SUBJECT_TYPES = ['plan', 'post', 'home', 'task', 'person'];
 const TYPES = { brief: 'assistant_brief', nudge: 'assistant_nudge' };
 const typeOf = (kind) => (kind === 'brief' ? TYPES.brief : TYPES.nudge);
 // Per person, per local day.
@@ -114,7 +115,7 @@ function checkTarget({ userId, kind, subject, checkpoint }) {
   if (!isUuid(userId)) throw new TypeError('sendNudge: userId must be a uuid');
   if (!KINDS.includes(kind)) throw new TypeError(`sendNudge: unknown kind ${kind}`);
   if (!subject || !SUBJECT_TYPES.includes(subject.type) || !isUuid(subject.id)) {
-    throw new TypeError('sendNudge: subject must be { type: plan|post|home|task, id: uuid }');
+    throw new TypeError('sendNudge: subject must be { type: plan|post|home|task|person, id: uuid }');
   }
   const point = String(checkpoint ?? '').trim();
   if (!point || point.length > 40 || /[\s:]/.test(point)) {
@@ -219,7 +220,8 @@ async function check(nudge, { now = new Date() } = {}) {
   if (prefs.muted[nudge.kind]) return { ok: false, reason: 'muted' };
   if (nudge.pickup && !(await pickupConfirmed(nudge.userId, nudge.pickup))) return { ok: false, reason: 'unconfirmed_pickup' };
   if (await alreadySent(nudgeKey(nudge))) return { ok: false, reason: 'duplicate' };
-  const window = await heldPushes.pushWindow(nudge.userId, { fallbackTz: DEFAULT_TIMEZONE, now });
+  // The brief goes at the time they chose: only quiet hours of their own hold it.
+  const window = await heldPushes.pushWindow(nudge.userId, { fallbackTz: DEFAULT_TIMEZONE, now, ownOnly: nudge.kind === 'brief' });
   const type = typeOf(nudge.kind);
   if ((await sentToday(nudge.userId, type, window.timeZone)).length >= DAILY_CAP[type]) return { ok: false, reason: 'cap' };
   if (!(await subjectReadable(nudge.subject, nudge.userId))) return { ok: false, reason: 'unreadable' };
@@ -285,6 +287,20 @@ async function latestConversation(userId, title) {
     .single();
   if (createError) throw new Error(`Conversation create failed: ${createError.message}`);
   return { conversation: created, created: true };
+}
+
+/**
+ * Whether a nudge's messages are in the conversation, read again after a save that failed.
+ * A read that fails too counts as not stored: the row is then removed, as for any failed save.
+ */
+async function nudgeStored(conversationId, notificationId) {
+  const ownId = `toolu_nudge_${notificationId.replace(/-/g, '')}_0`;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const { data, error } = await supabaseAdmin.from('AIConversation').select('messages').eq('id', conversationId).maybeSingle();
+    if (!error) return Boolean(data) && nudgeIdsIn(data.messages).has(ownId);
+    await new Promise((resolve) => { setTimeout(resolve, 1000); });
+  }
+  return false;
 }
 
 /** Append messages to a conversation, retrying when a chat turn or another nudge saved it meanwhile. */
@@ -415,12 +431,17 @@ async function deliver(nudge, { window }) {
       notificationId, kind, message: nudge.message, cards, sentAt: new Date(row.created_at), timeZone: window.timeZone,
     }));
   } catch (err) {
-    logger.warn('nudge.conversation_failed', { userId, kind, error: err.message });
-    return undo('error', { row: true });
+    // A save whose answer timed out may still have reached the database: then the nudge stands,
+    // or its message would be left in the conversation with a "Fewer like this" that has no row.
+    if (!(await nudgeStored(conversation.id, notificationId))) {
+      logger.warn('nudge.conversation_failed', { userId, kind, error: err.message });
+      return undo('error', { row: true });
+    }
+    logger.info('nudge.conversation_saved_late', { userId, kind, error: err.message });
   }
 
   try {
-    await heldPushes.pushOrHold(row, { send: pushNudge, fallbackTz: window.timeZone });
+    await heldPushes.pushOrHold(row, { send: pushNudge, fallbackTz: window.timeZone, ownOnly: kind === 'brief' });
   } catch (err) {
     // The row and the message stand; only the push is lost.
     logger.warn('nudge.push_failed', { userId, kind, error: err.message });
@@ -458,6 +479,27 @@ async function sendNudge(params) {
 }
 
 /**
+ * Send the morning brief (§4): a nudge of kind "brief" about the person's day, at most one a
+ * local day, with up to three cards. Its push is held only by quiet hours they set themselves.
+ * @param {{userId: string, date: string, lines: string[], cards: object[], expiresAt: Date, title?: string}} p
+ *   date: their local date (YYYY-MM-DD), the brief's checkpoint.
+ */
+async function sendBrief({ userId, date, lines, cards = [], expiresAt, title = 'Your Morning Briefing' }) {
+  return sendNudge({
+    userId,
+    kind: 'brief',
+    subject: { type: 'person', id: userId },
+    checkpoint: date,
+    title,
+    // The notification shows the first line (two when they fit); the conversation keeps them all.
+    body: lines.length > 1 && `${lines[0]} ${lines[1]}`.length <= BODY_MAX ? `${lines[0]} ${lines[1]}` : lines[0],
+    message: lines.join('\n'),
+    card: cards,
+    expiresAt,
+  });
+}
+
+/**
  * Whether a nudge would go now, without sending it: ask before drafting with the model.
  * @param {{userId: string, kind: string, subject: object, checkpoint: string}} p
  * @returns {Promise<{ok: true}|{ok: false, reason: string}>}
@@ -475,7 +517,9 @@ async function canNudge(params) {
 
 /**
  * A card for a nudge, built exactly as the chat builds it (actionCards.js), as the recipient:
- * the same fields, checks and requests. Session-scoped requests go without the scope header.
+ * the same fields, checks and requests. Session-scoped requests go without the scope header, so
+ * a follow-up that requires it (starting a repeating task's recurrence) answers 409: build nudge
+ * cards without repeats.
  *   const { card, error } = await nudgeCard('draft_plan_message', { plan_id, text, note: null }, { userId, expiresAt });
  * @returns {Promise<{card: object}|{error: string}>}
  */
@@ -527,6 +571,7 @@ async function fewerLikeThis(userId, notificationId) {
 
 module.exports = {
   sendNudge,
+  sendBrief,
   canNudge,
   nudgeCard,
   fewerLikeThis,
