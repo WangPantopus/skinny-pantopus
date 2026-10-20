@@ -1,15 +1,13 @@
 "use client";
 
-// Host scheduling shell (W0). AppShell chrome is already applied by the parent
-// (app)/app layout — this adds the scheduling section nav, with links to EVERY
-// feature-stream area pre-included so each is reachable the moment it merges
-// (before then they 404, which is expected during the parallel build). Only the
-// layout + nav live here; each section's page.tsx is owned by its feature stream.
+// Keep the retained invoice, package and payment tools reachable while
+// hiding navigation to scheduling features outside the current launch scope.
 
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import clsx from "clsx";
+import { isLaunchCutPath } from "@/lib/featureFlags";
 import {
   BarChart3,
   Bell,
@@ -138,7 +136,9 @@ function SchedulingNav() {
 
       {/* Mobile: horizontal scroll. Desktop: stacked sections. */}
       <div className="-mx-1 flex gap-1 overflow-x-auto pb-2 lg:mx-0 lg:flex-col lg:gap-0 lg:overflow-visible lg:pb-0">
-        {SECTIONS.map((section) => (
+        {SECTIONS.map((section) => ({ ...section, items: section.items.filter((item) => !isLaunchCutPath(item.href)) }))
+          .filter((section) => section.items.length > 0)
+          .map((section) => (
           <div key={section.title} className="contents lg:block lg:mb-4">
             <p className="hidden lg:mb-1 lg:block lg:px-2 lg:text-[11px] lg:font-semibold lg:uppercase lg:tracking-wide lg:text-app-text-muted">
               {section.title}

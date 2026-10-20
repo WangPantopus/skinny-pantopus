@@ -10,9 +10,10 @@ interface ProfileTabProps {
   profile: BusinessProfile;
   businessId: string;
   onUpdate: () => void;
+  canEdit: boolean;
 }
 
-export default function ProfileTab({ business, profile, businessId, onUpdate }: ProfileTabProps) {
+export default function ProfileTab({ business, profile, businessId, onUpdate, canEdit }: ProfileTabProps) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
     name: business?.name || '',
@@ -71,9 +72,10 @@ export default function ProfileTab({ business, profile, businessId, onUpdate }: 
 
   return (
     <div className="space-y-4">
+      {!canEdit && <p className="text-sm text-app-secondary">You have view-only access to this section.</p>}
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-app">Business Profile</h2>
-        <div className="flex items-center gap-2">
+        {canEdit && <div className="flex items-center gap-2">
           <button
             onClick={togglePublish}
             disabled={publishing}
@@ -93,11 +95,11 @@ export default function ProfileTab({ business, profile, businessId, onUpdate }: 
               Edit
             </button>
           )}
-        </div>
+        </div>}
       </div>
 
       <div className="rounded-xl border border-app bg-surface p-5 space-y-4">
-        {editing ? (
+        {canEdit && editing ? (
           <>
             <Field label="Name" value={form.name} onChange={(v) => setForm({ ...form, name: v })} />
             <Field label="Tagline" value={form.tagline} onChange={(v) => setForm({ ...form, tagline: v })} />
@@ -134,7 +136,7 @@ export default function ProfileTab({ business, profile, businessId, onUpdate }: 
                 ) : (
                   <span className="text-sm text-app-muted">No logo yet</span>
                 )}
-                <label className="px-3 py-1.5 rounded-lg border border-app-strong text-sm font-medium text-app-strong hover:bg-surface-raised transition cursor-pointer focus-within:ring-2 focus-within:ring-violet-500">
+                {canEdit && <label className="px-3 py-1.5 rounded-lg border border-app-strong text-sm font-medium text-app-strong hover:bg-surface-raised transition cursor-pointer focus-within:ring-2 focus-within:ring-violet-500">
                   {uploadingLogo ? 'Uploading…' : business?.profile_picture_url ? 'Change logo' : 'Upload logo'}
                   <input
                     type="file"
@@ -143,7 +145,7 @@ export default function ProfileTab({ business, profile, businessId, onUpdate }: 
                     disabled={uploadingLogo}
                     onChange={(e) => { void uploadLogo(e.target.files?.[0]); e.target.value = ''; }}
                   />
-                </label>
+                </label>}
               </div>
             </div>
             <InfoRow label="Name" value={business?.name} />

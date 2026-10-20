@@ -1187,12 +1187,17 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
       // v1.1: Home Place rate limit — 2 per day per home
       if (postAs === 'home' && homeId) {
         const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-        const { count } = await supabaseAdmin
+        let homePlacePosts = supabaseAdmin
           .from('Post')
           .select('id', { count: 'exact', head: true })
           .eq('home_id', homeId)
           .contains('distribution_targets', ['place'])
           .gte('created_at', oneDayAgo);
+        // A retry of a post this composer command already saved (to attach photos
+        // after a failed upload) is not a new post, so it doesn't count against itself.
+        const retryId = commandPostId(userId, req.body.clientRequestId);
+        if (retryId) homePlacePosts = homePlacePosts.neq('id', retryId);
+        const { count } = await homePlacePosts;
         if (count >= 2) {
           return res.status(429).json({ error: 'Home posting limit reached (2 posts per day to Place feed). Try again later.' });
         }

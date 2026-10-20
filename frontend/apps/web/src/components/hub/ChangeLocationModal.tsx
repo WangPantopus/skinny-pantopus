@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { X, Home as HomeIcon, Briefcase, Clock, MapPin, Pin, PinOff, Check } from 'lucide-react';
 import * as api from '@pantopus/api';
 import AddressAutocomplete from '../AddressAutocomplete';
@@ -13,6 +13,11 @@ interface ChangeLocationModalProps {
   onLocationChanged: () => void;
 }
 
+function hasCoordinates(location: { latitude: number; longitude: number }) {
+  return Number.isFinite(location.latitude) && Math.abs(location.latitude) <= 90
+    && Number.isFinite(location.longitude) && Math.abs(location.longitude) <= 180;
+}
+
 // Row UI helper -------------------------------------------------------------
 
 function OptionRow({
@@ -20,17 +25,20 @@ function OptionRow({
   title,
   subtitle,
   active,
+  disabled,
   onClick,
 }: {
   icon: React.ReactNode;
   title: string;
   subtitle?: string;
   active?: boolean;
+  disabled?: boolean;
   onClick: () => void;
 }) {
   return (
     <button
       onClick={onClick}
+      disabled={disabled}
       className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border transition text-left ${
         active
           ? 'border-primary-400 bg-primary-50 dark:bg-primary-900/20'
@@ -59,9 +67,13 @@ export default function ChangeLocationModal({ onClose, onLocationChanged }: Chan
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
   const [searchValue, setSearchValue] = useState('');
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const savingRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
+    setError(null);
     (async () => {
       try {
         const data = await api.location.getLocation();
@@ -75,7 +87,7 @@ export default function ChangeLocationModal({ onClose, onLocationChanged }: Chan
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [loadAttempt]);
 
   // Close on Escape
   useEffect(() => {
@@ -99,6 +111,12 @@ export default function ChangeLocationModal({ onClose, onLocationChanged }: Chan
     state?: string | null;
     zipcode?: string | null;
   }) => {
+    if (savingRef.current) return;
+    if (!hasCoordinates(params)) {
+      setError('This location is unavailable. Choose another saved location or search for an address.');
+      return;
+    }
+    savingRef.current = true;
     setSaving(params.key);
     setError(null);
     try {
@@ -116,12 +134,17 @@ export default function ChangeLocationModal({ onClose, onLocationChanged }: Chan
       onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to update location');
+    } finally {
+      savingRef.current = false;
       setSaving(null);
     }
   };
 
   const togglePin = async () => {
-    if (!current) return;
+    if (!current || savingRef.current) return;
+    savingRef.current = true;
+    setSaving('pin');
+    setError(null);
     try {
       const next = !current.isPinned;
       await api.location.setPinned(next);
@@ -129,6 +152,9 @@ export default function ChangeLocationModal({ onClose, onLocationChanged }: Chan
       onLocationChanged();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to update pin');
+    } finally {
+      savingRef.current = false;
+      setSaving(null);
     }
   };
 
@@ -163,8 +189,13 @@ export default function ChangeLocationModal({ onClose, onLocationChanged }: Chan
         {/* Body */}
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
           {error && (
-            <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 text-xs">
+            <div role="alert" className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 text-xs">
               {error}
+              {!payload && !loading && (
+                <button className="ml-2 font-semibold underline" onClick={() => setLoadAttempt((n) => n + 1)}>
+                  Try again
+                </button>
+              )}
             </div>
           )}
 
@@ -176,7 +207,7 @@ export default function ChangeLocationModal({ onClose, onLocationChanged }: Chan
             </div>
           )}
 
-          {!loading && (
+          {!loading && payload && (
             <>
               {/* Current */}
               {current && (
@@ -192,6 +223,7 @@ export default function ChangeLocationModal({ onClose, onLocationChanged }: Chan
                   </div>
                   <button
                     onClick={togglePin}
+                    disabled={saving !== null}
                     className={`p-1.5 rounded-md transition ${
                       current.isPinned
                         ? 'text-primary-600 bg-primary-50 dark:bg-primary-900/20'
@@ -243,13 +275,15 @@ export default function ChangeLocationModal({ onClose, onLocationChanged }: Chan
                     {payload!.homes.map((h) => {
                       const key = `home:${h.id}`;
                       const active = currentKey === key;
+                      const available = hasCoordinates(h);
                       return (
                         <OptionRow
                           key={h.id}
                           icon={<HomeIcon className="w-4 h-4" />}
                           title={h.name}
-                          subtitle={[h.city, h.state].filter(Boolean).join(', ')}
+                          subtitle={available ? [h.city, h.state].filter(Boolean).join(', ') : 'Location unavailable'}
                           active={active}
+                          disabled={saving !== null || active || !available}
                           onClick={() => {
                             if (saving || active) return;
                             commit({
@@ -281,13 +315,15 @@ export default function ChangeLocationModal({ onClose, onLocationChanged }: Chan
                       const key = `biz:${bl.id}`;
                       const active = currentKey === key;
                       const label = bl.label || bl.businessName;
+                      const available = hasCoordinates(bl);
                       return (
                         <OptionRow
                           key={bl.id}
                           icon={<Briefcase className="w-4 h-4" />}
                           title={label}
-                          subtitle={[bl.businessName, bl.city, bl.state].filter((v, i) => v && (i === 0 ? v !== label : true)).join(' · ')}
+                          subtitle={available ? [bl.businessName, bl.city, bl.state].filter((v, i) => v && (i === 0 ? v !== label : true)).join(' · ') : 'Location unavailable'}
                           active={active}
+                          disabled={saving !== null || active || !available}
                           onClick={() => {
                             if (saving || active) return;
                             commit({
@@ -317,12 +353,14 @@ export default function ChangeLocationModal({ onClose, onLocationChanged }: Chan
                   <div className="space-y-2">
                     {payload!.recentLocations.map((r) => {
                       const key = `recent:${r.id}`;
+                      const available = hasCoordinates(r);
                       return (
                         <OptionRow
                           key={r.id}
                           icon={<Clock className="w-4 h-4" />}
                           title={r.label}
-                          subtitle={[r.city, r.state].filter(Boolean).join(', ')}
+                          subtitle={available ? [r.city, r.state].filter(Boolean).join(', ') : 'Location unavailable'}
+                          disabled={saving !== null || !available}
                           onClick={() => {
                             if (saving) return;
                             commit({

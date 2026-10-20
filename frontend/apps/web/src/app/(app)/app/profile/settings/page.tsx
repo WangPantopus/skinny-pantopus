@@ -84,15 +84,24 @@ export default function SettingsPage() {
     try {
       await api.auth.logout();
     } catch (err) {
-      // A concurrent session-revoked reply can finish sign-out before this
-      // response arrives. An account switch also owns its own navigation.
-      if ((err as { code?: string } | null)?.code === 'AUTH_SESSION_CHANGED') return;
+      // Logout's Clear-Site-Data or a concurrent revocation can change the
+      // session marker before its response arrives. Finish navigation if the
+      // server already cleared the session cookie; preserve a newer sign-in.
+      if ((err as { code?: string } | null)?.code === 'AUTH_SESSION_CHANGED') {
+        const hasSessionCookie = document.cookie.split(';').some((cookie) => cookie.trim() === 'pantopus_session=1');
+        if (!hasSessionCookie) {
+          clearPendingPlaces();
+          clearAuthToken();
+          hardNavigate('/login');
+        }
+        return;
+      }
       toast.error('Could not confirm sign-out. Please try again.');
       return;
     }
     clearPendingPlaces();
     clearAuthToken();
-    router.push('/login');
+    hardNavigate('/login');
   };
 
   const handleDeleteAccount = async () => {

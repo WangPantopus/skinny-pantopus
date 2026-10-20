@@ -84,7 +84,7 @@ const ROLE_OPTIONS = [
   { value: 'admin', label: 'Admin', description: 'Full control over home settings and members' },
   { value: 'manager', label: 'Manager', description: 'Manage tasks, issues, bills. No member control' },
   { value: 'member', label: 'Member', description: 'View and contribute to home life' },
-  { value: 'restricted_member', label: 'Restricted', description: 'Limited access (chores, basic info)' },
+  { value: 'restricted_member', label: 'Restricted', description: 'Basic home information; additional access by permission' },
   { value: 'guest', label: 'Guest', description: 'Read-only access to shared info' },
 ];
 

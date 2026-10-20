@@ -77,6 +77,8 @@ export default function BusinessDashboardPage() {
     refresh,
   } = useBusinessData(businessId);
 
+  const can = (permission: string) => access.hasAccess && (access.isOwner || access.permissions.includes(permission));
+
   const dashPath = `/app/businesses/${businessId}/dashboard`;
 
   if (loading) {
@@ -193,8 +195,8 @@ export default function BusinessDashboardPage() {
             catalog={catalog}
             pages={pages}
             businessId={businessId}
-            onboarding={onboarding}
-            foundingOffer={foundingOffer}
+            onboarding={can('profile.edit') ? onboarding : null}
+            foundingOffer={access.isOwner ? foundingOffer : null}
             onUpdate={refresh}
           />
         )}
@@ -203,6 +205,7 @@ export default function BusinessDashboardPage() {
             business={business}
             profile={profile}
             businessId={businessId}
+            canEdit={can('profile.edit')}
             onUpdate={refresh}
           />
         )}
@@ -210,14 +213,16 @@ export default function BusinessDashboardPage() {
           <LocationsTab
             locations={locations}
             businessId={businessId}
+            canManage={can('locations.manage')}
+            canEditHours={can('hours.edit')}
             onUpdate={refresh}
           />
         )}
         {tab === 'catalog' && (
-          <CatalogTab catalog={catalog} businessId={businessId} onUpdate={refresh} />
+          <CatalogTab canEdit={can('catalog.edit')} canManage={can('catalog.manage')} catalog={catalog} businessId={businessId} onUpdate={refresh} />
         )}
         {tab === 'pages' && (
-          <PagesTab pages={pages} businessId={businessId} onUpdate={refresh} />
+          <PagesTab canEdit={can('pages.edit')} canManage={can('pages.manage')} pages={pages} businessId={businessId} onUpdate={refresh} />
         )}
         {tab === 'team' && (
           <TeamTab team={team} businessId={businessId} access={access} onUpdate={refresh} />
@@ -225,11 +230,12 @@ export default function BusinessDashboardPage() {
         {tab === 'reviews' && <ReviewsTab businessId={businessId} businessName={business?.name || 'Business'} />}
         {tab === 'payments' && <PaymentsTab businessId={businessId} />}
         {tab === 'insights' && <InsightsTab businessId={businessId} />}
-        {tab === 'invoices' && <InvoicesTab businessId={businessId} />}
+        {tab === 'invoices' && <InvoicesTab businessId={businessId} canManage={can('profile.edit')} />}
         {tab === 'legal' && <LegalTab businessId={businessId} businessType={profile?.business_type} />}
         {tab === 'activity' && <ActivityTab businessId={businessId} />}
         {tab === 'inbox' && <InboxTab businessId={businessId} />}
-        {tab === 'settings' && profile && (
+        {tab === 'settings' && !can('profile.edit') && <p className="text-sm text-app-secondary">Your role cannot edit business settings. Ask the business owner for access.</p>}
+        {tab === 'settings' && can('profile.edit') && profile && (
           <SettingsTab
             businessId={businessId}
             profile={profile}

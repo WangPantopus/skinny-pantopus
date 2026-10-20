@@ -26,6 +26,16 @@ export const SPORTS_SCOPES = [
   'local', 'regional', 'national', 'youth', 'school', 'rec', 'watch',
 ] as const;
 
+export const SPORTS_SCOPE_LABELS: Record<string, string> = {
+  local: 'Local sports',
+  regional: 'Regional sports',
+  national: 'National sports',
+  youth: 'Youth sports',
+  school: 'School sports',
+  rec: 'Recreational sports',
+  watch: 'Watching sports',
+};
+
 export interface SportsStarter {
   key: string;
   label: string;
