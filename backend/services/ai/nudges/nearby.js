@@ -357,6 +357,48 @@ async function askedRecently(authorId, postId, now) {
   return Boolean(data && data.length);
 }
 
+/**
+ * One open question: its author hears once there are 2 or more replies they can see, or one reply
+ * older than 12 hours, at most once every 48 hours. `all` is its live replies, oldest first.
+ */
+async function checkQuestion(ask, all, now) {
+  const authorId = String(ask.user_id);
+  // Replies the author can see: not their own, and nobody on either side of a block.
+  const blocked = await blockService.blockedUserIds(authorId);
+  const theirs = all.filter((reply) => String(reply.user_id) !== authorId && !blocked.has(String(reply.user_id)));
+  const ready = theirs.length >= 2 || (theirs.length === 1 && Date.parse(theirs[0].created_at) <= now - ONE_REPLY_WAIT_MS);
+  if (!ready || (await askedRecently(authorId, ask.id, now))) return null;
+  const subject = { type: 'post', id: ask.id };
+  const checkpoint = `r${theirs.length}`;
+  if (!(await wouldHear(authorId, 'question_answered', subject, checkpoint))) return null;
+  const expiresAt = new Date(now + 3 * DAY_MS);
+
+  const people = [...new Set(theirs.map((reply) => String(reply.user_id)))];
+  const shown = await localDisplayNames(people).catch(() => new Map());
+  const names = people.map((id) => firstNameOf({ display_name: shown.get(id) }) || 'A neighbor');
+  const question = clip(ask.title, 50) || clip(ask.content, 50) || 'your question';
+  // They already said thanks after the latest reply: only Mark solved is offered.
+  const lastTheirs = theirs[theirs.length - 1];
+  const thankedAfter = all.some((reply) => String(reply.user_id) === authorId && Date.parse(reply.created_at) > Date.parse(lastTheirs.created_at));
+  const solve = await cardFor(authorId, 'draft_post_solve', { post_id: ask.id, note: null }, expiresAt);
+  if (!solve) return null;
+  const thanks = thankedAfter ? null : await cardFor(authorId, 'draft_post_reply', {
+    post_id: ask.id,
+    reply_to: null,
+    text: names.length <= 2 ? `Thanks, ${namesText(names)}! This helped.` : 'Thanks, everyone! This helped.',
+    note: null,
+  }, expiresAt);
+  return send(authorId, {
+    kind: 'question_answered',
+    subject,
+    checkpoint,
+    title: `Your question got ${theirs.length} ${theirs.length === 1 ? 'reply' : 'replies'}`,
+    body: `${namesText(names)} replied to “${question}”. Mark it solved${thanks ? ', or say thanks' : ''}?`,
+    cards: [solve, thanks].filter(Boolean),
+    expiresAt,
+  });
+}
+
 async function questionsAnswered(now = Date.now()) {
   const { data: asks, error } = await feedService.onlyShownPosts(supabaseAdmin.from('Post')
     .select('id, user_id, title, content, created_at, comment_count'))
@@ -387,43 +429,8 @@ async function questionsAnswered(now = Date.now()) {
 
   let sent = 0;
   for (const ask of asks) {
-    const authorId = String(ask.user_id);
     try {
-      const all = byPost.get(ask.id) || [];
-      // Replies the author can see: not their own, and nobody on either side of a block.
-      const blocked = await blockService.blockedUserIds(authorId);
-      const theirs = all.filter((reply) => String(reply.user_id) !== authorId && !blocked.has(String(reply.user_id)));
-      const ready = theirs.length >= 2 || (theirs.length === 1 && Date.parse(theirs[0].created_at) <= now - ONE_REPLY_WAIT_MS);
-      if (!ready || (await askedRecently(authorId, ask.id, now))) continue;
-      const subject = { type: 'post', id: ask.id };
-      const checkpoint = `r${theirs.length}`;
-      if (!(await wouldHear(authorId, 'question_answered', subject, checkpoint))) continue;
-      const expiresAt = new Date(now + 3 * DAY_MS);
-
-      const people = [...new Set(theirs.map((reply) => String(reply.user_id)))];
-      const shown = await localDisplayNames(people).catch(() => new Map());
-      const names = people.map((id) => firstNameOf({ display_name: shown.get(id) }) || 'A neighbor');
-      const question = clip(ask.title, 50) || clip(ask.content, 50) || 'your question';
-      // They already said thanks after the latest reply: only Mark solved is offered.
-      const lastTheirs = theirs[theirs.length - 1];
-      const thankedAfter = all.some((reply) => String(reply.user_id) === authorId && Date.parse(reply.created_at) > Date.parse(lastTheirs.created_at));
-      const solve = await cardFor(authorId, 'draft_post_solve', { post_id: ask.id, note: null }, expiresAt);
-      if (!solve) continue;
-      const thanks = thankedAfter ? null : await cardFor(authorId, 'draft_post_reply', {
-        post_id: ask.id,
-        reply_to: null,
-        text: names.length <= 2 ? `Thanks, ${namesText(names)}! This helped.` : 'Thanks, everyone! This helped.',
-        note: null,
-      }, expiresAt);
-      const result = await send(authorId, {
-        kind: 'question_answered',
-        subject,
-        checkpoint,
-        title: `Your question got ${theirs.length} ${theirs.length === 1 ? 'reply' : 'replies'}`,
-        body: `${namesText(names)} replied to “${question}”. Mark it solved${thanks ? ', or say thanks' : ''}?`,
-        cards: [solve, thanks].filter(Boolean),
-        expiresAt,
-      });
+      const result = await checkQuestion(ask, byPost.get(ask.id) || [], now);
       if (result?.sent) sent += 1;
     } catch (err) {
       logger.warn('nearby.question.nudge_failed', { postId: ask.id, error: err.message });
@@ -452,7 +459,8 @@ module.exports = {
   runNearbyNudges,
   lostFoundMatch,
   questionsAnswered,
-  // For scripts.
+  // One question at a time (also for scripts on a shared test database), and the pairing.
+  checkQuestion,
   candidatePairs,
   wordsOf,
 };
