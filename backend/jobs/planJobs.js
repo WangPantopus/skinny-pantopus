@@ -13,6 +13,8 @@
  *  5. Reminders for people who are in: 2 hours before, or 7 PM the evening
  *     before a plan that starts before 10 AM.
  *  6. The host's summary at 8 AM on the day, with how many requests are waiting.
+ *  7. The assistant's nudges for hosts (services/ai/nudges/plans.js): weather
+ *     and air, requests waiting as asking closes, and after the plan.
  *
  * Every send is claimed first with a conditional update (or a notice's
  * idempotency key), so two runners (or a retry) never send the same notice twice.
@@ -328,8 +330,16 @@ async function runPlansTick() {
   const askedAgain = await sendStillComingReminders();
   const reminders = await sendReminders();
   const summaries = await sendHostSummaries();
-  const result = { released, ...lifecycle, askedAgain, reminders, summaries };
-  if (released || askedAgain || reminders || summaries || lifecycle.expiredCount || lifecycle.endedCount || lifecycle.closedCount) {
+  // The assistant's nudges come last, and a failure there never stops the notices above.
+  let nudges = null;
+  try {
+    nudges = await require('../services/ai/nudges/plans').runPlanNudges();
+  } catch (err) {
+    logger.warn('plans.tick.nudges_failed', { error: err.message });
+  }
+  const result = { released, ...lifecycle, askedAgain, reminders, summaries, ...(nudges ? { nudges } : {}) };
+  if (released || askedAgain || reminders || summaries || lifecycle.expiredCount || lifecycle.endedCount || lifecycle.closedCount
+    || (nudges && nudges.sent)) {
     logger.info('plans.tick', result);
   }
   return result;
