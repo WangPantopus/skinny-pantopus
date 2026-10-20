@@ -42,6 +42,7 @@ const MagicTaskComposerV2 = dynamic(() => import('@/components/magic-task-v2').t
 import FloatingChatWidget from '@/components/chat/FloatingChatWidget';
 import FloatingPromoModal from '@/components/ui/FloatingPromoModal';
 import NamePrompt from '@/components/profile/NamePrompt';
+import BriefingNotice from '@/components/BriefingNotice';
 import { toast } from '@/components/ui/toast-store';
 import useViewerHome from '@/hooks/useViewerHome';
 import { useTabScroll } from '@/hooks/useTabScroll';
@@ -603,6 +604,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       <FloatingChatWidget />
       <FloatingPromoModal />
       {/* Asked once of an account with no name (sign-up didn't ask before October 2026). */}
+      {user?.id && !namePromptOpen && !feedComposerOpen && !composerOpen && <BriefingNotice key={user.id} accountId={user.id} />}
       <NamePrompt
         user={user}
         onOpenChange={setNamePromptOpen}

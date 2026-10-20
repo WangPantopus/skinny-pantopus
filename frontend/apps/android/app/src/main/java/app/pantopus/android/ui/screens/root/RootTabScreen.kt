@@ -435,6 +435,7 @@ import app.pantopus.android.ui.screens.scheduling.setup.FirstRunWizardScreen
 import app.pantopus.android.ui.screens.scheduling.setup.OnboardingHomeBusinessScreen
 import app.pantopus.android.ui.screens.scheduling.visits.VisitDetailScreen
 import app.pantopus.android.ui.screens.scheduling.visits.VisitSetupScreen
+import app.pantopus.android.ui.screens.settings.BriefingNotice
 import app.pantopus.android.ui.screens.settings.NotificationSettingsScreen
 import app.pantopus.android.ui.screens.settings.PrivacySettingsScreen
 import app.pantopus.android.ui.screens.settings.SettingsIndexScreen
@@ -2178,6 +2179,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
         ) { uri ->
             if (uri != null) appContext.shareText(InviteLinks.INVITE_MESSAGE, "Invite to Pantopus")
         }
+    BriefingNotice(onManage = { navController.navigate(ChildRoutes.SETTINGS_NOTIFICATIONS) })
     val sessionViewModel: RootSessionViewModel = hiltViewModel()
     val chatBadgeViewModel: ChatBadgeViewModel = hiltViewModel()
     val currentHandle by sessionViewModel.currentHandle.collectAsStateWithLifecycle()
