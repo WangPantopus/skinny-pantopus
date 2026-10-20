@@ -36,6 +36,24 @@ function isHiddenBlock(rel, userId) {
   return rel?.status === 'blocked' && rel.blocked_by !== userId;
 }
 
+function connectionUnavailable(res) {
+  return res.status(403).json({
+    error: 'This connection request is no longer available.',
+    code: 'CONNECTION_UNAVAILABLE',
+  });
+}
+
+function isPersonalBlockAdmissionError(error) {
+  return error?.code === 'PT403' && error.message === 'PERSONAL_CONNECTION_BLOCKED';
+}
+
+function connectionReadUnavailable(res) {
+  return res.status(503).json({
+    error: 'Connections are temporarily unavailable. Please try again.',
+    code: 'CONNECTION_CHECK_UNAVAILABLE',
+  });
+}
+
 // The caller asked to block someone who already blocked them. Their own block
 // is recorded as a personal UserBlock, which every client uses and which stays
 // in force if the other person unblocks later. The answer is a plain success
@@ -189,6 +207,7 @@ router.post('/requests', verifyToken, connectionRequestLimiter, validate(request
             .select();
 
           if (error) {
+            if (isPersonalBlockAdmissionError(error)) return connectionUnavailable(res);
             logger.error('Error auto-accepting relationship', { error: error.message });
             return res.status(500).json({ error: 'Failed to accept connection' });
           }
@@ -254,6 +273,7 @@ router.post('/requests', verifyToken, connectionRequestLimiter, validate(request
       .single();
 
     if (error) {
+      if (isPersonalBlockAdmissionError(error)) return connectionUnavailable(res);
       // Handle unique violation gracefully
       if (error.code === '23505') {
         return res.status(400).json({ error: 'Connection request already exists' });
@@ -294,11 +314,13 @@ router.post('/:id/accept', verifyToken, async (req, res) => {
     const userId = req.user.id;
 
     // Fetch the relationship
-    const { data: rel } = await supabaseAdmin
+    const { data: rel, error: readError } = await supabaseAdmin
       .from('Relationship')
       .select('*')
       .eq('id', relationshipId)
-      .single();
+      .maybeSingle();
+
+    if (readError) return connectionReadUnavailable(res);
 
     if (!rel) {
       return res.status(404).json({ error: 'Connection request not found' });
@@ -311,6 +333,13 @@ router.post('/:id/accept', verifyToken, async (req, res) => {
 
     if (isHiddenBlock(rel, userId)) {
       return res.status(404).json({ error: 'Connection request not found' });
+    }
+
+    // An older request is not permission to connect after either person blocks.
+    // The database admission trigger repeats this check under the block's pair
+    // lock, covering a block committed after this cached preflight.
+    if (await blockService.isBlocked(rel.requester_id, rel.addressee_id)) {
+      return connectionUnavailable(res);
     }
 
     // A repeat of an accept that already went through (a re-sent request or a second tap)
@@ -335,6 +364,7 @@ router.post('/:id/accept', verifyToken, async (req, res) => {
       .select();
 
     if (error) {
+      if (isPersonalBlockAdmissionError(error)) return connectionUnavailable(res);
       logger.error('Error accepting relationship', { error: error.message });
       return res.status(500).json({ error: 'Failed to accept connection' });
     }
@@ -375,6 +405,7 @@ router.post('/:id/accept', verifyToken, async (req, res) => {
 
     res.json({ message: 'Connection accepted', relationship: updated });
   } catch (err) {
+    if (err.code === 'BLOCK_CHECK_UNAVAILABLE') return connectionReadUnavailable(res);
     logger.error('Accept connection error', { error: err.message });
     res.status(500).json({ error: 'Failed to accept connection' });
   }
@@ -722,6 +753,7 @@ router.get('/', verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const { status, limit = 50, offset = 0 } = req.query;
+    const blockedIds = [...await blockService.blockedUserIds(userId)];
 
     let query = supabaseAdmin
       .from('Relationship')
@@ -740,6 +772,10 @@ router.get('/', verifyToken, async (req, res) => {
 
     if (status) {
       query = query.eq('status', status);
+    }
+    if (blockedIds.length) {
+      query = query.not('requester_id', 'in', `(${blockedIds.join(',')})`)
+        .not('addressee_id', 'in', `(${blockedIds.join(',')})`);
     }
 
     const { data: relationships, error } = await query;
@@ -765,6 +801,7 @@ router.get('/', verifyToken, async (req, res) => {
 
     res.json({ relationships: enriched });
   } catch (err) {
+    if (err.code === 'BLOCK_CHECK_UNAVAILABLE') return connectionReadUnavailable(res);
     logger.error('List relationships error', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch connections' });
   }
@@ -776,8 +813,9 @@ router.get('/', verifyToken, async (req, res) => {
 router.get('/requests/pending', verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
+    const blockedIds = [...await blockService.blockedUserIds(userId)];
 
-    const { data: requests, error } = await supabaseAdmin
+    let query = supabaseAdmin
       .from('Relationship')
       .select(`
         id, status, created_at,
@@ -786,6 +824,8 @@ router.get('/requests/pending', verifyToken, async (req, res) => {
       .eq('addressee_id', userId)
       .eq('status', 'pending')
       .order('created_at', { ascending: false });
+    if (blockedIds.length) query = query.not('requester_id', 'in', `(${blockedIds.join(',')})`);
+    const { data: requests, error } = await query;
 
     if (error) {
       logger.error('Error fetching pending requests', { error: error.message });
@@ -794,6 +834,7 @@ router.get('/requests/pending', verifyToken, async (req, res) => {
 
     res.json({ requests: (requests || []).map(r => ({ ...r, requester: withChosenUsername(r.requester) })) });
   } catch (err) {
+    if (err.code === 'BLOCK_CHECK_UNAVAILABLE') return connectionReadUnavailable(res);
     logger.error('Pending requests error', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch pending requests' });
   }
@@ -805,8 +846,9 @@ router.get('/requests/pending', verifyToken, async (req, res) => {
 router.get('/requests/sent', verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
+    const blockedIds = [...await blockService.blockedUserIds(userId)];
 
-    const { data: requests, error } = await supabaseAdmin
+    let query = supabaseAdmin
       .from('Relationship')
       .select(`
         id, status, created_at,
@@ -815,6 +857,8 @@ router.get('/requests/sent', verifyToken, async (req, res) => {
       .eq('requester_id', userId)
       .eq('status', 'pending')
       .order('created_at', { ascending: false });
+    if (blockedIds.length) query = query.not('addressee_id', 'in', `(${blockedIds.join(',')})`);
+    const { data: requests, error } = await query;
 
     if (error) {
       logger.error('Error fetching sent requests', { error: error.message });
@@ -823,6 +867,7 @@ router.get('/requests/sent', verifyToken, async (req, res) => {
 
     res.json({ requests: (requests || []).map(r => ({ ...r, addressee: withChosenUsername(r.addressee) })) });
   } catch (err) {
+    if (err.code === 'BLOCK_CHECK_UNAVAILABLE') return connectionReadUnavailable(res);
     logger.error('Sent requests error', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch sent requests' });
   }
