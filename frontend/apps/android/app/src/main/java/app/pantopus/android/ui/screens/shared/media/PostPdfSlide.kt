@@ -70,15 +70,7 @@ internal fun PostPdfSlide(
         try {
             pages =
                 withContext(Dispatchers.IO) {
-                    if (localFile == null) {
-                        downloadPdf(url, file)
-                    } else {
-                        require(file.length() <= 25 * 1024 * 1024)
-                        PdfRenderer(ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)).use {
-                            require(it.pageCount > 0)
-                            it.pageCount
-                        }
-                    }
+                    loadPdfPageCount(url, file, isLocal = localFile != null)
                 }
         } catch (cancelled: CancellationException) {
             if (localFile == null) file.delete()
@@ -140,6 +132,19 @@ internal fun PostPdfSlide(
                 Button(onClick = { page += 1 }, enabled = page + 1 < pages) { Text("Next") }
             }
         }
+    }
+}
+
+private fun loadPdfPageCount(
+    url: String,
+    file: File,
+    isLocal: Boolean,
+): Int {
+    if (!isLocal) return downloadPdf(url, file)
+    require(file.length() <= 25 * 1024 * 1024)
+    return PdfRenderer(ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)).use {
+        require(it.pageCount > 0)
+        it.pageCount
     }
 }
 

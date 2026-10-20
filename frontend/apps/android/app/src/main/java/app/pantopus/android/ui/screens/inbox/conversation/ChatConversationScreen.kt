@@ -3097,10 +3097,12 @@ private fun BubbleRow(
             // Reactions float as pills overlapping the bubble's bottom
             // corner (design `.reaction { bottom: -10; left/right: 8 }`).
             Box {
-                if (content.attachments.any {
+                val hasInlineAttachments =
+                    content.attachments.any {
                         !it.mimeType.orEmpty().startsWith("image/") || it.liveVideoFileId != null
-                    } && (content.lockedTier == null || isOut)
-                ) {
+                    }
+                val canViewAttachments = content.lockedTier == null || isOut
+                if (hasInlineAttachments && canViewAttachments) {
                     BubbleContainer(
                         isOut = isOut,
                         hasTail = content.hasTail,
