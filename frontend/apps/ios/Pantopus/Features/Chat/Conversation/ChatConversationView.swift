@@ -307,7 +307,8 @@ public struct ChatConversationView: View {
         }
         .fileImporter(
             isPresented: $documentImporterPresented,
-            allowedContentTypes: [.item],
+            // The assistant reads PDFs (photos come through Photos and Camera).
+            allowedContentTypes: mode == .aiAssistant ? [.pdf] : [.item],
             allowsMultipleSelection: true
         ) { result in
             handlePickedDocuments(result)
@@ -574,6 +575,10 @@ public struct ChatConversationView: View {
                 let values = try? url.resourceValues(forKeys: [.contentTypeKey, .localizedNameKey])
                 let mimeType = values?.contentType?.preferredMIMEType ?? "application/octet-stream"
                 let filename = values?.localizedName ?? url.lastPathComponent
+                if mode == .aiAssistant {
+                    await MainActor.run { viewModel.queueAIDocument(filename: filename, data: data) }
+                    continue
+                }
                 await MainActor.run {
                     viewModel.queueAttachment(
                         kind: mimeType.hasPrefix("image/") ? .image : .document,
@@ -2655,7 +2660,7 @@ private struct ChatBubbleRow: View {
         switch content.body {
         case let .text(text):
             text.isEmpty ? nil : text
-        case let .textWithImages(text, _):
+        case let .textWithImages(text, _, _):
             text.isEmpty ? nil : text
         case let .aiReply(text, _, _):
             text.isEmpty ? nil : text
@@ -2730,7 +2735,7 @@ private struct ChatBubbleRow: View {
         switch content.body {
         case let .text(text):
             ChatLinkDetection.firstURL(in: text)
-        case let .textWithImages(text, _):
+        case let .textWithImages(text, _, _):
             ChatLinkDetection.firstURL(in: text)
         default:
             nil
@@ -2745,8 +2750,8 @@ private struct ChatBubbleRow: View {
             } else {
                 bubbleContainer { textBody(text) }
             }
-        case let .textWithImages(text, imageURLs):
-            bubbleContainer { textWithImagesBody(text: text, imageURLs: imageURLs) }
+        case let .textWithImages(text, imageURLs, files):
+            bubbleContainer { textWithImagesBody(text: text, imageURLs: imageURLs, files: files) }
         case let .image(url, caption, moreURLs):
             photoMessage(url: url, caption: caption, moreURLs: moreURLs)
         case let .attachment(filename, sizeLabel, fileURL, mimeType, caption):
@@ -2915,26 +2920,34 @@ private struct ChatBubbleRow: View {
             || (0x1F3FB...0x1F3FF).contains(value) // skin tones
     }
 
-    private func textWithImagesBody(text: String, imageURLs: [URL]) -> some View {
+    private func textWithImagesBody(text: String, imageURLs: [URL], files: [ChatSentFile]) -> some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
             if !text.isEmpty {
                 textBody(text)
             }
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 72), spacing: 6)], spacing: 6) {
-                ForEach(imageURLs, id: \.absoluteString) { url in
-                    CachedAsyncImage(url: url) { phase in
-                        switch phase {
-                        case let .success(image): image.resizable().scaledToFill()
-                        case .failure: PhotoBubblePlaceholder()
-                        case .empty: PhotoBubblePlaceholder()
-                        @unknown default: PhotoBubblePlaceholder()
+            if !imageURLs.isEmpty {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 72), spacing: 6)], spacing: 6) {
+                    ForEach(imageURLs, id: \.absoluteString) { url in
+                        CachedAsyncImage(url: url) { phase in
+                            switch phase {
+                            case let .success(image): image.resizable().scaledToFill()
+                            case .failure: PhotoBubblePlaceholder()
+                            case .empty: PhotoBubblePlaceholder()
+                            @unknown default: PhotoBubblePlaceholder()
+                            }
                         }
+                        .frame(width: 72, height: 72)
+                        .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                     }
-                    .frame(width: 72, height: 72)
-                    .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                 }
+                .frame(maxWidth: bubbleTextMaxWidth, alignment: .leading)
             }
-            .frame(maxWidth: bubbleTextMaxWidth, alignment: .leading)
+            // The PDFs sent to the assistant, one chip each.
+            ForEach(Array(files.enumerated()), id: \.offset) { _, file in
+                attachmentFileRow(filename: file.name, sizeLabel: file.sizeLabel)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("chatSentFile")
+            }
         }
     }
 

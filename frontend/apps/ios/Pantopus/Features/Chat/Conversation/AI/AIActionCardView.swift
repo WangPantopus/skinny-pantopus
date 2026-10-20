@@ -227,7 +227,8 @@ struct AIActionCardView: View {
         case "plan_requests": ("Requests", .users)
         case "plan_message": ("Message", .messageCircle)
         case "post_reply", "post_solve": ("Post", .messageSquare)
-        case "home_task": ("Task", .checkCircle)
+        case "home_task", "home_task_update": ("Task", .checkCircle)
+        case "home_system": ("Home system", .wrench)
         case "notification_settings": ("Notifications", .bell)
         default: ("Action", .sparkles)
         }

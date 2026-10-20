@@ -14,6 +14,7 @@
 import Foundation
 import Logging
 import Observation
+import PDFKit
 
 // swiftlint:disable cyclomatic_complexity large_tuple
 
@@ -356,6 +357,19 @@ public final class AIConversationStore {
     }
 }
 
+/// A brief or nudge the assistant thread opens at (`pantopus://assistant?nudge=`,
+/// `docs/product/ai-assistant-phase2-contract-2026-10-20.md` §8.2): its
+/// Notification id and, when its metadata named it, its conversation.
+public struct AIAssistantNudge: Hashable, Sendable {
+    public let notificationId: String
+    public let conversationId: String?
+
+    public init(notificationId: String, conversationId: String? = nil) {
+        self.notificationId = notificationId
+        self.conversationId = conversationId
+    }
+}
+
 @Observable
 @MainActor
 public final class ChatConversationViewModel {
@@ -583,9 +597,13 @@ public final class ChatConversationViewModel {
     /// push banners for the thread the user is already viewing.
     private let activeThreadTracker: ActiveChatThreadTracker
     /// Message to scroll to on first load (Chat Search deep-link). `nil`
-    /// for normal opens, which land on the latest message.
-    private let scrollToMessageId: String?
+    /// for normal opens, which land on the latest message. In the assistant
+    /// thread opened at a nudge it is the nudge's id until its history names
+    /// the message that carries it.
+    private var scrollToMessageId: String?
     private var didResolveScrollTarget = false
+    /// The brief or nudge the assistant thread was opened at.
+    private let aiNudge: AIAssistantNudge?
     private let logger = Logger(label: "app.pantopus.ios.ChatConversation")
 
     private var messages: [ChatMessageDTO] = []
@@ -624,6 +642,9 @@ public final class ChatConversationViewModel {
     /// Photos sent to the assistant, by the message that carried them: copies on the phone,
     /// because the server deletes each photo once it has read it and its reference never loads.
     private var aiSentPhotos: [String: [URL]] = [:]
+    /// PDFs sent to the assistant, by the message that carried them: a chip
+    /// each in its bubble. Only their names and sizes are kept.
+    private var aiSentFiles: [String: [ChatSentFile]] = [:]
     /// Where those copies are kept. It goes with "New chat", with the view-model, and at the next launch.
     private let aiPhotoFolder = ChatMediaURL.sentPhotosRoot.appendingPathComponent(UUID().uuidString, isDirectory: true)
     /// In-flight AI reply stream, held so the composer's stop button can
@@ -684,6 +705,7 @@ public final class ChatConversationViewModel {
         aiClient: any AIChatStreaming = AIChatStreamClient.shared,
         aiConversationStore: AIConversationStore = .shared,
         aiTopic: AIAskTopic? = nil,
+        aiNudge: AIAssistantNudge? = nil,
         actionDoneStore: AIActionDoneStore = .shared,
         locationProvider: any LocationProviding = DeviceLocationProvider.shared,
         activeThreadTracker: ActiveChatThreadTracker = .shared
@@ -698,7 +720,9 @@ public final class ChatConversationViewModel {
         }
         composerText = initialComposerText
         self.initialTopic = initialTopic
-        self.scrollToMessageId = scrollToMessageId
+        let nudge: AIAssistantNudge? = if case .ai = mode { aiNudge } else { nil }
+        self.aiNudge = nudge
+        self.scrollToMessageId = scrollToMessageId ?? nudge?.notificationId
         self.gigId = gigId
         self.api = api
         store = ScreenStore.store(for: api)
@@ -716,7 +740,8 @@ public final class ChatConversationViewModel {
         // Continue the user's existing AI conversation across thread
         // opens within this app session. Ask on a screen starts a new one
         // with its first message; until then the earlier one stays current.
-        if case .ai = mode, topic == nil {
+        // A thread opened at a nudge continues the nudge's conversation.
+        if case .ai = mode, topic == nil, nudge == nil {
             aiConversationId = aiConversationStore.conversationId(forUserId: currentUserId)
         }
     }
@@ -738,6 +763,7 @@ public final class ChatConversationViewModel {
         currentUserId = "preview_me"
         asBusinessUserId = nil
         scrollToMessageId = nil
+        aiNudge = nil
         initialTopic = nil
         gigId = nil
         api = .shared
@@ -804,6 +830,10 @@ public final class ChatConversationViewModel {
     /// what is asked there, so its starters stay in view.
     private func restoreAIConversationIfNeeded() async {
         guard case .ai = mode else { return }
+        if let aiNudge {
+            await openAINudge(aiNudge)
+            return
+        }
         // Reopened this session (or after an Ask on a screen): show the
         // conversation it continues, as a relaunch does.
         if let aiConversationId {
@@ -824,6 +854,34 @@ public final class ChatConversationViewModel {
         }
     }
 
+    /// A brief's or nudge's push or row: the conversation it went into (the
+    /// one its metadata names, else the newest, which a nudge is added to),
+    /// shown with its turns and opened at the nudge's message. The person
+    /// carries on in that conversation, so "move it to Sunday" after a
+    /// weather nudge reaches the plan it was about.
+    private func openAINudge(_ nudge: AIAssistantNudge) async {
+        var conversationId = nudge.conversationId
+        if conversationId == nil {
+            do {
+                let response: AIConversationsResponse = try await api.request(AIEndpoints.conversations())
+                conversationId = response.conversations.first?.id
+            } catch {
+                logger.warning("AI conversation for a nudge unavailable: \(error)")
+            }
+        }
+        // A message sent meanwhile already has its conversation.
+        if let conversationId, aiConversationId == nil {
+            aiConversationId = conversationId
+            aiConversationStore.setConversationId(conversationId, forUserId: currentUserId)
+            await loadAIHistory(conversationId: conversationId)
+        }
+        // Not found (gone, or another conversation): the thread opens at its latest message.
+        if scrollToMessageId == nudge.notificationId, !didResolveScrollTarget {
+            didResolveScrollTarget = true
+            rebuild()
+        }
+    }
+
     /// Seed the thread with a restored conversation's turns
     /// (`GET /api/ai/conversations/:id/messages`). A draft and the note
     /// after it share one reply, as they did when it streamed. A server
@@ -839,15 +897,22 @@ public final class ChatConversationViewModel {
             var restored: [ChatMessageDTO] = []
             var drafts: [String: [ChatAIDraftCard]] = [:]
             var links: [String: [ChatAILink]] = [:]
+            var files: [String: [ChatSentFile]] = [:]
             var openReplyId: String?
+            var nudgeMessageId: String?
             for (index, item) in history.messages.enumerated() {
                 let id = "ai_history_\(index)"
                 if item.role == "user" {
                     openReplyId = nil
                     let text = item.text ?? ""
                     let photos = item.photos ?? 0
+                    let documents = item.documents ?? 0
                     let shown = text.isEmpty && photos > 0 ? (photos == 1 ? "Sent a photo" : "Sent \(photos) photos") : text
                     restored.append(localMessage(id: id, text: shown, userId: currentUserId, type: "text"))
+                    // A PDF isn't kept: its chip says one was sent.
+                    if documents > 0 {
+                        files[id] = Array(repeating: ChatSentFile(name: "PDF", sizeLabel: nil), count: min(documents, 5))
+                    }
                     continue
                 }
                 var replyId = openReplyId ?? id
@@ -882,10 +947,24 @@ public final class ChatConversationViewModel {
                 if !itemLinks.isEmpty, let target {
                     links[target, default: []] += itemLinks.map { ChatAILink(label: $0.label, url: $0.url) }
                 }
+                // The first reply carrying the nudge the thread was opened at.
+                if nudgeMessageId == nil, let nudge = aiNudge, item.notificationId?.lowercased() == nudge.notificationId,
+                   let target {
+                    nudgeMessageId = target
+                }
             }
             messages = restored
             aiDraftsByMessageId = drafts
             aiLinksByMessageId = links
+            aiSentFiles = files
+            if aiNudge != nil, !didResolveScrollTarget {
+                if let nudgeMessageId {
+                    scrollToMessageId = nudgeMessageId
+                } else {
+                    // Not in this conversation: the thread opens at its latest message.
+                    didResolveScrollTarget = true
+                }
+            }
             rebuild()
         } catch {
             logger.warning("AI conversation history unavailable: \(error)")
@@ -1166,19 +1245,50 @@ public final class ChatConversationViewModel {
         return messages.first { $0.id == replyToId && $0.roomId == roomId }?.id
     }
 
-    private func sendAIMessage(_ text: String) async {
-        // The photos the upload sends (images only), taken before it starts.
+    /// A message to the assistant with the photos and PDFs it sends, uploaded.
+    private struct AIOutgoing {
+        let message: ChatMessageDTO
+        /// The uploads' private references, for the chat's `images`.
+        let references: [String]
+        let hasDocuments: Bool
+    }
+
+    /// The person's message, its photos and PDFs uploaded first: nil when the
+    /// upload failed. Then nothing went, and the composer keeps the words and
+    /// the files for another try.
+    private func outgoingAIMessage(_ text: String) async -> AIOutgoing? {
+        // What the upload sends, taken before it starts.
         let photos = queuedAttachments.compactMap { $0.mimeType.hasPrefix("image/") ? $0.data : nil }
-        let imageURLs = await (try? uploadQueuedAIImagesIfNeeded()) ?? []
+        let documents = queuedAttachments.filter { $0.mimeType == Self.pdfMimeType && $0.data != nil }
+        let references: [String]
+        do {
+            references = try await uploadQueuedAIMediaIfNeeded()
+        } catch {
+            if composerText.isEmpty { setComposerTextSilently(text) }
+            actionFailure = Self.aiUploadFailure(error)
+            return nil
+        }
         let userMessage = localMessage(
             id: "ai_user_\(UUID().uuidString)",
             text: text,
             userId: currentUserId,
             type: "text"
         )
-        if !imageURLs.isEmpty {
+        if !photos.isEmpty, !references.isEmpty {
             aiSentPhotos[userMessage.id] = await Self.sentPhotoCopies(of: photos, in: aiPhotoFolder)
         }
+        if !documents.isEmpty, !references.isEmpty {
+            aiSentFiles[userMessage.id] = documents.map {
+                ChatSentFile(name: $0.filename, sizeLabel: Self.fileSizeLabel($0.data?.count))
+            }
+        }
+        return AIOutgoing(message: userMessage, references: references, hasDocuments: !documents.isEmpty)
+    }
+
+    private func sendAIMessage(_ text: String) async {
+        guard let outgoing = await outgoingAIMessage(text) else { return }
+        let userMessage = outgoing.message
+        let references = outgoing.references
         let assistantId = "ai_assistant_\(UUID().uuidString)"
         let assistantMessage = localMessage(id: assistantId, text: "", userId: "ai", type: "ai_reply")
         messages.append(userMessage)
@@ -1187,9 +1297,12 @@ public final class ChatConversationViewModel {
         rebuild()
 
         let request = AIChatStreamRequest(
-            message: text.isEmpty ? "What can you tell me about this image?" : text,
+            message: text.isEmpty
+                ? (outgoing.hasDocuments ? "What can you tell me about this document?" : "What can you tell me about this image?")
+                : text,
             conversationId: aiConversationId,
-            images: imageURLs.isEmpty ? nil : imageURLs,
+            // PDF references go with the photos' (phase 2 contract §7.1).
+            images: references.isEmpty ? nil : references,
             // Every message of a thread opened from a screen says which screen.
             context: aiTopic?.context
         )
@@ -1267,6 +1380,7 @@ public final class ChatConversationViewModel {
         aiConversationId = nil
         aiConversationStore.startFresh(forUserId: currentUserId)
         aiSentPhotos = [:]
+        aiSentFiles = [:]
         try? FileManager.default.removeItem(at: aiPhotoFolder)
         messages = []
         aiDraftsByMessageId = [:]
@@ -1880,14 +1994,56 @@ public final class ChatConversationViewModel {
         return response.media.map(\.id)
     }
 
-    private func uploadQueuedAIImagesIfNeeded() async throws -> [String] {
+    /// The queued photos and PDFs, uploaded to `ai-media`: a private
+    /// reference for each, which the chat's `images` carries.
+    private func uploadQueuedAIMediaIfNeeded() async throws -> [String] {
         let files = queuedAttachments.compactMap { attachment -> MultipartFile? in
-            guard let data = attachment.data, attachment.mimeType.hasPrefix("image/") else { return nil }
+            guard let data = attachment.data,
+                  attachment.mimeType.hasPrefix("image/") || attachment.mimeType == Self.pdfMimeType else { return nil }
             return MultipartFile(fieldName: "files", filename: attachment.filename, mimeType: attachment.mimeType, data: data)
         }
         guard !files.isEmpty else { return [] }
         let response = try await uploader.uploadAIMedia(files: files)
         return response.images.map(\.url)
+    }
+
+    static let pdfMimeType = "application/pdf"
+    /// What `ai-media` takes in a PDF (phase 2 contract §7.1).
+    static let aiDocumentMaxBytes = 10 * 1024 * 1024
+    static let aiDocumentMaxPages = 20
+
+    /// A PDF for the assistant (Attach → Document), read on the phone first so
+    /// one the server would refuse says so at once.
+    public func queueAIDocument(filename: String, data: Data) {
+        guard data.count <= Self.aiDocumentMaxBytes else {
+            actionFailure = "That PDF is over 10 MB. Choose a smaller one."
+            return
+        }
+        guard let document = PDFDocument(data: data) else {
+            actionFailure = "Couldn\u{2019}t open that PDF."
+            return
+        }
+        guard !document.isLocked else {
+            actionFailure = "That PDF is locked with a password. Choose one that opens without it."
+            return
+        }
+        guard document.pageCount <= Self.aiDocumentMaxPages else {
+            actionFailure = "That PDF has more than 20 pages. Choose a shorter one."
+            return
+        }
+        let name = filename.lowercased().hasSuffix(".pdf") ? filename : filename + ".pdf"
+        queueAttachment(kind: .document, filename: name, mimeType: Self.pdfMimeType, data: data)
+    }
+
+    /// The upload's refusal in the server's own words (a PDF over its page
+    /// limit, say), else a plain line.
+    private static func aiUploadFailure(_ error: any Error) -> String {
+        let fallback = "Couldn\u{2019}t send that. Check your connection and try again."
+        switch error {
+        case let APIError.clientError(_, body): return APIError.friendlyClientMessage(body) ?? fallback
+        case let APIError.server(_, body): return APIError.friendlyClientMessage(body) ?? fallback
+        default: return (error as? APIError)?.errorDescription ?? fallback
+        }
     }
 
     /// Off the main actor: shrinking full-size photos takes a moment.
@@ -2525,8 +2681,10 @@ public final class ChatConversationViewModel {
     /// An assistant reply carries the draft cards that came with it, and a message sent to the
     /// assistant with photos shows the phone's copies of them.
     private func bubbleBody(for message: ChatMessageDTO) -> ChatBubbleContent.Body {
-        if let photos = aiSentPhotos[message.id], !photos.isEmpty {
-            return .textWithImages(text: message.messageText ?? "", imageURLs: photos)
+        let photos = aiSentPhotos[message.id] ?? []
+        let files = aiSentFiles[message.id] ?? []
+        if !photos.isEmpty || !files.isEmpty {
+            return .textWithImages(text: message.messageText ?? "", imageURLs: photos, files: files)
         }
         guard message.messageType == "ai_reply" else { return Self.bodyForMessage(message) }
         return .aiReply(text: message.messageText ?? "", estimate: nil, drafts: aiDraftsByMessageId[message.id] ?? [])

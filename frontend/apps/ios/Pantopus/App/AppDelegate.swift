@@ -255,7 +255,13 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
         let taskPath = HomeTaskNotificationRoute.pushPath(userInfo)
         let homeId = userInfo["homeId"] as? String ?? userInfo["home_id"] as? String
         let taskId = userInfo["taskId"] as? String ?? userInfo["task_id"] as? String
-        let deepLink = HomeTaskNotificationRoute.pushPath(userInfo)
+        // A brief or nudge opens the assistant at its message (AI assistant phase 2).
+        let deepLink = DeepLinkRouter.assistantPath(
+            type: type,
+            notificationId: userInfo["notificationId"] as? String ?? userInfo["notification_id"] as? String,
+            conversationId: userInfo["conversation_id"] as? String
+        )
+            ?? HomeTaskNotificationRoute.pushPath(userInfo)
             ?? DeepLinkRouter.notificationPath(type: userInfo["type"] as? String, link: userInfo["link"] as? String)
             ?? (userInfo["deepLink"] as? String)
             // Briefing / monthly-receipt pushes carry no `link` — compose one

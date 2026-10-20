@@ -59,6 +59,8 @@ public struct InboxConversationDestination: Hashable, Sendable {
     public let arrivalRoomId: String?
     /// Explicit business-inbox context; ordinary chats keep the person's identity.
     public let asBusinessUserId: String?
+    /// The assistant thread opened at a brief or nudge (`pantopus://assistant?nudge=`).
+    public let assistantNudge: AIAssistantNudge?
 
     public init(
         mode: Mode,
@@ -71,7 +73,8 @@ public struct InboxConversationDestination: Hashable, Sendable {
         initialTopic: ChatInitialTopic? = nil,
         gigId: String? = nil,
         arrivalRoomId: String? = nil,
-        asBusinessUserId: String? = nil
+        asBusinessUserId: String? = nil,
+        assistantNudge: AIAssistantNudge? = nil
     ) {
         self.mode = mode
         self.kind = kind
@@ -84,6 +87,7 @@ public struct InboxConversationDestination: Hashable, Sendable {
         self.gigId = gigId
         self.arrivalRoomId = arrivalRoomId
         self.asBusinessUserId = asBusinessUserId
+        self.assistantNudge = assistantNudge
     }
 }
 
@@ -193,6 +197,9 @@ public struct InboxTabRoot: View {
                 let destination = await Self.linkedConversation(roomId: id, viewerId: viewerId)
                 path.append(.conversation(destination))
             }
+        case let .assistant(nudgeId, conversationId):
+            _ = router.consume()
+            openAssistant(nudge: nudgeId.map { AIAssistantNudge(notificationId: $0, conversationId: conversationId) })
         default:
             break
         }
@@ -261,7 +268,8 @@ public struct InboxTabRoot: View {
                     scrollToMessageId: dest.scrollToMessageId,
                     initialTopic: dest.initialTopic,
                     gigId: dest.gigId,
-                    asBusinessUserId: dest.asBusinessUserId
+                    asBusinessUserId: dest.asBusinessUserId,
+                    aiNudge: dest.assistantNudge
                 ),
                 mode: dest.kind,
                 onUseAIDraft: { draft in
@@ -414,6 +422,23 @@ public struct InboxTabRoot: View {
 // MARK: - Pantopus AI draft destinations
 
 private extension InboxTabRoot {
+    /// `pantopus://assistant` (a brief's or nudge's push or row): the
+    /// assistant thread, at the nudge when there is one. A thread already on
+    /// top gives way, so the new one opens with its latest messages.
+    func openAssistant(nudge: AIAssistantNudge?) {
+        let destination = InboxConversationDestination(
+            mode: .ai,
+            kind: .aiAssistant,
+            displayName: "Pantopus AI",
+            initials: "AI",
+            identityKind: nil,
+            verified: false,
+            assistantNudge: nudge
+        )
+        if case let .conversation(top)? = path.last, top.mode == .ai { path.removeLast() }
+        path.append(.conversation(destination))
+    }
+
     func postComposer(intent: String, draft: PulseComposeDraft?) -> some View {
         PulseComposeFlowView(
             prefillFeedIntent: PulseIntent(rawValue: intent),

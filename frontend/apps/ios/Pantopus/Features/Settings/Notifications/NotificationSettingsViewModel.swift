@@ -5,10 +5,13 @@
 //  A14.5 — Notification & briefing preferences, backed by
 //  `GET/PUT /api/hub/preferences` (`backend/routes/hub.js:648` / `:716`).
 //
-//  Four cards, projected onto the shared GroupedList archetype and
+//  Five cards, projected onto the shared GroupedList archetype and
 //  mirrored row-for-row in the Android `NotificationSettingsViewModel`:
 //    Briefings        — morning + evening enable toggles, each revealing
 //                       a send-time chip strip when on.
+//    Suggestions      — "Suggestions from Pantopus" (AI assistant phase 2
+//                       contract §3.4), revealing the "Fewer like this"
+//                       reset when on. Only when the server knows the switch.
 //    Alert preferences— weather / AQI / home reminders / gig updates /
 //                       mail summary switches.
 //    Quiet hours      — one toggle (start-time presence is the server's
@@ -134,7 +137,17 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
         await fetch(force: false)
     }
 
-    public func tapRow(_: String) async {}
+    /// "Reset 'Fewer like this'": every kind of suggestion comes back.
+    public func tapRow(_ rowId: String) async {
+        guard rowId == RowID.suggestionsReset, preferencesScopeIsCurrent, let prefs = preferences else { return }
+        guard !prefs.activeSuggestionMutes().isEmpty else {
+            toast = ToastMessage(text: "Nothing is muted", kind: .neutral)
+            return
+        }
+        preferences?.suggestionsMuted = [:]
+        enqueue(["suggestions_muted": .object([:])])
+    }
+
     public func setSlider(_: String, index _: Int) async {}
 
     public func toggleRow(_ rowId: String, isOn: Bool) async {
@@ -166,6 +179,9 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
             enqueue(["mail_summary_enabled": .bool(isOn)])
         case RowID.quietHours:
             setQuietHours(enabled: isOn)
+        case RowID.suggestions:
+            preferences?.suggestionsEnabled = isOn
+            enqueue(["suggestions_enabled": .bool(isOn)])
         default:
             break
         }
@@ -311,12 +327,14 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
 
     private func groups() -> [GroupedListGroup] {
         guard let prefs = preferences else { return [] }
-        return [
-            briefingsGroup(prefs),
-            alertsGroup(prefs),
-            quietHoursGroup(prefs),
-            locationGroup(prefs)
-        ]
+        var groups: [GroupedListGroup] = [briefingsGroup(prefs)]
+        if prefs.suggestionsSupported {
+            groups.append(suggestionsGroup(prefs))
+        }
+        groups.append(alertsGroup(prefs))
+        groups.append(quietHoursGroup(prefs))
+        groups.append(locationGroup(prefs))
+        return groups
     }
 
     private func briefingsGroup(_ prefs: NotificationPreferencesDTO) -> GroupedListGroup {
@@ -363,6 +381,38 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
             )
         }
         return GroupedListGroup(id: GroupID.briefings, overline: "Briefings", rows: rows)
+    }
+
+    /// Off until the person turns it on: a switch never set reads as off.
+    /// Its reset row shows while it is on.
+    private func suggestionsGroup(_ prefs: NotificationPreferencesDTO) -> GroupedListGroup {
+        let isOn = prefs.suggestionsEnabled == true
+        var rows: [GroupedListRow] = [
+            GroupedListRow(
+                id: RowID.suggestions,
+                label: Self.suggestionsTitle,
+                subtext: Self.suggestionsCaption,
+                control: .toggle(isOn: isOn)
+            )
+        ]
+        if isOn {
+            let muted = prefs.activeSuggestionMutes().count
+            rows.append(
+                GroupedListRow(
+                    id: RowID.suggestionsReset,
+                    label: "Reset \u{201C}Fewer like this\u{201D}",
+                    subtext: muted == 0
+                        ? "Nothing is muted right now"
+                        : "Bring back the suggestions you asked to see less of",
+                    control: .chipStatus(
+                        label: muted == 0 ? "None" : "\(muted) muted",
+                        tone: muted == 0 ? .neutral : .info,
+                        includesChevron: false
+                    )
+                )
+            )
+        }
+        return GroupedListGroup(id: GroupID.suggestions, overline: "Suggestions", rows: rows)
     }
 
     private func alertsGroup(_ prefs: NotificationPreferencesDTO) -> GroupedListGroup {
@@ -476,6 +526,7 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
 
     public enum GroupID {
         public static let briefings = "briefings"
+        public static let suggestions = "suggestions"
         public static let alerts = "alerts"
         public static let quietHours = "quietHours"
         public static let briefingLocation = "briefingLocation"
@@ -486,6 +537,8 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
         public static let morningTime = "briefings.morningTime"
         public static let eveningBriefing = "briefings.evening"
         public static let eveningTime = "briefings.eveningTime"
+        public static let suggestions = "suggestions.enabled"
+        public static let suggestionsReset = "suggestions.resetFewer"
         public static let weatherAlerts = "alerts.weather"
         public static let aqiAlerts = "alerts.aqi"
         public static let homeReminders = "alerts.homeReminders"
@@ -499,6 +552,12 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
         public static let locationViewing = "briefingLocation.viewingLocation"
         public static let locationDevice = "briefingLocation.deviceLocation"
     }
+
+    // MARK: - Suggestions copy (contract §3.4; the notice uses it too)
+
+    public static let suggestionsTitle = "Suggestions from Pantopus"
+    public static let suggestionsCaption =
+        "A morning brief with buttons, and at most two nudges a day, never during quiet hours."
 
     // MARK: - Option catalogues (parity contract — mirrored on Android)
 
