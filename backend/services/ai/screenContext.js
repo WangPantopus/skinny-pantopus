@@ -85,6 +85,9 @@ async function screenContextText(context, ctx) {
         return result.posts ? asText(screen, { area: result.area, posts: result.posts.slice(0, 8) }, ' (newest posts)') : null;
       }
       case 'place': {
+        // Without a home id the screen shows a saved place, not the default home that
+        // getPlaceFacts would read, so there is no context to give.
+        if (!screen.home_id) return null;
         // A section screen's few sections come with their data; the tab itself shows all
         // of them, so each comes in one line.
         const topics = screen.section ? PLACE_SLUG_SECTIONS[screen.section] : null;
@@ -93,6 +96,8 @@ async function screenContextText(context, ctx) {
         return asText(screen, result);
       }
       case 'today': {
+        // Today on a saved place sends no home id (iOS calendarHomeId); the default home isn't on screen.
+        if (!screen.home_id) return null;
         const result = await readTools.getToday({ home_id: screen.home_id }, ctx);
         return result.sections ? asText(screen, result) : null;
       }

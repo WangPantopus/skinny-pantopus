@@ -278,11 +278,11 @@ function buildUserContent({ message, photos, unreadable, timeZone, askedFrom, co
     text += `\n\n[${unreadable} of the ${photos.length + unreadable} photos couldn't be opened, so they aren't included.]`;
   }
   text += `\n\n[Sent: ${describeNow(timeZone)}]`;
-  // Every message from a screen says so, also when that screen's context isn't sent again.
-  if (askedFrom) text += `\n[Asked from: ${askedFrom}]`;
   if (coarseLocation) {
     text += `\n[User location context: ${coarseLocation.city || ''}, ${coarseLocation.state || ''}]`;
   }
+  // Every message from a screen ends saying so, also when that screen's context isn't sent again.
+  if (askedFrom) text += `\n[Asked from: ${askedFrom}]`;
   // A model without system messages gets Pantopus's context at the top of the message instead.
   if (contextText) text = `${contextText}\n\n${text}`;
   return photos.length ? [...photos, { type: 'text', text }] : text;
