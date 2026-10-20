@@ -74,9 +74,11 @@ struct AddressStep: View {
                 .autocorrectionDisabled()
                 .focused($focusedField, equals: field)
                 .submitLabel(field == .zip ? .done : .next)
-                .onSubmit {
+                // Only the focus, not the step: the keyboard's AutoFill can keep this field, and the action with it,
+                // after the wizard closes, and the step would keep the wizard's view-model alive.
+                .onSubmit { [focus = $focusedField] in
                     let fields: [AddressField] = [.street, .unit, .city, .state, .zip]
-                    focusedField = fields.firstIndex(of: field).flatMap { index in
+                    focus.wrappedValue = fields.firstIndex(of: field).flatMap { index in
                         index + 1 < fields.count ? fields[index + 1] : nil
                     }
                 }
