@@ -178,6 +178,10 @@ class NotificationSettingsViewModel
         fun onTapRow(rowId: String) {
             val current = preferences ?: return
             if (rowId != RowId.SUGGESTIONS_RESET) return
+            if (current.activeSuggestionMutes() == 0) {
+                _toast.value = ToastMessage("Nothing is muted", ToastKind.Neutral)
+                return
+            }
             applyLocally(
                 current.copy(suggestionsMuted = emptyMap()),
                 NotificationPreferencesPatch(clearSuggestionMutes = true),
@@ -348,8 +352,8 @@ class NotificationSettingsViewModel
 
         private fun groups(prefs: NotificationPreferences): List<GroupedListGroup> =
             listOfNotNull(
-                suggestionsGroup(prefs),
                 briefingsGroup(prefs),
+                suggestionsGroup(prefs),
                 alertsGroup(prefs),
                 quietHoursGroup(prefs),
                 locationGroup(prefs),
@@ -357,30 +361,35 @@ class NotificationSettingsViewModel
 
         /**
          * Suggestions from Pantopus (AI assistant phase 2 contract §3.4), on a server that has them: the switch, and
-         * "Reset 'Fewer like this'" while a kind is muted.
+         * while it is on, "Reset 'Fewer like this'" with how many kinds are muted (mirrors iOS).
          */
         private fun suggestionsGroup(prefs: NotificationPreferences): GroupedListGroup? {
             if (!prefs.supportsSuggestions) return null
             val on = prefs.suggestionsEnabled == true
+            val muted = prefs.activeSuggestionMutes()
             return GroupedListGroup(
                 id = GroupId.SUGGESTIONS,
                 overline = "Suggestions",
-                // The brief comes at the Morning Briefing's time, so it needs that briefing on.
-                helper = "Turn on the Morning Briefing to get the brief.".takeIf { on && !prefs.dailyBriefingEnabled },
                 rows =
                     listOfNotNull(
                         GroupedListRow(
                             id = RowId.SUGGESTIONS,
-                            label = "Suggestions from Pantopus",
+                            label = SUGGESTIONS_TITLE,
                             subtext = SUGGESTIONS_CAPTION,
                             control = RowControl.Toggle(on),
                         ),
                         GroupedListRow(
                             id = RowId.SUGGESTIONS_RESET,
                             label = "Reset “Fewer like this”",
-                            subtext = "Bring back the suggestions you asked to see fewer of",
-                            control = RowControl.ChipStatus("Reset", RowControl.ChipTone.Info, includesChevron = false),
-                        ).takeIf { on && prefs.hasActiveSuggestionMutes() },
+                            subtext =
+                                if (muted == 0) "Nothing is muted right now" else "Bring back the suggestions you asked to see less of",
+                            control =
+                                RowControl.ChipStatus(
+                                    label = if (muted == 0) "None" else "$muted muted",
+                                    tone = if (muted == 0) RowControl.ChipTone.Neutral else RowControl.ChipTone.Info,
+                                    includesChevron = false,
+                                ),
+                        ).takeIf { on },
                     ),
             )
         }
@@ -566,7 +575,7 @@ class NotificationSettingsViewModel
         /** Stable row ids — parity contract with iOS `RowID`. */
         object RowId {
             const val SUGGESTIONS = "suggestions.enabled"
-            const val SUGGESTIONS_RESET = "suggestions.resetMuted"
+            const val SUGGESTIONS_RESET = "suggestions.resetFewer"
             const val MORNING_BRIEFING = "briefings.morning"
             const val MORNING_TIME = "briefings.morningTime"
             const val EVENING_BRIEFING = "briefings.evening"

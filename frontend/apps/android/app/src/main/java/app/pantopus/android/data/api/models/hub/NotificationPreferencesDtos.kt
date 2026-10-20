@@ -95,9 +95,9 @@ data class NotificationPreferences(
     /** The server has Suggestions: only then do the switch and the notice show, so nothing sends a key it rejects. */
     val supportsSuggestions: Boolean get() = suggestionsMuted != null
 
-    /** A "Fewer like this" mute hasn't ended yet, so "Reset" has something to bring back. */
-    fun hasActiveSuggestionMutes(now: Instant = Instant.now()): Boolean =
-        suggestionsMuted.orEmpty().values.any { end -> parseInstant(end)?.isAfter(now) == true }
+    /** How many kinds of suggestion a "Fewer like this" still mutes: what "Reset" brings back. */
+    fun activeSuggestionMutes(now: Instant = Instant.now()): Int =
+        suggestionsMuted.orEmpty().values.count { end -> parseInstant(end)?.isAfter(now) == true }
 
     companion object {
         const val DEFAULT_DAILY_TIME = "07:30"

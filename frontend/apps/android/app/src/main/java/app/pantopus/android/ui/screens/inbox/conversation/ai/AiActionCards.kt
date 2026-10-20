@@ -259,6 +259,7 @@ private fun AiCardButtons(
                     modifier = Modifier.testTag("chatAIActionError"),
                 )
             }
+
             @Composable
             fun button(
                 action: ChatAICardAction,

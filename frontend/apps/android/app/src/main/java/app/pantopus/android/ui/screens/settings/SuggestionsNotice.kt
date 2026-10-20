@@ -8,9 +8,11 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -34,34 +36,37 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-/**
- * What Suggestions from Pantopus are (AI assistant phase 2 contract §3.4): the notice's words under its title, and the
- * caption of the Settings → Notifications switch.
- */
+/** The switch's name (AI assistant phase 2 contract §3.4): the notice's title and the Settings row's label. */
+const val SUGGESTIONS_TITLE = "Suggestions from Pantopus"
+
+/** What Suggestions are (contract §3.4): the notice's words under its title, and the Settings switch's caption. */
 const val SUGGESTIONS_CAPTION = "A morning brief with buttons, and at most two nudges a day, never during quiet hours."
 
 /**
- * The one-time Suggestions notice (AI assistant phase 2 contract §3.4): shown while the person has never chosen, on a
- * server that has Suggestions. Turn on and Not now each save their answer, so it doesn't come back. It waits until the
- * briefing notice has been seen, so the two never stack.
+ * The one-time Suggestions notice (AI assistant phase 2 contract §3.4), built like [BriefingNotice]: it asks while the
+ * server holds no answer, on a server that has Suggestions. Turn on and Not now each save their answer, so it never
+ * comes back; it can't be closed without one. While the briefing notice shows ([waiting]) it waits, then follows it,
+ * unless Settings (reached from "Manage notifications") answered meanwhile.
  */
 @Composable
-fun SuggestionsNotice(viewModel: SuggestionsNoticeViewModel = hiltViewModel()) {
+fun SuggestionsNotice(
+    waiting: Boolean,
+    viewModel: SuggestionsNoticeViewModel = hiltViewModel(),
+) {
     val locked by viewModel.locked.collectAsStateWithLifecycle()
     if (locked) return
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
     val saving by viewModel.saving.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
     HomeCopyLifecycle(viewModel::enter, viewModel::leave)
-    if (preferences == null) return
+    LaunchedEffect(waiting) { if (!waiting) viewModel.recheck() }
+    if (waiting || preferences == null) return
     AlertDialog(
-        // Closing it without a choice counts as Not now: it is off until they choose, and it asks once.
-        onDismissRequest = { viewModel.choose(false) },
-        title = { Text("Suggestions from Pantopus") },
+        onDismissRequest = {},
+        title = { Text(SUGGESTIONS_TITLE) },
         text = {
             Text(
-                "$SUGGESTIONS_CAPTION\n\nYou can change this any time in Settings → Notifications." +
-                    (error?.let { "\n\n$it" } ?: ""),
+                "$SUGGESTIONS_CAPTION\n\nYou can change this in Settings → Notifications." + (error?.let { "\n\n$it" } ?: ""),
                 modifier = Modifier.verticalScroll(rememberScrollState()),
             )
         },
@@ -79,6 +84,8 @@ fun SuggestionsNotice(viewModel: SuggestionsNoticeViewModel = hiltViewModel()) {
                 modifier = Modifier.testTag("suggestionsNoticeNotNow"),
             ) { Text("Not now") }
         },
+        // One tap answers it; closing it without one would only bring it back.
+        properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
         modifier = Modifier.testTag("suggestionsNotice"),
     )
 }
@@ -118,7 +125,7 @@ class SuggestionsNoticeViewModel
                 if (!scope.confirmCurrent()) return@launch
                 val response = repository.preferences()
                 if (!active || !scope.confirmCurrent()) return@launch
-                if (response is NetworkResult.Success && asks(response.data)) _preferences.value = response.data
+                if (response is NetworkResult.Success) _preferences.value = response.data.takeIf(::asks)
             }
         }
 
@@ -129,7 +136,20 @@ class SuggestionsNoticeViewModel
             _saving.value = false
         }
 
-        /** Turn on (true) or Not now (false): saved as the person's choice; a failure keeps the notice up to try again. */
+        /** The briefing notice closed: Settings may have answered meanwhile (the stored copy holds what it saved). */
+        fun recheck() {
+            val entry = entryScope ?: return
+            if (_preferences.value == null) return
+            entry.launch {
+                val stored = repository.preferencesStored(force = false).data ?: return@launch
+                if (!asks(stored)) _preferences.value = null
+            }
+        }
+
+        /**
+         * Turn on (true) or Not now (false), saved as the person's answer. A failed Turn on stays up to try again;
+         * a failed Not now closes, and the notice asks again on the next launch.
+         */
         fun choose(enabled: Boolean) {
             val scope = session ?: return
             val entry = entryScope ?: return
@@ -149,26 +169,26 @@ class SuggestionsNoticeViewModel
                                 },
                         )
                     if (!active || !scope.confirmCurrent()) return@launch
-                    if (result is NetworkResult.Success && result.data.suggestionsEnabled != null) {
+                    if ((result is NetworkResult.Success && result.data.suggestionsEnabled != null) || !enabled) {
                         _preferences.value = null
                     } else {
-                        _error.value = SAVE_FAILED
+                        _error.value = TURN_ON_FAILED
                     }
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (_: IllegalStateException) {
-                    if (scope.isCurrent) _error.value = SAVE_FAILED else _preferences.value = null
+                    if (scope.isCurrent && enabled) _error.value = TURN_ON_FAILED else _preferences.value = null
                 } finally {
                     if (entryScope === entry) _saving.value = false
                 }
             }
         }
 
-        /** Never chosen, on a server that has Suggestions, once the briefing notice is behind them. */
+        /** Asked while the server knows the switch and holds no answer. */
         private fun asks(preferences: NotificationPreferences): Boolean =
-            preferences.supportsSuggestions && preferences.suggestionsEnabled == null && preferences.dailyBriefingPromptedAt != null
+            preferences.supportsSuggestions && preferences.suggestionsEnabled == null
 
         private companion object {
-            const val SAVE_FAILED = "Couldn’t save your choice. You can change it in Settings → Notifications."
+            const val TURN_ON_FAILED = "Couldn’t turn on Suggestions. You can turn them on in Settings → Notifications."
         }
     }

@@ -439,6 +439,7 @@ import app.pantopus.android.ui.screens.scheduling.setup.OnboardingHomeBusinessSc
 import app.pantopus.android.ui.screens.scheduling.visits.VisitDetailScreen
 import app.pantopus.android.ui.screens.scheduling.visits.VisitSetupScreen
 import app.pantopus.android.ui.screens.settings.BriefingNotice
+import app.pantopus.android.ui.screens.settings.BriefingNoticeViewModel
 import app.pantopus.android.ui.screens.settings.NotificationSettingsScreen
 import app.pantopus.android.ui.screens.settings.PrivacySettingsScreen
 import app.pantopus.android.ui.screens.settings.SettingsIndexScreen
@@ -2223,9 +2224,11 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
         ) { uri ->
             if (uri != null) appContext.shareText(InviteLinks.INVITE_MESSAGE, "Invite to Pantopus")
         }
-    BriefingNotice(onManage = { navController.navigate(ChildRoutes.SETTINGS_NOTIFICATIONS) })
+    val briefingNotice: BriefingNoticeViewModel = hiltViewModel()
+    BriefingNotice(onManage = { navController.navigate(ChildRoutes.SETTINGS_NOTIFICATIONS) }, viewModel = briefingNotice)
     // AI assistant phase 2: asks once whether to turn on Suggestions from Pantopus, after the briefing notice.
-    SuggestionsNotice()
+    val briefingNoticeShowing by briefingNotice.preferences.collectAsStateWithLifecycle()
+    SuggestionsNotice(waiting = briefingNoticeShowing != null)
     val sessionViewModel: RootSessionViewModel = hiltViewModel()
     val chatBadgeViewModel: ChatBadgeViewModel = hiltViewModel()
     val currentHandle by sessionViewModel.currentHandle.collectAsStateWithLifecycle()
