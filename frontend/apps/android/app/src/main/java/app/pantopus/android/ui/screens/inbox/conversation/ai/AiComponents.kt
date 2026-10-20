@@ -76,6 +76,7 @@ internal fun AiCapabilityChip(
     chip: ChatPromptChip,
     onTap: (ChatPromptChip) -> Unit,
     modifier: Modifier = Modifier,
+    testTag: String = "chatAIWelcomeCapability_${chip.id}",
 ) {
     Row(
         modifier =
@@ -86,7 +87,7 @@ internal fun AiCapabilityChip(
                 .clickable { onTap(chip) }
                 .heightIn(min = 48.dp)
                 .padding(horizontal = 10.dp)
-                .testTag("chatAIWelcomeCapability_${chip.id}"),
+                .testTag(testTag),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {

@@ -1,6 +1,8 @@
 package app.pantopus.android.ui.screens.place.today
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,9 +11,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -28,6 +32,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -35,6 +43,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.perf.ReportContentShown
+import app.pantopus.android.data.ai.AIScreenContext
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.GhostButton
 import app.pantopus.android.ui.components.PrimaryButton
@@ -53,6 +62,7 @@ import app.pantopus.android.ui.screens.plans.today.PlansTodayCards
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
+import app.pantopus.android.ui.theme.Radii
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -71,6 +81,7 @@ fun TodayTabScreen(
     onClaim: () -> Unit,
     onOpenPlace: ((homeId: String) -> Unit)? = null,
     plans: PlansTodayActions? = null,
+    onAsk: ((AIScreenContext) -> Unit)? = null,
     viewModel: TodayTabViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -125,6 +136,7 @@ fun TodayTabScreen(
                         if (current.savedAnchorMatches) {
                             StatusChip("Saved place · Only you", modifier = Modifier.padding(bottom = 12.dp))
                         }
+                        onAsk?.let { ask -> TodayAskBox(onAsk = { ask(AIScreenContext.today(viewModel.homeId)) }) }
                         // Nearby Plans (A1, A2, A5): today's plan and the day-after card, above the weather.
                         plans?.let { PlansTodayCards(actions = it, modifier = Modifier.padding(bottom = 16.dp)) }
                         CompositionLocalProvider(LocalPlaceDetailRetry provides viewModel::refresh) {
@@ -221,5 +233,40 @@ private fun NoPlaceCard(onClaim: () -> Unit) {
             color = PantopusColors.appTextSecondary,
         )
         PrimaryButton(title = "Claim your address", onClick = onClaim, modifier = Modifier.fillMaxWidth())
+    }
+}
+
+/** The box at the top of Today (AI assistant phase 1): it opens the assistant about today, nothing sent yet. */
+@Composable
+private fun TodayAskBox(onAsk: () -> Unit) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp)
+                .clip(RoundedCornerShape(Radii.xl))
+                .background(PantopusColors.appSurface)
+                .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.xl))
+                .clickable(onClick = onAsk)
+                .heightIn(min = 48.dp)
+                .padding(horizontal = 14.dp, vertical = 12.dp)
+                .clearAndSetSemantics {
+                    contentDescription = "Ask Pantopus about your day"
+                    role = Role.Button
+                }.testTag("todayAskPantopus"),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Box(
+            modifier = Modifier.size(32.dp).clip(CircleShape).background(PantopusColors.magicBg),
+            contentAlignment = Alignment.Center,
+        ) {
+            PantopusIconImage(icon = PantopusIcon.Sparkles, contentDescription = null, size = 16.dp, tint = PantopusColors.magic)
+        }
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+            Text("Ask Pantopus", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
+            Text("About today at your place", fontSize = 13.sp, color = PantopusColors.appTextSecondary, maxLines = 1)
+        }
+        PantopusIconImage(icon = PantopusIcon.ChevronRight, contentDescription = null, size = 16.dp, tint = PantopusColors.appTextMuted)
     }
 }

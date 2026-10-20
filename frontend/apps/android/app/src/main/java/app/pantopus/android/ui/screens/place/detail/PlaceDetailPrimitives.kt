@@ -55,6 +55,8 @@ fun PlaceDetailHeader(
     title: String,
     address: String,
     onBack: () -> Unit,
+    /** Ask Pantopus about this section (AI assistant phase 1); null hides the button. */
+    onAsk: (() -> Unit)? = null,
 ) {
     Row(
         modifier =
@@ -100,6 +102,26 @@ fun PlaceDetailHeader(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+        }
+        if (onAsk != null) {
+            Box(
+                modifier =
+                    Modifier
+                        .size(34.dp)
+                        .shadow(1.dp, CircleShape, clip = false)
+                        .clip(CircleShape)
+                        .background(PantopusColors.appSurface)
+                        .clickable(onClick = onAsk)
+                        .testTag("placeDetail.askPantopus"),
+                contentAlignment = Alignment.Center,
+            ) {
+                PantopusIconImage(
+                    icon = PantopusIcon.Sparkles,
+                    contentDescription = "Ask Pantopus",
+                    size = 18.dp,
+                    tint = PantopusColors.magic,
+                )
+            }
         }
     }
 }

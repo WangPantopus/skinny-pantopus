@@ -120,13 +120,19 @@ import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.LaunchFeatures
+import app.pantopus.android.core.routing.DeepLinkRouter
 import app.pantopus.android.data.links.LinkPreview
 import app.pantopus.android.ui.components.GhostButton
 import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.screens.inbox.conversation.ai.AiActionCard
 import app.pantopus.android.ui.screens.inbox.conversation.ai.AiCapabilityChip
+import app.pantopus.android.ui.screens.inbox.conversation.ai.AiContextStrip
 import app.pantopus.android.ui.screens.inbox.conversation.ai.AiEstimateCard
+import app.pantopus.android.ui.screens.inbox.conversation.ai.AiLinkButtons
+import app.pantopus.android.ui.screens.inbox.conversation.ai.AiStarterRow
 import app.pantopus.android.ui.screens.inbox.conversation.ai.ChatAiAvatar
+import app.pantopus.android.ui.screens.inbox.conversation.ai.starterChips
 import app.pantopus.android.ui.screens.plans.chat.PlanChatClosedBar
 import app.pantopus.android.ui.screens.plans.chat.PlanChatStrip
 import app.pantopus.android.ui.screens.plans.chat.rememberPlanChat
@@ -203,6 +209,8 @@ fun ChatConversationScreen(
     val openFile by viewModel.openFile.collectAsStateWithLifecycle()
     val linkPreviews by viewModel.linkPreviews.collectAsStateWithLifecycle()
     val isAiStreaming by viewModel.isAiStreaming.collectAsStateWithLifecycle()
+    val aiContext by viewModel.aiContext.collectAsStateWithLifecycle()
+    val aiStarters by viewModel.aiStarters.collectAsStateWithLifecycle()
     // Nearby Plans (A4): a plan room shows its plan under the header and closes after the plan.
     val planChat =
         rememberPlanChat(
@@ -335,6 +343,7 @@ fun ChatConversationScreen(
             args.scrollToMessageId,
             args.initialTopic,
             args.gigId,
+            args.aiContext,
         )
         viewModel.load()
     }
@@ -344,6 +353,17 @@ fun ChatConversationScreen(
     val resolvedCreatorContext = chrome.creatorThread?.context ?: ChatCreatorThreadContext.defaults()
     val isCreatorThread = conversationMode == ChatConversationMode.CreatorThread
     val isCreatorQuotaLocked = isCreatorThread && resolvedCreatorContext.quota?.isMaxed == true
+
+    // AI assistant phase 1: action cards send through the view model; links open with the deep-link router.
+    val aiReplyActions =
+        remember(viewModel) {
+            ChatAIReplyActions(
+                onAction = viewModel::runAIAction,
+                onDismiss = viewModel::dismissAIAction,
+                onOpenLink = { url -> if (DeepLinkRouter.canRoute(url)) DeepLinkRouter.handle(url) },
+                canOpen = DeepLinkRouter::canRoute,
+            )
+        }
 
     // The chat sits on the keyboard: pad the bottom by the keyboard height
     // minus the space already below the chat (the tab bar).
@@ -385,6 +405,8 @@ fun ChatConversationScreen(
                 GigContextStrip(strip = strip, onTap = { onOpenGig(strip.gigId) })
             }
             PlanChatStrip(state = planChat, onOpenPlan = onOpenPlan)
+            // AI assistant phase 1: the screen Ask Pantopus was tapped on.
+            if (conversationMode == ChatConversationMode.AiAssistant) aiContext?.let { AiContextStrip(label = it.label) }
             if (conversationMode == ChatConversationMode.CreatorThread) {
                 CreatorAudienceStrip(
                     context = resolvedCreatorContext,
@@ -435,6 +457,7 @@ fun ChatConversationScreen(
                             conversationMode = conversationMode,
                             fanEntitlement = fanEntitlement,
                             onCapabilityTap = viewModel::sendCapabilityPrompt,
+                            aiStarters = aiStarters,
                         )
                     is ChatConversationUiState.Loaded ->
                         PopulatedFrame(
@@ -461,6 +484,7 @@ fun ChatConversationScreen(
                                     else -> viewModel.savePickupSchedule(draft)
                                 }
                             },
+                            aiReplyActions = aiReplyActions,
                             onOpenGig = onOpenGig,
                             onOpenListing = onOpenListing,
                             onOpenLocation = { lat, lng ->
@@ -515,6 +539,11 @@ fun ChatConversationScreen(
                     editing = editingMessageId != null,
                     onCancel = viewModel::cancelMessageAction,
                 )
+                // The empty thread offers them in its welcome instead.
+                val aiThreadIdle = state is ChatConversationUiState.Loaded && !isAiStreaming
+                if (conversationMode == ChatConversationMode.AiAssistant && aiStarters.isNotEmpty() && aiThreadIdle) {
+                    AiStarterRow(starters = aiStarters, onTap = viewModel::sendAiStarter)
+                }
                 Composer(
                     text = composerText,
                     placeholder =
@@ -1994,10 +2023,11 @@ internal fun EmptyFrame(
     conversationMode: ChatConversationMode = ChatConversationMode.Dm,
     fanEntitlement: ChatFanEntitlement? = null,
     onCapabilityTap: (ChatPromptChip) -> Unit = {},
+    aiStarters: List<String> = emptyList(),
 ) {
     val isAi = conversationMode == ChatConversationMode.AiAssistant || counterparty is ChatCounterparty.Ai
     when {
-        isAi -> AiWelcomeFrame(onCapabilityTap = onCapabilityTap)
+        isAi -> AiWelcomeFrame(onCapabilityTap = onCapabilityTap, starters = aiStarters)
         conversationMode == ChatConversationMode.FanThread ->
             FanEmptyFrame(
                 counterparty = counterparty,
@@ -2284,7 +2314,10 @@ private fun TrustPill(text: String) {
 
 /** A15.3 "Empty AI" frame: big avatar, "Ask me anything", trust pill, 2×2 prompt grid. */
 @Composable
-private fun AiWelcomeFrame(onCapabilityTap: (ChatPromptChip) -> Unit) {
+private fun AiWelcomeFrame(
+    onCapabilityTap: (ChatPromptChip) -> Unit,
+    starters: List<String> = emptyList(),
+) {
     Column(
         modifier =
             Modifier
@@ -2320,26 +2353,37 @@ private fun AiWelcomeFrame(onCapabilityTap: (ChatPromptChip) -> Unit) {
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(Spacing.s2),
         ) {
-            // Launch cut #3 (Marketplace): a Home prompt takes the Marketplace card's place.
-            launchPromptCards().chunked(2).forEach { rowCards ->
-                Row(
+            // Opened with Ask Pantopus: the starter prompts of the screen it was tapped on.
+            starterChips(starters).forEach { chip ->
+                AiCapabilityChip(
+                    chip = chip,
+                    onTap = onCapabilityTap,
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
-                ) {
-                    rowCards.forEach { card ->
-                        AiPromptCard(
-                            card = card,
-                            onTap = { tapped ->
-                                // Tapping sends the full question as the
-                                // thread's first message (iOS parity).
-                                onCapabilityTap(
-                                    ChatPromptChip(id = tapped.id, label = tapped.question, icon = tapped.icon),
-                                )
-                            },
-                            modifier = Modifier.weight(1f),
-                        )
+                    testTag = "chatAIStarter_${chip.id}",
+                )
+            }
+            // Launch cut #3 (Marketplace): a Home prompt takes the Marketplace card's place.
+            if (starters.isEmpty()) {
+                launchPromptCards().chunked(2).forEach { rowCards ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+                    ) {
+                        rowCards.forEach { card ->
+                            AiPromptCard(
+                                card = card,
+                                onTap = { tapped ->
+                                    // Tapping sends the full question as the
+                                    // thread's first message (iOS parity).
+                                    onCapabilityTap(
+                                        ChatPromptChip(id = tapped.id, label = tapped.question, icon = tapped.icon),
+                                    )
+                                },
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                        if (rowCards.size == 1) Spacer(modifier = Modifier.weight(1f))
                     }
-                    if (rowCards.size == 1) Spacer(modifier = Modifier.weight(1f))
                 }
             }
         }
@@ -2540,6 +2584,7 @@ internal fun PopulatedFrame(
     selectedMessageIds: Set<String> = emptySet(),
     onBubbleTap: (ChatBubbleContent) -> Unit = {},
     onUseAIDraft: (ChatAIDraftCard) -> Unit = {},
+    aiReplyActions: ChatAIReplyActions = ChatAIReplyActions(),
     onOpenGig: (String) -> Unit = {},
     onOpenListing: (String) -> Unit = {},
     onOpenLocation: (Double, Double) -> Unit = { _, _ -> },
@@ -2670,6 +2715,7 @@ internal fun PopulatedFrame(
                             isSelected = selectedMessageIds.contains(row.content.id),
                             onTap = { onBubbleTap(row.content) },
                             onUseAIDraft = onUseAIDraft,
+                            aiReplyActions = aiReplyActions,
                             onOpenGig = onOpenGig,
                             onOpenListing = onOpenListing,
                             onOpenLocation = onOpenLocation,
@@ -2842,6 +2888,7 @@ private fun BubbleRow(
     isSelected: Boolean = false,
     onTap: () -> Unit = {},
     onUseAIDraft: (ChatAIDraftCard) -> Unit,
+    aiReplyActions: ChatAIReplyActions = ChatAIReplyActions(),
     onOpenGig: (String) -> Unit,
     onOpenListing: (String) -> Unit,
     onOpenLocation: (Double, Double) -> Unit,
@@ -3101,7 +3148,8 @@ private fun BubbleRow(
                             isOutgoing = isOut,
                             onOpen = { body.card.listingId.takeIf { it.isNotBlank() }?.let(onOpenListing) },
                         )
-                    is ChatBubbleBody.AiReply -> AiReplyBubble(body = body, hasTail = content.hasTail, onUseDraft = onUseAIDraft)
+                    is ChatBubbleBody.AiReply ->
+                        AiReplyBubble(body = body, hasTail = content.hasTail, onUseDraft = onUseAIDraft, actions = aiReplyActions)
                 }
                 if (content.reactions.isNotEmpty()) {
                     // Tapping a pill toggles the reaction (iOS parity).
@@ -4400,6 +4448,7 @@ private fun AiReplyBubble(
     body: ChatBubbleBody.AiReply,
     hasTail: Boolean,
     onUseDraft: (ChatAIDraftCard) -> Unit,
+    actions: ChatAIReplyActions = ChatAIReplyActions(),
 ) {
     val shape =
         RoundedCornerShape(
@@ -4408,7 +4457,7 @@ private fun AiReplyBubble(
             bottomEnd = 18.dp,
             bottomStart = if (hasTail) Radii.sm else 18.dp,
         )
-    val isThinking = body.text.isEmpty() && body.estimate == null && body.drafts.isEmpty()
+    val isThinking = body.text.isEmpty() && body.estimate == null && body.drafts.isEmpty() && body.links.isEmpty()
     Column(
         modifier =
             Modifier
@@ -4429,8 +4478,20 @@ private fun AiReplyBubble(
             Text(text = body.text, fontSize = 13.5.sp, lineHeight = 18.sp, color = PantopusColors.appText)
             body.estimate?.let { AiEstimateCard(estimate = it, modifier = Modifier.fillMaxWidth()) }
             body.drafts.forEach { draft ->
-                AiDraftCard(draft = draft, onUse = onUseDraft)
+                val card = draft.action
+                if (card != null) {
+                    AiActionCard(
+                        card = card,
+                        onAction = { scope, action -> actions.onAction(draft, scope, action) },
+                        onDismiss = { actions.onDismiss(draft) },
+                        onOpenLink = actions.onOpenLink,
+                        canOpen = actions.canOpen,
+                    )
+                } else {
+                    AiDraftCard(draft = draft, onUse = onUseDraft)
+                }
             }
+            if (body.links.isNotEmpty()) AiLinkButtons(links = body.links, onOpen = actions.onOpenLink)
         }
     }
 }
