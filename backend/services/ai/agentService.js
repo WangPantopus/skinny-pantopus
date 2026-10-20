@@ -94,7 +94,7 @@ function launchScopedChatInstructions({ pickupSchedule = false, actionCards = fa
     actionCards,
     links,
     plans,
-    guide: appGuide({ plans, playdates }),
+    guide: appGuide({ plans, playdates, suggestions: actionCards }),
   });
 }
 
@@ -401,6 +401,8 @@ async function streamChat({
   };
   const toolContext = {
     userId, user: viewer, sessionScope: sessionScope || null, timeZone: context.timeZone || undefined, plansEnabled,
+    // Apps with action cards have the Suggestions switch (phase 2); older builds aren't told about it.
+    suggestions: shown.has('action'),
   };
   if (images?.length && photos.length === 0) {
     // Answering without the photo would only confuse: say it couldn't be opened.

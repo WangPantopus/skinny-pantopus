@@ -155,7 +155,7 @@ const readToolDefinitions = [
   },
   {
     name: 'get_notification_settings',
-    description: "The person's notification settings: quiet hours, the morning and evening briefings and their times, weather and air alerts, home reminders, and Suggestions from Pantopus (suggestions_enabled: null means never chosen, which is off; suggestions_muted: kinds muted with \"Fewer like this\", until when).",
+    description: "The person's notification settings: quiet hours, the morning and evening briefings and their times, weather and air alerts, home reminders.",
     input_schema: { type: 'object', properties: {}, required: [], additionalProperties: false },
   },
 ];
@@ -691,7 +691,14 @@ async function getNotificationSettings(_args, ctx) {
     .eq('user_id', ctx.userId)
     .maybeSingle();
   if (error) throw new Error(`Preferences read failed: ${error.message}`);
-  return { settings: data || null, note: data ? null : 'No settings saved yet; the defaults apply.' };
+  // Suggestions exist only in apps that can show them (ctx.suggestions); older builds have no such switch.
+  const { suggestions_enabled: suggestionsEnabled, suggestions_muted: suggestionsMuted, ...settings } = data || {};
+  const suggestions = ctx.suggestions ? {
+    suggestions_enabled: suggestionsEnabled ?? null,
+    suggestions_muted: suggestionsMuted || {},
+    suggestions_note: 'Suggestions from Pantopus: null means never chosen, which is off. suggestions_muted lists kinds muted with "Fewer like this", until when.',
+  } : {};
+  return { settings: data ? { ...settings, ...suggestions } : null, note: data ? null : 'No settings saved yet; the defaults apply.' };
 }
 
 // ─── Dispatch ──────────────────────────────────────────────────────────────

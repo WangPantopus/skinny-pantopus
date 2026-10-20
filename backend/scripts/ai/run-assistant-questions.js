@@ -36,15 +36,21 @@ const { questions } = JSON.parse(fs.readFileSync(path.join(__dirname, 'assistant
 const tokens = new Map();
 async function token(label) {
   if (tokens.has(label)) return tokens.get(label);
-  const res = await fetch(`${API}/api/users/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: field(label, 'EMAIL'), password: field(label, 'PASSWORD') }),
-  });
-  const json = await res.json();
-  if (!json.accessToken) throw new Error(`sign-in failed for ${label} (${res.status})`);
-  tokens.set(label, json.accessToken);
-  return json.accessToken;
+  // A local stack under load answers 503 ("Sign-in is busy") now and then: try a few times.
+  for (let attempt = 1; ; attempt++) {
+    const res = await fetch(`${API}/api/users/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: field(label, 'EMAIL'), password: field(label, 'PASSWORD') }),
+    });
+    const json = await res.json();
+    if (json.accessToken) {
+      tokens.set(label, json.accessToken);
+      return json.accessToken;
+    }
+    if (res.status !== 503 || attempt >= 4) throw new Error(`sign-in failed for ${label} (${res.status})`);
+    await new Promise((resolve) => { setTimeout(resolve, 15000); });
+  }
 }
 
 function fillContext(context) {
