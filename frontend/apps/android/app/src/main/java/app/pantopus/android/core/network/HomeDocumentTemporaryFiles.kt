@@ -4,16 +4,21 @@ import java.io.File
 import java.io.IOException
 import java.util.UUID
 
-/** Keep private previews/exports for this process; background sharing stays valid. */
+/**
+ * Keep private previews/exports (Home documents, the emergency card, residency letters) for this process and
+ * account; background sharing stays valid. They go at the next launch and at sign-out.
+ */
 object HomeDocumentTemporaryFiles {
     private fun root(cacheDirectory: File) = File(cacheDirectory, "home-document-files")
 
     fun clearPreviousLaunch(cacheDirectory: File) {
         root(cacheDirectory).deleteRecursively()
-        // These exact prefixes belonged to the previous Home document renderer.
+        // These exact prefixes belonged to the previous Home document renderer and to the emergency card,
+        // which earlier builds wrote at the top of the cache.
         cacheDirectory.listFiles()?.filter {
             it.name.matches(Regex("document-export-[0-9a-fA-F-]{36}")) ||
-                (it.isFile && it.name.startsWith("doc-preview-") && it.extension == "pdf")
+                (it.isFile && it.name.startsWith("doc-preview-") && it.extension == "pdf") ||
+                (it.isFile && it.name.startsWith("emergency-card-") && it.extension == "pdf")
         }?.forEach { it.deleteRecursively() }
     }
 

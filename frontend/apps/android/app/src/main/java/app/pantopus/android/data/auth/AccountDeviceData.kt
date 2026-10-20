@@ -2,6 +2,7 @@ package app.pantopus.android.data.auth
 
 import android.content.Context
 import androidx.datastore.preferences.core.edit
+import app.pantopus.android.core.network.HomeDocumentTemporaryFiles
 import app.pantopus.android.data.chats.ChatBadgeCoordinator
 import app.pantopus.android.data.chats.ChatConversationPreferences
 import app.pantopus.android.data.gigs.GigDraftQueue
@@ -67,6 +68,9 @@ class AccountDeviceData
                 // And the files opened from its chats, with the photos taken for them.
                 runCatching { ChatMediaUrl.removeLocalFiles(context.cacheDir) }
                     .onFailure { Timber.w(it, "Sign-out could not remove the chat files") }
+                // And its exported Home documents, emergency card and residency letters.
+                runCatching { HomeDocumentTemporaryFiles.clearPreviousLaunch(context.cacheDir) }
+                    .onFailure { Timber.w(it, "Sign-out could not remove the exported documents") }
             }
         }
     }

@@ -590,8 +590,10 @@ extension AuthManager {
         AIConversationStore.shared.clear()
         SupportTrainReservationsStore.shared.reset()
         ChatConversationPreferences.shared.clear()
-        // And the files opened from its chats, with the copies of photos it sent the assistant.
+        // And the files opened from its chats, with the copies of photos it sent the assistant,
+        // and its exported Home documents, emergency card and residency letters.
         ChatMediaURL.removeLocalFiles()
+        try? HomeDocumentTemporaryFiles.clearPreviousLaunch()
         guard hadSession else { return false }
         // The next person on this device must not read the last account's
         // notifications on the lock screen or in Notification Center.

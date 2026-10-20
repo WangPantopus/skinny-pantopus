@@ -10,6 +10,7 @@ import android.net.Uri
 import android.text.StaticLayout
 import android.text.TextPaint
 import androidx.core.content.FileProvider
+import app.pantopus.android.core.network.HomeDocumentTemporaryFiles
 import app.pantopus.android.data.api.models.homes.HomeEmergencyDto
 import java.io.File
 import java.io.FileOutputStream
@@ -160,7 +161,9 @@ object EmergencyCardPdf {
         document.finishPage(page)
 
         return try {
-            val file = File(context.cacheDir, "emergency-card-${System.currentTimeMillis()}.pdf")
+            // With the other private exports, so it goes at sign-out and at the next launch.
+            val directory = HomeDocumentTemporaryFiles.makeExportDirectory(context.cacheDir)
+            val file = File(directory, "emergency-card-${System.currentTimeMillis()}.pdf")
             FileOutputStream(file).use { document.writeTo(it) }
             document.close()
             FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
