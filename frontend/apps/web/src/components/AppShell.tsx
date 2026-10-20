@@ -937,13 +937,14 @@ function BusinessSidebarContent({ businessId, currentTab, showLabels, onNavigate
       {access?.hasAccess && <SidebarItem icon={BusinessIcons.pages} label="Pages" active={isTabActive('pages')} onClick={() => goTab('pages')} accent="violet" showLabel={showLabels} />}
       {/* Launch cut #4 (Open Gigs): business "Post Task" is hidden. */}
       {launchFeatures.openGigs && can('gigs.post') ? <SidebarItem icon={BusinessIcons.postTask} label="Post Task" active={pathname.startsWith('/app/gigs/new') || pathname.startsWith('/app/gigs-v2/new')} onClick={() => goPath(`/app/gigs/new?beneficiary=${businessId}`)} accent="violet" showLabel={showLabels} /> : null}
-      {access?.hasAccess && <SidebarItem icon={BusinessIcons.chat} label="Business Chat" active={pathname.startsWith(`/app/businesses/${businessId}/chat`)} onClick={() => goPath(`/app/businesses/${businessId}/chat`)} accent="violet" showLabel={showLabels} />}
+      {/* The inbox answers only roles that may act for the business (gigs.manage or gigs.post, services/chatBusinessAccess). */}
+      {(can('gigs.manage') || can('gigs.post')) && <SidebarItem icon={BusinessIcons.chat} label="Business Chat" active={pathname.startsWith(`/app/businesses/${businessId}/chat`)} onClick={() => goPath(`/app/businesses/${businessId}/chat`)} accent="violet" showLabel={showLabels} />}
 
       <SidebarDivider showLabel={showLabels} />
 
       {can('team.view') && <SidebarItem icon={BusinessIcons.team} label="Team" active={isTabActive('team')} onClick={() => goTab('team')} accent="violet" showLabel={showLabels} />}
       {can('reviews.view') && <SidebarItem icon={BusinessIcons.reviews} label="Reviews" active={isTabActive('reviews')} onClick={() => goTab('reviews')} accent="violet" showLabel={showLabels} />}
-      {can('analytics.view') && <SidebarItem icon={BusinessIcons.insights} label="Insights" active={isTabActive('insights')} onClick={() => goTab('insights')} accent="violet" showLabel={showLabels} />}
+      {can('insights.view') && <SidebarItem icon={BusinessIcons.insights} label="Insights" active={isTabActive('insights')} onClick={() => goTab('insights')} accent="violet" showLabel={showLabels} />}
       {access?.isOwner && <SidebarItem icon={BusinessIcons.payments} label="Payments" active={isTabActive('payments')} onClick={() => goTab('payments')} accent="violet" showLabel={showLabels} />}
 
       <SidebarDivider showLabel={showLabels} />

@@ -169,6 +169,7 @@ fun NotificationSettingsScreen(
                 GroupedListCallbacks(
                     onBack = onBack,
                     onToggleRow = viewModel::onToggle,
+                    onTapRow = viewModel::onTapRow,
                     onSelectRadio = viewModel::onSelectRadio,
                     onSelectChip = viewModel::onSelectChip,
                     onRetry = viewModel::refresh,
