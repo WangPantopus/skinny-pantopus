@@ -16,10 +16,12 @@ const verifyToken = require('../middleware/verifyToken');
 const logger = require('../utils/logger');
 const s3 = require('../services/s3Service');
 const imageResizeService = require('../services/marketplace/imageResizeService');
+const { photoReference } = require('../services/ai/photos');
 const { calculateAndStoreCompleteness } = require('../utils/businessCompleteness');
 const { requirePersonaEnabled } = require('../utils/featureFlags');
 const { writeIdentityAuditLog } = require('../utils/identityAudit');
 const { syncLocalProfileFromAccount } = require('../utils/identityProfiles');
+const { actingBusinessInRoom } = require('../services/chatBusinessAccess');
 
 // Rate limit: 30 uploads per 15 minutes per IP
 const uploadLimiter = rateLimit({
@@ -659,7 +661,8 @@ router.post('/chat-media/:roomId', uploadLimiter, verifyToken, upload.array('fil
       .eq('is_active', true)
       .maybeSingle();
 
-    if (!participant) {
+    // A business's owner and staff attach files to its conversations without being members of them.
+    if (!participant && !(await actingBusinessInRoom(roomId, userId))) {
       return res.status(403).json({ error: 'Not authorized to upload files to this room' });
     }
 
@@ -1692,7 +1695,9 @@ router.post('/business-media/:businessId', uploadLimiter, verifyToken, upload.si
 /**
  * POST /api/upload/ai-media
  * Upload images for AI assistant chat (up to 5 images).
- * Returns public URLs to pass to the AI chat endpoint.
+ * Returns a reference for each (`url`, `ai-photo:<name>`) to pass to the AI chat endpoint or the
+ * flyer reader. The photos are private: no address to them is handed out, and the request that
+ * reads one deletes it (services/ai/photos.js).
  */
 router.post('/ai-media', uploadLimiter, verifyToken, upload.array('files', 5), enforceFileSizeLimits, validateAndStripUploads, async (req, res) => {
   try {
@@ -1711,17 +1716,19 @@ router.post('/ai-media', uploadLimiter, verifyToken, upload.array('files', 5), e
 
     const uploaded = [];
     for (const file of files) {
-      const { url, key } = await s3.uploadGeneral(
+      // The stored name becomes the reference, so keep only a plain extension from the phone's file name.
+      const extension = /^\.[a-z0-9]{1,10}$/.exec(path.extname(file.originalname || '').toLowerCase())?.[0] || '';
+      const { key } = await s3.uploadGeneral(
         file.buffer,
-        file.originalname,
+        `photo${extension}`,
         userId,
-        `ai-chat/${userId}`,
+        'ai-chat',
         file.mimetype
       );
 
       uploaded.push({
-        url,
-        key,
+        // Still named url: released apps send it back as one of the chat's images.
+        url: photoReference(key),
         name: file.originalname,
         mime_type: file.mimetype,
         size: file.size,

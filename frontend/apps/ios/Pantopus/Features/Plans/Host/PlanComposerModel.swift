@@ -335,7 +335,7 @@ final class PlanComposerModel {
         case .verifiedAuto: rules.append(.verified)
         case .anyoneNearby: rules.append(.anyoneNearby)
         }
-        if alsoHostedBefore { rules.append(.hostedBefore) }
+        if alsoHostedBefore, kind != .pickupGame { rules.append(.hostedBefore) } // H4 has no such box (as on Android)
         if whereKind == .home { rules = rules.filter { $0 == .hostedBefore } }
         return rules
     }

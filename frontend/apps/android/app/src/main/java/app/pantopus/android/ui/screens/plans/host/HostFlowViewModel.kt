@@ -620,7 +620,8 @@ class HostFlowViewModel
                 buildList {
                     if (kind != PlanKind.PLAYDATE) {
                         if (!draft.approveEach && !draft.atHome) draft.autoRule?.let(::add)
-                        if (draft.hostedBefore) add(PlanAutoRule.HOSTED_BEFORE)
+                        // Not for a pickup game: its form has no such box (board H4), as on iOS.
+                        if (draft.hostedBefore && kind != PlanKind.PICKUP_GAME) add(PlanAutoRule.HOSTED_BEFORE)
                     }
                 }.distinct()
             val game = ui.games.firstOrNull { it.id == draft.gameId }
@@ -633,7 +634,9 @@ class HostFlowViewModel
                 place = place,
                 spots = draft.spots,
                 autoRules = rules,
-                joinRequirement = if (kind == PlanKind.PLAYDATE || draft.autoRule == PlanAutoRule.VERIFIED) "verified" else "located",
+                // Who can ask (decision D5, as on iOS): anyone nearby, or only verified neighbors for a playdate.
+                // "Verified neighbors get in right away" is the `verified` rule above; others still ask.
+                joinRequirement = if (kind == PlanKind.PLAYDATE) "verified" else "located",
                 details = details(kind, draft, game),
                 guestNote = draft.note.trim().takeIf(String::isNotEmpty),
                 gps = gps,
