@@ -67,8 +67,9 @@ const LISTING_BROWSE_SELECT = `
 const _filterCache = new GeoCache(1000); // userId → filters
 const FILTER_CACHE_TTL = 60_000;
 
-// Total-in-bounds count cache (30s TTL)
-const _countCache = new Map();
+// Total-in-bounds count cache (30s TTL). Keyed by the exact bounds plus filters, so every
+// new map pan adds a key: the LRU keeps it bounded.
+const _countCache = new GeoCache(2000);
 const COUNT_CACHE_TTL = 30_000;
 
 // ---------------------------------------------------------------------------
@@ -622,7 +623,7 @@ async function browseListings({
   let freeCount = 0;
 
   const cachedCount = _countCache.get(cKey);
-  if (cachedCount && cachedCount.expires > Date.now()) {
+  if (cachedCount) {
     totalInBounds = cachedCount.total;
     freeCount = cachedCount.free;
   } else {
@@ -711,8 +712,7 @@ async function runCountQuery(south, west, north, east, filterOpts, cacheKey) {
   _countCache.set(cacheKey, {
     total: total || 0,
     free: free || 0,
-    expires: Date.now() + COUNT_CACHE_TTL,
-  });
+  }, COUNT_CACHE_TTL);
 }
 
 // ---------------------------------------------------------------------------

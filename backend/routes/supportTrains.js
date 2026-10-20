@@ -4139,12 +4139,21 @@ router.get(
     }
 
     if (userId && viewerLevel === 'none') {
-      const { data: orgRow } = await supabaseAdmin
+      const { data: orgRow, error: orgErr } = await supabaseAdmin
         .from('SupportTrainOrganizer')
         .select('role')
         .eq('support_train_id', supportTrainId)
         .eq('user_id', userId)
-        .single();
+        .maybeSingle();
+      // A failed read is not an answer: a co-organizer must not get the non-organizer view.
+      if (orgErr) {
+        logger.error('Support Train organizer check failed', {
+          supportTrainId,
+          userId,
+          error: orgErr.message,
+        });
+        return supportTrainUnavailable(res);
+      }
       if (orgRow) {
         viewerLevel = 'organizer';
         viewerSupportTrainRole = orgRow.role;
@@ -4159,12 +4168,20 @@ router.get(
 
     // Check signed-up helper
     if (userId && viewerLevel === 'none') {
-      const { count: resCount } = await supabaseAdmin
+      const { count: resCount, error: resErr } = await supabaseAdmin
         .from('SupportTrainReservation')
         .select('id', { count: 'exact', head: true })
         .eq('support_train_id', supportTrainId)
         .eq('user_id', userId)
         .in('status', ['reserved', 'delivered', 'confirmed']);
+      if (resErr) {
+        logger.error('Support Train helper check failed', {
+          supportTrainId,
+          userId,
+          error: resErr.message,
+        });
+        return supportTrainUnavailable(res);
+      }
       if ((resCount || 0) > 0) {
         viewerLevel = 'signed_up_helper';
         viewerSupportTrainRole = 'helper';
@@ -4183,7 +4200,7 @@ router.get(
         // My connections ("Only people you're connected to can find this"): the
         // organizer's accepted connections, and anyone the organizer invited. No route
         // ever accepts an invite, so any invite row for the viewer counts.
-        const [{ count: invCount }, { count: connCount }] = await Promise.all([
+        const [{ count: invCount, error: invErr }, { count: connCount, error: connErr }] = await Promise.all([
           supabaseAdmin
             .from('SupportTrainInvite')
             .select('id', { count: 'exact', head: true })
@@ -4198,6 +4215,14 @@ router.get(
         if ((invCount || 0) > 0 || (connCount || 0) > 0) {
           viewerLevel = 'viewer';
           viewerSupportTrainRole = 'viewer';
+        } else if (invErr || connErr) {
+          // Neither read found access, and one failed: that is not a refusal.
+          logger.error('Support Train connection check failed', {
+            supportTrainId,
+            userId,
+            error: (invErr || connErr).message,
+          });
+          return supportTrainUnavailable(res);
         }
       }
     }
