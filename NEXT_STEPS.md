@@ -127,7 +127,7 @@ Sessions you start for one job (Instant Screens, Nearby Plans, single fixes) wor
 - [x] New tables for phase 3: `AgentRequest`, `AgentStep` and `AgentMemoryItem` from the October 4 [system design](docs/product/pantopus-agent-system-design-2026-10-04.md), built when phase 2 ships. Memory is kept until the person deletes it, with a yearly reminder to review it. Standing rules (`AgentRule`) come later in phase 3.
 - [x] Siri App Intents and the Android equivalent in phase 3, starting with five actions: next pickup, what's on today, start a plan, catch me up nearby, remind my household.
 - [x] Model unchanged: Claude Sonnet 5.5 for everything (October 12). Claude Haiku 5.5 for background jobs stays your option.
-- [ ] Yours before phase 1 ships: the privacy policy and the data inventory name AI processing and Anthropic as a processor, and you confirm the Anthropic account's data-retention setting. A draft of the wording will be in a pull request for your review.
+- [ ] Yours before phase 1 ships: the privacy policy and the data inventory name AI processing and Anthropic as a processor, and you confirm the Anthropic account's data-retention setting. The draft wording is in [#2472](https://github.com/WangPantopus/skinny-pantopus/pull/2472): confirm the retention setting and Anthropic's terms there, then merge it. The backend half of phase 1 has been in production since October 20, so the policy is behind the code until #2472 merges.
 
 **Still open. The brief builds the default until you decide.**
 
@@ -431,10 +431,10 @@ Decided October 13 (section 0). The [build kit](docs/product/pulse-build/README.
 
 Decided October 20 (section 0) from the [AI expansion proposal](https://claude.ai/artifact/DkyRkpcQ1bLL4ETb3DjqQ5). The contract the backend, iOS and Android sessions build against is [docs/product/ai-assistant-phase1-contract-2026-10-20.md](docs/product/ai-assistant-phase1-contract-2026-10-20.md). The server sends the new cards only to app builds that ask for them, so released apps and the web keep working while the apps catch up.
 
-- [ ] Phase 1, backend: read tools for Plans, Pulse, Place, Today and home tasks; action cards; screen context; link buttons; the app guide; 45-second turns with eight tool rounds; a daily budget per person, a global spending cap and an off switch; other people's words handled as data; the question set and the attack set.
-- [ ] Phase 1, iOS: action cards and link buttons in the assistant thread, Ask on Today, Place, Nearby, Plans, a plan and a post, and post cards that keep every field.
+- [x] Phase 1, backend: read tools for Plans, Pulse, Place, Today and home tasks; action cards; screen context; link buttons; the app guide; 45-second turns with eight tool rounds; a daily budget per person, a global spending cap and an off switch; other people's words handled as data; the question set and the attack set. Merged October 20 ([#2467](https://github.com/WangPantopus/skinny-pantopus/pull/2467)) and released to production. Today's apps and the web get the better answers; the cards and link buttons wait for the new app builds.
+- [ ] Phase 1, iOS: action cards and link buttons in the assistant thread, Ask on Today, Place, Nearby, Plans, a plan and a post, and post cards that keep every field. In review: [#2473](https://github.com/WangPantopus/skinny-pantopus/pull/2473).
 - [ ] Phase 1, Android: the same.
-- [ ] Phase 1, yours: the privacy policy and data inventory wording (section 0), before phase 1 ships.
+- [ ] Phase 1, yours: the privacy policy and data inventory wording (section 0), before phase 1 ships. Draft: [#2472](https://github.com/WangPantopus/skinny-pantopus/pull/2472).
 - [ ] Phase 2: catch-up for Nearby, chats and plan chats, reply drafts, chat to task, warning signs on first messages from strangers, the morning brief with buttons, weather watch and the host digest for plans, lost-and-found matching, and document readers for the home.
 - [ ] Phase 3: the memory list, "Needs you", standing rules, follow-ups, and Siri and the Android assistant.
 - [ ] Later, when their flags turn on: selling, buying, negotiating within limits and hiring, as the proposal describes.
