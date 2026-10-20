@@ -11,6 +11,8 @@ const validate = require('../middleware/validate');
 const Joi = require('joi');
 const logger = require('../utils/logger');
 const { escapeIlike } = require('../utils/escapeIlike');
+// A letter sent as a business names the business to everyone it reaches, never the person who sent it.
+const { presentMailSender, presentMailSenders } = require('../utils/mailSenderView');
 
 // ============ VALIDATION SCHEMAS ============
 
@@ -414,7 +416,7 @@ router.get('/booklet/:mailId', async (req, res, next) => {
 
     await logMailEvent(req.user.id, 'booklet_opened', mailId, { page_count: mail.page_count });
 
-    res.json({ booklet: mail, pages: pages || [] });
+    res.json({ booklet: presentMailSender(mail, req.user.id), pages: pages || [] });
   } catch (err) { next(err); }
 });
 
@@ -488,7 +490,7 @@ router.get('/bundle/:bundleId/items', async (req, res, next) => {
       item_count: (items || []).length,
     });
 
-    res.json({ bundle, items: items || [] });
+    res.json({ bundle: presentMailSender(bundle, req.user.id), items: presentMailSenders(items || [], req.user.id) });
   } catch (err) { next(err); }
 });
 
@@ -649,7 +651,7 @@ router.get('/certified/:mailId', async (req, res, next) => {
 
     await logMailEvent(req.user.id, 'certified_mail_delivered', mailId);
 
-    res.json({ mail });
+    res.json({ mail: presentMailSender(mail, req.user.id) });
   } catch (err) { next(err); }
 });
 
@@ -1140,7 +1142,7 @@ router.get('/vault/folder/:folderId/items', async (req, res, next) => {
       folder_id: folderId,
     });
 
-    res.json({ items: items || [], total: count || 0 });
+    res.json({ items: presentMailSenders(items || [], req.user.id), total: count || 0 });
   } catch (err) { next(err); }
 });
 
@@ -1318,7 +1320,7 @@ router.get('/vault/search', async (req, res, next) => {
         const idx = item.content.toLowerCase().indexOf(lq);
         matchExcerpt = item.content.substring(Math.max(0, idx - 30), idx + q.length + 30);
       }
-      return { ...item, _matchField: matchedField, _matchExcerpt: matchExcerpt };
+      return { ...presentMailSender(item, req.user.id), _matchField: matchedField, _matchExcerpt: matchExcerpt };
     });
 
     res.json({ results: enhanced, total: count || 0, query: q });
