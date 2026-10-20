@@ -1724,19 +1724,23 @@ public final class GigDetailViewModel {
 
     /// Opens (or creates) the gig chat room and returns a conversation
     /// destination for the inbox stack. Mirrors web/RN `getGigChatRoom`.
+    /// A business's owner and staff open its task's room as the business,
+    /// headed by the worker (the task before anyone is assigned).
     public func resolveChatDestination() async -> InboxConversationDestination? {
         guard let gig = rawGig else { return nil }
-        let name = gig.creator?.resolvedDisplayName ?? gig.title
-        let initials = Self.initialsFromName(name)
-        let verified = gig.creator?.resolvedVerified ?? false
         do {
             let response: GigChatRoomResponse = try await api.request(GigsEndpoints.chatRoom(gigId: gigId))
+            let asBusinessUserId = response.asBusinessUserId.flatMap { $0.isEmpty ? nil : $0 }
+            let name = asBusinessUserId == nil
+                ? gig.creator?.resolvedDisplayName ?? gig.title
+                : response.workerName ?? gig.title
             return InboxConversationDestination(
                 mode: .room(id: response.roomId),
                 displayName: name,
-                initials: initials,
+                initials: Self.initialsFromName(name),
                 identityKind: nil,
-                verified: verified
+                verified: asBusinessUserId == nil && gig.creator?.resolvedVerified == true,
+                asBusinessUserId: asBusinessUserId
             )
         } catch {
             return nil
