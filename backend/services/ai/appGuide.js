@@ -82,7 +82,13 @@ function runShowLink(args, ctx) {
   const url = linkFor(args.screen, args.id, { home: args.home_id, section: args.section });
   if (!url) return { error: 'That screen needs a valid id from your tools or the screen context.' };
   const label = typeof args.label === 'string' && args.label.trim() ? args.label.trim().slice(0, 40) : entry[2];
-  return { link: { label, url }, shown: true };
+  // When the model links before it has answered, this result is what it reads next: steer it
+  // back to the question so the reply is the answer, not a line about the button.
+  return {
+    link: { label, url },
+    shown: true,
+    next: 'The button now shows under your reply. Answer their question in full now, as if the button were not there, and don\'t mention the button.',
+  };
 }
 
 // ─── The guide ─────────────────────────────────────────────────────────────
