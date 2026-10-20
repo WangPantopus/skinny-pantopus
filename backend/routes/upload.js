@@ -636,7 +636,7 @@ router.delete('/gig-media/:gigId/:mediaId', verifyToken, async (req, res) => {
  * POST /api/upload/chat-media/:roomId
  * Upload chat attachments (documents/images) and return File records.
  */
-router.post('/chat-media/:roomId', uploadLimiter, verifyToken, upload.array('files', 5), enforceFileSizeLimits, validateAndStripUploads, async (req, res) => {
+router.post('/chat-media/:roomId', uploadLimiter, verifyToken, upload.array('files', 10), enforceFileSizeLimits, validateAndStripUploads, async (req, res) => {
   try {
     const userId = req.user.id;
     const { roomId } = req.params;
@@ -649,6 +649,30 @@ router.post('/chat-media/:roomId', uploadLimiter, verifyToken, upload.array('fil
 
     if (files.length === 0) {
       return res.status(400).json({ error: 'No files provided' });
+    }
+
+    // Keep both resources as ordinary private File rows, so authorization,
+    // retries and message deletion cover the motion clip as well as the still.
+    let slots;
+    try {
+      slots = req.body.media == null ? files.map((_, fileIndex) => ({ fileIndex })) : JSON.parse(req.body.media);
+      if (!Array.isArray(slots) || !slots.length || slots.length > 5) throw new Error('Choose up to 5 attachments');
+      const used = new Set();
+      const take = index => {
+        if (!Number.isInteger(index) || !files[index] || used.has(index)) throw new Error('Invalid attachment pairing');
+        used.add(index);
+        return files[index];
+      };
+      for (const slot of slots) {
+        const still = take(slot?.fileIndex);
+        if (slot.liveVideoIndex != null) {
+          const clip = take(slot.liveVideoIndex);
+          if (!still.mimetype.startsWith('image/') || !clip.mimetype.startsWith('video/')) throw new Error('A Live Photo needs a still and video');
+        }
+      }
+      if (used.size !== files.length) throw new Error('Every file must belong to an attachment');
+    } catch (error) {
+      return res.status(400).json({ error: error instanceof SyntaxError ? 'Invalid attachment pairing' : error.message });
     }
 
     const { data: participant } = await supabaseAdmin
@@ -665,15 +689,26 @@ router.post('/chat-media/:roomId', uploadLimiter, verifyToken, upload.array('fil
 
     // Bind every part to the same send intent. Include the ordered batch in the
     // fingerprint so a changed retry cannot combine attachments from two drafts.
-    const fingerprint = requestId ? crypto.createHash('sha256').update(JSON.stringify(files.map(file => [
+    const batch = files.map(file => [
       file.originalname, file.mimetype, crypto.createHash('sha256').update(file.buffer).digest('hex'),
-    ]))).digest('hex') : null;
+    ]);
+    const fingerprint = requestId ? crypto.createHash('sha256').update(JSON.stringify(req.body.media == null ? batch : [batch, slots])).digest('hex') : null;
+    const recordIds = files.map((_, index) => {
+      if (!requestId) return crypto.randomUUID();
+      const hex = crypto.createHash('sha256')
+        .update(`pantopus:chat-upload:v1:${userId.toLowerCase()}:${roomId.toLowerCase()}:${requestId.toLowerCase()}:${index}`)
+        .digest('hex').slice(0, 32);
+      return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+    });
+    const pairMetadata = files.map(() => ({}));
+    for (const slot of slots) {
+      if (slot.liveVideoIndex == null) continue;
+      pairMetadata[slot.fileIndex] = { live_video_file_id: recordIds[slot.liveVideoIndex] };
+      pairMetadata[slot.liveVideoIndex] = { live_photo_file_id: recordIds[slot.fileIndex] };
+    }
     const uploaded = [];
     for (const [index, file] of files.entries()) {
-      const hex = requestId ? crypto.createHash('sha256')
-        .update(`pantopus:chat-upload:v1:${userId.toLowerCase()}:${roomId.toLowerCase()}:${requestId.toLowerCase()}:${index}`)
-        .digest('hex').slice(0, 32) : null;
-      const id = hex ? `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}` : null;
+      const id = requestId ? recordIds[index] : null;
       const readExisting = async () => {
         const { data, error } = await supabaseAdmin.from('File').select('*').eq('id', id).maybeSingle();
         if (error) throw error;
@@ -684,6 +719,7 @@ router.post('/chat-media/:roomId', uploadLimiter, verifyToken, upload.array('fil
         id: saved.id, file_url: `/api/chat/files/${saved.id}`,
         original_filename: saved.original_filename, mime_type: saved.mime_type,
         file_size: saved.file_size, file_type: saved.file_type,
+        ...pairMetadata[index],
       });
       if (id) {
         const existing = await readExisting();
@@ -694,7 +730,7 @@ router.post('/chat-media/:roomId', uploadLimiter, verifyToken, upload.array('fil
         }
       }
 
-      const recordId = id || crypto.randomUUID();
+      const recordId = recordIds[index];
       const objectKey = id ? `chat/${roomId}/${userId}/${id}/${fingerprint}${path.extname(file.originalname).toLowerCase()}`
         : s3.generateS3Key(`chat/${roomId}`, file.originalname, userId);
       const sha256 = crypto.createHash('sha256').update(file.buffer).digest('hex');
@@ -727,6 +763,7 @@ router.post('/chat-media/:roomId', uploadLimiter, verifyToken, upload.array('fil
             room_id: roomId,
             category,
             uploaded_via: 'chat',
+            ...pairMetadata[index],
             ...(fingerprint ? { upload_fingerprint: fingerprint } : {}),
           }
         };

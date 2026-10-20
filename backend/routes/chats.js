@@ -1789,7 +1789,7 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
       const uniqueFileIds = [...new Set(fileIds.map((id) => String(id)))];
       const { data: files, error: fileErr } = await supabaseAdmin
         .from('File')
-        .select('id, user_id, file_url, original_filename, mime_type, file_size, is_deleted, file_type')
+        .select('id, user_id, file_url, original_filename, mime_type, file_size, is_deleted, file_type, metadata')
         .in('id', uniqueFileIds);
 
       if (fileErr) {
@@ -1807,6 +1807,12 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
       }
 
       const validMap = new Map(validFiles.map((f) => [String(f.id), f]));
+      for (const file of validFiles) {
+        const pairId = file.metadata?.live_video_file_id || file.metadata?.live_photo_file_id;
+        if (pairId && (!validMap.has(pairId) || String(file.metadata?.room_id) !== String(roomId))) {
+          return res.status(400).json({ error: 'Attach both Live Photo resources in their original room' });
+        }
+      }
       attachmentPayload = uniqueFileIds.map((fid) => {
         const f = validMap.get(String(fid));
         return {
@@ -1816,6 +1822,8 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
           mime_type: f.mime_type,
           file_size: f.file_size,
           file_type: f.file_type,
+          ...(f.metadata?.live_video_file_id ? { live_video_file_id: f.metadata.live_video_file_id } : {}),
+          ...(f.metadata?.live_photo_file_id ? { live_photo_file_id: f.metadata.live_photo_file_id } : {}),
         };
       });
     }

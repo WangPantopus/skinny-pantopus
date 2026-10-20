@@ -57,7 +57,13 @@ export default function ChatInput({ onSend, sending, disabled = false, placehold
   const handlePickFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
     const incoming = Array.from(e.target.files || []) as File[];
     if (incoming.length === 0) return;
-    setSelectedFiles(prev => [...prev, ...incoming].slice(0, 5));
+    const valid = incoming.filter(file => {
+      const limit = file.type.startsWith('video/') ? 100 : file.type.startsWith('image/') ? 10 : 25;
+      return file.size > 0 && file.size <= limit * 1024 * 1024;
+    });
+    setError(valid.length !== incoming.length ? 'Some files could not be added. Images: 10 MB, videos: 100 MB, documents: 25 MB maximum; empty files are not supported.' : null);
+    setSelectedFiles(prev => [...prev, ...valid].slice(0, 5));
+    e.target.value = '';
   };
 
   const removeFile = (idx: number) => {

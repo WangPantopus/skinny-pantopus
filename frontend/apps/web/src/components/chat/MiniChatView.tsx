@@ -57,9 +57,10 @@ export default function MiniChatView({ roomId, otherUserId, name, avatar, onBack
 
   const handleSend = useCallback(async (text: string, files?: File[]) => {
     try {
-      await chat.sendMessage(text);
+      await chat.sendMessage(text, files);
     } catch (e: unknown) {
       chat.setError(e instanceof Error ? e.message : 'Failed to send');
+      throw e;
     }
   }, [chat]);
 

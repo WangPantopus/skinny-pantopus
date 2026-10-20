@@ -1422,14 +1422,15 @@ public final class ChatConversationViewModel {
         queuedAttachments.removeAll { $0.id == id }
     }
 
-    public func queueAttachment(kind: ChatQueuedAttachmentKind, filename: String, mimeType: String, data: Data) {
+    public func queueAttachment(kind: ChatQueuedAttachmentKind, filename: String, mimeType: String, data: Data, liveVideo: Data? = nil) {
         appendQueuedAttachment(
             ChatQueuedAttachment(
                 id: UUID().uuidString,
                 kind: kind,
                 filename: filename,
                 mimeType: mimeType,
-                data: data
+                data: data,
+                liveVideo: liveVideo
             )
         )
     }
@@ -1637,17 +1638,21 @@ public final class ChatConversationViewModel {
         roomId: String,
         clientId: String
     ) async throws -> [String] {
-        let files = attachments.compactMap { attachment -> MultipartFile? in
-            guard let data = attachment.data else { return nil }
-            return MultipartFile(
-                fieldName: "files",
-                filename: attachment.filename,
-                mimeType: attachment.mimeType,
-                data: data
-            )
+        var files: [MultipartFile] = []
+        var slots: [[String: Int]] = []
+        for attachment in attachments {
+            guard let data = attachment.data else { continue }
+            var slot = ["fileIndex": files.count]
+            files.append(MultipartFile(fieldName: "files", filename: attachment.filename, mimeType: attachment.mimeType, data: data))
+            if let clip = attachment.liveVideo {
+                slot["liveVideoIndex"] = files.count
+                files.append(MultipartFile(fieldName: "files", filename: "live-\(attachment.id).mp4", mimeType: "video/mp4", data: clip))
+            }
+            slots.append(slot)
         }
         guard !files.isEmpty else { return [] }
-        let response = try await uploader.uploadChatMedia(roomId: roomId, files: files, clientRequestId: clientId)
+        let media = try String(bytes: JSONEncoder().encode(slots), encoding: .utf8)
+        let response = try await uploader.uploadChatMedia(roomId: roomId, files: files, clientRequestId: clientId, media: media)
         return response.media.map(\.id)
     }
 
@@ -2259,7 +2264,8 @@ public final class ChatConversationViewModel {
                 stamp: stamp,
                 deliveryState: deliveryState,
                 lockedTier: Self.lockedTier(for: message),
-                sentSupportTier: Self.sentSupportTier(for: message)
+                sentSupportTier: Self.sentSupportTier(for: message),
+                attachments: message.attachments
             )))
         }
         state = .loaded(rows: rows)

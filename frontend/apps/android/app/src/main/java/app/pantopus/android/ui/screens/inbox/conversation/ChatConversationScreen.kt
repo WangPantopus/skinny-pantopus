@@ -226,9 +226,9 @@ fun ChatConversationScreen(
     var pendingDeleteId by remember { mutableStateOf<String?>(null) }
     // Photos (and the tapped index) shown in the full-screen viewer.
     var viewerPhotos by remember { mutableStateOf<Pair<List<String>, Int>?>(null) }
+    var viewerFile by remember { mutableStateOf<ChatOpenFile?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
-    // Photos and videos, as on iOS. A video rides as a named file, like one
-    // picked with Document; web plays it inline, the apps open it.
+    // Images and videos share the same private attachment upload and viewer.
     val photoPicker =
         rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(maxItems = 5)) { uris ->
             if (uris.isEmpty()) return@rememberLauncherForActivityResult
@@ -236,7 +236,10 @@ fun ChatConversationScreen(
                 uris.take(5).forEach { uri ->
                     withContext(Dispatchers.IO) {
                         val mimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
-                        val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return@withContext
+                        val bytes = readChatAttachment(context, uri, mimeType) ?: run {
+                            snackbarHostState.showSnackbar("Couldn’t read this file. Images: 10 MB, videos: 100 MB, documents: 25 MB maximum.")
+                            return@withContext
+                        }
                         val extension = mimeType.substringAfter('/', "jpg").substringBefore('+')
                         val isVideo = mimeType.startsWith("video/")
                         val name = if (isVideo) context.pickedFileName(uri) else null
@@ -259,8 +262,10 @@ fun ChatConversationScreen(
                         uris.take(5).mapNotNull { uri ->
                             val mimeType = context.contentResolver.getType(uri) ?: "application/octet-stream"
                             val bytes =
-                                context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                                    ?: return@mapNotNull null
+                                readChatAttachment(context, uri, mimeType) ?: run {
+                                    snackbarHostState.showSnackbar("Couldn’t read this file. Images: 10 MB, videos: 100 MB, documents: 25 MB maximum.")
+                                    return@mapNotNull null
+                                }
                             val extension = mimeType.substringAfter('/', "bin").substringBefore('+')
                             val name = context.pickedFileName(uri) ?: "chat-${UUID.randomUUID()}.$extension"
                             Triple(mimeType, name, bytes)
@@ -290,8 +295,10 @@ fun ChatConversationScreen(
             scope.launch {
                 withContext(Dispatchers.IO) {
                     val bytes =
-                        context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                            ?: return@withContext
+                        readChatAttachment(context, uri, "image/jpeg") ?: run {
+                            snackbarHostState.showSnackbar("Couldn’t read this photo. Images must be under 10 MB.")
+                            return@withContext
+                        }
                     viewModel.queueAttachment(
                         kind = ChatQueuedAttachmentKind.Image,
                         filename = "camera-${UUID.randomUUID()}.jpg",
@@ -795,6 +802,10 @@ fun ChatConversationScreen(
         LaunchedEffect(openFile) {
             val opened = openFile ?: return@LaunchedEffect
             viewModel.consumeOpenFile()
+            if (opened.mimeType == "application/pdf" || opened.mimeType.startsWith("video/") || opened.liveFile != null) {
+                viewerFile = opened
+                return@LaunchedEffect
+            }
             val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", opened.file)
             val intent =
                 Intent(Intent.ACTION_VIEW)
@@ -806,6 +817,20 @@ fun ChatConversationScreen(
             } catch (_: ActivityNotFoundException) {
                 snackbarHostState.showSnackbar("No app on this device can open this file.")
             }
+        }
+        viewerFile?.let { opened ->
+            DisposableEffect(opened) { onDispose { opened.file.parentFile?.deleteRecursively() } }
+            val kind = when {
+                opened.liveFile != null -> PostMediaKind.LivePhoto
+                opened.mimeType == "application/pdf" -> PostMediaKind.Document
+                else -> PostMediaKind.Video
+            }
+            MediaViewerDialog(
+                items = listOf(PostMediaItem(id = opened.file.name, kind = kind, url = Uri.fromFile(opened.file).toString(), liveVideoUrl = opened.liveFile?.let { Uri.fromFile(it).toString() })),
+                startIndex = 0,
+                localPdfFile = opened.file.takeIf { kind == PostMediaKind.Document },
+                onDismiss = { viewerFile = null },
+            )
         }
         viewerPhotos?.let { (urls, index) ->
             MediaViewerDialog(
@@ -2900,7 +2925,19 @@ private fun BubbleRow(
             // Reactions float as pills overlapping the bubble's bottom
             // corner (design `.reaction { bottom: -10; left/right: 8 }`).
             Box {
-                when (val body = content.body) {
+                if (content.attachments.any { !it.mimeType.orEmpty().startsWith("image/") || it.liveVideoFileId != null } && (content.lockedTier == null || isOut)) {
+                    BubbleContainer(
+                        isOut = isOut,
+                        hasTail = content.hasTail,
+                        isContinuation = content.isContinuation,
+                        bubbleColor = bubbleColor,
+                        lockedTier = null,
+                        onLockedAction = onLockedAction,
+                        contentId = content.id,
+                    ) {
+                        ChatAttachmentRows(content, isOut, textColor, onOpenAttachment, onOpenPhotos, onOpenUrl)
+                    }
+                } else when (val body = content.body) {
                     is ChatBubbleBody.Text ->
                         if (isEmojiOnly(body.text)) {
                             // Emoji-only messages render large with no bubble (RN).
@@ -3173,21 +3210,23 @@ private fun ReplyPreview(
 }
 
 /**
- * First http(s) URL in [text] via [Patterns.WEB_URL], or null. Schemeless
- * matches ("example.com") are ignored — only explicit http/https links
- * become tappable / drive the preview card.
+ * Detect web links and discard surrounding punctuation, including schemeless domains.
  */
-private fun firstHttpUrl(text: String): String? {
-    if (!text.contains("http://", ignoreCase = true) && !text.contains("https://", ignoreCase = true)) return null
+private fun chatLinks(text: String): List<Triple<Int, String, String>> {
+    val links = mutableListOf<Triple<Int, String, String>>()
     val matcher = Patterns.WEB_URL.matcher(text)
     while (matcher.find()) {
-        val match = matcher.group()
-        if (match.startsWith("http://", ignoreCase = true) || match.startsWith("https://", ignoreCase = true)) {
-            return match
+        var raw = matcher.group().trimEnd('.', ',', ';', ':', '!', '?')
+        for ((open, close) in listOf('(' to ')', '[' to ']', '{' to '}')) {
+            while (raw.endsWith(close) && raw.count { it == close } > raw.count { it == open }) raw = raw.dropLast(1)
         }
+        val http = raw.startsWith("http://", true) || raw.startsWith("https://", true)
+        if (raw.isNotBlank() && (http || !raw.contains("://"))) links += Triple(matcher.start(), raw, if (http) raw else "https://$raw")
     }
-    return null
+    return links
 }
+
+private fun firstHttpUrl(text: String): String? = chatLinks(text).firstOrNull()?.third
 
 /**
  * Bubble body text with http(s) URLs rendered as tappable, underlined
@@ -3206,17 +3245,11 @@ private fun LinkifiedBubbleText(
         remember(text, isOut) {
             buildAnnotatedString {
                 var cursor = 0
-                val matcher = Patterns.WEB_URL.matcher(text)
-                while (matcher.find()) {
-                    val match = matcher.group()
-                    val isHttp =
-                        match.startsWith("http://", ignoreCase = true) ||
-                            match.startsWith("https://", ignoreCase = true)
-                    if (!isHttp) continue
-                    append(text.substring(cursor, matcher.start()))
+                for ((start, match, url) in chatLinks(text)) {
+                    append(text.substring(cursor, start))
                     withLink(
                         LinkAnnotation.Url(
-                            url = match,
+                            url = url,
                             styles =
                                 TextLinkStyles(
                                     style =
@@ -3225,10 +3258,10 @@ private fun LinkifiedBubbleText(
                                             textDecoration = TextDecoration.Underline,
                                         ),
                                 ),
-                            linkInteractionListener = { onOpenUrl(match) },
+                            linkInteractionListener = { onOpenUrl(url) },
                         ),
                     ) { append(match) }
-                    cursor = matcher.end()
+                    cursor = start + match.length
                 }
                 append(text.substring(cursor))
             }
@@ -5302,3 +5335,72 @@ private tailrec fun Context.findActivity(): Activity? =
         is ContextWrapper -> baseContext.findActivity()
         else -> null
     }
+
+
+/** Every logical attachment remains reachable, including mixed photo/video/document sends. */
+@Composable
+private fun ChatAttachmentRows(
+    content: ChatBubbleContent,
+    isOut: Boolean,
+    textColor: Color,
+    onOpenAttachment: ((ChatBubbleBody.Attachment) -> Unit)?,
+    onOpenPhotos: ((List<String>, Int) -> Unit)?,
+    onOpenUrl: (String) -> Unit,
+) {
+    val files = content.attachments
+    val logical = files.filter { clip -> files.none { it.liveVideoFileId == clip.id && clip.livePhotoFileId == it.id } }
+    Column(modifier = Modifier.widthIn(max = 240.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        logical.forEach { file ->
+            val clip = files.firstOrNull { it.id == file.liveVideoFileId && it.livePhotoFileId == file.id }
+            val mime = file.mimeType.orEmpty()
+            val image = mime.startsWith("image/")
+            val label = when {
+                clip != null -> "LIVE · Tap to play"
+                mime.startsWith("video/") -> "Video · Tap to play"
+                mime == "application/pdf" -> "PDF · Tap to read"
+                else -> file.originalFilename ?: "Attachment"
+            }
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(Radii.md)).background(PantopusColors.appSurfaceSunken).clickable {
+                if (image && clip == null) {
+                    ChatMediaUrl.resolve(file.fileUrl)?.let { onOpenPhotos?.invoke(listOf(it), 0) }
+                } else {
+                    onOpenAttachment?.invoke(ChatBubbleBody.Attachment(filename = file.originalFilename ?: "Attachment", fileUrl = file.fileUrl, mimeType = file.mimeType, liveVideoFileId = clip?.id))
+                }
+            }.padding(8.dp)) {
+                if (image) {
+                    ChatMediaUrl.resolve(file.fileUrl)?.let { url ->
+                        AsyncImage(model = inlinePhotoRequest(url), contentDescription = "Photo", contentScale = ContentScale.Fit, modifier = Modifier.fillMaxWidth().height(140.dp))
+                    }
+                }
+                Text(label, color = PantopusColors.appText, fontSize = 13.sp)
+            }
+        }
+        val caption = when (val body = content.body) {
+            is ChatBubbleBody.Image -> body.caption
+            is ChatBubbleBody.Attachment -> body.caption
+            else -> null
+        }
+        caption?.let { LinkifiedBubbleText(text = it, isOut = isOut, textColor = textColor, onOpenUrl = onOpenUrl) }
+    }
+}
+
+/** Bound picker reads before allocating media bytes; remote uploads use the same limits. */
+private fun readChatAttachment(context: Context, uri: Uri, mime: String): ByteArray? =
+    runCatching {
+        val limit = when {
+            mime.startsWith("video/") -> 100 * 1024 * 1024
+            mime.startsWith("image/") -> 10 * 1024 * 1024
+            else -> 25 * 1024 * 1024
+        }
+        context.contentResolver.openInputStream(uri)?.use { stream ->
+            val output = java.io.ByteArrayOutputStream()
+            val buffer = ByteArray(8192)
+            while (true) {
+                val count = stream.read(buffer)
+                if (count < 0) break
+                require(output.size() + count <= limit)
+                output.write(buffer, 0, count)
+            }
+            output.toByteArray().takeIf { it.isNotEmpty() }
+        }
+    }.getOrNull()

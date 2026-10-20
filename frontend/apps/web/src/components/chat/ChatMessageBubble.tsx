@@ -4,6 +4,8 @@ import React, { useState } from 'react';
 import type { ChatMessage } from '@pantopus/types';
 import { chatPersonAvatar, chatPersonHandle, chatPersonName, extractAttachments, resolveMessageType } from '../../hooks/useChatMessages';
 import ChatRichCard from './ChatRichCard';
+import ImageLightbox from './ImageLightbox';
+import { PostLinkContent } from '../feed/LinkPreviewCard';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
 import MessageReactionBar from './MessageReactionBar';
 import QuickReactionPicker from './QuickReactionPicker';
@@ -30,6 +32,7 @@ interface ChatMessageBubbleProps {
 }
 
 function ChatMessageBubble({ msg, isMine, showSender = false, onImageClick, onReact, onRetry }: ChatMessageBubbleProps) {
+  const [preview, setPreview] = useState<{ url: string; title?: string; mimeType?: string; liveUrl?: string } | null>(null);
   const [hovered, setHovered] = useState(false);
   const [showQuickPicker, setShowQuickPicker] = useState(false);
   const [showFullPicker, setShowFullPicker] = useState(false);
@@ -39,7 +42,8 @@ function ChatMessageBubble({ msg, isMine, showSender = false, onImageClick, onRe
     ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : '';
   const msgText = msg.message_text || msg.message || msg.content || '';
-  const attachments = extractAttachments(msg);
+  const allAttachments = extractAttachments(msg);
+  const attachments = allAttachments.filter(a => !allAttachments.some(still => still.live_video_file_id === a.id && a.live_photo_file_id === still.id));
   const metadata = msg.metadata || {};
   const msgType = resolveMessageType(msg);
   const isOptimistic = msg._optimistic;
@@ -191,23 +195,31 @@ function ChatMessageBubble({ msg, isMine, showSender = false, onImageClick, onRe
                 </div>
               </div>
             )}
-            {showText && msgText}
+            {showText && <span className="[&_a]:text-inherit"><PostLinkContent content={msgText} /></span>}
             {attachments.length > 0 && (
               <div className={`${showText ? 'mt-2' : ''} space-y-2`}>
                 {attachments.map((a: Record<string, any>, i: number) => {
                   const mime = String(a?.mime_type || '');
                   const isImage = mime.startsWith('image/');
                   const url = a?.file_url as string | undefined;
+                  const live = allAttachments.find(clip => clip.id === a.live_video_file_id && clip.live_photo_file_id === a.id);
+                  if (mime === 'application/pdf' && url) {
+                    return <button key={`${msg.id}-att-${i}`} type="button" className="block rounded-lg border p-3 text-left"
+                      onClick={() => setPreview({ url, title: a.original_filename, mimeType: mime })}>
+                      PDF · {a.original_filename || 'Tap to read'}
+                    </button>;
+                  }
                   if (isImage && url) {
                     return (
                       <button
                         key={`${msg.id}-att-${i}`}
                         type="button"
-                        onClick={() => onImageClick ? onImageClick(url, a.original_filename) : window.open(url, '_blank')}
+                        onClick={() => live || !onImageClick ? setPreview({ url, title: a.original_filename, liveUrl: live?.file_url }) : onImageClick(url, a.original_filename)}
                         className={`block max-w-[min(100%,240px)] overflow-hidden rounded-lg text-left ${
                           isMine ? 'bg-primary-700/40' : 'bg-black/[0.06]'
                         }`}
                       >
+                        {live && <span className="block px-2 py-1 text-xs">● LIVE</span>}
                         {/* Native img: user URLs + cookies on /api/chat/files/; avoids next/image dev sizing warnings. */}
                         <img
                           src={url}
@@ -280,6 +292,8 @@ function ChatMessageBubble({ msg, isMine, showSender = false, onImageClick, onRe
           ) : isOptimistic ? 'Sending…' : <>{isEdited && <span>edited · </span>}{ts}</>}
         </div>
         {reactionBar}
+        <ImageLightbox imageUrl={preview?.url ?? null} title={preview?.title} mimeType={preview?.mimeType}
+          liveUrl={preview?.liveUrl} onClose={() => setPreview(null)} />
       </div>
     </div>
   );

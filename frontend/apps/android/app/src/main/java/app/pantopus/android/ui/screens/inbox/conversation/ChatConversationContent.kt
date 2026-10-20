@@ -3,6 +3,7 @@
 package app.pantopus.android.ui.screens.inbox.conversation
 
 import androidx.compose.runtime.Immutable
+import app.pantopus.android.data.api.models.chats.ChatAttachmentDto
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.ui.theme.PantopusIcon
 import java.io.File
@@ -378,6 +379,7 @@ data class ChatShareListingOption(
 data class ChatOpenFile(
     val file: File,
     val mimeType: String,
+    val liveFile: File? = null,
 )
 
 /** Body of a single bubble. */
@@ -409,6 +411,7 @@ sealed interface ChatBubbleBody {
         val caption: String? = null,
         val fileUrl: String? = null,
         val mimeType: String? = null,
+        val liveVideoFileId: String? = null,
     ) : ChatBubbleBody
 
     data class LocationCard(val card: ChatLocationCard) : ChatBubbleBody
@@ -457,6 +460,7 @@ data class ChatBubbleContent(
     val lockedTier: String? = null,
     val sentSupportTier: String? = null,
     val isContinuation: Boolean = false,
+    val attachments: List<ChatAttachmentDto> = emptyList(),
 )
 
 @Immutable

@@ -229,19 +229,22 @@ public struct ChatQueuedAttachment: Identifiable, Sendable, Hashable {
     public let filename: String
     public let mimeType: String
     public let data: Data?
+    public let liveVideo: Data?
 
     public init(
         id: String,
         kind: ChatQueuedAttachmentKind,
         filename: String,
         mimeType: String = "application/octet-stream",
-        data: Data? = nil
+        data: Data? = nil,
+        liveVideo: Data? = nil
     ) {
         self.id = id
         self.kind = kind
         self.filename = filename
         self.mimeType = mimeType
         self.data = data
+        self.liveVideo = liveVideo
     }
 }
 
@@ -478,6 +481,7 @@ public struct ChatBubbleContent: Identifiable, Sendable, Hashable {
     public let id: String
     public let side: ChatMessageSide
     public let body: Body
+    public let attachments: [ChatAttachmentDTO]
     public let replyPreview: ChatReplyPreview?
     public let reactions: [ChatBubbleReaction]
     /// Whether this bubble carries the 4pt tail (last in a same-sender
@@ -508,7 +512,8 @@ public struct ChatBubbleContent: Identifiable, Sendable, Hashable {
         stamp: String?,
         deliveryState: ChatDeliveryState? = nil,
         lockedTier: String? = nil,
-        sentSupportTier: String? = nil
+        sentSupportTier: String? = nil,
+        attachments: [ChatAttachmentDTO] = []
     ) {
         self.id = id
         self.side = side
@@ -521,6 +526,7 @@ public struct ChatBubbleContent: Identifiable, Sendable, Hashable {
         self.deliveryState = deliveryState
         self.lockedTier = lockedTier
         self.sentSupportTier = sentSupportTier
+        self.attachments = attachments
     }
 }
 

@@ -24,11 +24,12 @@ struct MediaStillImage: View {
     let url: URL?
     /// `.fill` for grid cells, `.fit` for full-screen viewer slides.
     var contentMode: ContentMode = .fill
+    var keepsOnDisk = true
 
     var body: some View {
         Color.clear
             .overlay {
-                CachedAsyncImage(url: url) { phase in
+                CachedAsyncImage(url: url, keepsOnDisk: keepsOnDisk) { phase in
                     switch phase {
                     case let .success(image):
                         if contentMode == .fill {
@@ -163,7 +164,8 @@ struct LivePhotoTileView: View {
         ZStack {
             MediaStillImage(
                 url: contentMode == .fill ? (thumbnailURL ?? stillURL) : stillURL,
-                contentMode: contentMode
+                contentMode: contentMode,
+                keepsOnDisk: !showsReplayButton
             )
             if let player {
                 PlayerLayerView(
@@ -248,7 +250,7 @@ struct PostMediaTileView: View {
     var body: some View {
         switch item.kind {
         case .image:
-            MediaStillImage(url: item.url)
+            MediaStillImage(url: item.thumbnailURL ?? item.url)
                 .contentShape(Rectangle())
                 .onTapGesture { onTap?() }
                 .accessibilityElement()

@@ -2,14 +2,17 @@
 
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import LivePhotoTile from '../feed/LivePhotoTile';
 
 interface ImageLightboxProps {
   imageUrl: string | null;
   title?: string;
+  mimeType?: string;
+  liveUrl?: string;
   onClose: () => void;
 }
 
-export default function ImageLightbox({ imageUrl, title, onClose }: ImageLightboxProps) {
+export default function ImageLightbox({ imageUrl, title, mimeType, liveUrl, onClose }: ImageLightboxProps) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
 
@@ -29,14 +32,14 @@ export default function ImageLightbox({ imageUrl, title, onClose }: ImageLightbo
       className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80"
       role="dialog"
       aria-modal="true"
-      aria-label="Full size image"
+      aria-label="Attachment viewer"
       onClick={onClose}
     >
       {/* Close button */}
       <button
         onClick={onClose}
         className="absolute top-4 right-4 w-10 h-10 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70 transition-colors z-10"
-        aria-label="Close image"
+        aria-label="Close attachment"
       >
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -50,7 +53,16 @@ export default function ImageLightbox({ imageUrl, title, onClose }: ImageLightbo
         </div>
       )}
 
-      {/* Native img: arbitrary chat URLs; avoids next/image dev sizing warnings in lightbox. */}
+      {mimeType === 'application/pdf' ? (
+        <object data={imageUrl} type="application/pdf" aria-label={title || 'PDF document'} className="h-[85vh] w-[min(90vw,1100px)] bg-white" onClick={e => e.stopPropagation()}>
+          <p>This browser cannot display the PDF. <a href={imageUrl} target="_blank" rel="noopener noreferrer">Open PDF</a></p>
+        </object>
+      ) : liveUrl ? (
+        <div onClick={e => e.stopPropagation()}>
+          <LivePhotoTile stillUrl={imageUrl} videoUrl={liveUrl} fit="contain" showsReplayPill showsDot={false} className="h-[85vh] w-[90vw]" />
+        </div>
+      ) : (
+      /* Native img: arbitrary chat URLs; avoids next/image dev sizing warnings in lightbox. */
       <img
         src={imageUrl}
         alt={title || 'Image preview'}
@@ -64,6 +76,7 @@ export default function ImageLightbox({ imageUrl, title, onClose }: ImageLightbo
         }}
         onClick={e => e.stopPropagation()}
       />
+      )}
     </div>,
     document.body,
   );

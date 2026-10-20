@@ -422,6 +422,8 @@ public struct ChatAttachmentDTO: Decodable, Sendable, Hashable, Identifiable {
     public let mimeType: String?
     public let fileSize: Int?
     public let fileType: String?
+    public let liveVideoFileId: String?
+    public let livePhotoFileId: String?
 
     private enum CodingKeys: String, CodingKey {
         case id
@@ -430,6 +432,8 @@ public struct ChatAttachmentDTO: Decodable, Sendable, Hashable, Identifiable {
         case mimeType = "mime_type"
         case fileSize = "file_size"
         case fileType = "file_type"
+        case liveVideoFileId = "live_video_file_id"
+        case livePhotoFileId = "live_photo_file_id"
     }
 }
 
