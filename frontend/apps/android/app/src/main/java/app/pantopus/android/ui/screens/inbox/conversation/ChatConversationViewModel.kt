@@ -11,6 +11,7 @@ import app.pantopus.android.data.ai.AIActionRunner
 import app.pantopus.android.data.ai.AIChatRepository
 import app.pantopus.android.data.ai.AIChatStreamEvent
 import app.pantopus.android.data.ai.AIConversationSession
+import app.pantopus.android.data.ai.AIPdfCheck
 import app.pantopus.android.data.ai.AIScreenContext
 import app.pantopus.android.data.api.models.chats.ChatMessageDto
 import app.pantopus.android.data.api.models.chats.ChatMessageSender
@@ -304,7 +305,16 @@ class ChatConversationViewModel
         // server deletes a photo once it has read it and its reference never loads.
         private val aiSentPhotos = mutableMapOf<String, List<String>>()
 
+        // PDFs sent to the assistant, by the message that carried them: the name and size its chip shows.
+        private val aiSentFiles = mutableMapOf<String, List<ChatSentFile>>()
+
         private var aiConversationId: String? = null
+
+        // The brief or nudge the thread was opened for (its notification id): the thread scrolls to its message once.
+        private var aiNudgeId: String? = null
+
+        // The conversation that brief or nudge was added to (its notification says which).
+        private var aiNudgeConversationId: String? = null
         private val aiDraftsByMessageId = mutableMapOf<String, List<ChatAIDraftCard>>()
 
         // Buttons to screens of the app under each reply (`link` events and history `links`).
@@ -369,6 +379,8 @@ class ChatConversationViewModel
             initialTopic: ChatInitialTopic? = null,
             gigId: String? = null,
             aiContext: AIScreenContext? = null,
+            aiNudgeId: String? = null,
+            aiConversationId: String? = null,
         ) {
             this.mode = mode
             this.currentUserId = currentUserId
@@ -376,6 +388,10 @@ class ChatConversationViewModel
             this.scrollToMessageId = scrollToMessageId
             this.initialTopic = initialTopic
             this.gigId = gigId
+            if (mode is ChatThreadMode.Ai) {
+                this.aiNudgeId = aiNudgeId
+                this.aiNudgeConversationId = aiConversationId
+            }
             // Configured again after a rotation: the starters already used stay gone.
             if (mode is ChatThreadMode.Ai && aiContext != _aiContext.value) {
                 _aiContext.value = aiContext
@@ -400,9 +416,13 @@ class ChatConversationViewModel
                 fetch(initial = true, quiet = true)
                 return
             }
-            // Seed AI continuity: a new VM instance for the AI thread keeps
-            // appending to the conversation the app session already opened.
-            if (mode is ChatThreadMode.Ai && aiConversationId == null) {
+            // A brief or nudge opens the conversation it was added to, at its message (AI assistant phase 2 §8.2).
+            val openedForNudge = aiNudgeId != null || aiNudgeConversationId != null
+            if (mode is ChatThreadMode.Ai && aiConversationId == null && openedForNudge) {
+                openAtNudge()
+            } else if (mode is ChatThreadMode.Ai && aiConversationId == null) {
+                // Seed AI continuity: a new VM instance for the AI thread keeps
+                // appending to the conversation the app session already opened.
                 aiConversationId = aiSession.conversationId
                 // Cold relaunch: the session holder is empty — restore the
                 // latest backend conversation id so the thread continues
@@ -441,6 +461,26 @@ class ChatConversationViewModel
                     is NetworkResult.Failure ->
                         Timber.w("restore AI conversation failed: ${result.error.message}")
                 }
+            }
+        }
+
+        /**
+         * A brief or nudge was tapped (a push or a notification row): the conversation its notification names opens and
+         * continues while the person still has it (else the newest, which a nudge's arrival lists first), scrolled to
+         * the message whose history item carries the notification's id. A server without that id opens it at its newest
+         * message.
+         */
+        private fun openAtNudge() {
+            viewModelScope.launch {
+                val listed = (aiRepo.conversations() as? NetworkResult.Success)?.data?.conversations.orEmpty()
+                val named = aiNudgeConversationId?.takeIf { id -> listed.any { it.id == id } }
+                val id = named ?: listed.firstOrNull()?.id ?: aiSession.conversationId ?: return@launch
+                // A message sent while the list loaded keeps its own conversation.
+                if (aiConversationId != null || messages.isNotEmpty()) return@launch
+                aiConversationId = id
+                aiSession.conversationId = id
+                aiSession.freshStartUserId = null
+                loadAiHistory(id)
             }
         }
 
@@ -487,6 +527,7 @@ class ChatConversationViewModel
          * after it share one reply, as they did when it streamed. A server
          * without the route leaves the thread empty, as before.
          */
+        @Suppress("CyclomaticComplexMethod")
         private suspend fun loadAiHistory(conversationId: String) {
             if (messages.isNotEmpty()) return
             val history =
@@ -502,18 +543,24 @@ class ChatConversationViewModel
             val restored = mutableListOf<ChatMessageDto>()
             val drafts = mutableMapOf<String, List<ChatAIDraftCard>>()
             val links = mutableMapOf<String, List<ChatAILink>>()
+            // A brief's or nudge's notification id, by the reply its first item opened.
+            val nudgeReplies = mutableMapOf<String, String>()
             var openReplyId: String? = null
             history.messages.forEachIndexed { index, item ->
                 val id = "ai_history_$index"
                 val text = item.text.orEmpty()
                 if (item.role == "user") {
                     openReplyId = null
-                    restored.add(localMessage(id = id, text = sentText(text, item.photos ?: 0), userId = currentUserId, type = "text"))
+                    val sent = sentText(text, item.photos ?: 0, item.documents ?: 0)
+                    restored.add(localMessage(id = id, text = sent, userId = currentUserId, type = "text"))
                     return@forEachIndexed
                 }
                 val draft = item.draft?.let { aiRepo.draftCard(it.type, it.draft) }
                 val itemLinks = item.links.orEmpty().mapNotNull { aiRepo.link(it.label, it.url) }
                 if (draft == null && text.isEmpty() && itemLinks.isEmpty()) return@forEachIndexed
+                // A brief or nudge (its line, then its cards) is a reply of its own, never the note of the one before.
+                val nudge = item.nudgeNotificationId
+                if (nudge != null) openReplyId = null
                 // A draft, its link buttons and the note after it share one reply, as they did when it streamed.
                 val replyId =
                     openReplyId?.takeIf { open -> restored.any { it.id == open } }
@@ -522,13 +569,23 @@ class ChatConversationViewModel
                     val at = restored.indexOfFirst { it.id == replyId }
                     restored[at] = localMessage(id = replyId, text = text, userId = "ai", type = "ai_reply")
                 }
-                openReplyId = replyId.takeIf { text.isEmpty() }
+                // A brief's or nudge's cards join its line.
+                openReplyId = if (nudge != null) replyId else replyId.takeIf { text.isEmpty() }
                 draft?.let { drafts[replyId] = drafts[replyId].orEmpty() + withSavedRuns(it) }
                 if (itemLinks.isNotEmpty()) links[replyId] = links[replyId].orEmpty() + itemLinks
+                nudge?.let { nudgeReplies.putIfAbsent(it, replyId) }
             }
             messages.addAll(restored)
             aiDraftsByMessageId.putAll(drafts)
             aiLinksByMessageId.putAll(links)
+            // Opened for a brief or nudge: its message comes into view (the Chat Search scroll), once.
+            aiNudgeId?.let { nudge ->
+                aiNudgeId = null
+                nudgeReplies[nudge]?.let { replyId ->
+                    scrollToMessageId = replyId
+                    didResolveScrollTarget = false
+                }
+            }
             rebuild()
         }
 
@@ -590,16 +647,28 @@ class ChatConversationViewModel
             rebuild()
         }
 
-        /** A restored message of the person's: their words, or a line for the photos they sent alone. */
+        /** A restored message of the person's: their words, or a line for the photos and documents they sent alone. */
         private fun sentText(
             text: String,
             photos: Int,
-        ): String =
-            when {
-                text.isNotEmpty() || photos == 0 -> text
-                photos == 1 -> "Sent a photo"
-                else -> "Sent $photos photos"
-            }
+            documents: Int = 0,
+        ): String {
+            if (text.isNotEmpty()) return text
+            val sent =
+                listOfNotNull(
+                    when {
+                        photos == 1 -> "a photo"
+                        photos > 1 -> "$photos photos"
+                        else -> null
+                    },
+                    when {
+                        documents == 1 -> "a document"
+                        documents > 1 -> "$documents documents"
+                        else -> null
+                    },
+                )
+            return if (sent.isEmpty()) text else "Sent ${sent.joinToString(" and ")}"
+        }
 
         /**
          * A15 `.ctx-strip` — resolve the pinned gig context for a gig room
@@ -732,6 +801,11 @@ class ChatConversationViewModel
             bytes: ByteArray,
             sourceUri: String? = null,
         ) {
+            // The assistant reads a PDF of up to 10 MB (`POST /api/upload/ai-media`); a bigger one is turned away here.
+            if (mode is ChatThreadMode.Ai && mimeType == PDF_MIME && bytes.size > AIPdfCheck.MAX_BYTES) {
+                refuseAttachment(AIPdfCheck.TOO_LARGE)
+                return
+            }
             appendQueuedAttachment(
                 ChatQueuedAttachment(
                     id = UUID.randomUUID().toString(),
@@ -742,6 +816,11 @@ class ChatConversationViewModel
                     sourceUri = sourceUri,
                 ),
             )
+        }
+
+        /** A picked file the assistant can't take: the reason, in the server's words, and nothing queued. */
+        fun refuseAttachment(reason: String) {
+            _actionFailure.value = reason
         }
 
         private fun appendQueuedAttachment(attachment: ChatQueuedAttachment) {
@@ -1323,6 +1402,7 @@ class ChatConversationViewModel
             aiSession.conversationId = null
             aiSession.freshStartUserId = currentUserId
             aiSentPhotos.clear()
+            aiSentFiles.clear()
             messages.clear()
             aiDraftsByMessageId.clear()
             aiLinksByMessageId.clear()
@@ -1332,12 +1412,20 @@ class ChatConversationViewModel
         }
 
         private suspend fun streamAiMessage(text: String) {
-            // Where the photos the upload sends (images only) are on the phone, taken before it starts.
-            val photos =
-                _queuedAttachments.value
-                    .filter { it.bytes != null && it.mimeType.startsWith("image/") }
-                    .mapNotNull { it.sourceUri }
-            val imageUrls = uploadQueuedAIImagesIfNeeded()
+            // What the upload sends, taken before it starts: where each photo is on the phone, and each PDF's name and size.
+            val queued = _queuedAttachments.value.filter { it.bytes != null }
+            val photos = queued.filter { it.mimeType.startsWith("image/") }.mapNotNull { it.sourceUri }
+            val files = queued.filter { it.mimeType == PDF_MIME }.map { ChatSentFile(it.filename, it.bytes?.size?.let(::fileSizeLabel)) }
+            val imageUrls =
+                when (val upload = uploadQueuedAIMediaIfNeeded()) {
+                    is NetworkResult.Success -> upload.data
+                    is NetworkResult.Failure -> {
+                        // Nothing went: the words and the files stay for another try, and the server says why.
+                        if (_composerText.value.isEmpty()) _composerText.value = text
+                        _actionFailure.value = upload.error.displayMessage("Couldn't send your files. Try again.")
+                        return
+                    }
+                }
             val userMessage =
                 localMessage(
                     id = "ai_user_${UUID.randomUUID()}",
@@ -1345,7 +1433,10 @@ class ChatConversationViewModel
                     userId = currentUserId,
                     type = "text",
                 )
-            if (imageUrls.isNotEmpty()) aiSentPhotos[userMessage.id] = photos
+            if (imageUrls.isNotEmpty()) {
+                if (photos.isNotEmpty()) aiSentPhotos[userMessage.id] = photos
+                if (files.isNotEmpty()) aiSentFiles[userMessage.id] = files
+            }
             val assistantId = "ai_assistant_${UUID.randomUUID()}"
             streamingAssistantId = assistantId
             messages.add(userMessage)
@@ -1356,7 +1447,14 @@ class ChatConversationViewModel
             var streamedText = ""
             runCatching {
                 aiRepo.streamChat(
-                    message = text.ifEmpty { "What can you tell me about this image?" },
+                    message =
+                        text.ifEmpty {
+                            if (photos.isEmpty() && files.isNotEmpty()) {
+                                "What can you tell me about this document?"
+                            } else {
+                                "What can you tell me about this image?"
+                            }
+                        },
                     conversationId = aiConversationId,
                     images = imageUrls,
                     context = _aiContext.value,
@@ -2468,21 +2566,25 @@ class ChatConversationViewModel
             }
         }
 
-        private suspend fun uploadQueuedAIImagesIfNeeded(): List<String> {
+        /**
+         * The queued photos and PDFs through `POST /api/upload/ai-media`, as the references the chat's `images` carries
+         * (AI assistant phase 2 §7.1); nothing queued needs no request.
+         */
+        private suspend fun uploadQueuedAIMediaIfNeeded(): NetworkResult<List<String>> {
             val files =
                 _queuedAttachments.value.mapNotNull { attachment ->
                     val bytes = attachment.bytes ?: return@mapNotNull null
-                    if (!attachment.mimeType.startsWith("image/")) return@mapNotNull null
+                    if (!attachment.mimeType.startsWith("image/") && attachment.mimeType != PDF_MIME) return@mapNotNull null
                     UploadFile(
                         filename = attachment.filename,
                         mimeType = attachment.mimeType,
                         bytes = bytes,
                     )
                 }
-            if (files.isEmpty()) return emptyList()
+            if (files.isEmpty()) return NetworkResult.Success(emptyList())
             return when (val result = uploadRepo.uploadAIMedia(files)) {
-                is NetworkResult.Success -> result.data.images.map { it.url }
-                is NetworkResult.Failure -> emptyList()
+                is NetworkResult.Success -> NetworkResult.Success(result.data.images.map { it.url })
+                is NetworkResult.Failure -> result
             }
         }
 
@@ -2666,8 +2768,9 @@ class ChatConversationViewModel
                                 ?.filterIsInstance<String>()
                                 ?.mapNotNull(ChatMediaUrl::resolve)
                                 .orEmpty()
-                    if (imageUrls.isNotEmpty()) {
-                        ChatBubbleBody.TextWithImages(message.resolvedText, imageUrls)
+                    val files = aiSentFiles[message.id].orEmpty()
+                    if (imageUrls.isNotEmpty() || files.isNotEmpty()) {
+                        ChatBubbleBody.TextWithImages(message.resolvedText, imageUrls, files)
                     } else {
                         ChatBubbleBody.Text(message.resolvedText)
                     }
@@ -2999,6 +3102,9 @@ private const val SEND_REFUSED_NOTICE = "You can't send messages in this convers
  * "Document"), or an older client's "[1 attachment]"; not a caption.
  */
 private val ATTACHMENT_PLACEHOLDER = Regex("""^(\[.+ attachments?]|Photo|Video|Document|Media)$""", RegexOption.IGNORE_CASE)
+
+/** The documents the assistant reads (AI assistant phase 2 §7.1). */
+private const val PDF_MIME = "application/pdf"
 
 /**
  * Min gap between `typing:start` emits. The backend rate-limits the event

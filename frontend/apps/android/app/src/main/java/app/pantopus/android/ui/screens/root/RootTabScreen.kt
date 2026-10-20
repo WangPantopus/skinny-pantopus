@@ -439,10 +439,12 @@ import app.pantopus.android.ui.screens.scheduling.setup.OnboardingHomeBusinessSc
 import app.pantopus.android.ui.screens.scheduling.visits.VisitDetailScreen
 import app.pantopus.android.ui.screens.scheduling.visits.VisitSetupScreen
 import app.pantopus.android.ui.screens.settings.BriefingNotice
+import app.pantopus.android.ui.screens.settings.BriefingNoticeViewModel
 import app.pantopus.android.ui.screens.settings.NotificationSettingsScreen
 import app.pantopus.android.ui.screens.settings.PrivacySettingsScreen
 import app.pantopus.android.ui.screens.settings.SettingsIndexScreen
 import app.pantopus.android.ui.screens.settings.SettingsRoute
+import app.pantopus.android.ui.screens.settings.SuggestionsNotice
 import app.pantopus.android.ui.screens.settings.about.AboutScreen
 import app.pantopus.android.ui.screens.settings.blocks.BlockedUsersScreen
 import app.pantopus.android.ui.screens.settings.data_export.DataExportScreen
@@ -1407,6 +1409,12 @@ private object ChildRoutes {
 
     /** Ask Pantopus: the screen the assistant thread was opened from ([AIScreenContext.encode]; empty otherwise). */
     const val CHAT_AI_CONTEXT_KEY = "aiContext"
+
+    /** A brief's or nudge's notification id: the assistant thread opens at its message (empty otherwise). */
+    const val CHAT_AI_NUDGE_KEY = "aiNudge"
+
+    /** The conversation that brief or nudge was added to: the assistant thread opens and continues it (empty otherwise). */
+    const val CHAT_AI_CONVERSATION_KEY = "aiConversation"
     const val CHAT_CONVERSATION =
         "chat/{$CHAT_KIND_KEY}/{$CHAT_ID_KEY}?" +
             "$CHAT_NAME_KEY={$CHAT_NAME_KEY}" +
@@ -1425,7 +1433,9 @@ private object ChildRoutes {
             "&$CHAT_GIG_ID_KEY={$CHAT_GIG_ID_KEY}" +
             "&$CHAT_ARRIVAL_ROOM_KEY={$CHAT_ARRIVAL_ROOM_KEY}" +
             "&$CHAT_BUSINESS_ID_KEY={$CHAT_BUSINESS_ID_KEY}" +
-            "&$CHAT_AI_CONTEXT_KEY={$CHAT_AI_CONTEXT_KEY}"
+            "&$CHAT_AI_CONTEXT_KEY={$CHAT_AI_CONTEXT_KEY}" +
+            "&$CHAT_AI_NUDGE_KEY={$CHAT_AI_NUDGE_KEY}" +
+            "&$CHAT_AI_CONVERSATION_KEY={$CHAT_AI_CONVERSATION_KEY}"
 
     /** New message contact picker (T6.6b P25). Reached from Chat list
      *  compose button + empty-state CTA. */
@@ -1624,6 +1634,19 @@ private object ChildRoutes {
         fun enc(value: String) = java.net.URLEncoder.encode(value, "UTF-8").replace("+", "%20")
         return "chat/ai/ai_assistant?$CHAT_NAME_KEY=${enc("Pantopus AI")}&$CHAT_INITIALS_KEY=AI" +
             "&$CHAT_AI_CONTEXT_KEY=${enc(context.encode())}"
+    }
+
+    /**
+     * `pantopus://assistant` (AI assistant phase 2 contract §8.2): the assistant thread, in [conversationId] when the
+     * link names one, at the brief or nudge [nudgeId] names when there is one.
+     */
+    fun assistantThread(
+        nudgeId: String?,
+        conversationId: String?,
+    ): String {
+        fun enc(value: String) = java.net.URLEncoder.encode(value, "UTF-8").replace("+", "%20")
+        return "chat/ai/ai_assistant?$CHAT_NAME_KEY=${enc("Pantopus AI")}&$CHAT_INITIALS_KEY=AI" +
+            "&$CHAT_AI_NUDGE_KEY=${enc(nudgeId.orEmpty())}&$CHAT_AI_CONVERSATION_KEY=${enc(conversationId.orEmpty())}"
     }
 
     // A Creator Inbox row no longer builds a generic-chat path. Persona DMs
@@ -2208,7 +2231,11 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
         ) { uri ->
             if (uri != null) appContext.shareText(InviteLinks.INVITE_MESSAGE, "Invite to Pantopus")
         }
-    BriefingNotice(onManage = { navController.navigate(ChildRoutes.SETTINGS_NOTIFICATIONS) })
+    val briefingNotice: BriefingNoticeViewModel = hiltViewModel()
+    BriefingNotice(onManage = { navController.navigate(ChildRoutes.SETTINGS_NOTIFICATIONS) }, viewModel = briefingNotice)
+    // AI assistant phase 2: asks once whether to turn on Suggestions from Pantopus, after the briefing notice.
+    val briefingNoticeShowing by briefingNotice.preferences.collectAsStateWithLifecycle()
+    SuggestionsNotice(waiting = briefingNoticeShowing != null)
     val sessionViewModel: RootSessionViewModel = hiltViewModel()
     val chatBadgeViewModel: ChatBadgeViewModel = hiltViewModel()
     val currentHandle by sessionViewModel.currentHandle.collectAsStateWithLifecycle()
@@ -2343,6 +2370,13 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
             DeepLinkRouter.Destination.NotificationSettings -> {
                 navController.navigate(ChildRoutes.MENU)
                 navController.navigate(ChildRoutes.SETTINGS_NOTIFICATIONS)
+                DeepLinkRouter.consume()
+            }
+            // A brief or a nudge (push or notification row): the assistant thread over Messages, where its row is, so
+            // Back lands on the conversation list. Messages opens fresh, so an earlier assistant thread isn't kept under it.
+            is DeepLinkRouter.Destination.Assistant -> {
+                navController.navigateToRootTab(PantopusRoute.messagesTab, restoreState = false)
+                navController.navigate(ChildRoutes.assistantThread(pending.nudgeId, pending.conversationId))
                 DeepLinkRouter.consume()
             }
             DeepLinkRouter.Destination.CreateBusiness -> {
@@ -5075,6 +5109,14 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 type = NavType.StringType
                                 defaultValue = ""
                             },
+                            navArgument(ChildRoutes.CHAT_AI_NUDGE_KEY) {
+                                type = NavType.StringType
+                                defaultValue = ""
+                            },
+                            navArgument(ChildRoutes.CHAT_AI_CONVERSATION_KEY) {
+                                type = NavType.StringType
+                                defaultValue = ""
+                            },
                         ),
                 ) { entry ->
                     val args = entry.arguments ?: return@composable
@@ -5172,6 +5214,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onOpenProfile = { userId -> navController.navigate(ChildRoutes.publicProfile(userId)) },
                         onOpenPlan = { planId -> navController.navigate(PlansRoutes.plan(planId)) },
                         aiContext = if (kind == "ai") AIScreenContext.decode(args.getString(ChildRoutes.CHAT_AI_CONTEXT_KEY)) else null,
+                        aiNudgeId = args.getString(ChildRoutes.CHAT_AI_NUDGE_KEY)?.takeIf { kind == "ai" && it.isNotBlank() },
+                        aiConversationId = args.getString(ChildRoutes.CHAT_AI_CONVERSATION_KEY)?.takeIf { kind == "ai" && it.isNotBlank() },
                     )
                 }
                 composable(ChildRoutes.CHAT_SEARCH) {

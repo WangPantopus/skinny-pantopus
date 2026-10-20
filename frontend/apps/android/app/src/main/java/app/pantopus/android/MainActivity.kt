@@ -30,6 +30,7 @@ import app.pantopus.android.data.auth.TokenStorage
 import app.pantopus.android.data.chats.ActiveChatThread
 import app.pantopus.android.data.plans.PlansFeature
 import app.pantopus.android.data.store.StoreSync
+import app.pantopus.android.push.ASSISTANT_RECIPIENT
 import app.pantopus.android.push.PushTokenSyncer
 import app.pantopus.android.push.ReminderActionReceiver
 import app.pantopus.android.ui.components.ToastController
@@ -227,8 +228,19 @@ class MainActivity : FragmentActivity() {
             OAuthSessionStore.deliver(uri)
             return
         }
-        if (forwardReminderAction(intent, uri)) return
+        if (forwardReminderAction(intent, uri) || forwardAssistantNudge(intent, uri)) return
         DeepLinkRouter.handle(uri)
+    }
+
+    /** A brief or nudge opens only for the account it was sent to; signed out, it waits for that account's sign-in. */
+    private fun forwardAssistantNudge(
+        intent: Intent,
+        uri: Uri,
+    ): Boolean {
+        val recipient = intent.getStringExtra(ASSISTANT_RECIPIENT) ?: return false
+        intent.removeExtra(ASSISTANT_RECIPIENT)
+        DeepLinkRouter.handle(uri.toString(), expectedUserId = recipient)
+        return true
     }
 
     /**
