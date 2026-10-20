@@ -58,6 +58,15 @@ public struct PulseComposeDraft: Hashable, Sendable {
     /// fractional seconds, or a bare day (taken at 9 AM on the device, as
     /// the composer takes a typed day).
     static func date(from raw: String?) -> Date? {
+        moment(from: raw, bareDayOffset: 9 * 3600)
+    }
+
+    /// A deal's last day ends at 11:59 PM on the device; a full moment stays as given.
+    static func lastMoment(from raw: String?) -> Date? {
+        moment(from: raw, bareDayOffset: 24 * 3600 - 60)
+    }
+
+    private static func moment(from raw: String?, bareDayOffset: TimeInterval) -> Date? {
         guard let raw = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else { return nil }
         let fractional = ISO8601DateFormatter()
         fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -66,6 +75,6 @@ public struct PulseComposeDraft: Hashable, Sendable {
         day.calendar = Calendar(identifier: .iso8601)
         day.locale = Locale(identifier: "en_US_POSIX")
         day.dateFormat = "yyyy-MM-dd"
-        return day.date(from: raw).map { $0.addingTimeInterval(9 * 3600) }
+        return day.date(from: raw).map { $0.addingTimeInterval(bareDayOffset) }
     }
 }

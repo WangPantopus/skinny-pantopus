@@ -470,7 +470,9 @@ public final class PulseComposeViewModel {
         let pickerFormat = DateFormatter()
         pickerFormat.calendar = Calendar(identifier: .iso8601)
         pickerFormat.locale = Locale(identifier: "en_US_POSIX")
-        // The Event picker's own shape and zone (`PulseComposeContent.formatDate`).
+        // The card's times are moments; the Event fields hold the picker's local
+        // wall clock (`PulseComposeContent.formatDate`), which every composer posts
+        // as wall-clock time (`PulseEventDetails`).
         pickerFormat.dateFormat = "yyyy-MM-dd HH:mm"
         let venue = draft.eventVenue?.trimmingCharacters(in: .whitespacesAndNewlines)
         for (field, value) in [
@@ -483,7 +485,7 @@ public final class PulseComposeViewModel {
             snapshot.value = value
             fields[field] = snapshot
         }
-        if let expires = PulseComposeDraft.date(from: draft.dealExpiresAt) { dealExpiresAt = expires }
+        if let expires = PulseComposeDraft.lastMoment(from: draft.dealExpiresAt) { dealExpiresAt = expires }
         if let kind = draft.lostFoundType.flatMap(PulseLostFoundKind.init(rawValue:)) { lostFoundKind = kind }
         if let kind = draft.safetyAlertKind.flatMap(PulseSafetyAlertKind.init(rawValue:)) { safetyAlertKind = kind }
     }
