@@ -14,7 +14,7 @@ const logger = require('../utils/logger');
 const { checkHomePermission } = require('../utils/homePermissions');
 const { getBusinessIdsWithPermissions } = require('../utils/businessPermissions');
 const { VERIFICATION_RANK } = require('../utils/businessConstants');
-const s3 = require('../services/s3Service');
+const mailObjects = require('../services/mailObjectStorage');
 const notificationService = require('../services/notificationService');
 const emailService = require('../services/emailService');
 const smsService = require('../services/smsService');
@@ -287,7 +287,6 @@ async function logMailEvent(eventType, mailId, userId, metadata = {}) {
   }
 }
 
-const MAIL_OBJECT_FOLDER = 'mailbox-objects';
 const DEFAULT_MAIL_TYPE = 'letter';
 const DEFAULT_MAIL_PRIORITY = 'normal';
 const MAIL_OBJECT_FORMATS = ['mailjson_v1', 'html', 'markdown', 'plain_text', 'pdf', 'binary'];
@@ -822,8 +821,8 @@ const applyMailboxScopeToQuery = (query, { scope, userId, homeId, accessibleHome
   return query.eq('recipient_user_id', userId);
 };
 
-// A letter sent as a business (businessId) names the business in its payload and is stored under the business's id:
-// recipients read both, and the storage key and URL carry the uploader's id. created_by_user_id keeps the person.
+// A letter sent as a business (businessId) names the business in its payload, which recipients read. The letter is
+// stored privately under a key that names no one (services/mailObjectStorage); created_by_user_id keeps the person.
 const createMailObject = async ({
   senderId,
   businessId = null,
@@ -840,51 +839,32 @@ const createMailObject = async ({
   const serialized = JSON.stringify(payload || {});
   const buffer = Buffer.from(serialized, 'utf8');
   const sha256 = crypto.createHash('sha256').update(buffer).digest('hex');
-
-  const { url, key } = await s3.uploadGeneral(
-    buffer,
-    'mail.json',
-    businessId || senderId,
-    MAIL_OBJECT_FOLDER,
-    'application/json'
-  );
-
-  const bucketName =
-    process.env.AWS_S3_BUCKET_NAME ||
-    process.env.AWS_BUCKET_NAME ||
-    process.env.AWS_S3_BUCKET ||
-    null;
+  const id = crypto.randomUUID();
+  const stored = await mailObjects.store(id, buffer, sha256);
 
   const { data: objectRow, error } = await supabaseAdmin
     .from('MailObject')
     .insert({
+      id,
       created_by_user_id: senderId,
-      storage_provider: 's3',
-      bucket_name: bucketName,
-      object_key: key,
+      ...stored,
       format: 'mailjson_v1',
       mime_type: 'application/json',
       size_bytes: buffer.length,
       sha256,
       status: 'ready',
-      uploaded_at: new Date().toISOString(),
-      object_meta: {
-        publicUrl: url
-      }
+      uploaded_at: new Date().toISOString()
     })
     .select()
     .single();
 
   if (error) {
-    logger.error('MailObject insert failed', { error: error.message, key, senderId });
+    await mailObjects.remove(stored);
+    logger.error('MailObject insert failed', { error: error.message, objectId: id, senderId });
     throw new Error('Failed to persist mail object metadata');
   }
 
-  return {
-    objectId: objectRow.id,
-    objectKey: key,
-    objectUrl: url
-  };
+  return { objectId: objectRow.id };
 };
 
 const insertMailWithCompatibility = async (mailData) => {
@@ -990,25 +970,24 @@ const getMailObjectPayload = async (objectId) => {
     return null;
   }
 
+  // Responses carry the row without its storage location (mailObjectStorage.clientFields).
+  const metadata = mailObjects.clientFields(objectRow);
   if (!objectRow.object_key) {
-    return { metadata: objectRow, payload: null };
+    return { metadata, payload: null };
   }
 
   try {
-    const objectText = await s3.getObjectAsString(
-      objectRow.object_key,
-      objectRow.bucket_name || undefined
-    );
+    const objectText = await mailObjects.readText(objectRow);
     let payload = null;
     try {
       payload = JSON.parse(objectText);
     } catch {
       payload = { body: { content: objectText } };
     }
-    return { metadata: objectRow, payload };
+    return { metadata, payload };
   } catch (err) {
     logger.error('MailObject read failed', { objectId, error: err.message });
-    return { metadata: objectRow, payload: null };
+    return { metadata, payload: null };
   }
 };
 
