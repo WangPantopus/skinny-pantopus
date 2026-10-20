@@ -35,6 +35,7 @@ const {
   assertCanMutateTarget,
 } = require('../utils/homePermissions');
 const { HOME_DOCUMENT_VISIBILITIES, HOME_DOCUMENT_TYPES, homeDocumentVisibilities, serializeHomeDocument } = require('../utils/homeDocumentAccess');
+const { createHomeAssetSchema } = require('../utils/homeAssetFields');
 const { unpublishedBusinessIds, isUnpublishedBusiness } = require('../utils/visibilityPolicy');
 const homeClaimMergeService = require('../services/homeClaimMergeService');
 const homeClaimRoutingService = require('../services/homeClaimRoutingService');
@@ -4327,14 +4328,18 @@ router.post('/:id/devices', verifyToken, async (req, res) => {
 
 /**
  * GET /api/homes/:id/assets
+ * The home's records of appliances and valuables (with serial numbers, prices and warranty
+ * dates) need assets.view, as the table's own policy and the records photo reads require;
+ * being in the home (a guest, a service provider) isn't enough.
  */
 router.get('/:id/assets', verifyToken, async (req, res) => {
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
+    if (Joi.string().uuid().validate(homeId).error) return res.status(400).json({ error: 'Invalid Home id' });
 
-    const access = await checkHomePermission(homeId, userId);
-    if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
+    const access = await checkHomePermission(homeId, userId, 'assets.view');
+    if (!access.hasAccess) return res.status(403).json({ error: "You do not have permission to see this home's records." });
 
     const { data, error } = await supabaseAdmin
       .from('HomeAsset')
@@ -4347,39 +4352,13 @@ router.get('/:id/assets', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch assets' });
     }
 
+    res.set('Cache-Control', 'private, no-store');
     res.json({ assets: data || [] });
   } catch (err) {
+    if (err.code === 'HOME_ACCESS_UNAVAILABLE') return res.status(503).json({ error: err.message, code: err.code });
     logger.error('Assets fetch error', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch assets' });
   }
-});
-
-// HomeAsset's columns and their limits: the categories its check constraint allows, a
-// numeric(12,2) price, and dates (YYYY-MM-DD) a receipt or a warranty could carry.
-const HOME_ASSET_CATEGORIES = ['appliance', 'electronics', 'furniture', 'tool', 'valuable', 'consumable', 'fixture', 'other'];
-const assetDay = Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).custom((value, helpers) => {
-  const day = new Date(`${value}T12:00:00.000Z`);
-  const year = Number(value.slice(0, 4));
-  if (!Number.isFinite(day.getTime()) || day.toISOString().slice(0, 10) !== value || year < 1900 || year > 2100) {
-    return helpers.error('date.base');
-  }
-  return value;
-}).allow(null, '');
-const assetText = (max) => Joi.string().trim().max(max).allow(null, '');
-const createHomeAssetSchema = Joi.object({
-  category: Joi.string().valid(...HOME_ASSET_CATEGORIES).required(),
-  name: Joi.string().trim().min(1).max(120).required(),
-  room: assetText(80),
-  brand: assetText(80),
-  model: assetText(80),
-  serial_number: assetText(80),
-  purchase_date: assetDay,
-  purchase_price: Joi.number().min(0).max(9999999999.99).precision(2).allow(null),
-  warranty_expires_at: assetDay,
-  notes: assetText(2000),
-  details: Joi.object().unknown(true).custom((value, helpers) => (
-    JSON.stringify(value).length > 8000 ? helpers.error('any.invalid') : value
-  )).allow(null),
 });
 
 /**

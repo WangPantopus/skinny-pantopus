@@ -7,8 +7,10 @@ import {
   Plus,
   StopCircle,
   ChevronLeft,
+  Trash2,
 } from 'lucide-react';
 import { useAIChat } from '@/hooks/useAIChat';
+import { useConfirm } from '@/hooks/useConfirm';
 import { AIMessageBubble } from './AIMessageBubble';
 import { launchFeatures } from '@/lib/featureFlags';
 
@@ -27,8 +29,11 @@ export function AIAssistantView({ initialMessage, onBack }: AIAssistantViewProps
     error,
     sendMessage,
     startNewConversation,
+    deleteConversations,
     abort,
   } = useAIChat();
+  const { confirm } = useConfirm();
+  const [deleting, setDeleting] = useState(false);
 
   const [input, setInput] = useState('');
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -52,10 +57,10 @@ export function AIAssistantView({ initialMessage, onBack }: AIAssistantViewProps
 
   const handleSend = useCallback(() => {
     const text = input.trim();
-    if (!text || isStreaming) return;
+    if (!text || isStreaming || deleting) return;
     setInput('');
     sendMessage(text);
-  }, [input, isStreaming, sendMessage]);
+  }, [input, isStreaming, deleting, sendMessage]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -72,6 +77,22 @@ export function AIAssistantView({ initialMessage, onBack }: AIAssistantViewProps
     setInput('');
     inputRef.current?.focus();
   }, [startNewConversation]);
+
+  const handleDeleteConversation = useCallback(async () => {
+    const yes = await confirm({
+      title: 'Delete this conversation?',
+      description: "Pantopus Assistant won't remember it. Any earlier chats with the assistant are deleted too.",
+      confirmLabel: 'Delete',
+      variant: 'destructive',
+    });
+    if (!yes) return;
+    setDeleting(true);
+    try {
+      await deleteConversations();
+    } finally {
+      setDeleting(false);
+    }
+  }, [confirm, deleteConversations]);
 
   return (
     <div className="flex flex-col h-full bg-app-surface">
@@ -105,6 +126,15 @@ export function AIAssistantView({ initialMessage, onBack }: AIAssistantViewProps
           title="New conversation"
         >
           <Plus className="w-4 h-4" />
+        </button>
+        <button
+          onClick={handleDeleteConversation}
+          disabled={deleting}
+          aria-label="Delete conversation"
+          className="p-2 rounded-lg hover:bg-app-surface/60 transition-colors text-app-text-muted hover:text-app-text-strong disabled:opacity-50"
+          title="Delete conversation"
+        >
+          <Trash2 className="w-4 h-4" />
         </button>
       </div>
 
@@ -174,7 +204,7 @@ export function AIAssistantView({ initialMessage, onBack }: AIAssistantViewProps
                 target.style.height = 'auto';
                 target.style.height = Math.min(target.scrollHeight, 128) + 'px';
               }}
-              disabled={isStreaming}
+              disabled={isStreaming || deleting}
             />
           </div>
 

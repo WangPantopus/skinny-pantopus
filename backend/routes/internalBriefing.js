@@ -24,6 +24,9 @@ const pushService = require('../services/pushService');
 const { createNotification, isPushEnabled } = require('../services/notificationService');
 const { skipForLaunchCut } = require('../utils/featureFlags');
 const { recordFunnelEvent } = require('../services/funnelEvents');
+const { composeBrief } = require('../services/ai/nudges/brief');
+const { sendBrief } = require('../services/ai/nudges/engine');
+const rules = require('../services/plans/planRules');
 
 // ── Internal API key auth ───────────────────────────────────────────
 
@@ -88,11 +91,31 @@ function getBriefingConfig(kind) {
 }
 
 function isBriefingEnabled(prefs, briefingConfig, briefingKind) {
-  const value = prefs?.[briefingConfig.prefField];
+  // An account without a preferences row gets the briefings GET /api/hub/preferences reports: both on.
+  if (!prefs) return true;
+  const value = prefs[briefingConfig.prefField];
   if (briefingKind === 'evening') {
     return value !== false;
   }
   return value === true;
+}
+
+/** Suggestions on and the brief not muted ("Fewer like this"): the morning briefing is the AI brief. */
+function wantsAiBrief(prefs, briefingKind) {
+  if (briefingKind !== 'morning' || prefs?.suggestions_enabled !== true) return false;
+  const mutedUntil = Date.parse(prefs.suggestions_muted?.brief || '');
+  return !(mutedUntil > Date.now());
+}
+
+/** The first moment of the person's next local day: the brief's cards stop working then. */
+function endOfLocalDay(tz) {
+  const tomorrow = rules.localParts(new Date(Date.now() + 24 * 60 * 60 * 1000), tz);
+  return rules.zonedInstant(tomorrow.year, tomorrow.month, tomorrow.day, 0, 0, tz);
+}
+
+/** The stored briefing screen both apps open for a delivery (DeepLinkRouter's hub-today). */
+function storedBriefingRoute(briefingKind, deliveryId) {
+  return `/hub-today?kind=${briefingKind}&deliveryId=${deliveryId}`;
 }
 
 /**
@@ -148,6 +171,47 @@ router.post('/timezones', verifyInternalApiKey, async (req, res) => {
   }
 });
 
+/**
+ * Today's AI brief, sent through the assistant's engine: its Notification row, its message in
+ * the assistant conversation and one push (held while the person's own quiet hours last).
+ * Returns the route's answer, or null to send the template briefing instead: a model error, a
+ * cap, nothing worth saying, no home to brief about.
+ */
+async function sendAiBrief({ userId, deliveryId, tz, todayLocal }) {
+  try {
+    const expiresAt = endOfLocalDay(tz);
+    const composed = await composeBrief(userId, { timeZone: tz, expiresAt });
+    if (composed.fallback) {
+      logger.info('Briefing: AI brief not written, sending the template', { userId, reason: composed.fallback });
+      return null;
+    }
+    const sent = await sendBrief({ userId, date: todayLocal, lines: composed.lines, cards: composed.cards, expiresAt });
+    if (!sent.sent) {
+      // Today's brief already went out: never a second briefing on top of it.
+      if (sent.reason === 'duplicate' || sent.reason === 'cap') {
+        await supabaseAdmin.from('DailyBriefingDelivery').update({ status: 'skipped', skip_reason: 'brief_already_sent' }).eq('id', deliveryId);
+        return { status: 'skipped', skip_reason: 'brief_already_sent' };
+      }
+      logger.info('Briefing: AI brief not sent, sending the template', { userId, reason: sent.reason });
+      return null;
+    }
+    const text = composed.lines.join('\n');
+    await supabaseAdmin.from('DailyBriefingDelivery').update({
+      status: 'sent',
+      delivered_at: new Date().toISOString(),
+      summary_text: text,
+      composition_mode: 'ai_polished',
+      ai_tokens_used: composed.usage.inputTokens + composed.usage.outputTokens,
+      notification_id: sent.notificationId,
+    }).eq('id', deliveryId);
+    logger.info('Briefing sent', { userId, briefingKind: 'morning', mode: 'ai', cards: composed.cards.length });
+    return { status: 'sent', text, mode: 'ai', briefing_kind: 'morning', notification_id: sent.notificationId };
+  } catch (err) {
+    logger.warn('Briefing: AI brief failed, sending the template', { userId, error: err.message });
+    return null;
+  }
+}
+
 // ── POST /send ──────────────────────────────────────────────────────
 
 /**
@@ -168,14 +232,18 @@ router.post('/send', verifyInternalApiKey, async (req, res) => {
 
   try {
     // 2. Check preferences
-    const { data: prefsRow } = await supabaseAdmin
+    const { data: prefsRow, error: prefsError } = await supabaseAdmin
       .from('UserNotificationPreferences')
-      .select(`${briefingConfig.prefField}, daily_briefing_timezone, quiet_hours_start_local, quiet_hours_end_local`)
+      .select(`${briefingConfig.prefField}, daily_briefing_timezone, quiet_hours_start_local, quiet_hours_end_local, suggestions_enabled, suggestions_muted`)
       .eq('user_id', userId)
       .maybeSingle();
+    // A read that failed can't show the person kept their briefing on: try again later.
+    if (prefsError) {
+      return res.status(503).json({ status: 'failed', error: 'Notification preferences are unavailable.' });
+    }
 
     const prefs = {
-      [briefingConfig.prefField]: briefingKind === 'evening',
+      [briefingConfig.prefField]: true,
       daily_briefing_timezone: null,
       quiet_hours_start_local: null,
       quiet_hours_end_local: null,
@@ -189,8 +257,9 @@ router.post('/send', verifyInternalApiKey, async (req, res) => {
     prefs.daily_briefing_timezone = await resolveNotificationTimezone(userId, prefs);
     if (!prefs.daily_briefing_timezone) return res.json({ status: 'skipped', skip_reason: 'timezone_unavailable' });
 
-    // 3. Check quiet hours
-    if (isInQuietHours(prefs)) {
+    // 3. Check quiet hours. The AI brief is sent anyway: its push waits until they end.
+    const aiBrief = wantsAiBrief(prefsRow, briefingKind);
+    if (!aiBrief && isInQuietHours(prefs)) {
       return res.json({ status: 'skipped', skip_reason: 'quiet_hours' });
     }
 
@@ -259,6 +328,16 @@ router.post('/send', verifyInternalApiKey, async (req, res) => {
       }
 
       deliveryId = delivery.id;
+    }
+
+    // 5b. With Suggestions on, the AI brief (contract §4); the template briefing when it can't be written.
+    if (aiBrief) {
+      const sent = await sendAiBrief({ userId, deliveryId, tz, todayLocal });
+      if (sent) return res.json(sent);
+      if (isInQuietHours(prefs)) {
+        await supabaseAdmin.from('DailyBriefingDelivery').update({ status: 'skipped', skip_reason: 'quiet_hours' }).eq('id', deliveryId);
+        return res.json({ status: 'skipped', skip_reason: 'quiet_hours' });
+      }
     }
 
     // 6. Compose briefing
@@ -340,19 +419,19 @@ router.post('/send', verifyInternalApiKey, async (req, res) => {
     }
 
     // 9. Send push
-    // Route to Place, not /hub. Both mobile clients auto-land the Home tab
-    // on the Place dashboard, so a push that opened /hub dropped the user on
-    // the *secondary* address surface — and until the Place deep link landed
-    // there was no way back to Place at all after a back-swipe. The home id
-    // comes from the same location the briefing was composed for, so the
-    // link opens the dashboard for the address the copy is about.
+    // The morning briefing opens its stored briefing screen (GET /api/hub/briefings/:id), where
+    // the copy it summarizes is. The evening briefing routes to Place, not /hub: both mobile
+    // clients auto-land the Home tab on the Place dashboard, so a push that opened /hub dropped
+    // the user on the *secondary* address surface. The home id comes from the same location the
+    // briefing was composed for, so the link opens the dashboard for the address the copy is about.
+    const link = briefingKind === 'morning' ? storedBriefingRoute(briefingKind, deliveryId) : placeRoute(result.home_id);
     const receipt = await pushService.sendToUserWithReceipt(userId, {
       title: pickup ? pickup.label : briefingConfig.title,
       body: messageText,
       data: {
         type: briefingConfig.notificationType,
-        link: placeRoute(result.home_id),
-        route: placeRoute(result.home_id),
+        link,
+        route: link,
         homeId: result.home_id || null,
         briefingKind,
         briefingDeliveryId: deliveryId,

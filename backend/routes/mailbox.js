@@ -14,12 +14,13 @@ const logger = require('../utils/logger');
 const { checkHomePermission } = require('../utils/homePermissions');
 const { getBusinessIdsWithPermissions } = require('../utils/businessPermissions');
 const { VERIFICATION_RANK } = require('../utils/businessConstants');
-const s3 = require('../services/s3Service');
+const mailObjects = require('../services/mailObjectStorage');
 const notificationService = require('../services/notificationService');
 const emailService = require('../services/emailService');
 const smsService = require('../services/smsService');
-const { skipForLaunchCut } = require('../utils/featureFlags');
+const { skipForLaunchCut, areLaunchFeaturesEnabled } = require('../utils/featureFlags');
 const { chosenUsernameOrNull } = require('../utils/personalUsername');
+const { maskContact } = require('../jobs/mailEscrowExpiry');
 // A letter sent as a business names the business to everyone it reaches, never the person who sent it.
 const { presentMailSender, presentMailSenders, objectForRecipient, payloadForRecipient, sentAsBusiness, claimPageSender } = require('../utils/mailSenderView');
 
@@ -287,7 +288,6 @@ async function logMailEvent(eventType, mailId, userId, metadata = {}) {
   }
 }
 
-const MAIL_OBJECT_FOLDER = 'mailbox-objects';
 const DEFAULT_MAIL_TYPE = 'letter';
 const DEFAULT_MAIL_PRIORITY = 'normal';
 const MAIL_OBJECT_FORMATS = ['mailjson_v1', 'html', 'markdown', 'plain_text', 'pdf', 'binary'];
@@ -343,7 +343,16 @@ const DELIVERABLE_ACTION_REQUIRED_TYPES = new Set(['bill', 'notice']);
 const ESCROW_EXPIRY_DAYS = 90;
 const ESCROW_MAX_UNIQUE_CONTACTS_PER_WEEK = 3;
 const ESCROW_MAX_SENDS_PER_CONTACT_DAYS = 30;
-const ESCROW_CLAIM_LINK_BASE = 'https://mail.pantopus.com/open';
+
+/**
+ * The link emailed or texted to someone not on Pantopus. It opens the web app's public page for the letter
+ * (frontend/apps/web/src/app/open), on the same base as the other public pages' links
+ * (services/residencyLetterService webBaseUrl).
+ */
+function escrowClaimLink(mailId, token) {
+  const base = (process.env.PUBLIC_WEB_URL || process.env.APP_URL || 'https://pantopus.com').trim().replace(/\/+$/, '');
+  return `${base}/open/${mailId}?token=${token}`;
+}
 
 /**
  * Constant-time comparison for claim tokens.
@@ -357,19 +366,36 @@ function timingSafeTokenCompare(stored, provided) {
   return crypto.timingSafeEqual(storedBuf, providedBuf);
 }
 
-/**
- * Normalize an escrow contact for consistent storage and comparison.
- * Emails: lowercased. Phones: digits only with leading +.
- */
-/**
- * Escape HTML special characters to prevent XSS in email bodies.
- */
-function escapeHtml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+// The claim token travels only in the link. The letter keeps its SHA-256 (escrow_claim_token_hash), so a Mail row
+// read back by a route (most select '*') or a copy of the database never holds a working link.
+function hashClaimToken(token) {
+  return crypto.createHash('sha256').update(String(token), 'utf8').digest('hex');
+}
+
+// Letters stored before the hash kept the token itself.
+function claimTokenMatches(mail, provided) {
+  if (typeof provided !== 'string' || !provided) return false;
+  if (mail.escrow_claim_token_hash) return timingSafeTokenCompare(mail.escrow_claim_token_hash, hashClaimToken(provided));
+  return timingSafeTokenCompare(mail.escrow_claim_token, provided);
+}
+
+// A wrong id or token, and a letter that was never escrowed, get the same answer: the link doesn't work.
+const sendClaimLinkInvalid = (res) =>
+  res.status(404).json({ error: 'This letter link doesn’t work. Check that you opened the whole link.', code: 'MAIL_LINK_INVALID' });
+
+// Why a claim link no longer opens its letter, or null while the letter waits. Past its 90 days it is expired even
+// before the daily job (jobs/mailEscrowExpiry) marks it.
+function closedEscrowReason(mail) {
+  if (mail.escrow_status === 'claimed') {
+    return { status: 409, error: 'This letter has already been added to a mailbox.', code: 'MAIL_CLAIMED' };
+  }
+  if (mail.escrow_status === 'withdrawn') {
+    return { status: 410, error: 'The sender took this letter back.', code: 'MAIL_WITHDRAWN' };
+  }
+  if (mail.escrow_status === 'expired' || (mail.escrow_expires_at && new Date(mail.escrow_expires_at) <= new Date())) {
+    return { status: 410, error: 'This letter waited 90 days for you and has expired.', code: 'MAIL_EXPIRED' };
+  }
+  return null;
 }
 
 /**
@@ -449,6 +475,8 @@ const normalizeSendMailPayload = (rawBody, senderId) => {
 
   let recipientUserId = body.recipientUserId || null;
   let recipientHomeId = body.recipientHomeId || null;
+  // Someone who isn't on Pantopus, by email or phone: the letter waits in escrow until they claim it (POST /send).
+  const contactRecipient = body.recipientEmail || body.recipientPhone || null;
 
   if (structuredRecipient.mode === 'self') {
     recipientUserId = senderId;
@@ -521,7 +549,7 @@ const normalizeSendMailPayload = (rawBody, senderId) => {
       throw new Error('Please choose who can see this mail at the home.');
     }
   } else {
-    if (!recipientUserId && !recipientHomeId) {
+    if (!recipientUserId && !recipientHomeId && !contactRecipient) {
       throw new Error('Please choose who this mail is for.');
     }
 
@@ -531,16 +559,17 @@ const normalizeSendMailPayload = (rawBody, senderId) => {
       addressHomeId = recipientHomeId || null;
       attnUserId = recipientUserId;
       deliveryVisibility = 'attn_only';
-    } else {
+    } else if (recipientHomeId) {
       deliveryTargetType = 'home';
       deliveryTargetId = recipientHomeId;
       addressHomeId = recipientHomeId;
       deliveryVisibility = 'home_members';
       attnLabel = 'Current Resident';
     }
+    // Otherwise the letter is for contactRecipient and has no delivery target until it is claimed.
   }
 
-  if (!recipientUserId && !recipientHomeId) {
+  if (!recipientUserId && !recipientHomeId && !contactRecipient) {
     throw new Error('Please choose who this mail is for.');
   }
 
@@ -822,8 +851,8 @@ const applyMailboxScopeToQuery = (query, { scope, userId, homeId, accessibleHome
   return query.eq('recipient_user_id', userId);
 };
 
-// A letter sent as a business (businessId) names the business in its payload and is stored under the business's id:
-// recipients read both, and the storage key and URL carry the uploader's id. created_by_user_id keeps the person.
+// A letter sent as a business (businessId) names the business in its payload, which recipients read. The letter is
+// stored privately under a key that names no one (services/mailObjectStorage); created_by_user_id keeps the person.
 const createMailObject = async ({
   senderId,
   businessId = null,
@@ -840,51 +869,32 @@ const createMailObject = async ({
   const serialized = JSON.stringify(payload || {});
   const buffer = Buffer.from(serialized, 'utf8');
   const sha256 = crypto.createHash('sha256').update(buffer).digest('hex');
-
-  const { url, key } = await s3.uploadGeneral(
-    buffer,
-    'mail.json',
-    businessId || senderId,
-    MAIL_OBJECT_FOLDER,
-    'application/json'
-  );
-
-  const bucketName =
-    process.env.AWS_S3_BUCKET_NAME ||
-    process.env.AWS_BUCKET_NAME ||
-    process.env.AWS_S3_BUCKET ||
-    null;
+  const id = crypto.randomUUID();
+  const stored = await mailObjects.store(id, buffer, sha256);
 
   const { data: objectRow, error } = await supabaseAdmin
     .from('MailObject')
     .insert({
+      id,
       created_by_user_id: senderId,
-      storage_provider: 's3',
-      bucket_name: bucketName,
-      object_key: key,
+      ...stored,
       format: 'mailjson_v1',
       mime_type: 'application/json',
       size_bytes: buffer.length,
       sha256,
       status: 'ready',
-      uploaded_at: new Date().toISOString(),
-      object_meta: {
-        publicUrl: url
-      }
+      uploaded_at: new Date().toISOString()
     })
     .select()
     .single();
 
   if (error) {
-    logger.error('MailObject insert failed', { error: error.message, key, senderId });
+    await mailObjects.remove(stored);
+    logger.error('MailObject insert failed', { error: error.message, objectId: id, senderId });
     throw new Error('Failed to persist mail object metadata');
   }
 
-  return {
-    objectId: objectRow.id,
-    objectKey: key,
-    objectUrl: url
-  };
+  return { objectId: objectRow.id };
 };
 
 const insertMailWithCompatibility = async (mailData) => {
@@ -968,6 +978,7 @@ const insertMailWithCompatibility = async (mailData) => {
   delete fallbackData.escrow_status;
   delete fallbackData.escrow_expires_at;
   delete fallbackData.escrow_claim_token;
+  delete fallbackData.escrow_claim_token_hash;
 
   const fallbackInsert = await supabaseAdmin
     .from('Mail')
@@ -990,25 +1001,24 @@ const getMailObjectPayload = async (objectId) => {
     return null;
   }
 
+  // Responses carry the row without its storage location (mailObjectStorage.clientFields).
+  const metadata = mailObjects.clientFields(objectRow);
   if (!objectRow.object_key) {
-    return { metadata: objectRow, payload: null };
+    return { metadata, payload: null };
   }
 
   try {
-    const objectText = await s3.getObjectAsString(
-      objectRow.object_key,
-      objectRow.bucket_name || undefined
-    );
+    const objectText = await mailObjects.readText(objectRow);
     let payload = null;
     try {
       payload = JSON.parse(objectText);
     } catch {
       payload = { body: { content: objectText } };
     }
-    return { metadata: objectRow, payload };
+    return { metadata, payload };
   } catch (err) {
     logger.error('MailObject read failed', { objectId, error: err.message });
-    return { metadata: objectRow, payload: null };
+    return { metadata, payload: null };
   }
 };
 
@@ -1956,6 +1966,18 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
     }
 
     if (isEscrowSend) {
+      // Launch cuts #8 and #10: a letter to someone who isn't on Pantopus is a surface of both, and its page
+      // (web /open) is hidden until both are on.
+      if (!areLaunchFeaturesEnabled(['mailbox', 'mail_extras'])) {
+        return res.status(403).json({ error: 'This isn\u2019t available yet.', code: 'MAIL_EXTRAS_UNAVAILABLE' });
+      }
+
+      // Pantopus emails or texts the person about it, so only a letter goes to someone who isn't on Pantopus: never
+      // an ad, bill, notice or promotion to an address the sender typed in.
+      if (type !== 'letter') {
+        return res.status(400).json({ error: 'Only a letter can go to someone who isn’t on Pantopus yet.' });
+      }
+
       // Rate limit check
       const rateCheck = await checkEscrowRateLimits(senderId, escrowContact);
       if (!rateCheck.allowed) {
@@ -2013,12 +2035,13 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
         attn_user_id: null,
         attn_label: null,
         delivery_visibility: null,
-        mail_extracted: extractedData || null,
+        // NOT NULL DEFAULT '{}': null failed the insert.
+        mail_extracted: extractedData || {},
         // Escrow-specific fields
         escrow_recipient_contact: escrowContact,
         escrow_status: 'pending',
         escrow_expires_at: escrowExpiresAt,
-        escrow_claim_token: escrowClaimToken,
+        escrow_claim_token_hash: hashClaimToken(escrowClaimToken),
       };
 
       const { data: escrowMail, error: escrowError } = await insertMailWithCompatibility(escrowMailData);
@@ -2028,35 +2051,36 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
         return res.status(500).json({ error: 'Failed to send mail' });
       }
 
+      // The recipient's email address or phone number stays out of the log.
       logger.info('Escrowed mail created', {
         mailId: escrowMail.id,
         type,
         senderId,
-        escrowContact,
         escrowExpiresAt,
       });
 
       // ── Notify non-user recipient (non-blocking) ────────────
-      const claimLink = `${ESCROW_CLAIM_LINK_BASE}/${escrowMail.id}?token=${escrowClaimToken}`;
+      const claimLink = escrowClaimLink(escrowMail.id, escrowClaimToken);
       (async () => {
         // Launch cuts #8 and #10: no email or text about a letter goes to anyone while writing letters
         // (mail_extras) or the mailbox is off.
         if (skipForLaunchCut(['mailbox', 'mail_extras'], 'escrowLetterNotice')) return;
         try {
-          const senderName = senderDisplayName;
-          const notifBody = `${senderName} sent you a letter to your home. Open it on Pantopus: ${claimLink}`;
-
           if (req.body.recipientEmail) {
-            await emailService.sendEmail({
-              to: escrowContact,
-              subject: `${senderName} sent you mail on Pantopus`,
-              text: notifBody,
-              html: `<p>${escapeHtml(senderName)} sent you a letter to your home.</p><p><a href="${claimLink}">Open it on Pantopus</a></p>`,
+            const sent = await emailService.sendLetterWaitingEmail({
+              toEmail: escrowContact,
+              senderName: senderDisplayName,
+              claimLink,
+              expiresAt: escrowExpiresAt,
             });
+            if (!sent?.success) {
+              logger.warn('Escrow letter email not delivered', { mailId: escrowMail.id, error: sent?.error || null });
+            }
           } else {
+            const until = new Date(escrowExpiresAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', timeZone: 'UTC' });
             await smsService.sendSms({
               to: escrowContact,
-              body: notifBody,
+              body: `${senderDisplayName} sent you a letter on Pantopus. Open it by ${until}: ${claimLink}`,
             });
           }
         } catch (notifErr) {
@@ -2409,98 +2433,47 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
 // ============================================================
 
 /**
- * GET /api/mailbox/claim/:mailId
- * Public endpoint (no auth required) — previews escrowed mail.
- * Requires ?token= query param matching the mail's claim token.
- * Returns safe subset of mail content for the web receiving page.
+ * GET /api/mailbox/claim/:mailId?token=…
+ * Public (no sign-in): what the link in a letter's email or text opens (the web app's /open/:mailId page). It shows
+ * who the letter is from and its preview, never the letter itself, which the person reads once it is in their
+ * mailbox (POST /claim/:mailId). A letter sent as a business shows the business, never the person who sent it.
  */
 router.get('/claim/:mailId', async (req, res) => {
   try {
     const { mailId } = req.params;
     const { token } = req.query;
-
-    if (!mailId || !UUID_REGEX.test(mailId)) {
-      return res.status(400).json({ error: 'Invalid mail ID format' });
-    }
-    if (!token || typeof token !== 'string') {
-      return res.status(400).json({ error: 'Claim token is required' });
-    }
+    if (!UUID_REGEX.test(mailId) || typeof token !== 'string' || !token) return sendClaimLinkInvalid(res);
 
     const { data: mail, error } = await supabaseAdmin
       .from('Mail')
-      .select('id, sender_user_id, sender_entity_id, sender_business_name, sender_display, sender_trust, type, subject, content, content_excerpt, preview_text, display_title, mail_type, primary_action, ack_required, attachments, object_id, escrow_recipient_contact, escrow_status, escrow_claim_token, escrow_expires_at, created_at')
+      .select('id, sender_user_id, sender_entity_id, sender_business_name, sender_display, sender_trust, type, subject, content_excerpt, preview_text, display_title, mail_type, primary_action, ack_required, escrow_recipient_contact, escrow_status, escrow_claim_token, escrow_claim_token_hash, escrow_expires_at, created_at')
       .eq('id', mailId)
-      .single();
+      .maybeSingle();
+    if (error) {
+      logger.error('Escrow claim preview read failed', { error: error.message, mailId });
+      return res.status(500).json({ error: 'Failed to open this letter' });
+    }
+    if (!mail || !claimTokenMatches(mail, token)) return sendClaimLinkInvalid(res);
 
-    if (error || !mail) {
-      return res.status(404).json({ error: 'Mail not found' });
-    }
+    const closed = closedEscrowReason(mail);
+    if (closed) return res.status(closed.status).json({ error: closed.error, code: closed.code });
 
-    // Validate claim token (timing-safe to prevent side-channel leaks)
-    if (!mail.escrow_claim_token || !timingSafeTokenCompare(mail.escrow_claim_token, token)) {
-      return res.status(403).json({ error: 'Invalid claim token' });
-    }
-
-    // Check escrow status
-    if (mail.escrow_status === 'expired') {
-      return res.status(410).json({ error: 'This mail has expired and is no longer available.' });
-    }
-    if (mail.escrow_status === 'withdrawn') {
-      return res.status(410).json({ error: 'This mail was withdrawn by the sender.' });
-    }
-    if (mail.escrow_status === 'claimed') {
-      return res.status(409).json({ error: 'This mail has already been claimed.' });
-    }
-
-    // The sender as this public page shows it: a letter sent as a business shows the business (its name and whether
-    // it is verified), never the person who sent it for the business; otherwise the sender's display name.
     let sender;
     if (sentAsBusiness(mail)) {
-      sender = claimPageSender(mail);
+      sender = { ...claimPageSender(mail), senderKind: 'business' };
     } else {
-      const { data: senderUser } = await supabaseAdmin
+      const { data: person } = await supabaseAdmin
         .from('User')
-        .select('name, username')
+        .select('name, first_name, username')
         .eq('id', mail.sender_user_id)
-        .single();
-      const { data: senderProfile } = await supabaseAdmin
-        .from('UserProfile')
-        .select('identity_verified')
-        .eq('user_id', mail.sender_user_id)
-        .single();
+        .maybeSingle();
       sender = {
-        senderName: senderUser?.name || senderUser?.username || 'Someone',
-        senderVerified: Boolean(senderProfile?.identity_verified),
+        senderName: person?.name || person?.first_name || chosenUsernameOrNull(person?.username) || mail.sender_display || 'A neighbor',
+        // A personal letter needs a verified home to be sent (POST /send); this says whether the sender still has one.
+        senderVerified: await hasVerifiedSenderHome(mail.sender_user_id),
+        senderKind: 'person',
       };
     }
-
-    // Fetch object payload (stationery metadata) if available
-    let stationeryTheme = null;
-    let inkSelection = null;
-    let voicePostscriptUri = null;
-    let outcomes = null;
-    let bodyContent = mail.content || mail.content_excerpt || '';
-
-    if (mail.object_id) {
-      const objectPayload = await getMailObjectPayload(mail.object_id);
-      if (objectPayload?.payload) {
-        const p = objectPayload.payload;
-        // Extract stationery from payload (may be nested at .payload or .body.payload)
-        const stationeryData = p.payload || p.body?.payload || {};
-        stationeryTheme = stationeryData.stationeryTheme || null;
-        inkSelection = stationeryData.inkSelection || null;
-        voicePostscriptUri = stationeryData.voicePostscriptUri || null;
-        outcomes = stationeryData.outcomes || null;
-        // Use full content from object if available
-        if (p.body?.content) bodyContent = p.body.content;
-        else if (p.content) bodyContent = p.content;
-      }
-    }
-
-    // Filter attachments — only return photo URLs (not internal refs)
-    const photoAttachments = (mail.attachments || []).filter(
-      a => a && !a.includes('voice') && (a.startsWith('http') || a.startsWith('/'))
-    );
 
     // Build outcome description
     let outcomeDescription = null;
@@ -2508,8 +2481,12 @@ router.get('/claim/:mailId', async (req, res) => {
       outcomeDescription = 'Payment requested';
     } else if (mail.ack_required) {
       outcomeDescription = 'Acknowledgement required';
-    } else if (mail.primary_action === 'sign') {
-      outcomeDescription = 'Signature required';
+    }
+
+    // The preview (140 characters) ends at a whole word, with an ellipsis when the letter goes on.
+    let previewText = mail.preview_text || mail.content_excerpt || null;
+    if (previewText && (mail.content_excerpt || '').length > previewText.length) {
+      previewText = `${previewText.replace(/\s+\S*$/, '')}…`;
     }
 
     return res.json({
@@ -2517,15 +2494,13 @@ router.get('/claim/:mailId', async (req, res) => {
         id: mail.id,
         senderName: sender.senderName,
         senderVerified: sender.senderVerified,
+        senderKind: sender.senderKind,
         subject: mail.subject || mail.display_title || null,
-        previewText: mail.preview_text || mail.content_excerpt || null,
+        previewText,
         mailType: mail.mail_type || mail.type || null,
-        stationeryTheme,
-        inkSelection,
-        voicePostscriptUri,
-        photoAttachments,
         outcomeDescription,
-        outcomes,
+        // The address or number to sign in with, masked as in the sender's expiry notice.
+        sentTo: maskContact(mail.escrow_recipient_contact || ''),
         createdAt: mail.created_at,
         expiresAt: mail.escrow_expires_at,
       },
@@ -2537,108 +2512,83 @@ router.get('/claim/:mailId', async (req, res) => {
 });
 
 /**
- * POST /api/mailbox/claim/:mailId
- * Auth required — claims escrowed mail for the authenticated user.
- * Validates claim token and (optionally) address proximity.
- * Updates escrow status to 'claimed' and delivers the mail.
+ * POST /api/mailbox/claim/:mailId  { token }
+ * The signed-in person the letter was sent to puts it in their mailbox: their account's email (or phone number) must
+ * be the one the sender typed. The letter arrives as their own, and the sender is told it was opened.
  */
 router.post('/claim/:mailId', verifyToken, async (req, res) => {
   try {
     const { mailId } = req.params;
-    const { token } = req.body;
+    const token = req.body?.token;
     const claimerId = req.user.id;
+    if (!UUID_REGEX.test(mailId) || typeof token !== 'string' || !token) return sendClaimLinkInvalid(res);
 
-    if (!mailId || !UUID_REGEX.test(mailId)) {
-      return res.status(400).json({ error: 'Invalid mail ID format' });
-    }
-    if (!token || typeof token !== 'string') {
-      return res.status(400).json({ error: 'Claim token is required' });
-    }
-
-    // Fetch the escrowed mail
     const { data: mail, error } = await supabaseAdmin
       .from('Mail')
-      .select('*')
+      .select('id, sender_user_id, type, subject, mail_type, display_title, escrow_recipient_contact, escrow_status, escrow_claim_token, escrow_claim_token_hash, escrow_expires_at')
       .eq('id', mailId)
-      .single();
+      .maybeSingle();
+    if (error) {
+      logger.error('Escrow claim read failed', { error: error.message, mailId });
+      return res.status(500).json({ error: 'Failed to claim mail' });
+    }
+    if (!mail || !claimTokenMatches(mail, token)) return sendClaimLinkInvalid(res);
 
-    if (error || !mail) {
-      return res.status(404).json({ error: 'Mail not found' });
+    const closed = closedEscrowReason(mail);
+    if (closed) {
+      if (closed.code === 'MAIL_EXPIRED' && mail.escrow_status === 'pending') {
+        await supabaseAdmin
+          .from('Mail')
+          .update({ escrow_status: 'expired' })
+          .eq('id', mailId)
+          .eq('escrow_status', 'pending');
+      }
+      return res.status(closed.status).json({ error: closed.error, code: closed.code });
     }
 
-    // Validate claim token (timing-safe to prevent side-channel leaks)
-    if (!mail.escrow_claim_token || !timingSafeTokenCompare(mail.escrow_claim_token, token)) {
-      return res.status(403).json({ error: 'Invalid claim token' });
+    if (String(mail.sender_user_id) === String(claimerId)) {
+      return res.status(400).json({ error: 'You sent this letter. It’s waiting for the person you wrote to.', code: 'MAIL_OWN_LETTER' });
     }
 
-    // Check escrow status
-    if (mail.escrow_status !== 'pending') {
-      return res.status(409).json({
-        error: `This mail has already been ${mail.escrow_status}.`,
-      });
-    }
-
-    // Check expiry
-    if (mail.escrow_expires_at && new Date(mail.escrow_expires_at) < new Date()) {
-      // Auto-expire if past deadline
-      await supabaseAdmin
-        .from('Mail')
-        .update({ escrow_status: 'expired' })
-        .eq('id', mailId);
-      return res.status(410).json({ error: 'This mail has expired.' });
-    }
-
-    // Prevent sender from claiming their own mail
-    if (mail.sender_user_id === claimerId) {
-      return res.status(400).json({ error: 'You cannot claim mail you sent.' });
-    }
-
-    // Verify the claimer's contact matches the escrow contact (email or phone)
-    const { data: claimer } = await supabaseAdmin
+    // Sign-in needs a confirmed email, so a matching email shows the claimer reads that inbox.
+    const { data: claimer, error: claimerError } = await supabaseAdmin
       .from('User')
-      .select('email, phone')
+      .select('email, phone_number, name, first_name, username')
       .eq('id', claimerId)
-      .single();
-
-    if (!claimer) {
-      return res.status(404).json({ error: 'User not found' });
+      .maybeSingle();
+    if (claimerError || !claimer) {
+      logger.error('Escrow claimer read failed', { error: claimerError?.message || 'no User row', mailId });
+      return res.status(500).json({ error: 'Failed to claim mail' });
     }
 
-    const escrowContact = mail.escrow_recipient_contact;
-    const normalizedEscrow = normalizeEscrowContact(escrowContact);
-    const contactMatches =
-      (claimer.email && normalizeEscrowContact(claimer.email) === normalizedEscrow) ||
-      (claimer.phone && normalizeEscrowContact(claimer.phone) === normalizedEscrow);
+    const escrowContact = normalizeEscrowContact(mail.escrow_recipient_contact);
+    const contactMatches = Boolean(escrowContact) && (
+      (claimer.email && normalizeEscrowContact(claimer.email) === escrowContact) ||
+      (claimer.phone_number && normalizeEscrowContact(claimer.phone_number) === escrowContact));
 
     if (!contactMatches) {
       return res.status(403).json({
-        error: 'Your account contact does not match the intended recipient.',
+        error: 'This letter was sent to a different email address or phone number. Sign in with the account that uses it.',
+        code: 'MAIL_CONTACT_MISMATCH',
       });
     }
 
     // ── Claim the mail ─────────────────────────────────────────
-    // Look up the claimer's home for delivery
-    const { data: claimerOccupancy } = await supabaseAdmin
-      .from('HomeOccupancy')
-      .select('home_id')
-      .eq('user_id', claimerId)
-      .eq('is_active', true)
-      .limit(1)
-      .single();
-
-    const claimerHomeId = claimerOccupancy?.home_id || null;
-
+    // It arrives as the claimer's own letter, for them alone (Personal drawer, attention only), not as mail for
+    // everyone at their Home.
     const { data: updatedRows, error: updateError } = await supabaseAdmin
       .from('Mail')
       .update({
         escrow_status: 'claimed',
         recipient_user_id: claimerId,
-        recipient_home_id: claimerHomeId,
-        delivery_target_type: claimerHomeId ? 'home' : 'user',
-        delivery_target_id: claimerHomeId || claimerId,
-        recipient_type: claimerHomeId ? 'home' : 'user',
-        recipient_id: claimerHomeId || claimerId,
-        address_home_id: claimerHomeId,
+        recipient_home_id: null,
+        delivery_target_type: 'user',
+        delivery_target_id: claimerId,
+        recipient_type: 'user',
+        recipient_id: claimerId,
+        attn_user_id: claimerId,
+        delivery_visibility: 'attn_only',
+        drawer: 'personal',
         lifecycle: 'delivered',
       })
       .eq('id', mailId)
@@ -2651,25 +2601,15 @@ router.post('/claim/:mailId', verifyToken, async (req, res) => {
     }
 
     if (!updatedRows || updatedRows.length === 0) {
-      return res.status(409).json({ error: 'This mail has already been claimed.' });
+      return res.status(409).json({ error: 'This letter has already been added to a mailbox.', code: 'MAIL_CLAIMED' });
     }
 
-    logger.info('Escrowed mail claimed', {
-      mailId,
-      claimerId,
-      claimerHomeId,
-      escrowContact,
-    });
+    logger.info('Escrowed mail claimed', { mailId, claimerId });
 
     // Notify the sender that their mail was claimed
     (async () => {
       try {
-        const { data: claimerUser } = await supabaseAdmin
-          .from('User')
-          .select('name, username')
-          .eq('id', claimerId)
-          .single();
-        const claimerName = claimerUser?.name || claimerUser?.username || 'Someone';
+        const claimerName = claimer.name || claimer.first_name || chosenUsernameOrNull(claimer.username) || 'Someone';
 
         await notificationService.createNotification({
           userId: mail.sender_user_id,

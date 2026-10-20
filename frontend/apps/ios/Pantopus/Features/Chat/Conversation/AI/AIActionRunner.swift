@@ -286,6 +286,16 @@ final class AIActionDoneStore {
         persist()
     }
 
+    /// A deleted conversation's cards: nothing of them stays on the device.
+    func forget(cardIds: Set<String>) {
+        guard !cardIds.isEmpty else { return }
+        saved.done = saved.done.filter { key, _ in
+            !cardIds.contains(String(key.prefix { $0 != "|" }))
+        }
+        saved.dismissed = saved.dismissed.filter { !cardIds.contains($0.key) }
+        persist()
+    }
+
     private func persist() {
         if saved.done.count > Self.limit {
             let oldest = saved.done.sorted { $0.value.at < $1.value.at }.prefix(saved.done.count - Self.limit)

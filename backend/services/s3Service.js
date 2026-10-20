@@ -29,10 +29,16 @@ function categorizeFile(mimeType) {
 }
 
 function generateS3Key(folder, originalFilename, userId) {
+  return generateOpaqueS3Key(`${folder}/${userId}`, originalFilename);
+}
+
+// A key that names no uploader, for files a letter carries: a letter can be sent as a business, its recipients see
+// the file's URL, and the uploader's id in it would name the person behind the business.
+function generateOpaqueS3Key(folder, originalFilename) {
   const ext = path.extname(originalFilename).toLowerCase();
   const ts = Date.now();
   const rand = crypto.randomBytes(8).toString('hex');
-  return `${folder}/${userId}/${ts}_${rand}${ext}`;
+  return `${folder}/${ts}_${rand}${ext}`;
 }
 
 function getPublicUrl(key) {
@@ -445,7 +451,7 @@ function isAllowedType(mimeType) {
 }
 
 module.exports = {
-  categorizeFile, generateS3Key, getPublicUrl, isPublicStorageUrl, isAllowedType,
+  categorizeFile, generateS3Key, generateOpaqueS3Key, getPublicUrl, isPublicStorageUrl, isAllowedType,
   uploadToS3, uploadProfilePicture, uploadGigMedia,
   chatFileStorageReference, chatFileObjectMetadata, removeDeletedChatFile,
   verifyGigCompletionFile, normalizeGigCompletionFile,
