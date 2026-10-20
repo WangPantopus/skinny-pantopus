@@ -429,6 +429,91 @@ async function emitNewMessage(io, { room, message, actorUserId, identityUserId }
   });
 }
 
+// ── Delivery ─────────────────────────────────────────────────────────
+// A message just written to `room` (with its `sender`) goes out the same way
+// wherever it was written: every member hears it (message:new, without the
+// internal actor_user_id), the room moves up the lists, the sender's own row
+// stays read, and the other members get a badge update and a device push.
+// POST /messages and an organizer's Support Train reminder
+// (routes/supportTrains.js) both deliver through here.
+async function deliverNewMessage(io, { room, message, actorUserId, senderUserId = actorUserId, requestId = null }) {
+  const roomId = room.id;
+  if (io) {
+    const broadcast = serializeChatMessageForViewer(message);
+    emitNewMessage(io, { room, message: broadcast, actorUserId, identityUserId: senderUserId })
+      .catch((emitError) => {
+        // Without the members, the room still hears it as before (the lists reload).
+        logger.warn('message_new_personal_failed', { requestId, roomId, error: emitError.message });
+        io.to(roomId).emit('message:new', broadcast);
+      });
+  }
+
+  const stamp = new Date().toISOString();
+  await Promise.all([
+    supabaseAdmin
+      .from('ChatRoom')
+      .update({ updated_at: stamp })
+      .eq('id', roomId),
+    supabaseAdmin
+      .from('ChatParticipant')
+      .update({ unread_count: 0, last_read_at: stamp })
+      .eq('room_id', roomId)
+      .eq('user_id', actorUserId),
+  ]);
+
+  // Push fresh badge counts (including total message count) immediately.
+  const { data: participantRows } = await supabaseAdmin
+    .from('ChatParticipant')
+    .select('user_id')
+    .eq('room_id', roomId)
+    .eq('is_active', true);
+  const participantUserIds = Array.from(new Set((participantRows || []).map((row) => String(row.user_id)).filter(Boolean)));
+  // Exclude both the acting user and the message identity user.
+  const excludedUserIds = new Set([String(actorUserId), String(senderUserId)]);
+  let recipientUserIds = participantUserIds.filter((id) => !excludedUserIds.has(id));
+  try {
+    // Leftover members of an assigned task's gig room get no badge or push for it.
+    recipientUserIds = await gigRoomRecipients(room, recipientUserIds);
+  } catch (recipientErr) {
+    logger.warn('gig_room_recipients_unavailable', { requestId, roomId, error: recipientErr.message });
+    recipientUserIds = [];
+  }
+  if (recipientUserIds.length === 0) return;
+  badgeService.emitBadgeUpdateToMany(recipientUserIds);
+
+  // A device push to every recipient who has push on, so it arrives when the
+  // app is in the background or closed.
+  (async () => {
+    try {
+      // Skip recipients who turned push off; an account with no
+      // preference row has the default (on).
+      const { data: disabledRows, error: prefsError } = await supabaseAdmin
+        .from('MailPreferences')
+        .select('user_id')
+        .in('user_id', recipientUserIds)
+        .eq('push_notifications', false);
+      if (prefsError) return;
+      const disabled = new Set((disabledRows || []).map((r) => r.user_id));
+      const pushEnabledIds = recipientUserIds.filter((id) => !disabled.has(id));
+      if (pushEnabledIds.length === 0) return;
+
+      const senderName = serializeUserIdentityForViewer(message.sender)?.displayName || 'Someone';
+      const text = String(message.message || '');
+      const type = message.type || 'text';
+      const preview = type === 'text'
+        ? (text.length > 100 ? text.slice(0, 100) + '…' : text)
+        : type === 'file' ? '📎 Sent an attachment' : '💬 New message';
+      await pushService.sendToUsers(pushEnabledIds, {
+        title: senderName,
+        body: preview,
+        data: { type: 'chat_message', room_id: roomId, link: `/chat/${roomId}` },
+      });
+    } catch (err) {
+      logger.warn('Chat push delivery failed (non-blocking)', { error: err.message, roomId });
+    }
+  })();
+}
+
 async function resolveRoomPreviewMap(roomPreviews, requestId, logContext) {
   const previewMap = {};
   const deletedRoomIds = [];
@@ -994,6 +1079,15 @@ router.get('/rooms/:roomId', verifyToken, async (req, res) => {
       if (hiddenMembers.size > 0) {
         room.participants = room.participants.filter((p) => !hiddenMembers.has(`${room.id}:${p.user_id}`));
       }
+    }
+    // A Support Train's room goes by the train's title as it is now, as in the Messages list.
+    if (room.type === 'support_train' && room.support_train_id) {
+      const { data: train } = await supabaseAdmin
+        .from('SupportTrain')
+        .select('Activity(title)')
+        .eq('id', room.support_train_id)
+        .maybeSingle();
+      room.name = train?.Activity?.title || room.name;
     }
     // A plan's room names its plan, so the chat can show the plan strip and open it.
     if (room.type === 'plan') {
@@ -1964,38 +2058,12 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
       return res.status(500).json({ error: 'Failed to send message' });
     }
 
-    // Broadcast the new message to all participants in the room via Socket.IO
-    // so that both sender and receivers see it in real-time without refreshing.
-    // Strip actor_user_id from broadcast — it's internal business data.
-    const io = req.app.get('io');
-    if (io) {
-      const broadcast = serializeChatMessageForViewer(message);
-      emitNewMessage(io, { room, message: broadcast, actorUserId: userId, identityUserId: senderUserId })
-        .catch((emitError) => {
-          // Without the members, the room still hears it as before (the lists reload).
-          logger.warn('message_new_personal_failed', { requestId, roomId, error: emitError.message });
-          io.to(roomId).emit('message:new', broadcast);
-        });
-    }
-
-    const sideEffectStamp = new Date().toISOString();
     await Promise.all([
-      supabaseAdmin
-        .from('ChatRoom')
-        .update({ updated_at: sideEffectStamp })
-        .eq('id', roomId),
-      supabaseAdmin
-        .from('ChatParticipant')
-        .update({
-          unread_count: 0,
-          last_read_at: sideEffectStamp
-        })
-        .eq('room_id', roomId)
-        .eq('user_id', userId),
+      deliverNewMessage(req.app.get('io'), { room, message, actorUserId: userId, senderUserId, requestId }),
       topicId
         ? supabaseAdmin
             .from('ConversationTopic')
-            .update({ last_activity_at: sideEffectStamp })
+            .update({ last_activity_at: new Date().toISOString() })
             .eq('id', topicId)
         : Promise.resolve(),
     ]);
@@ -2004,60 +2072,6 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
     incCounter('chat.message.sent', { room_type: room?.type || 'unknown' });
     recordHistogram('chat.message.send_latency_ms', sendDurationMs);
     logger.info('message_send_complete', { requestId, roomId, userId, senderUserId, messageId: message.id, durationMs: sendDurationMs });
-
-    // Push fresh badge counts (including total message count) immediately.
-    const { data: participantRows } = await supabaseAdmin
-      .from('ChatParticipant')
-      .select('user_id')
-      .eq('room_id', roomId)
-      .eq('is_active', true);
-    const participantUserIds = Array.from(new Set((participantRows || []).map((row) => String(row.user_id)).filter(Boolean)));
-    // Exclude both the acting user and the message identity user.
-    const excludedUserIds = new Set([String(userId), String(senderUserId)]);
-    let recipientUserIds = participantUserIds.filter((id) => !excludedUserIds.has(id));
-    try {
-      // Leftover members of an assigned task's gig room get no badge or push for it.
-      recipientUserIds = await gigRoomRecipients(room, recipientUserIds);
-    } catch (recipientErr) {
-      logger.warn('gig_room_recipients_unavailable', { requestId, roomId, error: recipientErr.message });
-      recipientUserIds = [];
-    }
-    if (recipientUserIds.length > 0) {
-      badgeService.emitBadgeUpdateToMany(recipientUserIds);
-    }
-
-    // ── Push notification for chat messages ──────────────────────────
-    // Send a device push to every recipient (who has push enabled) so
-    // they receive a notification when the app is backgrounded or killed.
-    if (recipientUserIds.length > 0) {
-      (async () => {
-        try {
-          // Skip recipients who turned push off; an account with no
-          // preference row has the default (on).
-          const { data: disabledRows, error: prefsError } = await supabaseAdmin
-            .from('MailPreferences')
-            .select('user_id')
-            .in('user_id', recipientUserIds)
-            .eq('push_notifications', false);
-          if (prefsError) return;
-          const disabled = new Set((disabledRows || []).map((r) => r.user_id));
-          const pushEnabledIds = recipientUserIds.filter((id) => !disabled.has(id));
-          if (pushEnabledIds.length === 0) return;
-
-          const senderName = serializeUserIdentityForViewer(message.sender)?.displayName || 'Someone';
-          const preview = resolvedType === 'text'
-            ? (resolvedMessage.length > 100 ? resolvedMessage.slice(0, 100) + '…' : resolvedMessage)
-            : resolvedType === 'file' ? '📎 Sent an attachment' : '💬 New message';
-          await pushService.sendToUsers(pushEnabledIds, {
-            title: senderName,
-            body: preview,
-            data: { type: 'chat_message', room_id: roomId, link: `/chat/${roomId}` },
-          });
-        } catch (err) {
-          logger.warn('Chat push delivery failed (non-blocking)', { error: err.message, roomId });
-        }
-      })();
-    }
 
     res.status(201).json({ message: serializeChatMessageForViewer(message) });
     
@@ -2529,7 +2543,10 @@ router.get('/unified-conversations', verifyToken, async (req, res) => {
         last_read_at,
         role,
         is_active,
-        room:room_id(id, type, name, description, gig_id, home_id, is_active, created_at, updated_at)
+        room:room_id(
+          id, type, name, description, gig_id, home_id, support_train_id, is_active, created_at, updated_at,
+          support_train:support_train_id(Activity(title))
+        )
       `)
       .eq('user_id', userId)
       .eq('is_active', true);
@@ -2544,9 +2561,9 @@ router.get('/unified-conversations', verifyToken, async (req, res) => {
     const closedRoomIds = await closedGigRoomIds(joinedRooms.map((p) => p.room), userId);
     const roomList = joinedRooms.filter((p) => !closedRoomIds.has(String(p.room.id)));
 
-    // Separate group/home/plan rooms (not mergeable) from direct/gig rooms (mergeable by person)
+    // Separate group/home/plan/Support Train rooms (not mergeable) from direct/gig rooms (mergeable by person)
     const mergeableParticipants = roomList.filter(p => p.room.type === 'direct' || p.room.type === 'gig');
-    const groupHomeParticipants = roomList.filter(p => ['group', 'home', 'plan'].includes(p.room.type));
+    const groupHomeParticipants = roomList.filter(p => ['group', 'home', 'plan', 'support_train'].includes(p.room.type));
 
     // Step 2: For mergeable rooms, find other participants. The messages and topics of steps 4-5
     // don't depend on them, so they're fetched in the same round trip (previews for every listed
@@ -2658,10 +2675,12 @@ router.get('/unified-conversations', verifyToken, async (req, res) => {
       conversations.push({
         id: roomId,
         room_type: p.room.type,
-        room_name: p.room.name,
+        // A Support Train's room goes by the train's title as it is now (the room was named at publish).
+        room_name: p.room.support_train?.Activity?.title || p.room.name,
         description: p.room.description,
         gig_id: p.room.gig_id,
         home_id: p.room.home_id,
+        support_train_id: p.room.support_train_id || null,
         total_unread: p.unread_count || 0,
         last_message_at: lastMessageAt || p.room.updated_at,
         last_message_preview: lastMessagePreview,
@@ -3131,3 +3150,5 @@ router.get('/metrics', verifyToken, (_req, res) => {
 });
 
 module.exports = router;
+// A Support Train organizer's reminder (routes/supportTrains.js) is delivered as a chat message.
+module.exports.deliverNewMessage = deliverNewMessage;
