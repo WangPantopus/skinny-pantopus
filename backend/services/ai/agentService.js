@@ -1371,8 +1371,13 @@ function storedResults(messages) {
   return results;
 }
 
-/** The stored transcript as the apps show it: the person's messages, the replies, and the drafts as cards. */
-function displayMessages(stored) {
+/**
+ * The stored transcript as the apps show it: the person's messages, the replies, and the drafts as cards.
+ * Action cards and link buttons go only to apps that list them in `cards` ("action", "link"), as in the
+ * chat stream; an app without them sees those turns' words only, as it did before they existed.
+ */
+function displayMessages(stored, { cards = [] } = {}) {
+  const shown = new Set(cards);
   const items = [];
   const history = sanitizeHistory(stored);
   const results = storedResults(history);
@@ -1410,9 +1415,10 @@ function displayMessages(stored) {
       if (block.type !== 'tool_use') continue;
       const result = results.get(block.id);
       // A link button (show_link) goes with this reply's text.
-      if (block.name === 'show_link' && result?.link?.url) turnLinks.push(result.link);
+      if (block.name === 'show_link' && result?.link?.url && shown.has('link')) turnLinks.push(result.link);
       // An action card is what its tool returned: the exact request the app sends.
       if (result?.draftType === 'action' && result.draft?.card) {
+        if (!shown.has('action')) continue;
         if (text.trim()) items.push({ role: 'assistant', text: text.trim() });
         text = '';
         items.push({ role: 'assistant', draft: { type: 'action', draft: result.draft } });
@@ -1441,8 +1447,10 @@ function displayMessages(stored) {
 /**
  * One of the person's conversations, for display. null when it isn't theirs or
  * doesn't exist; an empty list when the database has no transcripts yet.
+ * @param {object} [options]
+ * @param {string[]} [options.cards] — The cards the app can show, as the chat request lists them
  */
-async function getConversationMessages(userId, conversationId) {
+async function getConversationMessages(userId, conversationId, { cards = [] } = {}) {
   const { data, error } = await supabaseAdmin
     .from('AIConversation')
     .select('id, title, messages')
@@ -1457,7 +1465,7 @@ async function getConversationMessages(userId, conversationId) {
     return row ? { conversationId: row.id, title: row.title, messages: [] } : null;
   }
   if (!data) return null;
-  return { conversationId: data.id, title: data.title, messages: displayMessages(data.messages) };
+  return { conversationId: data.id, title: data.title, messages: displayMessages(data.messages, { cards }) };
 }
 
 async function deleteConversation(userId, conversationId) {

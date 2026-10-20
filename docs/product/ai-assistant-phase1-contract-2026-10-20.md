@@ -29,6 +29,8 @@ This file is the contract three sessions build against: the backend, iOS and And
 
 `context` shape: `{ "surface": string, "id"?: uuid, "home_id"?: uuid, "section"?: string }`. Unknown surfaces are ignored. The server checks access exactly as the screen does; a plan or post the person can't see is treated as no context.
 
+The history request (`GET /api/ai/conversations/:id/messages`) takes the same `cards` list as a comma-separated query: `?cards=pickup_schedule,action,link` (at most 20 names of at most 40 characters; unknown names are ignored). Sections 4.1 and 5 say what it changes.
+
 ## 4. Action cards
 
 ### 4.1 Event
@@ -39,7 +41,7 @@ An action card arrives as the existing `draft` event:
 { "type": "action", "draft": { ...envelope... }, "valid": true }
 ```
 
-and in history (`GET /api/ai/conversations/:id/messages`) as `{ "role": "assistant", "draft": { "type": "action", "draft": { ...envelope... } } }`. As with today's drafts, a card ends the assistant's turn; the line under it arrives as `text_delta`.
+and in history (`GET /api/ai/conversations/:id/messages?cards=pickup_schedule,action,link`) as `{ "role": "assistant", "draft": { "type": "action", "draft": { ...envelope... } } }`. History includes action cards only when `cards` lists `"action"`, as the chat does. A build that sends no list, like the 2.0.1 store apps, gets the words of those turns without the card, even when another build of the same account made it. As with today's drafts, a card ends the assistant's turn; the line under it arrives as `text_delta`.
 
 ### 4.2 Envelope
 
@@ -133,7 +135,7 @@ event: link
 data: { "label": "Open notification settings", "url": "pantopus://settings/notifications" }
 ```
 
-after the text it belongs to (it may come before `done`). Apps that sent `"link"` in `cards` show each link as a button under that reply and open it with their deep-link router; an unknown URL does nothing. History items carry them as `"links": [ { "label", "url" } ]` on the assistant message.
+after the text it belongs to (it may come before `done`). Apps that sent `"link"` in `cards` show each link as a button under that reply and open it with their deep-link router; an unknown URL does nothing. History items carry them as `"links": [ { "label", "url" } ]` on the assistant message when the history request's `cards` lists `"link"` (section 3).
 
 URLs come only from a fixed catalog on the server (section 5.1), never from the model.
 
