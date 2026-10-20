@@ -321,6 +321,8 @@ const TOOL_TIMEOUTS_MS = {
   draft_plan_ask: 8000,
   draft_plan_message: 8000,
   draft_home_task: 8000,
+  draft_home_system: 12000,
+  draft_home_asset: 8000,
 };
 
 /** The tool context: the person and what this turn knows. A bare user id still works (older callers, tests). */
