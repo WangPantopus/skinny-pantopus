@@ -554,6 +554,9 @@ class ChatConversationViewModel
                 val draft = item.draft?.let { aiRepo.draftCard(it.type, it.draft) }
                 val itemLinks = item.links.orEmpty().mapNotNull { aiRepo.link(it.label, it.url) }
                 if (draft == null && text.isEmpty() && itemLinks.isEmpty()) return@forEachIndexed
+                // A brief or nudge (its line, then its cards) is a reply of its own, never the note of the one before.
+                val nudge = item.nudgeNotificationId
+                if (nudge != null) openReplyId = null
                 // A draft, its link buttons and the note after it share one reply, as they did when it streamed.
                 val replyId =
                     openReplyId?.takeIf { open -> restored.any { it.id == open } }
@@ -562,10 +565,11 @@ class ChatConversationViewModel
                     val at = restored.indexOfFirst { it.id == replyId }
                     restored[at] = localMessage(id = replyId, text = text, userId = "ai", type = "ai_reply")
                 }
-                openReplyId = replyId.takeIf { text.isEmpty() }
+                // A brief's or nudge's cards join its line.
+                openReplyId = if (nudge != null) replyId else replyId.takeIf { text.isEmpty() }
                 draft?.let { drafts[replyId] = drafts[replyId].orEmpty() + withSavedRuns(it) }
                 if (itemLinks.isNotEmpty()) links[replyId] = links[replyId].orEmpty() + itemLinks
-                item.nudgeNotificationId?.let { nudgeReplies.putIfAbsent(it, replyId) }
+                nudge?.let { nudgeReplies.putIfAbsent(it, replyId) }
             }
             messages.addAll(restored)
             aiDraftsByMessageId.putAll(drafts)
