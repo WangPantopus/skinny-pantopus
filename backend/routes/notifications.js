@@ -139,7 +139,7 @@ router.get('/', verifyToken, async (req, res) => {
           .maybeSingle();
         if (anchorError) {
           logger.error('Error reading notification cursor', { error: anchorError.message, userId });
-          return res.status(500).json({ error: 'Failed to fetch notifications' });
+          throw anchorError;
         }
         if (!anchor) {
           return res.status(400).json({ error: 'Unknown notification; reload the list.', code: 'NOTIFICATION_CURSOR_UNKNOWN' });
