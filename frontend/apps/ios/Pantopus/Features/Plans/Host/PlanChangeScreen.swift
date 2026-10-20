@@ -232,6 +232,9 @@ struct PlanChangeScreen: View {
     }
 
     private func save() {
+        guard !isSaving else { return }
+        isSaving = true
+        error = nil
         var body = UpdatePlanBody()
         body.startsAt = PlanTime.string(start)
         body.endsAt = PlanTime.string(end)
@@ -246,8 +249,12 @@ struct PlanChangeScreen: View {
             )
         }
         Task {
-            isSaving = true
-            error = nil
+            // Moving a public plan needs the same fresh nearby proof as posting one.
+            let location = DeviceLocationProvider.shared
+            if newPlace != nil, location.canLocateWithoutAsking,
+               let fix = await location.requestCurrent(timeoutSeconds: 4) {
+                body.gps = PlanGPSBody(latitude: fix.latitude, longitude: fix.longitude, timestamp: Date())
+            }
             do {
                 let _: PlanDetailDTO = try await APIClient.shared.request(PlansEndpoints.update(id: planId, body))
                 PlansStoreReads.changed(planId: planId)

@@ -26,7 +26,6 @@ export default function InviteSeatModal({ open, onClose, businessId, onSuccess }
     display_name: '',
     invited_email: '',
     role_base: 'viewer',
-    title: '',
   });
   const [saving, setSaving] = useState(false);
   // After a create (or a renewal) the dialog shows the invite link. The link exists only now, and a
@@ -62,20 +61,23 @@ export default function InviteSeatModal({ open, onClose, businessId, onSuccess }
       toast.error('Display name is required');
       return;
     }
+    if (!form.invited_email.trim()) {
+      toast.error('The team member’s email is required');
+      return;
+    }
     setSaving(true);
     try {
       const result = await api.businessSeats.createSeatInvite(businessId, {
         display_name: form.display_name.trim(),
-        invite_email: form.invited_email.trim() || undefined,
+        invite_email: form.invited_email.trim(),
         role_base: form.role_base as 'admin' | 'editor' | 'staff' | 'viewer',
-        title: form.title.trim() || undefined,
       });
       setCreated({
         url: result.invite_token ? `${window.location.origin}/invite/seat?token=${result.invite_token}` : null,
         // Inviting the same email again renews that invite; the link sent before stops working.
         renewed: result.renewed === true,
       });
-      setForm({ display_name: '', invited_email: '', role_base: 'viewer', title: '' });
+      setForm({ display_name: '', invited_email: '', role_base: 'viewer' });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Failed to create seat invite';
       toast.error(msg);
@@ -154,7 +156,7 @@ export default function InviteSeatModal({ open, onClose, businessId, onSuccess }
             />
 
             <Field
-              label="Email (optional)"
+              label="Email *"
               value={form.invited_email}
               onChange={(v) => setForm({ ...form, invited_email: v })}
               placeholder="team@example.com"
@@ -174,13 +176,6 @@ export default function InviteSeatModal({ open, onClose, businessId, onSuccess }
                 ))}
               </select>
             </div>
-
-            <Field
-              label="Title (optional)"
-              value={form.title}
-              onChange={(v) => setForm({ ...form, title: v })}
-              placeholder="e.g. Store Manager"
-            />
 
             <div className="rounded-lg bg-violet-50 border border-violet-200 px-4 py-3">
               <p className="text-xs text-violet-700">

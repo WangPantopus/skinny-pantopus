@@ -5,7 +5,7 @@
 //  A13.14 — structural snapshot coverage for the reshaped Change Password
 //  screen. Mirrors the two design frames: READY (current verified, strong
 //  new password, confirm matches, CTA enabled, info chip) and ERROR
-//  (form banner, wrong current password + reset shortcut, breached new
+//  (form banner, wrong current password + reset shortcut, common new
 //  password, mismatched confirm, CTA locked). Follows the existing iOS
 //  pattern of rendering the SwiftUI hierarchy in-process.
 //
@@ -51,13 +51,13 @@ final class PasswordChangeSnapshotTests: XCTestCase {
         vm.update(.new, to: "Bake-Sourdough-Friday-77")
         vm.update(.confirm, to: "Bake-Sourdough-Friday-77")
         await vm.save()
-        // Mid-recovery: the new password is now breached and confirm drifts.
+        // Mid-recovery: the new password is now common and confirm drifts.
         vm.update(.new, to: "password123")
         vm.update(.confirm, to: "password12")
 
         XCTAssertNotNil(vm.formError)
         XCTAssertFalse(vm.isValid)
-        XCTAssertTrue(vm.strength.breached)
+        XCTAssertFalse(vm.strength.breached)
         XCTAssertEqual(vm.fields[.current]?.error, "That doesn't match the password on file.")
         assertRenders(PasswordChangeView(viewModel: vm) {})
     }

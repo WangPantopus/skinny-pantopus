@@ -2,6 +2,7 @@
 
 package app.pantopus.android.ui.screens.businesses.create_business.steps
 
+import app.pantopus.android.ui.screens.businesses.create_business.BusinessHoursDay
 import app.pantopus.android.ui.screens.businesses.create_business.CreateBusinessLogoPick
 
 /**
@@ -23,4 +24,5 @@ data class ProfileStepCallbacks(
     val onClearLogo: () -> Unit,
     val onSkipLogo: () -> Unit,
     val onUnskipLogo: () -> Unit,
+    val onHoursDayChange: (BusinessHoursDay) -> Unit = {},
 )

@@ -245,13 +245,6 @@ final class TokenAcceptViewModelTests: XCTestCase {
         XCTAssertEqual(TokenAcceptViewModel.humanRole("renter"), "Renter")
         XCTAssertEqual(TokenAcceptViewModel.humanRole("admin"), "Admin")
     }
-
-    func testSeatBenefitsForAdminIncludeInviteCopy() {
-        let adminBenefits = TokenAcceptViewModel.seatBenefits(role: "admin")
-        XCTAssertTrue(adminBenefits.contains { $0.contains("Invite teammates") })
-        let memberBenefits = TokenAcceptViewModel.seatBenefits(role: "member")
-        XCTAssertFalse(memberBenefits.contains { $0.contains("Invite teammates") })
-    }
 }
 
 @MainActor

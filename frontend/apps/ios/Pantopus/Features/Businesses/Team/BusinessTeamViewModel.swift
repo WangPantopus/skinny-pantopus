@@ -67,6 +67,8 @@ public final class BusinessTeamViewModel {
     // MARK: Public state
 
     public private(set) var state: BusinessTeamState = .loading
+    public var mutationError: String?
+    public private(set) var isMutating = false
 
     /// Assignable role presets for the change-role picker. Populated by
     /// `load()`; empty until then.
@@ -82,7 +84,7 @@ public final class BusinessTeamViewModel {
 
     // MARK: Raw state
 
-    private var access: BusinessTeamAccessDTO?
+    private(set) var access: BusinessTeamAccessDTO?
     private var members: [BusinessTeamMemberDTO] = []
     private var pendingSeats: [BusinessSeatDTO] = []
     private var loadedOnce = false
@@ -172,8 +174,10 @@ public final class BusinessTeamViewModel {
             // Pending seats + role presets are best-effort — the screen
             // still renders the roster if either is unavailable.
             pendingSeats = await (try? fetchPendingSeats()) ?? pendingSeats
-            if rolePresets.isEmpty {
-                rolePresets = await (try? fetchPresets()) ?? []
+            let presets = await (try? fetchPresets()) ?? []
+            let actorRole = BusinessRole.parse(access.roleBase)
+            rolePresets = presets.filter {
+                access.isOwner == true || BusinessRole.parse($0.roleBase).rank < actorRole.rank
             }
 
             loadedOnce = true
@@ -190,7 +194,9 @@ public final class BusinessTeamViewModel {
         let response: BusinessSeatsResponse = try await api.request(
             BusinessTeamEndpoints.seats(businessId: businessId)
         )
-        return response.seats.filter { ($0.inviteStatus ?? "").lowercased() == "pending" }
+        return response.seats.filter {
+            ($0.inviteStatus ?? "").lowercased() == "pending" && $0.isActive != false
+        }
     }
 
     private func fetchPresets() async throws -> [BusinessRolePresetDTO] {
@@ -217,14 +223,20 @@ public final class BusinessTeamViewModel {
     /// Fold a freshly-created seat invite into the pending bucket so the
     /// user sees it without waiting for a refetch.
     public func handleInvited(_ seat: BusinessSeatDTO) {
+        pendingSeats.removeAll { $0.id == seat.id }
         pendingSeats.insert(seat, at: 0)
         applyState()
     }
 
-    /// Optimistic role change with rollback. The member's role tier is
-    /// updated locally from the chosen preset and the list re-grouped.
+    /// Update the role only after the server accepts the change.
     public func changeRole(userId: String, preset: BusinessRolePresetDTO) async {
-        let previous = members
+        guard await mutate(
+            BusinessTeamEndpoints.changeRole(
+                businessId: businessId,
+                userId: userId,
+                request: BusinessChangeRoleRequest(presetKey: preset.key)
+            ), failure: "Couldn't confirm the role change."
+        ) else { return }
         members = members.map { member in
             guard member.user?.id == userId else { return member }
             return BusinessTeamMemberDTO(
@@ -238,47 +250,39 @@ public final class BusinessTeamViewModel {
             )
         }
         applyState()
-        do {
-            let _: EmptyResponse = try await api.request(
-                BusinessTeamEndpoints.changeRole(
-                    businessId: businessId,
-                    userId: userId,
-                    request: BusinessChangeRoleRequest(presetKey: preset.key)
-                )
-            )
-        } catch {
-            members = previous
-            applyState()
-        }
     }
 
-    /// Optimistic member removal with rollback.
+    /// Remove a member only after the server confirms it.
     public func remove(userId: String) async {
-        let previous = members
+        guard await mutate(
+            BusinessTeamEndpoints.removeMember(businessId: businessId, userId: userId),
+            failure: "Couldn't confirm member removal."
+        ) else { return }
         members.removeAll { $0.user?.id == userId }
         applyState()
-        do {
-            let _: EmptyResponse = try await api.request(
-                BusinessTeamEndpoints.removeMember(businessId: businessId, userId: userId)
-            )
-        } catch {
-            members = previous
-            applyState()
-        }
     }
 
-    /// Optimistic cancel of a pending seat invite with rollback.
+    /// Withdraw an invitation only after the server confirms it.
     public func cancelInvite(seatId: String) async {
-        let previous = pendingSeats
+        guard await mutate(
+            BusinessTeamEndpoints.cancelSeat(businessId: businessId, seatId: seatId),
+            failure: "Couldn't confirm invite cancellation."
+        ) else { return }
         pendingSeats.removeAll { $0.id == seatId }
         applyState()
+    }
+
+    private func mutate(_ endpoint: Endpoint, failure: String) async -> Bool {
+        guard !isMutating else { return false }
+        isMutating = true
+        mutationError = nil
+        defer { isMutating = false }
         do {
-            let _: EmptyResponse = try await api.request(
-                BusinessTeamEndpoints.cancelSeat(businessId: businessId, seatId: seatId)
-            )
+            let _: EmptyResponse = try await api.request(endpoint)
+            return true
         } catch {
-            pendingSeats = previous
-            applyState()
+            mutationError = "\(failure) \((error as? APIError)?.errorDescription ?? "Please try again.") Refresh to check the latest state."
+            return false
         }
     }
 
@@ -363,7 +367,9 @@ public final class BusinessTeamViewModel {
                 email: seat.inviteEmail,
                 role: role,
                 invitedText: invitedText(for: seat),
-                canManage: canManage
+                canManage: canManage && (
+                    access?.isOwner == true || role.rank < BusinessRole.parse(access?.roleBase).rank
+                )
             )
         }
     }
@@ -384,7 +390,9 @@ public final class BusinessTeamViewModel {
             role: role,
             avatarGradient: BusinessTeamAvatarTone.tone(for: userId).gradient,
             joinedText: joinedText(for: member),
-            canManage: canManage && role != .owner
+            canManage: canManage && role != .owner && (
+                access?.isOwner == true || role.rank < BusinessRole.parse(access?.roleBase).rank
+            )
         )
     }
 
@@ -417,20 +425,6 @@ public final class BusinessTeamViewModel {
             return nil
         }
         return "Invited \(relative)"
-    }
-
-    public static func formatRelativeTime(
-        _ raw: String?,
-        now: Date,
-        calendar: Calendar,
-        timeZone: TimeZone
-    ) -> String? {
-        BusinessTeamDateFormatter.formatRelativeTime(
-            raw,
-            now: now,
-            calendar: calendar,
-            timeZone: timeZone
-        )
     }
 }
 
@@ -490,5 +484,16 @@ private extension String {
     var nilIfBlank: String? {
         let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : self
+    }
+}
+
+public extension BusinessTeamViewModel {
+    static func formatRelativeTime(
+        _ raw: String?,
+        now: Date,
+        calendar: Calendar,
+        timeZone: TimeZone
+    ) -> String? {
+        BusinessTeamDateFormatter.formatRelativeTime(raw, now: now, calendar: calendar, timeZone: timeZone)
     }
 }

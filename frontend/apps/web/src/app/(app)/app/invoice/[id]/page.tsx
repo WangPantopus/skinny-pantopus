@@ -107,13 +107,13 @@ function InvoiceContent() {
 
         <div className="flex items-center justify-between mt-4">
           <div>
-            <p className="text-xs text-app-text-muted">Amount Due</p>
+            <p className="text-xs text-app-text-muted">{canPay ? 'Amount Due' : 'Invoice Amount'}</p>
             <p className="text-3xl font-extrabold text-app-text">{formatCents(invoice.total_cents)}</p>
           </div>
           <span className={`text-xs font-semibold px-3 py-1 rounded-full ${sc.bg} ${sc.color}`}>{sc.label}</span>
         </div>
 
-        {invoice.due_date && (
+        {canPay && invoice.due_date && (
           <p className="text-sm text-app-text-secondary mt-2">Due: {new Date(invoice.due_date).toLocaleDateString()}</p>
         )}
       </div>

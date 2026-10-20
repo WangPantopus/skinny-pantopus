@@ -17,8 +17,10 @@ import { PostMediaPreview, resolvePostMediaSlots } from './PostMediaGrid';
 import PostMediaLightbox from './PostMediaLightbox';
 import { PostLinkContent } from './LinkPreviewCard';
 import LinkPreviewCard from './LinkPreviewCard';
+import PostMetadata from './PostMetadata';
+import { sharePostLink } from './sharePostLink';
 import { formatTimeAgo as timeAgo, getPostTypeConfig, POST_TYPE_ICONS_LUCIDE } from '@pantopus/ui-utils';
-import { buildCanonicalShareUrlForPost, chosenUsername } from '@pantopus/utils';
+import { chosenUsername } from '@pantopus/utils';
 import { removePostFromFeedCaches } from '@/hooks/useFeedData';
 import { usePostDetail } from '@/hooks/usePostDetail';
 import type { Post, PostComment as PostCommentType } from '@pantopus/types';
@@ -275,18 +277,8 @@ export default function PostDetailPanel({
 
   const handleShare = async () => {
     if (!post) return;
-    const url = buildCanonicalShareUrlForPost(post);
-
     try {
-      if (typeof navigator !== 'undefined' && navigator.share) {
-        await navigator.share({
-          title: post.title || 'Post',
-          text: post.content?.slice(0, 120),
-          url,
-        });
-      } else {
-        await navigator.clipboard.writeText(url);
-      }
+      if (!await sharePostLink(post)) return;
 
       const res = await api.posts.sharePost(post.id);
       setPost((prev) => prev ? { ...prev, share_count: res.shareCount } : prev);
@@ -443,10 +435,13 @@ export default function PostDetailPanel({
               )}
 
               <div className="px-5 pb-4">
+                {post.title && <h3 className="mb-2 text-base font-semibold text-app break-words">{post.title}</h3>}
                 <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-app">
                   <PostLinkContent content={post.content} />
                 </p>
               </div>
+
+              <PostMetadata post={post} spacing="mx-5 mb-3" />
 
               {post.tags && post.tags.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 px-5 pb-3">
@@ -482,12 +477,16 @@ export default function PostDetailPanel({
                         imageClassName="max-h-80 w-full rounded-xl object-cover" onPress={() => setLightboxIndex(idx)} />
 
                     </div>
+
                   ))}
                 </div>
               )}
 
               <div className="grid grid-cols-2 gap-2 border-y border-app px-5 py-3 sm:grid-cols-5">
                 <button
+                  type="button"
+                  aria-label={post.userHasLiked ? 'Unlike post' : 'Like post'}
+                  aria-pressed={!!post.userHasLiked}
                   onClick={handleLike}
                   className={`flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium transition ${
                     post.userHasLiked ? 'bg-red-50 text-red-500 hover:bg-red-100' : 'text-app-muted hover-bg-app'
@@ -519,6 +518,8 @@ export default function PostDetailPanel({
                   <span>{post.userHasReposted ? 'Reposted' : 'Repost'}</span>
                 </button>
                 <button
+                  type="button"
+                  aria-label="Share post"
                   onClick={handleShare}
                   className="flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium text-app-muted transition hover-bg-app"
                 >

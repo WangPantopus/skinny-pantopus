@@ -330,6 +330,7 @@ internal fun LogMaintenanceFormContent(
                     onValueChange = callbacks.onUpdateCost,
                     placeholder = "$0",
                     testTag = "logMaintenance_cost",
+                    error = form.costError,
                 )
                 Spacer(modifier = Modifier.height(Spacing.s3))
                 Row(
@@ -631,6 +632,7 @@ private fun LabeledTextField(
     onValueChange: (String) -> Unit,
     placeholder: String,
     testTag: String,
+    error: String? = null,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
@@ -644,6 +646,8 @@ private fun LabeledTextField(
             onValueChange = onValueChange,
             placeholder = { Text(placeholder, color = PantopusColors.appTextMuted) },
             singleLine = true,
+            isError = error != null,
+            supportingText = error?.let { message -> { Text(message) } },
             modifier =
                 Modifier
                     .fillMaxWidth()

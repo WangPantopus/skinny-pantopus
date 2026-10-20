@@ -3,10 +3,10 @@
 import Image from 'next/image';
 import React, { useState, type CSSProperties, type ReactNode } from 'react';
 import {
-  MessageCircle, Star, Calendar, CalendarDays, Search, Megaphone,
+  MessageCircle, Star, CalendarDays, Search, Megaphone,
   AlertTriangle, PenLine, Pencil, Siren, Tag, Wrench, Newspaper, X,
   Trophy, Compass, User, Heart, Bookmark, Hand, ThumbsUp,
-  MapPin, Store, Clock, CheckCircle, Hammer, Plane, Bookmark as BookmarkIcon, Share,
+  MapPin, Store, CheckCircle, Hammer, Plane, Bookmark as BookmarkIcon, Share,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import * as api from '@pantopus/api';
@@ -15,9 +15,10 @@ import { PostMediaPreview, resolvePostMediaSlots } from './PostMediaGrid';
 import { PostLinkContent } from './LinkPreviewCard';
 import LinkPreviewCard from './LinkPreviewCard';
 import { formatDistance, formatTimeAgo as timeAgo, getPostTypeConfig, POST_TYPE_ICONS_LUCIDE, type PostTypeConfig } from '@pantopus/ui-utils';
-import { buildCanonicalShareUrlForPost, chosenUsername } from '@pantopus/utils';
+import { chosenUsername } from '@pantopus/utils';
 import { confirmStore } from '@/components/ui/confirm-store';
-import { lostFoundContactLabel } from './composer/LostFoundFields';
+import PostMetadata from './PostMetadata';
+import { sharePostLink } from './sharePostLink';
 import type { AudienceProfile, Post } from '@pantopus/types';
 import { launchFeatures } from '@/lib/featureFlags';
 
@@ -98,6 +99,7 @@ function PostCard({
   showToast,
 }: PostCardProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [solving, setSolving] = useState(false);
   const config = getPostTypeConfig(post.post_type || 'general');
   const typeIconNode = getTypeIcon(post.post_type || 'general');
   const ctaIconNode = getTypeCtaIcon(post.post_type || 'general');
@@ -174,7 +176,7 @@ function PostCard({
         <div className="flex items-center gap-2 px-4 py-2 bg-red-50 border-b border-red-100">
           <Siren className="w-3.5 h-3.5" />
           <span className="text-xs font-bold text-red-700 uppercase tracking-wide">
-            Safety Alert{post.safety_alert_kind ? ` · ${post.safety_alert_kind}` : ''}
+            Safety Alert{post.safety_alert_kind ? ` · ${post.safety_alert_kind.replace(/_/g, ' ')}` : ''}
           </span>
         </div>
       )}
@@ -325,6 +327,7 @@ function PostCard({
 
       {/* ─── Content ─────────────────────────────────── */}
       <div className={`px-4 pb-2${tapClass}`} onClick={openFullPost}>
+        {post.title && <h3 className="mb-1 text-sm font-semibold text-app break-words">{post.title}</h3>}
         <p
           className="text-sm text-app leading-relaxed whitespace-pre-wrap break-words"
         >
@@ -342,63 +345,7 @@ function PostCard({
       {/* ─── Link preview ──────────────────────────────── */}
       {post.content && <LinkPreviewCard content={post.content} />}
 
-      {/* ─── Type-specific metadata cards ────────────── */}
-      {(post.post_type === 'event') && (post.event_date || post.event_venue) && (
-        <div className={`mx-4 mb-2 p-3 bg-blue-50 rounded-xl border-l-4 border-blue-400 space-y-1${tapClass}`} onClick={openFullPost}>
-          {post.event_date && (
-            <div className="flex items-center gap-2 text-xs text-blue-800">
-              <Calendar className="w-3.5 h-3.5 flex-shrink-0" />
-              <span>
-                {/* Stored as the wall-clock time the poster picked, labelled UTC (every composer), so shown in UTC. */}
-                {new Date(post.event_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'UTC' })}
-                {post.event_end_date ? ` – ${new Date(post.event_end_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'UTC' })}` : ''}
-              </span>
-            </div>
-          )}
-          {post.event_venue && (
-            <div className="flex items-center gap-2 text-xs text-blue-800">
-              <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
-              <span>{post.event_venue}</span>
-            </div>
-          )}
-        </div>
-      )}
-
-      {post.post_type === 'deal' && (post.deal_business_name || post.deal_expires_at) && (
-        <div className={`mx-4 mb-2 p-3 bg-green-50 rounded-xl border-l-4 border-green-400 space-y-1${tapClass}`} onClick={openFullPost}>
-          {post.deal_business_name && (
-            <div className="flex items-center gap-2 text-xs text-green-800">
-              <Store className="w-3.5 h-3.5 flex-shrink-0" />
-              <span>{post.deal_business_name}</span>
-            </div>
-          )}
-          {post.deal_expires_at && (
-            <div className="flex items-center gap-2 text-xs text-green-800">
-              <Clock className="w-3.5 h-3.5 flex-shrink-0" />
-              <span>Expires {new Date(post.deal_expires_at).toLocaleDateString(undefined, { timeZone: 'UTC' })}</span>
-            </div>
-          )}
-        </div>
-      )}
-
-      {post.post_type === 'lost_found' && post.lost_found_type && (
-        <div className={`mx-4 mb-2 p-3 bg-yellow-50 rounded-xl border-l-4 border-yellow-400${tapClass}`} onClick={openFullPost}>
-          <div className="flex items-center gap-2 text-xs text-yellow-800 font-bold">
-            {post.lost_found_type === 'lost' ? <Search className="w-3.5 h-3.5 flex-shrink-0" /> : <CheckCircle className="w-3.5 h-3.5 flex-shrink-0" />}
-            <span className="uppercase">{post.lost_found_type}</span>
-            {post.lost_found_contact_pref && <span className="font-normal">· Contact: {lostFoundContactLabel(post.lost_found_contact_pref)}</span>}
-          </div>
-        </div>
-      )}
-
-      {post.post_type === 'service_offer' && post.service_category && (
-        <div className={`mx-4 mb-2 p-3 bg-violet-50 rounded-xl border-l-4 border-violet-400${tapClass}`} onClick={openFullPost}>
-          <div className="flex items-center gap-2 text-xs text-violet-800">
-            <Wrench className="w-3.5 h-3.5 flex-shrink-0" />
-            <span>{post.service_category}</span>
-          </div>
-        </div>
-      )}
+      <PostMetadata post={post} onClick={seeded ? undefined : openFullPost} />
 
       {/* ─── Cross-surface reference links ─────────── */}
       {/* Launch cuts #3 (listings) and #4 (open tasks): their links are hidden. */}
@@ -446,6 +393,7 @@ function PostCard({
               } ${post.media_urls.length === 3 && idx === 0 ? 'row-span-2 aspect-auto' : ''}`}
             >
               <PostMediaPreview url={url} thumbnailUrl={post.media_thumbnails?.[idx]} slot={resolvePostMediaSlots(post.media_urls, post.media_types, post.media_live_urls)[idx]} onPress={openFullPost} />
+
 
               {idx === 3 && post.media_urls.length > 4 && (
                 <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
@@ -503,25 +451,15 @@ function PostCard({
 
         {/* Share */}
         <button
-          onClick={() => {
-            if (typeof navigator !== 'undefined' && navigator.share) {
-              navigator.share({ title: post.title || 'Post', text: post.content?.slice(0, 100), url: buildCanonicalShareUrlForPost(post) })
-                .then(() => api.posts.sharePost(post.id))
-                .catch(() => {});
-            } else {
-              // Copying is invisible, so say whether it worked (as the post detail does).
-              const copied = navigator.clipboard?.writeText(buildCanonicalShareUrlForPost(post));
-              if (!copied) {
-                showToast?.('Failed to share post');
-                return;
-              }
-              copied
-                .then(() => {
-                  showToast?.('Post link shared');
-                  void api.posts.sharePost(post.id).catch(() => {});
-                })
-                .catch(() => showToast?.('Failed to share post'));
+          onClick={async () => {
+            try {
+              if (!await sharePostLink(post)) return;
+            } catch {
+              showToast?.('Failed to share post. Please try again.');
+              return;
             }
+            showToast?.('Post link shared. Only people with access can open it.');
+            void api.posts.sharePost(post.id).catch(() => {});
           }}
           aria-label="Share post"
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-app-muted hover-bg-app transition"
@@ -555,14 +493,23 @@ function PostCard({
           isOwn && post.state !== 'solved' && (
           <button
             onClick={async () => {
+              if (solving) return;
+              setSolving(true);
               try {
                 await api.posts.solvePost(post.id);
                 onSolved?.(post.id);
-              } catch {}
+                showToast?.('Marked solved');
+              } catch {
+                showToast?.('Could not mark this question solved. Please try again.');
+              } finally {
+                setSolving(false);
+              }
             }}
+            disabled={solving}
+            aria-busy={solving || undefined}
             className="flex items-center gap-1 px-2 py-1 text-xs font-semibold text-green-700 bg-green-50 hover:bg-green-100 rounded-lg transition-colors"
           >
-            <CheckCircle className="w-3.5 h-3.5" /> Mark Solved
+            <CheckCircle className="w-3.5 h-3.5" /> {solving ? 'Saving…' : 'Mark Solved'}
           </button>
         )}
 

@@ -206,6 +206,10 @@ public struct SupportTrainDetailView: View {
                     overline("Slot calendar")
                     calendarCard(days: content.calendarDays)
 
+                    if content.viewerRole == .recipient {
+                        recipientDeliveries
+                    }
+
                     ForEach(content.sections) { section in
                         let expanded = expandedSections.contains(section.id)
                         overline(
@@ -229,6 +233,15 @@ public struct SupportTrainDetailView: View {
                     if let address = content.exactAddress {
                         overline("Delivery address")
                         exactAddressCard(address, instructions: content.deliveryInstructions)
+                    } else if content.viewerRole != .viewer, content.viewerRole != .recipient {
+                        // Organizers and helpers coordinate delivery; recipients don't head out.
+                        overline("Delivery address")
+                        Text(content.viewerRole.isOrganizer
+                            ? "No delivery address is available for this train. Coordinate delivery details with your helpers."
+                            : "Delivery details aren't available yet. Contact the organizer before heading out.")
+                            .pantopusTextStyle(.body)
+                            .foregroundStyle(Theme.Color.appTextSecondary)
+                            .accessibilityIdentifier("supportTrainAddressUnavailable")
                     }
 
                     HostedByRow(content: content.hostedBy, onMessageHost: messageHostAction(content))
@@ -284,7 +297,7 @@ public struct SupportTrainDetailView: View {
     /// Helper-side actions under the viewer's own commitment rows —
     /// `POST …/deliver` and `POST …/cancel` with `helper_reason`
     /// (RN `handleLeaveSlot`, `src/app/support-trains/[id].tsx:322`).
-    /// Recipients / organizers get `POST …/confirm` on a delivered row.
+    /// Organizers get `POST …/confirm` on their delivered row; recipients use the delivery-review section.
     @ViewBuilder
     private func commitmentActions(
         for row: SlotRowContent,
@@ -305,8 +318,7 @@ public struct SupportTrainDetailView: View {
                         }
                     }
                 }
-                if row.reservationStatus == "delivered",
-                   content.viewerRole == .recipient || content.viewerRole.isOrganizer {
+                if row.reservationStatus == "delivered", content.viewerRole.isOrganizer {
                     rowActionButton(
                         title: "Confirm delivery",
                         icon: .checkCircle,
@@ -328,6 +340,39 @@ public struct SupportTrainDetailView: View {
                 Spacer(minLength: Spacing.s0)
             }
             .padding(.bottom, Spacing.s1)
+        }
+    }
+
+    @ViewBuilder
+    private var recipientDeliveries: some View {
+        overline("Deliveries to confirm")
+        if let error = viewModel.deliveryLoadError {
+            Text(error)
+                .pantopusTextStyle(.body)
+                .foregroundStyle(Theme.Color.appTextSecondary)
+            rowActionButton(title: "Try again", icon: .refreshCw, identifier: "supportTrainDeliveriesRetry") {
+                Task { await viewModel.refresh() }
+            }
+        } else if let rows = viewModel.deliveryRows {
+            if rows.isEmpty {
+                Text("No deliveries awaiting your confirmation.")
+                    .pantopusTextStyle(.body)
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+            }
+            ForEach(rows) { row in
+                SlotRow(content: row)
+                rowActionButton(
+                    title: "Confirm delivery",
+                    icon: .checkCircle,
+                    identifier: "supportTrainRecipientConfirm-\(row.id)"
+                ) {
+                    Task { await viewModel.confirmDelivery(reservationId: row.id) }
+                }
+            }
+        } else {
+            Text("Loading deliveries…")
+                .pantopusTextStyle(.body)
+                .foregroundStyle(Theme.Color.appTextSecondary)
         }
     }
 

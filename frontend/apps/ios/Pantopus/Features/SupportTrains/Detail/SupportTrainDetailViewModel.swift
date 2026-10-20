@@ -74,6 +74,9 @@ public final class SupportTrainDetailViewModel {
     private var readGeneration = 0
     private var safeContent: SupportTrainDetailContent?
     public private(set) var recipientDetailsAvailable = false
+    /// Recipient-only delivery review is never stored in the preview cache.
+    public private(set) var deliveryRows: [SlotRowContent]?
+    public private(set) var deliveryLoadError: String?
     /// Offline override. When set, `load()` resolves from it instead of the
     /// network — used by QA / previews to swap variants on a row tap.
     private let resolver: Resolver?
@@ -177,6 +180,8 @@ public final class SupportTrainDetailViewModel {
         readGeneration += 1
         let read = readGeneration
         let cache = store.generation
+        deliveryRows = nil
+        deliveryLoadError = nil
         do {
             try requireCurrentRead(read, cache: cache)
             let reply = try await api.requestDataResponse(endpoint)
@@ -195,6 +200,9 @@ public final class SupportTrainDetailViewModel {
             )
             state = .loaded(Self.project(dto))
             recipientDetailsAvailable = true
+            if Self.viewerRole(dto) == .recipient {
+                await fetchRecipientDeliveries(read: read, cache: cache)
+            }
         } catch {
             guard read == readGeneration, cache == store.generation,
                   sessionScope.isCurrent, !(error is CancellationError) else { return }
@@ -226,6 +234,8 @@ public final class SupportTrainDetailViewModel {
 
     private func redactRecipientDetails() {
         recipientDetailsAvailable = false
+        deliveryRows = nil
+        deliveryLoadError = nil
         if let safeContent { state = .loaded(safeContent) }
     }
 
@@ -421,6 +431,32 @@ public final class SupportTrainDetailViewModel {
 // MARK: - Projection (DTO → content)
 
 extension SupportTrainDetailViewModel {
+    private func fetchRecipientDeliveries(read: Int, cache: Int) async {
+        do {
+            let response: SupportTrainReservationsResponse = try await api.request(
+                SupportTrainsEndpoints.reservations(supportTrainId: trainId)
+            )
+            try requireCurrentRead(read, cache: cache)
+            deliveryRows = response.reservations.filter { $0.status == "delivered" }.map { reservation in
+                let date = Self.parseSlotDate(reservation.slotDate)
+                return SlotRowContent(
+                    id: reservation.id,
+                    dayLabel: date.map { Self.format($0, "EEE") } ?? "",
+                    dateLabel: date.map { Self.format($0, "d") } ?? "",
+                    state: .covered,
+                    title: reservation.dishTitle ?? reservation.restaurantName ?? "Contribution",
+                    subtitle: "Awaiting your confirmation",
+                    reservationId: reservation.id,
+                    reservationStatus: reservation.status
+                )
+            }
+        } catch {
+            guard read == readGeneration, cache == store.generation,
+                  sessionScope.isCurrent, !(error is CancellationError) else { return }
+            deliveryLoadError = (error as? APIError)?.errorDescription ?? "Couldn't load deliveries. Please try again."
+        }
+    }
+
     /// Pure mapping from the `GET /:id` payload to the render model.
     /// `nonisolated` so unit tests can assert it without an actor hop.
     nonisolated static func project(_ dto: SupportTrainDetailDTO) -> SupportTrainDetailContent {
@@ -485,7 +521,7 @@ extension SupportTrainDetailViewModel {
                 contactlessPreferred: dto.contactlessPreferred ?? false
             ),
             viewerRole: viewerRole(dto),
-            exactAddress: dto.address?.singleLineLabel.isEmpty == false
+            exactAddress: dto.address?.address?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
                 ? dto.address?.singleLineLabel
                 : nil,
             deliveryInstructions: dto.deliveryInstructions,

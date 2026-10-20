@@ -64,7 +64,6 @@ private val ACCOUNT_DELETE_BULLETS =
         "Your profile and all personal data",
         "Your task history and reviews",
         "Your home memberships",
-        "Your business profiles",
         "Your messages and connections",
     )
 
@@ -111,7 +110,9 @@ fun AccountDeleteSheet(
             modifier = Modifier.padding(top = Spacing.s4),
         )
         Text(
-            text = "This will permanently delete your account, including:",
+            text =
+                "Transfer ownership or close any businesses you own before deleting your account. " +
+                    "Account deletion permanently removes:",
             style = PantopusTextStyle.body,
             color = PantopusColors.appTextSecondary,
             textAlign = TextAlign.Center,

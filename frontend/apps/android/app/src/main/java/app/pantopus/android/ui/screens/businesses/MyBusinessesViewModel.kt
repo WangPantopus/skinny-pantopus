@@ -97,7 +97,7 @@ class MyBusinessesViewModel
                 id = m.businessUserId,
                 name = name,
                 category = category,
-                locality = place.ifEmpty { "Online only" },
+                locality = place.ifEmpty { "Location not set" },
                 localityIsPlaceholder = place.isEmpty(),
                 logoUrl = m.business.profilePictureUrl,
                 role = roleStyle(m.roleBase),

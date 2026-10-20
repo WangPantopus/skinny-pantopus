@@ -1,5 +1,12 @@
 # Mobile pilot build brief
 
+> **Founder amendment, October 17 — briefings:** New notification preferences
+> start with both morning and evening briefings on. Replace WP1's morning opt-in
+> card with a one-time notice of the saved settings and a direct link to
+> Settings → Notifications. Preserve existing opt-outs. The app still needs OS
+> notification permission, uses the recipient's local clock, and sends only
+> useful briefs. This supersedes WP1's saved-place-off defaults and opt-in copy.
+
 **Date:** October 3, 2026. **Checked against:** `master` at `2f7bea45f`. Line numbers are anchors from that commit; if code moved, find the same symbol before changing anything.
 **Status:** the founder-approved build instructions for the pilot. Agents build from this file. [NEXT_STEPS.md](../NEXT_STEPS.md) tracks status and points here.
 **Platforms:** iOS and Android, plus the backend, database and seeder changes the apps need. No web interface work.

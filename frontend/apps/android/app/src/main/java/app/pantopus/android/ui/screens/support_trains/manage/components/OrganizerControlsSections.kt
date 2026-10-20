@@ -159,7 +159,7 @@ fun ManageDatesSection(
         Text(
             text =
                 "Add a new date, move an open one, or remove one you no longer need. " +
-                    "If someone already signed up, remove the helper first.",
+                    "Reserved dates need their signup removed first. Completed dates stay in the train's history.",
             color = PantopusColors.appTextSecondary,
             fontSize = 12.5.sp,
         )
@@ -207,7 +207,12 @@ fun ManageDatesSection(
                     }
                 } else {
                     Text(
-                        text = "A helper already has this date. Remove their signup before changing it.",
+                        text =
+                            if (row.status == "completed") {
+                                "This date is complete and stays in the train's history."
+                            } else {
+                                "A helper already has this date. Only reserved signups can be removed."
+                            },
                         color = PantopusColors.appTextMuted,
                         fontSize = 12.sp,
                     )
@@ -220,6 +225,7 @@ fun ManageDatesSection(
 @Composable
 fun ManageHelpersSection(
     rows: List<ManageHelperRow>,
+    addressAvailable: Boolean,
     /** The reservations read failed: no count, and no "No signups yet". */
     failed: Boolean = false,
     isBusy: Boolean,
@@ -281,7 +287,13 @@ fun ManageHelpersSection(
                     )
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-                    if (row.canShareAddress) {
+                    if (row.status != "canceled" && !addressAvailable) {
+                        Text(
+                            text = "Delivery address unavailable",
+                            color = PantopusColors.appTextMuted,
+                            fontSize = 11.5.sp,
+                        )
+                    } else if (row.canShareAddress) {
                         ManagePillButton(
                             label = if (row.isGuest) "Email address" else "Share address",
                             icon = PantopusIcon.MapPin,
@@ -324,6 +336,8 @@ fun ManageHelpersSection(
 @Composable
 fun ManageOrganizersSection(
     rows: List<ManageOrganizerRow>,
+    failed: Boolean = false,
+    onRetry: (() -> Unit)? = null,
     /** Only the primary organizer may edit the roster (`supportTrains.js:1055`). */
     canEdit: Boolean,
     isBusy: Boolean,
@@ -336,6 +350,24 @@ fun ManageOrganizersSection(
         verticalArrangement = Arrangement.spacedBy(Spacing.s2),
     ) {
         ManageSectionHeader(title = "Co-organizers")
+        if (failed) {
+            ManageCard {
+                Text(
+                    text = "Couldn't load co-organizers",
+                    color = PantopusColors.appTextMuted,
+                    fontSize = 13.sp,
+                )
+                if (onRetry != null) {
+                    ManagePillButton(
+                        label = "Try again",
+                        icon = PantopusIcon.RefreshCw,
+                        tag = "manageTrainRetryOrganizers",
+                        isEnabled = !isBusy,
+                        onClick = onRetry,
+                    )
+                }
+            }
+        }
         rows.forEach { row ->
             ManageCard {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
@@ -365,7 +397,7 @@ fun ManageOrganizersSection(
                 }
             }
         }
-        if (canEdit) {
+        if (canEdit && !failed) {
             ManageCard {
                 Text(
                     text = "Pick someone you know on Pantopus.",

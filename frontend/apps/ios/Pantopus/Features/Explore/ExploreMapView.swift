@@ -80,7 +80,11 @@ public struct ExploreMapView: View {
             }
         )
         .id(focus)
-        .task { await savedStore.loadIfNeeded() }
+        .refreshesOnStoreChange(
+            affects: { $0.names(topic: ScreenTopic.savedPlaces) },
+            recheckOnAttach: true,
+            perform: savedStore.reload
+        )
         .sheet(isPresented: $showFilterSheet) {
             ExploreFilterSheet(
                 criteria: viewModel.filters,

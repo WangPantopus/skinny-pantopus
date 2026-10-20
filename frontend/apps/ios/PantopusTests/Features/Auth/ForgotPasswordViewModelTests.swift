@@ -61,7 +61,7 @@ final class ForgotPasswordViewModelTests: XCTestCase {
         }
         XCTAssertNil(vm.errorMessage)
         XCTAssertFalse(vm.isLoading)
-        XCTAssertEqual(vm.resendCooldownUntil?.timeIntervalSince1970, 1030)
+        XCTAssertEqual(vm.resendCooldownUntil?.timeIntervalSince1970, 1060)
 
         let body = SequencedURLProtocol.capturedRequests.last?.httpBodyData()
             .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
@@ -111,7 +111,7 @@ final class ForgotPasswordViewModelTests: XCTestCase {
         XCTAssertEqual(SequencedURLProtocol.capturedRequests.count, 1, "resend within cooldown must short-circuit")
 
         // After cooldown — the call goes through.
-        await vm.resend(email: "alice@example.com", using: auth, now: t0.addingTimeInterval(31))
+        await vm.resend(email: "alice@example.com", using: auth, now: t0.addingTimeInterval(61))
         XCTAssertEqual(SequencedURLProtocol.capturedRequests.count, 2)
     }
 }

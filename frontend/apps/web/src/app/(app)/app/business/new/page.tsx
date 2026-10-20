@@ -50,8 +50,8 @@ export default function BusinessOnboardingPage() {
   const canBack = step > 0;
   const currentStep = STEPS[step];
 
-  const next = () => setStep((s) => Math.min(STEPS.length - 1, s + 1));
-  const back = () => (canBack ? setStep((s) => s - 1) : router.push('/app/businesses'));
+  const next = () => { setError(''); setStep((s) => Math.min(STEPS.length - 1, s + 1)); };
+  const back = () => { setError(''); if (canBack) setStep((s) => s - 1); else router.push('/app/businesses'); };
 
   const updateHour = (index: number, patch: Partial<HoursEntry>) => {
     setHours((prev) => prev.map((h, i) => (i === index ? { ...h, ...patch } : h)));
@@ -72,6 +72,11 @@ export default function BusinessOnboardingPage() {
       return;
     }
 
+    if (!/^[a-z0-9_]{3,30}$/.test(username.trim())) {
+      setError('Username must be 3–30 lowercase letters, numbers, or underscores.');
+      return;
+    }
+
     setSaving(true);
     setError('');
     try {
@@ -83,20 +88,29 @@ export default function BusinessOnboardingPage() {
         .split(',')
         .map((s) => s.trim())
         .filter(Boolean);
-      const result = await api.businesses.createBusiness({
+      const profile = {
         name: name.trim(),
-        username: username.trim().toLowerCase().replace(/[^a-z0-9_]/g, ''),
-        email: email.trim(),
-        description: description.trim() || undefined,
+        description: description.trim(),
         categories: businessType === 'other' || typedCategories.includes(businessType)
           ? typedCategories
           : [businessType, ...typedCategories],
-        public_phone: phone.trim() || undefined,
-        website: website.trim() || undefined,
-      });
-      const businessId = result.business?.id || null;
-      if (!businessId) throw new Error('Business ID missing after creation');
-      setCreatedBusinessId(businessId);
+        public_phone: phone.trim(),
+        website: website.trim(),
+      };
+      let businessId = createdBusinessId;
+      if (!businessId) {
+        const result = await api.businesses.createBusiness({
+          ...profile,
+          username: username.trim(),
+          email: email.trim(),
+        });
+        businessId = result.business?.id || null;
+        if (!businessId) throw new Error('Business ID missing after creation');
+        setCreatedBusinessId(businessId);
+      }
+      // Back/Next edits update the same draft. A recovered create can also
+      // return an earlier draft, so confirm its editable fields before advancing.
+      await api.businesses.updateBusiness(businessId, profile);
       next();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to create business');
@@ -107,6 +121,7 @@ export default function BusinessOnboardingPage() {
 
   const handleLocationComplete = (locationId: string) => {
     setCreatedLocationId(locationId);
+    setLocationSkipped(false);
     next();
   };
 
@@ -193,7 +208,10 @@ export default function BusinessOnboardingPage() {
   };
 
   const onNext = () => {
-    if (currentStep === 'Type') return next();
+    if (currentStep === 'Type') {
+      if (!name.trim()) { setError('Business name is required.'); return; }
+      return next();
+    }
     if (currentStep === 'Basic Info') return void handleBasicInfoStep();
     // Location step is driven by BusinessAddressFlow callbacks, not the Next button
     if (currentStep === 'Location') return;
@@ -244,8 +262,9 @@ export default function BusinessOnboardingPage() {
 
           {currentStep === 'Basic Info' && (
             <div className="space-y-4">
-              <Field label="Username *" value={username} onChange={(v) => setUsername(v.toLowerCase())} placeholder="mybusiness" />
-              <Field label="Email *" value={email} onChange={setEmail} type="email" placeholder="business@email.com" />
+              <Field label="Username *" disabled={!!createdBusinessId} value={username} onChange={(v) => setUsername(v.toLowerCase())} placeholder="mybusiness" />
+              <Field label="Email *" disabled={!!createdBusinessId} value={email} onChange={setEmail} type="email" placeholder="business@email.com" />
+              {createdBusinessId && <p className="text-xs text-app-text-secondary">Username and account email are fixed for this draft. You can still edit its profile below.</p>}
               <Field label="Description" value={description} onChange={setDescription} placeholder="What does your business do?" />
               <Field label="Categories (comma separated)" value={categories} onChange={setCategories} placeholder="Plumber, Emergency Repair" />
               <Field label="Public Phone" value={phone} onChange={setPhone} placeholder="(555) 123-4567" />
@@ -265,7 +284,8 @@ export default function BusinessOnboardingPage() {
             <div className="text-sm text-red-600">Business must be created first. Go back and complete Basic Info.</div>
           )}
 
-          {currentStep === 'Hours' && (
+          {currentStep === 'Hours' && !createdLocationId && <p className="text-sm text-app-text-secondary">Add a location before setting its hours. You can do this later from Locations & Hours.</p>}
+          {currentStep === 'Hours' && createdLocationId && (
             <div className="space-y-3">
               <label className="inline-flex items-center gap-2 text-sm text-app-text-strong">
                 <input type="checkbox" checked={skipHours} onChange={(e) => setSkipHours(e.target.checked)} />
@@ -339,7 +359,7 @@ export default function BusinessOnboardingPage() {
                 label="Location"
                 value={locationSkipped ? 'Skipped' : createdLocationId ? 'Configured' : 'Not set'}
               />
-              <ReviewRow label="Hours" value={skipHours ? 'Skipped' : 'Configured'} />
+              <ReviewRow label="Hours" value={!createdLocationId ? 'Not configured — no location' : skipHours ? 'Skipped' : 'Configured'} />
               <ReviewRow label="Media" value={skipMedia ? 'Skipped' : [logoFile ? 'Logo' : '', bannerFile ? 'Banner' : ''].filter(Boolean).join(' + ') || 'Not set'} />
             </div>
           )}
@@ -385,18 +405,21 @@ function Field({
   onChange,
   placeholder,
   type = 'text',
+  disabled = false,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
   type?: string;
+  disabled?: boolean;
 }) {
   return (
     <label className="block">
       <span className="block text-sm font-medium text-app-text-strong mb-1">{label}</span>
       <input
         type={type}
+        disabled={disabled}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}

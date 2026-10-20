@@ -87,7 +87,7 @@ class SupportTrainsSearchViewModelTest {
         )
 
     private fun loadedVm(rows: List<SupportTrainListItemDto> = corpus()): SupportTrainsSearchViewModel {
-        coEvery { repo.mine(any(), any(), any(), any()) } returns
+        coEvery { repo.mineAll(any()) } returns
             NetworkResult.Success(SupportTrainsListResponse(supportTrains = rows))
         return SupportTrainsSearchViewModel(repo).also { it.load() }
     }
@@ -136,15 +136,16 @@ class SupportTrainsSearchViewModelTest {
         }
 
     @Test
-    fun load_failure_degrades_to_empty_corpus() =
+    fun load_failure_shows_error_with_empty_corpus() =
         runTest {
-            coEvery { repo.mine(any(), any(), any(), any()) } returns
+            coEvery { repo.mineAll(any()) } returns
                 NetworkResult.Failure(NetworkError.Server(500, null))
             val vm = SupportTrainsSearchViewModel(repo)
             vm.load()
             vm.setQuery("chen")
             assertTrue(vm.results.value.isEmpty())
             assertFalse(vm.isLoading.value)
+            assertEquals("Something went wrong on our side. Please try again.", vm.error.value)
         }
 
     @Test

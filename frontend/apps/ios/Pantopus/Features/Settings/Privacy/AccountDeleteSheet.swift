@@ -85,6 +85,11 @@ public struct AccountDeleteSheet: View {
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .multilineTextAlignment(.center)
                     .padding(.top, Spacing.s3)
+                Text(Self.businessNote)
+                    .pantopusTextStyle(.small)
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.top, Spacing.s3)
                 if organizedLiveTrainCount > 0 {
                     Text(Self.organizerNotice(count: organizedLiveTrainCount))
                         .pantopusTextStyle(.small)
@@ -195,6 +200,12 @@ public struct AccountDeleteSheet: View {
     static let retainedNote =
         "Things other people rely on, like bills, tasks and documents in a shared home, stay with them without your name."
 
+    /// The server refuses the deletion while the person owns a business; this
+    /// says where the owner closes one.
+    static let businessNote = "Business profiles are managed separately. Before deleting your account, "
+        + "close each business you own or hand off its ownership. To close one, open it from "
+        + "My businesses, tap Settings, then Close business."
+
     /// What happens to the Support Trains the person organizes (migration 20260930134000):
     /// each one with a co-organizer passes to them; the others are removed.
     static func organizerNotice(count: Int) -> String {
@@ -208,12 +219,11 @@ public struct AccountDeleteSheet: View {
             + "To keep a train going, add a co-organizer first."
     }
 
-    /// RN's bullet list, verbatim (`AccountDeleteSheet.tsx:64-68`).
+    /// Personal data removed with the account; business ownership is handled separately.
     static let bulletItems: [String] = [
         "Your profile and all personal data",
         "Your task history and reviews",
         "Your home memberships",
-        "Your business profiles",
         "Your messages and connections"
     ]
 }

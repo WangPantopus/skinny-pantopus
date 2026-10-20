@@ -91,7 +91,7 @@ data class BusinessOwnerContent(
     val foundingOffer: OwnerFoundingOffer? = null,
     /**
      * Drives the header chip: "Business · Verified" only when verified,
-     * otherwise the "Verification pending" state the My businesses card shows.
+     * otherwise the "Not verified" state the My businesses card shows.
      */
     val isVerified: Boolean = false,
 ) {

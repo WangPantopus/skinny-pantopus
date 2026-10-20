@@ -27,6 +27,8 @@ final class NeighborMessageReceivedViewModel {
     /// Local toggle: re-show the quick-reply bar over an existing reply.
     var editingReply = false
     private(set) var replying = false
+    private(set) var isUpdating = false
+    private(set) var actionError: String?
 
     let messageId: String
     private let api: APIClient
@@ -54,7 +56,7 @@ final class NeighborMessageReceivedViewModel {
             replies = catalog.replies
             flags = NeighborManageFlags(
                 notHelpful: message.notHelpful,
-                blocked: false,
+                blocked: message.blockedByViewer ?? false,
                 reported: message.reported
             )
             state = .loaded(message)
@@ -66,8 +68,9 @@ final class NeighborMessageReceivedViewModel {
     }
 
     func reply(_ replyTemplateId: String) async {
-        guard !replying else { return }
+        guard !replying, !isUpdating, message?.canReply == true, !flags.blocked else { return }
         replying = true
+        actionError = nil
         do {
             let updated: ReceivedNeighborMessage = try await api.request(
                 NeighborMessagesEndpoints.reply(
@@ -78,31 +81,53 @@ final class NeighborMessageReceivedViewModel {
             editingReply = false
             state = .loaded(updated)
         } catch {
-            // Stay on the quick-reply bar; the row tap can be retried.
+            actionError = "Couldn't send your reply. Tap the reply to try again."
         }
         replying = false
     }
 
     func startEditingReply() {
+        guard message?.canReply == true, !flags.blocked else { return }
         editingReply = true
     }
 
     func markNotHelpful() async {
         guard !flags.notHelpful else { return }
-        _ = try? await api.request(NeighborMessagesEndpoints.notHelpful(id: messageId)) as NeighborMessageAck
-        flags.notHelpful = true
+        await update(NeighborMessagesEndpoints.notHelpful(id: messageId), failure: "Couldn't save your feedback. Try again.") {
+            flags.notHelpful = true
+        }
     }
 
     func block() async {
         guard !flags.blocked else { return }
-        _ = try? await api.request(NeighborMessagesEndpoints.block(id: messageId)) as NeighborMessageAck
-        flags.blocked = true
+        await update(NeighborMessagesEndpoints.block(id: messageId), failure: "Couldn't block this neighbor. Try again.") {
+            flags.blocked = true
+            editingReply = false
+            ScreenStore.store(for: api).markStale(topics: [ScreenTopic.profileMe, ScreenTopic.chats, ScreenTopic.posts])
+        }
     }
 
     func report() async {
         guard !flags.reported else { return }
         let request = ReportNeighborMessageRequest(reason: nil)
-        _ = try? await api.request(NeighborMessagesEndpoints.report(id: messageId, request: request)) as NeighborMessageAck
-        flags.reported = true
+        await update(
+            NeighborMessagesEndpoints.report(id: messageId, request: request),
+            failure: "Couldn't report this message. Try again."
+        ) {
+            flags.reported = true
+        }
+    }
+
+    private func update(_ endpoint: Endpoint, failure: String, onSuccess: () -> Void) async {
+        guard !isUpdating, !replying else { return }
+        isUpdating = true
+        actionError = nil
+        defer { isUpdating = false }
+        do {
+            _ = try await api.request(endpoint) as NeighborMessageAck
+            onSuccess()
+        } catch {
+            actionError = failure
+        }
     }
 }

@@ -18,6 +18,8 @@ data class BusinessProfileHeader(
     val isVerified: Boolean,
     /** Optional logo glyph; `null` falls back to initials from [displayName]. */
     val logoIcon: PantopusIcon? = null,
+    val logoUrl: String? = null,
+    val bannerUrl: String? = null,
 )
 
 /** Tint applied to a stat cell's value (and its leading star). */

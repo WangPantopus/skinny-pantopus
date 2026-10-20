@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.support_trains.CancelReservationBody
 import app.pantopus.android.data.api.models.support_trains.ReserveSlotBody
 import app.pantopus.android.data.api.models.support_trains.SupportTrainDetailDto
+import app.pantopus.android.data.api.models.support_trains.SupportTrainReservationsResponse
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.api.net.refusesStoredCopy
@@ -157,14 +158,25 @@ class SupportTrainDetailViewModel
                         if (!current(version)) return@launch
                         val result = repo.detail(trainId)
                         if (!current(version)) return@launch
-                        publish(result)
+                        val role = (result as? NetworkResult.Success)?.data?.let(SupportTrainDetailProjection::viewerRole)
+                        val helpers =
+                            if (role?.isOrganizer == true || role == SupportTrainViewerRole.RECIPIENT) {
+                                repo.reservations(trainId)
+                            } else {
+                                null
+                            }
+                        if (!current(version)) return@launch
+                        publish(result, helpers)
                     } finally {
                         if (version == readVersion) _refreshing.value = false
                     }
                 }
         }
 
-        private fun publish(result: NetworkResult<SupportTrainDetailDto>) {
+        private fun publish(
+            result: NetworkResult<SupportTrainDetailDto>,
+            helpers: NetworkResult<SupportTrainReservationsResponse>?,
+        ) {
             val saved = repo.detailCopy(trainId)
             _refreshNotice.value =
                 RefreshNotice(saved.fetchedAt) { refresh() }.takeIf {
@@ -173,7 +185,13 @@ class SupportTrainDetailViewModel
                 }
             _state.value =
                 when (result) {
-                    is NetworkResult.Success -> SupportTrainDetailUiState.Loaded(SupportTrainDetailProjection.project(result.data))
+                    is NetworkResult.Success ->
+                        SupportTrainDetailUiState.Loaded(
+                            SupportTrainDetailProjection.project(
+                                result.data,
+                                helperReservations = (helpers as? NetworkResult.Success)?.data?.reservations,
+                            ).copy(helperDetailsUnavailable = helpers is NetworkResult.Failure),
+                        )
                     is NetworkResult.Failure -> {
                         val safe = summary()
                         if (!result.error.refusesStoredCopy && safe is SupportTrainDetailUiState.Loaded) {

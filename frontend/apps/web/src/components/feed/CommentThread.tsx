@@ -32,6 +32,7 @@ function isImageAttachment(mimeType?: string) {
 const MAX_INDENT_DEPTH = 4;
 /** Number of replies shown by default before "View more" */
 const INITIAL_REPLIES_SHOWN = 3;
+const COMMENT_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif', 'image/heic', 'image/heif'];
 
 export default function CommentThread({
   comments,
@@ -47,6 +48,8 @@ export default function CommentThread({
   const [newComment, setNewComment] = useState('');
   const [replyTo, setReplyTo] = useState<{ id: string; name: string } | null>(null);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [fileError, setFileError] = useState('');
+  const [failedAvatarUrls, setFailedAvatarUrls] = useState<Set<string>>(new Set());
   /** Keep blob URLs in sync with selectedFiles on the same render (useEffect + setState was one tick behind). */
   const previewUrls = useMemo(
     () => selectedFiles.map((file) => URL.createObjectURL(file)),
@@ -98,6 +101,7 @@ export default function CommentThread({
     setNewComment('');
     setReplyTo(null);
     setSelectedFiles([]);
+    setFileError('');
     setEmojiOpen(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
@@ -146,17 +150,29 @@ export default function CommentThread({
   };
 
   const handleFilePick = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files || []).filter((file) => file.type.startsWith('image/'));
+    const files = Array.from(event.target.files || []);
+    event.target.value = '';
     if (files.length === 0) return;
+    if (selectedFiles.length + files.length > 4) {
+      setFileError('Choose up to 4 images per comment. Your existing attachments are kept.');
+      return;
+    }
+    if (files.some((file) => !COMMENT_IMAGE_TYPES.includes(file.type))) {
+      setFileError('Choose a supported photo: JPEG, PNG, GIF, WebP, AVIF, HEIC or HEIF.');
+      return;
+    }
+    if (files.some((file) => file.size === 0 || file.size > 10 * 1024 * 1024)) {
+      setFileError('Images must not be empty and can be up to 10 MB each.');
+      return;
+    }
 
+    setFileError('');
     draftRevision.current += 1;
-    setSelectedFiles((prev) => {
-      const next = [...prev, ...files];
-      return next.slice(0, 4);
-    });
+    setSelectedFiles((prev) => [...prev, ...files]);
   };
 
   const handleRemoveFile = (index: number) => {
+    setFileError('');
     draftRevision.current += 1;
     setSelectedFiles((prev) => prev.filter((_, idx) => idx !== index));
     if (fileInputRef.current && selectedFiles.length <= 1) {
@@ -176,6 +192,7 @@ export default function CommentThread({
     const authorName =
       comment.author?.displayName || chosenUsername(comment.author?.handle) || 'Neighbor';
     const authorInitial = authorName[0]?.toUpperCase() || '?';
+    const avatarUrl = comment.author?.avatarUrl;
     const isOwn = comment.user_id === currentUserId;
     const replies = repliesMap[comment.id] || [];
     const imageAttachments = (comment.attachments || []).filter((attachment) => isImageAttachment(attachment.mime_type));
@@ -199,15 +216,16 @@ export default function CommentThread({
           {/* P0.4: comment.author is always a serializer output now (handle / */}
           {/* displayName / avatarUrl). Legacy username / profile_picture_url */}
           {/* aliases are gone. */}
-          {comment.author?.avatarUrl ? (
+          {avatarUrl && !failedAvatarUrls.has(avatarUrl) ? (
             <Image
-              src={comment.author.avatarUrl}
+              src={avatarUrl}
               alt={authorName}
               className="w-7 h-7 rounded-full object-cover flex-shrink-0 mt-0.5"
               width={28}
               height={28}
               sizes="28px"
               quality={75}
+              onError={() => setFailedAvatarUrls((previous) => new Set(previous).add(avatarUrl))}
             />
           ) : (
             <div className="w-7 h-7 rounded-full bg-surface-muted text-app-muted flex items-center justify-center text-[10px] font-semibold flex-shrink-0 mt-0.5">
@@ -426,6 +444,8 @@ export default function CommentThread({
               </div>
             )}
 
+            {fileError && <p role="alert" className="mb-2 text-xs text-red-600">{fileError}</p>}
+
             <div className="rounded-2xl border border-app bg-surface-muted p-2">
               <textarea
                 ref={inputRef}
@@ -471,7 +491,7 @@ export default function CommentThread({
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/*"
+                  accept={COMMENT_IMAGE_TYPES.join(',')}
                   multiple
                   className="hidden"
                   onChange={handleFilePick}

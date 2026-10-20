@@ -8,6 +8,7 @@ import app.pantopus.android.data.api.models.support_trains.SupportTrainHelperDto
 import app.pantopus.android.data.api.models.support_trains.SupportTrainModesDto
 import app.pantopus.android.data.api.models.support_trains.SupportTrainMyReservationDto
 import app.pantopus.android.data.api.models.support_trains.SupportTrainOrganizerDto
+import app.pantopus.android.data.api.models.support_trains.SupportTrainReservationsResponse
 import app.pantopus.android.data.api.models.support_trains.SupportTrainSlotDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
@@ -48,6 +49,7 @@ class SupportTrainDetailViewModelTest {
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         every { repo.detailCopy(any()) } returns Stored()
+        coEvery { repo.reservations(any()) } returns NetworkResult.Success(SupportTrainReservationsResponse(emptyList()))
     }
 
     @After

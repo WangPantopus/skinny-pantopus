@@ -350,28 +350,29 @@ const mapboxProvider = {
 
     // Reverse geocoding only honors limit > 1 with a single `types` value,
     // so POIs and the locality come from two parallel calls.
-    const [poiRes, localityRes] = await Promise.all([
-      fetch(`${base}&types=poi&limit=${limit}`),
-      fetch(`${base}&types=place&limit=1`),
+    const signal = AbortSignal.timeout(MAPBOX_TIMEOUT_MS);
+    const [poiData, localityData] = await Promise.all([
+      (async () => {
+        const res = await fetch(`${base}&types=poi&limit=${limit}`, { signal });
+        if (!res.ok) {
+          logger.warn('mapbox_nearby_places_error', { status: res.status });
+          throw new Error(`Mapbox nearby places failed: ${res.status}`);
+        }
+        return res.json();
+      })(),
+      (async () => {
+        // Locality is decorative. HTTP, network, timeout and malformed-body
+        // failures must all preserve a successful POI response.
+        try {
+          const res = await fetch(`${base}&types=place&limit=1`, { signal });
+          if (!res.ok) throw new Error(`Mapbox nearby locality failed: ${res.status}`);
+          return await res.json();
+        } catch (error) {
+          logger.warn('mapbox_nearby_locality_error', { error: error.message });
+          return { features: [] };
+        }
+      })(),
     ]);
-
-    if (!poiRes.ok) {
-      const text = await poiRes.text();
-      logger.warn('mapbox_nearby_places_error', { status: poiRes.status, body: text });
-      throw new Error(`Mapbox nearby places failed: ${poiRes.status}`);
-    }
-
-    // The locality row is decorative (the contract allows locality: null),
-    // so its call failing must not throw away a successful POI response.
-    let localityData = { features: [] };
-    if (localityRes.ok) {
-      localityData = await localityRes.json();
-    } else {
-      const text = await localityRes.text();
-      logger.warn('mapbox_nearby_locality_error', { status: localityRes.status, body: text });
-    }
-
-    const poiData = await poiRes.json();
     const places = (poiData.features || [])
       .filter(hasCenter)
       .map((f) => featureToPlace(f, lat, lng));

@@ -21,6 +21,27 @@
 import Foundation
 
 public enum SupportTrainsEndpoints {
+    /// List, search and account summaries need every participation, including
+    /// invitations that sort behind newer trains. Callers retain their own cache policy.
+    @MainActor
+    static func allMine(
+        role: SupportTrainRoleFilter? = nil,
+        load: (Endpoint) async throws -> SupportTrainsListResponse
+    ) async throws -> [SupportTrainListItemDTO] {
+        var rows: [SupportTrainListItemDTO] = []
+        var seen = Set<String>()
+        var offset = 0
+        while true {
+            try Task.checkCancellation()
+            let page = try await load(mine(role: role, offset: offset))
+            guard !page.supportTrains.isEmpty else { break }
+            offset += page.supportTrains.count
+            rows.append(contentsOf: page.supportTrains.filter { seen.insert($0.id).inserted })
+            if offset >= (page.total ?? offset) { break }
+        }
+        return rows
+    }
+
     /// User-side feed of Support Trains the caller participates in
     /// (organizer or helper).
     ///

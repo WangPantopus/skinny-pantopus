@@ -136,7 +136,7 @@ export default function VerifyResidencyPage() {
         toast.error(
           blockedByOther
             ? 'A verification for this address is already in progress. If that is yours, wait for the decision; otherwise contact Support.'
-            : 'Could not start your residency verification. Please try again.'
+            : 'A new residency request cannot be started right now. Check your requests in My Homes or contact Support.'
         );
         setSubmitting(false);
         return;

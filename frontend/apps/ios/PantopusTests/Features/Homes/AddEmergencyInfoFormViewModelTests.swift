@@ -95,8 +95,8 @@ final class AddEmergencyInfoFormViewModelTests: XCTestCase {
         XCTAssertEqual(EmergencyFormCategory.medication.palette, .medical)
         XCTAssertEqual(EmergencyFormCategory.petMedical.palette, .medical)
         XCTAssertEqual(EmergencyFormCategory.contact.palette, .contact)
-        XCTAssertEqual(EmergencyFormCategory.powerOfAttorney.palette, .contact)
-        XCTAssertEqual(EmergencyFormCategory.other.palette, .contact)
+        XCTAssertEqual(EmergencyFormCategory.powerOfAttorney.palette, .other)
+        XCTAssertEqual(EmergencyFormCategory.other.palette, .other)
     }
 
     // MARK: - Details map composition

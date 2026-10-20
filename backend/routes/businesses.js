@@ -78,7 +78,7 @@ const {
   writeAuditLog,
   BUSINESS_ROLE_RANK,
 } = require('../utils/businessPermissions');
-const { RESERVED_USERNAMES, ENTITY_TYPES, getPublishRequirements } = require('../utils/businessConstants');
+const { RESERVED_USERNAMES, ENTITY_TYPES, VERIFICATION_STATUSES, getPublishRequirements } = require('../utils/businessConstants');
 const { applyEntityTypeSideEffects } = require('../services/businessEntityService');
 const stripeService = require('../stripe/stripeService');
 const { PAYMENT_STATES } = require('../stripe/paymentStateMachine');
@@ -148,6 +148,19 @@ const updateBusinessSchema = Joi.object({
   tagline: Joi.string().max(255).allow('', null),
   bio: Joi.string().max(5000).allow('', null),
 }).min(1);
+
+const updateBusinessPrivateSchema = Joi.object({
+  tax_id_last4: Joi.string().trim().pattern(/^[0-9]{4}$/).allow('', null)
+    .messages({
+      'string.base': 'Tax ID must contain exactly the last four digits.',
+      'string.pattern.base': 'Tax ID must contain exactly the last four digits.',
+    }),
+  support_email: Joi.string().trim().email().allow('', null)
+    .messages({
+      'string.base': 'Please enter a valid support email address.',
+      'string.email': 'Please enter a valid support email address.',
+    }),
+}).unknown(true).required();
 
 const validateAddressSchema = Joi.object({
   address: Joi.string().min(5).max(255).required(),
@@ -1214,7 +1227,7 @@ router.get('/:businessId/dashboard', verifyToken, async (req, res) => {
     const { businessId } = req.params;
     const userId = req.user.id;
 
-    const access = await checkBusinessPermission(businessId, userId);
+    const access = await getUserAccess(businessId, userId);
     if (!access.hasAccess) {
       return res.status(403).json({ error: 'No access to this business' });
     }
@@ -1258,6 +1271,11 @@ router.get('/:businessId/dashboard', verifyToken, async (req, res) => {
       hasHours = (hoursCount || 0) > 0;
     }
 
+    // Self-attestation records the owner's claim; only reviewed verification
+    // completes this step, matching the dashboard's verified badge.
+    const businessVerified = profile?.verification_status === VERIFICATION_STATUSES.DOCUMENT_VERIFIED
+      || profile?.verification_status === VERIFICATION_STATUSES.GOVERNMENT_VERIFIED;
+
     // Build onboarding checklist
     const checklist = [
       { key: 'account_created', done: true, label: 'Create business account', action: null },
@@ -1266,7 +1284,7 @@ router.get('/:businessId/dashboard', verifyToken, async (req, res) => {
       { key: 'logo_uploaded', done: !!profile?.logo_file_id, label: 'Upload a logo', action: '/profile' },
       { key: 'description_written', done: !!(profile?.description && profile.description.length >= 50), label: 'Write a description (50+ chars)', action: '/profile' },
       { key: 'catalog_item_added', done: (catalogItems || []).length > 0, label: 'Add a service or product', action: '/catalog' },
-      { key: 'business_verified', done: !!(profile?.verification_status && profile.verification_status !== 'unverified'), label: 'Verify your business', action: '/settings/verification' },
+      { key: 'business_verified', done: businessVerified, label: 'Verify your business', action: '/settings/verification' },
       { key: 'profile_published', done: profile?.is_published === true, label: 'Publish your profile', action: null },
     ];
 
@@ -1284,6 +1302,7 @@ router.get('/:businessId/dashboard', verifyToken, async (req, res) => {
         hasAccess: access.hasAccess,
         isOwner: access.isOwner,
         role_base: access.membership?.role_base || null,
+        permissions: access.permissions,
       },
       onboarding: {
         checklist,
@@ -1600,47 +1619,26 @@ router.delete('/:businessId', verifyToken, async (req, res) => {
   try {
     const { businessId } = req.params;
     const userId = req.user.id;
-
-    const access = await checkBusinessPermission(businessId, userId);
-    if (!access.isOwner) {
-      return res.status(403).json({ error: 'Only the owner can delete a business' });
+    if (Joi.string().uuid().validate(businessId).error) {
+      return res.status(400).json({ error: 'Invalid business ID' });
     }
 
-    // Soft-delete: unpublish + deactivate seats and team
-    await supabaseAdmin
-      .from('BusinessProfile')
-      .update({ is_published: false, updated_at: new Date().toISOString() })
-      .eq('business_user_id', businessId);
-
-    // Deactivate all seats
-    await supabaseAdmin
-      .from('BusinessSeat')
-      .update({ is_active: false, deactivated_at: new Date().toISOString(), deactivated_reason: 'Business deleted' })
-      .eq('business_user_id', businessId);
-
-    // Remove all seat bindings for this business
-    const { data: seats } = await supabaseAdmin
-      .from('BusinessSeat')
-      .select('id')
-      .eq('business_user_id', businessId);
-    if (seats && seats.length > 0) {
-      await supabaseAdmin
-        .from('SeatBinding')
-        .delete()
-        .in('seat_id', seats.map(s => s.id));
+    // Authorization and every retirement write share one transaction. A
+    // failed write must not report success or strand a partially closed crew.
+    const { error } = await supabaseAdmin.rpc('retire_business_account', {
+      p_business_id: businessId,
+      p_actor_id: userId,
+    });
+    if (error) {
+      if (error.code === '42501') {
+        return res.status(403).json({ error: 'Only the owner can delete a business' });
+      }
+      logger.warn('Business deletion unavailable', { businessId, code: error.code });
+      return res.status(503).json({
+        error: 'Business closure is temporarily unavailable. Please try again.',
+        code: 'BUSINESS_DELETE_UNAVAILABLE',
+      });
     }
-
-    // Dual-write: also deactivate legacy BusinessTeam
-    await supabaseAdmin
-      .from('BusinessTeam')
-      .update({ is_active: false, left_at: new Date().toISOString() })
-      .eq('business_user_id', businessId);
-
-    // Mark the User row as deleted (soft)
-    await supabaseAdmin
-      .from('User')
-      .update({ account_type: 'individual', updated_at: new Date().toISOString() })
-      .eq('id', businessId);
 
     await writeAuditLog(businessId, userId, 'delete_business', 'User', businessId, {});
 
@@ -4084,10 +4082,17 @@ router.patch('/:businessId/private', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'No permission to edit sensitive data' });
     }
 
+    const privateFields = updateBusinessPrivateSchema.validate(req.body, { abortEarly: false });
+    if (privateFields.error) {
+      // Legal/contact values must not be echoed into error responses or logs.
+      const details = privateFields.error.details.map(({ path, message }) => ({ field: path.join('.'), message }));
+      return res.status(400).json({ error: details[0].message, code: 'INVALID_BUSINESS_PRIVATE', details });
+    }
+
     const allowed = ['legal_name', 'tax_id_last4', 'support_email', 'banking_info', 'legal_doc_ids'];
     const updates = {};
     for (const key of allowed) {
-      if (req.body[key] !== undefined) updates[key] = req.body[key];
+      if (privateFields.value[key] !== undefined) updates[key] = privateFields.value[key];
     }
     updates.updated_at = new Date().toISOString();
 
@@ -4258,7 +4263,7 @@ router.get('/:businessId/insights', verifyToken, async (req, res) => {
     const userId = req.user.id;
 
     // Permission check
-    const access = await checkBusinessPermission(businessId, userId, 'analytics.view');
+    const access = await checkBusinessPermission(businessId, userId, 'insights.view');
     if (!access.hasAccess) {
       return res.status(403).json({ error: 'You do not have permission to view insights' });
     }
@@ -4774,6 +4779,31 @@ router.get('/invoices/:invoiceId', verifyToken, async (req, res) => {
 
     if (error || !invoice) {
       return res.status(404).json({ error: 'Invoice not found', code: 'NOT_FOUND' });
+    }
+
+    // Opening the recipient detail is the view event. A conditional update must
+    // never turn a concurrently paid or voided invoice back into a payable one.
+    if (invoice.status === 'sent') {
+      const { error: viewError } = await supabaseAdmin
+        .from('BusinessInvoice')
+        .update({ status: 'viewed' })
+        .eq('id', invoiceId)
+        .eq('recipient_user_id', userId)
+        .eq('status', 'sent');
+      if (viewError) {
+        logger.error('Record invoice view error', { error: viewError.message });
+        return res.status(500).json({ error: 'Failed to open invoice', code: 'INTERNAL_ERROR' });
+      }
+      const { data: current, error: currentError } = await supabaseAdmin
+        .from('BusinessInvoice')
+        .select('status')
+        .eq('id', invoiceId)
+        .eq('recipient_user_id', userId)
+        .single();
+      if (currentError || !current) {
+        return res.status(500).json({ error: 'Failed to open invoice', code: 'INTERNAL_ERROR' });
+      }
+      invoice.status = current.status;
     }
 
     res.json({ invoice });

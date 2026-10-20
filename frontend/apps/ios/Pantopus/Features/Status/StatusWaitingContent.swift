@@ -145,11 +145,13 @@ public struct StatusCTA: Sendable, Hashable {
     public let label: String
     public let actionKey: String
     public let icon: PantopusIcon?
+    public let isDisabled: Bool
 
-    public init(label: String, actionKey: String, icon: PantopusIcon? = nil) {
+    public init(label: String, actionKey: String, icon: PantopusIcon? = nil, isDisabled: Bool = false) {
         self.label = label
         self.actionKey = actionKey
         self.icon = icon
+        self.isDisabled = isDisabled
     }
 }
 
@@ -407,14 +409,18 @@ public extension StatusWaitingContent {
 
     /// Reset link sent — Forgot-password success state used by
     /// `ForgotPasswordView`. Primary is "Resend"; ghost is "Back to login".
-    static func resetLinkSent(email: String) -> StatusWaitingContent {
+    static func resetLinkSent(
+        email: String,
+        resendLabel: String = "Resend",
+        resendDisabled: Bool = false
+    ) -> StatusWaitingContent {
         let recipient = email.isEmpty ? "your email" : email
         return StatusWaitingContent(
             halo: StatusHalo(tone: .info, icon: .mailCheck),
             headline: "Check your email",
             subcopy: "If this email is eligible, check \(recipient) for a password reset link.",
             bodyEmphasis: email.isEmpty ? nil : email,
-            primaryCta: StatusCTA(label: "Resend", actionKey: "resend_reset"),
+            primaryCta: StatusCTA(label: resendLabel, actionKey: "resend_reset", isDisabled: resendDisabled),
             secondaryCta: StatusCTA(label: "Back to login", actionKey: "back_to_login")
         )
     }

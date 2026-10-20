@@ -31,7 +31,7 @@ final class DocumentReplacementTests: XCTestCase {
 
     private func load(_ vm: DocumentDetailViewModel, version: String?) async {
         SequencedURLProtocol.sequence = [
-            .status(200, body: "{\"documents\":[\(document(version: version))]}"),
+            .status(200, body: "{\"permissions\":[\"docs.view\",\"docs.manage\"],\"documents\":[\(document(version: version))]}"),
             .status(200, body: "old private bytes")
         ]
         await vm.load()
@@ -74,7 +74,7 @@ final class DocumentReplacementTests: XCTestCase {
         XCTAssertFalse(vm.isMutating)
         SequencedURLProtocol.sequence = try [
             .status(200, body: "{\"document\":\(document(version: id)),\"reused\":true}"),
-            .status(200, body: "{\"documents\":[\(document(version: id))]}"),
+            .status(200, body: "{\"permissions\":[\"docs.view\",\"docs.manage\"],\"documents\":[\(document(version: id))]}"),
             .status(200, body: XCTUnwrap(String(data: bytes, encoding: .utf8)))
         ]
         await vm.replace()

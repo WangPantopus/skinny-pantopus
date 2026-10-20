@@ -21,6 +21,13 @@ final class NeighborMessageComposeViewModel {
         case error(message: String)
     }
 
+    enum RecipientSearchState: Equatable {
+        case idle
+        case loading
+        case loaded([DiscoveredHomeDTO])
+        case error(String)
+    }
+
     private(set) var state: State = .loading
     /// The chosen template id (radio). Send is gated on this + a recipient.
     var selectedTemplateId: String?
@@ -31,7 +38,16 @@ final class NeighborMessageComposeViewModel {
 
     let senderHomeId: String
     let address: String
-    let recipient: ComposeRecipient?
+    private(set) var recipient: ComposeRecipient?
+    var recipientQuery = "" {
+        didSet {
+            searchGeneration += 1
+            recipientSearchState = .idle
+        }
+    }
+
+    private(set) var recipientSearchState: RecipientSearchState = .idle
+    private var searchGeneration = 0
 
     private let api: APIClient
 
@@ -61,6 +77,53 @@ final class NeighborMessageComposeViewModel {
         recipient != nil && selectedTemplate != nil && !sending
     }
 
+    var canSearchRecipients: Bool {
+        let query = recipientQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        return query.count >= 4 && query.rangeOfCharacter(from: .decimalDigits) != nil
+            && query.rangeOfCharacter(from: .letters) != nil && recipientSearchState != .loading
+    }
+
+    func searchRecipients() async {
+        guard canSearchRecipients else { return }
+        searchGeneration += 1
+        let generation = searchGeneration
+        let query = recipientQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        recipientSearchState = .loading
+        do {
+            let response: HomeDiscoverResponse = try await api.request(
+                HomeDiscoveryEndpoints.discover(query: query, limit: 50)
+            )
+            guard generation == searchGeneration, !Task.isCancelled else { return }
+            // Reuse discovery's privacy contract. Never select a redacted or
+            // ambiguous address, enumerate verification, or name a resident.
+            let homes = response.homes.filter {
+                $0.id != senderHomeId && !$0.isMember && $0.addressRedacted == false
+                    && $0.visibility == "public_preview" && !($0.address?.isEmpty ?? true)
+            }
+            recipientSearchState = .loaded(homes)
+        } catch {
+            guard generation == searchGeneration, !Task.isCancelled else { return }
+            recipientSearchState = .error("Couldn't search homes. Check your connection and try again.")
+        }
+    }
+
+    func selectRecipient(_ home: DiscoveredHomeDTO) {
+        guard !sending, case let .loaded(homes) = recipientSearchState,
+              homes.contains(where: { $0.id == home.id }), let address = home.address else { return }
+        recipient = ComposeRecipient(
+            homeId: home.id,
+            address: address,
+            relativeLabel: [home.city, home.state].compactMap { $0 }.joined(separator: ", ")
+        )
+        sendError = nil
+    }
+
+    func changeRecipient() {
+        guard !sending else { return }
+        recipient = nil
+        sendError = nil
+    }
+
     func load() async {
         if case .loaded = state { return }
         state = .loading
@@ -86,6 +149,13 @@ final class NeighborMessageComposeViewModel {
             )
             _ = try await api.request(NeighborMessagesEndpoints.send(request)) as SentNeighborMessage
             sent = true
+        } catch let error as APIError {
+            switch error {
+            case .clientError, .forbidden:
+                sendError = error.errorDescription
+            default:
+                sendError = "We couldn't send that message. Please try again."
+            }
         } catch {
             sendError = "We couldn't send that message. Please try again."
         }

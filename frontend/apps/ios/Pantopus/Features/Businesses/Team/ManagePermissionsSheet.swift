@@ -58,6 +58,7 @@ public struct ManagePermissionsSheet: View {
     @State private var load: PermissionsLoad = .loading
     @State private var granted: Set<String> = []
     @State private var inFlight: Set<String> = []
+    @State private var saveError: String?
 
     public init(
         memberName: String,
@@ -84,6 +85,14 @@ public struct ManagePermissionsSheet: View {
         }
         .accessibilityIdentifier("businessTeam.permissionsSheet")
         .task { await reload() }
+        .alert("Couldn't confirm permission change", isPresented: Binding(
+            get: { saveError != nil },
+            set: { if !$0 { saveError = nil } }
+        )) {
+            Button("OK") { saveError = nil }
+        } message: {
+            Text(saveError ?? "Please try again.")
+        }
     }
 
     @ViewBuilder private var content: some View {
@@ -170,11 +179,14 @@ public struct ManagePermissionsSheet: View {
 
     private func apply(option: BusinessPermissionOption, newValue: Bool) async {
         guard !inFlight.contains(option.key) else { return }
-        let previous = granted
+        let wasGranted = granted.contains(option.key)
         inFlight.insert(option.key)
         if newValue { granted.insert(option.key) } else { granted.remove(option.key) }
         let ok = await toggle(option.key, newValue)
-        if !ok { granted = previous }
+        if !ok {
+            if wasGranted { granted.insert(option.key) } else { granted.remove(option.key) }
+            saveError = "Reopen permissions to check the latest state, then try again."
+        }
         inFlight.remove(option.key)
     }
 }
@@ -196,6 +208,7 @@ private struct PermissionToggleRow: View {
                 set: { onToggle($0) }
             ))
             .labelsHidden()
+            .accessibilityLabel(option.label)
             .tint(Theme.Color.business)
             .disabled(isBusy)
         }

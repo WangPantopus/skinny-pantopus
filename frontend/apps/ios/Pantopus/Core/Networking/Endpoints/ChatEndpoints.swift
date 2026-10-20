@@ -24,8 +24,12 @@ public enum ChatEndpoints {
     /// `GET /api/chat/rooms/:roomId` — the room's type and participants,
     /// for participants only. A chat link carries only the room id; this
     /// tells a direct room's other person apart.
-    public static func room(roomId: String) -> Endpoint {
-        Endpoint(method: .get, path: "/api/chat/rooms/\(roomId)")
+    public static func room(roomId: String, asBusinessUserId: String? = nil) -> Endpoint {
+        Endpoint(
+            method: .get,
+            path: "/api/chat/rooms/\(roomId)",
+            query: asBusinessUserId.map { ["asBusinessUserId": $0] } ?? [:]
+        )
     }
 
     /// `GET /api/chat/stats` — lightweight badge counts.
@@ -40,11 +44,13 @@ public enum ChatEndpoints {
         roomId: String,
         limit: Int = 60,
         before: String? = nil,
-        after: String? = nil
+        after: String? = nil,
+        asBusinessUserId: String? = nil
     ) -> Endpoint {
         var query: [String: String] = ["limit": String(limit)]
         if let before { query["before"] = before }
         if let after { query["after"] = after }
+        if let asBusinessUserId { query["asBusinessUserId"] = asBusinessUserId }
         return Endpoint(method: .get, path: "/api/chat/rooms/\(roomId)/messages", query: query)
     }
 
@@ -111,8 +117,12 @@ public enum ChatEndpoints {
     /// `POST /api/chat/rooms/:roomId/read` — mark every message in the
     /// room as read for the current user. Route
     /// `backend/routes/chats.js:1953`.
-    public static func markRoomRead(roomId: String) -> Endpoint {
-        Endpoint(method: .post, path: "/api/chat/rooms/\(roomId)/read")
+    public static func markRoomRead(roomId: String, asBusinessUserId: String? = nil) -> Endpoint {
+        Endpoint(
+            method: .post,
+            path: "/api/chat/rooms/\(roomId)/read",
+            body: asBusinessUserId.map { ["asBusinessUserId": $0] }
+        )
     }
 
     /// `POST /api/chat/conversations/:otherUserId/read` — mark every
@@ -157,6 +167,7 @@ public struct SendChatMessageBody: Encodable, Sendable {
     public let replyToId: String?
     public let topicId: String?
     public let metadata: [String: JSONValue]?
+    public let asBusinessUserId: String?
 
     public init(
         roomId: String,
@@ -166,7 +177,8 @@ public struct SendChatMessageBody: Encodable, Sendable {
         clientMessageId: String? = nil,
         replyToId: String? = nil,
         topicId: String? = nil,
-        metadata: [String: JSONValue]? = nil
+        metadata: [String: JSONValue]? = nil,
+        asBusinessUserId: String? = nil
     ) {
         self.roomId = roomId
         self.messageText = messageText
@@ -176,6 +188,7 @@ public struct SendChatMessageBody: Encodable, Sendable {
         self.replyToId = replyToId
         self.topicId = topicId
         self.metadata = metadata
+        self.asBusinessUserId = asBusinessUserId
     }
 }
 
