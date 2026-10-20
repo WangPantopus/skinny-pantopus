@@ -244,7 +244,7 @@ export default function NearbyPage() {
           </p>
           <button
             type="button"
-            onClick={() => router.push('/app/place')}
+            onClick={() => router.push('/app/homes/new')}
             className="mt-5 inline-flex items-center gap-1.5 h-11 px-5 rounded-xl bg-primary-600 text-white text-sm font-semibold hover:bg-primary-700 transition-colors"
           >
             Set up a home

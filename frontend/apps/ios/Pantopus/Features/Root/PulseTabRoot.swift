@@ -164,11 +164,17 @@ public struct PulseTabRoot: View {
     private func consumeDeepLinkIfNeeded(pending: DeepLinkRouter.Destination?) {
         // Nearby, while this is Nearby's Pulse segment (launch cut #11 off).
         guard navigationReady, rootTabs.selected == RootTab.pulseHome, let pending, pending == router.pending else { return }
+        // This stack stays mounted behind Neighborhood. Its observer can run
+        // before RootTabView's: leave /nearby to the root dispatcher, and
+        // reveal Pulse ourselves before consuming a feed or post link.
+        if pending == .pulse, !LaunchFeatures.pulseRedesign { return }
         switch pending {
         case .feed, .pulse:
+            if !LaunchFeatures.pulseRedesign { door.pendingSegment = .pulse }
             path.replaceNavigationPath(NavigationPath())
             _ = router.consume()
         case let .post(id):
+            if !LaunchFeatures.pulseRedesign { door.pendingSegment = .pulse }
             path.replaceNavigationPath(NavigationPath())
             path.append(.post(postId: id))
             _ = router.consume()
