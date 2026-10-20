@@ -843,7 +843,7 @@ public final class ChatConversationViewModel {
                         "valid": true,
                         "draft": draft.draft.mapValues { AIChatStreamClient.foundationValue($0) }
                     ]
-                    if let card = AIChatStreamClient.parseDraft(object).flatMap(withSavedState) {
+                    if let card = AIChatStreamClient.parseDraft(object).flatMap({ withSavedState($0) }) {
                         drafts[replyId, default: []].append(card)
                     }
                 } else if let text = item.text, !text.isEmpty {

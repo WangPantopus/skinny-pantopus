@@ -251,7 +251,7 @@ final class AIActionDoneStore {
     }
 
     /// The key for one action: the card, the row it sits on (if any) and the action.
-    static func key(cardId: String, itemId: String?, actionId: String) -> String {
+    nonisolated static func key(cardId: String, itemId: String?, actionId: String) -> String {
         "\(cardId)|\(itemId ?? "")|\(actionId)"
     }
 
