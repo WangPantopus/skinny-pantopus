@@ -509,6 +509,7 @@ class ChatConversationViewModel
          * after it share one reply, as they did when it streamed. A server
          * without the route leaves the thread empty, as before.
          */
+        @Suppress("CyclomaticComplexMethod")
         private suspend fun loadAiHistory(conversationId: String) {
             if (messages.isNotEmpty()) return
             val history =
