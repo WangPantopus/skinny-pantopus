@@ -13,6 +13,7 @@ package app.pantopus.android.ui.screens.shared.media
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -250,6 +251,14 @@ fun PostMediaTile(
                     // Coil stores source bytes: a small view does not make the original a thumbnail.
                     cacheOnDisk = item.thumbnailUrl != null,
                 )
+            PostMediaKind.Document -> {
+                Box(
+                    modifier = Modifier.fillMaxSize().background(PantopusColors.appSurfaceSunken).clickable { onTap?.invoke() },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("PDF · Tap to read", color = PantopusColors.appText)
+                }
+            }
             PostMediaKind.Video -> {
                 MediaStillTile(
                     url = item.thumbnailUrl ?: "",
@@ -411,6 +420,7 @@ fun LivePhotoTile(
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Crop,
     showsReplayButton: Boolean = false,
+    isActive: Boolean = true,
     onTap: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
@@ -445,6 +455,10 @@ fun LivePhotoTile(
             player?.release()
             player = null
         }
+    }
+
+    LaunchedEffect(isActive) {
+        if (!isActive) playing = false
     }
 
     LaunchedEffect(playing) {

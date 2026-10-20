@@ -361,6 +361,29 @@ async function lookupPoint(lat, lng, options) {
   return { result, lookedUpAt: result ? new Date().toISOString() : null };
 }
 
+// The election for a point, and the boundary answer a supported state's card
+// needs. A point whose state is not on record (a saved address keeps only what
+// its save sent) is placed by the boundary lookup itself.
+async function pointElection({ lat, lng, state }, { now, timeoutMs, lookup }) {
+  let answer = null;
+  let stateValue = referenceData.stateCode(state);
+  if (!stateValue) {
+    answer = await lookup(lat, lng, { timeoutMs });
+    stateValue = answer.result ? referenceData.stateCode(answer.result.state_name) : null;
+  }
+  const current = referenceData.currentElection(stateValue, { now });
+  if (!current) return null;
+  const supported = current.state.coverage === 'supported' && Boolean(current.block);
+  if (supported && !answer) answer = await lookup(lat, lng, { timeoutMs });
+  return {
+    current,
+    supported,
+    stateValue,
+    result: supported ? answer.result : null,
+    lookedUpAt: supported ? answer.lookedUpAt : null,
+  };
+}
+
 /**
  * The anonymous /start teaser for a point. Coordinates only; nothing is
  * written here. `timeoutMs` ends the geocoder call when the caller's budget
@@ -369,9 +392,9 @@ async function lookupPoint(lat, lng, options) {
  * `{ result, lookedUpAt }`, where `lookedUpAt` is when the answer was made.
  */
 async function teaserForPoint({ lat, lng, state }, { now = new Date(), timeoutMs, lookup = lookupPoint } = {}) {
-  const current = referenceData.currentElection(state, { now });
-  if (!current || current.phase === 'after') return null;
-  const supported = current.state.coverage === 'supported' && Boolean(current.block);
+  const point = await pointElection({ lat, lng, state }, { now, timeoutMs, lookup });
+  if (!point || point.current.phase === 'after') return null;
+  const { current, supported } = point;
 
   if (!supported) {
     const defaults = referenceData.linksOnlyDefaults();
@@ -396,11 +419,11 @@ async function teaserForPoint({ lat, lng, state }, { now = new Date(), timeoutMs
     };
   }
 
-  const { result: govResult, lookedUpAt } = await lookup(lat, lng, { timeoutMs });
+  const { result: govResult, lookedUpAt } = point;
   // A successful boundary lookup owns its timestamp. Client rerenders and
   // restored previews must not make the same answer appear refreshed.
   const summary = composeSummary({
-    stateValue: state,
+    stateValue: point.stateValue,
     countyGeoid: govResult ? govResult.county_geoid : null,
     governmentsResult: govResult,
     now,
@@ -432,6 +455,23 @@ async function teaserForPoint({ lat, lng, state }, { now = new Date(), timeoutMs
       ? `Dates: ${summary.source_line} · Boundaries: Census Bureau`
       : `Dates: ${summary.source_line}`,
   };
+}
+
+/**
+ * The Place card for a point with no household: a saved address's preview,
+ * or a typed address's. It is the card a Home there shows, without the
+ * household's "Moved this year?" line (no move-in date). Coordinates only;
+ * `timeoutMs` and `lookup` as for the teaser.
+ */
+async function summaryForPoint({ lat, lng, state }, { now = new Date(), timeoutMs, lookup = lookupPoint } = {}) {
+  const point = await pointElection({ lat, lng, state }, { now, timeoutMs, lookup });
+  if (!point) return null;
+  return composeSummary({
+    stateValue: point.stateValue,
+    countyGeoid: point.result ? point.result.county_geoid : null,
+    governmentsResult: point.result,
+    now,
+  });
 }
 
 const LONG_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -500,6 +540,7 @@ async function civicGovernmentsForHome(home) {
 module.exports = {
   composeSummary,
   summaryForHome,
+  summaryForPoint,
   teaserForPoint,
   civicGovernmentsForHome,
   electionOfficeFor,

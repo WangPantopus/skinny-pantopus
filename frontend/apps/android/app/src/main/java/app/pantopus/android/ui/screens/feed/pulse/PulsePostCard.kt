@@ -42,6 +42,7 @@ import app.pantopus.android.ui.screens.shared.feed.FeedAvatarTint
 import app.pantopus.android.ui.screens.shared.media.PostMediaGridStyle
 import app.pantopus.android.ui.screens.shared.media.PostMediaGridWithViewer
 import app.pantopus.android.ui.screens.shared.media.PostMediaItem
+import app.pantopus.android.ui.screens.shared.media.postLinkedText
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -206,7 +207,7 @@ fun PulsePostCard(
         }
         if (content.body.isNotEmpty()) {
             Text(
-                text = content.body,
+                text = postLinkedText(content.body),
                 fontSize = 12.5.sp,
                 color = PantopusColors.appTextStrong,
                 maxLines = if (!content.title.isNullOrEmpty()) 2 else 3,

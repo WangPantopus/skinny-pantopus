@@ -1189,6 +1189,18 @@ function electionMatchesState(election, stateAbbr) {
   return Boolean(name && ocd.includes(division));
 }
 
+// The election section from a Ballot summary (ballot/summary.js): the "Your
+// ballot" card fields beside the pre-Ballot contract they extend.
+function ballotElectionSection(data) {
+  return serializePlaceSection('civic_election', {
+    asOf: data.checked_at ? `${data.checked_at}T00:00:00.000Z` : null,
+    status: 'ready',
+    source: data.source_line,
+    coverage: data.coverage === 'supported' ? 'full' : 'partial',
+    data,
+  });
+}
+
 // Ballot P0 (docs/ballot-implementation-plan-2026-09-24.md §5.2): for a
 // request that opted in to Ballot (see composeCivicGovernments) the section
 // gains the "Your ballot" card fields from person-checked reference data.
@@ -1199,13 +1211,7 @@ async function composeBallotElection(home, ballot) {
   try {
     const data = await ballotSummary.summaryForHome(home);
     if (!data) return null;
-    return [serializePlaceSection('civic_election', {
-      asOf: data.checked_at ? `${data.checked_at}T00:00:00.000Z` : null,
-      status: 'ready',
-      source: data.source_line,
-      coverage: data.coverage === 'supported' ? 'full' : 'partial',
-      data,
-    })];
+    return [ballotElectionSection(data)];
   } catch (err) {
     logger.warn('placeSections: ballot summary failed', { homeId: home.id, error: err.message });
     return null;
@@ -1419,6 +1425,8 @@ module.exports = {
   composeEnvironmentalHazards,
   composeCivicDistricts,
   composeCivicElection,
+  // The preview's election row for a point (placePreviewService).
+  ballotElectionSection,
   composeSeismic,
   composeWildfire,
   // The anonymous preview leads with a dollar figure and needs the raw

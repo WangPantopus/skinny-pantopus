@@ -113,6 +113,7 @@ public struct PulseComposeContentActions {
     /// typist by a keystroke, and a text view reset to it jumps the cursor and scrambles the input.
     public var fieldValue: ((PulseComposeField) -> String)?
     public var onPickPhotos: () -> Void
+    public var onPickDocuments: () -> Void
     public var onRemovePhoto: (UUID) -> Void
     /// Body-field blur — runs `POST /api/posts/precheck`.
     public var onBodyEditingEnded: () -> Void
@@ -137,6 +138,7 @@ public struct PulseComposeContentActions {
         onUpdateField: @escaping (PulseComposeField, String) -> Void = { _, _ in },
         fieldValue: ((PulseComposeField) -> String)? = nil,
         onPickPhotos: @escaping () -> Void = {},
+        onPickDocuments: @escaping () -> Void = {},
         onRemovePhoto: @escaping (UUID) -> Void = { _ in },
         onBodyEditingEnded: @escaping () -> Void = {},
         onDismissPrecheckNudge: @escaping () -> Void = {},
@@ -156,6 +158,7 @@ public struct PulseComposeContentActions {
         self.onUpdateField = onUpdateField
         self.fieldValue = fieldValue
         self.onPickPhotos = onPickPhotos
+        self.onPickDocuments = onPickDocuments
         self.onRemovePhoto = onRemovePhoto
         self.onBodyEditingEnded = onBodyEditingEnded
         self.onDismissPrecheckNudge = onDismissPrecheckNudge
@@ -816,17 +819,25 @@ public struct PulseComposeContent: View {
     // MARK: - Photos
 
     private var photosSection: some View {
-        FormFieldGroup("Photos (optional)") {
+        FormFieldGroup("Attachments (optional)") {
             VStack(alignment: .leading, spacing: Spacing.s2) {
-                HStack(spacing: Spacing.s2) {
+                ScrollView(.horizontal) { HStack(spacing: Spacing.s2) {
                     ForEach(state.photos) { photo in
                         photoThumbnail(photo)
                     }
                     if state.photos.count < pulseComposeMaxPhotos {
-                        addPhotoTile
+                        Menu {
+                            Button("Photos and videos", action: actions.onPickPhotos)
+                            Button("PDF document", action: actions.onPickDocuments)
+                        } label: {
+                            Icon(.plus, size: 20, color: Theme.Color.appTextSecondary)
+                                .frame(width: 64, height: 64)
+                        }
+                        .accessibilityIdentifier("composePulseAddPhoto")
                     }
                 }
-                Text("Up to \(pulseComposeMaxPhotos) images. Tap a photo to remove it.")
+                }
+                Text("Up to \(pulseComposeMaxPhotos) photos, Live Photos, videos, or PDFs. Tap an attachment to remove it.")
                     .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextSecondary)
             }
@@ -846,6 +857,15 @@ public struct PulseComposeContent: View {
                     RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
                         .fill(Theme.Color.appSurfaceSunken)
                         .frame(width: 64, height: 64)
+                        .overlay(Text(photo.mimeType == "application/pdf" ? "PDF" : "Video").font(.caption))
+                }
+                if photo.liveVideo != nil {
+                    Text("LIVE")
+                        .font(.system(size: 9, weight: .bold))
+                        .padding(3)
+                        .background(.black.opacity(0.6))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
                 }
                 Circle()
                     .fill(Theme.Color.appText.opacity(0.7))
@@ -857,27 +877,8 @@ public struct PulseComposeContent: View {
             }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Remove photo")
+        .accessibilityLabel("Remove attachment")
         .accessibilityIdentifier("composePulsePhotoThumb_\(photo.id.uuidString)")
-    }
-
-    private var addPhotoTile: some View {
-        Button { actions.onPickPhotos() } label: {
-            RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
-                .stroke(Theme.Color.appBorderStrong, style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
-                .frame(width: 64, height: 64)
-                .overlay(
-                    VStack(spacing: 2) {
-                        Icon(.camera, size: 18, strokeWidth: 2, color: Theme.Color.appTextSecondary)
-                        Text("Add")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(Theme.Color.appTextSecondary)
-                    }
-                )
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Add photo")
-        .accessibilityIdentifier("composePulseAddPhoto")
     }
 
     // MARK: - Location

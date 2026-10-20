@@ -6,12 +6,14 @@ package app.pantopus.android.ui.screens.shared.media
 enum class PostMediaKind {
     Image,
     Video,
+    Document,
     LivePhoto,
     ;
 
     companion object {
         fun from(raw: String?): PostMediaKind =
             when (raw) {
+                "document" -> Document
                 "video" -> Video
                 "live_photo" -> LivePhoto
                 else -> Image

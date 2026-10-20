@@ -9,6 +9,7 @@
 //
 
 import AVKit
+import PDFKit
 import SwiftUI
 
 /// Full-screen, horizontally paged gallery over a post's media.
@@ -75,6 +76,8 @@ public struct MediaViewerView: View {
         switch item.kind {
         case .image:
             viewerImage(item.url)
+        case .document:
+            PostPDFSlide(url: item.url)
         case .video:
             VideoSlideView(url: item.url, isActive: isActive)
         case .livePhoto:
@@ -83,6 +86,7 @@ public struct MediaViewerView: View {
                 thumbnailURL: nil,
                 videoURL: item.liveVideoURL ?? item.url,
                 contentMode: .fit,
+                isActive: isActive,
                 showsDot: false,
                 showsReplayButton: true
             )
@@ -162,4 +166,67 @@ private struct VideoSlideView: View {
         ],
         startIndex: 0
     )
+}
+
+/// PDFKit renders every page with scrolling and pinch-to-zoom inside the gallery.
+private struct PostPDFSlide: View {
+    let url: URL
+    @State private var document: PDFDocument?
+    @State private var failed = false
+    @State private var attempt = 0
+
+    var body: some View {
+        Group {
+            if let document {
+                PostPDFView(document: document)
+            } else if failed {
+                VStack(spacing: 16) {
+                    Text("Couldn't open this PDF.").foregroundStyle(.white)
+                    Button("Try again") { attempt += 1 }
+                }
+            } else {
+                ProgressView().tint(.white)
+            }
+        }
+        .padding(.top, 52)
+        .task(id: "\(url)-\(attempt)") {
+            failed = false
+            do {
+                var request = URLRequest(url: url)
+                request.timeoutInterval = 30
+                let (bytes, response) = try await URLSession.shared.bytes(for: request)
+                guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode),
+                      response.expectedContentLength <= 25 * 1024 * 1024 else { throw URLError(.badServerResponse) }
+                var data = Data()
+                for try await byte in bytes {
+                    guard data.count < 25 * 1024 * 1024 else { throw URLError(.dataLengthExceedsMaximum) }
+                    data.append(byte)
+                }
+                try Task.checkCancellation()
+                guard let pdf = PDFDocument(data: data), !pdf.isLocked, pdf.pageCount > 0 else { throw URLError(.cannotDecodeContentData) }
+                document = pdf
+            } catch is CancellationError {
+                return
+            } catch {
+                failed = true
+            }
+        }
+    }
+}
+
+private struct PostPDFView: UIViewRepresentable {
+    let document: PDFDocument
+
+    func makeUIView(context _: Context) -> PDFView {
+        let view = PDFView()
+        view.autoScales = true
+        view.displayMode = .singlePageContinuous
+        view.displayDirection = .vertical
+        view.document = document
+        return view
+    }
+
+    func updateUIView(_ view: PDFView, context _: Context) {
+        if view.document !== document { view.document = document }
+    }
 }

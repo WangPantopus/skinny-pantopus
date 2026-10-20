@@ -70,8 +70,8 @@ router.get('/:id/preview', verifyToken, async (req, res) => {
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
       return res.json({ status: 'could_not_place', tier: 'preview', region: null, message: 'This saved place has no location.' });
     }
-    const { buildPlacePreview } = require('./public');
-    return res.json(await buildPlacePreview({
+    const { placePreviewWithBallot } = require('./public');
+    return res.json(await placePreviewWithBallot({
       lat, lng, city: place.city || null, state: place.state || null, line: place.label, zipcode: null,
     }));
   } catch (err) {
