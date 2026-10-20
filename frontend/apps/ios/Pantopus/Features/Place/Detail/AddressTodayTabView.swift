@@ -272,6 +272,8 @@ private struct AddressTodayLoaded: View {
     @State private var scope = HomeClaimSessionScope(api: .shared)
     @State private var savedAnchorMatches = false
     @State private var sessionChanged = false
+    /// The assistant, opened from the box at the top about this day.
+    @State private var askTopic: AIAskTopic?
 
     var body: some View {
         Group {
@@ -284,6 +286,8 @@ private struct AddressTodayLoaded: View {
                 case let .loaded(intel):
                     ScrollView {
                         VStack(alignment: .leading, spacing: 0) {
+                            AskPantopusBox { askTopic = .today(homeId: viewModel.calendarHomeId) }
+                                .padding(.bottom, 12)
                             // Nearby Plans on the day (A1, A2): nothing unless the `plans` flag is on.
                             if PlansFlags.shared.plans { PlansTodayCards() }
                             if savedAnchorMatches {
@@ -332,6 +336,7 @@ private struct AddressTodayLoaded: View {
             }
         }
         .refreshFailureToast($viewModel.refreshFailureMessage)
+        .askPantopus($askTopic)
         .task {
             guard scope.isCurrent else { sessionChanged = true
                 return

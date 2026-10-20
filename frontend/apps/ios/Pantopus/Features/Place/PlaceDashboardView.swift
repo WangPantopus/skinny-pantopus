@@ -20,6 +20,8 @@ struct PlaceDashboardView: View {
     @State private var showSwitcher = false
     @State private var showVerify = false
     @State private var ballotGovernments: BallotGovernmentsSheet?
+    /// The assistant, opened from the header about this home.
+    @State private var askTopic: AIAskTopic?
 
     private let isActive: Bool
     /// The Place tab's root has nothing to go back to: its loading and error
@@ -104,6 +106,7 @@ struct PlaceDashboardView: View {
         .refreshable { await viewModel.refresh() }
         .refreshesOnStoreChange(onBackground: viewModel.discardTemporaryCopy) { if isActive { await viewModel.load() } }
         .refreshFailureToast($viewModel.refreshFailureMessage)
+        .askPantopus($askTopic)
         .sheet(isPresented: $showSwitcher) {
             PlaceSwitcherSheet(
                 viewModel: PlaceSwitcherViewModel(
@@ -290,7 +293,19 @@ struct PlaceDashboardView: View {
                     .accessibilityIdentifier("place.menu")
                 }
             }
-            addressButton(intel.place.label)
+            // Ask sits at the end of the address row, under the bell and menu,
+            // so the title row keeps room for the status chip.
+            HStack(spacing: Spacing.s2) {
+                addressButton(intel.place.label)
+                Spacer(minLength: 0)
+                AskPantopusButton(accessibilityIdentifier: "place.askPantopus") {
+                    askTopic = .place(homeId: viewModel.homeId)
+                } label: {
+                    AskPantopusGlyph()
+                        .frame(width: Spacing.s12, height: 44)
+                        .contentShape(Rectangle())
+                }
+            }
         }
     }
 

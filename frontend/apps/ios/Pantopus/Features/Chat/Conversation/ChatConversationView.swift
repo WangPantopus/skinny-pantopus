@@ -82,6 +82,8 @@ public struct ChatConversationView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// A Nearby Plan's chat (board A4): the plan above the messages.
     @Environment(\.chatPlanContext) private var planContext
+    /// Opens a screen in the app from the assistant (closing the Ask sheet first).
+    @Environment(\.openPantopusLink) private var openPantopusLink
     /// Presentation mode — drives the AI chrome (avatar, welcome card,
     /// reply bubbles). Default `.dm`.
     private let mode: ChatConversationMode
@@ -144,6 +146,8 @@ public struct ChatConversationView: View {
             }
             gigContextStrip
             if let planContext { PlanChatStrip(context: planContext) }
+            // Ask on a screen: what the thread is about.
+            if let topic = viewModel.aiTopic { AIAboutStrip(about: topic.about) }
             if mode == .creatorThread {
                 ChatCreatorAudienceStrip(
                     context: resolvedCreatorContext,
@@ -238,6 +242,13 @@ public struct ChatConversationView: View {
         }
         .background(Theme.Color.appSurface)
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
+        // Action cards' taps and "Not now" (`AIActionCardView`).
+        .environment(\.chatAIActions, ChatAIActionHandlers(
+            run: { cardId, itemId, actionId in
+                Task { await viewModel.runAIAction(cardId: cardId, itemId: itemId, actionId: actionId) }
+            },
+            dismiss: { cardId in viewModel.dismissAIAction(cardId: cardId) }
+        ))
         .task { await viewModel.load() }
         .onChange(of: hasLoadedContent, initial: true) { _, loaded in
             if loaded { onContentLoaded() }
@@ -794,8 +805,13 @@ extension ChatConversationView {
                     .padding(.top, 6)
                 aiPrivacyRow
                     .padding(.top, 10)
-                aiPromptGrid
-                    .padding(.top, 18)
+                if viewModel.aiTopic != nil {
+                    aiStarterPrompts
+                        .padding(.top, 18)
+                } else {
+                    aiPromptGrid
+                        .padding(.top, 18)
+                }
             }
             .padding(.horizontal, 28)
             .padding(.top, Spacing.s10)
@@ -849,6 +865,40 @@ extension ChatConversationView {
                 .buttonStyle(.plain)
                 .accessibilityLabel(card.question)
                 .accessibilityIdentifier("chatAIPromptCard_\(card.id)")
+            }
+        }
+    }
+
+    /// Ask on a screen: that screen's starter prompts, in the suggestion
+    /// cards' style. One ending in "…" goes into the composer to finish.
+    private var aiStarterPrompts: some View {
+        VStack(spacing: Spacing.s2) {
+            ForEach(viewModel.aiPrompts) { chip in
+                Button {
+                    Task { await viewModel.sendCapabilityPrompt(chip) }
+                } label: {
+                    HStack(spacing: Spacing.s2) {
+                        Icon(.sparkles, size: 13, color: Theme.Color.magic)
+                        Text(chip.label)
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.Color.appText)
+                            .multilineTextAlignment(.leading)
+                        Spacer(minLength: Spacing.s2)
+                        Icon(.arrowUpRight, size: 14, color: Theme.Color.appTextMuted)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    .background(Theme.Color.appSurface)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(Theme.Color.appBorder, lineWidth: 1)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .shadow(color: .black.opacity(0.04), radius: 1.5, y: 1)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("chatAIStarter_\(chip.id)")
             }
         }
     }
@@ -1245,7 +1295,7 @@ extension ChatConversationView {
                 // A pickup-days card saves here; once saved it opens Today, where the days show.
                 if let pickup = draft.pickup {
                     if pickup.save == .saved, let today = URL(string: "pantopus://today") {
-                        DeepLinkRouter.shared.handle(url: today)
+                        openPantopusLink(today)
                     } else {
                         Task { await viewModel.savePickupSchedule(draft) }
                     }
@@ -2585,7 +2635,13 @@ private struct ChatBubbleRow: View {
                 }
             }
         }
-        .accessibilityElement(children: .combine)
+        // A reply with action cards or link buttons keeps each button its own element.
+        .accessibilityElement(children: hasAIControls ? .contain : .combine)
+    }
+
+    private var hasAIControls: Bool {
+        guard case let .aiReply(_, _, drafts) = content.body else { return false }
+        return !content.aiLinks.isEmpty || drafts.contains { $0.action != nil }
     }
 
     /// Plain text carried by the bubble — the context menu's Copy
@@ -3140,7 +3196,14 @@ private struct ChatBubbleRow: View {
                 AIEstimateCard(estimate: estimate)
             }
             ForEach(drafts) { draft in
-                AIDraftCard(draft: draft, onUse: onUseAIDraft)
+                if let action = draft.action {
+                    AIActionCardView(cardId: draft.id, card: action)
+                } else {
+                    AIDraftCard(draft: draft, onUse: onUseAIDraft)
+                }
+            }
+            if !content.aiLinks.isEmpty {
+                AILinkButtons(links: content.aiLinks)
             }
         }
         .padding(.horizontal, 12)
