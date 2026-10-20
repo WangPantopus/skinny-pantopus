@@ -378,11 +378,13 @@ export async function abortAccept(
 /**
  * Get (or create) the gig chat room for this gig.
  * Access: gig owner OR accepted worker.
+ * The owner and staff of the business that posted it also get `asBusinessUserId` (open the room as the business)
+ * and, once it is assigned, `workerName`.
  */
 export async function getGigChatRoom(
   gigId: string
-): Promise<{ roomId: string; topicId?: string; gigOwnerId?: string }> {
-  return get<{ roomId: string; topicId?: string; gigOwnerId?: string }>(
+): Promise<{ roomId: string; topicId?: string; gigOwnerId?: string; asBusinessUserId?: string; workerName?: string }> {
+  return get<{ roomId: string; topicId?: string; gigOwnerId?: string; asBusinessUserId?: string; workerName?: string }>(
     `/api/gigs/${gigId}/chat-room`
   );
 }

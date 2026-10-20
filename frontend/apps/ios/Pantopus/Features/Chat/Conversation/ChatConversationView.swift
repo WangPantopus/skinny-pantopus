@@ -242,12 +242,16 @@ public struct ChatConversationView: View {
         }
         .background(Theme.Color.appSurface)
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
-        // Action cards' taps and "Not now" (`AIActionCardView`).
+        // Action cards' taps and "Not now" (`AIActionCardView`). The handlers
+        // hold the view-model weakly: UIKit keeps the composer's text view, and
+        // the environment it was handed, after the thread closes (until another
+        // field takes the keyboard), so a strong capture kept the view-model
+        // and its messages alive.
         .environment(\.chatAIActions, ChatAIActionHandlers(
-            run: { cardId, itemId, actionId in
-                Task { await viewModel.runAIAction(cardId: cardId, itemId: itemId, actionId: actionId) }
+            run: { [weak viewModel] cardId, itemId, actionId in
+                Task { await viewModel?.runAIAction(cardId: cardId, itemId: itemId, actionId: actionId) }
             },
-            dismiss: { cardId in viewModel.dismissAIAction(cardId: cardId) }
+            dismiss: { [weak viewModel] cardId in viewModel?.dismissAIAction(cardId: cardId) }
         ))
         .task { await viewModel.load() }
         .onChange(of: hasLoadedContent, initial: true) { _, loaded in
@@ -3715,6 +3719,8 @@ private struct ChatComposer: View {
     let onEmoji: @MainActor () -> Void
     let onSend: @MainActor () -> Void
     var onStop: @MainActor () -> Void = {}
+    /// The keyboard's Send, held only weakly by the field's `.onSubmit`.
+    @State private var returnKey = ChatComposerReturnKey()
 
     var body: some View {
         // A15 `.composer` — [+ disc] → [input pill with trailing smile]
@@ -3738,7 +3744,10 @@ private struct ChatComposer: View {
                     .foregroundStyle(Theme.Color.appText)
                     .lineLimit(1...4)
                     .submitLabel(.send)
-                    .onSubmit { if canSend { onSend() } }
+                    .onSubmit { [weak returnKey] in returnKey?.send() }
+                    .onChange(of: canSend, initial: true) { _, isEnabled in
+                        returnKey.send = isEnabled ? onSend : {}
+                    }
                     // A multi-line field exposes no name of its own; VoiceOver
                     // read just "text field".
                     .accessibilityLabel("Message")
@@ -3842,6 +3851,15 @@ private struct ChatComposer: View {
         guard canSend else { return Theme.Color.appSurfaceSunken }
         return isLockedAction ? Theme.Color.warningSolid : Theme.Color.primarySolid
     }
+}
+
+/// What the keyboard's Send does in the composer. SwiftUI keeps `.onSubmit`'s
+/// action in the field's environment, which UIKit keeps after the thread
+/// closes (see `chatAIActions`), so the action holds this box weakly instead
+/// of the composer's closures and, through them, the view-model.
+@MainActor
+private final class ChatComposerReturnKey {
+    var send: @MainActor () -> Void = {}
 }
 
 private struct ChatComposerContextBanner: View {

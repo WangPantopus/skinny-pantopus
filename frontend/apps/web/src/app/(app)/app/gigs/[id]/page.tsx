@@ -387,7 +387,9 @@ export default function GigDetailsPage() {
         toast.info('Chat thread not available yet for this gig.');
         return;
       }
-      router.push(`/app/chat/${roomId}`);
+      // A business's owner and staff answer its task's room as the business.
+      const asBusiness = resp.asBusinessUserId ? `?asBusinessUserId=${encodeURIComponent(resp.asBusinessUserId)}` : '';
+      router.push(`/app/chat/${roomId}${asBusiness}`);
     } catch (err: unknown) {
       console.error('Open gig chat failed:', err);
       const { toast } = await import('@/components/ui/toast-store');
