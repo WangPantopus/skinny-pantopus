@@ -98,6 +98,16 @@ final class PantopusImagePipeline: @unchecked Sendable {
     }
 
     private func fetch(url: URL, key: String, keepsOnDisk: Bool, generation started: Int) async -> UIImage? {
+        // A copy the app keeps in its own temporary folder (a photo just sent to the assistant):
+        // read where it is, memory only. A file link from anywhere else loads nothing.
+        if url.isFileURL {
+            let temporary = FileManager.default.temporaryDirectory.standardizedFileURL.path + "/"
+            guard url.standardizedFileURL.path.hasPrefix(temporary),
+                  let bytes = try? Data(contentsOf: url), let image = Self.decode(bytes)
+            else { return nil }
+            keep(image, key: key, generation: started)
+            return image
+        }
         let file = root.appendingPathComponent(Self.fileName(for: key))
         if let bytes = try? Data(contentsOf: file), let image = Self.decode(bytes) {
             try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: file.path)

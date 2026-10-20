@@ -408,10 +408,17 @@ function normalizeGigItems(items) {
   return [];
 }
 
-function redactGigTracking(gig, canViewPrivateWork = false) {
+function redactGigTracking(gig, canViewPrivateWork = false, viewerId = null) {
   if (!gig) return null;
   const safe = { ...gig };
   if ('items' in safe) safe.items = normalizeGigItems(safe.items);
+  // A task posted for a business (created_by is the team member who posted it) names the business, never the person
+  // behind it: who posted or cancelled it reads as the business, except to that person themselves.
+  if (safe.created_by && safe.user_id && String(safe.created_by) !== String(safe.user_id)) {
+    const forBusiness = (id) => id && ![safe.user_id, gig.accepted_by, viewerId].some((known) => known && String(known) === String(id));
+    if (forBusiness(safe.created_by)) safe.created_by = safe.user_id;
+    if (forBusiness(safe.cancelled_by)) safe.cancelled_by = safe.user_id;
+  }
   // Share credentials belong only to the explicit share command. Exact helper
   // coordinates belong to the existing consent-gated active-status reader.
   for (const key of ['status_share_token', 'status_share_expires_at', 'helper_last_location']) delete safe[key];
@@ -464,9 +471,9 @@ function taskDay(value) {
   return `${day}T19:00:00.000Z`;
 }
 
-function serializeGigForViewer(gig, { canViewPrivateWork = false } = {}) {
+function serializeGigForViewer(gig, { canViewPrivateWork = false, viewerId = null } = {}) {
   if (!gig) return null;
-  const { creator, acceptedBy, ...safe } = redactGigTracking(gig, canViewPrivateWork);
+  const { creator, acceptedBy, ...safe } = redactGigTracking(gig, canViewPrivateWork, viewerId);
   if (!canViewPrivateWork) {
     // Payment details stay with the poster, their managers and the worker, as on GET /:gigId/payment.
     for (const key of ['completion_note', 'completion_photos', 'completion_checklist',
@@ -497,13 +504,15 @@ function serializeGigForViewer(gig, { canViewPrivateWork = false } = {}) {
   };
 }
 
-function serializeGigQuestionForViewer(question) {
+// On a business's task the answers are the business's: `business` (the task's owner) is named as the answerer, never
+// the team member who wrote the answer.
+function serializeGigQuestionForViewer(question, { business = null } = {}) {
   if (!question) return null;
   const { asker, answerer, ...safe } = question;
   return {
     ...safe,
     asker: serializeUserAsLocalIdentity(asker),
-    answerer: serializeUserIdentityForViewer(answerer),
+    answerer: serializeUserIdentityForViewer(business && answerer ? business : answerer),
   };
 }
 
@@ -2876,7 +2885,7 @@ router.get('/', optionalAuth, async (req, res) => {
         'Anonymous';
 
       return {
-        ...redactGigTracking(g, Boolean(currentUserId) && (g.user_id === currentUserId || g.accepted_by === currentUserId)),
+        ...redactGigTracking(g, Boolean(currentUserId) && (g.user_id === currentUserId || g.accepted_by === currentUserId), currentUserId),
         poster_display_name: posterDisplayName,
         poster_username: poster?.username || null,
         poster_profile_picture_url: poster?.profile_picture_url || null,
@@ -3161,7 +3170,7 @@ router.get('/saved', verifyToken, async (req, res) => {
           'Anonymous';
 
         return {
-          ...redactGigTracking(gig, gig.user_id === userId || gig.accepted_by === userId),
+          ...redactGigTracking(gig, gig.user_id === userId || gig.accepted_by === userId, userId),
           poster_display_name: posterDisplayName,
           poster_username: poster?.username || null,
           poster_profile_picture_url: poster?.profile_picture_url || null,
@@ -3933,7 +3942,7 @@ router.get('/:id', optionalAuth, async (req, res) => {
       String(gig.accepted_by) === String(currentUserId)
       || (await getGigOwnerAccess(gig.user_id, currentUserId, 'gigs.manage')).allowed
     );
-    res.json({ gig: serializeGigForViewer(gig, { canViewPrivateWork }) });
+    res.json({ gig: serializeGigForViewer(gig, { canViewPrivateWork, viewerId: currentUserId }) });
   } catch (err) {
     logger.error('Gig fetch error', { error: err.message, gigId: req.params.id });
     res.status(500).json({ error: 'Failed to fetch gig' });
@@ -4649,12 +4658,11 @@ router.post('/:gigId/bids/:bidId/accept', verifyToken, async (req, res) => {
       }
 
       if (roomId) {
+        // A business's staff who accepted aren't added: they answer as the business through its own row
+        // (services/chatBusinessAccess), so the worker never sees who they are.
         const participants = [
           { room_id: roomId, user_id: gig.user_id, role: 'owner', is_active: true },
           { room_id: roomId, user_id: bid.user_id, role: 'member', is_active: true },
-          ...(String(actorUserId) !== String(gig.user_id)
-            ? [{ room_id: roomId, user_id: actorUserId, role: 'member', is_active: true }]
-            : []),
         ];
 
         await supabaseAdmin
@@ -4989,7 +4997,8 @@ router.post('/:gigId/bids/:bidId/counter', verifyToken, async (req, res) => {
         counter_amount: parseFloat(amount),
         counter_message: counterMsg || null,
         countered_at: nowIso,
-        countered_by: userId,
+        // The bidder sees the bid row: a counter for a business is the business's, never its team member's.
+        countered_by: ownerAccess.viaBusiness ? gig.user_id : userId,
         counter_status: 'pending',
         status: 'countered',
         updated_at: nowIso,
@@ -5578,7 +5587,8 @@ router.post('/:gigId/remind-worker', verifyToken, async (req, res) => {
       metadata: {
         gig_id: gigId,
         reminder_kind: 'start_work',
-        sent_by: actorUserId,
+        // The worker's notification names who reminded them: the business, for a business's task.
+        sent_by: ownerAccess.viaBusiness ? gig.user_id : actorUserId,
       },
     });
 
@@ -6836,7 +6846,7 @@ router.get('/:gigId/questions', async (req, res) => {
       'Business';
 
     const normalized = (questions || []).map((q) => ({
-      ...serializeGigQuestionForViewer(q),
+      ...serializeGigQuestionForViewer(q, { business: ownerIsBusiness ? owner : null }),
       question_attachments: q.question_attachments || [],
       answer_attachments: q.answer_attachments || [],
       answerer_display_name: ownerIsBusiness && q.answer ? ownerDisplayName : null,
@@ -7034,7 +7044,7 @@ router.post('/:gigId/questions/:questionId/answer', verifyToken, async (req, res
     emitGigUpdate(req, gigId, 'qa-update');
     res.json({
       question: {
-        ...serializeGigQuestionForViewer(updated),
+        ...serializeGigQuestionForViewer(updated, { business: ownerIsBusiness ? owner : null }),
         answerer_display_name: ownerIsBusiness ? ownerDisplayName : null,
         answerer_display_id: ownerIsBusiness ? owner?.id : null,
         answerer_display_username: ownerIsBusiness ? owner?.username || null : null,
@@ -7826,6 +7836,8 @@ async function openOwnerConversation(userId, gig) {
  * Pre-bid users get added as participants but are message-limited.
  * Once a worker is assigned, the room is the owner's and the worker's conversation:
  * anyone else gets their direct room with the owner and is never added to it.
+ * A business owner's staff are never added either: they answer as the business through its
+ * own row (services/chatBusinessAccess), so the worker and askers never see who they are.
  */
 router.get('/:gigId/chat-room', verifyToken, async (req, res) => {
   const { gigId } = req.params;
@@ -7881,14 +7893,11 @@ router.get('/:gigId/chat-room', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to get chat room' });
     }
 
-    // Ensure participants
+    // Ensure participants: the owner, the worker, and anyone asking before the task is assigned.
     const participants = [
       { room_id: roomId, user_id: gig.user_id, role: 'owner' },
       ...(gig.accepted_by ? [{ room_id: roomId, user_id: gig.accepted_by, role: 'member' }] : []),
-      // Add current acting user as participant when different from canonical owner/worker.
-      ...(!isAcceptedWorker && String(userId) !== String(gig.user_id)
-        ? [{ room_id: roomId, user_id: userId, role: 'member' }]
-        : []),
+      ...(!isOwner && !isAcceptedWorker ? [{ room_id: roomId, user_id: userId, role: 'member' }] : []),
     ];
 
     const { error: partErr } = await supabaseAdmin
@@ -7961,7 +7970,8 @@ router.get('/:gigId/chat-room', verifyToken, async (req, res) => {
     }
 
     // ─── Unified conversation: also create direct room + task topic ───
-    const { topicId } = await openOwnerConversation(userId, gig);
+    // Not for the owner's staff: theirs would be a conversation with their own business.
+    const { topicId } = isOwner ? { topicId: null } : await openOwnerConversation(userId, gig);
 
     return res.json({ roomId, preBidInfo, topicId, gigOwnerId: gig.user_id });
   } catch (err) {

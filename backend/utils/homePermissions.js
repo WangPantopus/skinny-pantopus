@@ -11,6 +11,7 @@
 
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
+const { userFacing } = require('./userFacingError');
 
 const {
   HOME_PERMISSIONS, OLD_TO_NEW_PERM, ROLE_RANK, resolveHomeRole,
@@ -18,9 +19,9 @@ const {
 } = require('./homeAccessPolicy');
 
 function accessUnavailable() {
-  return Object.assign(new Error('Could not check Home access. Please retry.'), {
+  return userFacing(Object.assign(new Error('Could not check Home access. Please retry.'), {
     code: 'HOME_ACCESS_UNAVAILABLE', status: 503, statusCode: 503,
-  });
+  }));
 }
 
 async function checked(query) {

@@ -84,7 +84,8 @@ public struct PulseTabRoot: View {
                         onCompose: { intent in
                             path.append(.compose(intent: intent.rawValue))
                         },
-                        onBack: onClose
+                        onBack: onClose,
+                        asksPantopus: true
                     )
                 }
             }
