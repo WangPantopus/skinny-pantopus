@@ -415,11 +415,13 @@ function weatherForModel(data, zone) {
 /**
  * When a section's data is from, to the hour in the home's time ("2026-10-20 3 AM"): enough to say how current
  * it is, and steady, so a screen's context isn't added to the conversation again on every turn just because a
- * timestamp moved (the weather's and the address calendar's are the time they were read).
+ * timestamp moved (the weather's and the address calendar's are the time they were read). A date stored as UTC
+ * midnight stays a date (localDate).
  */
 function asOfHour(iso, zone) {
-  const at = iso ? DateTime.fromISO(String(iso), { zone: 'utc' }).setZone(zoneOr(zone)) : null;
-  return at && at.isValid ? at.toFormat('yyyy-LL-dd h a') : null;
+  if (!iso || /^\d{4}-\d{2}-\d{2}(T00:00:00(\.0+)?Z)?$/.test(String(iso))) return localDate(iso, zone);
+  const at = DateTime.fromISO(String(iso), { zone: 'utc' }).setZone(zoneOr(zone));
+  return at.isValid ? at.toFormat('yyyy-LL-dd h a') : null;
 }
 
 function sectionForModel(section, zone, dataChars = SECTION_DATA_CHARS) {
