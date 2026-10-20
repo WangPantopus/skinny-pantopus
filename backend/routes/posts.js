@@ -862,8 +862,21 @@ async function isVisitorAt(userId, latitude, longitude) {
     && homes.every((home) => Math.abs(lat - home.latitude) > 0.5 || Math.abs(lng - home.longitude) > 0.5);
 }
 
+// An event may omit its times, but an end requires a strictly earlier start.
+// Edits call this with the resulting pair, not just the fields in the request.
+function eventRangeError(start, end) {
+  if (end == null) return null;
+  if (start == null) return 'Choose an event start time before setting its end time.';
+  if (new Date(end).getTime() <= new Date(start).getTime()) {
+    return 'The event end time must be after its start time.';
+  }
+  return null;
+}
+
 router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
   try {
+    const dateError = eventRangeError(req.body.eventDate, req.body.eventEndDate);
+    if (dateError) return res.status(400).json({ error: dateError, code: 'INVALID_EVENT_DATES' });
     const {
       content, title, mediaUrls, mediaTypes, mediaThumbnails, mediaLiveUrls, postType, postFormat,
       visibility, visibilityScope, locationPrecision,
@@ -2574,10 +2587,17 @@ router.patch('/:id', verifyToken, validate(updatePostSchema), async (req, res) =
     const { data: existing } = await supabaseAdmin.from('Post')
       .select(`user_id, media_urls, media_thumbnails, media_live_urls, safety_alert_kind, post_metadata,
         post_type, content, topic, area_id, read_scope, latitude, longitude, location_precision,
-        visibility, visibility_scope, radius_miles`)
+        visibility, visibility_scope, radius_miles, event_date, event_end_date`)
       .eq('id', id).single();
     if (!existing) return res.status(404).json({ error: 'Post not found' });
     if (existing.user_id !== userId) return res.status(403).json({ error: 'You can only edit your own posts' });
+    if (req.body.eventDate !== undefined || req.body.eventEndDate !== undefined) {
+      const dateError = eventRangeError(
+        req.body.eventDate !== undefined ? req.body.eventDate : existing.event_date,
+        req.body.eventEndDate !== undefined ? req.body.eventEndDate : existing.event_end_date
+      );
+      if (dateError) return res.status(400).json({ error: dateError, code: 'INVALID_EVENT_DATES' });
+    }
     // Only Pulse creates Share and Offer posts; an older post can't become one.
     if (!existing.read_scope && PULSE_ONLY_TYPES.includes(req.body.postType) && req.body.postType !== existing.post_type) {
       return res.status(400).json({ error: "A post's type can't be changed to this one.", code: 'PULSE_FIELD_LOCKED' });
