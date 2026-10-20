@@ -5,9 +5,13 @@ package app.pantopus.android.ui.screens.inbox.conversation
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.LaunchFeatures
+import app.pantopus.android.core.routing.DeepLinkRouter
+import app.pantopus.android.data.ai.AIActionCardStore
+import app.pantopus.android.data.ai.AIActionRunner
 import app.pantopus.android.data.ai.AIChatRepository
 import app.pantopus.android.data.ai.AIChatStreamEvent
 import app.pantopus.android.data.ai.AIConversationSession
+import app.pantopus.android.data.ai.AIScreenContext
 import app.pantopus.android.data.api.models.chats.ChatMessageDto
 import app.pantopus.android.data.api.models.chats.ChatMessageSender
 import app.pantopus.android.data.api.models.chats.ChatMessagesResponse
@@ -78,6 +82,8 @@ class ChatConversationViewModel
         private val aiSession: AIConversationSession,
         private val activeChatThread: ActiveChatThread,
         private val placeRepository: PlaceRepository,
+        private val aiActions: AIActionRunner,
+        private val aiCards: AIActionCardStore,
     ) : ViewModel() {
         private val _state = MutableStateFlow<ChatConversationUiState>(ChatConversationUiState.Loading)
         val state: StateFlow<ChatConversationUiState> = _state.asStateFlow()
@@ -176,6 +182,14 @@ class ChatConversationViewModel
         // its send disc for a stop button (A15.3) bound to [cancelAiStream].
         private val _isAiStreaming = MutableStateFlow(false)
         val isAiStreaming: StateFlow<Boolean> = _isAiStreaming.asStateFlow()
+
+        // AI assistant phase 1: the screen the thread was opened from ("About: …"), sent with its messages.
+        private val _aiContext = MutableStateFlow<AIScreenContext?>(null)
+        val aiContext: StateFlow<AIScreenContext?> = _aiContext.asStateFlow()
+
+        // That screen's starter prompts, offered until the person sends something.
+        private val _aiStarters = MutableStateFlow<List<String>>(emptyList())
+        val aiStarters: StateFlow<List<String>> = _aiStarters.asStateFlow()
 
         // A15 `.ctx-strip` — pinned gig context for gig rooms. Populated
         // once per VM from the gig detail fetch when the route carried a
@@ -282,8 +296,15 @@ class ChatConversationViewModel
             val metadata: Map<String, Any>? = null,
         )
 
+        // Photos sent to the assistant, by the message that carried them: where each is on the phone, because the
+        // server deletes a photo once it has read it and its reference never loads.
+        private val aiSentPhotos = mutableMapOf<String, List<String>>()
+
         private var aiConversationId: String? = null
         private val aiDraftsByMessageId = mutableMapOf<String, List<ChatAIDraftCard>>()
+
+        // Buttons to screens of the app under each reply (`link` events and history `links`).
+        private val aiLinksByMessageId = mutableMapOf<String, List<ChatAILink>>()
 
         // What the assistant is doing while a tool runs ("Drafting your post…"), shown on the pending reply.
         private var aiStatus: String? = null
@@ -343,6 +364,7 @@ class ChatConversationViewModel
             scrollToMessageId: String? = null,
             initialTopic: ChatInitialTopic? = null,
             gigId: String? = null,
+            aiContext: AIScreenContext? = null,
         ) {
             this.mode = mode
             this.currentUserId = currentUserId
@@ -350,6 +372,11 @@ class ChatConversationViewModel
             this.scrollToMessageId = scrollToMessageId
             this.initialTopic = initialTopic
             this.gigId = gigId
+            // Configured again after a rotation: the starters already used stay gone.
+            if (mode is ChatThreadMode.Ai && aiContext != _aiContext.value) {
+                _aiContext.value = aiContext
+                _aiStarters.value = aiContext?.starters.orEmpty()
+            }
         }
 
         /** Clear the scroll target after the screen has scrolled to it. */
@@ -377,6 +404,9 @@ class ChatConversationViewModel
                 // latest backend conversation id so the thread continues
                 // across app restarts.
                 if (aiConversationId == null && aiSession.freshStartUserId != currentUserId) restoreLatestAiConversation()
+                // Reopened in the same app session (from Messages or an Ask button): the conversation
+                // continues, so its earlier turns show as well.
+                aiConversationId?.let { id -> viewModelScope.launch { loadAiHistory(id) } }
             }
             loadTopicsIfNeeded()
             loadGigContextIfNeeded()
@@ -467,36 +497,92 @@ class ChatConversationViewModel
             if (messages.isNotEmpty() || aiConversationId != conversationId) return
             val restored = mutableListOf<ChatMessageDto>()
             val drafts = mutableMapOf<String, List<ChatAIDraftCard>>()
+            val links = mutableMapOf<String, List<ChatAILink>>()
             var openReplyId: String? = null
             history.messages.forEachIndexed { index, item ->
                 val id = "ai_history_$index"
-                val draft = item.draft
                 val text = item.text.orEmpty()
-                when {
-                    item.role == "user" -> {
-                        openReplyId = null
-                        restored.add(localMessage(id = id, text = sentText(text, item.photos ?: 0), userId = currentUserId, type = "text"))
-                    }
-                    draft != null -> {
-                        val replyId = openReplyId ?: id
-                        if (openReplyId == null) restored.add(localMessage(id = replyId, text = "", userId = "ai", type = "ai_reply"))
-                        openReplyId = replyId
-                        aiRepo.draftCard(draft.type, draft.draft)?.let { drafts[replyId] = drafts[replyId].orEmpty() + it }
-                    }
-                    text.isNotEmpty() -> {
-                        val replyId = openReplyId
-                        val at = restored.indexOfFirst { it.id == replyId }
-                        if (replyId != null && at >= 0) {
-                            restored[at] = localMessage(id = replyId, text = text, userId = "ai", type = "ai_reply")
-                            openReplyId = null
-                        } else {
-                            restored.add(localMessage(id = id, text = text, userId = "ai", type = "ai_reply"))
-                        }
-                    }
+                if (item.role == "user") {
+                    openReplyId = null
+                    restored.add(localMessage(id = id, text = sentText(text, item.photos ?: 0), userId = currentUserId, type = "text"))
+                    return@forEachIndexed
                 }
+                val draft = item.draft?.let { aiRepo.draftCard(it.type, it.draft) }
+                val itemLinks = item.links.orEmpty().mapNotNull { aiRepo.link(it.label, it.url) }
+                if (draft == null && text.isEmpty() && itemLinks.isEmpty()) return@forEachIndexed
+                // A draft, its link buttons and the note after it share one reply, as they did when it streamed.
+                val replyId =
+                    openReplyId?.takeIf { open -> restored.any { it.id == open } }
+                        ?: id.also { restored.add(localMessage(id = it, text = "", userId = "ai", type = "ai_reply")) }
+                if (text.isNotEmpty()) {
+                    val at = restored.indexOfFirst { it.id == replyId }
+                    restored[at] = localMessage(id = replyId, text = text, userId = "ai", type = "ai_reply")
+                }
+                openReplyId = replyId.takeIf { text.isEmpty() }
+                draft?.let { drafts[replyId] = drafts[replyId].orEmpty() + withSavedRuns(it) }
+                if (itemLinks.isNotEmpty()) links[replyId] = links[replyId].orEmpty() + itemLinks
             }
             messages.addAll(restored)
             aiDraftsByMessageId.putAll(drafts)
+            aiLinksByMessageId.putAll(links)
+            rebuild()
+        }
+
+        /** An action card as this phone left it: the buttons that succeeded, or "Not now". */
+        private fun withSavedRuns(draft: ChatAIDraftCard): ChatAIDraftCard {
+            val card = draft.action ?: return draft
+            val runs = aiCards.done(card.id).associate { it.scope to ChatAICardRun.Done(it.actionId, it.link, it.note) }
+            return draft.copy(action = card.copy(runs = card.runs + runs, dismissed = aiCards.isDismissed(card.id)))
+        }
+
+        /**
+         * An action card's button (AI assistant phase 1 contract, section 4.3): the request goes out only if
+         * it is on the allowlist, through the signed-in client. [scope] is [ChatAIActionCard.CARD_SCOPE] or the
+         * row's id. The card's buttons wait while it runs; a success is remembered on this phone.
+         */
+        fun runAIAction(
+            draft: ChatAIDraftCard,
+            scope: String,
+            action: ChatAICardAction,
+        ) {
+            val card = draft.action ?: return
+            val usable = !card.isRunning && !card.dismissed && !card.isExpired()
+            if (!usable || card.runs[scope] is ChatAICardRun.Done) return
+            updateActionCard(draft.id) { it.copy(runs = it.runs + (scope to ChatAICardRun.Running(action.id))) }
+            viewModelScope.launch {
+                val run =
+                    when (val outcome = aiActions.run(action)) {
+                        is AIActionRunner.Outcome.Done -> {
+                            aiCards.markDone(card.id, AIActionCardStore.Done(scope, action.id, outcome.link, outcome.note))
+                            ChatAICardRun.Done(action.id, outcome.link, outcome.note)
+                        }
+                        is AIActionRunner.Outcome.Failed -> ChatAICardRun.Failed(action.id, outcome.message)
+                        AIActionRunner.Outcome.NotAllowed ->
+                            ChatAICardRun.Failed(action.id, "This card can't be used in this version of Pantopus.")
+                        AIActionRunner.Outcome.SessionChanged ->
+                            ChatAICardRun.Failed(action.id, "This card is from an earlier sign-in. Ask again.")
+                    }
+                updateActionCard(draft.id) { it.copy(runs = it.runs + (scope to run)) }
+            }
+        }
+
+        /** "Not now": the card stays in the thread without its buttons, on this phone only. */
+        fun dismissAIAction(draft: ChatAIDraftCard) {
+            val card = draft.action ?: return
+            if (card.isRunning) return
+            aiCards.dismiss(card.id)
+            updateActionCard(draft.id) { it.copy(dismissed = true) }
+        }
+
+        private fun updateActionCard(
+            draftId: String,
+            change: (ChatAIActionCard) -> ChatAIActionCard,
+        ) {
+            val messageId = aiDraftsByMessageId.entries.firstOrNull { (_, cards) -> cards.any { it.id == draftId } }?.key ?: return
+            aiDraftsByMessageId[messageId] =
+                aiDraftsByMessageId[messageId].orEmpty().map { draft ->
+                    if (draft.id == draftId) draft.copy(action = draft.action?.let(change)) else draft
+                }
             rebuild()
         }
 
@@ -640,6 +726,7 @@ class ChatConversationViewModel
             filename: String,
             mimeType: String,
             bytes: ByteArray,
+            sourceUri: String? = null,
         ) {
             appendQueuedAttachment(
                 ChatQueuedAttachment(
@@ -648,6 +735,7 @@ class ChatConversationViewModel
                     filename = filename,
                     mimeType = mimeType,
                     bytes = bytes,
+                    sourceUri = sourceUri,
                 ),
             )
         }
@@ -875,7 +963,19 @@ class ChatConversationViewModel
          * welcome/empty state).
          */
         fun sendCapabilityPrompt(chip: ChatPromptChip) {
-            _composerText.value = chip.label
+            sendAiStarter(chip.label)
+        }
+
+        /**
+         * A starter prompt: a whole question goes at once; one that trails off ("Remind us…") fills the
+         * composer for the person to finish.
+         */
+        fun sendAiStarter(text: String) {
+            if (text.endsWith("…")) {
+                _composerText.value = text.removeSuffix("…").trimEnd() + " "
+                return
+            }
+            _composerText.value = text
             send()
         }
 
@@ -889,6 +989,7 @@ class ChatConversationViewModel
             if (_editingMessageId.value == null && mode is ChatThreadMode.Ai) {
                 if (_isAiStreaming.value) return
                 _composerText.value = ""
+                _aiStarters.value = emptyList()
                 startAiStream(trimmed)
                 return
             }
@@ -1161,12 +1262,21 @@ class ChatConversationViewModel
             aiConversationId = null
             aiSession.conversationId = null
             aiSession.freshStartUserId = currentUserId
+            aiSentPhotos.clear()
             messages.clear()
             aiDraftsByMessageId.clear()
+            aiLinksByMessageId.clear()
+            // Opened from a screen: the new conversation is about it too, with its starters again.
+            _aiStarters.value = _aiContext.value?.starters.orEmpty()
             rebuild()
         }
 
         private suspend fun streamAiMessage(text: String) {
+            // Where the photos the upload sends (images only) are on the phone, taken before it starts.
+            val photos =
+                _queuedAttachments.value
+                    .filter { it.bytes != null && it.mimeType.startsWith("image/") }
+                    .mapNotNull { it.sourceUri }
             val imageUrls = uploadQueuedAIImagesIfNeeded()
             val userMessage =
                 localMessage(
@@ -1174,8 +1284,8 @@ class ChatConversationViewModel
                     text = text,
                     userId = currentUserId,
                     type = "text",
-                    imageUrls = imageUrls,
                 )
+            if (imageUrls.isNotEmpty()) aiSentPhotos[userMessage.id] = photos
             val assistantId = "ai_assistant_${UUID.randomUUID()}"
             streamingAssistantId = assistantId
             messages.add(userMessage)
@@ -1189,6 +1299,7 @@ class ChatConversationViewModel
                     message = text.ifEmpty { "What can you tell me about this image?" },
                     conversationId = aiConversationId,
                     images = imageUrls,
+                    context = _aiContext.value,
                 ).collect { event ->
                     when (event) {
                         is AIChatStreamEvent.Conversation -> {
@@ -1207,7 +1318,11 @@ class ChatConversationViewModel
                         }
                         is AIChatStreamEvent.Draft -> {
                             aiStatus = null
-                            aiDraftsByMessageId[assistantId] = aiDraftsByMessageId[assistantId].orEmpty() + event.draft
+                            aiDraftsByMessageId[assistantId] = aiDraftsByMessageId[assistantId].orEmpty() + withSavedRuns(event.draft)
+                            rebuild()
+                        }
+                        is AIChatStreamEvent.Link -> {
+                            aiLinksByMessageId[assistantId] = aiLinksByMessageId[assistantId].orEmpty() + event.link
                             rebuild()
                         }
                         is AIChatStreamEvent.Error -> {
@@ -2481,13 +2596,16 @@ class ChatConversationViewModel
                         estimate = null,
                         drafts = aiDraftsByMessageId[message.id].orEmpty(),
                         status = aiStatus.takeIf { message.id == streamingAssistantId },
+                        // A link this version can't open shows no button.
+                        links = aiLinksByMessageId[message.id].orEmpty().filter { DeepLinkRouter.canRoute(it.url) },
                     )
                 "text" -> {
                     val imageUrls =
-                        (message.metadata?.get("image_urls") as? List<*>)
-                            ?.filterIsInstance<String>()
-                            ?.mapNotNull(ChatMediaUrl::resolve)
-                            .orEmpty()
+                        aiSentPhotos[message.id]
+                            ?: (message.metadata?.get("image_urls") as? List<*>)
+                                ?.filterIsInstance<String>()
+                                ?.mapNotNull(ChatMediaUrl::resolve)
+                                .orEmpty()
                     if (imageUrls.isNotEmpty()) {
                         ChatBubbleBody.TextWithImages(message.resolvedText, imageUrls)
                     } else {
@@ -2632,7 +2750,6 @@ class ChatConversationViewModel
             text: String,
             userId: String,
             type: String,
-            imageUrls: List<String> = emptyList(),
         ): ChatMessageDto =
             ChatMessageDto(
                 id = id,
@@ -2640,7 +2757,6 @@ class ChatConversationViewModel
                 userId = userId,
                 messageText = text,
                 messageType = type,
-                metadata = if (imageUrls.isEmpty()) null else mapOf("image_urls" to imageUrls),
                 createdAt = Instant.now().toString(),
             )
 

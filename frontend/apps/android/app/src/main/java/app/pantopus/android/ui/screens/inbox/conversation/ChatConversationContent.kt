@@ -4,6 +4,8 @@ package app.pantopus.android.ui.screens.inbox.conversation
 
 import androidx.compose.runtime.Immutable
 import app.pantopus.android.core.LaunchFeatures
+import app.pantopus.android.data.ai.AIScreenContext
+import app.pantopus.android.ui.screens.compose.pulse.PulseComposeDraftFields
 import app.pantopus.android.ui.theme.PantopusIcon
 import java.io.File
 
@@ -150,6 +152,8 @@ data class ChatConversationRouteArgs(
     val initialTopic: ChatInitialTopic? = null,
     /** Backing gig for gig rooms — drives the A15 pinned context strip. */
     val gigId: String? = null,
+    /** The screen an assistant thread was opened from (Ask Pantopus), or null. */
+    val aiContext: AIScreenContext? = null,
 )
 
 /**
@@ -231,6 +235,8 @@ data class ChatQueuedAttachment(
     val filename: String,
     val mimeType: String = "application/octet-stream",
     val bytes: ByteArray? = null,
+    /** Where the picked file is on the phone (its content:// address): a photo sent to the assistant shows from it. */
+    val sourceUri: String? = null,
 )
 
 /**
@@ -252,6 +258,8 @@ data class ChatAIDraftPrefill(
     val postType: String? = null,
     /** A post's headline, when the draft has one. */
     val title: String? = null,
+    /** A post's exact type and its event, deal, lost-and-found and heads-up fields. */
+    val post: PulseComposeDraftFields? = null,
 )
 
 /**
@@ -290,6 +298,8 @@ data class ChatAIDraftCard(
     val prefill: ChatAIDraftPrefill? = null,
     /** A pickup-days card's schedule and where its Save stands. */
     val pickup: ChatAIPickupSchedule? = null,
+    /** An action card (type `action`): its fields, buttons and how they went. */
+    val action: ChatAIActionCard? = null,
 ) {
     /** Launch cut: a task (#4) or listing (#3) draft opens a composer hidden for the first launch. */
     val isLaunchAvailable: Boolean
@@ -434,6 +444,8 @@ sealed interface ChatBubbleBody {
         val drafts: List<ChatAIDraftCard> = emptyList(),
         /** What the assistant is doing while the reply is pending ("Drafting your post…"). */
         val status: String? = null,
+        /** Buttons to screens of the app, under the reply. */
+        val links: List<ChatAILink> = emptyList(),
     ) : ChatBubbleBody
 }
 

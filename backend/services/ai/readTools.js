@@ -9,6 +9,7 @@
  * from the household's locked record functions. A tool never widens what a screen
  * shows, and words other people wrote are marked as such (OTHERS_WORDS).
  */
+const { DateTime } = require('luxon');
 const supabaseAdmin = require('../../config/supabaseAdmin');
 const logger = require('../../utils/logger');
 const { isFeatureEnabled } = require('../featureFlagService');
@@ -26,20 +27,35 @@ const homeDetailService = require('../homeDetailService');
 const { checkHomePermission } = require('../../utils/homePermissions');
 const { localDisplayNames } = require('../../utils/identityProfiles');
 const {
-  OTHERS_WORDS, isUuid, clip, chosenHome, homesOf, whenLabel, dayLabel, todayIn, firstNameOf, distanceWords,
+  OTHERS_WORDS, isUuid, clip, chosenHome, homesOf, zoneOr, whenLabel, dayLabel, todayIn, firstNameOf, distanceWords,
 } = require('./assistantKit');
 
-// Playdates stay off for launch (plans_playdates); the assistant never offers them.
-const PLAN_KINDS = KINDS.filter((kind) => kind !== 'playdate');
+/**
+ * The kinds of plan the tools offer. Playdates follow the person's plans_playdates flag, as the
+ * Plans tab does: the tools list them only for people who have it (agentService's `playdates`
+ * capability), and the plan services decide who sees, hosts and joins one (a verified address).
+ */
+function planKinds(playdates = false) {
+  return playdates ? KINDS : KINDS.filter((kind) => kind !== 'playdate');
+}
+
 // What the nearby feed accepts from residents (posts.js PLACE types).
 const PLACE_POST_TYPES = ['ask_local', 'recommendation', 'event', 'lost_found', 'alert', 'deal', 'local_update', 'neighborhood_win', 'visitor_guide'];
 // The Today screen's sections (PlaceStoreReads / StoreKeys).
 const TODAY_SECTIONS = ['weather', 'air_quality', 'alerts', 'sunrise_sunset', 'good_day_to', 'address_calendar'];
+// Tasks due on Today, soonest first; list_home_tasks reads them all.
+const TODAY_TASKS = 10;
 const NEARBY_RADIUS_METERS = 16093; // 10 miles
 const SECTION_DATA_CHARS = 900;
+// Sections the tool reads by name share this much, so one or two come whole (all of their
+// representatives, every home system) while a read of every section stays at 900 each.
+const NAMED_SECTIONS_DATA_CHARS = 5000;
+// A section's line in the Place tab's own context, which holds every section at once.
+const SECTION_BRIEF_CHARS = 240;
 
-const readToolDefinitions = [
-  {
+/** find_plans, with playdates among its kinds for people who have plans_playdates. */
+function findPlansDefinition({ playdates = false } = {}) {
+  return {
     name: 'find_plans',
     description: "Plans (small meetups on the Plans map): the person's own (hosting, going, asked, waitlisted, recent) or ones nearby. Other people's plans show only their area, never the exact place. Use before drafting a plan change, an ask, a message to guests or answering \"what's on\".",
     input_schema: {
@@ -47,12 +63,16 @@ const readToolDefinitions = [
       properties: {
         scope: { type: 'string', enum: ['mine', 'nearby'], description: '"mine" for plans they host or joined, "nearby" for plans within 5 miles.' },
         window: { type: ['string', 'null'], enum: ['now', 'today', 'week', 'weekend', null], description: 'Nearby only: when. Null means this week.' },
-        kinds: { type: ['array', 'null'], items: { type: 'string', enum: PLAN_KINDS }, description: 'Nearby only: kinds to include, or null for all.' },
+        kinds: { type: ['array', 'null'], items: { type: 'string', enum: planKinds(playdates) }, description: 'Nearby only: kinds to include, or null for all.' },
       },
       required: ['scope', 'window', 'kinds'],
       additionalProperties: false,
     },
-  },
+  };
+}
+
+const readToolDefinitions = [
+  findPlansDefinition(),
   {
     name: 'get_plan',
     description: 'One plan as the person sees it. For the host it includes the people who asked to join and their signals (verified address, distance, plans joined, mutual connections, hosted before, new to Pantopus, note).',
@@ -94,7 +114,7 @@ const readToolDefinitions = [
       type: 'object',
       properties: {
         home_id: { type: ['string', 'null'], description: 'One of their homes, or null for the home Today shows.' },
-        topics: { type: ['array', 'null'], items: { type: 'string', enum: PLACE_SECTION_IDS }, description: 'Sections to read, or null for all.' },
+        topics: { type: ['array', 'null'], items: { type: 'string', enum: PLACE_SECTION_IDS }, description: 'Sections to read, or null for all. Name the ones you need: a few named sections come whole, while a read of all of them cuts each one short.' },
       },
       required: ['home_id', 'topics'],
       additionalProperties: false,
@@ -139,6 +159,9 @@ const readToolDefinitions = [
     input_schema: { type: 'object', properties: {}, required: [], additionalProperties: false },
   },
 ];
+
+// The read tools that differ for people with plans_playdates.
+const playdateReadToolDefinitions = [findPlansDefinition({ playdates: true })];
 
 // ─── Plans ─────────────────────────────────────────────────────────────────
 
@@ -204,10 +227,17 @@ async function findPlans(args, ctx) {
     };
   }
   if (!viewer.origin) return { error: 'They have no home, saved place or location yet, so nearby plans can\'t be found.' };
-  const kinds = Array.isArray(args.kinds) ? args.kinds.filter((kind) => PLAN_KINDS.includes(kind)) : [];
+  const asked = Array.isArray(args.kinds) ? args.kinds.filter((kind) => KINDS.includes(kind)) : [];
+  // Playdates only for people who see them on the map (the flag and a verified address), as
+  // GET /api/plans: asking only for kinds they can't see finds nothing, not every plan.
+  const kinds = viewer.seesPlaydates ? asked : asked.filter((kind) => kind !== 'playdate');
+  const unseen = viewer.playdatesFlag && !viewer.seesPlaydates && (!asked.length || asked.includes('playdate'))
+    ? { playdates: 'Playdates are for verified neighbors, so none show until their address is verified.' }
+    : {};
+  if (asked.length && !kinds.length) return { note: OTHERS_WORDS, plans: [], more: false, ...unseen };
   const result = await planService.listNearby(viewer, { point: viewer.origin, window: args.window || 'week', kinds });
-  const items = (result.items || []).filter((card) => card.kind !== 'playdate').slice(0, 12);
-  return { note: OTHERS_WORDS, plans: items.map((card) => planForModel(card, ctx.timeZone)), more: Boolean(result.next_cursor) };
+  const items = (result.items || []).slice(0, 12);
+  return { note: OTHERS_WORDS, plans: items.map((card) => planForModel(card, ctx.timeZone)), more: Boolean(result.next_cursor), ...unseen };
 }
 
 async function getPlan(args, ctx) {
@@ -229,6 +259,8 @@ async function getPlan(args, ctx) {
       mutual_connections: r.user.mutual_connections,
       hosted_before: r.user.hosted_before,
       new_to_pantopus: r.user.new_to_pantopus,
+      // A playdate's family: how many kids and their ages (never names).
+      ...(body.kind === 'playdate' ? { kids_count: r.kids_count, kids_age_bands: r.kids_age_bands } : {}),
       note_text: clip(r.note, 280),
     });
     plan.waiting = requests.pending.map(view);
@@ -321,15 +353,23 @@ async function getPost(args, ctx) {
 
 // ─── Place, Today, tasks, household ────────────────────────────────────────
 
-/** The home's intelligence sections under the person's own access, as the Place screen reads them. */
-async function readSections(homeId, userId, sectionIds) {
+/**
+ * The home's intelligence sections under the person's own access, as the Place screen reads them.
+ * The screen asks for the Ballot card (`ballot=1`), so the civic sections come with it whenever
+ * `ballot_p0` is on for them, as routes/placeIntelligence.js decides.
+ */
+async function readSections(homeId, userId, sectionIds, user = null) {
   const homeRead = placeIntelligenceService.readHome(homeId);
-  const access = await checkHomePermission(homeId, userId, 'home.view');
+  const civic = !sectionIds || sectionIds.some((id) => id.startsWith('civic_'));
+  const [access, ballot] = await Promise.all([
+    checkHomePermission(homeId, userId, 'home.view'),
+    civic ? isFeatureEnabled('ballot_p0', user || { id: userId }).catch(() => false) : false,
+  ]);
   if (!access.hasAccess) {
     const privateSetup = await homeListService.readAccessState(homeId, userId);
     if (privateSetup.mode !== 'private_setup') return null;
   }
-  return placeIntelligenceService.composeHomeIntelligence({ homeId, userId, access, sectionIds, homeRead });
+  return placeIntelligenceService.composeHomeIntelligence({ homeId, userId, access, sectionIds, ballot, homeRead });
 }
 
 /** The composed payload's sections in screen order; serializePlaceIntelligence nests them under groups. */
@@ -337,11 +377,72 @@ function sectionsOf(intelligence) {
   return (intelligence?.groups || []).flatMap((group) => group.sections || []);
 }
 
-function sectionForModel(section) {
+const HOUR_MS = 60 * 60 * 1000;
+/** A code in plain words: "partly_cloudy" → "partly cloudy". */
+const words = (code) => (code ? String(code).replace(/_/g, ' ') : null);
+/** The forecast hours from the current one on, at most a day of them. */
+const nextHours = (hourly) => (Array.isArray(hourly) ? hourly : [])
+  .filter((hour) => Date.parse(hour.time) + HOUR_MS > Date.now())
+  .slice(0, 24);
+
+/**
+ * The calendar day of a time in `zone`. A date stored as UTC midnight (the Ballot card's
+ * checked date) stays that date instead of moving back a day in the Americas.
+ */
+function localDate(iso, zone) {
+  if (!iso) return null;
+  const text = String(iso);
+  if (/^\d{4}-\d{2}-\d{2}(T00:00:00(\.0+)?Z)?$/.test(text)) return text.slice(0, 10);
+  const at = DateTime.fromISO(text, { zone: 'utc' }).setZone(zoneOr(zone));
+  return at.isValid ? at.toISODate() : null;
+}
+
+/**
+ * The weather section in the home's own time: now, today's high and low, the next 24
+ * hours and the days ahead. Whole it is about 3,300 characters of UTC times, and cut to
+ * SECTION_DATA_CHARS its hourly forecast stopped about 7 hours ahead.
+ */
+function weatherForModel(data, zone) {
+  const local = zoneOr(zone);
+  let lastDay = null;
+  let lastOffset = null;
+  const hour = (entry) => {
+    const at = DateTime.fromISO(String(entry.time), { zone: 'utc' }).setZone(local);
+    // The weekday only where the day changes ("Tue 3 AM", "4 AM", … "Wed 12 AM"), and the
+    // zone where the clocks change, so the repeated hour reads "1 AM PST".
+    let label = at.toFormat(at.toISODate() === lastDay ? 'h a' : 'ccc h a');
+    if (lastOffset !== null && at.offset !== lastOffset) label += ` ${at.offsetNameShort}`;
+    lastDay = at.toISODate();
+    lastOffset = at.offset;
+    const wind = entry.wind_mph == null ? 'wind unknown' : `${entry.wind_mph} mph`;
+    return `${label}: ${entry.temp_f}°F, ${entry.precip_chance}%, ${wind}, ${words(entry.condition_code) || 'sky unknown'}`;
+  };
+  const day = (entry) => {
+    const date = DateTime.fromISO(String(entry.date), { zone: local });
+    return `${date.isValid ? date.toFormat('ccc, LLL d') : entry.date}: ${entry.high_f}°F/${entry.low_f}°F, ${entry.precip_chance}%, ${words(entry.condition_code) || 'sky unknown'}`;
+  };
+  return {
+    note: "In the home's local time. Each hour: temperature, chance of rain or snow, wind, sky. Each day: high/low, chance of rain or snow, sky.",
+    now: {
+      temp_f: data.current_temp_f ?? null,
+      feels_like_f: data.feels_like_f ?? null,
+      sky: data.condition_label || words(data.condition_code),
+      wind_mph: data.wind_mph ?? null,
+      wind_from: data.wind_direction || null,
+    },
+    today: { high_f: data.high_f ?? null, low_f: data.low_f ?? null },
+    next_24_hours: nextHours(data.hourly).map(hour),
+    days: (Array.isArray(data.daily) ? data.daily : []).map(day),
+  };
+}
+
+function sectionForModel(section, zone, dataChars = SECTION_DATA_CHARS) {
   let data = null;
-  if (section.data != null) {
+  if (section.data != null && section.id === 'weather') {
+    data = weatherForModel(section.data, zone);
+  } else if (section.data != null) {
     const json = JSON.stringify(section.data);
-    data = json.length > SECTION_DATA_CHARS ? `${json.slice(0, SECTION_DATA_CHARS)}…` : section.data;
+    data = json.length > dataChars ? `${json.slice(0, dataChars)}…` : section.data;
   }
   return {
     topic: section.id,
@@ -352,18 +453,143 @@ function sectionForModel(section) {
     coverage: section.coverage,
     unavailable_reason: section.unavailable_reason || null,
     data,
+    // A cut section says so, and how to read more of it while it shares the read with others.
+    ...(typeof data === 'string' ? {
+      cut: dataChars < NAMED_SECTIONS_DATA_CHARS ? 'Cut short here. get_place_facts with only this topic reads more of it.' : 'Cut short here.',
+    } : {}),
   };
 }
 
-async function getPlaceFacts(args, ctx) {
+/** `value` without nulls, empty strings and empty lists or objects; undefined when nothing is left. */
+function withoutEmpty(value) {
+  if (Array.isArray(value)) {
+    const list = value.map(withoutEmpty).filter((item) => item !== undefined);
+    return list.length ? list : undefined;
+  }
+  if (value && typeof value === 'object') {
+    const entries = Object.entries(value).map(([key, item]) => [key, withoutEmpty(item)]).filter(([, item]) => item !== undefined);
+    return entries.length ? Object.fromEntries(entries) : undefined;
+  }
+  return value === null || value === '' ? undefined : value;
+}
+
+const shortDate = (isoDate) => {
+  const date = DateTime.fromISO(String(isoDate || ''));
+  return date.isValid ? date.toFormat('LLL d') : isoDate;
+};
+
+const ALERT_RANK = { warning: 0, watch: 1, advisory: 2 };
+
+// The line for sections whose data has no sentence of its own and runs long.
+const BRIEFS = {
+  weather: (data) => {
+    const hours = nextHours(data.hourly);
+    const sky = String(data.condition_label || words(data.condition_code) || '').toLowerCase();
+    return [
+      data.current_temp_f != null ? `${data.current_temp_f}°F${sky ? ` and ${sky}` : ''} now` : null,
+      data.high_f != null && data.low_f != null ? `high ${data.high_f}°F, low ${data.low_f}°F` : null,
+      hours.length ? `up to ${Math.max(...hours.map((hour) => hour.precip_chance || 0))}% chance of rain or snow in the next 24 hours` : null,
+    ].filter(Boolean).join('; ');
+  },
+  air_quality: (data) => `AQI ${data.index}, ${data.category_label}. ${data.health_message || ''}`,
+  // The strongest first, by their short names.
+  alerts: (data) => {
+    const active = Array.isArray(data.active) ? [...data.active] : [];
+    if (!active.length) return 'No active alerts';
+    return active.sort((a, b) => (ALERT_RANK[a.severity] ?? 3) - (ALERT_RANK[b.severity] ?? 3))
+      .map((alert) => alert.event || alert.headline).join('; ');
+  },
+  good_day_to: (data) => (data.tiles || []).map((tile) => `${tile.label} (${tile.verdict}): ${tile.answer}`).join('; '),
+  // Each kind of date once, at its next date, saying when it isn't confirmed.
+  address_calendar: (data) => {
+    const seen = new Set();
+    const next = (data.upcoming || []).filter((entry) => !seen.has(entry.title) && seen.add(entry.title));
+    const confirmed = (entry) => entry.confidence === 'official' || entry.scope === 'home';
+    return `${data.needs_pickup_day ? 'Pickup day not set. ' : ''}${next.map((entry) => `${entry.title}, ${shortDate(entry.date)}${entry.moved_from ? ` (moved from ${shortDate(entry.moved_from)})` : ''}${confirmed(entry) ? '' : ' (not confirmed)'}`).join('; ')}`;
+  },
+  // The ledger's own headline, and ages estimated from the year built marked as such.
+  home_systems: (data) => {
+    const systems = data.systems || [];
+    const known = systems.filter((system) => system.age_years != null);
+    const allEstimated = known.length > 0 && known.every((system) => system.source === 'estimated');
+    const age = (system) => (system.age_years == null
+      ? 'age unknown'
+      : `${system.age_years} years${!allEstimated && system.source === 'estimated' ? ' (estimated)' : ''}`);
+    return [
+      data.summary?.headline,
+      `${allEstimated ? 'Ages estimated from the year built: ' : ''}${systems.map((system) => `${system.label} ${age(system)}`).join('; ')}`,
+    ].filter(Boolean).join(' ');
+  },
+  exemption_check: (data) => [
+    data.filing_status === 'on_file'
+      ? `On file: ${(data.exemptions || []).join(', ')}${data.homestead_on_file === false ? ' (no homestead exemption)' : ''}.`
+      : (data.filing_status ? `Filing status: ${words(data.filing_status)}.` : null),
+    data.state_program ? `${data.state_program.label}: ${data.state_program.note}` : null,
+  ].filter(Boolean).join(' '),
+  civic_districts: (data) => (data.representatives || []).map((person) => `${person.name} (${person.office})`).join('; '),
+  // After Election Day the Ballot card says where the count stands instead of a countdown.
+  civic_election: (data) => {
+    const after = data.phase === 'after';
+    let when = '';
+    if (!after && data.days_until === 0) when = ' (today)';
+    else if (!after && data.days_until > 0) when = ` (in ${data.days_until} day${data.days_until === 1 ? '' : 's'})`;
+    return [
+      `${data.name}, ${shortDate(data.date)}${when}.`,
+      after ? data.note : null,
+      ...(data.deadlines || []).map((deadline) => deadline.teaser_lead).filter(Boolean),
+      data.how_it_works,
+    ].filter(Boolean).join(' ');
+  },
+};
+
+/**
+ * A section in one short line, for the Place tab's own context: the line above for its
+ * kind, else its data when that is short, else its own sentence, else the start of its
+ * data. Each section of the tab fits, where whole (or cut to SECTION_DATA_CHARS) the
+ * context ran out after 9 of 22. get_place_facts reads the details.
+ */
+function sectionBrief(section, zone) {
+  let summary = null;
+  if (section.data != null) {
+    const data = withoutEmpty(section.data);
+    const json = data === undefined ? '' : JSON.stringify(data);
+    const sentence = data && [data.summary, data.headline, data.plain_meaning].find((text) => typeof text === 'string');
+    summary = (BRIEFS[section.id] && BRIEFS[section.id](section.data))
+      || (data !== undefined && json.length <= SECTION_BRIEF_CHARS ? data : null)
+      || sentence
+      || json
+      || null;
+    if (typeof summary === 'string') summary = clip(summary, SECTION_BRIEF_CHARS);
+  }
+  return {
+    topic: section.id,
+    ...(section.status !== 'ready' ? { status: section.status } : {}),
+    ...(section.access !== 'available' ? { access: section.access } : {}),
+    ...(section.coverage && section.coverage !== 'full' ? { coverage: section.coverage } : {}),
+    source: section.source || null,
+    as_of: localDate(section.as_of, zone),
+    ...(section.unavailable_reason ? { unavailable_reason: clip(section.unavailable_reason, 160) } : {}),
+    ...(summary != null ? { summary } : {}),
+  };
+}
+
+/**
+ * Facts from a home's Place tab. The tool gives sections read by name a shared budget. A
+ * screen's context keeps SECTION_DATA_CHARS a section (`screen`), so it fits, and the Place
+ * tab's own context gives each section in one line instead of its data (`brief`).
+ */
+async function getPlaceFacts(args, ctx, { screen = false, brief = false } = {}) {
   const home = await chosenHome(ctx.userId, args.home_id);
   if (!home) return { error: 'They have no home in Pantopus yet. Their Place tab is where they add one.' };
-  const topics = Array.isArray(args.topics) ? args.topics.filter((id) => PLACE_SECTION_IDS.includes(id)) : null;
-  const intelligence = await readSections(home.id, ctx.userId, topics && topics.length ? topics : null);
+  const topics = Array.isArray(args.topics) ? [...new Set(args.topics.filter((id) => PLACE_SECTION_IDS.includes(id)))] : [];
+  const intelligence = await readSections(home.id, ctx.userId, topics.length ? topics : null, ctx.user);
   if (!intelligence) return { error: "They can't see this home's Place facts." };
+  const zone = intelligence.time_zone || ctx.timeZone;
+  const dataChars = topics.length && !screen ? Math.max(SECTION_DATA_CHARS, Math.floor(NAMED_SECTIONS_DATA_CHARS / topics.length)) : SECTION_DATA_CHARS;
   return {
     home: { home_id: home.id, city: home.city, state: home.state },
-    sections: sectionsOf(intelligence).map(sectionForModel),
+    ...(brief ? { note: 'Each section in short. get_place_facts with its topic reads the details.' } : {}),
+    sections: sectionsOf(intelligence).map((section) => (brief ? sectionBrief(section, zone) : sectionForModel(section, zone, dataChars))),
   };
 }
 
@@ -432,24 +658,30 @@ async function getToday(args, ctx) {
       if (!(await plansOn(ctx))) return null;
       const viewer = await loadViewer({ id: ctx.userId, role: ctx.user?.role || null });
       const mine = await planService.listMine(viewer);
-      const today = todayIn(ctx.timeZone);
+      // The Today card's rule: under way now, or starting today in the plan's own time zone
+      // (starts_on). UTC's date put a 5:30 PM plan in California on tomorrow.
       return [...mine.hosting, ...mine.going]
-        .filter((card) => card.starts_at && card.starts_at.slice(0, 10) <= today && card.ends_at && card.ends_at.slice(0, 10) >= today)
+        .filter((card) => card.state === 'live'
+          || (card.state === 'upcoming' && card.starts_on && card.starts_on === todayIn(card.timezone || ctx.timeZone)))
         .map((card) => planForModel(card, ctx.timeZone));
     })().catch(() => null),
   ]);
-  const endOfToday = new Date(`${todayIn(ctx.timeZone)}T23:59:59Z`).getTime();
+  // Due by the end of their day, overdue ones included, soonest first.
+  const today = todayIn(ctx.timeZone);
   const due = tasks
-    ? tasks.records.filter((task) => task.due_at && new Date(task.due_at).getTime() <= endOfToday + 12 * 60 * 60 * 1000)
-      .map((task) => taskForModel(task, tasks.names, ctx.timeZone))
+    ? tasks.records.filter((task) => task.due_at && localDate(task.due_at, ctx.timeZone) <= today)
+      .sort((a, b) => (Date.parse(a.due_at) || 0) - (Date.parse(b.due_at) || 0))
     : null;
+  // The screen's sections come first, so a long day's context is cut in its plans and tasks
+  // (find_plans and list_home_tasks have them all), never in its weather and alerts.
   return {
     note: OTHERS_WORDS,
     today: dayLabel(new Date().toISOString(), ctx.timeZone),
     home: { home_id: home.id, city: home.city, state: home.state },
-    sections: sectionsOf(intelligence).map(sectionForModel),
+    sections: sectionsOf(intelligence).map((section) => sectionForModel(section, intelligence.time_zone || ctx.timeZone)),
     plans_today: plans,
-    tasks_due: due,
+    tasks_due: due ? due.slice(0, TODAY_TASKS).map((task) => taskForModel(task, tasks.names, ctx.timeZone)) : null,
+    ...(due && due.length > TODAY_TASKS ? { more_tasks_due: due.length - TODAY_TASKS } : {}),
   };
 }
 
@@ -493,10 +725,11 @@ async function runReadTool(name, args, ctx) {
 
 module.exports = {
   readToolDefinitions,
+  playdateReadToolDefinitions,
   runReadTool,
   READ_EXECUTORS,
   PLAN_TOOLS,
-  PLAN_KINDS,
+  planKinds,
   PLACE_POST_TYPES,
   // For screen context.
   planForModel,
