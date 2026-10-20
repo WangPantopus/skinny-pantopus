@@ -154,6 +154,8 @@ const TOOL_STATUS = {
   draft_post_reply: 'Drafting your reply…',
   draft_post_solve: 'Getting it ready to mark solved…',
   draft_home_task: 'Drafting the task…',
+  draft_home_system: 'Getting your home\'s record ready…',
+  draft_home_asset: 'Getting your home\'s record ready…',
   draft_notification_settings: 'Drafting your settings…',
   show_link: 'Finding the screen…',
 };
@@ -271,15 +273,20 @@ async function updateConversation(conversationId, { messages, messageCount, titl
 
 // ─── 1. Streaming Chat Agent ────────────────────────────────────────────────
 
+// A PDF's upload reference keeps its file's extension (routes/upload.js), so the chat can
+// tell a document from a photo before reading it.
+const isPdfReference = (source) => typeof source === 'string' && /\.pdf$/i.test(source);
+
 /**
- * The person's message as Claude's content: photos first, then the text, then
- * the app's lines (when it was sent, which the model can't know, the screen it
- * was sent from, and the coarse location the client reports).
+ * The person's message as Claude's content: photos and documents first, then the
+ * text, then the app's lines (when it was sent, which the model can't know, the
+ * screen it was sent from, and the coarse location the client reports).
  */
 function buildUserContent({ message, photos, unreadable, timeZone, askedFrom, coarseLocation, contextText }) {
   let text = message;
   if (unreadable) {
-    text += `\n\n[${unreadable} of the ${photos.length + unreadable} photos couldn't be opened, so they aren't included.]`;
+    const noun = photos.some((block) => block.type === 'document') ? 'files' : 'photos';
+    text += `\n\n[${unreadable} of the ${photos.length + unreadable} ${noun} couldn't be opened, so they aren't included.]`;
   }
   text += `\n\n[Sent: ${describeNow(timeZone)}]`;
   if (coarseLocation) {
@@ -303,7 +310,7 @@ function buildUserContent({ message, photos, unreadable, timeZone, askedFrom, co
  * @param {string} [params.conversationId]
  * @param {string} params.message
  * @param {object} [params.coarseLocation]
- * @param {string[]} [params.images] — Photos to include: the person's uploads (ai-photo: references) or image URLs
+ * @param {string[]} [params.images] — Photos and PDFs to include: the person's uploads (ai-photo: references) or image URLs
  * @param {AbortSignal} [params.signal] — Aborts when the client disconnects, which stops the model call
  * @param {object} sseWriter — { write(event, data), end() }
  */
@@ -384,8 +391,13 @@ async function streamChat({
     userId, user: viewer, sessionScope: sessionScope || null, timeZone: context.timeZone || undefined, plansEnabled,
   };
   if (images?.length && photos.length === 0) {
-    // Answering without the photo would only confuse: say it couldn't be opened.
-    sseWriter.write('error', { error: 'AI_ERROR', message: "I couldn't open that photo. Try a JPEG or PNG, or a different photo." });
+    // Answering without the photo or PDF would only confuse: say it couldn't be opened.
+    sseWriter.write('error', {
+      error: 'AI_ERROR',
+      message: images.some(isPdfReference)
+        ? "I couldn't open that file. Try a PDF that isn't password-protected, or a photo of the page."
+        : "I couldn't open that photo. Try a JPEG or PNG, or a different photo.",
+    });
     sseWriter.end();
     await logChat({ status: 'error', errorMessage: 'unreadable_photos' });
     return;
@@ -523,12 +535,10 @@ async function streamChat({
     }
 
     logger.error('streamChat error', { userId, error: err.message, stack: err.stack });
-    sseWriter.write('error', {
-      error: 'AI_ERROR',
-      message: isImageError(err)
-        ? "I couldn't read that photo. Please try a different one."
-        : 'Something went wrong with the AI. Please try again.',
-    });
+    let message = 'Something went wrong with the AI. Please try again.';
+    if (images?.some(isPdfReference) && isDocumentError(err)) message = "I couldn't read that PDF. Try one that isn't password-protected, or a photo of the page.";
+    else if (isImageError(err)) message = "I couldn't read that photo. Please try a different one.";
+    sseWriter.write('error', { error: 'AI_ERROR', message });
     sseWriter.end();
     await logChat({ status: 'error', errorMessage: err.message, ...tokens });
     return;
@@ -1353,12 +1363,14 @@ const DRAFT_TYPES = {
 // Lines the app adds to a person's message, which aren't theirs to see again.
 const APP_LINES = [
   /\n*\[(?:Sent|Asked from|User location context): [^\]\n]*\]/g,
-  /\n*\[\d+ of the \d+ photos couldn't be opened[^\]\n]*\]/g,
+  /\n*\[\d+ of the \d+ (?:photos|files) couldn't be opened[^\]\n]*\]/g,
 ];
-// The note that stands in for a stored photo (agentLoop.compactForStorage).
+// The notes that stand in for a stored photo or document (agentLoop.compactForStorage).
 const PHOTO_NOTE = /^\[(?:Photo attached|(\d+) photos attached)\./;
-// What the apps send for photos sent without words: not the person's, so the apps show "Sent a photo" instead.
-const PHOTO_ONLY_QUESTION = 'What can you tell me about this image?';
+const DOCUMENT_NOTE = /^\[(?:Document attached|(\d+) documents attached)\./;
+// What the apps send for photos or documents sent without words: not the person's, so the apps
+// show "Sent a photo" instead.
+const ONLY_ATTACHED_QUESTIONS = new Set(['What can you tell me about this image?', 'What can you tell me about this document?']);
 
 function personText(text) {
   // A model without system messages got Pantopus's context at the top of the message.
@@ -1408,15 +1420,19 @@ function displayMessages(stored) {
       flushLinks();
       turnStart = items.length;
       let photos = 0;
+      let documents = 0;
       const texts = [];
       for (const block of blocks) {
         if (block.type !== 'text') continue;
-        const note = PHOTO_NOTE.exec(block.text);
-        if (note) photos += note[1] ? Number(note[1]) : 1;
+        const photo = PHOTO_NOTE.exec(block.text);
+        const document = DOCUMENT_NOTE.exec(block.text);
+        if (photo) photos += photo[1] ? Number(photo[1]) : 1;
+        else if (document) documents += document[1] ? Number(document[1]) : 1;
         else texts.push(block.text);
       }
       const said = personText(texts.join('\n'));
-      items.push({ role: 'user', text: photos && said === PHOTO_ONLY_QUESTION ? '' : said, photos });
+      const onlyAttached = (photos || documents) && ONLY_ATTACHED_QUESTIONS.has(said);
+      items.push({ role: 'user', text: onlyAttached ? '' : said, photos, ...(documents ? { documents } : {}) });
       continue;
     }
     let text = '';
