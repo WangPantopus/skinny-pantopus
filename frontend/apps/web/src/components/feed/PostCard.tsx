@@ -11,7 +11,8 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import * as api from '@pantopus/api';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
-import FeedMediaImage from './FeedMediaImage';
+import { PostMediaPreview, resolvePostMediaSlots } from './PostMediaGrid';
+import { PostLinkContent } from './LinkPreviewCard';
 import LinkPreviewCard from './LinkPreviewCard';
 import { formatDistance, formatTimeAgo as timeAgo, getPostTypeConfig, POST_TYPE_ICONS_LUCIDE, type PostTypeConfig } from '@pantopus/ui-utils';
 import { chosenUsername } from '@pantopus/utils';
@@ -332,11 +333,11 @@ function PostCard({
         >
           {post.content.length > 400 ? (
             <>
-              {post.content.slice(0, 400)}
+              <PostLinkContent content={post.content.slice(0, 400)} />
               <span className="text-app-link font-medium">… Read more</span>
             </>
           ) : (
-            post.content
+            <PostLinkContent content={post.content} />
           )}
         </p>
       </div>
@@ -391,16 +392,9 @@ function PostCard({
                 post.media_urls.length === 1 ? 'aspect-video' : 'aspect-square'
               } ${post.media_urls.length === 3 && idx === 0 ? 'row-span-2 aspect-auto' : ''}`}
             >
-              {(post.media_types?.[idx] !== 'video' || post.media_thumbnails?.[idx]) && (
-                <FeedMediaImage src={post.media_thumbnails?.[idx] || url} alt="" className="w-full h-full object-cover" loading="lazy" />
-              )}
-              {post.media_types?.[idx] === 'video' && (
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-black/50">
-                    <svg viewBox="0 0 24 24" fill="white" className="ml-0.5 h-5 w-5"><path d="M8 5v14l11-7z" /></svg>
-                  </div>
-                </div>
-              )}
+              <PostMediaPreview url={url} thumbnailUrl={post.media_thumbnails?.[idx]} slot={resolvePostMediaSlots(post.media_urls, post.media_types, post.media_live_urls)[idx]} onPress={openFullPost} />
+
+
               {idx === 3 && post.media_urls.length > 4 && (
                 <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
                   <span className="text-white font-bold text-lg">+{post.media_urls.length - 4}</span>

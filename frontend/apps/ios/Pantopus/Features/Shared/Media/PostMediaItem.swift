@@ -14,6 +14,7 @@ import Foundation
 public enum PostMediaKind: Sendable, Hashable {
     case image
     case video
+    case document
     /// Still image + short companion video clip (iPhone Live Photo).
     case livePhoto
 }
@@ -78,6 +79,7 @@ public struct PostMediaItem: Sendable, Hashable, Identifiable {
                 }
             }
             let kind: PostMediaKind = switch types?[safe: index]?.lowercased() {
+            case "document": .document
             case "video": .video
             case "live_photo" where liveVideoURL != nil: .livePhoto
             default: .image

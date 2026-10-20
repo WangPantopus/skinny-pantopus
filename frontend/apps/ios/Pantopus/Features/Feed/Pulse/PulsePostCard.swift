@@ -282,7 +282,7 @@ public struct PulsePostCard: View {
                     .lineLimit(1)
             }
             if !content.body.isEmpty {
-                Text(content.body)
+                PostLinkText(content.body)
                     .font(.system(size: 12.5))
                     .foregroundStyle(Theme.Color.appTextStrong)
                     .lineLimit(content.title?.isEmpty == false ? 2 : 3)

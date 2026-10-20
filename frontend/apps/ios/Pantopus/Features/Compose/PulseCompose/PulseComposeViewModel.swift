@@ -212,17 +212,26 @@ public struct PulseComposePhoto: Identifiable, Sendable, Hashable {
     /// place-picker anchor hint ONLY — never sent on any request.
     public let capturedLatitude: Double?
     public let capturedLongitude: Double?
+    public let mimeType: String?
+    public let filename: String?
+    public let liveVideo: Data?
 
     public init(
         id: UUID = UUID(),
         data: Data,
         capturedLatitude: Double? = nil,
-        capturedLongitude: Double? = nil
+        capturedLongitude: Double? = nil,
+        mimeType: String? = nil,
+        filename: String? = nil,
+        liveVideo: Data? = nil
     ) {
         self.id = id
         self.data = data
         self.capturedLatitude = capturedLatitude
         self.capturedLongitude = capturedLongitude
+        self.mimeType = mimeType
+        self.filename = filename
+        self.liveVideo = liveVideo
     }
 }
 
@@ -779,19 +788,27 @@ public final class PulseComposeViewModel {
                 return false
             }
             if !photos.isEmpty {
-                let files = photos.enumerated().map { index, photo in
-                    photo.asMultipartFile(index: index)
+                var files: [MultipartFile] = []
+                let slots = photos.enumerated().map { index, photo in
+                    var slot = ["fileIndex": files.count]
+                    files.append(photo.asMultipartFile(index: index))
+                    if let clip = photo.liveVideo {
+                        slot["liveVideoIndex"] = files.count
+                        files.append(MultipartFile(fieldName: "files", filename: "live-\(index).mp4", mimeType: "video/mp4", data: clip))
+                    }
+                    return slot
                 }
+                let metadata = try String(bytes: JSONEncoder().encode(slots), encoding: .utf8)
                 do {
-                    _ = try await multipartUploader.uploadPostMedia(postId: postId, files: files)
+                    _ = try await multipartUploader.uploadPostMedia(postId: postId, files: files, media: metadata)
                 } catch {
                     toast = ToastMessage(
                         text: isEditing
-                            ? "Saved. Photos could not be confirmed. Try again."
-                            : "Post saved. Photos could not be confirmed. Try again.",
+                            ? "Saved. Attachments could not be confirmed. Try again."
+                            : "Post saved. Attachments could not be confirmed. Try again.",
                         kind: .error
                     )
-                    state = .error(toast?.text ?? "Photos could not be confirmed. Try again.")
+                    state = .error(toast?.text ?? "Attachments could not be confirmed. Try again.")
                     PulsePostsRefresh.notifyPostsDidChange()
                     Analytics.track(.formPulseComposeSubmit(intent: activeIntent.rawValue, result: .error))
                     return false
@@ -1343,8 +1360,13 @@ public final class PulseComposeViewModel {
 
 private extension PulseComposePhoto {
     func asMultipartFile(index: Int) -> MultipartFile {
-        let (filename, mimeType) = Self.mimeInfo(for: data, index: index)
-        return MultipartFile(fieldName: "files", filename: filename, mimeType: mimeType, data: data)
+        let inferred = Self.mimeInfo(for: data, index: index)
+        return MultipartFile(
+            fieldName: "files",
+            filename: filename ?? inferred.filename,
+            mimeType: mimeType ?? inferred.mimeType,
+            data: data
+        )
     }
 
     static func mimeInfo(for data: Data, index: Int) -> (filename: String, mimeType: String) {
