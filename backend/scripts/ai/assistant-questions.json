@@ -125,6 +125,29 @@
       }
     },
     {
+      "id": "settings-suggestions-on",
+      "as": "guest",
+      "say": "Turn on suggestions from Pantopus",
+      "expect": {
+        "card": "notification_settings",
+        "cardBodyHas": {
+          "suggestions_enabled": true
+        },
+        "textNotMatches": "^(Done|I've turned|Turned on|Suggestions are now on)"
+      },
+      "note": "Phase 2 (contract §3.4): draft_notification_settings carries suggestions_enabled. Nothing is saved until the card is tapped."
+    },
+    {
+      "id": "app-what-are-suggestions",
+      "as": "neighbor",
+      "say": "What are suggestions from Pantopus?",
+      "expect": {
+        "noCard": true,
+        "textMatches": "(two|2) (nudges|a day)|morning (brief|briefing)"
+      },
+      "note": "Phase 2: the guide's sentence on Suggestions (appGuide.js)."
+    },
+    {
       "id": "doc-label-photo-gives-system-year",
       "as": "owner",
       "context": {

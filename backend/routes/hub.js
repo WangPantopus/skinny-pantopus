@@ -805,6 +805,9 @@ router.get('/preferences', verifyToken, async (req, res) => {
       custom_latitude: null,
       custom_longitude: null,
       custom_label: null,
+      // Suggestions from Pantopus: null until the person chooses (treated as off).
+      suggestions_enabled: null,
+      suggestions_muted: {},
     };
 
     prefs.daily_briefing_timezone = await resolveNotificationTimezone(req.user.id, prefs) || 'UTC';
@@ -844,6 +847,11 @@ const preferencesSchema = Joi.object({
   custom_latitude: Joi.number().min(-90).max(90).allow(null),
   custom_longitude: Joi.number().min(-180).max(180).allow(null),
   custom_label: Joi.string().max(255).allow(null, ''),
+  // Suggestions from Pantopus (the AI morning brief and nudges). Only new app builds send it.
+  suggestions_enabled: Joi.boolean(),
+  // "Reset 'Fewer like this'": an empty object clears every mute; mutes are set by
+  // POST /api/ai/nudges/:id/fewer, never here.
+  suggestions_muted: Joi.object().max(0),
 }).min(1);
 
 router.put('/preferences', verifyToken, validate(preferencesSchema), async (req, res) => {

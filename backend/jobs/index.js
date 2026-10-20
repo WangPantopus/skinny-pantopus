@@ -105,6 +105,8 @@ const authRegistryPrune = require('./authRegistryPrune');
 const { runSupportTrainReminders } = require('./supportTrainReminders');
 // Nearby Plans: held pushes, reminders, lifecycle and the host's summary
 const { runPlansTick } = require('./planJobs');
+// Assistant nudges and briefs: pushes held for quiet hours
+const { releaseHeldNudges } = require('../services/ai/nudges/engine');
 const { runBookingReminders } = require('./bookingReminders');
 // Payment health alerting
 const { checkAndAlertStuckPayments } = require('../routes/paymentOps');
@@ -702,6 +704,15 @@ function startJobs(options = {}) {
   // plans, closing chats 24h after the end, reminders and the 8 AM host summary.
   // Every send is claimed first, so overlapping runners don't repeat a notice.
   scheduleCron('*/5 * * * *', wrapJob('plansTick', runPlansTick), {
+    scheduled: true,
+    timezone: 'UTC',
+  });
+
+  // ─── Assistant suggestions ───
+  // Every 5 minutes: nudge and brief pushes held for quiet hours go out once they end,
+  // or are dropped if the nudge expired or Suggestions was turned off meanwhile.
+  // Each send is claimed first, like the Plans tick's.
+  scheduleCron('*/5 * * * *', wrapJob('assistantHeldPushes', releaseHeldNudges), {
     scheduled: true,
     timezone: 'UTC',
   });
