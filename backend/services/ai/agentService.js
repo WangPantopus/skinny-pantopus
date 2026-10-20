@@ -422,6 +422,8 @@ async function streamChat({
   const usage = emptyUsage();
   const replyText = plainTextStream((delta) => sseWriter.write('text_delta', { delta }));
   let firstTextMs = null;
+  // Link buttons (show_link) go out after the reply's text, just before `done`.
+  const links = [];
   let turn;
   try {
     // Send conversation ID immediately
@@ -456,7 +458,14 @@ async function streamChat({
           ? await executeTool(name, use.input || {}, toolContext)
           : { error: `Unknown tool: ${use.name}. The tools are: ${toolNames.join(', ')}.` };
         ran.set(use.id, { name, result });
-        if (result.link) sseWriter.write('link', result.link);
+        if (result.link) {
+          links.push(result.link);
+          // On Claude Sonnet 5.5, text written just before a tool call can come back as a
+          // hidden progress note, so the model is told what the person has actually seen.
+          result.next = firstTextMs === null
+            ? "They see only the button so far. Write your whole answer now; it shows above the button. Don't mention the button."
+            : "The button shows under your reply. Finish your reply if anything is missing, without repeating what you wrote or mentioning the button.";
+        }
         if (result.draftType) {
           sseWriter.write('draft', {
             type: result.draftType,
@@ -471,8 +480,15 @@ async function streamChat({
           ...(result.error ? { is_error: true } : {}),
         };
       },
-      // Drafts that came out valid are the answer: the turn ends at their cards.
-      finishAfterTools: (uses) => closingForDrafts(uses.map((use) => ran.get(use.id))),
+      // Drafts that came out valid are the answer: the turn ends at their cards. So does a
+      // reply that showed its answer and then its link buttons: another round would only
+      // describe the button or say the answer again.
+      finishAfterTools: (uses, { said }) => {
+        const calls = uses.map((use) => ran.get(use.id));
+        const linked = calls.length > 0 && calls.every((call) => call?.name === 'show_link' && call.result.link);
+        if (linked) return said && !said.endsWith(':') ? true : null;
+        return closingForDrafts(calls);
+      },
     });
   } catch (err) {
     const tokens = { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens };
@@ -560,6 +576,7 @@ async function streamChat({
 
   // Send done event
   replyText.flush();
+  for (const link of links) sseWriter.write('link', link);
   sseWriter.write('done', {
     conversationId: conversation.id,
     usage: { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens },

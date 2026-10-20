@@ -59,7 +59,7 @@ function linkFor(screen, id = null, extra = {}) {
 
 const showLinkDefinition = {
   name: 'show_link',
-  description: 'Show a button under your reply that opens a screen in the app. Write your whole answer first and call this last, only when your answer sends them to that screen to do something ("open notification settings", "see who asked to join"); never instead of answering, and never for something they didn\'t ask about. Ids come from your tools or the screen context. At most two per reply.',
+  description: 'Show a button under your reply that opens a screen in the app, when your answer sends them to that screen to do something ("open notification settings", "see who asked to join"). Call it before you write your answer, like a lookup, then write your whole answer: the button shows under it, so don\'t mention the button. Never use it instead of answering, or for something they didn\'t ask about. Ids come from your tools or the screen context. At most two per reply.',
   input_schema: {
     type: 'object',
     properties: {
@@ -82,13 +82,8 @@ function runShowLink(args, ctx) {
   const url = linkFor(args.screen, args.id, { home: args.home_id, section: args.section });
   if (!url) return { error: 'That screen needs a valid id from your tools or the screen context.' };
   const label = typeof args.label === 'string' && args.label.trim() ? args.label.trim().slice(0, 40) : entry[2];
-  // When the model links before it has answered, this result is what it reads next: steer it
-  // back to the question so the reply is the answer, not a line about the button.
-  return {
-    link: { label, url },
-    shown: true,
-    next: 'The button now shows under your reply. Answer their question in full now, as if the button were not there, and don\'t mention the button.',
-  };
+  // The chat adds what to do next, from what the person has seen of the reply so far.
+  return { link: { label, url }, shown: true };
 }
 
 // ─── The guide ─────────────────────────────────────────────────────────────
