@@ -228,6 +228,10 @@ struct AIActionCardView: View {
         case "plan_message": ("Message", .messageCircle)
         case "post_reply", "post_solve": ("Post", .messageSquare)
         case "home_task": ("Task", .checkCircle)
+        case "home_task_update": ("Task update", .checkCheck)
+        case "home_system": ("Home system", .wrench)
+        // An appliance, the year's plan and any later home card.
+        case let other where other.hasPrefix("home_"): ("Home", .home)
         case "notification_settings": ("Notifications", .bell)
         default: ("Action", .sparkles)
         }

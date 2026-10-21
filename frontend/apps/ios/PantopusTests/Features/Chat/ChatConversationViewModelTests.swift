@@ -339,7 +339,7 @@ final class ChatConversationViewModelTests: XCTestCase {
         XCTAssertEqual(fakeAI.lastRequest?.images, ["ai-photo:photo.jpg"])
         guard case let .loaded(rows) = vm.state,
               case let .bubble(content)? = rows.first(where: { $0.id.hasPrefix("bubble_ai_user_") }),
-              case let .textWithImages(text, urls) = content.body else {
+              case let .textWithImages(text, urls, _) = content.body else {
             XCTFail("Expected outgoing image prompt bubble")
             return
         }

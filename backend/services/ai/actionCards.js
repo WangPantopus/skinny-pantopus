@@ -328,7 +328,7 @@ const actionCardDefinitions = [
         brand: nullable({ type: 'string' }),
         model: nullable({ type: 'string', description: 'The model name or number on the label. Never the serial number.' }),
         room: nullable({ type: 'string', description: 'Where it is, e.g. "Kitchen".' }),
-        purchase_date: nullable({ type: 'string', description: 'The day it was bought or installed, YYYY-MM-DD.' }),
+        purchase_date: nullable({ type: 'string', description: 'The day it was bought, YYYY-MM-DD. Null if unknown; an installation date is not a purchase date. Save installation details with draft_home_system instead.' }),
         warranty_ends: nullable({ type: 'string', description: 'The last day of its warranty, YYYY-MM-DD.' }),
         source: {
           type: ['object', 'null'],

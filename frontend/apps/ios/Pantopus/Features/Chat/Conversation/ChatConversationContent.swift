@@ -512,11 +512,25 @@ public struct ChatShareListingOption: Identifiable, Sendable, Hashable {
     }
 }
 
+/// A file sent to the assistant: its name and size for the bubble's chip.
+/// The file itself isn't kept; the server deletes it once it has read it.
+public struct ChatSentFile: Sendable, Hashable {
+    public let name: String
+    public let sizeLabel: String?
+
+    public init(name: String, sizeLabel: String?) {
+        self.name = name
+        self.sizeLabel = sizeLabel
+    }
+}
+
 /// Per-bubble render model.
 public struct ChatBubbleContent: Identifiable, Sendable, Hashable {
     public enum Body: Sendable, Hashable {
         case text(String)
-        case textWithImages(text: String, imageURLs: [URL])
+        /// Text with photos and, for a message sent to the assistant, the
+        /// PDFs it carried (`files`, shown as file chips).
+        case textWithImages(text: String, imageURLs: [URL], files: [ChatSentFile] = [])
         /// One or more photos. `caption` is the text sent with them;
         /// `moreURLs` are the message's further photos after `url`.
         case image(url: URL?, caption: String? = nil, moreURLs: [URL] = [])
