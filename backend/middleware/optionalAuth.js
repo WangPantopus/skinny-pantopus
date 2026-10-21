@@ -5,7 +5,8 @@
  * populate req.user = { id, email }.  Otherwise set req.user = null
  * and continue — never returns 401. A token the auth service rejected
  * (invalid, expired or revoked; not an unreachable service) also sets
- * req.authRejected, for routes whose signed-in view differs.
+ * req.authRejected, for routes whose signed-in view differs. An inconclusive
+ * check sets req.authUnavailable so those routes can offer a retry instead.
  *
  * Uses a short-lived in-memory token→user cache (15 s) to avoid
  * hitting Supabase auth on every request.
@@ -20,7 +21,7 @@ const { verifyAccessToken } = require('../services/accessTokenVerifier');
 // ── Token → user cache (15 s TTL) ──────────────────────────────
 const TOKEN_CACHE_TTL = 15_000;
 // An unreachable auth service is remembered briefly, so an outage answers fast
-// (anonymous) without pinning a valid user as signed out after it recovers.
+// without pinning a valid user as signed out after it recovers.
 const UNREACHABLE_TTL = 5_000;
 const UNREACHABLE = Symbol('auth-unreachable');
 const TOKEN_CACHE_MAX = 500;
@@ -69,6 +70,7 @@ function isRejection(error) {
 async function optionalAuth(req, _res, next) {
   req.user = null;
   req.authRejected = false;
+  req.authUnavailable = false;
 
   try {
     // Extract token: prefer Bearer header (mobile) over httpOnly cookie (web).
@@ -89,6 +91,7 @@ async function optionalAuth(req, _res, next) {
     if (cached !== undefined) {
       req.user = cached === UNREACHABLE ? null : cached;
       req.authRejected = cached === null; // only rejections are cached as null
+      req.authUnavailable = cached === UNREACHABLE;
       return next();
     }
 
@@ -98,8 +101,9 @@ async function optionalAuth(req, _res, next) {
     if (!verified.ok) {
       const error = verified.error;
       if (verified.reason === 'busy' || (error && !isRejection(error))) {
-        logger.debug('optionalAuth: auth service unreachable, treating as anonymous', { status: error?.status });
+        logger.debug('optionalAuth: auth service unavailable', { status: error?.status });
         setCache(token, UNREACHABLE);
+        req.authUnavailable = true;
         return next();
       }
       setCache(token, null);
@@ -135,7 +139,7 @@ async function optionalAuth(req, _res, next) {
     req.user = user;
   } catch (err) {
     logger.debug('optionalAuth: non-fatal error', { error: err.message });
-    // Continue as anonymous
+    req.authUnavailable = true;
   }
 
   next();
