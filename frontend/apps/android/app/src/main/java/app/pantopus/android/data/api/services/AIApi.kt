@@ -30,12 +30,15 @@ interface AIApi {
     suspend fun conversations(): AIConversationsResponse
 
     /**
-     * One conversation's earlier turns, for a restored thread.
-     * Route `backend/routes/ai.js:365`.
+     * One conversation's earlier turns, for a restored thread. [cards] is the
+     * chat request's card list, comma-separated: the server leaves out the
+     * cards an app doesn't list (AI assistant phase 1 contract, section 4.1).
+     * Route `backend/routes/ai.js:459`.
      */
     @GET("api/ai/conversations/{id}/messages")
     suspend fun conversationMessages(
         @Path("id") id: String,
+        @Query("cards") cards: String,
     ): AIConversationMessagesResponse
 
     /**
