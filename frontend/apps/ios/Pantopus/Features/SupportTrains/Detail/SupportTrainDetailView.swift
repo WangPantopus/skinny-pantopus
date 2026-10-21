@@ -198,7 +198,17 @@ public struct SupportTrainDetailView: View {
                     }
 
                     overline("For")
-                    RecipientCard(content: content.recipient)
+                    if viewModel.recipientDetailsAvailable {
+                        RecipientCard(content: content.recipient)
+                    } else {
+                        VStack(alignment: .leading, spacing: Spacing.s2) {
+                            Text("Recipient and delivery details need to be checked again.")
+                                .font(.system(size: 13.5))
+                                .foregroundStyle(Theme.Color.appTextSecondary)
+                            Button("Retry recipient details") { Task { await viewModel.refresh() } }
+                                .accessibilityIdentifier("supportTrainRetryDetails")
+                        }
+                    }
 
                     overline("The train")
                     TypeDatesCard(content: content.typeDates)
@@ -318,7 +328,7 @@ public struct SupportTrainDetailView: View {
     }
 
     private func signUpAction(for row: SlotRowContent) -> (@MainActor () -> Void)? {
-        guard row.state == .open, !signupsClosed else { return nil }
+        guard row.state == .open, !signupsClosed, viewModel.recipientDetailsAvailable else { return nil }
         return {
             viewModel.startReserve(slotId: row.slotId)
             onSignUp?()
@@ -559,6 +569,7 @@ public struct SupportTrainDetailView: View {
             SlotCalendar(days: days) { _ in
                 if !signupsClosed { viewModel.startReserve() }
             }
+            .disabled(!viewModel.recipientDetailsAvailable)
         }
         .padding(Spacing.s3)
         .frame(maxWidth: .infinity, alignment: .center)
@@ -577,7 +588,10 @@ public struct SupportTrainDetailView: View {
             Group {
                 switch dock {
                 case let .signUp(label):
-                    PrimarySignUpCTA(label: label) {
+                    PrimarySignUpCTA(
+                        label: viewModel.recipientDetailsAvailable ? label : "Refresh to sign up",
+                        isEnabled: viewModel.recipientDetailsAvailable
+                    ) {
                         viewModel.startReserve()
                         onSignUp?()
                     }
