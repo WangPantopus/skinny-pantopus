@@ -189,7 +189,7 @@ Apple: **Health**. Google Play: **Health info**.
 
 ### 2.11 AI processing (Anthropic) — *App Functionality, Linked, not Tracking* — *new 2026-10*
 
-The Pantopus assistant (`POST /api/ai/chat`) and the AI drafting, photo-reading and
+The Pantopus assistant (`POST /api/ai/chat`) and the AI drafting, photo/PDF-reading and
 briefing features send data from the **backend** to **Anthropic** (Claude Sonnet 5.5,
 `backend/config/anthropic.js`), which processes it on our behalf. The apps never call
 Anthropic themselves; no Anthropic code ships in them.
@@ -197,12 +197,13 @@ Anthropic themselves; no Anthropic code ships in them.
 | Data | Evidence | Sent to | Kept by Pantopus |
 |------|----------|---------|------------------|
 | Messages to the assistant | `backend/routes/ai.js` `/chat` → `services/ai/agentService.js` `streamChat` | Anthropic | `AIConversation.messages`, with the replies |
-| Photos and files attached to the assistant or a draft (a hauler's flyer, a radon lab report) | `POST /api/upload/ai-media` → `services/ai/photos.js`; `/api/ai/draft/pickup-schedule`, `/api/ai/draft/radon-result` | Anthropic (inline) | `ai-chat/` storage objects: private and deleted right after the read; a sweep deletes leftovers older than 1 hour (#2458) |
+| Photos and PDFs attached to the assistant or a draft (a hauler's flyer, a radon lab report, a warranty) | `POST /api/upload/ai-media` → `services/ai/photos.js`; `/api/ai/draft/pickup-schedule`, `/api/ai/draft/radon-result` | Anthropic (inline) | `ai-chat/` storage objects: private and deleted right after the read; a sweep deletes leftovers older than 1 hour (#2458) |
 | What was on screen when the person tapped Ask (a plan, a post, a Place section, Today) | `services/ai/screenContext.js`, loaded with the screen's own access checks | Anthropic | in the conversation |
 | What the assistant looks up | `services/ai/readTools.js`: the person's homes, Place facts with their sources, household tasks and members' names, plans (other people's plans as an area only until accepted), Nearby posts and replies (other people's words are labeled as data), notification settings | Anthropic | in the conversation (each tool result clipped to 4,000 characters) |
 | City, time zone and approximate location | the context message (home city, pickup days, weather alerts) and the `[Sent: …]` / `[User location context: …]` lines | Anthropic | in the conversation |
 | Briefing and local-update text | `services/context/briefingComposer.js`, `services/context/localUpdateProvider.js`: the day's facts for the home (weather, alerts, pickup days) and nearby local updates | Anthropic | the briefing itself |
 | Draft requests (posts, Support Trains, tasks; property suggestions only when `PROPERTY_SUGGESTIONS_LLM=1`) | `/api/ai/draft/*`, `services/ai/supportTrainDraftService.js`, `services/magicTaskService.js`, `services/ai/propertySuggestionsService.js` | Anthropic | the draft only, if the person saves it |
+| Optional Suggestions | `services/ai/nudges/*` and `services/ai/background.js`: enabled by the account switch; one brief and up to two nudges per local day; Fewer like this mutes a kind for 30 days | Anthropic only for triggers that need a model | `Notification` and `AIConversation`; suggestion preferences and mute expirations in `UserNotificationPreferences` |
 | Request log (no message content) | `AIRequestLog`: feature, model, tokens, latency, status, error message | — | kept; `user_id` set to null when the account is deleted |
 
 **Not sent:** passwords, payment details, emergency and medical info (the assistant has
@@ -308,11 +309,13 @@ manifests and are **out of scope** for this file.
   requires the OS lock — design §2 principle 1); on Android nothing in app
   storage survives uninstall and the Block Store item is same-device only.
 - **AI (2026-10):** `AIConversation` rows are deleted with the account
-  (`ON DELETE CASCADE` from `User`). No app offers deleting one conversation
-  yet (the API has `DELETE /api/ai/conversations/:id`), so the policy promises
-  deletion with the account or on request. `AIRequestLog` keeps no content;
-  its `user_id` becomes null when the account is deleted. Assistant photos
-  (`ai-chat/`) are deleted after the read or within an hour (#2458). At
+  (`ON DELETE CASCADE` from `User`). The apps offer Delete conversation, which
+  removes all assistant conversations for that account through
+  `DELETE /api/ai/conversations/:id`; saved posts, tasks and home records remain.
+  `AIRequestLog` keeps no message content;
+  its `user_id` becomes null when the account is deleted. Assistant photos and PDFs
+  (`ai-chat/`) are deleted after the read; a periodic cleanup removes leftovers
+  older than an hour (#2458), so the interval is not a strict one-hour SLA. At
   Anthropic: per the account's retention setting (founder to confirm, §4).
 
 ---

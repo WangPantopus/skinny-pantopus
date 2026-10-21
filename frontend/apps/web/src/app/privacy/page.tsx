@@ -91,7 +91,7 @@ export default function PrivacyPage() {
               { label: 'Safety and moderation', detail: 'Detecting fraud, preventing abuse, enforcing community standards, and responding to reports.' },
               { label: 'Product improvement', detail: 'Understanding how features are used so we can make the platform more reliable and useful.' },
               { label: 'Communications', detail: 'Sending you notifications, important updates, and (with your consent) relevant product announcements.' },
-              { label: 'AI features', detail: 'Answering your questions in the Pantopus assistant, preparing posts, plans and reminders for you to check, writing your daily briefings, and reading photos you choose to share with it. Section 5 explains what this involves.' },
+              { label: 'AI features', detail: 'Answering your questions in the Pantopus assistant, preparing posts, plans and reminders for you to check, writing your daily briefings and optional suggestions, and reading photos and PDFs you choose to share with it. Section 5 explains what this involves.' },
             ]} />
           </PolicySection>
 
@@ -121,7 +121,7 @@ export default function PrivacyPage() {
 
           <PolicySection title="5. AI features and the Pantopus assistant">
             <p>
-              Pantopus has an assistant, called Pantopus in the app, that answers questions about your home and neighborhood, explains how the app works, and prepares posts, plans, reminders and replies for you to check. AI also writes the text of your daily briefings and reads a photo when you choose to share one, such as a hauler&apos;s flyer or a radon lab report.
+              Pantopus has an assistant, called Pantopus in the app, that answers questions about your home and neighborhood, explains how the app works, and prepares posts, plans, reminders and replies for you to check. AI also writes the text of your daily briefings and reads photos and PDFs you choose to share, such as a hauler&apos;s flyer, a radon lab report or a warranty.
             </p>
             <p>
               These features run on Claude, an AI model made by Anthropic. Anthropic processes this information on our behalf, as our service provider. When you use them, we send Anthropic what the feature needs to answer you:
@@ -133,7 +133,7 @@ export default function PrivacyPage() {
               { label: 'Your general area', detail: 'Your city and, if you share your location with the app, an approximate location, so answers fit where you are.' },
             ]} />
             <p>
-              The assistant does not read your chats or your home&apos;s emergency and medical details, and it never receives your password or payment details. It never acts on its own: anything it prepares is a card you review and send yourself with one tap.
+              The assistant does not look up your private conversations with other people or your home&apos;s emergency and medical details. Pantopus does not supply it with your password or payment credentials; information you choose to include in an assistant message or attachment is processed as described above. When Suggestions is on, Pantopus can prepare a morning brief and up to two nudges a day using information available to your account. You can turn Suggestions off in notification settings or choose “Fewer like this” on a suggestion. Saving or sending something the assistant prepares requires you to review and confirm its card.
             </p>
             {/* Founder to confirm before this ships: the Anthropic account's data-retention setting
                 and that Anthropic's commercial terms (no training on API data, data processing
@@ -142,7 +142,7 @@ export default function PrivacyPage() {
               Anthropic may use this information only to provide the service to us. It does not use it to train its models, and it keeps it only for a limited time, to run the service and to detect misuse.
             </p>
             <p>
-              We save your conversations with the assistant so you can continue them. Photos you send it are kept privately and deleted within an hour, once it has read them. We also log which AI feature you used, when, and how much it used, but not what you wrote, to run daily limits and keep costs in check.
+              We save your conversations with the assistant so you can continue them. Photos and PDFs you send it are kept privately and removed after processing. A cleanup job removes leftover uploads more than an hour old. We also log which AI feature you used, when, and how much it used, but not what you wrote, to run daily limits and keep costs in check.
             </p>
             <p>
               AI can make mistakes. The assistant tells you where its facts come from, and the screen a fact comes from is the source.
@@ -157,10 +157,10 @@ export default function PrivacyPage() {
               When you delete your account, we begin the process of removing your personal information from our systems. Some data may be retained in anonymized or aggregated form for platform safety and analytics purposes.
             </p>
             <p>
-              Your conversations with the Pantopus assistant are kept until you delete your account, or sooner if you ask us at{' '}
+              You can delete your assistant conversation in the app; this also removes earlier assistant chats for your account. Deleting a conversation does not undo posts, tasks or other records you already chose to save. Conversations are also deleted with your account. You can request deletion at{' '}
               <a href="mailto:privacy@pantopus.com" className="text-indigo-600 dark:text-indigo-400 underline underline-offset-2 hover:decoration-2">
                 privacy@pantopus.com
-              </a>. Photos you send the assistant are deleted within an hour.
+              </a>. Assistant photos and PDFs are removed after processing, with a cleanup job for leftover uploads more than an hour old.
             </p>
           </PolicySection>
 
