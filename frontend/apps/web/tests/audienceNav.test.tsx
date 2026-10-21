@@ -30,6 +30,9 @@ jest.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
+// Navigation checks do not mount the browser-only chat/PDF worker.
+jest.mock('../src/components/chat/FloatingChatWidget', () => () => null);
+
 const apiMock = require('@pantopus/api');
 
 function renderWithClient(ui: React.ReactElement) {

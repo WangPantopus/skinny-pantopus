@@ -413,17 +413,20 @@ public final class MultipartUploader: @unchecked Sendable {
     public func uploadChatMedia(
         roomId: String,
         files: [MultipartFile],
-        clientRequestId: String? = nil
+        clientRequestId: String? = nil,
+        media: String? = nil
     ) async throws -> ChatMediaUploadResponse {
         guard !files.isEmpty else {
             throw APIError.clientError(status: 400, message: "No files provided")
         }
         let boundary = "PantopusBoundary-\(UUID().uuidString)"
         let url = environment.apiBaseURL.appendingPathComponent("/api/upload/chat-media/\(roomId)")
+        var fields = clientRequestId.map { ["client_request_id": $0] } ?? [:]
+        if let media { fields["media"] = media }
         let body = Self.buildBody(
             boundary: boundary,
             files: files,
-            fields: clientRequestId.map { ["client_request_id": $0] } ?? [:]
+            fields: fields
         )
         let (data, http) = try await performUpload(to: url, boundary: boundary, body: body)
         switch http.statusCode {
