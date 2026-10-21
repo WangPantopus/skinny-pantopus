@@ -217,6 +217,11 @@ public struct FeedView: View {
                 contextBarViewModel?.fallbackLabel = $0
             }
             await viewModel.load()
+            if showsNearbyPosts { await NearbyFeedSeen.feedShown() }
+        }
+        // Back on Nearby from Connections, or loaded after an error.
+        .onChange(of: showsNearbyPosts) { _, shown in
+            if shown { Task { await NearbyFeedSeen.feedShown() } }
         }
         .onReceive(NotificationCenter.default.publisher(for: .pulsePostsDidChange)) { _ in
             Task { await viewModel.refresh() }
@@ -251,6 +256,15 @@ public struct FeedView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("pulseFeed")
+    }
+
+    /// The Nearby feed (the one with Ask) shows its posts or its empty state.
+    private var showsNearbyPosts: Bool {
+        guard asksPantopus, viewModel.surface == .pulse else { return false }
+        switch viewModel.state {
+        case .loaded, .empty: return true
+        case .loading, .error: return false
+        }
     }
 
     /// Open the composer pre-filled from a Sports starter prompt.
