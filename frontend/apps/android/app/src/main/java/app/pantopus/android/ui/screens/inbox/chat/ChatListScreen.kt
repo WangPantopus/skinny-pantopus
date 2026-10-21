@@ -42,6 +42,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.core.perf.ReportContentShown
+import app.pantopus.android.ui.components.NavigationMenuButton
 import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.theme.PantopusColors
@@ -62,6 +63,8 @@ fun ChatListScreen(
     onOpenConversation: (ConversationRowContent) -> Unit = {},
     onCompose: () -> Unit = {},
     onOpenSearch: () -> Unit = {},
+    /** The side menu, on every tab (founder decision 2026-10-20); null hides the button. */
+    onOpenMenu: (() -> Unit)? = null,
     viewModel: ChatListViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -83,7 +86,7 @@ fun ChatListScreen(
                 .background(PantopusColors.appSurface)
                 .testTag("chatList"),
     ) {
-        TopBar(onCompose = onCompose)
+        TopBar(onCompose = onCompose, onOpenMenu = onOpenMenu)
         SearchBar(skeleton = state is ChatListUiState.Loading, onTap = onOpenSearch)
         FilterTabs(
             active = activeFilter,
@@ -122,13 +125,17 @@ fun ChatListScreen(
 }
 
 @Composable
-private fun TopBar(onCompose: () -> Unit) {
+private fun TopBar(
+    onCompose: () -> Unit,
+    onOpenMenu: (() -> Unit)? = null,
+) {
     Row(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .background(PantopusColors.appSurface)
-                .padding(start = Spacing.s4, end = Spacing.s2, top = 10.dp, bottom = Spacing.s1),
+                // The menu button's 48 dp keep the bar's height with less padding above it.
+                .padding(start = Spacing.s4, end = Spacing.s2, top = if (onOpenMenu != null) Spacing.s1 else 10.dp, bottom = Spacing.s1),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
@@ -155,6 +162,7 @@ private fun TopBar(onCompose: () -> Unit) {
                 tint = PantopusColors.appText,
             )
         }
+        onOpenMenu?.let { NavigationMenuButton(onClick = it, testTag = "messages.menu") }
     }
 }
 
