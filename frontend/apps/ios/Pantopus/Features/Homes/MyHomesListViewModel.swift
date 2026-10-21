@@ -133,12 +133,14 @@ final class MyHomesListViewModel: ListOfRowsDataSource {
         suspend()
         visible = true
         let revision = generation
-        // The stored list and first page of requests show at once (no skeleton).
-        if !force, let homes = store.peek(HomesEndpoints.myHomes(), as: MyHomesResponse.self)?.value,
-           let page = store.peek(Self.residencyPage(cursor: nil), as: PersonalHomeResidencyPage.self)?.value {
-            entries = homes.homes
-            requests = page.requests
-            nextCursor = page.nextCursor
+        // Keep eligible saved content visible even during a forced re-check.
+        // The store withholds guest, temporary and other restricted copies.
+        let homes = store.peek(HomesEndpoints.myHomes(), as: MyHomesResponse.self)?.value
+        let page = store.peek(Self.residencyPage(cursor: nil), as: PersonalHomeResidencyPage.self)?.value
+        entries = homes?.homes ?? []
+        requests = page?.requests ?? []
+        nextCursor = page?.nextCursor
+        if homes != nil || page != nil {
             render(revision: revision)
         }
         do {
@@ -150,6 +152,7 @@ final class MyHomesListViewModel: ListOfRowsDataSource {
             entries = response.homes
         } catch {
             guard current(revision) else { return }
+            if ScreenStore.isRefusal(error) { entries = [] }
             homesError = "Your saved Homes could not be checked. Retry."
         }
         guard current(revision) else { return }
@@ -197,6 +200,11 @@ final class MyHomesListViewModel: ListOfRowsDataSource {
             nextCursor = page.nextCursor
         } catch {
             guard current(revision) else { return }
+            if ScreenStore.isRefusal(error) {
+                requests = []
+                nextCursor = nil
+                store.remove(Self.residencyPage(cursor: nil))
+            }
             historyError = cursor == nil ? "Your residency requests could not be checked. Retry."
                 : "More residency requests could not be checked. Retry."
         }
