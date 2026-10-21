@@ -34,6 +34,7 @@
   "packageManager": "pnpm@9.15.4",
   "pnpm": {
     "overrides": {
+      "follow-redirects@>=1.16.0 <1.16.1": "^1.16.1",
       "proxy-addr@<2.0.8": "^2.0.8",
       "ws@>=8.0.0 <8.21.0": "^8.21.0",
       "engine.io@<6.6.10": "^6.6.10",
