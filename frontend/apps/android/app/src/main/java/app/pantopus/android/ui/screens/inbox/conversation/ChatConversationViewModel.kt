@@ -1598,12 +1598,23 @@ class ChatConversationViewModel
             openAttachmentJob =
                 viewModelScope.launch {
                     val name = File(attachment.filename).name.takeUnless { it.isBlank() || it == "." || it == ".." }
-                    val target = File(directory, name ?: "attachment")
+                    val previewDirectory = File(directory, UUID.randomUUID().toString()).apply { mkdirs() }
+                    val target = File(previewDirectory, name ?: "attachment")
                     when (val result = repo.downloadFile(fileId, target)) {
-                        is NetworkResult.Success ->
-                            _openFile.value = ChatOpenFile(target, attachment.mimeType ?: "application/octet-stream")
+                        is NetworkResult.Success -> {
+                            val clip = attachment.liveVideoFileId?.let { File(previewDirectory, "live.mp4") }
+                            if (
+                                clip != null &&
+                                repo.downloadFile(checkNotNull(attachment.liveVideoFileId), clip) is NetworkResult.Failure
+                            ) {
+                                previewDirectory.deleteRecursively()
+                                _actionFailure.value = "Couldn't open the Live Photo. Try again."
+                            } else {
+                                _openFile.value = ChatOpenFile(target, attachment.mimeType ?: "application/octet-stream", clip)
+                            }
+                        }
                         is NetworkResult.Failure -> {
-                            target.delete()
+                            previewDirectory.deleteRecursively()
                             _actionFailure.value = "Couldn't open the file. Try again."
                             Timber.w("chat file download failed: ${result.error.message}")
                         }
@@ -2714,6 +2725,7 @@ class ChatConversationViewModel
                                 } else {
                                     null
                                 },
+                            attachments = message.attachments,
                         ),
                     ),
                 )

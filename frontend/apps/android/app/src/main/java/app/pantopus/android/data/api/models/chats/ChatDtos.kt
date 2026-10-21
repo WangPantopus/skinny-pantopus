@@ -172,6 +172,8 @@ data class ChatAttachmentDto(
     @Json(name = "mime_type") val mimeType: String? = null,
     @Json(name = "file_size") val fileSize: Int? = null,
     @Json(name = "file_type") val fileType: String? = null,
+    @Json(name = "live_video_file_id") val liveVideoFileId: String? = null,
+    @Json(name = "live_photo_file_id") val livePhotoFileId: String? = null,
 )
 
 @JsonClass(generateAdapter = true)

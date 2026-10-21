@@ -76,12 +76,14 @@ export default function DrawerLayout({
 
   // Older links open a letter as /app/mailbox/:mailId (mail notifications and
   // the Home bill, package and document links), which lands here with the
-  // letter's id as the drawer. Open the letter's existing detail page instead.
+  // letter's id as the drawer. Open the letter's existing detail page instead,
+  // without loading a drawer by that id (it would fail and show an error).
+  const isLetterLink = MAIL_ID.test(drawerParam);
   useEffect(() => {
-    if (drawerParam in DRAWER_LABELS || !MAIL_ID.test(drawerParam)) return;
+    if (!isLetterLink) return;
     const scope = new URLSearchParams(window.location.search).get('scope');
     router.replace(`/app/mailbox/${scope === 'home' ? 'home' : 'personal'}/${drawerParam.toLowerCase()}`);
-  }, [drawerParam, router]);
+  }, [isLetterLink, drawerParam, router]);
 
   // ── State ───────────────────────────────────────────────
   const [filter, setFilter] = useState('');
@@ -118,7 +120,7 @@ export default function DrawerLayout({
     limit: 20,
     tab: 'incoming',
     filter: filter || undefined,
-  });
+  }, { enabled: !isLetterLink });
   const markOpened = useMarkItemOpened();
 
   // Accumulate items for infinite scroll. A refetched later page (after a
@@ -188,6 +190,15 @@ export default function DrawerLayout({
   const unreadItems = filteredItems.filter(item => !isMailRead(item));
   const readItems = filteredItems.filter(item => isMailRead(item));
   const hasNewItems = unreadItems.length > 0 && readItems.length > 0;
+
+  // A letter link has no drawer to show while it opens the letter.
+  if (isLetterLink) {
+    return (
+      <div className="flex items-center justify-center h-full" role="status" aria-label="Opening your letter">
+        <div className="w-6 h-6 border-2 border-app-border border-t-gray-600 rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full overflow-hidden">

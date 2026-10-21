@@ -90,7 +90,10 @@ struct PlaceDensityCard: View {
                     .kerning(-0.15)
                     .foregroundStyle(Theme.Color.appText)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                PlaceChevron()
+                // Only a card that opens something says so.
+                if onTap != nil {
+                    PlaceChevron()
+                }
             }
             .padding(.bottom, 11)
             HStack(spacing: 10) {

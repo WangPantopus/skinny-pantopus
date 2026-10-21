@@ -4,6 +4,8 @@ package app.pantopus.android.ui.screens.contentdetail
 
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.core.LaunchFeature
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.core.notifications.GigActiveNotification
 import app.pantopus.android.core.notifications.GigActiveNotifier
 import app.pantopus.android.data.api.models.gigs.CompleteGigResponse
@@ -134,6 +136,7 @@ class GigDetailSaveViewModelTest {
             jobs.joinAll()
         }
         Dispatchers.resetMain()
+        LaunchFeatures.overrideForTesting = null
     }
 
     private fun openGig(savedByUser: Boolean?) =
@@ -169,6 +172,7 @@ class GigDetailSaveViewModelTest {
                 authorizationFactory = authorizationFactory(),
                 stopFactory = mockk(relaxed = true),
                 tipStore = mockk(relaxed = true),
+                businessTeamRepo = mockk(relaxed = true),
             )
         viewModels.add(vm)
         vm.load()
@@ -299,6 +303,7 @@ class GigDetailSaveViewModelTest {
                 authorizationFactory = authorizationFactory(),
                 stopFactory = mockk(relaxed = true),
                 tipStore = mockk(relaxed = true),
+                businessTeamRepo = mockk(relaxed = true),
             )
         viewModels.add(vm)
         vm.load()
@@ -364,6 +369,8 @@ class GigDetailSaveViewModelTest {
     @Test
     fun instant_accept_calls_endpoint_and_reloads() =
         runTest {
+            // Instant accept is Open Gigs (launch cut #4): with it off, nobody but the poster gets a dock on an open task.
+            LaunchFeatures.overrideForTesting = setOf(LaunchFeature.OPEN_GIGS)
             val gig = openGig(savedByUser = false).copy(engagementMode = "instant_accept")
             coEvery { repo.detail("g1") } returns NetworkResult.Success(GigDetailResponse(gig = gig))
             coEvery { repo.bids("g1") } returns NetworkResult.Success(GigBidsResponse(bids = emptyList()))
@@ -390,6 +397,7 @@ class GigDetailSaveViewModelTest {
                     authorizationFactory = authorizationFactory(),
                     stopFactory = mockk(relaxed = true),
                     tipStore = mockk(relaxed = true),
+                    businessTeamRepo = mockk(relaxed = true),
                 )
             viewModels.add(vm)
             vm.load()
@@ -472,6 +480,7 @@ class GigDetailSaveViewModelTest {
                 authorizationFactory = authorizationFactory(),
                 stopFactory = mockk(relaxed = true),
                 tipStore = mockk(relaxed = true),
+                businessTeamRepo = mockk(relaxed = true),
             )
         viewModels.add(vm)
         vm.load()
