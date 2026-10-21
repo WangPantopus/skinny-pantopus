@@ -44,7 +44,7 @@ class SourceConfig:
 def load_active_regions(supabase_client) -> list[RegionConfig]:
     """Load all active regions from seeder_config.
 
-    Returns an empty list on failure (never raises).
+    Database failures propagate so the handler reports a failed run.
     """
     try:
         result = (
@@ -76,13 +76,13 @@ def load_active_regions(supabase_client) -> list[RegionConfig]:
         return regions
     except Exception:
         log.exception("Failed to load active regions from seeder_config")
-        return []
+        raise
 
 
 def load_sources_for_region(supabase_client, region: str) -> list[SourceConfig]:
     """Load active sources for a region from seeder_sources.
 
-    Returns an empty list on failure (never raises).
+    Database failures propagate so the handler reports a failed run.
     """
     try:
         result = (
@@ -109,4 +109,4 @@ def load_sources_for_region(supabase_client, region: str) -> list[SourceConfig]:
         return sources
     except Exception:
         log.exception("Failed to load sources for region %s", region)
-        return []
+        raise

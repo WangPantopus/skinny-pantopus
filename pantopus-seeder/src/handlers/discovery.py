@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+from src.utils.run_metrics import publish_run_outcome
 
 from src.config.region_registry import load_active_regions
 from src.config.secrets import get_secrets
@@ -39,7 +40,8 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         result = _run(event, context)
     except Exception:
         log.exception("Discovery handler failed with unhandled exception")
-        return {"error": "unhandled_exception", "regions_discovered": 0}
+        result = {"error": "unhandled_exception", "regions_discovered": 0}
+    publish_run_outcome(result, "provision_errors")
     log.info("Run summary: %s", result)
     return result
 
@@ -101,15 +103,19 @@ def _run(event: dict[str, Any], context: Any) -> dict[str, Any]:
 
     # Provision each candidate
     regions_created = []
+    provision_errors = 0
     for candidate in candidates:
         result = _provision_region(
             supabase, candidate, curator_user_id, existing_region_ids
         )
         if result:
+            provision_errors += result.get("source_errors", 0)
             regions_created.append(result)
             # Add to existing set to prevent duplicates within this run
             existing_region_ids.add(result["region_id"])
             existing_regions.append((candidate.lat, candidate.lng, candidate.radius_meters))
+        else:
+            provision_errors += 1
 
     log.info("Provisioned %d new region(s): %s",
              len(regions_created),
@@ -120,6 +126,7 @@ def _run(event: dict[str, Any], context: Any) -> dict[str, Any]:
         "total_users": len(user_points),
         "candidates_found": len(candidates),
         "regions_created": regions_created,
+        "provision_errors": provision_errors,
     }
 
 
@@ -148,7 +155,7 @@ def _load_user_locations(supabase) -> list[UserPoint]:
         return points
     except Exception:
         log.exception("Failed to load user viewing locations")
-        return []
+        raise
 
 
 def _find_curator_user_id(supabase) -> str | None:
@@ -287,16 +294,19 @@ def _provision_region(
             "priority": 2,
         })
 
+    source_errors = 0
     for src in sources:
         try:
             supabase.table("seeder_sources").upsert(
                 src, on_conflict="source_id,region"
             ).execute()
         except Exception:
+            source_errors += 1
             log.warning("Failed to create source %s for %s", src["source_id"], region_id, exc_info=True)
 
     return {
         "region_id": region_id,
+        "source_errors": source_errors,
         "display_name": display_name,
         "lat": candidate.lat,
         "lng": candidate.lng,

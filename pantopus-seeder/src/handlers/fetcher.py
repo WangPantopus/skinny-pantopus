@@ -22,6 +22,7 @@ from src.pipeline.topic_dedup import (
     normalize_title,
 )
 from src.sources.registry import get_sources_from_db
+from src.utils.run_metrics import publish_run_outcome
 
 # Configure logging for Lambda (root logger must be set to INFO)
 logging.basicConfig(level=logging.INFO, force=True)
@@ -37,7 +38,8 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         result = _run(event, context)
     except Exception:
         log.exception("Fetcher handler failed with unhandled exception")
-        return {"error": "unhandled_exception", "regions_processed": 0}
+        result = {"error": "unhandled_exception", "regions_processed": 0}
+    publish_run_outcome(result, "total_errors")
     log.info("Run summary: %s", result)
     return result
 
