@@ -764,14 +764,40 @@ for P10). The containers were not inspected on the host.
   `https://api.pantopus.com/api/v1/webhooks/lob`; its secret in
   `LOB_WEBHOOK_SECRET`.
 
-### P8. Production scheduled jobs (briefings active since October 18; other jobs paused)
+### P8. Production scheduled jobs (approved launch groups active October 21)
 
-**Current state (recorded from the PR #2427 rollout, October 18):** the stack
-runs `SchedulesEnabled=false BriefingsEnabled=true`. Only the every-minute
-briefing rule and the daily briefing cleanup are enabled, with one reserved
-briefing invocation; the other 22 schedules stay disabled. Scheduled delivery
-to a physical iPhone and Android phone is still unverified (step 4), so P8 is
-not complete. The paused-rollout and quota notes below are the earlier history.
+**Current state, verified October 21:** `SchedulesEnabled=false`, with
+`BriefingsEnabled`, `SeederEnabled`, `HomeRemindersEnabled`, `AlertsEnabled` and
+`MaintenanceJobsEnabled` true; `PaymentJobsEnabled=false`. There are **13 enabled
+and 11 disabled schedules**. Briefing, Home reminder and local poster functions
+each reserve one invocation. Sports, Mail and no-bid schedules remain disabled.
+The founder explicitly approved curator setup, normal metered local seeding,
+Home/weather/maintenance activation and production alarm routing. Useful-update-only
+briefings remain the chosen behavior.
+
+The existing setup script created the labeled **Pantopus Local** curator, two
+initial regions (Clark County, WA and Portland Metro), and 10 active critical/core
+sources. All 55 enrichment sources, including sports, are inactive. Curator login
+was verified and credentials saved in the production secret without changing its
+other fields. The registered iPhone's location is within the configured coverage.
+A bootstrap publisher run created two real posts with zero failures; both appeared
+in the production web Pulse. A subsequent fetch completed with zero errors.
+The first manual fetch overlapped the newly enabled schedule and encountered
+unique-key deduplication conflicts; no duplicate queue rows were inserted.
+
+All six maintenance jobs completed through the deployed Lambda/backend path.
+Home and weather checks completed without failures, with no eligible reminders
+or alerts to send. Daily discovery completed with no new clusters. CloudFormation
+reported `UPDATE_COMPLETE`; all 12 function packages were preserved and remain
+Active. The production SNS email subscription is confirmed, all six existing
+error alarms route to it, and the one-time routing test arrived in the inbox.
+The worker's Lambda cron fallback remains off to prevent duplicate scheduling.
+
+The founder confirmed physical iPhone receipt of the authorized generic push test
+and that tapping opened Today. **Scheduled useful briefing/Home-reminder receipt
+on physical iPhone and Android remains unverified.** Quiet-day suppression is
+intentional; a successful generic push does not prove briefing composition,
+idempotency or the briefing-specific destination. P8's physical checks remain open.
 
 The April stack `pantopus-seeder-production` already exists, so
 `sam deploy --config-env prod` updates it in place: new code, the job trigger,
@@ -779,9 +805,45 @@ the failure alarms and recipient-local reminder schedules. The stack never
 writes secret contents, so the secret `pantopus/seeder/production` keeps its
 previous values until they are replaced separately.
 The checked-in production deploy configuration matches the live stack:
-briefings and their housekeeping on, every other schedule paused. A plain
+the approved launch groups above on, payment and launch-cut jobs paused. A plain
 `sam deploy --config-env prod` keeps that state; changing activation is an
 explicit parameter change, recorded here and in `samconfig.toml` together.
+
+**Independent activation controls (deployed October 21):** keep
+`SchedulesEnabled=false` and enable only the groups the founder has reviewed.
+All new controls default to false, preserving existing deployments. The older
+`SchedulesEnabled=true` remains an all-jobs override, including sports, Mail and
+no-bid nudges; it is not the launch activation command.
+
+| Parameter | Schedules enabled | Before activation |
+| --- | --- | --- |
+| `BriefingsEnabled` | Briefing scheduler and cleanup (2) | Production API/database and internal-key authentication; preferences, location and native push registration |
+| `SeederEnabled` | Local fetcher, poster and region discovery (3) | Production curator account and credentials, region/source rows, reviewed source coverage and paid-composition approval; national sports stays paused |
+| `HomeRemindersEnabled` | Recipient-local Home reminders (1) | Due-day task/bill/calendar checks and physical-phone receipt |
+| `AlertsEnabled` | Weather/AQI checks (1) | Location coverage, preferences and working weather/AQI providers |
+| `MaintenanceJobsEnabled` | Post expiry, Ask reminders, chat redaction, ghost-business cleanup, response statistics and trust checks (6) | Review the existing jobs' effects and verify the worker is not also running them |
+| `PaymentJobsEnabled` | Authorization, transfers, capture retry, authorization expiry and stuck-payment checks (5) | Verify actual Stripe mode and review pending work before allowing financial side effects |
+
+The initial October 21 read-only check found all 11 generic job-trigger schedules
+disabled and `LAMBDA_BACKED_CRON_ENABLED=false` on the production worker. Those
+jobs had no scheduler; healthy API/worker containers did not establish that
+these jobs ran. Leave the worker fallback off when activating their Lambda
+schedules, so each job has one scheduler.
+
+The initial check found no production curator credentials or region/source/queue
+rows. Use the existing `pantopus-seeder/scripts/setup_curator_account.py` after
+reviewing its dry run, rather than reusing the April account or adding tables.
+Keep its output private. Check the resulting curator login and regional feed
+before enabling the poster. Existing location-driven region provisioning and
+daily discovery extend coverage after the curator exists; default setup regions
+alone are not nationwide coverage proof.
+
+Subscribe and confirm an operator inbox on the **production** SNS topic before
+activation. Initially the subscription belonged only to staging; the production subscription
+is now confirmed. An `OK`
+Lambda error alarm does not detect a disabled schedule or prove content/push
+delivery. Check invocation counts and application outcomes as well.
+
 Paused jobs do not reserve Lambda concurrency. Before activation, check
 `aws lambda get-account-settings --region us-west-2`: the account must have
 capacity for one reserved briefing invocation (and one each for home reminders
@@ -848,9 +910,9 @@ In this order:
    (mode 600), using `production-server-candidate.env`. Its database credential
    passed read-only checks against the new production, and its internal API key
    passed the live API check above. Revalidate if production credentials change.
-   The curator fields are deliberately blank: the April curator does not exist
-   in the new database. The founder must supply a production curator before
-   enabling content publishing. Briefings need only the database URL/key,
+   That historical candidate has blank curator fields and must not overwrite the
+   current secret: the production curator was created on October 21. Verify
+   the current curator login before enabling content publishing. Briefings need only the database URL/key,
    API URL and internal API key; they can be enabled independently below.
    ```bash
    aws secretsmanager put-secret-value --region us-west-2 \
@@ -864,7 +926,7 @@ In this order:
    change set before executing it. Verify the deployed code date, secret target
    and internal-key authentication while still paused.
 4. Activate **only morning/evening briefings and their housekeeping** first
-   (done October 18; the checked-in `samconfig.toml` now carries these values):
+   (done October 18; superseded by the approved October 21 group settings):
    ```bash
    sam deploy --config-env prod \
      --parameter-overrides Environment=production SchedulesEnabled=false BriefingsEnabled=true
@@ -875,14 +937,21 @@ In this order:
    Wait for the actual scheduled delivery on iPhone and Android. Quiet hours,
    opt-out and a low-signal day intentionally suppress delivery; inspect only
    aggregate status/skip reasons, never paste raw user or device-token rows.
-5. After the remaining S8 prerequisites (including the production curator) and
-   the other jobs' checks are complete, activate the rest of P8:
+5. After reviewing each group's prerequisites above, prepare the exact desired
+   parameter values in `samconfig.toml`, retaining `SchedulesEnabled=false`.
+   Review the CloudFormation change set before executing it. For example,
+   enabling **only Home reminders in addition to the existing briefings** is:
    ```bash
    sam deploy --config-env prod \
-     --parameter-overrides Environment=production SchedulesEnabled=true BriefingsEnabled=true
+     --parameter-overrides Environment=production SchedulesEnabled=false \
+       BriefingsEnabled=true SeederEnabled=false HomeRemindersEnabled=true \
+       AlertsEnabled=false MaintenanceJobsEnabled=false PaymentJobsEnabled=false
    ```
-   Subscribe your inbox to `pantopus-job-alarms-production` as in S8 step 4.
-   To pause everything, redeploy with `SchedulesEnabled=false BriefingsEnabled=false`.
+   This example is not production activation approval. Change only the approved
+   groups, and explicitly include every switch so a retained parameter cannot
+   keep an unintended group running. To pause everything, set `SchedulesEnabled`
+   and **all six group switches** to false. To roll back a single group, set its
+   switch false while preserving the other reviewed values.
    Whenever activation changes, update `parameter_overrides` in
    `pantopus-seeder/deploy/samconfig.toml` to the same values, so a later plain
    `sam deploy --config-env prod` never silently pauses or enables jobs. Do not
@@ -890,10 +959,11 @@ In this order:
    template.
 
 **Check:** as S8 with `-production` names. After step 4, only the briefing and
-cleanup rules are enabled. After step 5, every rule is enabled and
-`aws scheduler list-schedules --region us-west-2` lists the enabled
-`pantopus-home-reminders-local-production` (every 15 minutes UTC, with recipient
-eligibility evaluated in local time). The briefing scheduler runs every minute
+cleanup rules are enabled. After step 5, compare every rule with the approved
+groups; sports, Mail and no-bid schedules remain disabled. When Home reminders
+are approved, `aws scheduler list-schedules --region us-west-2` must list
+`pantopus-home-reminders-local-production` as enabled (every 15 minutes UTC,
+with recipient eligibility evaluated in local time). The briefing scheduler runs every minute
 against the new production database and delivers at most one successful
 morning and one evening brief per recipient's local date. Check summer, winter
 and DST transitions, including Alaska, Adak, Hawaii and Arizona; the AWS region

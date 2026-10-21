@@ -116,6 +116,12 @@ Sessions you start for one job (Instant Screens, Nearby Plans, single fixes) wor
 
 - [x] Morning and evening briefings default on for new notification preferences. Show a one-time in-app notice with the saved times and a direct route to Settings → Notifications to change times or turn either off. Preserve existing choices, including off settings. This replaces the morning-only opt-in and saved-place-off defaults in WP1; OS notification permission, recipient-local scheduling and useful-signal suppression still apply. Built and checked in the real web, iOS and Android apps in #2428. Scheduled delivery comes from the production briefing scheduler (#2427, briefings on since October 18); receipt on a physical phone is still unverified.
 
+**Made by the founder on October 21 (production scheduled services).**
+
+- [x] Keep morning/evening briefings useful-update-only. Enable local seeding, Home reminders, weather/AQI checks and the six maintenance jobs independently; keep payment jobs, sports publishing, Mail and no-bid schedules paused. Production now has 13 enabled and 11 disabled schedules, with worker fallbacks off. The labeled curator, two initial regions and core sources are configured; two real posts appeared in web Pulse. All six maintenance jobs and the Home/weather/discovery checks ran successfully. The production alarm inbox is confirmed and received its routing test. See [P8](docs/release/prod-config-checklist.md#p8-production-scheduled-jobs-approved-launch-groups-active-october-21) for deployment and rollback details.
+- [x] The founder received the authorized production iPhone push test and tapping opened Today.
+- [ ] Confirm a useful scheduled briefing and a real Home reminder on physical iPhone and Android. The generic push test proves transport only; the registered iPhone account currently has no Home, and production has no Android push registration. Do not manufacture content or change useful-update-only delivery to make the check pass.
+
 **Made by the founder on October 20 (Plans activation).**
 
 - [x] Enable all shipped Plans kinds, including playdates, through a new migration setting both `plans` and `plans_playdates` globally on. This replaces the earlier hold on activating playdates; it does not record production address verification or a legal review as completed. Keep the existing verified-address, public-place and host-approval rules.
