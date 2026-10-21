@@ -782,6 +782,41 @@ The checked-in production deploy configuration matches the live stack:
 briefings and their housekeeping on, every other schedule paused. A plain
 `sam deploy --config-env prod` keeps that state; changing activation is an
 explicit parameter change, recorded here and in `samconfig.toml` together.
+
+**Independent activation controls (prepared October 21, not activated):** keep
+`SchedulesEnabled=false` and enable only the groups the founder has reviewed.
+All new controls default to false, preserving existing deployments. The older
+`SchedulesEnabled=true` remains an all-jobs override, including sports, Mail and
+no-bid nudges; it is not the launch activation command.
+
+| Parameter | Schedules enabled | Before activation |
+| --- | --- | --- |
+| `BriefingsEnabled` | Briefing scheduler and cleanup (2) | Production API/database and internal-key authentication; preferences, location and native push registration |
+| `SeederEnabled` | Local fetcher, poster and region discovery (3) | Production curator account and credentials, region/source rows, reviewed source coverage and paid-composition approval; national sports stays paused |
+| `HomeRemindersEnabled` | Recipient-local Home reminders (1) | Due-day task/bill/calendar checks and physical-phone receipt |
+| `AlertsEnabled` | Weather/AQI checks (1) | Location coverage, preferences and working weather/AQI providers |
+| `MaintenanceJobsEnabled` | Post expiry, Ask reminders, chat redaction, ghost-business cleanup, response statistics and trust checks (6) | Review the existing jobs' effects and verify the worker is not also running them |
+| `PaymentJobsEnabled` | Authorization, transfers, capture retry, authorization expiry and stuck-payment checks (5) | Verify actual Stripe mode and review pending work before allowing financial side effects |
+
+The October 21 read-only check found all 11 generic job-trigger schedules
+disabled and `LAMBDA_BACKED_CRON_ENABLED=false` on the production worker. Those
+jobs had no scheduler; healthy API/worker containers did not establish that
+these jobs ran. Leave the worker fallback off when activating their Lambda
+schedules, so each job has one scheduler.
+
+The same check found no production curator credentials or region/source/queue
+rows. Use the existing `pantopus-seeder/scripts/setup_curator_account.py` after
+reviewing its dry run, rather than reusing the April account or adding tables.
+Keep its output private. Check the resulting curator login and regional feed
+before enabling the poster. Existing location-driven region provisioning and
+daily discovery extend coverage after the curator exists; default setup regions
+alone are not nationwide coverage proof.
+
+Subscribe and confirm an operator inbox on the **production** SNS topic before
+activation. The October 21 subscription belonged only to staging. An `OK`
+Lambda error alarm does not detect a disabled schedule or prove content/push
+delivery. Check invocation counts and application outcomes as well.
+
 Paused jobs do not reserve Lambda concurrency. Before activation, check
 `aws lambda get-account-settings --region us-west-2`: the account must have
 capacity for one reserved briefing invocation (and one each for home reminders
@@ -875,14 +910,21 @@ In this order:
    Wait for the actual scheduled delivery on iPhone and Android. Quiet hours,
    opt-out and a low-signal day intentionally suppress delivery; inspect only
    aggregate status/skip reasons, never paste raw user or device-token rows.
-5. After the remaining S8 prerequisites (including the production curator) and
-   the other jobs' checks are complete, activate the rest of P8:
+5. After reviewing each group's prerequisites above, prepare the exact desired
+   parameter values in `samconfig.toml`, retaining `SchedulesEnabled=false`.
+   Review the CloudFormation change set before executing it. For example,
+   enabling **only Home reminders in addition to the existing briefings** is:
    ```bash
    sam deploy --config-env prod \
-     --parameter-overrides Environment=production SchedulesEnabled=true BriefingsEnabled=true
+     --parameter-overrides Environment=production SchedulesEnabled=false \
+       BriefingsEnabled=true SeederEnabled=false HomeRemindersEnabled=true \
+       AlertsEnabled=false MaintenanceJobsEnabled=false PaymentJobsEnabled=false
    ```
-   Subscribe your inbox to `pantopus-job-alarms-production` as in S8 step 4.
-   To pause everything, redeploy with `SchedulesEnabled=false BriefingsEnabled=false`.
+   This example is not production activation approval. Change only the approved
+   groups, and explicitly include every switch so a retained parameter cannot
+   keep an unintended group running. To pause everything, set `SchedulesEnabled`
+   and **all six group switches** to false. To roll back a single group, set its
+   switch false while preserving the other reviewed values.
    Whenever activation changes, update `parameter_overrides` in
    `pantopus-seeder/deploy/samconfig.toml` to the same values, so a later plain
    `sam deploy --config-env prod` never silently pauses or enables jobs. Do not
@@ -890,10 +932,11 @@ In this order:
    template.
 
 **Check:** as S8 with `-production` names. After step 4, only the briefing and
-cleanup rules are enabled. After step 5, every rule is enabled and
-`aws scheduler list-schedules --region us-west-2` lists the enabled
-`pantopus-home-reminders-local-production` (every 15 minutes UTC, with recipient
-eligibility evaluated in local time). The briefing scheduler runs every minute
+cleanup rules are enabled. After step 5, compare every rule with the approved
+groups; sports, Mail and no-bid schedules remain disabled. When Home reminders
+are approved, `aws scheduler list-schedules --region us-west-2` must list
+`pantopus-home-reminders-local-production` as enabled (every 15 minutes UTC,
+with recipient eligibility evaluated in local time). The briefing scheduler runs every minute
 against the new production database and delivers at most one successful
 morning and one evening brief per recipient's local date. Check summer, winter
 and DST transitions, including Alaska, Adak, Hawaii and Arizona; the AWS region

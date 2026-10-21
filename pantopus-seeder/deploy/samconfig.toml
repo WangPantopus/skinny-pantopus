@@ -45,5 +45,5 @@ capabilities = "CAPABILITY_IAM"
 resolve_s3 = true
 # Matches the live production stack since 2026-10-18 06:17 UTC: briefings and their
 # housekeeping on, every other schedule paused (docs/release/prod-config-checklist.md P8).
-parameter_overrides = "Environment=production SchedulesEnabled=false BriefingsEnabled=true"
+parameter_overrides = "Environment=production SchedulesEnabled=false BriefingsEnabled=true SeederEnabled=false HomeRemindersEnabled=false AlertsEnabled=false MaintenanceJobsEnabled=false PaymentJobsEnabled=false"
 disable_rollback = false

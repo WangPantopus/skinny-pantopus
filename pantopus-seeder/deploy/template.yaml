@@ -21,6 +21,31 @@ Parameters:
     Default: 'false'
     AllowedValues: ['true', 'false']
     Description: Enable only briefings and their housekeeping while other jobs remain paused.
+  SeederEnabled:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: Enable local content fetching, posting and region discovery. Requires curator credentials and seeded regions; excludes national sports.
+  HomeRemindersEnabled:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: Enable recipient-local Home bill, task and calendar reminders.
+  AlertsEnabled:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: Enable weather and air-quality alert checks.
+  MaintenanceJobsEnabled:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: Enable post expiry, Ask reminders, chat redaction, business cleanup, response statistics and trust checks.
+  PaymentJobsEnabled:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: Enable payment authorization, transfer, capture retry, expiry and stuck-payment checks. Review payment mode before activation.
   SecretName:
     Type: String
     Default: ''
@@ -40,6 +65,21 @@ Conditions:
   RunBriefings: !Or
     - !Equals [!Ref SchedulesEnabled, 'true']
     - !Equals [!Ref BriefingsEnabled, 'true']
+  RunSeeder: !Or
+    - !Equals [!Ref SchedulesEnabled, 'true']
+    - !Equals [!Ref SeederEnabled, 'true']
+  RunHomeReminders: !Or
+    - !Equals [!Ref SchedulesEnabled, 'true']
+    - !Equals [!Ref HomeRemindersEnabled, 'true']
+  RunAlerts: !Or
+    - !Equals [!Ref SchedulesEnabled, 'true']
+    - !Equals [!Ref AlertsEnabled, 'true']
+  RunMaintenanceJobs: !Or
+    - !Equals [!Ref SchedulesEnabled, 'true']
+    - !Equals [!Ref MaintenanceJobsEnabled, 'true']
+  RunPaymentJobs: !Or
+    - !Equals [!Ref SchedulesEnabled, 'true']
+    - !Equals [!Ref PaymentJobsEnabled, 'true']
   UseDefaultSecretName: !Equals [!Ref SecretName, '']
 
 Globals:
@@ -77,7 +117,7 @@ Resources:
             Name: !Sub pantopus-seeder-fetch-${Environment}
             Schedule: rate(2 hours)
             Description: !Sub 'Run fetcher every 2 hours [${Environment}]'
-            State: !If [RunSchedules, ENABLED, DISABLED]
+            State: !If [RunSeeder, ENABLED, DISABLED]
       Policies:
         - Statement:
             - Effect: Allow
@@ -100,7 +140,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub pantopus-seeder-poster-${Environment}
-      ReservedConcurrentExecutions: !If [RunSchedules, 1, !Ref 'AWS::NoValue']
+      ReservedConcurrentExecutions: !If [RunSeeder, 1, !Ref 'AWS::NoValue']
       Handler: src.handlers.poster.handler
       Description: !Sub 'Selects, humanizes, and posts content from the seeder queue [${Environment}]'
       CodeUri: ../build/
@@ -112,7 +152,7 @@ Resources:
             # The handler selects 7 AM/noon/5 PM independently per region.
             Schedule: cron(0 * * * ? *)
             Description: !Sub 'Hourly during posting windows [${Environment}]'
-            State: !If [RunSchedules, ENABLED, DISABLED]
+            State: !If [RunSeeder, ENABLED, DISABLED]
       Policies:
         - Statement:
             - Effect: Allow
@@ -233,7 +273,7 @@ Resources:
             Name: !Sub pantopus-seeder-discovery-${Environment}
             Schedule: rate(1 day)
             Description: !Sub 'Run region discovery daily [${Environment}]'
-            State: !If [RunSchedules, ENABLED, DISABLED]
+            State: !If [RunSeeder, ENABLED, DISABLED]
       Policies:
         - Statement:
             - Effect: Allow
@@ -323,7 +363,7 @@ Resources:
             Name: !Sub pantopus-alert-check-${Environment}
             Schedule: rate(10 minutes)
             Description: !Sub 'Check weather/AQI alerts every 10 minutes [${Environment}]'
-            State: !If [RunSchedules, ENABLED, DISABLED]
+            State: !If [RunAlerts, ENABLED, DISABLED]
       Policies:
         - Statement:
             - Effect: Allow
@@ -346,7 +386,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub pantopus-home-reminders-${Environment}
-      ReservedConcurrentExecutions: !If [RunSchedules, 1, !Ref 'AWS::NoValue']
+      ReservedConcurrentExecutions: !If [RunHomeReminders, 1, !Ref 'AWS::NoValue']
       Handler: src.handlers.home_reminders.handler
       Description: !Sub 'Sends push for bills due, tasks due, and upcoming calendar events [${Environment}]'
       CodeUri: ../build/
@@ -363,7 +403,7 @@ Resources:
             Input: '{"time": "<aws.scheduler.scheduled-time>"}'
             RetryPolicy:
               MaximumEventAgeInSeconds: 3600
-            State: !If [RunSchedules, ENABLED, DISABLED]
+            State: !If [RunHomeReminders, ENABLED, DISABLED]
       Policies:
         - Statement:
             - Effect: Allow
@@ -472,7 +512,7 @@ Resources:
             Schedule: cron(15 * * * ? *)
             Description: !Sub 'Escrow release — hourly at :15 [${Environment}]'
             Input: '{"job": "process-pending-transfers"}'
-            State: !If [RunSchedules, ENABLED, DISABLED]
+            State: !If [RunPaymentJobs, ENABLED, DISABLED]
         RetryCaptureFailures:
           Type: Schedule
           Properties:
@@ -480,7 +520,7 @@ Resources:
             Schedule: rate(15 minutes)
             Description: !Sub 'Retry failed Stripe captures [${Environment}]'
             Input: '{"job": "retry-capture-failures"}'
-            State: !If [RunSchedules, ENABLED, DISABLED]
+            State: !If [RunPaymentJobs, ENABLED, DISABLED]
         AuthorizeUpcomingGigs:
           Type: Schedule
           Properties:
@@ -488,7 +528,7 @@ Resources:
             Schedule: cron(5 * * * ? *)
             Description: !Sub 'Create PaymentIntents for upcoming gigs — hourly at :05 [${Environment}]'
             Input: '{"job": "authorize-upcoming-gigs"}'
-            State: !If [RunSchedules, ENABLED, DISABLED]
+            State: !If [RunPaymentJobs, ENABLED, DISABLED]
         ExpireUncapturedAuth:
           Type: Schedule
           Properties:
@@ -496,7 +536,7 @@ Resources:
             Schedule: cron(0 3 * * ? *)
             Description: !Sub 'Cancel gigs with expiring auths — daily 3:00 AM [${Environment}]'
             Input: '{"job": "expire-uncaptured-authorizations"}'
-            State: !If [RunSchedules, ENABLED, DISABLED]
+            State: !If [RunPaymentJobs, ENABLED, DISABLED]
         CheckStuckPayments:
           Type: Schedule
           Properties:
@@ -504,7 +544,7 @@ Resources:
             Schedule: rate(15 minutes)
             Description: !Sub 'Alert on stuck payments [${Environment}]'
             Input: '{"job": "check-stuck-payments"}'
-            State: !If [RunSchedules, ENABLED, DISABLED]
+            State: !If [RunPaymentJobs, ENABLED, DISABLED]
         CleanupGhostBusinesses:
           Type: Schedule
           Properties:
@@ -512,7 +552,7 @@ Resources:
             Schedule: cron(30 2 * * ? *)
             Description: !Sub 'Remove orphaned business accounts — daily 2:30 AM [${Environment}]'
             Input: '{"job": "cleanup-ghost-businesses"}'
-            State: !If [RunSchedules, ENABLED, DISABLED]
+            State: !If [RunMaintenanceJobs, ENABLED, DISABLED]
         ChatRedaction:
           Type: Schedule
           Properties:
@@ -520,7 +560,7 @@ Resources:
             Schedule: cron(30 * * * ? *)
             Description: !Sub 'GDPR message redaction — hourly at :30 [${Environment}]'
             Input: '{"job": "chat-redaction"}'
-            State: !If [RunSchedules, ENABLED, DISABLED]
+            State: !If [RunMaintenanceJobs, ENABLED, DISABLED]
         TrustAnomalyDetection:
           Type: Schedule
           Properties:
@@ -528,7 +568,7 @@ Resources:
             Schedule: cron(45 */6 * * ? *)
             Description: !Sub 'Flag suspicious neighbor growth — every 6h [${Environment}]'
             Input: '{"job": "trust-anomaly-detection"}'
-            State: !If [RunSchedules, ENABLED, DISABLED]
+            State: !If [RunMaintenanceJobs, ENABLED, DISABLED]
         ComputeAvgResponseTime:
           Type: Schedule
           Properties:
@@ -536,7 +576,7 @@ Resources:
             Schedule: cron(0 5 * * ? *)
             Description: !Sub 'Business response time stats — daily 5:00 AM [${Environment}]'
             Input: '{"job": "compute-avg-response-time"}'
-            State: !If [RunSchedules, ENABLED, DISABLED]
+            State: !If [RunMaintenanceJobs, ENABLED, DISABLED]
         AutoArchivePosts:
           Type: Schedule
           Properties:
@@ -544,7 +584,7 @@ Resources:
             Schedule: cron(23 * * * ? *)
             Description: !Sub 'End expired local posts — hourly at :23 [${Environment}]'
             Input: '{"job": "auto-archive-posts"}'
-            State: !If [RunSchedules, ENABLED, DISABLED]
+            State: !If [RunMaintenanceJobs, ENABLED, DISABLED]
         AskStillOpenReminders:
           Type: Schedule
           Properties:
@@ -552,7 +592,7 @@ Resources:
             Schedule: cron(41 * * * ? *)
             Description: !Sub 'Day-6 reminders for open Asks — hourly at :41 [${Environment}]'
             Input: '{"job": "ask-still-open-reminders"}'
-            State: !If [RunSchedules, ENABLED, DISABLED]
+            State: !If [RunMaintenanceJobs, ENABLED, DISABLED]
       Policies:
         - Statement:
             - Effect: Allow
