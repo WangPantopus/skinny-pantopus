@@ -86,12 +86,21 @@ final class PlaceDetailViewModel {
     func load() async {
         if case .loaded = state, PlaceStoreReads.allowsCopy(homeId: homeId, savedPlaceId: savedPlaceId) { return }
         // The dashboard or Today may already hold this copy (one store entry).
-        if let copy = PlaceStoreReads.peek(homeId: homeId, savedPlaceId: savedPlaceId, sections: sections) {
+        if let copy = storedCopy {
             show(copy)
             await fetch(quietly: true, force: false)
             return
         }
         await fetch(quietly: false, force: false)
+    }
+
+    private var usesPreview: Bool {
+        savedPlaceId != nil && group != .today
+    }
+
+    private var storedCopy: ScreenSnapshot<PlaceIntelligence>? {
+        if usesPreview, let savedPlaceId { return PlaceStoreReads.previewCopy(id: savedPlaceId) }
+        return PlaceStoreReads.peek(homeId: homeId, savedPlaceId: savedPlaceId, sections: sections)
     }
 
     /// Coming back: the shown copy stays; the store refreshes it quietly only
@@ -114,6 +123,7 @@ final class PlaceDetailViewModel {
     func isAffected(by note: Notification) -> Bool {
         PlaceStoreReads.topics(homeId: homeId, savedPlaceId: savedPlaceId).contains { note.names(topic: $0) }
             || note.names(kind: storeKind)
+            || (savedPlaceId != nil && note.names(topic: ScreenTopic.savedPlaces))
     }
 
     private var storeKind: ScreenDataKind {
@@ -156,16 +166,16 @@ final class PlaceDetailViewModel {
         let revision = copyRevision
         let hadFallback = fallbackCalendar != nil
         do {
-            let snapshot = try await PlaceStoreReads.load(
-                homeId: homeId,
-                savedPlaceId: savedPlaceId,
-                sections: sections,
-                kind: storeKind,
-                force: force
-            )
+            let snapshot: ScreenSnapshot<PlaceIntelligence> = if usesPreview, let savedPlaceId {
+                try await PlaceStoreReads.previewDetails(id: savedPlaceId, force: force)
+            } else {
+                try await PlaceStoreReads.load(
+                    homeId: homeId, savedPlaceId: savedPlaceId, sections: sections, kind: storeKind, force: force
+                )
+            }
             try Task.checkCancellation()
             guard revision == copyRevision else { return }
-            refreshFailureMessage = nil
+            refreshFailureMessage = snapshot.refreshFailed ? "Couldn't refresh. Showing saved information." : nil
             show(snapshot)
             // A refresh asks for the fallback calendar again; the shown one
             // stays until the new one arrives.
