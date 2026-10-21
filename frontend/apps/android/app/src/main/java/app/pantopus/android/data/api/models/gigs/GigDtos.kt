@@ -33,6 +33,8 @@ data class GigCreator(
     @Json(name = "average_rating") val averageRating: Double? = null,
     @Json(name = "review_count") val reviewCount: Int? = null,
     @Json(name = "gigs_completed") val gigsCompleted: Int? = null,
+    /** The identity serializer's kind: `business` when a business posted the task. */
+    val type: String? = null,
 ) {
     fun resolvedDisplayName(): String =
         displayName?.takeIf { it.isNotEmpty() }

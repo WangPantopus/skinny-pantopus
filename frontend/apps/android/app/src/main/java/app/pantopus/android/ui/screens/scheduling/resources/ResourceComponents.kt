@@ -32,10 +32,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.pantopus.android.ui.theme.PantopusColors
@@ -755,7 +759,10 @@ fun PhotoAddRow(
     }
 }
 
-/** Small/full segmented control with a home-green selected pill (F10 Who-can-book). */
+/**
+ * Small/full segmented control with a home-green selected pill (F10 Who-can-book). The Nearby tab's Pulse |
+ * Neighborhood switch reuses it with neutral, larger text ([selectedTextColor], [fontSize]) and a tag per option.
+ */
 @Composable
 fun <T> SegmentedControl(
     options: List<T>,
@@ -763,6 +770,9 @@ fun <T> SegmentedControl(
     label: (T) -> String,
     onSelect: (T) -> Unit,
     modifier: Modifier = Modifier,
+    selectedTextColor: Color = PantopusColors.homeDark,
+    fontSize: TextUnit = 12.sp,
+    optionTag: ((T) -> String)? = null,
 ) {
     Row(
         modifier =
@@ -783,14 +793,16 @@ fun <T> SegmentedControl(
                         .background(if (isOn) PantopusColors.appSurface else Color.Transparent)
                         .clickable(onClickLabel = label(option), role = Role.Button) {
                             onSelect(option)
-                        }.padding(vertical = 7.dp),
+                        }.semantics { this.selected = isOn }
+                        .then(optionTag?.let { Modifier.testTag(it(option)) } ?: Modifier)
+                        .padding(vertical = 7.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
                     text = label(option),
-                    fontSize = 12.sp,
+                    fontSize = fontSize,
                     fontWeight = if (isOn) FontWeight.Bold else FontWeight.SemiBold,
-                    color = if (isOn) PantopusColors.homeDark else PantopusColors.appTextSecondary,
+                    color = if (isOn) selectedTextColor else PantopusColors.appTextSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )

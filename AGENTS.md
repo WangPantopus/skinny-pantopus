@@ -30,7 +30,13 @@ PRs, screenshots and chat. Preserve unrelated local work.
   [docs/product/pulse-build](docs/product/pulse-build/README.md). On October 17
   the founder approved adding Plans to that bar while the `plans` flag is on
   (Place · Today · Nearby · Plans · Messages), with Nearby no longer opening on
-  the Plans map.
+  the Plans map. On October 20 the founder removed the Nearby door page: the
+  Nearby tab is two segments, Pulse (the October 13 feed, where the tab opens)
+  and Neighborhood (the density map, the meter and "Invite your neighbors"),
+  and Connections lives in the side menu. The side menu (☰) is on the top
+  screen of every tab on iOS and Android; web keeps its sidebar and menu. New
+  tabs and redesigned tab screens keep the menu button, and nothing brings the
+  door page back. Rebase onto master before changing those screens.
 - Keep privacy and functional repairs separate from presentation changes. Never
   restore private fields to reproduce an old screenshot.
 - Migrations are additive and backward compatible. Never edit an applied
