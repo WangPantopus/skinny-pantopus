@@ -83,6 +83,8 @@ data class MailDetail(
     /** Who it's from as printed on the item. The server names the sender from it first (`resolveSenderDisplay`). */
     @Json(name = "sender_display") val senderDisplay: String? = null,
     @Json(name = "sender_user_id") val senderUserId: String? = null,
+    /** The business a letter was sent as (`Mail.sender_entity_id`); null for a person's own letter and older ones. */
+    @Json(name = "sender_entity_id") val senderEntityId: String? = null,
     /**
      * `Mail.sender_trust` — `verified_gov` / `verified_utility` /
      * `verified_business` / `pantopus_user` / `unknown`
@@ -159,10 +161,15 @@ data class MailDetail(
     val stationeryTheme: String?
         get() = (mailExtracted?.get("stationeryTheme") as? String)?.takeIf { it.isNotEmpty() }
 
+    /**
+     * The person who sent it, or, for a letter sent as a business, the business
+     * (`backend/utils/mailSenderView.js`): its id (null on letters stored before the
+     * business was recorded) and name, no username.
+     */
     @JsonClass(generateAdapter = true)
     data class Sender(
-        val id: String,
-        val username: String,
+        val id: String?,
+        val username: String?,
         /** Raw `users.name`; null for slim sign-up accounts (v2 already allows this). */
         val name: String?,
     )

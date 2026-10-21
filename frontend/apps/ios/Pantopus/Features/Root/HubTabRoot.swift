@@ -2195,6 +2195,9 @@ public struct HubTabRoot: View {
                 onOpenSenderProfile: { userId in
                     Task { @MainActor in push(.publicProfile(userId: userId)) }
                 },
+                onOpenSenderBusiness: { businessId in
+                    Task { @MainActor in push(.businessProfile(businessId: businessId)) }
+                },
                 onOpenExtractedTask: { sourceMailId in
                     // A17.12 — the certified-notice "view task" affordance
                     // opens the mail-derived task keyed by its source mail.
@@ -2335,9 +2338,9 @@ public struct HubTabRoot: View {
                 onEdit: { id in
                     Task { @MainActor in push(.editPost(postId: id)) }
                 },
-                onOpenBusiness: { username in
-                    // "Nearby Providers" row → `/business/:username`.
-                    Task { @MainActor in push(.businessProfile(businessId: username)) }
+                onOpenBusiness: { business in
+                    // A "Nearby Providers" row (username) or a business author (id) → `/business/:key`.
+                    Task { @MainActor in push(.businessProfile(businessId: business)) }
                 }
             )
             .toolbar(.hidden, for: .navigationBar)

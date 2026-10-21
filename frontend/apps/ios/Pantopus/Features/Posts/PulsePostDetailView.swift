@@ -31,8 +31,8 @@ public struct PulsePostDetailView: View {
     private let onOpenProfile: @MainActor (String) -> Void
     private let onEdit: @MainActor (String) -> Void
     private let onContentLoaded: @MainActor () -> Void
-    /// Tap-through from a "Nearby Providers" row. Carries the business
-    /// *username* (the `/business/:username` public-profile key).
+    /// Opens a business's page: a "Nearby Providers" row passes its
+    /// *username*, a business author its id (`/business/:key` takes either).
     private let onOpenBusiness: @MainActor (String) -> Void
 
     public init(
