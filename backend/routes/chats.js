@@ -21,6 +21,7 @@ const { isUnpublishedBusiness } = require('../utils/visibilityPolicy');
 const {
   isBusinessAccount,
   canActAsBusiness,
+  businessStaff,
   businessMembership,
   actingBusinessInRoom,
   taskBusinessInRoom,
@@ -39,6 +40,7 @@ const {
 } = require('../services/chatGigRoomAccess');
 const { incCounter, recordHistogram, getSnapshot } = require('../services/chatMetrics');
 const pushService = require('../services/pushService');
+const notificationService = require('../services/notificationService');
 const rateLimit = require('express-rate-limit');
 const { pipeline } = require('stream/promises');
 const sharp = require('sharp');
@@ -373,18 +375,93 @@ async function personRowUnread(userId, otherUserId, sentRoomId) {
 async function emitToBusinessStaff(emitTo, payload, businessIds, heard) {
   if (businessIds.length === 0) return;
   const { connectedUsers } = require('../socket/chatSocketio');
-  const { data: team, error } = await supabaseAdmin
-    .from('BusinessTeam')
-    .select('business_user_id, user_id')
-    .in('business_user_id', businessIds)
-    .eq('is_active', true);
-  if (error || !Array.isArray(team)) throw new Error(error?.message || 'business team unavailable');
-  for (const row of team) {
-    const staffId = String(row.user_id);
-    if (heard.has(staffId) || !connectedUsers.has(staffId)) continue;
-    if (!(await canActAsBusiness(row.business_user_id, staffId))) continue;
+  const staff = await businessStaff(businessIds, {
+    include: (staffId) => !heard.has(staffId) && connectedUsers.has(staffId),
+  });
+  for (const { userId: staffId } of staff) {
+    if (heard.has(staffId)) continue;
     heard.add(staffId);
     emitTo(staffId, payload);
+  }
+}
+
+// ── Business inbox notices ───────────────────────────────────────────
+// The chat push goes to room members, so it doesn't reach a business's owner and staff either. Each one who may act
+// for a business that received a message gets a notice (bell row, and a push unless their push is off) that opens the
+// business's thread: the web's /app/businesses/:id/chat/:roomId, which the apps open as the business, then its
+// thread. Never their personal Messages. One unread notice per conversation: a newer message replaces it, and
+// reading the conversation for the business reads it. Room members already got the chat push; anyone across a block
+// with the sender gets nothing.
+const BUSINESS_MESSAGE_NOTICE = 'business_message';
+
+function businessThreadLink(businessUserId, roomId) {
+  return `/app/businesses/${businessUserId}/chat/${roomId}`;
+}
+
+async function notifyBusinessStaff({ room, messageId, businessIds, actorUserId, senderUserId, memberIds, preview }) {
+  const skip = new Set([String(actorUserId), String(senderUserId), ...memberIds.map(String)]);
+  const staff = await businessStaff(businessIds, { include: (staffId) => !skip.has(staffId) });
+  if (staff.length === 0) return;
+  const [{ data: businesses, error: businessError }, { data: sender, error: senderError }] = await Promise.all([
+    supabaseAdmin.from('User').select('id, name, username').in('id', businessIds),
+    supabaseAdmin
+      .from('User')
+      .select('id, username, name, first_name, middle_name, last_name')
+      .eq('id', senderUserId)
+      .maybeSingle(),
+  ]);
+  if (businessError || senderError) throw new Error((businessError || senderError).message);
+  const businessNames = new Map((businesses || []).map((b) => [String(b.id), b.name || b.username || 'your business']));
+  // The sender as the business inbox lists them.
+  const senderIdentity = sender ? (await loadLocalIdentityMapForUsers([sender])).get(String(sender.id)) : null;
+  const senderName = senderIdentity?.displayName || 'Someone';
+  for (const { businessUserId, userId: staffId } of staff) {
+    try {
+      if (await isBlocked(staffId, senderUserId)) continue;
+    } catch {
+      continue;
+    }
+    const link = businessThreadLink(businessUserId, room.id);
+    const { error: replaceError } = await supabaseAdmin
+      .from('Notification')
+      .delete()
+      .eq('user_id', staffId)
+      .eq('type', BUSINESS_MESSAGE_NOTICE)
+      .eq('link', link)
+      .eq('is_read', false);
+    if (replaceError) logger.warn('business_message_notice_not_replaced', { roomId: room.id, error: replaceError.message });
+    await notificationService.createNotification({
+      userId: staffId,
+      type: BUSINESS_MESSAGE_NOTICE,
+      title: `New message for ${businessNames.get(businessUserId) || 'your business'}`,
+      body: `${senderName}: ${preview}`,
+      icon: '💬',
+      link,
+      // user_id is the sender: lists and counts leave the notice out across a later block.
+      metadata: { business_user_id: businessUserId, room_id: String(room.id), user_id: String(senderUserId), message_id: messageId },
+      contextType: 'business',
+      contextId: businessUserId,
+    });
+  }
+}
+
+// Reading a business's conversation reads the reader's own notices about it.
+async function readBusinessNotices(userId, businessUserId, roomIds) {
+  if (!businessUserId || String(businessUserId) === String(userId) || roomIds.length === 0) return;
+  try {
+    const { data: read, error } = await supabaseAdmin
+      .from('Notification')
+      .update({ is_read: true })
+      .eq('user_id', userId)
+      .eq('type', BUSINESS_MESSAGE_NOTICE)
+      .in('link', roomIds.map((roomId) => businessThreadLink(businessUserId, roomId)))
+      .eq('is_read', false)
+      .select('id');
+    if (error) throw error;
+    if (read?.length) badgeService.emitBadgeUpdate(userId);
+  } catch (err) {
+    // The conversation is read either way; the notice stays unread in the bell.
+    logger.warn('business_message_notice_read_failed', { userId, error: err.message });
   }
 }
 
@@ -470,7 +547,7 @@ async function deliverNewMessage(io, { room, message, actorUserId, senderUserId 
   // Push fresh badge counts (including total message count) immediately.
   const { data: participantRows } = await supabaseAdmin
     .from('ChatParticipant')
-    .select('user_id')
+    .select('user_id, user:user_id(account_type)')
     .eq('room_id', roomId)
     .eq('is_active', true);
   const participantUserIds = Array.from(new Set((participantRows || []).map((row) => String(row.user_id)).filter(Boolean)));
@@ -486,6 +563,12 @@ async function deliverNewMessage(io, { room, message, actorUserId, senderUserId 
   }
   if (recipientUserIds.length === 0) return;
   badgeService.emitBadgeUpdateToMany(recipientUserIds);
+
+  const text = String(message.message || '');
+  const type = message.type || 'text';
+  const preview = type === 'text'
+    ? (text.length > 100 ? text.slice(0, 100) + '…' : text)
+    : type === 'file' ? '📎 Sent an attachment' : '💬 New message';
 
   // A device push to every recipient who has push on, so it arrives when the
   // app is in the background or closed.
@@ -504,11 +587,6 @@ async function deliverNewMessage(io, { room, message, actorUserId, senderUserId 
       if (pushEnabledIds.length === 0) return;
 
       const senderName = serializeUserIdentityForViewer(message.sender)?.displayName || 'Someone';
-      const text = String(message.message || '');
-      const type = message.type || 'text';
-      const preview = type === 'text'
-        ? (text.length > 100 ? text.slice(0, 100) + '…' : text)
-        : type === 'file' ? '📎 Sent an attachment' : '💬 New message';
       await pushService.sendToUsers(pushEnabledIds, {
         title: senderName,
         body: preview,
@@ -518,6 +596,24 @@ async function deliverNewMessage(io, { room, message, actorUserId, senderUserId 
       logger.warn('Chat push delivery failed (non-blocking)', { error: err.message, roomId });
     }
   })();
+
+  const recipientSet = new Set(recipientUserIds);
+  const businessRecipientIds = (participantRows || [])
+    .filter((row) => row.user?.account_type === 'business' && recipientSet.has(String(row.user_id)))
+    .map((row) => String(row.user_id));
+  if (businessRecipientIds.length > 0) {
+    notifyBusinessStaff({
+      room,
+      messageId: message.id,
+      businessIds: businessRecipientIds,
+      actorUserId,
+      senderUserId,
+      memberIds: participantUserIds,
+      preview,
+    }).catch((err) => {
+      logger.warn('business_message_notice_failed', { requestId, roomId, error: err.message });
+    });
+  }
 }
 
 async function resolveRoomPreviewMap(roomPreviews, requestId, logContext) {
@@ -1624,6 +1720,7 @@ router.post('/conversations/:otherUserId/read', verifyToken, async (req, res) =>
     }
 
     badgeService.emitBadgeUpdateToMany(usersToClear);
+    await readBusinessNotices(userId, asBusinessUserId, sharedRoomIds);
     return res.json({ unreadCount: 0, updatedRooms: sharedRoomIds.length });
   } catch (err) {
     logger.error('Conversation read error', { requestId: req.requestId, userId: req.user?.id, error: err.message });
@@ -2287,6 +2384,7 @@ router.post('/rooms/:roomId/read', verifyToken, async (req, res) => {
     }
 
     badgeService.emitBadgeUpdateToMany(usersToClear);
+    await readBusinessNotices(userId, asBusinessUserId, [roomIdStr]);
     res.json({ unreadCount: 0 });
     
   } catch (err) {

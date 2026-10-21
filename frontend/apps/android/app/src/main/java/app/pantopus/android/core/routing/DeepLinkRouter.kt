@@ -280,6 +280,14 @@ object DeepLinkRouter {
         data class BusinessOwner(val businessId: String) : Destination
 
         /**
+         * `/app/businesses/:id/chat/:roomId` — a conversation in the business's
+         * inbox (the `business_message` notice its owner and staff get). Opens
+         * the owner view, then the thread acting as the business; never the
+         * person's own Messages. Mirrors iOS `businessConversation`.
+         */
+        data class BusinessConversation(val businessId: String, val roomId: String) : Destination
+
+        /**
          * `pantopus://business/:username` — A10.6 public business profile
          * (singular path). Mirrors iOS `businessProfile`.
          */
@@ -936,15 +944,20 @@ object DeepLinkRouter {
             "businesses" -> {
                 // `pantopus://businesses/new` opens the Create Business wizard.
                 // `pantopus://businesses/:id/page-editor` opens the owner-only
-                // A13.10 editor. `pantopus://businesses/:id` opens the A10.7
-                // Business owner view. Mirrors iOS `businessesDestination`.
+                // A13.10 editor. `pantopus://businesses/:id/chat/:roomId` opens
+                // a thread of the business inbox. `pantopus://businesses/:id`
+                // opens the A10.7 Business owner view. Mirrors iOS
+                // `businessesDestination`.
                 val id = segments.getOrNull(1)
                 val trailing = segments.getOrNull(2)
+                val roomId = segments.getOrNull(3)
                 when {
                     id == "new" -> Destination.CreateBusiness
                     id.isNullOrBlank() -> Destination.Unknown(raw)
                     trailing == "page-editor" || trailing == "page_editor" ->
                         Destination.EditBusinessPage(id)
+                    trailing == "chat" && segments.size == 4 && roomId != null && MAIL_UUID.matches(roomId) ->
+                        Destination.BusinessConversation(id, roomId.lowercase())
                     else -> Destination.BusinessOwner(id)
                 }
             }
