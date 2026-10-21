@@ -59,6 +59,7 @@ fun MediaViewerDialog(
     items: List<PostMediaItem>,
     startIndex: Int,
     onDismiss: () -> Unit,
+    localPdfFile: java.io.File? = null,
 ) {
     if (items.isEmpty()) return
     val pagerState =
@@ -94,7 +95,7 @@ fun MediaViewerDialog(
                             // Originals are never written to the disk cache (Instant Screens §6).
                             cacheOnDisk = false,
                         )
-                    PostMediaKind.Document -> PostPdfSlide(url = item.url)
+                    PostMediaKind.Document -> PostPdfSlide(url = item.url, localFile = localPdfFile)
                     PostMediaKind.Video ->
                         ViewerVideoSlide(
                             url = item.url,

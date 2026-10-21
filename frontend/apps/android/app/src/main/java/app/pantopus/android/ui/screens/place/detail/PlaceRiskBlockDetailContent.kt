@@ -34,6 +34,7 @@ import app.pantopus.android.data.api.models.place.PlaceHeatColdData
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.place.PlaceSectionEnvelope
 import app.pantopus.android.data.api.models.place.PlaceSectionId
+import app.pantopus.android.data.api.models.place.PlaceSectionStatus
 import app.pantopus.android.data.api.models.place.PlaceTier
 import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.screens.place.PlacePresentation
@@ -88,36 +89,40 @@ fun PlaceRiskDetailContent(
         }
     if (health.isNotEmpty()) {
         PlaceDetailSectionLabel("Health & environment")
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { health.forEach { HealthCard(it) } }
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            health.forEach { HealthCard(it, publicOnly = viewModel.savedPlaceId != null) }
+        }
         PlaceSourceNote("EPA radon zones · SDWIS · ECHO")
     }
 
-    PlaceDetailSectionLabel("Emergency plan")
-    EmergencyChecklist()
-    PlaceSourceNote("Ready.gov · American Red Cross")
+    if (viewModel.savedPlaceId == null) {
+        PlaceDetailSectionLabel("Emergency plan")
+        EmergencyChecklist()
+        PlaceSourceNote("Ready.gov · American Red Cross")
 
-    PlaceDetailSectionLabel("Fridge card")
-    if (intel.tier == PlaceTier.T4) {
-        LifecycleResumeEffect(Unit) {
-            viewModel.loadFridgeCards()
-            onPauseOrDispose { }
+        PlaceDetailSectionLabel("Fridge card")
+        if (intel.tier == PlaceTier.T4) {
+            LifecycleResumeEffect(Unit) {
+                viewModel.loadFridgeCards()
+                onPauseOrDispose { }
+            }
+            RefreshOnStoreChange(viewModel::loadFridgeCards)
+            PlaceFridgeCardSection(viewModel)
+        } else {
+            PlaceLockedCard(
+                title = "The 911-ready household card",
+                reason =
+                    if (intel.nonResidentViewer) {
+                        "Issued by this home's verified residents — its headline is the verified address a caller reads to 911."
+                    } else {
+                        "Verify your address to issue a fridge card — its headline is the verified " +
+                            "address a caller reads to 911."
+                    },
+                cta = "Verify address",
+                icon = PantopusIcon.HeartPulse,
+                onTap = LocalPlaceDetailVerify.current,
+            )
         }
-        RefreshOnStoreChange(viewModel::loadFridgeCards)
-        PlaceFridgeCardSection(viewModel)
-    } else {
-        PlaceLockedCard(
-            title = "The 911-ready household card",
-            reason =
-                if (intel.nonResidentViewer) {
-                    "Issued by this home's verified residents — its headline is the verified address a caller reads to 911."
-                } else {
-                    "Verify your address to issue a fridge card — its headline is the verified " +
-                        "address a caller reads to 911."
-                },
-            cta = "Verify address",
-            icon = PantopusIcon.HeartPulse,
-            onTap = LocalPlaceDetailVerify.current,
-        )
     }
 }
 
@@ -311,9 +316,12 @@ private fun NfipBlock(
 }
 
 @Composable
-private fun HealthCard(env: PlaceSectionEnvelope) {
+private fun HealthCard(
+    env: PlaceSectionEnvelope,
+    publicOnly: Boolean,
+) {
     val cfg = PlacePresentation.config(env.sectionId)
-    if (!env.isLive()) {
+    if (!env.isLive() && !(publicOnly && env.status == PlaceSectionStatus.PARTIAL)) {
         PlaceDetailFallbackCard(env)
         return
     }
@@ -348,7 +356,7 @@ private fun HealthCard(env: PlaceSectionEnvelope) {
                                 color = PantopusColors.appTextStrong,
                                 modifier = Modifier.weight(1f),
                             )
-                            Text("%.1f mi".format(f.distanceMi), fontSize = 12.sp, color = PantopusColors.appTextMuted)
+                            f.distanceMi?.let { Text("%.1f mi".format(it), fontSize = 12.sp, color = PantopusColors.appTextMuted) }
                         }
                     }
                 }

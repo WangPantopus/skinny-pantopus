@@ -243,9 +243,13 @@ private struct ChatListTopBar: View {
             .buttonStyle(.plain)
             .accessibilityLabel("New message")
             .accessibilityIdentifier("chatListComposeButton")
+            // The side menu, on every tab (founder decision 2026-10-20).
+            NavigationMenuButton(accessibilityIdentifier: "messages.menu")
         }
-        .padding(.horizontal, Spacing.s4)
-        .padding(.vertical, 10)
+        .padding(.leading, Spacing.s4)
+        .padding(.trailing, Spacing.s2)
+        // The menu button's 44 points keep the bar's height with 6 above and below.
+        .padding(.vertical, 6)
         .background(Theme.Color.appSurface)
     }
 }

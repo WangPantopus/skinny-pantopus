@@ -207,7 +207,7 @@ enum class NotificationCategory {
         fun fromRaw(raw: String?): NotificationCategory {
             val lower = raw?.lowercase(Locale.ROOT).orEmpty()
             return when (lower) {
-                "reply", "comment", "chat", "chat_message", "dm" -> Reply
+                "reply", "comment", "chat", "chat_message", "business_message", "dm" -> Reply
                 "mention", "follow", "connection", "connections", "user" -> Mention
                 "claim", "home_member_request", "home_claim", "home_ownership" -> Claim
                 "gig", "gig_bid", "gig_match" -> Gig
@@ -981,8 +981,11 @@ class NotificationsViewModel
         private fun openNotification(dto: NotificationDto) {
             if (dto.isRead != true) markRead(dto.id)
             if (!mayOpenTask(dto)) return
+            // A brief or nudge opens the assistant at its message, in the conversation it was added to.
+            val conversationId = (dto.metadata as? Map<*, *>)?.get("conversation_id") as? String
             val link =
-                HomeTaskNotificationRoute.metadataPath(dto.type, dto.metadata)
+                DeepLinkRouter.assistantNotificationPath(dto.type, dto.id, dto.link, conversationId)
+                    ?: HomeTaskNotificationRoute.metadataPath(dto.type, dto.metadata)
                     ?: DeepLinkRouter.notificationPath(dto.type, dto.link)
             if (!link.isNullOrEmpty()) {
                 val gigId = DeepLinkRouter.gigIdForLink(link)

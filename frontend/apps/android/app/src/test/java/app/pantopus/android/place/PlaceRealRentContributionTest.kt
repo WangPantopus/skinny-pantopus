@@ -94,6 +94,7 @@ class PlaceRealRentContributionTest {
         val appLock = mockk<AppLockManager>()
         every { appLock.isLocked } returns locked
         return PlaceDetailViewModel(
+            savedPlaces = mockk(relaxed = true),
             repo = repo,
             homesRepo = mockk(relaxed = true),
             adminRepo = mockk<HomeAdminRepository>(relaxed = true),

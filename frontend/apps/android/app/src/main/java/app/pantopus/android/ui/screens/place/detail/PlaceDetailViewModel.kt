@@ -28,6 +28,7 @@ import app.pantopus.android.data.homes.HomeAdminRepository
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.data.hub.NotificationPreferencesRepository
 import app.pantopus.android.data.place.PlaceRepository
+import app.pantopus.android.data.saved_places.SavedPlacesRepository
 import app.pantopus.android.data.store.StoreKind
 import app.pantopus.android.data.store.Stored
 import app.pantopus.android.ui.components.RefreshNotice
@@ -53,6 +54,7 @@ import javax.inject.Inject
 
 const val PLACE_DETAIL_HOME_ID_KEY = "homeId"
 const val PLACE_DETAIL_SLUG_KEY = "slug"
+const val PLACE_DETAIL_SAVED_ID_KEY = "savedPlaceId"
 
 /**
  * Container VM for a Place group-detail page (W2.3). Fetches the home's
@@ -78,6 +80,7 @@ class PlaceDetailViewModel
     @Inject
     constructor(
         private val repo: PlaceRepository,
+        private val savedPlaces: SavedPlacesRepository,
         private val adminRepo: HomeAdminRepository,
         private val homesRepo: HomesRepository,
         savedStateHandle: SavedStateHandle,
@@ -87,19 +90,17 @@ class PlaceDetailViewModel
         @ApplicationContext context: Context,
     ) : ViewModel(),
         AddressCalendarActions {
-        private val homeId: String =
-            requireNotNull(savedStateHandle[PLACE_DETAIL_HOME_ID_KEY]) {
-                "PlaceDetailViewModel requires a '$PLACE_DETAIL_HOME_ID_KEY' nav arg."
-            }
+        val savedPlaceId: String? = savedStateHandle[PLACE_DETAIL_SAVED_ID_KEY]
+        private val homeId: String = savedStateHandle.get<String>(PLACE_DETAIL_HOME_ID_KEY).orEmpty()
         private val calendarSession = sessionScopes.create(viewModelScope)
         private val keyguard = context.getSystemService(KeyguardManager::class.java)
-        override val calendarHomeId: String get() = homeId
+        override val calendarHomeId: String? get() = homeId.takeIf { savedPlaceId == null && it.isNotBlank() }
 
         val group: PlaceDetailGroup =
             PlaceDetailGroup.fromSlug(savedStateHandle[PLACE_DETAIL_SLUG_KEY])
                 ?: PlaceDetailGroup.TODAY
 
-        private val copy = PlaceDetailCopy(repo, homesRepo, homeId, group, viewModelScope)
+        private val copy = PlaceDetailCopy(repo, homesRepo, homeId, group, viewModelScope, savedPlaces, savedPlaceId)
         private val _state = copy.state
         val state: StateFlow<PlaceDetailUiState> = _state.asStateFlow()
         val refreshing = copy.refreshing.asStateFlow()
@@ -239,7 +240,9 @@ class PlaceDetailViewModel
 
         fun refresh() {
             copy.refresh()
-            if (group == PlaceDetailGroup.RISK && _fridgeCards.value !is FridgeCardsUiState.Loading) loadFridgeCards()
+            if (savedPlaceId == null && group == PlaceDetailGroup.RISK && _fridgeCards.value !is FridgeCardsUiState.Loading) {
+                loadFridgeCards()
+            }
         }
 
         fun suspendContent() {
@@ -1081,7 +1084,11 @@ sealed interface UnlistedUiState {
 sealed interface PlaceDetailUiState {
     data object Loading : PlaceDetailUiState
 
-    data class Loaded(val intelligence: PlaceIntelligence) : PlaceDetailUiState
+    data class Loaded(
+        val intelligence: PlaceIntelligence,
+        val fetchedAt: Long? = null,
+        val refreshFailed: Boolean = false,
+    ) : PlaceDetailUiState
 
     /** [denied]: the server refused this account the place (403), so a retry can't change it. */
     data class Error(val message: String, val denied: Boolean = false) : PlaceDetailUiState
@@ -1149,6 +1156,8 @@ private class PlaceDetailCopy(
     private val homeId: String,
     private val group: PlaceDetailGroup,
     private val scope: CoroutineScope,
+    private val savedPlaces: SavedPlacesRepository,
+    private val savedPlaceId: String?,
 ) {
     val state = MutableStateFlow<PlaceDetailUiState>(PlaceDetailUiState.Loading)
     val refreshing = MutableStateFlow(false)
@@ -1173,22 +1182,36 @@ private class PlaceDetailCopy(
         generation++
         readJob?.cancel()
         refreshing.value = false
-        if (!household() || sensitive) {
+        if (!allowsCopy() || sensitive) {
             state.value = PlaceDetailUiState.Loading
             refreshNotice.value = null
         }
-        if (!household()) repo.forgetPlace(homeId)
+        if (!allowsCopy()) repo.forgetPlace(homeId)
     }
 
-    private fun household(): Boolean = homes.myHomesCopy()?.homes?.any { it.id == homeId && it.showsCopyBeforeRecheck } == true
+    private fun allowsCopy(): Boolean =
+        savedPlaceId != null || homes.myHomesCopy()?.homes?.any {
+            it.id == homeId && it.showsCopyBeforeRecheck
+        } == true
 
     private fun current(version: Long): Boolean = visible && generation == version
 
     private fun read(force: Boolean) {
         if (readJob?.isActive == true || !visible) return
         if (state.value !is PlaceDetailUiState.Loaded) {
-            val stored = repo.placeCopy(homeId)?.takeIf { household() && !sensitive && !it.nonResidentViewer }
-            state.value = stored?.let { PlaceDetailUiState.Loaded(it) } ?: PlaceDetailUiState.Loading
+            val stored =
+                if (savedPlaceId != null) {
+                    if (group == PlaceDetailGroup.TODAY) {
+                        savedPlaces.todayCopy(savedPlaceId)
+                    } else {
+                        savedPlaces.detailsCopy(savedPlaceId)
+                    }
+                } else {
+                    Stored(data = repo.placeCopy(homeId)?.takeIf { allowsCopy() && !sensitive && !it.nonResidentViewer })
+                }
+            state.value = stored.data?.let {
+                PlaceDetailUiState.Loaded(it, stored.fetchedAt, stored.failure != null)
+            } ?: PlaceDetailUiState.Loading
         }
         refreshing.value = force && state.value is PlaceDetailUiState.Loaded
         val version = generation
@@ -1197,7 +1220,11 @@ private class PlaceDetailCopy(
                 val stored = readAuthorized(force, version)
                 if (!current(version)) return@launch
                 refreshing.value = false
-                refreshNotice.value = RefreshNotice(stored.fetchedAt, ::refresh).takeIf { stored.showsRefreshFailure(StoreKind.PLACE) }
+                refreshNotice.value =
+                    RefreshNotice(stored.fetchedAt, ::refresh).takeIf {
+                        stored.showsRefreshFailure(StoreKind.PLACE) ||
+                            (savedPlaceId != null && stored.data != null && stored.failure != null)
+                    }
                 publish(stored)
             }
     }
@@ -1206,9 +1233,16 @@ private class PlaceDetailCopy(
         force: Boolean,
         version: Long,
     ): Stored<PlaceIntelligence> {
-        val access = homes.myHomesStored(force || !household())
+        if (savedPlaceId != null) {
+            return if (group == PlaceDetailGroup.TODAY) {
+                savedPlaces.todayStored(savedPlaceId, force)
+            } else {
+                savedPlaces.detailsStored(savedPlaceId, force)
+            }
+        }
+        val access = homes.myHomesStored(force || !allowsCopy())
         if (!current(version)) return Stored()
-        val keep = household()
+        val keep = allowsCopy()
         if (!keep) {
             repo.forgetPlace(homeId)
             state.value = PlaceDetailUiState.Loading
@@ -1221,9 +1255,10 @@ private class PlaceDetailCopy(
     }
 
     private fun publish(stored: Stored<PlaceIntelligence>) {
-        val data = stored.data.takeUnless { (sensitive || !household()) && stored.failure != null }
+        val data = stored.data.takeUnless { (sensitive || !allowsCopy()) && stored.failure != null }
         when {
-            data != null -> state.value = PlaceDetailUiState.Loaded(data)
+            data != null -> state.value = PlaceDetailUiState.Loaded(data, stored.fetchedAt, stored.failure != null)
+            stored.failure == null -> state.value = PlaceDetailUiState.Loading
             stored.failure.refusesStoredCopy -> state.value = failure(stored.failure)
             state.value !is PlaceDetailUiState.Loaded -> state.value = failure(stored.failure)
         }

@@ -31,6 +31,7 @@ import app.pantopus.android.data.api.models.place.PlaceSectionAccess
 import app.pantopus.android.data.api.models.place.PlaceSectionEnvelope
 import app.pantopus.android.data.api.models.place.PlaceSectionStatus
 import app.pantopus.android.data.api.models.place.PlaceTier
+import app.pantopus.android.data.store.StoreKind
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.RefreshFailedLine
@@ -82,7 +83,10 @@ fun PlaceDetailScreen(
     Column(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg)) {
         PlaceDetailHeader(
             title = viewModel.group.title,
-            address = (state as? PlaceDetailUiState.Loaded)?.intelligence?.place?.let { placeDetailAddress(it) }.orEmpty(),
+            address =
+                (state as? PlaceDetailUiState.Loaded)?.intelligence?.place?.let {
+                    if (viewModel.savedPlaceId != null) it.label else placeDetailAddress(it)
+                }.orEmpty(),
             onBack = onBack,
             onAsk = onAsk?.let { ask -> askAboutSection(viewModel, ask) },
         )
@@ -97,35 +101,7 @@ fun PlaceDetailScreen(
                         ErrorState(message = current.message, onRetry = viewModel::refresh)
                     }
                 is PlaceDetailUiState.Loaded ->
-                    if (current.intelligence.leavesOut(viewModel.group)) {
-                        // The server leaves out what doesn't apply to this viewer;
-                        // a link to it gets a straight answer, not empty cards.
-                        PlaceNotForViewerState(group = viewModel.group, role = current.intelligence.viewer?.role, onBack = onBack)
-                    } else {
-                        Column(
-                            modifier =
-                                Modifier
-                                    .fillMaxSize()
-                                    .verticalScroll(rememberScrollState())
-                                    .padding(horizontal = 16.dp),
-                        ) {
-                            // Guests and service providers can't verify this address: no verify action.
-                            val detailVerify = verify.takeUnless { current.intelligence.nonResidentViewer }
-                            CompositionLocalProvider(
-                                LocalPlaceDetailRetry provides viewModel::refresh,
-                                LocalPlaceDetailVerify provides detailVerify,
-                                LocalPlaceDetailVerifiesFirst provides current.intelligence.verifiesFirst,
-                            ) {
-                                GroupContent(
-                                    group = viewModel.group,
-                                    intel = current.intelligence,
-                                    viewModel = viewModel,
-                                    onOpenBallot = onOpenBallot,
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(40.dp))
-                        }
-                    }
+                    LoadedDetail(current, viewModel, verify, refreshing, onBack, onOpenBallot)
             }
         }
     }
@@ -150,21 +126,101 @@ fun PlaceDetailScreen(
 }
 
 @Composable
+private fun LoadedDetail(
+    current: PlaceDetailUiState.Loaded,
+    viewModel: PlaceDetailViewModel,
+    verify: (() -> Unit)?,
+    refreshing: Boolean,
+    onBack: () -> Unit,
+    onOpenBallot: () -> Unit,
+) {
+    if (viewModel.savedPlaceId != null &&
+        (!viewModel.group.supportsSavedPlace || current.intelligence.groups.none { it.groupId in viewModel.group.groups })
+    ) {
+        EmptyState(
+            icon = PantopusIcon.MapPin,
+            headline = "Details aren't available for this address yet.",
+            subcopy = "Return to your Place to see its available public information.",
+            ctaTitle = "Back to your Place",
+            onCta = onBack,
+        )
+    } else if (current.intelligence.leavesOut(viewModel.group)) {
+        // The server leaves out what doesn't apply to this viewer;
+        // a link to it gets a straight answer, not empty cards.
+        PlaceNotForViewerState(group = viewModel.group, role = current.intelligence.viewer?.role, onBack = onBack)
+    } else {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp),
+        ) {
+            // Guests and service providers can't verify this address: no verify action.
+            val detailVerify = verify.takeUnless { current.intelligence.nonResidentViewer }
+            CompositionLocalProvider(
+                LocalPlaceDetailRetry provides viewModel::refresh,
+                LocalPlaceDetailVerify provides detailVerify,
+                LocalPlaceDetailVerifiesFirst provides current.intelligence.verifiesFirst,
+            ) {
+                GroupContent(
+                    group = viewModel.group,
+                    intel = current.intelligence,
+                    viewModel = viewModel,
+                    onOpenBallot = onOpenBallot,
+                    alertsCheck =
+                        if (viewModel.savedPlaceId != null) {
+                            savedAlertsCheck(
+                                current,
+                                refreshing,
+                            )
+                        } else {
+                            TodayAlertsCheck.CURRENT
+                        },
+                )
+            }
+            Spacer(modifier = Modifier.height(40.dp))
+        }
+    }
+}
+
+@Composable
 private fun GroupContent(
     group: PlaceDetailGroup,
     intel: PlaceIntelligence,
     viewModel: PlaceDetailViewModel,
     onOpenBallot: () -> Unit,
+    alertsCheck: TodayAlertsCheck,
 ) {
     when (group) {
         // This page opens over the Place dashboard, where the ballot card is.
-        PlaceDetailGroup.TODAY -> PlaceTodayDetailContent(intel, viewModel, onOpenBallot = onOpenBallot)
+        PlaceDetailGroup.TODAY ->
+            PlaceTodayDetailContent(
+                intel,
+                viewModel.takeIf { it.savedPlaceId == null },
+                onOpenBallot = onOpenBallot,
+                alertsCheck = alertsCheck,
+            )
         PlaceDetailGroup.YOUR_HOME -> PlaceHomeDetailContent(intel)
         PlaceDetailGroup.RISK -> PlaceRiskDetailContent(intel, viewModel)
         PlaceDetailGroup.BLOCK -> PlaceBlockDetailContent(intel, viewModel)
         PlaceDetailGroup.MONEY -> PlaceMoneyDetailContent(intel, viewModel)
         PlaceDetailGroup.CIVIC -> PlaceCivicDetailContent(intel)
         PlaceDetailGroup.IDENTITY -> PlaceIdentityDetailContent(intel, viewModel)
+    }
+}
+
+/** A cached saved-place alert check must never turn into a stale all-clear. */
+@Composable
+private fun savedAlertsCheck(
+    current: PlaceDetailUiState.Loaded,
+    refreshing: Boolean,
+): TodayAlertsCheck {
+    val age = rememberMinuteClock().toInstant().toEpochMilli() - (current.fetchedAt ?: 0L)
+    return when {
+        !current.refreshFailed && age <= StoreKind.TODAY_ALERTS.maxShownAgeMs -> TodayAlertsCheck.CURRENT
+        refreshing -> TodayAlertsCheck.CHECKING
+        else -> TodayAlertsCheck.UNAVAILABLE
     }
 }
 
@@ -274,8 +330,10 @@ private fun askAboutSection(
     viewModel: PlaceDetailViewModel,
     ask: (AIScreenContext) -> Unit,
 ): (() -> Unit)? =
-    if (viewModel.group == PlaceDetailGroup.IDENTITY) {
+    if (viewModel.savedPlaceId != null || viewModel.group == PlaceDetailGroup.IDENTITY) {
         null
     } else {
-        { ask(AIScreenContext.place(viewModel.calendarHomeId, viewModel.group.slug, viewModel.group.title)) }
+        viewModel.calendarHomeId?.let { homeId ->
+            { ask(AIScreenContext.place(homeId, viewModel.group.slug, viewModel.group.title)) }
+        }
     }

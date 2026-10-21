@@ -46,6 +46,12 @@ interface SavedPlacesApi {
      * its label), the same [PlacePreview] shape as `/api/public/place`. Route `backend/routes/savedPlaces.js:54`.
      */
     @GET("api/saved-places/{id}/preview")
+    suspend fun previewConditional(
+        @Path("id") id: String,
+        @Header("If-None-Match") etag: String?,
+    ): Response<PlacePreview>
+
+    @GET("api/saved-places/{id}/preview")
     suspend fun preview(
         @Path("id") id: String,
     ): PlacePreview

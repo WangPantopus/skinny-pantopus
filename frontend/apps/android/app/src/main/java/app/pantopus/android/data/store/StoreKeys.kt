@@ -18,6 +18,7 @@ import app.pantopus.android.data.api.models.neighborhood.NeighborhoodMeter
 import app.pantopus.android.data.api.models.notifications.NotificationUnreadCountResponse
 import app.pantopus.android.data.api.models.notifications.NotificationsListResponse
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
+import app.pantopus.android.data.api.models.place.PlacePreview
 import app.pantopus.android.data.api.models.place.PlaceSectionId
 import app.pantopus.android.data.api.models.posts.MyPostsResponse
 import app.pantopus.android.data.api.models.posts.PostDetailResponse
@@ -121,6 +122,15 @@ object StoreKeys {
             kind = StoreKind.TODAY,
             topics = setOf(StoreTopics.TODAY, "place:$id"),
             type = PlaceIntelligence::class.java,
+        )
+
+    /** Public preview shared by the saved-address root and its details. */
+    fun savedPlacePreview(id: String) =
+        StoreKey<PlacePreview>(
+            "api/saved-places/$id/preview",
+            kind = StoreKind.TODAY,
+            topics = setOf(StoreTopics.HOMES, StoreTopics.TODAY, "place:$id"),
+            type = PlacePreview::class.java,
         )
 
     /** My Homes: one source for every screen that lists the viewer's homes. */

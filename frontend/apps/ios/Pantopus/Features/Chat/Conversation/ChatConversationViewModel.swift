@@ -839,7 +839,7 @@ public final class ChatConversationViewModel {
         guard messages.isEmpty else { return }
         do {
             let history: AIConversationMessagesResponse = try await api.request(
-                AIEndpoints.conversationMessages(id: conversationId)
+                AIEndpoints.conversationMessages(id: conversationId, cards: AIChatStreamRequest.supportedCards)
             )
             // A message sent (or "New chat") while this loaded wins.
             guard messages.isEmpty, aiConversationId == conversationId else { return }
@@ -1373,11 +1373,14 @@ public final class ChatConversationViewModel {
         startNewAIConversation()
     }
 
-    /// The action cards in one conversation, by card id; none when it is already gone.
+    /// The action cards in one conversation, by card id; none when it is already gone. The history
+    /// read sends the chat's card list, or the server leaves the action cards out.
     private func aiActionCardIds(conversationId: String) async throws -> Set<String> {
         let history: AIConversationMessagesResponse
         do {
-            history = try await api.request(AIEndpoints.conversationMessages(id: conversationId))
+            history = try await api.request(
+                AIEndpoints.conversationMessages(id: conversationId, cards: AIChatStreamRequest.supportedCards)
+            )
         } catch APIError.notFound {
             return []
         }
@@ -1760,14 +1763,15 @@ public final class ChatConversationViewModel {
         queuedAttachments.removeAll { $0.id == id }
     }
 
-    public func queueAttachment(kind: ChatQueuedAttachmentKind, filename: String, mimeType: String, data: Data) {
+    public func queueAttachment(kind: ChatQueuedAttachmentKind, filename: String, mimeType: String, data: Data, liveVideo: Data? = nil) {
         appendQueuedAttachment(
             ChatQueuedAttachment(
                 id: UUID().uuidString,
                 kind: kind,
                 filename: filename,
                 mimeType: mimeType,
-                data: data
+                data: data,
+                liveVideo: liveVideo
             )
         )
     }
@@ -1975,17 +1979,21 @@ public final class ChatConversationViewModel {
         roomId: String,
         clientId: String
     ) async throws -> [String] {
-        let files = attachments.compactMap { attachment -> MultipartFile? in
-            guard let data = attachment.data else { return nil }
-            return MultipartFile(
-                fieldName: "files",
-                filename: attachment.filename,
-                mimeType: attachment.mimeType,
-                data: data
-            )
+        var files: [MultipartFile] = []
+        var slots: [[String: Int]] = []
+        for attachment in attachments {
+            guard let data = attachment.data else { continue }
+            var slot = ["fileIndex": files.count]
+            files.append(MultipartFile(fieldName: "files", filename: attachment.filename, mimeType: attachment.mimeType, data: data))
+            if let clip = attachment.liveVideo {
+                slot["liveVideoIndex"] = files.count
+                files.append(MultipartFile(fieldName: "files", filename: "live-\(attachment.id).mp4", mimeType: "video/mp4", data: clip))
+            }
+            slots.append(slot)
         }
         guard !files.isEmpty else { return [] }
-        let response = try await uploader.uploadChatMedia(roomId: roomId, files: files, clientRequestId: clientId)
+        let media = try String(bytes: JSONEncoder().encode(slots), encoding: .utf8)
+        let response = try await uploader.uploadChatMedia(roomId: roomId, files: files, clientRequestId: clientId, media: media)
         return response.media.map(\.id)
     }
 
@@ -2667,7 +2675,8 @@ public final class ChatConversationViewModel {
                 lockedTier: Self.lockedTier(for: message),
                 sentSupportTier: Self.sentSupportTier(for: message),
                 senderName: side == .incoming ? roomSenderName(for: message) : nil,
-                aiLinks: message.messageType == "ai_reply" ? aiLinksByMessageId[message.id] ?? [] : []
+                aiLinks: message.messageType == "ai_reply" ? aiLinksByMessageId[message.id] ?? [] : [],
+                attachments: message.attachments
             )))
         }
         state = .loaded(rows: rows)

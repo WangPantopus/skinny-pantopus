@@ -19,6 +19,12 @@
 //  is its own tab there too (founder decision 2026-10-17): Place · Today ·
 //  Nearby · Plans · Messages while the `plans` switch is on.
 //
+//  Founder decision 2026-10-20: Nearby is two segments, Pulse (the October 13
+//  feed, where the tab opens) and Neighborhood (the density map and meter),
+//  with no door page between; Connections lives in the side menu. The side
+//  menu (the navigation drawer) is hosted here, above every tab, and the top
+//  screen of every tab has its menu button (`NavigationMenuButton`).
+//
 
 // swiftlint:disable file_length
 
@@ -115,6 +121,12 @@ public final class RootTabModel {
     /// Changes each time the Place tab is tapped again while already on its
     /// root, so the root scrolls back to the top.
     public var placeReselectedAtRoot: UUID?
+    /// The side menu is open (each tab's menu button sets it; the drawer,
+    /// hosted by `RootTabView`, clears it when it closes).
+    public var showsNavigationMenu = false
+    /// A side-menu choice waiting for the Place tab's stack (`HubTabRoot`),
+    /// where the menu's screens open.
+    var pendingMenuAction: NavigationMenuAction?
     public init() {}
 }
 
@@ -165,9 +177,9 @@ public struct RootTabView: View {
                     .tabItem { tabLabel(.pulse) }
                     .tag(RootTab.pulse)
             } else {
-                // Launch cut #11 (the Pulse redesign) is off: October 13's
-                // Nearby tab, which opens Pulse and Connections.
-                NeighborhoodTabRoot()
+                // Launch cut #11 (the Pulse redesign) is off: the Nearby tab,
+                // Pulse and Neighborhood as two segments (founder, 2026-10-20).
+                NeighborhoodTabRoot(onAddHome: startAddingHome)
                     .tabItem { tabLabel(.nearby) }
                     .tag(RootTab.nearby)
             }
@@ -191,6 +203,8 @@ public struct RootTabView: View {
         // The app-wide tint also reaches the dialogs UIKit presents; primaryTint resolves for dark mode there.
         .tint(Theme.Color.primaryTint)
         .environment(model)
+        // The side menu, above every tab and the bar (founder, 2026-10-20).
+        .overlay { navigationMenu }
         .background {
             if signedInUserID != nil, !AppLockManager.shared.isLocked,
                !showProfile, pendingInviteToken == nil {
@@ -331,7 +345,7 @@ public struct RootTabView: View {
              .notifications, .createBusiness, .businessProfile, .businessPage,
              .editBusinessPage,
              .wallet, .paymentsSettings, .securityDevices, .notificationSettings,
-             .businessOwner, .viewAs, .waitingRoom, .neighborMessage,
+             .businessOwner, .businessConversation, .viewAs, .waitingRoom, .neighborMessage,
              .bookingDetail, .myBookings,
              .invoiceDetail:
             model.selected = .place
@@ -399,22 +413,56 @@ public struct RootTabView: View {
         model.selected = .plans
     }
 
-    /// With the Pulse redesign off (launch cut #11), as on October 13: `/nearby`
-    /// opens the Nearby tab, and a feed or post link opens Pulse from Nearby's
-    /// door, whose Pulse sheet then consumes it.
+    /// With the Pulse redesign off (launch cut #11): the Nearby tab (founder
+    /// decision 2026-10-20). `/nearby` (the neighborhood milestone push among
+    /// them) opens its Neighborhood segment; a feed or post link opens the
+    /// Pulse segment, whose stack then consumes it.
     private func openNearby(_ destination: DeepLinkRouter.Destination) {
         model.selected = .nearby
         if destination == .pulse {
+            NeighborhoodDoorStore.shared.pendingSegment = .neighborhood
             _ = router.consume()
         } else {
-            NeighborhoodDoorStore.shared.pendingSurface = .pulse
+            NeighborhoodDoorStore.shared.pendingSegment = .pulse
         }
     }
 
-    /// "Set up a home" from Today or Pulse: the Place tab starts adding one.
+    /// "Set up a home" from Today, Pulse or Nearby: the Place tab starts adding one.
     private func startAddingHome() {
         model.selected = .place
         addHomeRequest = UUID()
+    }
+
+    /// The side menu over every tab (founder decision 2026-10-20). It is the
+    /// personal context, as it was on Place: the pill's name opens the profile
+    /// cover, and rows open their screens in the Place tab's stack.
+    private var navigationMenu: some View {
+        NavigationDrawerView(
+            viewModel: NavigationDrawerViewModel(context: .personal(name: signedInUserName)),
+            isPresented: Binding(
+                get: { model.showsNavigationMenu },
+                set: { model.showsNavigationMenu = $0 }
+            ),
+            onSelect: { destination in openFromMenu(.open(destination)) },
+            // Launch cut #2 (Personas): the drawer hides its identity Switch.
+            onOpenIdentityCenter: {
+                if LaunchFeatures.personas { openFromMenu(.identityCenter) }
+            },
+            onBackToHub: { openFromMenu(.backToPlace) },
+            onOpenProfile: { showProfile = true }
+        )
+    }
+
+    /// The menu's screens live in the Place stack, as the account links
+    /// (`/connections`, `/wallet` …) do: from any tab, Place shows them.
+    private func openFromMenu(_ action: NavigationMenuAction) {
+        model.showsNavigationMenu = false
+        model.pendingMenuAction = action
+        model.selected = .place
+    }
+
+    private var signedInUserName: String {
+        if case let .signedIn(user) = auth.state { user.displayName ?? "" } else { "" }
     }
 
     /// Links that leave the profile cover in place: the monthly receipt
