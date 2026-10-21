@@ -56,6 +56,7 @@ struct PantopusApp: App {
                 .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
                     if let url = activity.webpageURL {
                         guard !AuthManager.isOAuthCallback(url) else { return }
+                        guard !WebLinkFallback.openIfNeeded(url) else { return }
                         DeepLinkRouter.shared.handle(url: url)
                     }
                 }
