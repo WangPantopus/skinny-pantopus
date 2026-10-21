@@ -144,7 +144,8 @@ fun PlaceDensityCard(
                 color = PantopusColors.appText,
                 modifier = Modifier.weight(1f),
             )
-            PlaceChevron()
+            // Only a card that opens something says so.
+            if (onTap != null) PlaceChevron()
         }
         Spacer(modifier = Modifier.height(11.dp))
         Row(
