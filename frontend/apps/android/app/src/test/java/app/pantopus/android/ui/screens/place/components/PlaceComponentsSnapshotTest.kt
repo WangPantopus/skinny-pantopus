@@ -102,6 +102,7 @@ private fun AtomsGallery() {
 @Composable
 private fun SectionCardStatesGallery() {
     Gallery {
+        // Dashboard cards open a detail page; the chevron only renders with an action behind it.
         PlaceSectionCard(
             title = "Air quality",
             icon = PantopusIcon.Wind,
@@ -110,6 +111,7 @@ private fun SectionCardStatesGallery() {
             value = "AQI 38 — good",
             caption = "AirNow · EPA",
             chip = PlaceChipModel(PlaceChipTone.SUCCESS, "Good", PantopusIcon.Check),
+            onTap = {},
         )
         PlaceSectionCard(
             title = "Your home",
@@ -117,21 +119,25 @@ private fun SectionCardStatesGallery() {
             state = PlaceSectionCardState.LOADED,
             value = "Built 1979 · 1,840 sqft · ~\$612k",
             sparkline = true,
+            onTap = {},
         )
         PlaceSectionCard(
             title = "Air quality",
             icon = PantopusIcon.Wind,
             state = PlaceSectionCardState.LOADING,
+            onTap = {},
         )
         PlaceSectionCard(
             title = "Water",
             icon = PantopusIcon.Droplets,
             state = PlaceSectionCardState.EMPTY,
+            onTap = {},
         )
         PlaceSectionCard(
             title = "Civic",
             icon = PantopusIcon.Landmark,
             state = PlaceSectionCardState.UNAVAILABLE,
+            onTap = {},
         )
         PlaceSectionCard(
             title = "Air quality",
@@ -139,11 +145,13 @@ private fun SectionCardStatesGallery() {
             asOf = "2h ago",
             state = PlaceSectionCardState.STALE,
             value = "AQI 41 — good",
+            onTap = {},
         )
         PlaceSectionCard(
             title = "Air quality",
             icon = PantopusIcon.Wind,
             state = PlaceSectionCardState.ERROR,
+            onTap = {},
         )
     }
 }
@@ -151,6 +159,7 @@ private fun SectionCardStatesGallery() {
 @Composable
 private fun InlineCardsGallery() {
     Gallery {
+        // The chevron only renders with an action behind it.
         PlaceGroupLabel(text = "Today")
         PlaceSectionCard(
             title = "Weather",
@@ -158,6 +167,7 @@ private fun InlineCardsGallery() {
             state = PlaceSectionCardState.LOADED,
             value = "62° and clear",
             inline = true,
+            onTap = {},
         )
         PlaceSectionCard(
             title = "Alerts",
@@ -165,6 +175,7 @@ private fun InlineCardsGallery() {
             state = PlaceSectionCardState.LOADED,
             chip = PlaceChipModel(PlaceChipTone.WARNING, "Wind advisory", PantopusIcon.Wind),
             inline = true,
+            onTap = {},
         )
         PlaceSectionCard(
             title = "Emergency plan",
@@ -172,6 +183,7 @@ private fun InlineCardsGallery() {
             state = PlaceSectionCardState.LOADED,
             actionLabel = "Set up your plan",
             inline = true,
+            onTap = {},
         )
     }
 }
@@ -187,8 +199,8 @@ private fun CompositeCardsGallery() {
             // The button only renders with an action behind it.
             onTap = {},
         )
-        PlaceDensityCard(bucket = PlaceDensityBucket.FEW)
-        PlaceDensityCard(bucket = PlaceDensityBucket.NONE)
+        PlaceDensityCard(bucket = PlaceDensityBucket.FEW, onTap = {})
+        PlaceDensityCard(bucket = PlaceDensityBucket.NONE, onTap = {})
     }
 }
 
