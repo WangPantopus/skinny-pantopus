@@ -87,6 +87,7 @@ struct AIActionCardView: View {
     let cardId: String
     let card: ChatAIActionCard
     @Environment(\.chatAIActions) private var handlers
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
@@ -188,17 +189,34 @@ struct AIActionCardView: View {
         }
     }
 
+    /// One button per row when side by side would wrap a label ("Fewer like this"), as on
+    /// Android: three or more buttons, a label over 12 characters, or large text.
+    private func stacks(_ actions: [AIActionCardDTO.Action]) -> Bool {
+        if actions.count > 2 { return true }
+        guard actions.count == 2 else { return false }
+        return dynamicTypeSize >= .xxxLarge || actions.contains { $0.label.count > 12 }
+    }
+
+    /// Two short buttons share a row; otherwise (`stacks`) each gets its own,
+    /// so none is squeezed.
+    @ViewBuilder
     private func buttons(_ actions: [AIActionCardDTO.Action], itemId: String?, size: CompactButtonSize) -> some View {
+        if stacks(actions) {
+            VStack(spacing: 6) { buttonRow(actions, itemId: itemId, size: size) }
+        } else {
+            HStack(spacing: Spacing.s2) { buttonRow(actions, itemId: itemId, size: size) }
+        }
+    }
+
+    private func buttonRow(_ actions: [AIActionCardDTO.Action], itemId: String?, size: CompactButtonSize) -> some View {
         let locked = card.running != nil || card.isExpired
-        return HStack(spacing: Spacing.s2) {
-            ForEach(actions) { action in
-                CompactButton(title: action.label, variant: variant(action.style), size: size) {
-                    handlers.run(cardId, itemId, action.id)
-                }
-                .disabled(locked)
-                .opacity(locked ? 0.5 : 1)
-                .accessibilityIdentifier("chatAIActionButton_\(action.id)")
+        return ForEach(actions) { action in
+            CompactButton(title: action.label, variant: variant(action.style), size: size) {
+                handlers.run(cardId, itemId, action.id)
             }
+            .disabled(locked)
+            .opacity(locked ? 0.5 : 1)
+            .accessibilityIdentifier("chatAIActionButton_\(action.id)")
         }
     }
 
@@ -233,6 +251,8 @@ struct AIActionCardView: View {
         // An appliance, the year's plan and any later home card.
         case let other where other.hasPrefix("home_"): ("Home", .home)
         case "notification_settings": ("Notifications", .bell)
+        // A nudge with nothing to do but "Fewer like this" (phase 2 §3.6).
+        case "suggestion": ("Suggestion", .sparkles)
         default: ("Action", .sparkles)
         }
     }

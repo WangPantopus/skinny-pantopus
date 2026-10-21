@@ -145,6 +145,11 @@ final class DeepLinkRouter {
         /// `pantopus://settings/notifications` — Settings → Notifications
         /// (quiet hours, briefings, alerts), from a Pantopus AI link button.
         case notificationSettings
+        /// `pantopus://assistant` — the Pantopus AI thread (AI assistant
+        /// phase 2 contract §8.2). `?nudge=<notificationId>` opens it at the
+        /// brief or nudge that notification carried; `&conversation=<id>`,
+        /// added from the notification's metadata, names its conversation.
+        case assistant(nudgeId: String?, conversationId: String?)
 
         // MARK: - B1.6 batch-2 routing seam
 
@@ -485,6 +490,22 @@ final class DeepLinkRouter {
         return "/hub-today?kind=\(kind)&deliveryId=\(encoded)"
     }
 
+    /// The types a brief or nudge arrives as (phase 2 contract §3.2).
+    nonisolated static let assistantNotificationTypes: Set<String> = ["assistant_brief", "assistant_nudge"]
+
+    /// A brief's or nudge's push or row opens the assistant at its message,
+    /// whatever its `link` says: `/assistant?nudge=<id>`, plus the
+    /// conversation its metadata names. Nil for every other type.
+    nonisolated static func assistantPath(type: String?, notificationId: String?, conversationId: String?) -> String? {
+        guard assistantNotificationTypes.contains(type?.lowercased() ?? ""),
+              let notificationId, UUID(uuidString: notificationId) != nil else { return nil }
+        var path = "/assistant?nudge=\(notificationId.lowercased())"
+        if let conversationId, UUID(uuidString: conversationId) != nil {
+            path += "&conversation=\(conversationId.lowercased())"
+        }
+        return path
+    }
+
     static func normalizeIncoming(_ path: String) -> String {
         if path.hasPrefix("pantopus://") || path.hasPrefix("http") {
             return path
@@ -708,6 +729,16 @@ final class DeepLinkRouter {
             return resetPasswordDestination(url: url, token: tokenQuery)
         case "verify-email", "verify_email":
             return verifyEmailDestination(url: url, token: tokenQuery, email: emailQuery)
+        case "assistant":
+            guard segments.count == 1 else { return .unknown(url) }
+            // An id that isn't a uuid opens the thread where it is.
+            let uuid: (String?) -> String? = { raw in
+                raw.flatMap { UUID(uuidString: $0) != nil ? $0.lowercased() : nil }
+            }
+            return .assistant(
+                nudgeId: uuid(queryValue("nudge", in: comps)),
+                conversationId: uuid(queryValue("conversation", in: comps))
+            )
         case "settings":
             // `pantopus://settings/payments` — A14.6,
             // `pantopus://settings/security` — Devices & sessions, and

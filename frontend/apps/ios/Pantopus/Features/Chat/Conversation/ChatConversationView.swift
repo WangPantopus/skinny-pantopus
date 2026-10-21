@@ -1152,13 +1152,18 @@ extension ChatConversationView {
                 .onChange(of: rows.last) { oldLast, newLast in
                     pinToBottomIfNeeded(oldLast: oldLast, newLast: newLast, proxy: proxy)
                 }
-                .onChange(of: viewModel.pendingScrollTargetId) { _, target in
+                // `initial`: a target published before this frame appeared
+                // (a slow first layout) still scrolls.
+                .onChange(of: viewModel.pendingScrollTargetId, initial: true) { _, target in
                     guard let target else { return }
+                    // A brief or nudge opens at its start, its cards below it;
+                    // a searched message sits in the middle.
+                    let anchor: UnitPoint = mode == .aiAssistant ? .top : .center
                     if reduceMotion {
-                        proxy.scrollTo(target, anchor: .center)
+                        proxy.scrollTo(target, anchor: anchor)
                     } else {
                         withAnimation(.easeOut(duration: 0.2)) {
-                            proxy.scrollTo(target, anchor: .center)
+                            proxy.scrollTo(target, anchor: anchor)
                         }
                     }
                     viewModel.consumePendingScroll()

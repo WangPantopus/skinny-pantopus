@@ -357,6 +357,25 @@ public final class AIConversationStore {
     }
 }
 
+/// A brief or nudge the assistant thread opens at (`pantopus://assistant?nudge=`,
+/// `docs/product/ai-assistant-phase2-contract-2026-10-20.md` §8.2): its
+/// Notification id and, when its metadata named it, its conversation.
+public struct AIAssistantNudge: Hashable, Sendable {
+    public let notificationId: String
+    public let conversationId: String?
+
+    public init(notificationId: String, conversationId: String? = nil) {
+        self.notificationId = notificationId
+        self.conversationId = conversationId
+    }
+}
+
+/// How reading an assistant conversation's turns went: shown (or overtaken by a
+/// message sent meanwhile), gone (404), or not read (offline, a server error).
+private enum AIHistoryLoad {
+    case read, missing, failed
+}
+
 @Observable
 @MainActor
 public final class ChatConversationViewModel {
@@ -369,11 +388,14 @@ public final class ChatConversationViewModel {
     /// `consumePendingScroll()` after scrolling.
     public private(set) var pendingScrollTargetId: String?
 
-    /// True while the screen was opened from Chat Search and the matched
-    /// message hasn't been scrolled to yet — the view skips its
-    /// land-at-latest pass so the two don't fight over the position.
+    /// True while the screen was opened from Chat Search (or at a nudge) and
+    /// the matched message hasn't been scrolled to yet — the view skips its
+    /// land-at-latest pass so the two don't fight over the position. It
+    /// stays true from finding the message until the view has scrolled to
+    /// it: the populated frame appears in between, and its pass would
+    /// otherwise pin the thread back to the bottom.
     public var hasPendingSearchTarget: Bool {
-        scrollToMessageId != nil && !didResolveScrollTarget
+        scrollToMessageId != nil && (!didResolveScrollTarget || awaitingTargetScroll)
     }
 
     /// Header counterparty data (drives the top-bar variant).
@@ -587,9 +609,15 @@ public final class ChatConversationViewModel {
     /// push banners for the thread the user is already viewing.
     private let activeThreadTracker: ActiveChatThreadTracker
     /// Message to scroll to on first load (Chat Search deep-link). `nil`
-    /// for normal opens, which land on the latest message.
-    private let scrollToMessageId: String?
+    /// for normal opens, which land on the latest message. In the assistant
+    /// thread opened at a nudge it is the nudge's id until its history names
+    /// the message that carries it.
+    private var scrollToMessageId: String?
     private var didResolveScrollTarget = false
+    /// Found, not yet scrolled to (`consumePendingScroll()` clears it).
+    private var awaitingTargetScroll = false
+    /// The brief or nudge the assistant thread was opened at.
+    private let aiNudge: AIAssistantNudge?
     private let logger = Logger(label: "app.pantopus.ios.ChatConversation")
 
     private var messages: [ChatMessageDTO] = []
@@ -691,6 +719,7 @@ public final class ChatConversationViewModel {
         aiClient: any AIChatStreaming = AIChatStreamClient.shared,
         aiConversationStore: AIConversationStore = .shared,
         aiTopic: AIAskTopic? = nil,
+        aiNudge: AIAssistantNudge? = nil,
         actionDoneStore: AIActionDoneStore = .shared,
         locationProvider: any LocationProviding = DeviceLocationProvider.shared,
         activeThreadTracker: ActiveChatThreadTracker = .shared
@@ -705,7 +734,9 @@ public final class ChatConversationViewModel {
         }
         composerText = initialComposerText
         self.initialTopic = initialTopic
-        self.scrollToMessageId = scrollToMessageId
+        let nudge: AIAssistantNudge? = if case .ai = mode { aiNudge } else { nil }
+        self.aiNudge = nudge
+        self.scrollToMessageId = scrollToMessageId ?? nudge?.notificationId
         self.gigId = gigId
         self.api = api
         store = ScreenStore.store(for: api)
@@ -723,7 +754,8 @@ public final class ChatConversationViewModel {
         // Continue the user's existing AI conversation across thread
         // opens within this app session. Ask on a screen starts a new one
         // with its first message; until then the earlier one stays current.
-        if case .ai = mode, topic == nil {
+        // A thread opened at a nudge continues the nudge's conversation.
+        if case .ai = mode, topic == nil, nudge == nil {
             aiConversationId = aiConversationStore.conversationId(forUserId: currentUserId)
         }
     }
@@ -745,6 +777,7 @@ public final class ChatConversationViewModel {
         currentUserId = "preview_me"
         asBusinessUserId = nil
         scrollToMessageId = nil
+        aiNudge = nil
         initialTopic = nil
         gigId = nil
         api = .shared
@@ -811,6 +844,10 @@ public final class ChatConversationViewModel {
     /// what is asked there, so its starters stay in view.
     private func restoreAIConversationIfNeeded() async {
         guard case .ai = mode else { return }
+        if let aiNudge {
+            await openAINudge(aiNudge)
+            return
+        }
         // Reopened this session (or after an Ask on a screen): show the
         // conversation it continues, as a relaunch does.
         if let aiConversationId {
@@ -831,22 +868,82 @@ public final class ChatConversationViewModel {
         }
     }
 
+    /// A brief's or nudge's push or row: the conversation it went into (the
+    /// one its metadata names, else the newest, which a nudge is added to),
+    /// shown with its turns and opened at the nudge's message. The person
+    /// carries on in that conversation, so "move it to Sunday" after a
+    /// weather nudge reaches the plan it was about.
+    private func openAINudge(_ nudge: AIAssistantNudge) async {
+        let shown = await showNudgeConversation(nudge)
+        if !shown {
+            // Offline or a server error: say so, rather than show an empty thread.
+            actionFailure = "Couldn\u{2019}t load this conversation. Check your connection, then open it again."
+        }
+        // Not found (gone, or another conversation): the thread opens at its latest message.
+        if scrollToMessageId == nudge.notificationId, !didResolveScrollTarget {
+            didResolveScrollTarget = true
+            rebuild()
+        }
+    }
+
+    /// Shows the conversation a brief or nudge went into; when the one it names is gone
+    /// (deleted), the newest. False when it couldn't be read.
+    private func showNudgeConversation(_ nudge: AIAssistantNudge) async -> Bool {
+        do {
+            var named = nudge.conversationId
+            if named == nil { named = try await newestAIConversationId() }
+            // A message sent meanwhile already has its conversation.
+            guard let conversationId = named, aiConversationId == nil else { return true }
+            switch await continueAIConversation(conversationId) {
+            case .read: return true
+            case .failed: return false
+            case .missing:
+                guard nudge.conversationId != nil, aiConversationId == conversationId,
+                      let newest = try await newestAIConversationId(), newest != conversationId else { return true }
+                aiConversationId = nil
+                return await continueAIConversation(newest) != .failed
+            }
+        } catch {
+            logger.warning("AI conversations unavailable: \(error)")
+            return false
+        }
+    }
+
+    /// The person's newest assistant conversation (`GET /api/ai/conversations`
+    /// lists them newest-updated first), nil when there is none.
+    private func newestAIConversationId() async throws -> String? {
+        let response: AIConversationsResponse = try await api.request(AIEndpoints.conversations())
+        return response.conversations.first?.id
+    }
+
+    /// Carries on in `conversationId`, showing its turns.
+    @discardableResult
+    private func continueAIConversation(_ conversationId: String) async -> AIHistoryLoad {
+        aiConversationId = conversationId
+        aiConversationStore.setConversationId(conversationId, forUserId: currentUserId)
+        return await loadAIHistory(conversationId: conversationId)
+    }
+
     /// Seed the thread with a restored conversation's turns
     /// (`GET /api/ai/conversations/:id/messages`). A draft and the note
     /// after it share one reply, as they did when it streamed. A server
     /// without the route (404) leaves the thread empty, as before.
-    private func loadAIHistory(conversationId: String) async {
-        guard messages.isEmpty else { return }
+    @discardableResult
+    private func loadAIHistory(conversationId: String) async -> AIHistoryLoad {
+        guard messages.isEmpty else { return .read }
         do {
             let history: AIConversationMessagesResponse = try await api.request(
                 AIEndpoints.conversationMessages(id: conversationId, cards: AIChatStreamRequest.supportedCards)
             )
             // A message sent (or "New chat") while this loaded wins.
-            guard messages.isEmpty, aiConversationId == conversationId else { return }
+            guard messages.isEmpty, aiConversationId == conversationId else { return .read }
             var restored: [ChatMessageDTO] = []
             var drafts: [String: [ChatAIDraftCard]] = [:]
             var links: [String: [ChatAILink]] = [:]
             var openReplyId: String?
+            // The open reply already shows a brief's or nudge's line, so a later line starts its own.
+            var openReplyHasText = false
+            var nudgeMessageId: String?
             for (index, item) in history.messages.enumerated() {
                 let id = "ai_history_\(index)"
                 if item.role == "user" {
@@ -855,11 +952,14 @@ public final class ChatConversationViewModel {
                     restored.append(localMessage(id: id, text: shown, userId: currentUserId, type: "text"))
                     continue
                 }
+                // A brief or nudge starts its own reply, and its cards join it.
+                if item.nudge != nil { openReplyId = nil }
                 var replyId = openReplyId ?? id
                 if let draft = item.draft {
                     if openReplyId == nil {
                         restored.append(localMessage(id: replyId, text: "", userId: "ai", type: "ai_reply"))
                         openReplyId = replyId
+                        openReplyHasText = false
                     }
                     let object: [String: Any] = [
                         "type": draft.type,
@@ -870,12 +970,14 @@ public final class ChatConversationViewModel {
                         drafts[replyId, default: []].append(card)
                     }
                 } else if let text = item.text, !text.isEmpty {
-                    if let open = openReplyId, let at = restored.firstIndex(where: { $0.id == open }) {
+                    if let open = openReplyId, !openReplyHasText, let at = restored.firstIndex(where: { $0.id == open }) {
                         restored[at] = localMessage(id: open, text: text, userId: "ai", type: "ai_reply")
                         openReplyId = nil
                     } else {
                         replyId = id
                         restored.append(localMessage(id: id, text: text, userId: "ai", type: "ai_reply"))
+                        openReplyId = item.nudge != nil ? id : nil
+                        openReplyHasText = item.nudge != nil
                     }
                 }
                 // A reply's link buttons stay under it after a relaunch.
@@ -887,13 +989,30 @@ public final class ChatConversationViewModel {
                 if !itemLinks.isEmpty, let target {
                     links[target, default: []] += itemLinks.map { ChatAILink(label: $0.label, url: $0.url) }
                 }
+                // The first reply carrying the nudge the thread was opened at.
+                if nudgeMessageId == nil, let nudge = aiNudge, item.nudge?.id.lowercased() == nudge.notificationId,
+                   let target {
+                    nudgeMessageId = target
+                }
             }
             messages = restored
             aiDraftsByMessageId = drafts
             aiLinksByMessageId = links
+            if aiNudge != nil, !didResolveScrollTarget {
+                if let nudgeMessageId {
+                    scrollToMessageId = nudgeMessageId
+                } else {
+                    // Not in this conversation: the thread opens at its latest message.
+                    didResolveScrollTarget = true
+                }
+            }
             rebuild()
+            return .read
+        } catch APIError.notFound {
+            return .missing
         } catch {
             logger.warning("AI conversation history unavailable: \(error)")
+            return .failed
         }
     }
 
@@ -2723,6 +2842,7 @@ public final class ChatConversationViewModel {
         let rowId = "bubble_\(target)"
         guard rows.contains(where: { $0.id == rowId }) else { return }
         didResolveScrollTarget = true
+        awaitingTargetScroll = true
         // Publish on the next beat so the populated frame is mounted and
         // laid out before the view reacts — it scrolls in `.onChange`,
         // which only fires for a value that changes while it is on screen.
@@ -2735,6 +2855,7 @@ public final class ChatConversationViewModel {
     /// Clear the scroll target after the view has scrolled to it.
     public func consumePendingScroll() {
         pendingScrollTargetId = nil
+        awaitingTargetScroll = false
     }
 
     /// Merge persisted messages with optimistic pending rows. Failed

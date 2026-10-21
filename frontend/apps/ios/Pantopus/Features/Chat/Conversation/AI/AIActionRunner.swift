@@ -40,7 +40,9 @@ enum AIActionAllowlist {
         (.put, "/api/homes/:id/tasks/:id"),
         (.post, "/api/homes/:id/assets"),
         (.post, "/api/homes/:id/tasks/:id/recurrence"),
-        (.put, "/api/hub/preferences")
+        (.put, "/api/hub/preferences"),
+        // Phase 2: a nudge's "Fewer like this".
+        (.post, "/api/ai/nudges/:id/fewer")
     ]
 
     /// The request as an endpoint, or nil when the app never sends it: a
@@ -235,6 +237,9 @@ enum AIActionRunner {
         case "chat":
             let room = body?.dictValue?["roomId"]?.stringValue
             signal(Set([ScreenTopic.chats] + (room.map { [ScreenTopic.chat($0)] } ?? [])))
+        case "hub", "ai":
+            // Notification settings show the switches and "Fewer like this" mutes.
+            signal([ScreenTopic.profileMe])
         default:
             break
         }

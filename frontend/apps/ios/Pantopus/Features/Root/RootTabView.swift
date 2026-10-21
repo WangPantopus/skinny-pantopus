@@ -369,9 +369,9 @@ public struct RootTabView: View {
             openProfile(at: .fanInbox(personaId: personaId))
         case .creatorAudienceMembers:
             openProfile(at: .creatorAudienceMembers)
-        case .conversation:
-            // Chat lives in the Messages tab (the Mail tab's Messages segment
-            // while Mailbox is on).
+        case .conversation, .assistant:
+            // Chat, and the Pantopus AI thread with it, lives in the Messages
+            // tab (the Mail tab's Messages segment while Mailbox is on).
             if LaunchFeatures.mailbox { MailTabStore.shared.pendingSegment = .messages }
             model.selected = .mail
         case .home:

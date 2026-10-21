@@ -62,6 +62,16 @@ public struct NotificationPreferencesDTO: Decodable, Sendable, Hashable {
     /// Raw wire value — kept as a string so an unknown server-side mode
     /// round-trips instead of being coerced to a default.
     public var locationMode: String
+    /// "Suggestions from Pantopus" (the morning brief with buttons and the
+    /// capped nudges, AI assistant phase 2 contract §3.4). Nil means never
+    /// set, which counts as off and brings the one-time notice.
+    public var suggestionsEnabled: Bool?
+    /// The server sent `suggestions_enabled` at all. A server from before
+    /// phase 2 doesn't, and then the app offers neither the switch nor the
+    /// notice.
+    public var suggestionsSupported: Bool
+    /// "Fewer like this": each muted kind and when its mute ends (ISO 8601).
+    public var suggestionsMuted: [String: String]
 
     /// Typed projection of `locationMode`; nil when the server sent a
     /// value this build doesn't know.
@@ -73,6 +83,18 @@ public struct NotificationPreferencesDTO: Decodable, Sendable, Hashable {
     /// Mirrors RN (`notification-preferences.tsx:205`).
     public var quietHoursEnabled: Bool {
         quietHoursStartLocal != nil
+    }
+
+    /// The kinds "Fewer like this" still holds back at `now`.
+    public func activeSuggestionMutes(now: Date = Date()) -> [String] {
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let plain = ISO8601DateFormatter()
+        return suggestionsMuted.compactMap { kind, until in
+            guard let end = fractional.date(from: until) ?? plain.date(from: until), end > now else { return nil }
+            return kind
+        }
+        .sorted()
     }
 
     public init(
@@ -90,7 +112,10 @@ public struct NotificationPreferencesDTO: Decodable, Sendable, Hashable {
         quietHoursStartLocal: String? = nil,
         quietHoursEndLocal: String? = nil,
         locationMode: String = BriefingLocationMode.primaryHome.rawValue,
-        dailyBriefingPromptedAt: String? = nil
+        dailyBriefingPromptedAt: String? = nil,
+        suggestionsEnabled: Bool? = nil,
+        suggestionsSupported: Bool = false,
+        suggestionsMuted: [String: String] = [:]
     ) {
         self.dailyBriefingEnabled = dailyBriefingEnabled
         self.dailyBriefingTimeLocal = dailyBriefingTimeLocal
@@ -107,6 +132,9 @@ public struct NotificationPreferencesDTO: Decodable, Sendable, Hashable {
         self.quietHoursStartLocal = quietHoursStartLocal
         self.quietHoursEndLocal = quietHoursEndLocal
         self.locationMode = locationMode
+        self.suggestionsEnabled = suggestionsEnabled
+        self.suggestionsSupported = suggestionsSupported
+        self.suggestionsMuted = suggestionsMuted
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -125,6 +153,8 @@ public struct NotificationPreferencesDTO: Decodable, Sendable, Hashable {
         case quietHoursStartLocal = "quiet_hours_start_local"
         case quietHoursEndLocal = "quiet_hours_end_local"
         case locationMode = "location_mode"
+        case suggestionsEnabled = "suggestions_enabled"
+        case suggestionsMuted = "suggestions_muted"
     }
 
     public init(from decoder: any Decoder) throws {
@@ -147,7 +177,11 @@ public struct NotificationPreferencesDTO: Decodable, Sendable, Hashable {
             quietHoursEndLocal: container.decodeIfPresent(String.self, forKey: .quietHoursEndLocal),
             locationMode: container.decodeIfPresent(String.self, forKey: .locationMode)
                 ?? BriefingLocationMode.primaryHome.rawValue,
-            dailyBriefingPromptedAt: container.decodeIfPresent(String.self, forKey: .dailyBriefingPromptedAt)
+            dailyBriefingPromptedAt: container.decodeIfPresent(String.self, forKey: .dailyBriefingPromptedAt),
+            suggestionsEnabled: container.decodeIfPresent(Bool.self, forKey: .suggestionsEnabled),
+            suggestionsSupported: container.contains(.suggestionsEnabled),
+            // A mute map of another shape reads as nothing muted.
+            suggestionsMuted: (try? container.decodeIfPresent([String: String].self, forKey: .suggestionsMuted)) ?? [:]
         )
     }
 }
