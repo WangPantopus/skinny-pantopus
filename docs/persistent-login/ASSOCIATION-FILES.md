@@ -25,14 +25,16 @@ They gate four things the design depends on:
   same team** (Xcode → Signing & Capabilities → Team, or
   `security find-identity -v -p codesigning`). If it is a different team, rerun
   the generator with the right `APPLE_TEAM_ID`.
-- **Android — NOT done, on purpose.** The `app.pantopus.android` statement
-  needs the SHA-256 fingerprint(s) of the certificate(s) that sign the APK the
-  user actually installs. Those are **not in the repo**: the release keystore is
-  a CI secret (`ANDROID_KEYSTORE_BASE64` in `.github/workflows/android-beta.yml`)
-  and, with Play App Signing, Google re-signs the app with a key only visible in
-  Play Console. Writing a guessed fingerprint would silently break App Link
-  verification, so nothing was added. The legacy `com.pantopus.app` statement is
-  kept.
+- **Android — source updated October 21, 2026.** `app.pantopus.android` now
+  carries the current Play app-signing certificate published in Play Console's
+  Digital Asset Links JSON, plus the two certificates in its previous
+  quantum-ready signing-key download (first used October 16). The public DER
+  certificate fingerprints were verified with `openssl x509 -fingerprint -sha256`.
+  The existing generator preserves the legacy `com.pantopus.app` statement and
+  supplies both App Links and Credential Manager relations. No debug or upload
+  certificate is included: this statement targets installs signed by Play.
+  Recheck the hosted JSON after deployment and verify links on a Play-installed
+  device; source correctness alone does not prove OS verification.
 
 ## What values are needed
 
