@@ -88,6 +88,11 @@ async function screenContextText(context, ctx) {
         // Without a home id the screen shows a saved place, not the default home that
         // getPlaceFacts would read, so there is no context to give.
         if (!screen.home_id) return null;
+        // The Place tab's Today screen shows the Today tab's cards (PlaceDetailViewModel, group .today).
+        if (screen.section === 'today') {
+          const result = await readTools.getToday({ home_id: screen.home_id }, ctx);
+          return result.sections ? asText(screen, result) : null;
+        }
         // A section screen's few sections come with their data; the tab itself shows all
         // of them, so each comes in one line.
         const topics = screen.section ? PLACE_SLUG_SECTIONS[screen.section] : null;
