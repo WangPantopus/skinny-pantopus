@@ -49,9 +49,12 @@ private val postPdfClient = OkHttpClient.Builder().callTimeout(30, TimeUnit.SECO
 
 /** Every page is rendered locally; no document is sent to a third-party viewer. */
 @Composable
-internal fun PostPdfSlide(url: String) {
+internal fun PostPdfSlide(
+    url: String,
+    localFile: File? = null,
+) {
     val context = LocalContext.current
-    val file = remember(url) { File(context.cacheDir, "pulse-pdf-${UUID.randomUUID()}.pdf") }
+    val file = remember(url, localFile) { localFile ?: File(context.cacheDir, "pulse-pdf-${UUID.randomUUID()}.pdf") }
     var pages by remember(url) { mutableIntStateOf(0) }
     var page by remember(url) { mutableIntStateOf(0) }
     var bitmap by remember(url) { mutableStateOf<Bitmap?>(null) }
@@ -60,17 +63,17 @@ internal fun PostPdfSlide(url: String) {
     var scale by remember(page) { mutableStateOf(1f) }
     var offset by remember(page) { mutableStateOf(Offset.Zero) }
 
-    DisposableEffect(file) { onDispose { file.delete() } }
+    DisposableEffect(file) { onDispose { if (localFile == null) file.delete() } }
     LaunchedEffect(url, attempt) {
         failed = false
         pages = 0
         try {
             pages =
                 withContext(Dispatchers.IO) {
-                    downloadPdf(url, file)
+                    loadPdfPageCount(url, file, isLocal = localFile != null)
                 }
         } catch (cancelled: CancellationException) {
-            file.delete()
+            if (localFile == null) file.delete()
             throw cancelled
         } catch (_: Exception) {
             failed = true
@@ -82,16 +85,7 @@ internal fun PostPdfSlide(url: String) {
         try {
             bitmap =
                 withContext(Dispatchers.IO) {
-                    PdfRenderer(ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)).use { renderer ->
-                        renderer.openPage(page).use { pdfPage ->
-                            val width = 1400
-                            val height = (width.toFloat() * pdfPage.height / pdfPage.width).toInt().coerceIn(1, 4000)
-                            Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also {
-                                it.eraseColor(android.graphics.Color.WHITE)
-                                pdfPage.render(it, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                            }
-                        }
-                    }
+                    renderPdfPage(file, page)
                 }
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -129,6 +123,34 @@ internal fun PostPdfSlide(url: String) {
                 Button(onClick = { page += 1 }, enabled = page + 1 < pages) { Text("Next") }
             }
         }
+    }
+}
+
+private fun renderPdfPage(
+    file: File,
+    page: Int,
+): Bitmap =
+    PdfRenderer(ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)).use { renderer ->
+        renderer.openPage(page).use { pdfPage ->
+            val width = 1400
+            val height = (width.toFloat() * pdfPage.height / pdfPage.width).toInt().coerceIn(1, 4000)
+            Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also {
+                it.eraseColor(android.graphics.Color.WHITE)
+                pdfPage.render(it, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+            }
+        }
+    }
+
+private fun loadPdfPageCount(
+    url: String,
+    file: File,
+    isLocal: Boolean,
+): Int {
+    if (!isLocal) return downloadPdf(url, file)
+    require(file.length() <= 25 * 1024 * 1024)
+    return PdfRenderer(ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)).use {
+        require(it.pageCount > 0)
+        it.pageCount
     }
 }
 

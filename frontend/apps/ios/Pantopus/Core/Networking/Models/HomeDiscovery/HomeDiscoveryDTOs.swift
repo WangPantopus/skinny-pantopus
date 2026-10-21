@@ -27,6 +27,7 @@ public struct DiscoveredHomeDTO: Decodable, Sendable, Hashable, Identifiable {
     public let id: String
     public let name: String?
     public let address: String?
+    public let addressRedacted: Bool?
     public let city: String?
     public let state: String?
     public let zipcode: String?
@@ -38,6 +39,7 @@ public struct DiscoveredHomeDTO: Decodable, Sendable, Hashable, Identifiable {
 
     private enum CodingKeys: String, CodingKey {
         case id, name, address, city, state, zipcode
+        case addressRedacted = "address_redacted"
         case homeType = "home_type"
         case visibility, owner
         case isMember = "is_member"
@@ -49,6 +51,7 @@ public struct DiscoveredHomeDTO: Decodable, Sendable, Hashable, Identifiable {
         id = try container.decode(String.self, forKey: .id)
         name = try container.decodeIfPresent(String.self, forKey: .name)
         address = try container.decodeIfPresent(String.self, forKey: .address)
+        addressRedacted = try container.decodeIfPresent(Bool.self, forKey: .addressRedacted)
         city = try container.decodeIfPresent(String.self, forKey: .city)
         state = try container.decodeIfPresent(String.self, forKey: .state)
         zipcode = try container.decodeIfPresent(String.self, forKey: .zipcode)
@@ -63,6 +66,7 @@ public struct DiscoveredHomeDTO: Decodable, Sendable, Hashable, Identifiable {
         id: String,
         name: String? = nil,
         address: String? = nil,
+        addressRedacted: Bool? = nil,
         city: String? = nil,
         state: String? = nil,
         zipcode: String? = nil,
@@ -75,6 +79,7 @@ public struct DiscoveredHomeDTO: Decodable, Sendable, Hashable, Identifiable {
         self.id = id
         self.name = name
         self.address = address
+        self.addressRedacted = addressRedacted
         self.city = city
         self.state = state
         self.zipcode = zipcode

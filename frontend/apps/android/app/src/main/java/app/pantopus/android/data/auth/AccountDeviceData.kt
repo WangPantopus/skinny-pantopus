@@ -2,14 +2,17 @@ package app.pantopus.android.data.auth
 
 import android.content.Context
 import androidx.datastore.preferences.core.edit
+import app.pantopus.android.core.network.HomeDocumentTemporaryFiles
 import app.pantopus.android.data.chats.ChatBadgeCoordinator
 import app.pantopus.android.data.chats.ChatConversationPreferences
+import app.pantopus.android.data.gigs.GigCameraPhotos
 import app.pantopus.android.data.gigs.GigDraftQueue
 import app.pantopus.android.data.store.ScreenStore
 import app.pantopus.android.data.support_trains.SupportTrainReservationsStore
 import app.pantopus.android.data.widget.TodayWidgetStore
 import app.pantopus.android.data.widget.WidgetSnapshotStore
 import app.pantopus.android.ui.screens.audience_profile.broadcast_detail.BroadcastDetailSeedCache
+import app.pantopus.android.ui.screens.inbox.conversation.ChatMediaUrl
 import app.pantopus.android.ui.screens.place.detail.homeTodayPreferences
 import coil.annotation.ExperimentalCoilApi
 import coil.imageLoader
@@ -63,6 +66,15 @@ class AccountDeviceData
                     .onFailure { Timber.w(it, "Sign-out could not clear the chat preferences") }
                 runCatching { context.homeTodayPreferences.edit { it.clear() } }
                     .onFailure { Timber.w(it, "Sign-out could not clear the Today preferences") }
+                // And the files opened from its chats, with the photos taken for them.
+                runCatching { ChatMediaUrl.removeLocalFiles(context.cacheDir) }
+                    .onFailure { Timber.w(it, "Sign-out could not remove the chat files") }
+                // And the photos taken with the camera for its task posts.
+                runCatching { GigCameraPhotos.remove(context.cacheDir) }
+                    .onFailure { Timber.w(it, "Sign-out could not remove the task camera photos") }
+                // And its exported Home documents, emergency card and residency letters.
+                runCatching { HomeDocumentTemporaryFiles.clearPreviousLaunch(context.cacheDir) }
+                    .onFailure { Timber.w(it, "Sign-out could not remove the exported documents") }
             }
         }
     }

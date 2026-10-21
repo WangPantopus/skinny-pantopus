@@ -33,6 +33,8 @@ data class GigCreator(
     @Json(name = "average_rating") val averageRating: Double? = null,
     @Json(name = "review_count") val reviewCount: Int? = null,
     @Json(name = "gigs_completed") val gigsCompleted: Int? = null,
+    /** The identity serializer's kind: `business` when a business posted the task. */
+    val type: String? = null,
 ) {
     fun resolvedDisplayName(): String =
         displayName?.takeIf { it.isNotEmpty() }
@@ -246,6 +248,10 @@ data class GigChatRoomResponse(
     val roomId: String,
     val topicId: String? = null,
     val gigOwnerId: String? = null,
+    /** Set for the owner and staff of the business that posted the task: they answer its room as the business. */
+    val asBusinessUserId: String? = null,
+    /** The assigned worker's name, set with [asBusinessUserId]. */
+    val workerName: String? = null,
 )
 
 /** User summary nested on a gig question row. */

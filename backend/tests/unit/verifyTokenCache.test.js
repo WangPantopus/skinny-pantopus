@@ -102,6 +102,7 @@ describe('verifyToken role cache (AUTH-3.4)', () => {
   });
 
   test('cache evicts oldest entry when max size is reached', () => {
+    seedTable('User', [{ id: 'mock-user-id', role: 'user', sessions_valid_after: null }]);
     // Directly test the cache map eviction behavior
     // Fill cache to max (1000 entries)
     for (let i = 0; i < 1000; i++) {

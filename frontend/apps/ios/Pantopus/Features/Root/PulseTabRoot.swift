@@ -12,8 +12,9 @@
 //  (`NeighborhoodDoorStore`).
 //
 //  While the Pulse redesign is off (launch cut #11) this is the October 13
-//  Pulse instead: a sheet from Nearby's door (`NeighborhoodTabRoot`) showing
-//  the feed (`FeedView`), and Nearby presents Tasks and Marketplace itself.
+//  Pulse instead: the Nearby tab's Pulse segment (`NeighborhoodTabRoot`,
+//  founder decision 2026-10-20) showing the feed (`FeedView`) under Nearby's
+//  segment header, and Nearby presents Tasks and Marketplace itself.
 //
 
 import SwiftUI
@@ -41,13 +42,21 @@ public struct PulseTabRoot: View {
 
     /// Starts adding a home (the quiet card's "Set up a home"), in the Place tab.
     private let onAddHome: @MainActor () -> Void
-    /// Closes the sheet this surface is presented in (Nearby's door, while
-    /// the Pulse redesign is off).
+    /// Closes the sheet this surface is presented in, when it is one; nil
+    /// draws no Back.
     private let onClose: (@MainActor () -> Void)?
+    /// Nearby's segment header above the October 13 feed (the Pulse
+    /// redesign off): the Pulse | Neighborhood switch and the side menu.
+    private let header: AnyView?
 
-    public init(onAddHome: @escaping @MainActor () -> Void = {}, onClose: (@MainActor () -> Void)? = nil) {
+    public init(
+        onAddHome: @escaping @MainActor () -> Void = {},
+        onClose: (@MainActor () -> Void)? = nil,
+        header: AnyView? = nil
+    ) {
         self.onAddHome = onAddHome
         self.onClose = onClose
+        self.header = header
     }
 
     private var currentUserId: String {
@@ -84,7 +93,9 @@ public struct PulseTabRoot: View {
                         onCompose: { intent in
                             path.append(.compose(intent: intent.rawValue))
                         },
-                        onBack: onClose
+                        onBack: onClose,
+                        header: header,
+                        asksPantopus: true
                     )
                 }
             }
@@ -151,13 +162,19 @@ public struct PulseTabRoot: View {
     }
 
     private func consumeDeepLinkIfNeeded(pending: DeepLinkRouter.Destination?) {
-        // Nearby, while this is Nearby's Pulse sheet (launch cut #11 off).
+        // Nearby, while this is Nearby's Pulse segment (launch cut #11 off).
         guard navigationReady, rootTabs.selected == RootTab.pulseHome, let pending, pending == router.pending else { return }
+        // This stack stays mounted behind Neighborhood. Its observer can run
+        // before RootTabView's: leave /nearby to the root dispatcher, and
+        // reveal Pulse ourselves before consuming a feed or post link.
+        if pending == .pulse, !LaunchFeatures.pulseRedesign { return }
         switch pending {
         case .feed, .pulse:
+            if !LaunchFeatures.pulseRedesign { door.pendingSegment = .pulse }
             path.replaceNavigationPath(NavigationPath())
             _ = router.consume()
         case let .post(id):
+            if !LaunchFeatures.pulseRedesign { door.pendingSegment = .pulse }
             path.replaceNavigationPath(NavigationPath())
             path.append(.post(postId: id))
             _ = router.consume()
@@ -207,11 +224,11 @@ public struct PulseTabRoot: View {
                 onEdit: { id in
                     Task { @MainActor in path.append(.editPost(postId: id)) }
                 },
-                onOpenBusiness: { username in
+                onOpenBusiness: { business in
                     // The Pulse stack has no business-profile route; hand the
-                    // public `/business/:username` link to the router, which
-                    // opens it in the Hub tab's stack.
-                    Task { @MainActor in DeepLinkRouter.shared.handle(path: "/business/\(username)") }
+                    // public `/business/:key` link (a username or an id) to the
+                    // router, which opens it in the Hub tab's stack.
+                    Task { @MainActor in DeepLinkRouter.shared.handle(path: "/business/\(business)") }
                 },
                 onContentLoaded: { router.completePostArrival(id: postId) }
             )

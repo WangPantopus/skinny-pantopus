@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.homes.HomeDocumentDto
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
+import app.pantopus.android.data.homes.HomeAdminRepository
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.ui.components.StatusChipVariant
 import app.pantopus.android.ui.screens.shared.list_of_rows.BannerConfig
@@ -89,14 +90,16 @@ enum class DocumentAction { View, Share, Download, Delete }
 class DocumentsViewModel
     internal constructor(
         private val repo: HomesRepository,
+        private val adminRepo: HomeAdminRepository,
         savedStateHandle: SavedStateHandle,
         private val clock: () -> Instant = Instant::now,
     ) : ViewModel() {
         @Inject
         constructor(
             repo: HomesRepository,
+            adminRepo: HomeAdminRepository,
             savedStateHandle: SavedStateHandle,
-        ) : this(repo, savedStateHandle, Instant::now)
+        ) : this(repo, adminRepo, savedStateHandle, Instant::now)
 
         private val homeId: String =
             checkNotNull(savedStateHandle.get<String>(DOCUMENTS_HOME_ID_KEY)) {
@@ -115,6 +118,10 @@ class DocumentsViewModel
         private val _chipStrip = MutableStateFlow(initialChipStrip())
         val chipStrip: StateFlow<ChipStripConfig> = _chipStrip.asStateFlow()
 
+        private val _canUpload = MutableStateFlow(false)
+        val canUpload: StateFlow<Boolean> = _canUpload.asStateFlow()
+
+        private var loadId = 0
         private var documents: List<HomeDocumentDto>? = null
         private var onOpenDocument: (HomeDocumentDto) -> Unit = {}
         private var onUpload: () -> Unit = {}
@@ -142,10 +149,17 @@ class DocumentsViewModel
 
         fun refresh() {
             _state.value = ListOfRowsUiState.Loading
+            _canUpload.value = false
+            val requestId = ++loadId
             viewModelScope.launch {
+                val access = adminRepo.myAccess(homeId)
+                if (requestId != loadId) return@launch
+                _canUpload.value = (access as? NetworkResult.Success)?.data?.can("docs.upload") == true
                 when (val result = repo.getHomeDocuments(homeId)) {
-                    is NetworkResult.Success -> applySuccess(result.data.documents)
+                    is NetworkResult.Success -> if (requestId == loadId) applySuccess(result.data.documents)
                     is NetworkResult.Failure -> {
+                        if (requestId != loadId) return@launch
+                        _canUpload.value = false
                         documents = null
                         _banner.value = null
                         _state.value = ListOfRowsUiState.Error(result.error.displayMessage("Couldn't load the list."))
@@ -167,14 +181,18 @@ class DocumentsViewModel
                 onClick = { onSearch() },
             )
 
-        fun fab(): FabAction =
-            FabAction(
-                icon = PantopusIcon.Upload,
-                contentDescription = "Upload document",
-                variant = FabVariant.SecondaryCreate,
-                tint = FabTint.Home,
-                onClick = { onUpload() },
-            )
+        fun fab(): FabAction? =
+            if (!_canUpload.value) {
+                null
+            } else {
+                FabAction(
+                    icon = PantopusIcon.Upload,
+                    contentDescription = "Upload document",
+                    variant = FabVariant.SecondaryCreate,
+                    tint = FabTint.Home,
+                    onClick = { if (_canUpload.value) onUpload() },
+                )
+            }
 
         private fun applySuccess(loaded: List<HomeDocumentDto>) {
             documents = loaded
@@ -190,9 +208,13 @@ class DocumentsViewModel
                         icon = PantopusIcon.FolderLock,
                         headline = "No documents yet",
                         subcopy =
-                            "Save leases, insurance and warranties privately. Choose which household members can access each file.",
-                        ctaTitle = "Upload document",
-                        onCta = { onUpload() },
+                            if (_canUpload.value) {
+                                "Save leases, insurance and warranties privately. Choose which household members can access each file."
+                            } else {
+                                "Documents shared with your household will appear here."
+                            },
+                        ctaTitle = if (_canUpload.value) "Upload document" else null,
+                        onCta = { if (_canUpload.value) onUpload() },
                     )
                 return
             }
@@ -206,7 +228,7 @@ class DocumentsViewModel
                     ListOfRowsUiState.Empty(
                         icon = PantopusIcon.FolderLock,
                         headline = emptyHeadline(filter),
-                        subcopy = "Switch chips above or upload a document to populate this scope.",
+                        subcopy = "Try another filter to see more documents.",
                     )
                 return
             }
@@ -288,7 +310,7 @@ class DocumentsViewModel
                 }
                 DocumentsFilter.Expiring -> expiresWithin(dto, 90, now)
                 DocumentsFilter.Shared ->
-                    dto.visibility != "private" && sharedCount(dto) > 0
+                    dto.visibility in setOf("members", "managers") || (dto.visibility != "private" && sharedCount(dto) > 0)
             }
 
         private fun expiresWithin(

@@ -451,7 +451,7 @@ final class APIClient: @unchecked Sendable {
             return DataResponse(data: data, response: http)
         case 401:
             // Refresh + sign-out decisions are made in executeWithRetry.
-            throw APIError.unauthorized
+            throw unauthorizedError(data, endpoint: endpoint)
         case 403:
             // `STEP_UP_REQUIRED` is the one 403 the client can recover from
             // (CONTRACT "Client behaviour"): surface it as a signal so the
@@ -480,6 +480,17 @@ final class APIClient: @unchecked Sendable {
             let body = String(data: data, encoding: .utf8) ?? ""
             throw APIError.server(status: http.statusCode, body: body)
         }
+    }
+
+    private func unauthorizedError(_ data: Data, endpoint: Endpoint) -> APIError {
+        // Credential-issuing requests can fail device proof even when
+        // the password is correct. Preserve that cause for the auth UI.
+        if !endpoint.authenticated, endpoint.requiresDPoP,
+           let code = AuthErrorBody.decode(data)?.code,
+           ["DPOP_REQUIRED", "DPOP_INVALID", "DPOP_REPLAY"].contains(code) {
+            return .clientError(status: 401, message: String(data: data, encoding: .utf8))
+        }
+        return .unauthorized
     }
 
     private func notFoundResponse(_ data: Data, response: HTTPURLResponse, includeBody: Bool) throws -> DataResponse {

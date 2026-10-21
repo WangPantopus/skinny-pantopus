@@ -28,6 +28,7 @@ const { checkHomePermission, getActiveOccupancy, mapLegacyRole } = require('../u
 const { computeUtilityScore } = require('../utils/feedRanking');
 const s3 = require('../services/s3Service');
 const feedService = require('../services/feedService');
+const marketplaceService = require('../services/marketplace/marketplaceService');
 const { generateNeighborhoodFacts } = require('../services/ai/neighborhoodFactService');
 const { encodeGeohash6: _encodeGeohash6 } = require('../utils/geohash');
 const { resolveLocation } = require('../services/context/locationResolver');
@@ -124,6 +125,7 @@ const {
   attachIdentityAuthors,
   applyPostLocationPrivacy,
   sortMatchedBusinessesByRating,
+  dropUnpublishedMatches,
   applyCursorCondition,
   buildCursorPagination,
   FEED_POST_SELECT,
@@ -862,8 +864,21 @@ async function isVisitorAt(userId, latitude, longitude) {
     && homes.every((home) => Math.abs(lat - home.latitude) > 0.5 || Math.abs(lng - home.longitude) > 0.5);
 }
 
+// An event may omit its times, but an end requires a strictly earlier start.
+// Edits call this with the resulting pair, not just the fields in the request.
+function eventRangeError(start, end) {
+  if (end == null) return null;
+  if (start == null) return 'Choose an event start time before setting its end time.';
+  if (new Date(end).getTime() <= new Date(start).getTime()) {
+    return 'The event end time must be after its start time.';
+  }
+  return null;
+}
+
 router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
   try {
+    const dateError = eventRangeError(req.body.eventDate, req.body.eventEndDate);
+    if (dateError) return res.status(400).json({ error: dateError, code: 'INVALID_EVENT_DATES' });
     const {
       content, title, mediaUrls, mediaTypes, mediaThumbnails, mediaLiveUrls, postType, postFormat,
       visibility, visibilityScope, locationPrecision,
@@ -967,6 +982,16 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
     if (postAs === 'business'
       && (LOCAL_AUDIENCES.includes(requestedAudience) || requestedDistributionTargets.includes('place'))) {
       return res.status(403).json({ error: BUSINESS_CANNOT_POST_ERROR, code: 'BUSINESS_CANNOT_POST' });
+    }
+    // A business has no connections: a business post for the writer's own connections would tell them who is behind
+    // the business (and notify them by the writer's name).
+    if (postAs === 'business' && (['connections', 'network'].includes(requestedAudience)
+      || requestedVisibility === 'connections'
+      || requestedDistributionTargets.some((target) => ['connections', 'followers'].includes(target)))) {
+      return res.status(400).json({
+        error: "Business posts can't go to your connections. Use Public instead.",
+        code: 'business_connections_audience',
+      });
     }
     const alertRefusal = alertKindRefusal(safetyAlertKind, req.user.accountType, sourceUrl);
     if (alertRefusal) {
@@ -1174,12 +1199,17 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
       // v1.1: Home Place rate limit — 2 per day per home
       if (postAs === 'home' && homeId) {
         const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-        const { count } = await supabaseAdmin
+        let homePlacePosts = supabaseAdmin
           .from('Post')
           .select('id', { count: 'exact', head: true })
           .eq('home_id', homeId)
           .contains('distribution_targets', ['place'])
           .gte('created_at', oneDayAgo);
+        // A retry of a post this composer command already saved (to attach photos
+        // after a failed upload) is not a new post, so it doesn't count against itself.
+        const retryId = commandPostId(userId, req.body.clientRequestId);
+        if (retryId) homePlacePosts = homePlacePosts.neq('id', retryId);
+        const { count } = await homePlacePosts;
         if (count >= 2) {
           return res.status(429).json({ error: 'Home posting limit reached (2 posts per day to Place feed). Try again later.' });
         }
@@ -1716,6 +1746,19 @@ router.get('/feed', verifyToken, async (req, res) => {
   }
 });
 
+// The person looked at the Nearby feed: its "since you last looked" marker moves to now
+// (AI assistant phase 2 contract §6.1). The apps call it when the feed appears, at most once
+// every 5 minutes. It is the marker the paused Pulse redesign keeps (services/pulse/seen.js),
+// which only ever moves forward.
+router.post('/feed/seen', verifyToken, async (req, res) => {
+  try {
+    res.json(await require('../services/pulse/seen').advance(req.user.id, 'nearby', new Date().toISOString()));
+  } catch (err) {
+    logger.error('Feed seen error', { error: err.message, userId: req.user?.id });
+    res.status(500).json({ error: "Couldn't save where you left off." });
+  }
+});
+
 
 
 router.get('/map', verifyToken, async (req, res) => {
@@ -2167,16 +2210,24 @@ router.post('/mute', verifyToken, async (req, res) => {
     if (!['user', 'business', 'persona'].includes(entityType)) {
       return res.status(400).json({ error: 'entityType must be "user", "business", or "persona"' });
     }
+    // A business post carries the business's id for everyone but its writer, and the web mutes a post's author as a
+    // "user": muting a business account mutes the business (its posts), never the person who wrote one.
+    let mutedType = entityType;
+    if (entityType === 'user') {
+      const { data: account } = await supabaseAdmin.from('User').select('account_type').eq('id', entityId).maybeSingle();
+      if (account?.account_type === 'business') mutedType = 'business';
+    }
 
     await ensurePostMute({
       userId,
-      entityType,
+      entityType: mutedType,
       entityId,
       surface: null,
     });
 
     feedService.invalidateFilterCache(userId);
-    res.json({ message: `${entityType} muted successfully` });
+    marketplaceService.invalidateFilterCache(userId);
+    res.json({ message: `${mutedType} muted successfully` });
   } catch (err) {
     logger.error('Mute error', { error: err.message });
     res.status(500).json({ error: 'Failed to mute' });
@@ -2271,6 +2322,7 @@ router.delete('/mute', verifyToken, async (req, res) => {
     if (error) throw error;
 
     feedService.invalidateFilterCache(userId);
+    marketplaceService.invalidateFilterCache(userId);
     res.json({ message: 'Unmuted successfully' });
   } catch (err) {
     logger.error('Unmute error', { error: err.message });
@@ -2545,6 +2597,7 @@ router.get('/:id', optionalAuth, async (req, res) => {
         .catch(err => logger.warn('post.view_count.error', { error: err.message, postId: id, userId }));
     }
 
+    await dropUnpublishedMatches([post]);
     applyPostLocationPrivacy(post, userId);
     const responsePost = await serializePostForViewer({
       ...post,
@@ -2574,10 +2627,17 @@ router.patch('/:id', verifyToken, validate(updatePostSchema), async (req, res) =
     const { data: existing } = await supabaseAdmin.from('Post')
       .select(`user_id, media_urls, media_thumbnails, media_live_urls, safety_alert_kind, post_metadata,
         post_type, content, topic, area_id, read_scope, latitude, longitude, location_precision,
-        visibility, visibility_scope, radius_miles`)
+        visibility, visibility_scope, radius_miles, event_date, event_end_date`)
       .eq('id', id).single();
     if (!existing) return res.status(404).json({ error: 'Post not found' });
     if (existing.user_id !== userId) return res.status(403).json({ error: 'You can only edit your own posts' });
+    if (req.body.eventDate !== undefined || req.body.eventEndDate !== undefined) {
+      const dateError = eventRangeError(
+        req.body.eventDate !== undefined ? req.body.eventDate : existing.event_date,
+        req.body.eventEndDate !== undefined ? req.body.eventEndDate : existing.event_end_date
+      );
+      if (dateError) return res.status(400).json({ error: dateError, code: 'INVALID_EVENT_DATES' });
+    }
     // Only Pulse creates Share and Offer posts; an older post can't become one.
     if (!existing.read_scope && PULSE_ONLY_TYPES.includes(req.body.postType) && req.body.postType !== existing.post_type) {
       return res.status(400).json({ error: "A post's type can't be changed to this one.", code: 'PULSE_FIELD_LOCKED' });
@@ -2657,22 +2717,27 @@ router.delete('/:id', verifyToken, async (req, res) => {
     if (existing.user_id !== userId) return res.status(403).json({ error: 'You can only delete your own posts' });
 
     const keys = new Set();
-    const prefix = `posts/${id}/${existing.user_id}/`;
-    const publicPrefix = s3.getPublicUrl(prefix);
+    // This post's own uploads (POST /api/upload/post-media) sit in posts/<post>/, or in posts/<post>/<writer>/ when
+    // uploaded before their keys stopped naming the writer.
+    const folders = [`posts/${id}/${existing.user_id}/`, `posts/${id}/`];
+    const ownFolder = (key) => folders.find((folder) => key.startsWith(folder) && !key.slice(folder.length).includes('/'));
+    const storage = s3.getPublicUrl('');
     for (const urls of [existing.media_urls, existing.media_thumbnails, existing.media_live_urls]) {
       if (urls != null && !Array.isArray(urls)) {
         return res.status(503).json({ error: 'Post media could not be checked. Please retry.' });
       }
       for (const url of urls || []) {
         // External/shared references do not authorize deleting another object's bytes.
-        if (typeof url !== 'string' || !url.startsWith(publicPrefix)) continue;
-        const name = url.slice(publicPrefix.length);
-        if (!/^(?:\d+_[a-f0-9]{16}|media_[a-f0-9]{64})(?:_(?:thumb|card|detail|full))?\.[a-z0-9]+$/.test(name)) {
+        const folder = typeof url === 'string' && url.startsWith(storage) ? ownFolder(url.slice(storage.length)) : null;
+        if (!folder) continue;
+        const name = url.slice(storage.length + folder.length);
+        // A Live Photo's clip is media_<hash>_live.<ext>.
+        if (!/^(?:\d+_[a-f0-9]{16}|media_[a-f0-9]{64})(?:_(?:thumb|card|detail|full|live))?\.[a-z0-9]+$/.test(name)) {
           return res.status(503).json({ error: 'Post media storage could not be verified. Please retry.' });
         }
-        const key = prefix + name;
+        const key = folder + name;
         keys.add(key);
-        if (!/_(?:thumb|card|detail|full)\.[a-z0-9]+$/.test(name)) {
+        if (!/_(?:thumb|card|detail|full|live)\.[a-z0-9]+$/.test(name)) {
           for (const variant of require('../services/marketplace/imageResizeService').getImageVariantKeys(key)) {
             keys.add(variant);
           }
@@ -2687,8 +2752,9 @@ router.delete('/:id', verifyToken, async (req, res) => {
         return res.status(503).json({ error: 'Post attachments could not be checked. Please retry.' });
       }
       for (const file of files) {
-        const filePrefix = file.comment_id ? `comments/${file.comment_id}/${file.user_id}/` : prefix;
-        if (typeof file.file_path !== 'string' || !file.file_path.startsWith(filePrefix)
+        const filePrefix = file.comment_id ? `comments/${file.comment_id}/${file.user_id}/`
+          : typeof file.file_path === 'string' && ownFolder(file.file_path);
+        if (typeof file.file_path !== 'string' || !filePrefix || !file.file_path.startsWith(filePrefix)
           || file.file_path.slice(filePrefix.length).includes('/') || file.file_path.includes('..')) {
           return res.status(503).json({ error: 'Post attachment storage could not be verified. Please retry.' });
         }
@@ -2788,6 +2854,7 @@ router.get('/:id/matched-businesses', verifyToken, async (req, res) => {
       select: `${POST_VISIBILITY_SELECT},service_category,matched_business_ids,matched_businesses_cache,created_at`,
     });
     if (!post) return;
+    await dropUnpublishedMatches([post]);
 
     // No service_category → no matches possible
     if (!post.service_category) {
@@ -3506,12 +3573,16 @@ router.get('/user/:userId', verifyToken, async (req, res) => {
     if (!(isOwn && includeArchived === 'true')) query = query.is('archived_at', null);
 
     if (isOwn) {
-      // Own profile: see everything (no filters on visibility)
+      // Own profile: see everything (no filters on visibility), the posts written for a business too, so the
+      // writer can still edit or delete them.
     } else {
       // Non-own profiles: only show posts marked for profile display
       query = query.eq('show_on_profile', true);
       // Exclude posts explicitly hidden from profiles
       query = query.neq('profile_visibility_scope', 'hidden');
+      // A post written for a business is the business's (its page lists it), never its writer's. Both ways of
+      // writing one (POST /api/posts as the business, the retired POST /api/businesses/:id/posts) store post_as.
+      query = query.or('post_as.is.null,post_as.neq.business');
     }
 
     query = applyCursorCondition(query, cursorCreatedAt, cursorId);

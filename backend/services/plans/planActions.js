@@ -14,6 +14,7 @@ const logger = require('../../utils/logger');
 const { canPostToPlace } = require('../../utils/trustState');
 const { recordFunnelEvent } = require('../funnelEvents');
 const { filePostReport } = require('../postReportService');
+const blockService = require('../blockService');
 const rules = require('./planRules');
 const planService = require('./planService');
 const { loadViewer, verifiedUserIds } = require('./planViewer');
@@ -68,6 +69,17 @@ async function activeRequests(postId) {
     .in('status', planService.ACTIVE_REQUEST_STATUSES);
   if (error) throw new Error(`Failed to load requests: ${error.message}`);
   return data || [];
+}
+
+/**
+ * Requests still waiting for the host's answer, without people on either side of a block
+ * (the requests screen hides them): for the host's summary and the assistant's nudge.
+ */
+async function waitingRequests(plan, requests) {
+  const pending = (requests || []).filter((r) => r.status === 'pending');
+  if (pending.length === 0) return pending;
+  const blocked = await blockService.blockedUserIds(plan.host_user_id).catch(() => new Set());
+  return pending.filter((r) => !blocked.has(String(r.user_id)));
 }
 
 async function loadRequest(requestId, postId) {
@@ -304,8 +316,8 @@ async function assertHostLimits(userId) {
 
 // ── Create ───────────────────────────────────────────────────
 
-async function createPlan(user, input) {
-  const viewer = await loadViewer(user, { gps: input.gps });
+/** A new plan's input checked by the hosting rules: what createPlan would save, or a PlanError. */
+async function checkedPlanInput(viewer, input) {
   const kind = input.kind;
   if (!rules.KINDS.includes(kind)) fail(422, 'validation', 'Choose what kind of plan this is.');
   if (kind === 'playdate' && !viewer.playdatesFlag) fail(404, 'not_found', "Playdates aren't available yet.");
@@ -323,6 +335,52 @@ async function createPlan(user, input) {
     : (oneOf(input.join_requirement, ['located', 'verified'], 'who can ask') || 'located');
   const details = normalizeDetails(kind, input.details);
   await assertHostLimits(viewer.id);
+  return { kind, title, about, guestNote, spots, place, autoRules, joinRequirement, details };
+}
+
+/**
+ * The plan this host posted in the last ten minutes with the same kind, title and
+ * start, or null: a second tap on the same "Post plan" (the assistant's card, a
+ * retried request) gets the plan already posted instead of a copy.
+ */
+async function recentSamePlan(hostId, input) {
+  const start = new Date(input?.starts_at);
+  const title = typeof input?.title === 'string' ? input.title.replace(/\s+/g, ' ').trim() : '';
+  if (!rules.KINDS.includes(input?.kind) || !title || Number.isNaN(start.getTime())) return null;
+  const { data, error } = await supabaseAdmin.from('Plan')
+    .select('post_id, post:Post!inner(title, event_date)')
+    .eq('host_user_id', hostId)
+    .eq('kind', input.kind)
+    .eq('status', 'open')
+    .eq('post.title', title)
+    .eq('post.event_date', start.toISOString())
+    .gt('created_at', new Date(Date.now() - 10 * 60 * 1000).toISOString())
+    .limit(1);
+  if (error) return null;
+  return data && data[0] ? data[0].post_id : null;
+}
+
+/**
+ * What createPlan would save from `input`, checked by the same rules, without
+ * saving anything. The assistant's plan card is built from it, so the card never
+ * offers a plan the server would refuse.
+ */
+async function previewPlan(user, input) {
+  const viewer = await loadViewer(user, { gps: input.gps });
+  const checked = await checkedPlanInput(viewer, input);
+  return {
+    ...checked,
+    startsAt: new Date(input.starts_at).toISOString(),
+    endsAt: new Date(input.ends_at).toISOString(),
+    timezone: planPlace.timezoneFor(checked.place.latitude, checked.place.longitude),
+  };
+}
+
+async function createPlan(user, input) {
+  const viewer = await loadViewer(user, { gps: input.gps });
+  const repeat = await recentSamePlan(viewer.id, input);
+  if (repeat) return planBodyFor(repeat, viewer);
+  const { kind, title, about, guestNote, spots, place, autoRules, joinRequirement, details } = await checkedPlanInput(viewer, input);
 
   const area = planPlace.areaPointFor(kind, place.latitude, place.longitude);
   const fallbackCity = place.home?.city || viewer.homes.find((h) => h.city)?.city || null;
@@ -604,8 +662,8 @@ async function ruleFor(plan, userId) {
   return null;
 }
 
-/** Let someone in: the chat, the grey line, the notice. */
-async function admit(plan, request, { byRule, hostFirst, io, viaWaitlist = false }) {
+/** Let someone in: the chat, the grey line, the notice. When a rule did it, the host hears who is in. */
+async function admit(plan, request, { byRule, hostFirst, io, viaWaitlist = false, rule = null }) {
   const roomId = await planChat.ensureRoom(plan, { io });
   await planChat.addMember(roomId, request.user_id, { io });
   const names = await userNames([request.user_id]);
@@ -616,6 +674,13 @@ async function admit(plan, request, { byRule, hostFirst, io, viaWaitlist = false
     await planNotify.spotOpened({ plan, request, hostFirst, nowIn: true });
   } else {
     await planNotify.accepted({ plan, request, hostFirst, byRule });
+  }
+  if (byRule) {
+    await activeRequests(plan.post_id)
+      .then((requests) => planNotify.guestAutoJoined({
+        plan, request, guestName: who, rule, goingCount: planService.seatsTaken(plan, requests), viaWaitlist,
+      }))
+      .catch((err) => logger.warn('plans.notify.auto_joined_failed', { planId: plan.post_id, error: err.message }));
   }
   recordFunnelEvent('plan_accepted', { userId: request.user_id, meta: { plan_id: plan.post_id, kind: plan.kind, by: byRule ? 'rule' : 'host' } });
 }
@@ -642,7 +707,7 @@ async function offerOpenSpots(plan, { io = null } = {}) {
       if (!moved || moved.length === 0) continue;
       const overflow = await enforceCapacity(plan);
       if (overflow.has(next.id)) return;
-      await admit(plan, moved[0], { byRule: true, hostFirst, io, viaWaitlist: true });
+      await admit(plan, moved[0], { byRule: true, hostFirst, io, viaWaitlist: true, rule });
       continue;
     }
     const { data: moved } = await supabaseAdmin.from('PlanRequest')
@@ -735,8 +800,9 @@ async function askToJoin(user, postId, body, { io = null } = {}) {
   const seats = rules.seatsFor(plan.kind, ask.party_size);
   let status = 'waitlisted';
   let decidedBy = null;
+  let rule = null;
   if (seats <= spotsLeft) {
-    const rule = planService.matchingAutoRule(plan, viewer, ctx);
+    rule = planService.matchingAutoRule(plan, viewer, ctx);
     if (rule) {
       status = 'accepted';
       decidedBy = 'rule';
@@ -788,7 +854,7 @@ async function askToJoin(user, postId, body, { io = null } = {}) {
   if (request.status === 'accepted') {
     const overflow = await enforceCapacity(plan);
     if (!overflow.has(request.id)) {
-      await admit(plan, request, { byRule: true, hostFirst, io });
+      await admit(plan, request, { byRule: true, hostFirst, io, rule });
     }
   } else if (request.status === 'pending') {
     await planNotify.requestReceived({ plan, request, hostFirst, requesterFirst: firstOf(names.get(viewer.id)) });
@@ -815,10 +881,15 @@ async function withdrawMine(user, postId, { io = null, reason = 'withdraw' } = {
   if (updateError) throw new Error(`Failed to update your request: ${updateError.message}`);
   if (changed && changed.length > 0 && leaving) {
     const names = await userNames([viewer.id]);
+    const who = partyLabel(names.get(viewer.id), mine.party_size);
     if (plan.chat_room_id) {
-      await planChat.systemLine(plan.chat_room_id, viewer.id, `${partyLabel(names.get(viewer.id), mine.party_size)} can't make it`);
+      await planChat.systemLine(plan.chat_room_id, viewer.id, `${who} can't make it`);
       await planChat.removeMember(plan.chat_room_id, viewer.id, { io });
     }
+    // The host hears it before a spot goes to someone waiting (who then has their own notice).
+    await activeRequests(postId)
+      .then((requests) => planNotify.guestLeft({ plan, request: mine, guestName: who, goingCount: planService.seatsTaken(plan, requests) }))
+      .catch((err) => logger.warn('plans.notify.guest_left_failed', { planId: postId, error: err.message }));
     await offerOpenSpots(plan, { io });
   }
   return requestResult(postId, viewer, mine.id);
@@ -1008,6 +1079,7 @@ async function reportPlan(user, postId, { reason, details }) {
 module.exports = {
   PlanError,
   createPlan,
+  previewPlan,
   editPlan,
   cancelPlan,
   askToJoin,
@@ -1022,6 +1094,8 @@ module.exports = {
   enforceCapacity,
   // For the jobs.
   activeRequests,
+  waitingRequests,
   firstOf,
   userNames,
+  partyLabel,
 };

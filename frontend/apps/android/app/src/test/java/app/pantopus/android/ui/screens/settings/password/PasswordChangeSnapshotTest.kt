@@ -116,14 +116,14 @@ class PasswordChangeSnapshotTest {
             fields =
                 mapOf(
                     FieldKey.Current to field("current", "autum-river-2018", "That doesn't match the password on file."),
-                    FieldKey.New to field("new", "password123", "Too common — appeared in 2.3M public records."),
+                    FieldKey.New to field("new", "password123", "Too common. Choose a less predictable password."),
                     FieldKey.Confirm to field("confirm", "password12", "Doesn't match the new password above."),
                 ),
             strength = PasswordStrength.evaluate("password123", breached = true),
             formError =
                 FormBannerContent(
                     title = "Couldn't update password",
-                    message = "Fix the two highlighted fields and try again. Three more attempts before a 15-minute cooldown.",
+                    message = "Check your current password and try again, or request a reset link.",
                 ),
             isCurrentValid = false,
             isNewValid = false,

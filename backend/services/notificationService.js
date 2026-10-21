@@ -69,8 +69,8 @@ const PERSONAL_TEMPLATES = [
   { name: 'residency_approved', pushTitle: 'Residency approved at {home.name}', pushBody: 'Your residency claim was approved.' },
   { name: 'residency_rejected', pushTitle: 'Residency claim not approved', pushBody: '{reason}' },
   { name: 'ownership_verification_needed', pushTitle: 'Verify ownership of {home.name}', pushBody: 'Provide a proof document to continue.' },
-  { name: 'ownership_claim_approved', pushTitle: 'Ownership approved at {home.name}', pushBody: 'Your ownership claim was approved.' },
-  { name: 'ownership_claim_rejected', pushTitle: 'Ownership claim not approved', pushBody: '{reason}' },
+  { name: 'ownership_claim_approved', pushTitle: 'Home verification approved', pushBody: 'Your home verification request was approved.' },
+  { name: 'ownership_claim_rejected', pushTitle: 'Home verification not approved', pushBody: '{reason}' },
   { name: 'ownership_claim_needs_more_info', pushTitle: 'More info needed', pushBody: 'We need additional details for {home.name}.' },
   { name: 'new_ownership_claim', pushTitle: 'New ownership claim', pushBody: '{actor.displayName} claims ownership of {home.name}.' },
   { name: 'ownership_dispute', pushTitle: 'Ownership dispute at {home.name}', pushBody: 'A counter-claim was filed.' },
@@ -321,6 +321,7 @@ async function shouldSuppressAudienceNotification(userId, type, metadata) {
  * @param {Object} [opts.metadata] - extra data (home_id, gig_id, etc.)
  * @param {string} [opts.idempotencyKey] - stable event identity; existing notices are never re-emitted
  * @param {boolean} [opts.sendPush] - false leaves transport to the caller's durable quiet-hours queue
+ * @param {string} [opts.id] - the row's id, for a caller whose link or metadata names it (assistant nudges)
  * @param {string} [opts.contextType] - 'personal' or 'business' (Identity Firewall)
  * @param {string} [opts.contextId] - business_user_id when contextType='business'
  * @param {string} [opts.context] - 'personal' | 'audience' | 'platform'
@@ -329,7 +330,7 @@ async function shouldSuppressAudienceNotification(userId, type, metadata) {
  *   pass `context: 'audience'` explicitly).
  * @returns {Promise<Object|null>} notification or null on error
  */
-async function createNotification({ userId, type, title, body, icon, link, metadata, contextType, contextId, context, idempotencyKey, sendPush = true }) {
+async function createNotification({ id, userId, type, title, body, icon, link, metadata, contextType, contextId, context, idempotencyKey, sendPush = true }) {
   if (!userId || !type || !title) {
     logger.warn('createNotification called with missing required fields', { userId, type, title });
     return null;
@@ -353,6 +354,7 @@ async function createNotification({ userId, type, title, body, icon, link, metad
     const { data, error } = await supabaseAdmin
       .from('Notification')
       .insert({
+        ...(id ? { id } : {}),
         user_id: userId,
         type,
         title,
@@ -1035,8 +1037,8 @@ async function notifyOwnershipClaimApproved({ userId, homeName, homeId }) {
   return createNotification({
     userId,
     type: 'ownership_claim_approved',
-    title: 'Ownership verified!',
-    body: `Your ownership of ${homeName || 'your home'} has been verified.`,
+    title: 'Home verification approved',
+    body: `Your verification request for ${homeName || 'your home'} was approved. Open the home to check your current access.`,
     icon: '✅',
     link: `/app/homes/${homeId}/dashboard?tab=members`,
     metadata: { home_id: homeId },
@@ -1050,9 +1052,11 @@ async function notifyOwnershipClaimRejected({ userId, homeName, homeId, reason }
   return createNotification({
     userId,
     type: 'ownership_claim_rejected',
-    title: 'Ownership verification update',
-    body: reason || `Your ownership verification for ${homeName || 'your home'} requires additional documentation.`,
+    title: 'Home verification not approved',
+    body: `Your verification request for ${homeName || 'your home'} was not approved.${reason ? ` ${reason}` : ''}`,
     icon: '📋',
+    // The iOS and Android routers need a Home id in the link; the web
+    // resolves this type to My Homes (lib/notificationRoutes.ts).
     link: `/app/homes/${homeId}/dashboard`,
     metadata: { home_id: homeId },
   });
@@ -1066,7 +1070,7 @@ async function notifyOwnershipClaimNeedsMoreInfo({ userId, homeName, homeId }) {
     userId,
     type: 'ownership_claim_needs_more_info',
     title: 'More information needed',
-    body: `Your ownership verification for ${homeName || 'your home'} needs additional documentation. Please upload proof again.`,
+    body: `Your verification request for ${homeName || 'your home'} needs additional documentation. Open My Homes to continue your claim.`,
     icon: '📋',
     link: `/app/homes/${homeId}/dashboard`,
     metadata: { home_id: homeId },

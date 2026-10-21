@@ -5,9 +5,14 @@ package app.pantopus.android.ui.screens.inbox.conversation
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.LaunchFeatures
+import app.pantopus.android.core.routing.DeepLinkRouter
+import app.pantopus.android.data.ai.AIActionCardStore
+import app.pantopus.android.data.ai.AIActionRunner
 import app.pantopus.android.data.ai.AIChatRepository
 import app.pantopus.android.data.ai.AIChatStreamEvent
 import app.pantopus.android.data.ai.AIConversationSession
+import app.pantopus.android.data.ai.AIPdfCheck
+import app.pantopus.android.data.ai.AIScreenContext
 import app.pantopus.android.data.api.models.chats.ChatMessageDto
 import app.pantopus.android.data.api.models.chats.ChatMessageSender
 import app.pantopus.android.data.api.models.chats.ChatMessagesResponse
@@ -78,6 +83,8 @@ class ChatConversationViewModel
         private val aiSession: AIConversationSession,
         private val activeChatThread: ActiveChatThread,
         private val placeRepository: PlaceRepository,
+        private val aiActions: AIActionRunner,
+        private val aiCards: AIActionCardStore,
     ) : ViewModel() {
         private val _state = MutableStateFlow<ChatConversationUiState>(ChatConversationUiState.Loading)
         val state: StateFlow<ChatConversationUiState> = _state.asStateFlow()
@@ -177,6 +184,18 @@ class ChatConversationViewModel
         private val _isAiStreaming = MutableStateFlow(false)
         val isAiStreaming: StateFlow<Boolean> = _isAiStreaming.asStateFlow()
 
+        // True while "Delete conversation" runs; the header's menu and sending wait.
+        private val _isDeletingAi = MutableStateFlow(false)
+        val isDeletingAi: StateFlow<Boolean> = _isDeletingAi.asStateFlow()
+
+        // AI assistant phase 1: the screen the thread was opened from ("About: …"), sent with its messages.
+        private val _aiContext = MutableStateFlow<AIScreenContext?>(null)
+        val aiContext: StateFlow<AIScreenContext?> = _aiContext.asStateFlow()
+
+        // That screen's starter prompts, offered until the person sends something.
+        private val _aiStarters = MutableStateFlow<List<String>>(emptyList())
+        val aiStarters: StateFlow<List<String>> = _aiStarters.asStateFlow()
+
         // A15 `.ctx-strip` — pinned gig context for gig rooms. Populated
         // once per VM from the gig detail fetch when the route carried a
         // gigId; null hides the strip.
@@ -214,6 +233,10 @@ class ChatConversationViewModel
         private var mode: ChatThreadMode = ChatThreadMode.Ai
         private var initialTopic: ChatInitialTopic? = null
         private var currentUserId: String = ""
+        private val asBusinessUserId: String?
+            get() = (mode as? ChatThreadMode.Room)?.asBusinessUserId
+        private val messageIdentityId: String
+            get() = asBusinessUserId ?: currentUserId
         private var gigId: String? = null
         private var scrollToMessageId: String? = null
         private var didResolveScrollTarget = false
@@ -278,8 +301,24 @@ class ChatConversationViewModel
             val metadata: Map<String, Any>? = null,
         )
 
+        // Photos sent to the assistant, by the message that carried them: where each is on the phone, because the
+        // server deletes a photo once it has read it and its reference never loads.
+        private val aiSentPhotos = mutableMapOf<String, List<String>>()
+
+        // PDFs sent to the assistant, by the message that carried them: the name and size its chip shows.
+        private val aiSentFiles = mutableMapOf<String, List<ChatSentFile>>()
+
         private var aiConversationId: String? = null
+
+        // The brief or nudge the thread was opened for (its notification id): the thread scrolls to its message once.
+        private var aiNudgeId: String? = null
+
+        // The conversation that brief or nudge was added to (its notification says which).
+        private var aiNudgeConversationId: String? = null
         private val aiDraftsByMessageId = mutableMapOf<String, List<ChatAIDraftCard>>()
+
+        // Buttons to screens of the app under each reply (`link` events and history `links`).
+        private val aiLinksByMessageId = mutableMapOf<String, List<ChatAILink>>()
 
         // What the assistant is doing while a tool runs ("Drafting your post…"), shown on the pending reply.
         private var aiStatus: String? = null
@@ -339,6 +378,9 @@ class ChatConversationViewModel
             scrollToMessageId: String? = null,
             initialTopic: ChatInitialTopic? = null,
             gigId: String? = null,
+            aiContext: AIScreenContext? = null,
+            aiNudgeId: String? = null,
+            aiConversationId: String? = null,
         ) {
             this.mode = mode
             this.currentUserId = currentUserId
@@ -346,6 +388,15 @@ class ChatConversationViewModel
             this.scrollToMessageId = scrollToMessageId
             this.initialTopic = initialTopic
             this.gigId = gigId
+            if (mode is ChatThreadMode.Ai) {
+                this.aiNudgeId = aiNudgeId
+                this.aiNudgeConversationId = aiConversationId
+            }
+            // Configured again after a rotation: the starters already used stay gone.
+            if (mode is ChatThreadMode.Ai && aiContext != _aiContext.value) {
+                _aiContext.value = aiContext
+                _aiStarters.value = aiContext?.starters.orEmpty()
+            }
         }
 
         /** Clear the scroll target after the screen has scrolled to it. */
@@ -365,14 +416,21 @@ class ChatConversationViewModel
                 fetch(initial = true, quiet = true)
                 return
             }
-            // Seed AI continuity: a new VM instance for the AI thread keeps
-            // appending to the conversation the app session already opened.
-            if (mode is ChatThreadMode.Ai && aiConversationId == null) {
+            // A brief or nudge opens the conversation it was added to, at its message (AI assistant phase 2 §8.2).
+            val openedForNudge = aiNudgeId != null || aiNudgeConversationId != null
+            if (mode is ChatThreadMode.Ai && aiConversationId == null && openedForNudge) {
+                openAtNudge()
+            } else if (mode is ChatThreadMode.Ai && aiConversationId == null) {
+                // Seed AI continuity: a new VM instance for the AI thread keeps
+                // appending to the conversation the app session already opened.
                 aiConversationId = aiSession.conversationId
                 // Cold relaunch: the session holder is empty — restore the
                 // latest backend conversation id so the thread continues
                 // across app restarts.
                 if (aiConversationId == null && aiSession.freshStartUserId != currentUserId) restoreLatestAiConversation()
+                // Reopened in the same app session (from Messages or an Ask button): the conversation
+                // continues, so its earlier turns show as well.
+                aiConversationId?.let { id -> viewModelScope.launch { loadAiHistory(id) } }
             }
             loadTopicsIfNeeded()
             loadGigContextIfNeeded()
@@ -403,6 +461,26 @@ class ChatConversationViewModel
                     is NetworkResult.Failure ->
                         Timber.w("restore AI conversation failed: ${result.error.message}")
                 }
+            }
+        }
+
+        /**
+         * A brief or nudge was tapped (a push or a notification row): the conversation its notification names opens and
+         * continues while the person still has it (else the newest, which a nudge's arrival lists first), scrolled to
+         * the message whose history item carries the notification's id. A server without that id opens it at its newest
+         * message.
+         */
+        private fun openAtNudge() {
+            viewModelScope.launch {
+                val listed = (aiRepo.conversations() as? NetworkResult.Success)?.data?.conversations.orEmpty()
+                val named = aiNudgeConversationId?.takeIf { id -> listed.any { it.id == id } }
+                val id = named ?: listed.firstOrNull()?.id ?: aiSession.conversationId ?: return@launch
+                // A message sent while the list loaded keeps its own conversation.
+                if (aiConversationId != null || messages.isNotEmpty()) return@launch
+                aiConversationId = id
+                aiSession.conversationId = id
+                aiSession.freshStartUserId = null
+                loadAiHistory(id)
             }
         }
 
@@ -449,6 +527,7 @@ class ChatConversationViewModel
          * after it share one reply, as they did when it streamed. A server
          * without the route leaves the thread empty, as before.
          */
+        @Suppress("CyclomaticComplexMethod")
         private suspend fun loadAiHistory(conversationId: String) {
             if (messages.isNotEmpty()) return
             val history =
@@ -463,49 +542,133 @@ class ChatConversationViewModel
             if (messages.isNotEmpty() || aiConversationId != conversationId) return
             val restored = mutableListOf<ChatMessageDto>()
             val drafts = mutableMapOf<String, List<ChatAIDraftCard>>()
+            val links = mutableMapOf<String, List<ChatAILink>>()
+            // A brief's or nudge's notification id, by the reply its first item opened.
+            val nudgeReplies = mutableMapOf<String, String>()
             var openReplyId: String? = null
             history.messages.forEachIndexed { index, item ->
                 val id = "ai_history_$index"
-                val draft = item.draft
                 val text = item.text.orEmpty()
-                when {
-                    item.role == "user" -> {
-                        openReplyId = null
-                        restored.add(localMessage(id = id, text = sentText(text, item.photos ?: 0), userId = currentUserId, type = "text"))
-                    }
-                    draft != null -> {
-                        val replyId = openReplyId ?: id
-                        if (openReplyId == null) restored.add(localMessage(id = replyId, text = "", userId = "ai", type = "ai_reply"))
-                        openReplyId = replyId
-                        aiRepo.draftCard(draft.type, draft.draft)?.let { drafts[replyId] = drafts[replyId].orEmpty() + it }
-                    }
-                    text.isNotEmpty() -> {
-                        val replyId = openReplyId
-                        val at = restored.indexOfFirst { it.id == replyId }
-                        if (replyId != null && at >= 0) {
-                            restored[at] = localMessage(id = replyId, text = text, userId = "ai", type = "ai_reply")
-                            openReplyId = null
-                        } else {
-                            restored.add(localMessage(id = id, text = text, userId = "ai", type = "ai_reply"))
-                        }
-                    }
+                if (item.role == "user") {
+                    openReplyId = null
+                    val sent = sentText(text, item.photos ?: 0, item.documents ?: 0)
+                    restored.add(localMessage(id = id, text = sent, userId = currentUserId, type = "text"))
+                    return@forEachIndexed
                 }
+                val draft = item.draft?.let { aiRepo.draftCard(it.type, it.draft) }
+                val itemLinks = item.links.orEmpty().mapNotNull { aiRepo.link(it.label, it.url) }
+                if (draft == null && text.isEmpty() && itemLinks.isEmpty()) return@forEachIndexed
+                // A brief or nudge (its line, then its cards) is a reply of its own, never the note of the one before.
+                val nudge = item.nudgeNotificationId
+                if (nudge != null) openReplyId = null
+                // A draft, its link buttons and the note after it share one reply, as they did when it streamed.
+                val replyId =
+                    openReplyId?.takeIf { open -> restored.any { it.id == open } }
+                        ?: id.also { restored.add(localMessage(id = it, text = "", userId = "ai", type = "ai_reply")) }
+                if (text.isNotEmpty()) {
+                    val at = restored.indexOfFirst { it.id == replyId }
+                    restored[at] = localMessage(id = replyId, text = text, userId = "ai", type = "ai_reply")
+                }
+                // A brief's or nudge's cards join its line.
+                openReplyId = if (nudge != null) replyId else replyId.takeIf { text.isEmpty() }
+                draft?.let { drafts[replyId] = drafts[replyId].orEmpty() + withSavedRuns(it) }
+                if (itemLinks.isNotEmpty()) links[replyId] = links[replyId].orEmpty() + itemLinks
+                nudge?.let { nudgeReplies.putIfAbsent(it, replyId) }
             }
             messages.addAll(restored)
             aiDraftsByMessageId.putAll(drafts)
+            aiLinksByMessageId.putAll(links)
+            // Opened for a brief or nudge: its message comes into view (the Chat Search scroll), once.
+            aiNudgeId?.let { nudge ->
+                aiNudgeId = null
+                nudgeReplies[nudge]?.let { replyId ->
+                    scrollToMessageId = replyId
+                    didResolveScrollTarget = false
+                }
+            }
             rebuild()
         }
 
-        /** A restored message of the person's: their words, or a line for the photos they sent alone. */
+        /** An action card as this phone left it: the buttons that succeeded, or "Not now". */
+        private fun withSavedRuns(draft: ChatAIDraftCard): ChatAIDraftCard {
+            val card = draft.action ?: return draft
+            val runs = aiCards.done(card.id).associate { it.scope to ChatAICardRun.Done(it.actionId, it.link, it.note) }
+            return draft.copy(action = card.copy(runs = card.runs + runs, dismissed = aiCards.isDismissed(card.id)))
+        }
+
+        /**
+         * An action card's button (AI assistant phase 1 contract, section 4.3): the request goes out only if
+         * it is on the allowlist, through the signed-in client. [scope] is [ChatAIActionCard.CARD_SCOPE] or the
+         * row's id. The card's buttons wait while it runs; a success is remembered on this phone.
+         */
+        fun runAIAction(
+            draft: ChatAIDraftCard,
+            scope: String,
+            action: ChatAICardAction,
+        ) {
+            val card = draft.action ?: return
+            val usable = !card.isRunning && !card.dismissed && !card.isExpired()
+            if (!usable || card.runs[scope] is ChatAICardRun.Done) return
+            updateActionCard(draft.id) { it.copy(runs = it.runs + (scope to ChatAICardRun.Running(action.id))) }
+            viewModelScope.launch {
+                val run =
+                    when (val outcome = aiActions.run(action)) {
+                        is AIActionRunner.Outcome.Done -> {
+                            aiCards.markDone(card.id, AIActionCardStore.Done(scope, action.id, outcome.link, outcome.note))
+                            ChatAICardRun.Done(action.id, outcome.link, outcome.note)
+                        }
+                        is AIActionRunner.Outcome.Failed -> ChatAICardRun.Failed(action.id, outcome.message)
+                        AIActionRunner.Outcome.NotAllowed ->
+                            ChatAICardRun.Failed(action.id, "This card can't be used in this version of Pantopus.")
+                        AIActionRunner.Outcome.SessionChanged ->
+                            ChatAICardRun.Failed(action.id, "This card is from an earlier sign-in. Ask again.")
+                    }
+                updateActionCard(draft.id) { it.copy(runs = it.runs + (scope to run)) }
+            }
+        }
+
+        /** "Not now": the card stays in the thread without its buttons, on this phone only. */
+        fun dismissAIAction(draft: ChatAIDraftCard) {
+            val card = draft.action ?: return
+            if (card.isRunning) return
+            aiCards.dismiss(card.id)
+            updateActionCard(draft.id) { it.copy(dismissed = true) }
+        }
+
+        private fun updateActionCard(
+            draftId: String,
+            change: (ChatAIActionCard) -> ChatAIActionCard,
+        ) {
+            val messageId = aiDraftsByMessageId.entries.firstOrNull { (_, cards) -> cards.any { it.id == draftId } }?.key ?: return
+            aiDraftsByMessageId[messageId] =
+                aiDraftsByMessageId[messageId].orEmpty().map { draft ->
+                    if (draft.id == draftId) draft.copy(action = draft.action?.let(change)) else draft
+                }
+            rebuild()
+        }
+
+        /** A restored message of the person's: their words, or a line for the photos and documents they sent alone. */
         private fun sentText(
             text: String,
             photos: Int,
-        ): String =
-            when {
-                text.isNotEmpty() || photos == 0 -> text
-                photos == 1 -> "Sent a photo"
-                else -> "Sent $photos photos"
-            }
+            documents: Int = 0,
+        ): String {
+            if (text.isNotEmpty()) return text
+            val sent =
+                listOfNotNull(
+                    when {
+                        photos == 1 -> "a photo"
+                        photos > 1 -> "$photos photos"
+                        else -> null
+                    },
+                    when {
+                        documents == 1 -> "a document"
+                        documents > 1 -> "$documents documents"
+                        else -> null
+                    },
+                )
+            return if (sent.isEmpty()) text else "Sent ${sent.joinToString(" and ")}"
+        }
 
         /**
          * A15 `.ctx-strip` — resolve the pinned gig context for a gig room
@@ -636,7 +799,13 @@ class ChatConversationViewModel
             filename: String,
             mimeType: String,
             bytes: ByteArray,
+            sourceUri: String? = null,
         ) {
+            // The assistant reads a PDF of up to 10 MB (`POST /api/upload/ai-media`); a bigger one is turned away here.
+            if (mode is ChatThreadMode.Ai && mimeType == PDF_MIME && bytes.size > AIPdfCheck.MAX_BYTES) {
+                refuseAttachment(AIPdfCheck.TOO_LARGE)
+                return
+            }
             appendQueuedAttachment(
                 ChatQueuedAttachment(
                     id = UUID.randomUUID().toString(),
@@ -644,8 +813,14 @@ class ChatConversationViewModel
                     filename = filename,
                     mimeType = mimeType,
                     bytes = bytes,
+                    sourceUri = sourceUri,
                 ),
             )
+        }
+
+        /** A picked file the assistant can't take: the reason, in the server's words, and nothing queued. */
+        fun refuseAttachment(reason: String) {
+            _actionFailure.value = reason
         }
 
         private fun appendQueuedAttachment(attachment: ChatQueuedAttachment) {
@@ -850,7 +1025,7 @@ class ChatConversationViewModel
             ChatMessageDto(
                 id = "client_$clientId",
                 roomId = roomId,
-                userId = currentUserId,
+                userId = messageIdentityId,
                 messageText = text,
                 messageType = messageType,
                 metadata = metadata,
@@ -858,7 +1033,7 @@ class ChatConversationViewModel
                 createdAt = Instant.now().toString(),
                 sender =
                     ChatMessageSender(
-                        id = currentUserId,
+                        id = messageIdentityId,
                         username = null,
                         name = null,
                         profilePictureUrl = null,
@@ -871,7 +1046,19 @@ class ChatConversationViewModel
          * welcome/empty state).
          */
         fun sendCapabilityPrompt(chip: ChatPromptChip) {
-            _composerText.value = chip.label
+            sendAiStarter(chip.label)
+        }
+
+        /**
+         * A starter prompt: a whole question goes at once; one that trails off ("Remind us…") fills the
+         * composer for the person to finish.
+         */
+        fun sendAiStarter(text: String) {
+            if (text.endsWith("…")) {
+                _composerText.value = text.removeSuffix("…").trimEnd() + " "
+                return
+            }
+            _composerText.value = text
             send()
         }
 
@@ -883,8 +1070,9 @@ class ChatConversationViewModel
             // stop button can abort generation (A15.3) without blocking
             // [isSending] for the whole stream.
             if (_editingMessageId.value == null && mode is ChatThreadMode.Ai) {
-                if (_isAiStreaming.value) return
+                if (_isAiStreaming.value || _isDeletingAi.value) return
                 _composerText.value = ""
+                _aiStarters.value = emptyList()
                 startAiStream(trimmed)
                 return
             }
@@ -995,6 +1183,7 @@ class ChatConversationViewModel
                         replyToId = sanitizedReplyToId(context.replyToId, roomId),
                         topicId = context.topicId,
                         metadata = context.metadata,
+                        asBusinessUserId = asBusinessUserId,
                     ),
                 )
             return when (result) {
@@ -1143,6 +1332,62 @@ class ChatConversationViewModel
         }
 
         /**
+         * "Delete conversation" (the header's More menu): every conversation the assistant keeps for this person goes
+         * (`DELETE /api/ai/conversations/:id`), the one on screen and any earlier one "New chat" or another device
+         * left, which the next launch would otherwise show. Each one's cards are read first, so their records on this
+         * phone go with it. Then the thread starts over, as "New chat" does.
+         */
+        fun deleteAiConversations() {
+            if (mode !is ChatThreadMode.Ai || _isDeletingAi.value) return
+            _isDeletingAi.value = true
+            cancelAiStream()
+            viewModelScope.launch {
+                val failure = deleteEveryAiConversation()
+                _isDeletingAi.value = false
+                if (failure == null) {
+                    startNewAiConversation()
+                } else {
+                    _actionFailure.value = failure
+                }
+            }
+        }
+
+        /** Null once none is left, else what to tell the person. */
+        private suspend fun deleteEveryAiConversation(): String? =
+            try {
+                val deleted = mutableSetOf<String>()
+                var listed = aiRepo.conversations().orThrow().conversations.map { it.id }
+                var rounds = 1
+                // The list holds the newest 50, so a long history takes a few rounds. One listed again after its
+                // delete went through stops it.
+                while (listed.any { it !in deleted } && rounds < AI_DELETE_ROUNDS) {
+                    for (id in listed.filterNot { it in deleted }) {
+                        val cardIds = aiActionCardIds(id)
+                        aiRepo.deleteConversation(id).orThrow()
+                        aiCards.forget(cardIds)
+                        deleted += id
+                    }
+                    listed = aiRepo.conversations().orThrow().conversations.map { it.id }
+                    rounds++
+                }
+                if (listed.isEmpty()) null else AI_DELETE_FAILED
+            } catch (error: NetworkError) {
+                Timber.w("AI conversation delete failed: ${error.message}")
+                if (error.code == HTTP_TOO_MANY_REQUESTS) AI_DELETE_TOO_MANY else AI_DELETE_FAILED
+            }
+
+        /** The action cards in one conversation, by card id; none when it is already gone. */
+        private suspend fun aiActionCardIds(conversationId: String): Set<String> =
+            when (val history = aiRepo.conversationMessages(conversationId)) {
+                is NetworkResult.Success ->
+                    history.data.messages
+                        .mapNotNull { item -> item.draft?.takeIf { it.type == "action" } }
+                        .mapNotNull { aiRepo.draftCard(it.type, it.draft)?.action?.id }
+                        .toSet()
+                is NetworkResult.Failure -> if (history.error is NetworkError.NotFound) emptySet() else throw history.error
+            }
+
+        /**
          * A15.3 "New chat": stop a reply in progress, clear the thread back to its starter prompts, and
          * forget the conversation so the next message starts a new one. A message being written stays.
          */
@@ -1156,21 +1401,42 @@ class ChatConversationViewModel
             aiConversationId = null
             aiSession.conversationId = null
             aiSession.freshStartUserId = currentUserId
+            aiSentPhotos.clear()
+            aiSentFiles.clear()
             messages.clear()
             aiDraftsByMessageId.clear()
+            aiLinksByMessageId.clear()
+            // Opened from a screen: the new conversation is about it too, with its starters again.
+            _aiStarters.value = _aiContext.value?.starters.orEmpty()
             rebuild()
         }
 
         private suspend fun streamAiMessage(text: String) {
-            val imageUrls = uploadQueuedAIImagesIfNeeded()
+            // What the upload sends, taken before it starts: where each photo is on the phone, and each PDF's name and size.
+            val queued = _queuedAttachments.value.filter { it.bytes != null }
+            val photos = queued.filter { it.mimeType.startsWith("image/") }.mapNotNull { it.sourceUri }
+            val files = queued.filter { it.mimeType == PDF_MIME }.map { ChatSentFile(it.filename, it.bytes?.size?.let(::fileSizeLabel)) }
+            val imageUrls =
+                when (val upload = uploadQueuedAIMediaIfNeeded()) {
+                    is NetworkResult.Success -> upload.data
+                    is NetworkResult.Failure -> {
+                        // Nothing went: the words and the files stay for another try, and the server says why.
+                        if (_composerText.value.isEmpty()) _composerText.value = text
+                        _actionFailure.value = upload.error.displayMessage("Couldn't send your files. Try again.")
+                        return
+                    }
+                }
             val userMessage =
                 localMessage(
                     id = "ai_user_${UUID.randomUUID()}",
                     text = text,
                     userId = currentUserId,
                     type = "text",
-                    imageUrls = imageUrls,
                 )
+            if (imageUrls.isNotEmpty()) {
+                if (photos.isNotEmpty()) aiSentPhotos[userMessage.id] = photos
+                if (files.isNotEmpty()) aiSentFiles[userMessage.id] = files
+            }
             val assistantId = "ai_assistant_${UUID.randomUUID()}"
             streamingAssistantId = assistantId
             messages.add(userMessage)
@@ -1181,9 +1447,17 @@ class ChatConversationViewModel
             var streamedText = ""
             runCatching {
                 aiRepo.streamChat(
-                    message = text.ifEmpty { "What can you tell me about this image?" },
+                    message =
+                        text.ifEmpty {
+                            if (photos.isEmpty() && files.isNotEmpty()) {
+                                "What can you tell me about this document?"
+                            } else {
+                                "What can you tell me about this image?"
+                            }
+                        },
                     conversationId = aiConversationId,
                     images = imageUrls,
+                    context = _aiContext.value,
                 ).collect { event ->
                     when (event) {
                         is AIChatStreamEvent.Conversation -> {
@@ -1202,7 +1476,11 @@ class ChatConversationViewModel
                         }
                         is AIChatStreamEvent.Draft -> {
                             aiStatus = null
-                            aiDraftsByMessageId[assistantId] = aiDraftsByMessageId[assistantId].orEmpty() + event.draft
+                            aiDraftsByMessageId[assistantId] = aiDraftsByMessageId[assistantId].orEmpty() + withSavedRuns(event.draft)
+                            rebuild()
+                        }
+                        is AIChatStreamEvent.Link -> {
+                            aiLinksByMessageId[assistantId] = aiLinksByMessageId[assistantId].orEmpty() + event.link
                             rebuild()
                         }
                         is AIChatStreamEvent.Error -> {
@@ -1249,7 +1527,7 @@ class ChatConversationViewModel
             _replyingTo.value =
                 ChatReplyPreview(
                     messageId = message.id,
-                    senderName = message.sender?.name ?: if (message.userId == currentUserId) "You" else "Message",
+                    senderName = message.sender?.displayLabel ?: if (message.userId == currentUserId) "You" else "Message",
                     text = message.resolvedText,
                 )
             _editingMessageId.value = null
@@ -1308,12 +1586,23 @@ class ChatConversationViewModel
             openAttachmentJob =
                 viewModelScope.launch {
                     val name = File(attachment.filename).name.takeUnless { it.isBlank() || it == "." || it == ".." }
-                    val target = File(directory, name ?: "attachment")
+                    val previewDirectory = File(directory, UUID.randomUUID().toString()).apply { mkdirs() }
+                    val target = File(previewDirectory, name ?: "attachment")
                     when (val result = repo.downloadFile(fileId, target)) {
-                        is NetworkResult.Success ->
-                            _openFile.value = ChatOpenFile(target, attachment.mimeType ?: "application/octet-stream")
+                        is NetworkResult.Success -> {
+                            val clip = attachment.liveVideoFileId?.let { File(previewDirectory, "live.mp4") }
+                            if (
+                                clip != null &&
+                                repo.downloadFile(checkNotNull(attachment.liveVideoFileId), clip) is NetworkResult.Failure
+                            ) {
+                                previewDirectory.deleteRecursively()
+                                _actionFailure.value = "Couldn't open the Live Photo. Try again."
+                            } else {
+                                _openFile.value = ChatOpenFile(target, attachment.mimeType ?: "application/octet-stream", clip)
+                            }
+                        }
                         is NetworkResult.Failure -> {
-                            target.delete()
+                            previewDirectory.deleteRecursively()
                             _actionFailure.value = "Couldn't open the file. Try again."
                             Timber.w("chat file download failed: ${result.error.message}")
                         }
@@ -1479,7 +1768,7 @@ class ChatConversationViewModel
                 viewModelScope.launch {
                     delay(600)
                     when (val target = mode) {
-                        is ChatThreadMode.Room -> repo.markRoomRead(target.id)
+                        is ChatThreadMode.Room -> repo.markRoomRead(target.id, target.asBusinessUserId)
                         is ChatThreadMode.Person -> repo.markConversationRead(target.otherUserId)
                         ChatThreadMode.Ai -> Unit
                     }
@@ -1573,7 +1862,13 @@ class ChatConversationViewModel
                 }
                 val response =
                     when (val target = context.mode) {
-                        is ChatThreadMode.Room -> repo.roomMessages(target.id, before, force = force)
+                        is ChatThreadMode.Room ->
+                            repo.roomMessages(
+                                target.id,
+                                before,
+                                force = force,
+                                asBusinessUserId = target.asBusinessUserId,
+                            )
                         is ChatThreadMode.Person ->
                             repo.conversationMessages(target.otherUserId, before, topicId = context.topicId, force = force)
                         ChatThreadMode.Ai -> return@launch
@@ -1591,7 +1886,7 @@ class ChatConversationViewModel
             historyCopyContext = context
             updateHistoryCopy =
                 when (val target = context.mode) {
-                    is ChatThreadMode.Room -> repo.roomHistoryUpdater(target.id)
+                    is ChatThreadMode.Room -> repo.roomHistoryUpdater(target.id, target.asBusinessUserId)
                     is ChatThreadMode.Person -> repo.conversationHistoryUpdater(target.otherUserId, context.topicId)
                     ChatThreadMode.Ai -> null
                 }
@@ -1651,7 +1946,7 @@ class ChatConversationViewModel
         private fun showHistoryCopy(): Boolean {
             val copy =
                 when (val target = mode) {
-                    is ChatThreadMode.Room -> repo.roomMessagesCopy(target.id)
+                    is ChatThreadMode.Room -> repo.roomMessagesCopy(target.id, target.asBusinessUserId)
                     is ChatThreadMode.Person -> repo.conversationMessagesCopy(target.otherUserId, _selectedTopicId.value)
                     ChatThreadMode.Ai -> null
                 } ?: return false
@@ -1670,6 +1965,10 @@ class ChatConversationViewModel
             quiet: Boolean,
         ): Boolean {
             if (quiet) return mergeNewestPage(page)
+            // A socket join's backfill can land before this page; its rows carry no sender,
+            // attachments or reactions, so the page's copy of the same message replaces them.
+            val pageIds = page.mapTo(HashSet()) { it.id }
+            messages.removeAll { it.sender == null && it.id in pageIds }
             // Drop ids we already hold — a send completing while
             // this fetch was in flight may have upserted its
             // message ahead of us.
@@ -2009,7 +2308,8 @@ class ChatConversationViewModel
                     do {
                         val result =
                             when (target) {
-                                is ChatThreadMode.Room -> repo.roomMessages(target.id, before = before, after = after)
+                                is ChatThreadMode.Room ->
+                                    repo.roomMessages(target.id, before = before, after = after, asBusinessUserId = target.asBusinessUserId)
                                 is ChatThreadMode.Person ->
                                     repo.conversationMessages(target.otherUserId, before = before, after = after, topicId = topic)
                                 ChatThreadMode.Ai -> return@launch
@@ -2277,21 +2577,25 @@ class ChatConversationViewModel
             }
         }
 
-        private suspend fun uploadQueuedAIImagesIfNeeded(): List<String> {
+        /**
+         * The queued photos and PDFs through `POST /api/upload/ai-media`, as the references the chat's `images` carries
+         * (AI assistant phase 2 §7.1); nothing queued needs no request.
+         */
+        private suspend fun uploadQueuedAIMediaIfNeeded(): NetworkResult<List<String>> {
             val files =
                 _queuedAttachments.value.mapNotNull { attachment ->
                     val bytes = attachment.bytes ?: return@mapNotNull null
-                    if (!attachment.mimeType.startsWith("image/")) return@mapNotNull null
+                    if (!attachment.mimeType.startsWith("image/") && attachment.mimeType != PDF_MIME) return@mapNotNull null
                     UploadFile(
                         filename = attachment.filename,
                         mimeType = attachment.mimeType,
                         bytes = bytes,
                     )
                 }
-            if (files.isEmpty()) return emptyList()
+            if (files.isEmpty()) return NetworkResult.Success(emptyList())
             return when (val result = uploadRepo.uploadAIMedia(files)) {
-                is NetworkResult.Success -> result.data.images.map { it.url }
-                is NetworkResult.Failure -> emptyList()
+                is NetworkResult.Success -> NetworkResult.Success(result.data.images.map { it.url })
+                is NetworkResult.Failure -> result
             }
         }
 
@@ -2349,15 +2653,9 @@ class ChatConversationViewModel
                     rows.add(ChatTimelineRow.SystemNote(message.id, message.resolvedText))
                     return@forEachIndexed
                 }
-                val side = if (message.userId == currentUserId) ChatMessageSide.Outgoing else ChatMessageSide.Incoming
-                val previousSameSide =
-                    index > 0 &&
-                        combined[index - 1].userId == message.userId &&
-                        dayKey(combined[index - 1].createdAt) == dayKey
-                val nextSameSide =
-                    index + 1 < combined.size &&
-                        combined[index + 1].userId == message.userId &&
-                        dayKey(combined[index + 1].createdAt) == dayKey
+                val side = if (message.userId == messageIdentityId) ChatMessageSide.Outgoing else ChatMessageSide.Incoming
+                val previousSameSide = sharesBubbleGroup(message, combined.getOrNull(index - 1))
+                val nextSameSide = sharesBubbleGroup(message, combined.getOrNull(index + 1))
                 val hasTail = !nextSameSide
                 val deliveryState =
                     if (side != ChatMessageSide.Outgoing) {
@@ -2409,6 +2707,13 @@ class ChatConversationViewModel
                             lockedTier = lockedTierOf(message),
                             sentSupportTier = sentSupportTierOf(message),
                             isContinuation = previousSameSide,
+                            senderName =
+                                if (mode is ChatThreadMode.Room && side == ChatMessageSide.Incoming) {
+                                    message.sender?.displayLabel?.takeIf { it.isNotBlank() } ?: "Participant"
+                                } else {
+                                    null
+                                },
+                            attachments = message.attachments,
                         ),
                     ),
                 )
@@ -2465,15 +2770,19 @@ class ChatConversationViewModel
                         estimate = null,
                         drafts = aiDraftsByMessageId[message.id].orEmpty(),
                         status = aiStatus.takeIf { message.id == streamingAssistantId },
+                        // A link this version can't open shows no button.
+                        links = aiLinksByMessageId[message.id].orEmpty().filter { DeepLinkRouter.canRoute(it.url) },
                     )
                 "text" -> {
                     val imageUrls =
-                        (message.metadata?.get("image_urls") as? List<*>)
-                            ?.filterIsInstance<String>()
-                            ?.mapNotNull(ChatMediaUrl::resolve)
-                            .orEmpty()
-                    if (imageUrls.isNotEmpty()) {
-                        ChatBubbleBody.TextWithImages(message.resolvedText, imageUrls)
+                        aiSentPhotos[message.id]
+                            ?: (message.metadata?.get("image_urls") as? List<*>)
+                                ?.filterIsInstance<String>()
+                                ?.mapNotNull(ChatMediaUrl::resolve)
+                                .orEmpty()
+                    val files = aiSentFiles[message.id].orEmpty()
+                    if (imageUrls.isNotEmpty() || files.isNotEmpty()) {
+                        ChatBubbleBody.TextWithImages(message.resolvedText, imageUrls, files)
                     } else {
                         ChatBubbleBody.Text(message.resolvedText)
                     }
@@ -2548,7 +2857,7 @@ class ChatConversationViewModel
             val original = allMessages.firstOrNull { it.id == replyToId } ?: return null
             return ChatReplyPreview(
                 messageId = original.id,
-                senderName = original.sender?.name ?: "Message",
+                senderName = original.sender?.displayLabel ?: "Message",
                 text = original.resolvedText,
             )
         }
@@ -2597,14 +2906,14 @@ class ChatConversationViewModel
             ChatMessageDto(
                 id = "client_$clientId",
                 roomId = roomId,
-                userId = currentUserId,
+                userId = messageIdentityId,
                 messageText = text,
                 messageType = "text",
                 clientMessageId = clientId,
                 createdAt = Instant.now().toString(),
                 sender =
                     ChatMessageSender(
-                        id = currentUserId,
+                        id = messageIdentityId,
                         username = null,
                         name = null,
                         profilePictureUrl = null,
@@ -2616,7 +2925,6 @@ class ChatConversationViewModel
             text: String,
             userId: String,
             type: String,
-            imageUrls: List<String> = emptyList(),
         ): ChatMessageDto =
             ChatMessageDto(
                 id = id,
@@ -2624,7 +2932,6 @@ class ChatConversationViewModel
                 userId = userId,
                 messageText = text,
                 messageType = type,
-                metadata = if (imageUrls.isEmpty()) null else mapOf("image_urls" to imageUrls),
                 createdAt = Instant.now().toString(),
             )
 
@@ -2690,6 +2997,14 @@ class ChatConversationViewModel
                 }
             }.getOrDefault(iso)
 
+        /** System notices break message groups even when they carry the same actor id. */
+        private fun sharesBubbleGroup(
+            message: ChatMessageDto,
+            neighbor: ChatMessageDto?,
+        ): Boolean =
+            neighbor != null && neighbor.resolvedType !in setOf("system", "broadcast_reference") &&
+                neighbor.userId == message.userId && dayKey(neighbor.createdAt) == dayKey(message.createdAt)
+
         private fun stampLabel(message: ChatMessageDto): String? =
             runCatching {
                 val time =
@@ -2697,10 +3012,11 @@ class ChatConversationViewModel
                         .parse(message.createdAt)
                         .atZone(ZoneId.systemDefault())
                         .format(DateTimeFormatter.ofPattern("h:mm a"))
-                if (message.userId == currentUserId) {
+                // Replies sent as the business are this viewer's own outgoing messages here.
+                if (message.userId == messageIdentityId) {
                     time
                 } else {
-                    val sender = message.sender?.name?.takeIf { it.isNotEmpty() }
+                    val sender = message.sender?.displayLabel?.takeIf { it.isNotEmpty() }
                     sender?.let { "$it · $time" } ?: time
                 }
             }.getOrNull()
@@ -2799,6 +3115,9 @@ private const val SEND_REFUSED_NOTICE = "You can't send messages in this convers
  */
 private val ATTACHMENT_PLACEHOLDER = Regex("""^(\[.+ attachments?]|Photo|Video|Document|Media)$""", RegexOption.IGNORE_CASE)
 
+/** The documents the assistant reads (AI assistant phase 2 §7.1). */
+private const val PDF_MIME = "application/pdf"
+
 /**
  * Min gap between `typing:start` emits. The backend rate-limits the event
  * to 10/min per socket and silently drops the excess
@@ -2818,3 +3137,19 @@ private const val REACTION_REFETCH_DEBOUNCE_MS = 300L
 
 /** Refresh cadence while the socket is disconnected (fallback polling). */
 private const val SOCKET_FALLBACK_POLL_MS = 30_000L
+
+/** How many lists of 50 "Delete conversation" works through before it gives up. */
+private const val AI_DELETE_ROUNDS = 20
+
+private const val AI_DELETE_FAILED = "Couldn't delete the conversation. Try again."
+
+private const val AI_DELETE_TOO_MANY = "Couldn't delete it all yet. Try again in a minute."
+
+private const val HTTP_TOO_MANY_REQUESTS = 429
+
+/** The body, or the failure thrown, for a run of calls that stops at the first one. */
+private fun <T> NetworkResult<T>.orThrow(): T =
+    when (this) {
+        is NetworkResult.Success -> data
+        is NetworkResult.Failure -> throw error
+    }

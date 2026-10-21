@@ -51,11 +51,14 @@ struct PantopusApp: App {
                 .onOpenURL { url in
                     guard !StripeAPI.handleURLCallback(with: url) else { return }
                     guard !AuthManager.isOAuthCallback(url) else { return }
+                    // SwiftUI also delivers HTTPS universal links through this entry point.
+                    guard !WebLinkFallback.openIfNeeded(url) else { return }
                     DeepLinkRouter.shared.handle(url: url)
                 }
                 .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
                     if let url = activity.webpageURL {
                         guard !AuthManager.isOAuthCallback(url) else { return }
+                        guard !WebLinkFallback.openIfNeeded(url) else { return }
                         DeepLinkRouter.shared.handle(url: url)
                     }
                 }

@@ -567,7 +567,6 @@ final class MaintenanceListViewModel: ListOfRowsDataSource {
 
     private static func formatCost(_ cost: Decimal?) -> String {
         guard let cost else { return "—" }
-        if cost == 0 { return "DIY" }
         return formatCurrency(cost)
     }
 
@@ -575,8 +574,8 @@ final class MaintenanceListViewModel: ListOfRowsDataSource {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = "USD"
-        formatter.maximumFractionDigits = 0
-        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = 2
+        formatter.minimumFractionDigits = 2
         return formatter.string(from: amount as NSDecimalNumber) ?? "$\(amount)"
     }
 

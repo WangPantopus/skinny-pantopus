@@ -65,7 +65,13 @@ import kotlin.coroutines.resume
 @Composable
 fun GigDetailScreen(
     onBack: () -> Unit = {},
-    onOpenChat: (roomId: String, displayName: String, initials: String, verified: Boolean) -> Unit = { _, _, _, _ -> },
+    onOpenChat: (
+        roomId: String,
+        displayName: String,
+        initials: String,
+        verified: Boolean,
+        asBusinessUserId: String?,
+    ) -> Unit = { _, _, _, _, _ -> },
     onOpenPayouts: () -> Unit = {},
     viewModel: GigDetailViewModel = hiltViewModel(),
 ) {
@@ -166,7 +172,7 @@ fun GigDetailScreen(
     }
     LaunchedEffect(Unit) {
         viewModel.openChatEvents.collect { event ->
-            onOpenChat(event.roomId, event.displayName, event.initials, event.verified)
+            onOpenChat(event.roomId, event.displayName, event.initials, event.verified, event.asBusinessUserId)
         }
     }
     // A freshly minted status link goes straight to the clipboard — RN's
@@ -282,7 +288,8 @@ fun GigDetailScreen(
     LaunchedEffect(stopState.recoveryError) { stopState.recoveryError?.let { showToast(it, true) } }
 
     // Launch cut #4 (Open Gigs): a task the viewer neither posted nor works is open-task
-    // browsing, hidden for the first launch; the detail and lifecycle of their own tasks stay.
+    // browsing, hidden for the first launch; the detail and lifecycle of their own tasks stay,
+    // and a business's owner and staff see its tasks.
     if (!LaunchFeatures.openGigs && state is ContentDetailUiState.Loaded && !viewModel.viewerIsPartOfTask()) {
         NotYetAvailableView(tabName = "Open tasks", icon = PantopusIcon.Info, onBack = onBack)
         return

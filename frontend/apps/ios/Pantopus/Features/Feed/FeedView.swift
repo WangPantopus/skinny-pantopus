@@ -61,6 +61,8 @@ public struct FeedView: View {
     @State private var sportsStarter: PulseSportsStarter?
     /// Non-nil while the system share sheet is up for one post.
     @State private var shareTarget: FeedShareTarget?
+    /// The assistant, opened from the header about what's nearby.
+    @State private var askTopic: AIAskTopic?
     @FocusState private var searchFieldFocused: Bool
     private let onOpenPost: @MainActor (String) -> Void
     private let onCompose: @MainActor (PulseIntent) -> Void
@@ -75,6 +77,11 @@ public struct FeedView: View {
     /// Runs beside the feed's own read on a pull to refresh (the Pulse tab
     /// re-reads its quiet-state card's meter).
     private let onRefresh: (@MainActor () async -> Void)?
+    /// The Nearby feed's header offers "Ask Pantopus" about what's nearby.
+    private let asksPantopus: Bool
+    /// Drawn above the top bar: the Nearby tab's segment header (the Pulse |
+    /// Neighborhood switch and the side menu, founder decision 2026-10-20).
+    private let header: AnyView?
 
     init(
         viewModel: PulseFeedViewModel? = nil,
@@ -86,7 +93,9 @@ public struct FeedView: View {
         onBack: (@MainActor () -> Void)? = nil,
         topMenu: FeedTopMenu? = nil,
         topCard: AnyView? = nil,
-        onRefresh: (@MainActor () async -> Void)? = nil
+        onRefresh: (@MainActor () async -> Void)? = nil,
+        header: AnyView? = nil,
+        asksPantopus: Bool = false
     ) {
         // Swift 5.10 crashes while lowering PulseFeedViewModel() in a default-argument thunk.
         let resolved = viewModel ?? PulseFeedViewModel()
@@ -107,11 +116,14 @@ public struct FeedView: View {
         self.topMenu = topMenu
         self.topCard = topCard
         self.onRefresh = onRefresh
+        self.header = header
+        self.asksPantopus = asksPantopus
     }
 
     public var body: some View {
         ZStack(alignment: .bottomTrailing) {
             VStack(spacing: Spacing.s0) {
+                if let header { header }
                 topBar
                 if viewModel.surface == .beacons {
                     HStack(spacing: Spacing.s4) {
@@ -196,6 +208,7 @@ public struct FeedView: View {
             }
         }
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
+        .askPantopus($askTopic)
         .task {
             viewModel.onAreaResolved = { [weak contextBarViewModel] in
                 contextBarViewModel?.applyCurrent($0)
@@ -305,13 +318,25 @@ public struct FeedView: View {
                 .accessibilityLabel("Back")
                 .accessibilityIdentifier("pulseBackButton")
             }
+            // One line, shrinking a little where the Ask button leaves less room.
             Text(viewModel.surface.title)
                 .font(.system(size: 22, weight: .bold))
                 .foregroundStyle(Theme.Color.appText)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
                 .accessibilityAddTraits(.isHeader)
-            Spacer()
+            Spacer(minLength: Spacing.s1)
             if viewModel.surface.supportsMapMode {
                 viewModeToggle.fixedSize(horizontal: true, vertical: false)
+            }
+            if asksPantopus {
+                AskPantopusButton(accessibilityIdentifier: "pulseAskPantopus") {
+                    askTopic = .nearby()
+                } label: {
+                    AskPantopusGlyph(size: 19)
+                        .frame(width: 32, height: 36)
+                        .hitArea(horizontal: 4, vertical: 4)
+                }
             }
             Button {
                 withAnimation(.easeOut(duration: 0.15)) { toggleSearch() }

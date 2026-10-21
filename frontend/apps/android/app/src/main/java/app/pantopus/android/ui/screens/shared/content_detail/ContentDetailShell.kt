@@ -22,6 +22,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -37,6 +38,11 @@ import app.pantopus.android.ui.theme.Spacing
 data class ContentDetailTopBarAction(
     val icon: PantopusIcon,
     val contentDescription: String,
+    /** A test tag for the button, when a screen's tests address it. */
+    val testTag: String? = null,
+    /** The icon's colour; null keeps the bar's text colour. */
+    val tint: Color? = null,
+    // Last, so `ContentDetailTopBarAction(icon, label) { … }` keeps working.
     val onClick: () -> Unit,
 )
 
@@ -57,6 +63,8 @@ fun ContentDetailShell(
     onBack: (() -> Void)? = null,
     topBarAction: ContentDetailTopBarAction? = null,
     topBarSecondaryAction: ContentDetailTopBarAction? = null,
+    /** A third trailing action, before the other two (a post's Ask Pantopus). */
+    topBarTertiaryAction: ContentDetailTopBarAction? = null,
     cta: @Composable () -> Unit = {},
     header: @Composable () -> Unit,
     body: @Composable () -> Unit,
@@ -74,6 +82,7 @@ fun ContentDetailShell(
                 onBack = onBack,
                 action = topBarAction,
                 secondaryAction = topBarSecondaryAction,
+                tertiaryAction = topBarTertiaryAction,
             )
             Column(
                 modifier =
@@ -103,6 +112,7 @@ fun ContentDetailTopBar(
     onBack: (() -> Void)? = null,
     action: ContentDetailTopBarAction? = null,
     secondaryAction: ContentDetailTopBarAction? = null,
+    tertiaryAction: ContentDetailTopBarAction? = null,
 ) {
     Column {
         Row(
@@ -133,8 +143,11 @@ fun ContentDetailTopBar(
             } else {
                 Spacer(Modifier.size(44.dp))
             }
-            // Balance the trailing pair so the title stays centered.
+            // Balance the trailing actions so the title stays centered.
             if (secondaryAction != null) {
+                Spacer(Modifier.size(44.dp))
+            }
+            if (tertiaryAction != null) {
                 Spacer(Modifier.size(44.dp))
             }
             Spacer(Modifier.weight(1f))
@@ -148,6 +161,25 @@ fun ContentDetailTopBar(
                 )
             }
             Spacer(Modifier.weight(1f))
+            if (tertiaryAction != null) {
+                Box(
+                    modifier =
+                        Modifier
+                            .size(44.dp)
+                            .clickable(onClick = tertiaryAction.onClick)
+                            .sizeIn(minWidth = 44.dp, minHeight = 44.dp)
+                            .semantics { contentDescription = tertiaryAction.contentDescription }
+                            .then(tertiaryAction.testTag?.let { Modifier.testTag(it) } ?: Modifier),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    PantopusIconImage(
+                        icon = tertiaryAction.icon,
+                        contentDescription = null,
+                        size = 22.dp,
+                        tint = tertiaryAction.tint ?: PantopusColors.appText,
+                    )
+                }
+            }
             if (secondaryAction != null) {
                 Box(
                     modifier =

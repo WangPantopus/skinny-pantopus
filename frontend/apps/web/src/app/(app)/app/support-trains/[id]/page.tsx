@@ -538,6 +538,16 @@ export default function SupportTrainDetailPage() {
               <Share2 className="w-4 h-4" />
               Copy link
             </button>
+            {/* The train's chat, for the people in it (organizers, the recipient, helpers with a signup). */}
+            {data.chat_thread_id && (
+              <button
+                onClick={() => router.push(`/app/chat/${data.chat_thread_id}?returnTo=${encodeURIComponent(`/app/support-trains/${id}`)}`)}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-app-border rounded-lg text-sm text-app-text-secondary hover:bg-app-surface-sunken transition"
+              >
+                <MessageSquare className="w-4 h-4" />
+                Group chat
+              </button>
+            )}
           </div>
         </div>
 

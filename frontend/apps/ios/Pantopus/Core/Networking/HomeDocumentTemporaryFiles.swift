@@ -1,8 +1,12 @@
 import Foundation
 
-/// Private export copies belong to one app process. Launch cleanup only touches
-/// this dedicated directory; backgrounding for an external share keeps it valid.
+/// Private export copies (Home documents, the emergency card, residency letters) belong to one app
+/// process and one account. Launch and sign-out cleanup only touch this dedicated directory and the
+/// exact names earlier builds wrote next to it; backgrounding for an external share keeps it valid.
 enum HomeDocumentTemporaryFiles {
+    /// Earlier builds wrote the emergency card and residency letters at the top of tmp.
+    private static let legacyPrefixes = ["emergency-card-", "pantopus-residency-letter-"]
+
     static func root(in temporaryDirectory: URL) -> URL {
         temporaryDirectory.appendingPathComponent("home-document-exports", isDirectory: true)
     }
@@ -11,6 +15,10 @@ enum HomeDocumentTemporaryFiles {
         let directory = root(in: temporaryDirectory)
         if FileManager.default.fileExists(atPath: directory.path) {
             try FileManager.default.removeItem(at: directory)
+        }
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: temporaryDirectory.path)) ?? []
+        for name in names where name.hasSuffix(".pdf") && legacyPrefixes.contains(where: name.hasPrefix) {
+            try? FileManager.default.removeItem(at: temporaryDirectory.appendingPathComponent(name))
         }
     }
 

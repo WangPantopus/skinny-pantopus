@@ -143,7 +143,10 @@ function governmentsFromGeographies(geo) {
     return true;
   });
 
-  return { items: typed, county_geoid: countyGeoid, state_geoid: stateGeoid };
+  // The state's postal code (or name) places a point whose state is not on
+  // record, such as a saved address that was saved without one.
+  const stateName = String(state.STUSAB || state.NAME || '').trim() || null;
+  return { items: typed, county_geoid: countyGeoid, state_geoid: stateGeoid, state_name: stateName };
 }
 
 // What counts as a government follows the Census of Governments, so the

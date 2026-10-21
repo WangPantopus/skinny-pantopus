@@ -149,9 +149,12 @@ export default function SupportTrainsPage() {
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusBadgeClasses(train.status)}`}>
                       {trainStatusLabel(train.status)}
                     </span>
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${roleBadgeClasses(train.my_role)}`}>
-                      {train.my_role === 'primary' || train.my_role === 'organizer' ? 'Organizer' : train.my_role === 'co_organizer' ? 'Co-organizer' : train.my_role === 'helper' ? 'Helper' : train.my_role}
-                    </span>
+                    {/* A pending invitation reads from its status badge alone. */}
+                    {train.my_role !== 'invited' && (
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${roleBadgeClasses(train.my_role)}`}>
+                        {train.my_role === 'primary' || train.my_role === 'organizer' ? 'Organizer' : train.my_role === 'co_organizer' ? 'Co-organizer' : train.my_role === 'helper' ? 'Helper' : train.my_role === 'recipient' ? 'For you' : train.my_role}
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div className="text-xs text-app-text-muted whitespace-nowrap">

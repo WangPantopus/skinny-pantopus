@@ -134,14 +134,18 @@ internal fun NeighborReceivedContent(
     ) {
         ReceivedCard(message = message)
 
+        flags.error?.let { message ->
+            NeighborErrorBanner(message = message, modifier = Modifier.padding(top = 12.dp))
+        }
+
         PlaceDetailSectionLabel(text = "Reply")
         when {
-            hasReply && message.reply != null ->
-                ReplySent(messageBody = message.reply!!.body, onChange = onChangeReply)
+            hasReply ->
+                ReplySent(messageBody = message.reply!!.body, canChange = canReply && !flags.busy, onChange = onChangeReply)
             canReply ->
                 QuickReplyBar(
                     replies = replies,
-                    replying = replying,
+                    replying = replying || flags.busy,
                     onReply = onReply,
                 )
             else -> RepliesOffNote()
@@ -149,7 +153,7 @@ internal fun NeighborReceivedContent(
 
         PlaceDetailSectionLabel(text = "Manage this message")
         ManageCard(
-            flags = flags,
+            flags = flags.copy(busy = flags.busy || replying),
             onNotHelpful = onNotHelpful,
             onBlock = onBlock,
             onReport = onReport,
@@ -286,6 +290,7 @@ private fun QuickReplyBar(
 @Composable
 private fun ReplySent(
     messageBody: String,
+    canChange: Boolean,
     onChange: () -> Unit,
 ) {
     Column(
@@ -342,13 +347,15 @@ private fun ReplySent(
                 )
                 Text(text = "Delivered anonymously", fontSize = 12.5.sp, color = PantopusColors.home)
             }
-            Text(
-                text = "Change reply",
-                fontSize = 13.5.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = PantopusColors.primary600,
-                modifier = Modifier.clickable(onClick = onChange),
-            )
+            if (canChange) {
+                Text(
+                    text = "Change reply",
+                    fontSize = 13.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = PantopusColors.primary600,
+                    modifier = Modifier.clickable(onClick = onChange),
+                )
+            }
         }
     }
 }
@@ -421,7 +428,7 @@ private fun ManageCard(
         )
     Column(modifier = Modifier.fillMaxWidth().placeCard()) {
         rows.forEachIndexed { index, row ->
-            ManageRow(config = row)
+            ManageRow(config = row, busy = flags.busy)
             if (index < rows.size - 1) {
                 HorizontalDivider(color = PantopusColors.appBorderSubtle)
             }
@@ -430,7 +437,10 @@ private fun ManageCard(
 }
 
 @Composable
-private fun ManageRow(config: ManageRowConfig) {
+private fun ManageRow(
+    config: ManageRowConfig,
+    busy: Boolean,
+) {
     val fg = if (config.danger) PantopusColors.error else PantopusColors.appTextSecondary
     val tileBg = if (config.danger) PantopusColors.errorBg else PantopusColors.appSurfaceSunken
     val tileFg = if (config.danger) PantopusColors.error else PantopusColors.appTextMuted
@@ -439,7 +449,7 @@ private fun ManageRow(config: ManageRowConfig) {
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clickable(enabled = !config.done, onClick = config.onClick)
+                .clickable(enabled = !config.done && !busy, onClick = config.onClick)
                 .padding(14.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,

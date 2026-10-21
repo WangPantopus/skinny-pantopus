@@ -133,6 +133,8 @@ struct BeaconIdentityBlock<Actions: View>: View {
                     ringProgress: 1,
                     size: 72
                 )
+                // This is an identity ring, not measured profile completion.
+                .accessibilityLabel(avatarName)
                 if isVerified {
                     BeaconVerifDot(color: accentColor)
                         .offset(x: 2, y: 2)

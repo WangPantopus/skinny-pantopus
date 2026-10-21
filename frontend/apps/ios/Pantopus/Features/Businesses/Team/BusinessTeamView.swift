@@ -53,6 +53,7 @@ public struct BusinessTeamView: View {
             }
         }
         .background(Theme.Color.appBg)
+        .disabled(viewModel.isMutating)
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .accessibilityIdentifier("businessTeam.screen")
         .navigationTitle("Team")
@@ -75,6 +76,14 @@ public struct BusinessTeamView: View {
             }
         }
         .pantopusAnimation(.componentState, value: toast)
+        .alert("Couldn't update team", isPresented: Binding(
+            get: { viewModel.mutationError != nil },
+            set: { if !$0 { viewModel.mutationError = nil } }
+        )) {
+            Button("OK") { viewModel.mutationError = nil }
+        } message: {
+            Text(viewModel.mutationError ?? "Please try again.")
+        }
         .confirmationDialog(
             overflowTarget?.name ?? "",
             isPresented: overflowBinding,
@@ -187,7 +196,10 @@ public struct BusinessTeamView: View {
     @ViewBuilder private func sheetBody(_ sheet: TeamSheet) -> some View {
         switch sheet {
         case .invite:
-            InviteTeammateWizardView(businessId: businessId) { seat, inviteLink in
+            InviteTeammateWizardView(
+                businessId: businessId,
+                actorRole: BusinessRole.parse(viewModel.access?.roleBase)
+            ) { seat, inviteLink in
                 activeSheet = nil
                 guard let seat else { return }
                 viewModel.handleInvited(seat)

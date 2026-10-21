@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,6 +28,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.plans.PlanDto
@@ -49,6 +49,7 @@ import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Spacing
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -76,33 +77,40 @@ class PlanChatViewModel
     ) : ViewModel() {
         private val _state = MutableStateFlow(PlanChatState())
         val state: StateFlow<PlanChatState> = _state.asStateFlow()
-        private var roomId: String? = null
+        private var loadJob: Job? = null
 
         fun bind(room: String) {
-            if (roomId == room || !feature.isOn) return
-            roomId = room
-            viewModelScope.launch {
-                val detail = (chats.room(room) as? NetworkResult.Success)?.data?.room ?: return@launch
-                if (detail.type != "plan") return@launch
-                val closedRoom = detail.isActive == false
-                _state.value = PlanChatState(closed = closedRoom)
-                val planId = detail.planId ?: return@launch
-                val plan = (plans.plan(planId) as? NetworkResult.Success)?.data ?: return@launch
-                _state.value =
-                    PlanChatState(
-                        plan = plan,
-                        closed = closedRoom || plan.chatOpen == false || plan.planState == PlanState.CANCELLED,
-                    )
-            }
+            if (!feature.isOn) return
+            loadJob?.cancel()
+            loadJob =
+                viewModelScope.launch {
+                    val detail = (chats.room(room) as? NetworkResult.Success)?.data?.room ?: return@launch
+                    if (detail.type != "plan") return@launch
+                    val closedRoom = detail.isActive == false
+                    _state.value = _state.value.copy(closed = _state.value.closed || closedRoom)
+                    val planId = detail.planId ?: return@launch
+                    val plan = (plans.plan(planId) as? NetworkResult.Success)?.data ?: return@launch
+                    _state.value =
+                        PlanChatState(
+                            plan = plan,
+                            closed = closedRoom || plan.chatOpen == false || plan.planState == PlanState.CANCELLED,
+                        )
+                }
         }
     }
 
 /** The plan context for a room (empty for a person thread, another room, or while Plans is off). */
 @Composable
-fun rememberPlanChat(roomId: String?): PlanChatState {
+fun rememberPlanChat(
+    roomId: String?,
+    systemNoteId: String? = null,
+): PlanChatState {
     if (roomId == null) return PlanChatState()
     val viewModel: PlanChatViewModel = hiltViewModel(key = "planChat:$roomId")
-    LaunchedEffect(roomId) { viewModel.bind(roomId) }
+    LifecycleResumeEffect(roomId, systemNoteId) {
+        viewModel.bind(roomId)
+        onPauseOrDispose { }
+    }
     val state by viewModel.state.collectAsStateWithLifecycle()
     return state
 }

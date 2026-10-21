@@ -218,7 +218,18 @@ export default function DocsCard({
                       ))}
                     </div>
 
+                    {doc.content_url && (
+                      <a
+                        href={`/api/homes/${encodeURIComponent(homeId)}/documents/${encodeURIComponent(doc.id)}/content`}
+                        download
+                        aria-label={`Download ${doc.title || 'document'}`}
+                        className="text-xs text-emerald-600 font-medium hover:underline flex-shrink-0"
+                      >
+                        Download
+                      </a>
+                    )}
                     <button
+                      type="button"
                       onClick={() => handleShare(doc)}
                       className="text-app-text-muted hover:text-blue-500 transition flex-shrink-0"
                       title="Create share link"

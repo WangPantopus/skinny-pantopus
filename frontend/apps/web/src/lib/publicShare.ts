@@ -150,10 +150,13 @@ export const fetchPublicUser = cache(async (username: string): Promise<PublicFet
   const identifier = normalizePublicProfileIdentifier(username);
   if (!identifier) return { data: null, status: 404 };
 
+  // Not cached: Next keeps serving the last 200 after the API answers 403 or 404, so a profile made
+  // private, a deleted account or a closed business would stay in the page title.
   const result = await fetchPublicJson<any>(
     UUID_REGEX.test(identifier)
       ? `/api/users/id/${encodeURIComponent(identifier)}`
-      : `/api/users/username/${encodeURIComponent(identifier)}`
+      : `/api/users/username/${encodeURIComponent(identifier)}`,
+    { noStore: true },
   );
 
   if (result.data || result.status !== 404 || UUID_REGEX.test(identifier)) {
@@ -161,7 +164,8 @@ export const fetchPublicUser = cache(async (username: string): Promise<PublicFet
   }
 
   const legacyResult = await fetchPublicJson<any>(
-    `/api/users/${encodeURIComponent(identifier)}`
+    `/api/users/${encodeURIComponent(identifier)}`,
+    { noStore: true },
   );
   return {
     data: legacyResult.data?.user ?? legacyResult.data ?? null,

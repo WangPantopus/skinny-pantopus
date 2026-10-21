@@ -44,6 +44,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import app.pantopus.android.core.LaunchFeatures
+import app.pantopus.android.data.ai.AIScreenContext
 import app.pantopus.android.data.api.models.posts.PostDetailDto
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.RefreshFailedLine
@@ -122,6 +123,8 @@ fun PulsePostDetailScreen(
     /** "Nearby Providers" tap-through. Carries the business *username*. */
     onOpenBusiness: (String) -> Unit = {},
     onContentLoaded: () -> Unit = {},
+    /** Ask Pantopus about this post (AI assistant phase 1); null hides the button. */
+    onAsk: ((AIScreenContext) -> Unit)? = null,
     viewModel: PulsePostDetailViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
@@ -224,6 +227,16 @@ fun PulsePostDetailScreen(
                                 icon = PantopusIcon.Share,
                                 contentDescription = "Share post",
                                 onClick = { launchShareSheet() },
+                            )
+                        },
+                    topBarTertiaryAction =
+                        onAsk?.let { ask ->
+                            ContentDetailTopBarAction(
+                                icon = PantopusIcon.Sparkles,
+                                contentDescription = "Ask Pantopus",
+                                onClick = { ask(AIScreenContext.post(content.post.id, postAskLabel(content.post))) },
+                                testTag = "postAskPantopus",
+                                tint = PantopusColors.magic,
                             )
                         },
                     onBack = onBack,
@@ -457,6 +470,7 @@ fun PulsePostDetailLoadedContent(
     actionPending: Boolean = false,
     topBarAction: ContentDetailTopBarAction? = null,
     topBarSecondaryAction: ContentDetailTopBarAction? = null,
+    topBarTertiaryAction: ContentDetailTopBarAction? = null,
     onBack: () -> Unit = {},
     onOpenProfile: (String) -> Unit = {},
     /** Organically matched local businesses — empty hides the card. */
@@ -481,6 +495,7 @@ fun PulsePostDetailLoadedContent(
         onBack = onBack,
         topBarAction = topBarAction,
         topBarSecondaryAction = topBarSecondaryAction,
+        topBarTertiaryAction = topBarTertiaryAction,
         cta = { InlineReplyCta() },
         header = {
             Column(verticalArrangement = Arrangement.spacedBy(Spacing.s4)) {
@@ -488,6 +503,7 @@ fun PulsePostDetailLoadedContent(
                 if (content.post.isRemovedByModerator) {
                     RemovedPostNotice(modifier = Modifier.padding(horizontal = Spacing.s4))
                 }
+                val businessAuthor = content.post.creator?.takeIf { it.identityType == "business" }
                 PostAuthorHeader(
                     displayName = content.authorDisplayName,
                     avatarUrl = content.authorAvatarUrl,
@@ -495,7 +511,13 @@ fun PulsePostDetailLoadedContent(
                     identity = content.authorIdentity,
                     timeAndLocality = content.timeAndLocality,
                     intent = content.intent,
-                    onAvatarTap = { onOpenProfile(content.post.userId) },
+                    // A business author opens its page, and only while it has a published one (the web links none).
+                    onAvatarTap =
+                        if (businessAuthor != null) {
+                            businessAuthor.businessPageId?.let { businessId -> { onOpenBusiness(businessId) } }
+                        } else {
+                            { onOpenProfile(content.post.userId) }
+                        },
                 )
                 content.status?.let { status ->
                     PostStatusPill(
@@ -641,3 +663,11 @@ private fun ErrorLayout(
         )
     }
 }
+
+/** The assistant thread's "About: …" line for a post: its headline, or the start of its text. */
+private fun postAskLabel(post: PostDetailDto): String =
+    post.title?.trim()?.ifEmpty { null }
+        ?: post.content.trim().lineSequence().firstOrNull()?.take(POST_ASK_LABEL_MAX)?.ifEmpty { null }
+        ?: "This post"
+
+private const val POST_ASK_LABEL_MAX = 60

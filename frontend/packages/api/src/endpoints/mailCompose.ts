@@ -12,20 +12,46 @@ import type { StructuredMailSendPayload } from './mailbox';
 
 // ─── Escrow types ──────────────────────────────────────────
 
+/**
+ * The public preview of a letter sent to someone who isn't on Pantopus: who it is from and a short preview,
+ * never the letter itself (GET /api/mailbox/claim/:mailId).
+ */
 export interface EscrowedMailView {
   mail: {
     id: string;
     senderName: string;
     senderVerified: boolean;
+    /** A letter sent as a business names the business, never the person who sent it for the business. */
+    senderKind: 'business' | 'person';
     subject: string | null;
-    body: string;
-    stationeryTheme: string | null;
-    inkSelection: string | null;
-    voicePostscriptUri: string | null;
-    photoAttachments: string[];
-    createdAt: string;
-    outcomeDescription: string;
+    previewText: string | null;
     mailType: string | null;
+    outcomeDescription: string | null;
+    /** The address or number the letter was sent to, masked (j***@example.com). */
+    sentTo: string;
+    createdAt: string;
+    expiresAt: string | null;
+  };
+}
+
+/** Why a letter's link can't be opened or claimed: the `code` of a claim route's error. */
+export type EscrowClaimErrorCode =
+  | 'MAIL_LINK_INVALID'
+  | 'MAIL_CLAIMED'
+  | 'MAIL_EXPIRED'
+  | 'MAIL_WITHDRAWN'
+  | 'MAIL_OWN_LETTER'
+  | 'MAIL_CONTACT_MISMATCH';
+
+export interface ClaimEscrowedMailResponse {
+  message: string;
+  mail: {
+    id: string;
+    type: Mail['type'];
+    subject: string | null;
+    mailType: Mail['mail_type'] | null;
+    displayTitle: string | null;
+    escrowStatus: 'claimed';
   };
 }
 
@@ -158,29 +184,29 @@ export async function uploadVoicePostscript(
 // ─── Escrow Claim Endpoints ─────────────────────────────────
 
 /**
- * Public preview of escrowed mail (no auth required).
- * Calls GET /api/mailbox/compose/claim/:mailId?token=...
+ * Public preview of a letter sent to someone who isn't on Pantopus (no sign-in): the page its emailed link opens.
+ * Calls GET /api/mailbox/claim/:mailId?token=...
  */
 export async function getEscrowedMailPublic(
   mailId: string,
   token: string,
 ): Promise<EscrowedMailView> {
   return get<EscrowedMailView>(
-    `/api/mailbox/compose/claim/${encodeURIComponent(mailId)}`,
+    `/api/mailbox/claim/${encodeURIComponent(mailId)}`,
     { token },
   );
 }
 
 /**
- * Claim escrowed mail as the authenticated user.
- * Calls POST /api/mailbox/compose/claim/:mailId
+ * Put the letter in the signed-in person's mailbox. Their account's email (or phone number) must be the one the
+ * letter was sent to. Calls POST /api/mailbox/claim/:mailId
  */
 export async function claimEscrowedMail(
   mailId: string,
   token: string,
-): Promise<{ success: boolean; message: string }> {
-  return post<{ success: boolean; message: string }>(
-    `/api/mailbox/compose/claim/${encodeURIComponent(mailId)}`,
+): Promise<ClaimEscrowedMailResponse> {
+  return post<ClaimEscrowedMailResponse>(
+    `/api/mailbox/claim/${encodeURIComponent(mailId)}`,
     { token },
   );
 }

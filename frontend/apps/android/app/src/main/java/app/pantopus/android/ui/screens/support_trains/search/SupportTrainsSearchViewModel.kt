@@ -44,11 +44,15 @@ class SupportTrainsSearchViewModel
         private val _isLoading = MutableStateFlow(false)
         val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
+        private val _error = MutableStateFlow<String?>(null)
+        val error: StateFlow<String?> = _error.asStateFlow()
+
         private val _results = MutableStateFlow<List<SupportTrainListItemDto>>(emptyList())
         val results: StateFlow<List<SupportTrainListItemDto>> = _results.asStateFlow()
 
         private var corpus: List<SupportTrainListItemDto> = emptyList()
         private var loadedOnce = false
+        private var fetching = false
 
         /** Routing callback wired by the screen before [load]. */
         var onOpenTrain: (String) -> Unit = {}
@@ -64,20 +68,26 @@ class SupportTrainsSearchViewModel
             recompute()
         }
 
+        fun retry() = reload(showLoading = true)
+
         private fun reload(showLoading: Boolean) {
+            if (fetching) return
+            fetching = true
+            _error.value = null
             if (showLoading) _isLoading.value = true
             viewModelScope.launch {
-                when (val result = repo.mine()) {
+                when (val result = repo.mineAll()) {
                     is NetworkResult.Success -> {
                         corpus = result.data.supportTrains
                         loadedOnce = true
                     }
-                    // A failed corpus load degrades to "no matches" — the list
-                    // screen owns the first-class error/retry surface; search
-                    // stays inside the shell's four-phase contract. A failed
-                    // quiet re-read keeps the results already shown.
-                    is NetworkResult.Failure -> if (!loadedOnce) corpus = emptyList()
+                    is NetworkResult.Failure -> {
+                        corpus = emptyList()
+                        loadedOnce = false
+                        _error.value = result.error.message
+                    }
                 }
+                fetching = false
                 _isLoading.value = false
                 recompute()
             }

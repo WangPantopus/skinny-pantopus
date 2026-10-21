@@ -11,6 +11,7 @@ const notificationService = require('../services/notificationService');
 const syncChangedService = require('../services/syncChangedService');
 const { isBlocked, blockedUserIds } = require('../services/blockService');
 const { closedGigRoomIds, isGigRoomClosedTo, isRoomClosedForWrites } = require('../services/chatGigRoomAccess');
+const { actingBusinessInRoom } = require('../services/chatBusinessAccess');
 const { setGauge } = require('../services/chatMetrics');
 // Persistent login (design §6.4): the same JWT decode helper verifyToken
 // exposes as `decodeSessionClaims` (verifyToken.js delegates to it), the 15-s
@@ -312,7 +313,7 @@ module.exports = (io) => {
       next();
     } catch (err) {
       logger.error('Socket auth error', { error: err.message });
-      next(new Error('Authentication failed'));
+      next(new Error(err.authBusy ? 'Authentication unavailable' : 'Authentication failed'));
     }
   });
   
@@ -324,6 +325,8 @@ module.exports = (io) => {
     const sessionId = socket.sessionId;
     const existingSockets = connectedUsers.get(userId);
     const wasOnline = Boolean(existingSockets && existingSockets.size > 0);
+    // Rooms this socket joined for a business inbox (room:join), where the user isn't a member.
+    const businessRooms = new Set();
 
     logger.info('User connected to chat', {
       sessionId,
@@ -433,23 +436,31 @@ module.exports = (io) => {
           .eq('user_id', userId)
           .eq('is_active', true)
           .single();
-        
-        if (!participant) {
+        // A business's owner and staff aren't members of its rooms (services/chatBusinessAccess), but its inbox hears
+        // the room's live updates. They join quietly: the room is never told who they are (no joined, presence,
+        // typing or read events), and their own read goes through the API for the business.
+        const actingFor = participant ? null : await actingBusinessInRoom(roomId, userId);
+
+        if (!participant && !actingFor) {
           return callback({ error: 'Access denied' });
         }
-        if (await isGigRoomClosedTo(roomId, userId)) {
+        if (await isGigRoomClosedTo(roomId, userId, actingFor ? [actingFor] : [])) {
           return callback({ error: 'Access denied' });
         }
-        
+
         socket.join(roomId);
-        
+
         // Track room
-        if (!userRooms.has(userId)) {
-          userRooms.set(userId, new Set());
+        if (actingFor) {
+          businessRooms.add(String(roomId));
+        } else {
+          if (!userRooms.has(userId)) {
+            userRooms.set(userId, new Set());
+          }
+          userRooms.get(userId).add(roomId);
         }
-        userRooms.get(userId).add(roomId);
-        
-        logger.info('User joined room', { sessionId, userId, roomId });
+
+        logger.info('User joined room', { sessionId, userId, roomId, forBusiness: Boolean(actingFor) });
         
         // Load recent messages
         const { data: messages } = await supabaseAdmin
@@ -472,13 +483,15 @@ module.exports = (io) => {
 
         callback({
           success: true,
-          messages: backfill.map((message) => ({
+          // Without actor_user_id, as the API serves messages: who wrote for a business stays internal.
+          messages: backfill.map(({ actor_user_id: _actor, ...message }) => ({
             ...message,
             reactions: reactionMap.get(String(message.id)) || [],
           })),
           roomId
         });
-        
+        if (actingFor) return;
+
         // Mark messages as read
         await markRoomRead(roomId, userId);
         
@@ -506,8 +519,9 @@ module.exports = (io) => {
       try {
         if (socketRateLimited(socket.id, 'typing:start')) return;
 
-        // Verify the socket has joined this room (room:join checks membership)
-        if (!socket.rooms.has(roomId)) {
+        // Verify the socket has joined this room (room:join checks membership); typing for a business would name
+        // the person to the room
+        if (!socket.rooms.has(roomId) || businessRooms.has(String(roomId))) {
           return;
         }
 
@@ -538,7 +552,7 @@ module.exports = (io) => {
     on('typing:stop', async ({ roomId }) => {
       try {
         // Verify the socket has joined this room
-        if (!socket.rooms.has(roomId)) {
+        if (!socket.rooms.has(roomId) || businessRooms.has(String(roomId))) {
           return;
         }
 
@@ -560,8 +574,8 @@ module.exports = (io) => {
      */
     on('messages:read', async ({ roomId }, callback) => {
       try {
-        // Verify the socket has joined this room
-        if (!socket.rooms.has(roomId)) {
+        // Verify the socket has joined this room as a member (a business's read goes through the API)
+        if (!socket.rooms.has(roomId) || businessRooms.has(String(roomId))) {
           return callback({ error: 'Not in room' });
         }
 

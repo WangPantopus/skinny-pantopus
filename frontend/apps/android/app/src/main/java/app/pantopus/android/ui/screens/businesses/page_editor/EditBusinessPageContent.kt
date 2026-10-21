@@ -216,7 +216,11 @@ data class EditBusinessPageContent(
     val website: EditBusinessPageField,
     val bookingLink: EditBusinessPageField?,
     val location: EditBusinessPageLocation,
-)
+) {
+    /** Publishing requires identity; the completeness checklist is advisory. */
+    val missingPublishRequirements: Int
+        get() = listOf(name.current, category.current).count { it.isBlank() }
+}
 
 /** Observed UI state. */
 sealed interface EditBusinessPageUiState {

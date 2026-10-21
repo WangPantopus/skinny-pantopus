@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -23,6 +24,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -34,6 +36,8 @@ import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.Spacing
+import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
 
 /** Open / Closed (or neutral) status chip shown beside the verified chip. */
 data class BizStatusBadge(
@@ -83,6 +87,8 @@ fun BizBannerHeader(
     // Icon on the identity chip. Callers showing an unverified business pass
     // null: the shield reads as a verification mark.
     chipIcon: PantopusIcon? = PantopusIcon.ShieldCheck,
+    logoUrl: String? = null,
+    bannerUrl: String? = null,
 ) {
     Column(
         modifier =
@@ -101,6 +107,9 @@ fun BizBannerHeader(
                             Brush.linearGradient(listOf(identity.deepColor, identity.color)),
                         ),
             )
+            bannerUrl?.takeIf(String::isNotBlank)?.let { url ->
+                AsyncImage(model = url, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.matchParentSize())
+            }
             Box(
                 modifier =
                     Modifier
@@ -113,6 +122,7 @@ fun BizBannerHeader(
                 identity = identity,
                 logoInitials = logoInitials ?: deriveInitials(name),
                 logoIcon = logoIcon,
+                logoUrl = logoUrl,
                 verified = verified,
                 modifier =
                     Modifier
@@ -201,6 +211,7 @@ private fun Logo(
     identity: IdentityPillar,
     logoInitials: String,
     logoIcon: PantopusIcon?,
+    logoUrl: String?,
     verified: Boolean,
     modifier: Modifier = Modifier,
 ) {
@@ -216,29 +227,60 @@ private fun Logo(
                     .border(3.dp, PantopusColors.appSurface, shape),
             contentAlignment = Alignment.Center,
         ) {
-            if (logoIcon != null) {
-                PantopusIconImage(
-                    icon = logoIcon,
-                    contentDescription = null,
-                    size = 30.dp,
-                    strokeWidth = 2f,
-                    tint = PantopusColors.appTextInverse,
-                )
-            } else {
-                Text(
-                    text = logoInitials,
-                    color = PantopusColors.appTextInverse,
-                    fontSize = 26.sp,
-                    fontWeight = FontWeight.Black,
-                    letterSpacing = (-0.5).sp,
-                )
-            }
+            BizLogoContent(logoIcon = logoIcon, initials = logoInitials, imageUrl = logoUrl)
         }
         if (verified) {
             VerifiedBadge(
                 size = 18.dp,
                 tint = identity.color,
                 modifier = Modifier.offset(x = 3.dp, y = 3.dp),
+            )
+        }
+    }
+}
+
+/** The same uploaded logo and fallback in public and owner headers. */
+@Composable
+internal fun BizLogoContent(
+    logoIcon: PantopusIcon?,
+    initials: String,
+    imageUrl: String?,
+) {
+    if (imageUrl.isNullOrBlank()) {
+        BizLogoFallback(logoIcon, initials)
+    } else {
+        SubcomposeAsyncImage(
+            model = imageUrl,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize().padding(3.dp).clip(RoundedCornerShape(15.dp)),
+            loading = { BizLogoFallback(logoIcon, initials) },
+            error = { BizLogoFallback(logoIcon, initials) },
+        )
+    }
+}
+
+@Composable
+private fun BizLogoFallback(
+    logoIcon: PantopusIcon?,
+    initials: String,
+) {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        if (logoIcon != null) {
+            PantopusIconImage(
+                icon = logoIcon,
+                contentDescription = null,
+                size = 30.dp,
+                strokeWidth = 2f,
+                tint = PantopusColors.appTextInverse,
+            )
+        } else {
+            Text(
+                text = initials,
+                color = PantopusColors.appTextInverse,
+                fontSize = 26.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = (-0.5).sp,
             )
         }
     }

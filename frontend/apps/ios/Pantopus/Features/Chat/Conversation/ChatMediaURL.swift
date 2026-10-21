@@ -7,10 +7,26 @@
 //  and auth (Bearer header is not sent by AsyncImage — use ?token=).
 //
 
-import Foundation
+import ImageIO
+import UIKit
 import UniformTypeIdentifiers
 
 enum ChatMediaURL {
+    /// Longest side of a sent photo's copy: its 72-pt tile at 3x, with room to crop it square.
+    static let sentPhotoPixels = 384
+    /// Copies of photos sent to the assistant, a folder per thread inside this one. They belong to
+    /// one app process: the next launch clears whatever a run left.
+    static let sentPhotosRoot = FileManager.default.temporaryDirectory.appendingPathComponent("ai-photos", isDirectory: true)
+    /// Files opened from chats (QuickLook needs a file on the phone).
+    static let openedFilesFolder = FileManager.default.temporaryDirectory.appendingPathComponent("chat-files", isDirectory: true)
+
+    /// Files opened from chats and copies of photos sent to the assistant go at the next launch and
+    /// with the account's data (sign-out, a switch), so nothing of one person's chats stays for the next.
+    static func removeLocalFiles() {
+        try? FileManager.default.removeItem(at: openedFilesFolder)
+        try? FileManager.default.removeItem(at: sentPhotosRoot)
+    }
+
     /// Turn a stored attachment URL into something `AsyncImage` can fetch.
     @MainActor
     static func resolve(
@@ -76,12 +92,34 @@ enum ChatMediaURL {
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw URLError(.badServerResponse)
         }
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("chat-files", isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let target = directory.appendingPathComponent(localName(filename, mimeType: mimeType))
+        try FileManager.default.createDirectory(at: openedFilesFolder, withIntermediateDirectories: true)
+        let target = openedFilesFolder.appendingPathComponent(localName(filename, mimeType: mimeType))
         try? FileManager.default.removeItem(at: target)
         try FileManager.default.moveItem(at: temporary, to: target)
         return target
+    }
+
+    /// A small copy of a photo sent to the assistant, for its bubble: the server deletes the
+    /// photo once it has read it. The bytes as they are when they can't be shrunk; nil when
+    /// the copy can't be written.
+    static func sentPhotoCopy(of data: Data, in folder: URL) -> URL? {
+        let small = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary)
+            .flatMap { source in
+                CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                    kCGImageSourceCreateThumbnailFromImageAlways: true,
+                    kCGImageSourceCreateThumbnailWithTransform: true,
+                    kCGImageSourceThumbnailMaxPixelSize: sentPhotoPixels
+                ] as CFDictionary)
+            }
+            .flatMap { UIImage(cgImage: $0).jpegData(compressionQuality: 0.8) }
+        let file = folder.appendingPathComponent("\(UUID().uuidString).jpg")
+        do {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            try (small ?? data).write(to: file, options: [.atomic, .completeFileProtection])
+            return file
+        } catch {
+            return nil
+        }
     }
 
     /// The sender's filename, reduced to its last path component, with an

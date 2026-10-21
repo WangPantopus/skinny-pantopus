@@ -20,6 +20,7 @@ export default function BusinessLocationHoursPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [hours, setHours] = useState<WeeklyHour[]>([]);
   const [specialHours, setSpecialHours] = useState<api.businesses.BusinessSpecialHours[]>([]);
   const [specialForm, setSpecialForm] = useState({
@@ -65,6 +66,7 @@ export default function BusinessLocationHoursPage() {
   };
 
   const saveWeekly = async () => {
+    setNotice('');
     setSaving(true);
     setError('');
     try {
@@ -77,6 +79,7 @@ export default function BusinessLocationHoursPage() {
         })),
       });
       await load();
+      setNotice('Weekly hours saved.');
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to save weekly hours');
     } finally {
@@ -85,7 +88,12 @@ export default function BusinessLocationHoursPage() {
   };
 
   const addSpecial = async () => {
-    if (!specialForm.date) return;
+    setNotice('');
+    if (!specialForm.date) { setError('Choose a date for the special hours.'); return; }
+    if (!specialForm.is_closed && (!specialForm.open_time || !specialForm.close_time)) {
+      setError('Enter opening and closing times, or mark the date as closed.');
+      return;
+    }
     setSaving(true);
     setError('');
     try {
@@ -126,7 +134,8 @@ export default function BusinessLocationHoursPage() {
         </Link>
       </div>
 
-      {error && <div className="text-sm text-red-600 mb-3">{error}</div>}
+      {error && <div role="alert" className="text-sm text-red-600 mb-3">{error}</div>}
+      {notice && <p role="status" className="text-sm text-green-700 mb-3">{notice}</p>}
       {loading && <div className="text-app-text-secondary">Loading...</div>}
 
       {!loading && (
@@ -140,6 +149,7 @@ export default function BusinessLocationHoursPage() {
                   <label className="col-span-2 text-xs inline-flex items-center gap-1">
                     <input
                       type="checkbox"
+                      aria-label={`${DAY_NAMES[h.day_of_week]} closed`}
                       checked={h.is_closed}
                       onChange={(e) => updateHour(idx, { is_closed: e.target.checked })}
                     />
@@ -181,7 +191,7 @@ export default function BusinessLocationHoursPage() {
               <input type="time" aria-label="Opening time" disabled={specialForm.is_closed} value={specialForm.open_time} onChange={(e) => setSpecialForm((f) => ({ ...f, open_time: e.target.value }))} className="rounded border border-app-border px-2 py-1.5 text-sm disabled:bg-app-surface-sunken" />
               <input type="time" aria-label="Closing time" disabled={specialForm.is_closed} value={specialForm.close_time} onChange={(e) => setSpecialForm((f) => ({ ...f, close_time: e.target.value }))} className="rounded border border-app-border px-2 py-1.5 text-sm disabled:bg-app-surface-sunken" />
               <label className="inline-flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={specialForm.is_closed} onChange={(e) => setSpecialForm((f) => ({ ...f, is_closed: e.target.checked }))} />
+                <input type="checkbox" aria-label="Closed on special date" checked={specialForm.is_closed} onChange={(e) => setSpecialForm((f) => ({ ...f, is_closed: e.target.checked }))} />
                 Closed
               </label>
             </div>

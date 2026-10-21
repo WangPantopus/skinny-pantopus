@@ -162,9 +162,13 @@ public struct AddHouseholdTaskFormView: View {
                 guard focusDueDate, !didFocusDueDate else { return }
                 didFocusDueDate = true
                 proxy.scrollTo("taskDueDate", anchor: .bottom)
-                selectedDueDate = dueDatePickerSelection
-                showDueDatePicker = true
+                presentDueDatePicker()
             }
         }
+    }
+
+    func presentDueDatePicker() {
+        selectedDueDate = dueDatePickerSelection
+        showDueDatePicker = true
     }
 }

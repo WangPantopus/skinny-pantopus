@@ -10,6 +10,7 @@
 package app.pantopus.android.ui.screens.businesses.page_editor
 
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -65,6 +66,8 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.EmptyState
+import app.pantopus.android.ui.components.PantopusTextField
+import app.pantopus.android.ui.screens.businesses.catalog.BusinessCatalogScreen
 import app.pantopus.android.ui.screens.businesses.page_editor.components.EditBusinessBannerLogoEditor
 import app.pantopus.android.ui.screens.businesses.page_editor.components.EditBusinessCompletionStrip
 import app.pantopus.android.ui.screens.businesses.page_editor.components.EditBusinessHoursEditor
@@ -93,15 +96,50 @@ import kotlinx.coroutines.withContext
 fun EditBusinessPageScreen(
     onBack: () -> Unit,
     onPreview: () -> Unit = {},
+    onBusinessClosed: () -> Unit = onBack,
     viewModel: EditBusinessPageViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val toast by viewModel.toast.collectAsStateWithLifecycle()
     val showsDiscard by viewModel.showsDiscardConfirm.collectAsStateWithLifecycle()
     val uploadingMedia by viewModel.uploadingMedia.collectAsStateWithLifecycle()
+    val canClose by viewModel.canClose.collectAsStateWithLifecycle()
+    val isClosing by viewModel.isClosing.collectAsStateWithLifecycle()
+    val closeError by viewModel.closeError.collectAsStateWithLifecycle()
+    val businessClosed by viewModel.businessClosed.collectAsStateWithLifecycle()
+    var showsCloseConfirm by remember { mutableStateOf(false) }
+    var leaveAfterDiscard by remember { mutableStateOf(false) }
+    val hasUnsavedEdits =
+        (state as? EditBusinessPageUiState.Loaded)?.content?.let { EditBusinessPageMapper.unsavedCount(it) > 0 } == true
+    val requestBack = {
+        if (!isClosing) {
+            if (hasUnsavedEdits) {
+                leaveAfterDiscard = true
+                viewModel.discardRequested()
+            } else {
+                onBack()
+            }
+        }
+    }
+    val cancelDiscard = {
+        leaveAfterDiscard = false
+        viewModel.cancelDiscard()
+    }
     val pickMedia = rememberBusinessMediaPicker(onPicked = viewModel::uploadMedia)
+    var showsCatalog by remember { mutableStateOf(false) }
+    if (showsCatalog) {
+        val closeCatalog = {
+            showsCatalog = false
+            viewModel.reloadServices()
+        }
+        BackHandler(onBack = closeCatalog)
+        BusinessCatalogScreen(onBack = closeCatalog)
+        return
+    }
 
     LaunchedEffect(Unit) { viewModel.load() }
+    LaunchedEffect(businessClosed) { if (businessClosed) onBusinessClosed() }
+    BackHandler(enabled = isClosing || hasUnsavedEdits, onBack = requestBack)
 
     LaunchedEffect(toast) {
         if (toast != null) {
@@ -123,14 +161,29 @@ fun EditBusinessPageScreen(
             is EditBusinessPageUiState.Loaded ->
                 EditBusinessPageLoadedFrame(
                     content = current.content,
-                    onBack = onBack,
+                    onBack = requestBack,
                     onPreview = onPreview,
-                    onDiscard = viewModel::discardRequested,
+                    onDiscard = {
+                        leaveAfterDiscard = false
+                        viewModel.discardRequested()
+                    },
                     onSave = viewModel::save,
                     onSaveDraft = viewModel::saveDraft,
                     onPublish = viewModel::publish,
                     onFieldChange = viewModel::update,
                     onBeginDescription = viewModel::beginDescriptionEditing,
+                    onDayChange = viewModel::updateHoursDay,
+                    onApplyWeekdays = viewModel::applyWeekdayHours,
+                    onManageServices = { showsCatalog = true },
+                    onCloseBusiness =
+                        if (canClose) {
+                            {
+                                viewModel.prepareClosure()
+                                showsCloseConfirm = true
+                            }
+                        } else {
+                            null
+                        },
                     uploadingMedia = uploadingMedia,
                     onPickMedia = pickMedia,
                 )
@@ -167,19 +220,72 @@ fun EditBusinessPageScreen(
 
         if (showsDiscard) {
             AlertDialog(
-                onDismissRequest = viewModel::cancelDiscard,
+                onDismissRequest = cancelDiscard,
                 title = { Text("Discard unsaved edits?") },
                 confirmButton = {
-                    TextButton(onClick = viewModel::discardConfirmed) {
+                    TextButton(onClick = {
+                        viewModel.discardConfirmed()
+                        if (leaveAfterDiscard) onBack()
+                        leaveAfterDiscard = false
+                    }) {
                         Text("Discard", color = PantopusColors.error)
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = viewModel::cancelDiscard) { Text("Keep editing") }
+                    TextButton(onClick = cancelDiscard) { Text("Keep editing") }
                 },
             )
         }
+        if (showsCloseConfirm) {
+            (state as? EditBusinessPageUiState.Loaded)?.content?.let { content ->
+                CloseBusinessDialog(
+                    businessName = content.name.original,
+                    isClosing = isClosing,
+                    error = closeError,
+                    onCancel = { showsCloseConfirm = false },
+                    onConfirm = viewModel::closeBusiness,
+                )
+            }
+        }
     }
+}
+
+@Composable
+private fun CloseBusinessDialog(
+    businessName: String,
+    isClosing: Boolean,
+    error: String?,
+    onCancel: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    var confirmation by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = { if (!isClosing) onCancel() },
+        title = { Text("Close $businessName?") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
+                Text(
+                    "This unpublishes the business and removes access for its entire team. " +
+                        "Existing records are retained. You can't undo this in the app.",
+                )
+                PantopusTextField(
+                    label = "Type CLOSE to confirm",
+                    value = confirmation,
+                    onValueChange = { confirmation = it },
+                    enabled = !isClosing,
+                )
+                error?.let { Text(it, color = PantopusColors.error) }
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = confirmation == "CLOSE" && !isClosing, onClick = onConfirm) {
+                Text(if (isClosing) "Closing…" else "Close business", color = PantopusColors.error)
+            }
+        },
+        dismissButton = {
+            TextButton(enabled = !isClosing, onClick = onCancel) { Text("Cancel") }
+        },
+    )
 }
 
 /**
@@ -198,6 +304,10 @@ internal fun EditBusinessPageLoadedFrame(
     onPublish: () -> Unit,
     onFieldChange: (EditBusinessPageFieldKey, String) -> Unit = { _, _ -> },
     onBeginDescription: () -> Unit = {},
+    onDayChange: (String, EditBusinessPageHoursRow.State) -> Unit = { _, _ -> },
+    onApplyWeekdays: () -> Unit = {},
+    onManageServices: () -> Unit = {},
+    onCloseBusiness: (() -> Unit)? = null,
     uploadingMedia: EditBusinessMediaKind? = null,
     onPickMedia: (EditBusinessMediaKind) -> Unit = {},
     modifier: Modifier = Modifier,
@@ -244,17 +354,22 @@ internal fun EditBusinessPageLoadedFrame(
                     onFieldChange = onFieldChange,
                     onBeginDescription = onBeginDescription,
                 )
-                HoursSection(content = content)
-                ServicesSection(content = content)
+                HoursSection(content = content, onDayChange = onDayChange, onApplyWeekdays = onApplyWeekdays)
+                ServicesSection(content = content, onManage = onManageServices)
                 // No gallery backend yet: the Gallery section only held add tiles
                 // that did nothing, so it stays hidden until one exists (as on iOS).
                 ContactSection(content = content, onFieldChange = onFieldChange)
                 LocationSection(content = content, onFieldChange = onFieldChange)
+                onCloseBusiness?.let { close ->
+                    TextButton(onClick = close, modifier = Modifier.padding(horizontal = Spacing.s4)) {
+                        Text("Close business", color = PantopusColors.error)
+                    }
+                }
                 Spacer(modifier = Modifier.height(40.dp))
             }
         }
         EditBusinessStickySave(
-            mode = stickyMode(content.mode),
+            mode = stickyMode(content),
             onDiscard = onDiscard,
             onSave = onSave,
             onSaveDraft = onSaveDraft,
@@ -297,10 +412,10 @@ private fun rememberBusinessMediaPicker(onPicked: (EditBusinessMediaKind, ByteAr
     }
 }
 
-private fun stickyMode(mode: EditBusinessPageMode): EditBusinessStickySaveMode =
-    when (mode) {
+private fun stickyMode(content: EditBusinessPageContent): EditBusinessStickySaveMode =
+    when (val mode = content.mode) {
         is EditBusinessPageMode.Published -> EditBusinessStickySaveMode.Dirty(count = mode.unsavedCount)
-        is EditBusinessPageMode.Setup -> EditBusinessStickySaveMode.Setup(remaining = mode.remaining)
+        is EditBusinessPageMode.Setup -> EditBusinessStickySaveMode.Setup(remaining = content.missingPublishRequirements)
     }
 
 @Composable
@@ -464,23 +579,30 @@ private fun DescriptionSection(
 }
 
 @Composable
-private fun HoursSection(content: EditBusinessPageContent) {
+private fun HoursSection(
+    content: EditBusinessPageContent,
+    onDayChange: (String, EditBusinessPageHoursRow.State) -> Unit,
+    onApplyWeekdays: () -> Unit,
+) {
     SectionWrapper(overline = "Hours") {
-        EditBusinessHoursEditor(state = content.hours)
+        EditBusinessHoursEditor(state = content.hours, onDayChange = onDayChange, onApplyWeekdays = onApplyWeekdays)
     }
 }
 
 @Composable
-private fun ServicesSection(content: EditBusinessPageContent) {
+private fun ServicesSection(
+    content: EditBusinessPageContent,
+    onManage: () -> Unit,
+) {
     SectionWrapper(overline = "Services") {
         when (val svc = content.services) {
             is EditBusinessPageServicesState.Chips -> {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     BizLabel(label = "What you offer")
-                    EditBusinessServiceChipsEditor(chips = svc.chips)
+                    EditBusinessServiceChipsEditor(chips = svc.chips, modifier = Modifier.clickable(onClick = onManage))
                 }
             }
-            is EditBusinessPageServicesState.Prompt -> PromptBlock(prompt = svc.prompt)
+            is EditBusinessPageServicesState.Prompt -> PromptBlock(prompt = svc.prompt, onTap = onManage)
         }
     }
 }

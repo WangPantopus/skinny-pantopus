@@ -111,6 +111,8 @@ data class ManageTrainContent(
     val viewerRole: SupportTrainViewerRole = SupportTrainViewerRole.PRIMARY_ORGANIZER,
     /** Organizer controls and private replies belong only to the current checked visit. */
     val privateDetailsAvailable: Boolean = true,
+    /** A sharing grant alone does not establish that a delivery address exists. */
+    val deliveryAddressAvailable: Boolean = false,
 )
 
 /** Drives the Close-train confirmation sheet presentation. */
@@ -140,12 +142,16 @@ data class ManageTrainUiState(
     val slotRows: List<ManageSlotRow> = emptyList(),
     /** Co-organizer roster from `GET /:id/organizers`. */
     val organizerRows: List<ManageOrganizerRow> = emptyList(),
+    /** A failed roster read must not look like the organizers were removed. */
+    val organizersFailed: Boolean = false,
     /** Gift-fund summary from `GET /:id/fund`. */
     val fund: SupportTrainFundDto? = null,
     /** True while any organizer mutation is in flight. */
     val isSubmitting: Boolean = false,
-    /** AI-drafted open-slots nudge, editable before sending. */
+    /** Open-slots nudge being edited before sending: the AI draft, or a simple one when drafting failed. */
     val nudgeDraft: String? = null,
+    /** Shown above that editor when the AI draft failed. */
+    val nudgeDraftNote: String? = null,
     /** Gift-fund goal input, in whole dollars (the API takes cents). */
     val fundGoalDollars: String = "",
     /** Inline failure copy for the last organizer action. */
@@ -238,7 +244,7 @@ class ManageTrainViewModel
                 it.copy(
                     state = if (session.isCurrent) summary() else ManageTrainState.Loading,
                     helperRows = emptyList(), organizerRows = emptyList(), fund = null, deliveredMeals = null,
-                    slotRows = emptyList(), helpersFailed = false, pendingConfirm = null,
+                    slotRows = emptyList(), helpersFailed = false, organizersFailed = false, pendingConfirm = null,
                     toast = null, actionError = null, refreshing = false, refreshNotice = null,
                 )
             }
@@ -336,8 +342,8 @@ class ManageTrainViewModel
         }
 
         /**
-         * Fan-out for the organizer-only feeds. Failures degrade to empty
-         * sections instead of blowing up the whole screen.
+         * Fan-out for the organizer-only feeds. A failed roster clears
+         * its rows and shows an error without hiding the rest of the screen.
          */
         @Suppress("CyclomaticComplexMethod")
         private suspend fun loadOrganizerSurfaces(
@@ -407,6 +413,7 @@ class ManageTrainViewModel
                             null
                         },
                     organizerRows = ManageOrganizerProjection.organizerRows(organizers),
+                    organizersFailed = organizersResult is NetworkResult.Failure,
                     fund = fund,
                 )
             }
@@ -737,10 +744,12 @@ class ManageTrainViewModel
          * signup). The address never comes back in this response — the
          * reload re-runs the server-side privacy gate.
          */
-        fun shareExactAddress(reservationId: String) =
+        fun shareExactAddress(reservationId: String) {
+            if ((_state.value.state as? ManageTrainState.Loaded)?.content?.deliveryAddressAvailable != true) return
             runAction("Exact location shared", "Couldn't share the exact location.") {
                 repo.revealAddress(trainId, reservationId)
             }
+        }
 
         /** `POST /:id/reservations/:rid/confirm`. */
         fun confirmDelivery(reservationId: String) =
@@ -748,20 +757,32 @@ class ManageTrainViewModel
                 repo.confirmDelivery(trainId, reservationId)
             }
 
-        /** `POST /:id/nudges/draft`. */
+        /**
+         * `POST /:id/nudges/draft`. Drafting needs AI and sending doesn't, so when the draft
+         * fails the editor opens with a simple reminder and a note instead of an error dialog.
+         */
         fun draftNudge() {
             if (_state.value.isSubmitting || !canAct) return
             _state.update { it.copy(isSubmitting = true) }
             viewModelScope.launch {
                 when (val result = checkedAction { repo.draftNudge(trainId) } ?: return@launch) {
                     is NetworkResult.Success ->
-                        _state.update { it.copy(isSubmitting = false, nudgeDraft = result.data) }
+                        _state.update { it.copy(isSubmitting = false, nudgeDraft = result.data, nudgeDraftNote = null) }
                     is NetworkResult.Failure ->
                         _state.update {
-                            it.copy(
-                                isSubmitting = false,
-                                actionError = result.error.displayMessage("Couldn't draft a reminder."),
-                            )
+                            val content = (it.state as? ManageTrainState.Loaded)?.content
+                            if (content == null) {
+                                it.copy(
+                                    isSubmitting = false,
+                                    actionError = result.error.displayMessage("Couldn't draft a reminder."),
+                                )
+                            } else {
+                                it.copy(
+                                    isSubmitting = false,
+                                    nudgeDraft = fallbackNudge(content.title, content.slotsOpen),
+                                    nudgeDraftNote = NUDGE_DRAFT_FAILED_NOTE,
+                                )
+                            }
                         }
                 }
             }
@@ -772,7 +793,7 @@ class ManageTrainViewModel
         }
 
         fun discardNudge() {
-            _state.update { it.copy(nudgeDraft = null) }
+            _state.update { it.copy(nudgeDraft = null, nudgeDraftNote = null) }
         }
 
         /** `POST /:id/nudges/send`. */
@@ -787,6 +808,7 @@ class ManageTrainViewModel
                             it.copy(
                                 isSubmitting = false,
                                 nudgeDraft = null,
+                                nudgeDraftNote = null,
                                 toast = "Reminder posted to the campaign chat",
                             )
                         }
@@ -870,5 +892,24 @@ class ManageTrainViewModel
             const val TRAIN_ID_KEY: String = "supportTrainId"
             private const val CENTS_PER_DOLLAR = 100
             private const val DAY_MILLIS = 24L * 60 * 60 * 1000
+            private const val NUDGE_DRAFT_FAILED_NOTE = "Couldn't draft a reminder. Here's a simple one you can edit and send."
+
+            /**
+             * The reminder the editor opens with when the AI draft fails, written here from the
+             * train's title and open-date count. Mirrors iOS `ManageTrainViewModel.fallbackNudge(title:openDates:)`.
+             */
+            internal fun fallbackNudge(
+                title: String,
+                openDates: Int,
+            ): String {
+                val train = title.trim().ifEmpty { "This Support Train" }
+                val stillOpen =
+                    when {
+                        openDates == 1 -> "still has 1 open date. If you can take it"
+                        openDates > 1 -> "still has $openDates open dates. If you can take one"
+                        else -> "still has open dates. If you can take one"
+                    }
+                return "$train $stillOpen, please sign up on the train's page. Thank you!"
+            }
         }
     }

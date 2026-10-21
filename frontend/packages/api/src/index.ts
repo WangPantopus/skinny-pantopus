@@ -281,7 +281,7 @@ export { streamChat, draftListing, draftListingFromImages, draftPost, summarizeM
 export { sendComposedMail, searchRecipients, getRecipientHomeContext, requestAISuggestion, uploadVoicePostscript, getEscrowedMailPublic, claimEscrowedMail, withdrawEscrowedMail } from './endpoints/mailCompose';
 
 // Types from Mail Compose
-export type { SendMailResponse, RecipientSearchResult, HomeContext, EscrowedMailView } from './endpoints/mailCompose';
+export type { SendMailResponse, RecipientSearchResult, HomeContext, EscrowedMailView, EscrowClaimErrorCode, ClaimEscrowedMailResponse } from './endpoints/mailCompose';
 
 // Types from Magic Task
 export type { MagicDraftRequest, MagicDraftResponse, MagicTaskDraft, MagicPostRequest, MagicPostResponse, SmartTemplate, SavedTaskTemplate, MagicSettings, ClarifyingQuestion, TaskItem, ScheduleType, PayType, TaskSourceFlow, PrivacyLevel, LocationMode } from '@pantopus/types';

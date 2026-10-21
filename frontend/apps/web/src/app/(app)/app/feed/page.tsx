@@ -32,6 +32,7 @@ import {
 } from '@/constants/feedTopics';
 import { FEED_POST_CREATED_EVENT } from '@/lib/feedComposerEvents';
 import { launchFeatures } from '@/lib/featureFlags';
+import NearbyTabs from '@/components/nearby/NearbyTabs';
 
 const FeedMap = dynamic(() => import('./FeedMap'), { ssr: false });
 
@@ -244,9 +245,10 @@ export default function FeedPage() {
     <div className={rootClassName}>
       <h1 className="sr-only">Pulse</h1>
       <div className={viewMode === 'map' ? 'flex-1 min-h-0 flex flex-col' : ''}>
-        {/* Header: View Toggle + Surface Tabs */}
+        {/* Header: Nearby's Pulse | Neighborhood switch, then View Toggle + Surface Tabs */}
         <div className="bg-surface border-b border-app/60 dark:backdrop-blur-sm">
           <div className="max-w-2xl mx-auto px-4 py-2">
+            <NearbyTabs active="pulse" className="mb-2" />
             <div className="rounded-2xl border border-app bg-surface overflow-hidden shadow-sm/80 dark:border-slate-700/80">
               <div className="flex items-center justify-between px-4 py-2 border-b border-app">
                 <div className="flex items-center gap-2">

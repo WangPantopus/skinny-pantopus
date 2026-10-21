@@ -6,17 +6,17 @@
 
 const express = require('express');
 const router = express.Router();
-const crypto = require('crypto');
-const Joi = require('joi');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const verifyToken = require('../middleware/verifyToken');
-const validate = require('../middleware/validate');
 const logger = require('../utils/logger');
 const notificationService = require('../services/notificationService');
 const { escapeIlike } = require('../utils/escapeIlike');
 // Who lives in a Home, for compose, is the household mail rule's: an active occupancy in a trusted
 // verification state. A pending claim (anyone can file one on any Home) is not a household member.
 const { getAccessibleHomeIds, MAIL_TRUSTED_VERIFICATION_STATUSES } = require('../utils/homeMailAccess');
+const { unpublishedBusinessIds, isSearchable, isScopedBlocked, isConnected } = require('../utils/visibilityPolicy');
+const { localProfileVisibilityFor } = require('../utils/identityProfiles');
+const { hasBlocked } = require('../services/blockService');
 
 // ─── Helpers ───────────────────────────────────────────────
 
@@ -109,6 +109,25 @@ async function getConnectionUserIds(userId) {
     }
   }
   return ids;
+}
+
+/**
+ * Whether a stranger's search finds this account, by the rules /api/users/search applies
+ * (canDiscoverLocalProfileForUserSearch in routes/users.js): no personal or scoped block, the
+ * account's and Local Profile's search visibility, and a profile that isn't private (or, when
+ * it is for connections, a connection).
+ */
+async function isFindableBy(senderId, user, localProfile) {
+  if (await hasBlocked(user.id, senderId)) return false;
+  if (!(await isSearchable(senderId, user.id))) return false;
+  if (await isScopedBlocked(senderId, user.id, 'search_only')) return false;
+  const searchVisibility = localProfile?.search_visibility || 'everyone';
+  const profileVisibility = await localProfileVisibilityFor(localProfile || { user_id: user.id }, senderId, user);
+  if (searchVisibility === 'nobody' || profileVisibility === 'private') return false;
+  if (searchVisibility === 'mutuals' || ['connections', 'followers'].includes(profileVisibility)) {
+    return isConnected(senderId, user.id);
+  }
+  return true;
 }
 
 /**
@@ -261,16 +280,25 @@ router.get('/recipients', verifyToken, async (req, res) => {
 
       const { data: generalUsers } = await supabaseAdmin
         .from('User')
-        .select('id, name, username, verified, profile_picture_url')
+        .select('id, name, username, verified, profile_picture_url, profile_visibility')
         .or(`name.ilike.${searchPattern},username.ilike.${searchPattern}`)
         .not('id', 'in', `(${excludeIds.join(',')})`)
         .limit(remaining);
 
       if (generalUsers) {
+        const generalUserIds = generalUsers.map((user) => user.id);
+        const unpublishedBusinesses = await unpublishedBusinessIds(generalUserIds);
+        const { data: localProfiles, error: localProfileError } = generalUserIds.length
+          ? await supabaseAdmin.from('LocalProfile').select('user_id, search_visibility, profile_visibility').in('user_id', generalUserIds)
+          : { data: [], error: null };
+        if (localProfileError) throw localProfileError;
+        const localProfileByUserId = new Map((localProfiles || []).map((profile) => [profile.user_id, profile]));
         // Someone who is neither a housemate nor a connection is matched by name
         // only: their Home, address and photo stay private.
         for (const user of generalUsers) {
           if (seenUserIds.has(user.id)) continue;
+          if (unpublishedBusinesses.has(String(user.id))) continue;
+          if (!(await isFindableBy(senderId, user, localProfileByUserId.get(user.id)))) continue;
           seenUserIds.add(user.id);
           results.push(buildRecipientResult(user, null, null, null, 2));
         }
@@ -396,23 +424,8 @@ router.get('/home-context/:homeId', verifyToken, async (req, res) => {
   }
 });
 
-// ─── Escrow Validation Schemas ──────────────────────────────
-
-const claimMailSchema = Joi.object({
-  token: Joi.string().required(),
-});
-
-const withdrawMailSchema = Joi.object({});
-
 // ─── Escrow Helpers ─────────────────────────────────────────
-
-function timingSafeTokenMatch(stored, provided) {
-  if (!stored || !provided) return false;
-  const storedBuf = Buffer.from(stored, 'utf8');
-  const providedBuf = Buffer.from(provided, 'utf8');
-  if (storedBuf.length !== providedBuf.length) return false;
-  return crypto.timingSafeEqual(storedBuf, providedBuf);
-}
+// A letter for someone not on Pantopus is previewed and claimed at /api/mailbox/claim/:mailId (routes/mailbox.js).
 
 function escrowStatusError(status) {
   switch (status) {
@@ -426,212 +439,6 @@ function escrowStatusError(status) {
       return null;
   }
 }
-
-// ─── Route 3: Escrow Claim Preview (PUBLIC) ─────────────────
-
-/**
- * GET /api/mailbox/compose/claim/:mailId?token=...
- *
- * Public endpoint — returns a safe preview of escrowed mail
- * so a non-user recipient can view it before claiming.
- */
-router.get('/claim/:mailId', async (req, res) => {
-  try {
-    const { mailId } = req.params;
-    const token = req.query.token;
-
-    if (!mailId || !UUID_RE.test(mailId)) {
-      return res.status(404).json({ error: 'Mail not found or invalid token' });
-    }
-    if (!token) {
-      return res.status(404).json({ error: 'Mail not found or invalid token' });
-    }
-
-    const { data: mail, error } = await supabaseAdmin
-      .from('Mail')
-      .select('id, sender_user_id, subject, content, type, mail_type, mail_extracted, attachments, created_at, escrow_status, escrow_claim_token, object_id')
-      .eq('id', mailId)
-      .single();
-
-    if (error || !mail) {
-      return res.status(404).json({ error: 'Mail not found or invalid token' });
-    }
-
-    if (!timingSafeTokenMatch(mail.escrow_claim_token, token)) {
-      return res.status(404).json({ error: 'Mail not found or invalid token' });
-    }
-
-    const statusErr = escrowStatusError(mail.escrow_status);
-    if (statusErr) {
-      return res.status(statusErr.code).json({ error: statusErr.error });
-    }
-
-    if (mail.escrow_status !== 'pending') {
-      return res.status(404).json({ error: 'Mail not found or invalid token' });
-    }
-
-    // Fetch sender info
-    const { data: sender } = await supabaseAdmin
-      .from('User')
-      .select('name, username, verified')
-      .eq('id', mail.sender_user_id)
-      .single();
-
-    // Get body content — if object_id exists, fetch from MailObject
-    let body = mail.content || '';
-    let stationeryTheme = null;
-    let inkSelection = null;
-    let voicePostscriptUri = null;
-    let photoAttachments = [];
-    let outcomeDescription = 'Just read';
-    let mailType = mail.mail_type || mail.type || null;
-
-    if (mail.object_id) {
-      const { data: obj } = await supabaseAdmin
-        .from('MailObject')
-        .select('payload')
-        .eq('id', mail.object_id)
-        .single();
-
-      if (obj?.payload) {
-        body = obj.payload.body || obj.payload.content || body;
-        stationeryTheme = obj.payload.stationeryTheme || null;
-        inkSelection = obj.payload.inkSelection || null;
-        voicePostscriptUri = obj.payload.voicePostscriptUri || null;
-        photoAttachments = obj.payload.photoAttachments || [];
-        if (obj.payload.outcomeDescription) outcomeDescription = obj.payload.outcomeDescription;
-        if (obj.payload.mailType) mailType = obj.payload.mailType;
-      }
-    }
-
-    // Extract from mail_extracted if available
-    if (mail.mail_extracted) {
-      const ext = mail.mail_extracted;
-      if (ext.stationeryTheme) stationeryTheme = stationeryTheme || ext.stationeryTheme;
-      if (ext.inkSelection) inkSelection = inkSelection || ext.inkSelection;
-    }
-
-    // Photo attachments fallback from mail.attachments
-    if (photoAttachments.length === 0 && Array.isArray(mail.attachments)) {
-      photoAttachments = mail.attachments.filter(
-        (a) => typeof a === 'string' || (a && a.url)
-      ).map((a) => (typeof a === 'string' ? a : a.url));
-    }
-
-    res.json({
-      mail: {
-        id: mail.id,
-        senderName: sender?.name || sender?.username || 'Someone',
-        senderVerified: sender?.verified || false,
-        subject: mail.subject || null,
-        body,
-        stationeryTheme,
-        inkSelection,
-        voicePostscriptUri,
-        photoAttachments,
-        createdAt: mail.created_at,
-        outcomeDescription,
-        mailType,
-      },
-    });
-  } catch (err) {
-    logger.error('Escrow claim preview error', { error: err.message, mailId: req.params.mailId });
-    res.status(500).json({ error: 'Failed to fetch mail' });
-  }
-});
-
-// ─── Route 4: Escrow Claim (AUTH REQUIRED) ──────────────────
-
-/**
- * POST /api/mailbox/compose/claim/:mailId
- *
- * Authenticated user claims escrowed mail, moving it into their mailbox.
- * Notifies the original sender.
- */
-router.post('/claim/:mailId', verifyToken, validate(claimMailSchema), async (req, res) => {
-  try {
-    const { mailId } = req.params;
-    const { token } = req.body;
-    const claimantId = req.user.id;
-
-    if (!mailId || !UUID_RE.test(mailId)) {
-      return res.status(404).json({ error: 'Mail not found or invalid token' });
-    }
-
-    const { data: mail, error } = await supabaseAdmin
-      .from('Mail')
-      .select('id, sender_user_id, escrow_status, escrow_claim_token')
-      .eq('id', mailId)
-      .single();
-
-    if (error || !mail) {
-      return res.status(404).json({ error: 'Mail not found or invalid token' });
-    }
-
-    if (!timingSafeTokenMatch(mail.escrow_claim_token, token)) {
-      return res.status(404).json({ error: 'Mail not found or invalid token' });
-    }
-
-    const statusErr = escrowStatusError(mail.escrow_status);
-    if (statusErr) {
-      return res.status(statusErr.code).json({ error: statusErr.error });
-    }
-
-    if (mail.escrow_status !== 'pending') {
-      return res.status(404).json({ error: 'Mail not found or invalid token' });
-    }
-
-    // Claim the mail
-    const { error: updateError } = await supabaseAdmin
-      .from('Mail')
-      .update({
-        escrow_status: 'claimed',
-        recipient_user_id: claimantId,
-        escrow_recipient_contact: null,
-        escrow_claim_token: null,
-        escrow_expires_at: null,
-      })
-      .eq('id', mailId)
-      .eq('escrow_status', 'pending');
-
-    if (updateError) {
-      logger.error('Escrow claim update failed', { error: updateError.message, mailId, claimantId });
-      return res.status(500).json({ error: 'Failed to claim mail' });
-    }
-
-    // Notify the original sender (non-blocking)
-    (async () => {
-      try {
-        const { data: claimant } = await supabaseAdmin
-          .from('User')
-          .select('name, username')
-          .eq('id', claimantId)
-          .single();
-
-        const recipientName = claimant?.name || claimant?.username || 'Someone';
-
-        await notificationService.createNotification({
-          userId: mail.sender_user_id,
-          type: 'mail_claimed',
-          title: `${recipientName} picked up your letter!`,
-          body: 'Your escrowed mail has been claimed.',
-          icon: '📬',
-          link: `/app/mailbox/${mailId}`,
-          metadata: { mail_id: mailId, claimant_id: claimantId },
-        });
-      } catch (notifErr) {
-        logger.warn('Escrow claim notification failed (non-blocking)', { error: notifErr.message, mailId });
-      }
-    })();
-
-    logger.info('Escrowed mail claimed', { mailId, claimantId, senderId: mail.sender_user_id });
-
-    res.json({ success: true, message: 'Mail claimed successfully' });
-  } catch (err) {
-    logger.error('Escrow claim error', { error: err.message, mailId: req.params.mailId });
-    res.status(500).json({ error: 'Failed to claim mail' });
-  }
-});
 
 // ─── Route 5: Escrow Withdraw (AUTH REQUIRED) ───────────────
 

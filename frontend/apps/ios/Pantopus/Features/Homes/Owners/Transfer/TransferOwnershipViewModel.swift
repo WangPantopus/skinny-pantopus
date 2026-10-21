@@ -85,7 +85,6 @@ public final class TransferOwnershipViewModel {
     private let transferExecutor: TransferExecutor?
     private let api: APIClient
     private let currentUserId: String?
-    private let timestampProvider: @Sendable () -> Date
 
     // MARK: - Init
 
@@ -95,8 +94,7 @@ public final class TransferOwnershipViewModel {
         currentUserName: String? = nil,
         api: APIClient = .shared,
         biometricEvaluator: BiometricEvaluator? = nil,
-        transferExecutor: TransferExecutor? = nil,
-        timestampProvider: @escaping @Sendable () -> Date = { Date() }
+        transferExecutor: TransferExecutor? = nil
     ) {
         self.homeId = homeId
         self.api = api
@@ -106,7 +104,6 @@ public final class TransferOwnershipViewModel {
         confirmationField = FormFieldState(id: "confirmation", originalValue: "")
         self.biometricEvaluator = biometricEvaluator ?? Self.defaultBiometricEvaluator
         self.transferExecutor = transferExecutor
-        self.timestampProvider = timestampProvider
     }
 
     // MARK: - Load
@@ -261,13 +258,6 @@ public final class TransferOwnershipViewModel {
                 toPercent: 100
             )
         ]
-    }
-
-    /// "HH:mm MMM d" stamp shown in the legal copy.
-    public var confirmationTimestamp: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm MMM d"
-        return formatter.string(from: timestampProvider())
     }
 
     // MARK: - Mutations

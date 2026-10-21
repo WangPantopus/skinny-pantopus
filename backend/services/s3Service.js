@@ -2,7 +2,7 @@
 // S3 SERVICE — Upload, delete, presigned URL generation
 // ============================================================
 
-const { PutObjectCommand, DeleteObjectCommand, GetObjectCommand, HeadObjectCommand } = require('@aws-sdk/client-s3');
+const { PutObjectCommand, DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, ListObjectsV2Command } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const crypto = require('crypto');
 const path = require('path');
@@ -29,10 +29,16 @@ function categorizeFile(mimeType) {
 }
 
 function generateS3Key(folder, originalFilename, userId) {
+  return generateOpaqueS3Key(`${folder}/${userId}`, originalFilename);
+}
+
+// A key that names no uploader, for files a letter carries: a letter can be sent as a business, its recipients see
+// the file's URL, and the uploader's id in it would name the person behind the business.
+function generateOpaqueS3Key(folder, originalFilename) {
   const ext = path.extname(originalFilename).toLowerCase();
   const ts = Date.now();
   const rand = crypto.randomBytes(8).toString('hex');
-  return `${folder}/${userId}/${ts}_${rand}${ext}`;
+  return `${folder}/${ts}_${rand}${ext}`;
 }
 
 function getPublicUrl(key) {
@@ -69,11 +75,18 @@ function buildPutObjectParams(baseParams) {
 // and an empty body (Android chat photos went blank from the second view).
 const PUBLIC_IMMUTABLE = 'public, max-age=31536000, immutable';
 const PRIVATE_IMMUTABLE = 'private, max-age=31536000, immutable';
+// Photos shown to the assistant are read once by the API and deleted (services/ai/photos.js): no cache keeps a copy.
+const PRIVATE_NO_STORE = 'private, no-store';
+
+function cacheControl(key) {
+  if (key.startsWith('ai-chat/')) return PRIVATE_NO_STORE;
+  return key.startsWith('chat/') ? PRIVATE_IMMUTABLE : PUBLIC_IMMUTABLE;
+}
 
 async function uploadToS3(buffer, key, contentType, objectMetadata) {
   const cmd = new PutObjectCommand(
     buildPutObjectParams({ Bucket: S3_BUCKET, Key: key, Body: buffer, ContentType: contentType,
-      CacheControl: key.startsWith('chat/') ? PRIVATE_IMMUTABLE : PUBLIC_IMMUTABLE,
+      CacheControl: cacheControl(key),
       ...(objectMetadata ? { Metadata: objectMetadata } : {}) })
   );
   await s3Client.send(cmd);
@@ -386,14 +399,30 @@ async function deleteFromS3(key) {
   }
 }
 
+/** Keys under `prefix` last written before `before` (epoch ms), at most `limit` of them. */
+async function listKeysWrittenBefore(prefix, before, limit = 1000) {
+  const keys = [];
+  let token;
+  do {
+    const page = await s3Client.send(new ListObjectsV2Command({ Bucket: S3_BUCKET, Prefix: prefix, ContinuationToken: token }));
+    for (const object of page.Contents || []) {
+      if (object.LastModified && object.LastModified.getTime() < before) keys.push(object.Key);
+    }
+    token = page.IsTruncated ? page.NextContinuationToken : undefined;
+  } while (token && keys.length < limit);
+  return keys.slice(0, limit);
+}
+
 async function getPresignedDownloadUrl(key, expiresIn = 3600) {
   return getSignedUrl(s3Client, new GetObjectCommand({ Bucket: S3_BUCKET, Key: key }), { expiresIn });
 }
 
-// An object's bytes as a stream, for the API to serve under its own address.
-async function getObjectStream(key, bucket = S3_BUCKET) {
-  const response = await s3Client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
-  return { body: response.Body, contentLength: response.ContentLength };
+// An object's bytes as a stream, for the API to serve under its own address. With `range` (one HTTP byte range, as a
+// Range header), storage may answer with just those bytes: contentRange then says which.
+async function getObjectStream(key, bucket = S3_BUCKET, range) {
+  const response = await s3Client.send(new GetObjectCommand({ Bucket: bucket, Key: key, ...(range ? { Range: range } : {}) }));
+  const partial = Boolean(range) && response.$metadata?.httpStatusCode === 206 && response.ContentRange;
+  return { body: response.Body, contentLength: response.ContentLength, contentRange: partial ? response.ContentRange : undefined };
 }
 
 async function getObjectAsString(key, bucket = S3_BUCKET) {
@@ -424,7 +453,7 @@ function isAllowedType(mimeType) {
 }
 
 module.exports = {
-  categorizeFile, generateS3Key, getPublicUrl, isPublicStorageUrl, isAllowedType,
+  categorizeFile, generateS3Key, generateOpaqueS3Key, getPublicUrl, isPublicStorageUrl, isAllowedType,
   uploadToS3, uploadProfilePicture, uploadGigMedia,
   chatFileStorageReference, chatFileObjectMetadata, removeDeletedChatFile,
   verifyGigCompletionFile, normalizeGigCompletionFile,
@@ -432,6 +461,6 @@ module.exports = {
   uploadPrivateGigCompletionFile, downloadPrivateGigCompletionFile, removePrivateGigCompletionFile,
   createPrivateGigCompletionFile, readAuthorizedGigCompletionFile,
   uploadHomeTaskMedia, uploadReviewMedia, uploadListingMedia, uploadGeneral,
-  deleteFromS3, getPresignedDownloadUrl, getObjectStream, getObjectAsString, getPresignedUploadUrl,
+  deleteFromS3, listKeysWrittenBefore, getPresignedDownloadUrl, getObjectStream, getObjectAsString, getPresignedUploadUrl,
   ALL_ALLOWED_TYPES, ALLOWED_IMAGE_TYPES, ALLOWED_VIDEO_TYPES, ALLOWED_DOC_TYPES, MAX_FILE_SIZES,
 };

@@ -24,6 +24,8 @@ const TRAIN_STATUS_LABELS: Record<string, string> = {
   paused: 'Paused',
   completed: 'Completed',
   archived: 'Archived',
+  // My Support Trains lists a pending invitation with this status.
+  invited: 'Invited',
 };
 
 export function trainStatusLabel(status?: string | null): string {

@@ -369,10 +369,6 @@ public struct BusinessLegalView: View {
                 keyboardType: .numberPad,
                 identifier: "businessLegal.taxIdLast4"
             )
-            .onChange(of: viewModel.taxIdLast4) { _, newValue in
-                let digits = String(newValue.filter(\.isNumber).prefix(4))
-                if digits != newValue { viewModel.taxIdLast4 = digits }
-            }
 
             Text("Pantopus only ever stores the last four digits. Never enter a full EIN or SSN.")
                 .font(.system(size: 11.5))
@@ -388,6 +384,13 @@ public struct BusinessLegalView: View {
             )
             .textInputAutocapitalization(.never)
             .autocorrectionDisabled()
+
+            if case let .failed(message) = viewModel.action {
+                Text(message)
+                    .pantopusTextStyle(.caption)
+                    .foregroundStyle(Theme.Color.error)
+                    .accessibilityIdentifier("businessLegal.saveError")
+            }
 
             PrimaryButton(
                 title: payload.hasPrivateRecord ? "Update" : "Save",

@@ -9,6 +9,7 @@ import app.pantopus.android.data.api.models.support_trains.SupportTrainDetailDto
 import app.pantopus.android.data.api.models.support_trains.SupportTrainModesDto
 import app.pantopus.android.data.api.models.support_trains.SupportTrainMyReservationDto
 import app.pantopus.android.data.api.models.support_trains.SupportTrainOrganizerDto
+import app.pantopus.android.data.api.models.support_trains.SupportTrainReservationDto
 import app.pantopus.android.data.api.models.support_trains.SupportTrainSlotDto
 import app.pantopus.android.data.api.models.support_trains.SupportTrainUpdateDto
 import app.pantopus.android.ui.components.SlotCalendarDay
@@ -24,15 +25,17 @@ import java.util.TimeZone
  * Maps the shared `GET /api/support-trains/:id` payload onto the Detail
  * render model. Mirrors iOS `SupportTrainDetailViewModel.project`.
  *
- * PROJECTION GAPS (degrade gracefully): `/:id` omits the per-slot helper /
- * dish and the contributor roster, so covered rows render without a dish
- * author, the contributor strip shows the signup count without faces
- * (organizers aren't helpers), and the recipient identity defaults to Home.
+ * The detail endpoint omits other helpers' private contributions. Organizers and recipients
+ * additionally read the existing role-gated reservations endpoint for the current visit.
+ * Other viewers keep the coarse covered rows; no helper identities are inferred from organizers.
  */
 object SupportTrainDetailProjection {
     private const val MILLIS_PER_DAY = 1000L * 60 * 60 * 24
 
-    fun project(dto: SupportTrainDetailDto): SupportTrainDetailContent {
+    fun project(
+        dto: SupportTrainDetailDto,
+        helperReservations: List<SupportTrainReservationDto>? = null,
+    ): SupportTrainDetailContent {
         val slots = dto.slots ?: emptyList()
         val reservations = dto.myReservations ?: emptyList()
         val organizers = dto.organizers ?: emptyList()
@@ -68,7 +71,7 @@ object SupportTrainDetailProjection {
             recipient = recipient(dto, primaryName),
             typeDates = typeDates,
             calendarDays = calendar(slots, reservations),
-            sections = sections(slots, reservations),
+            sections = sections(slots, reservations, helperReservations),
             hostedBy = hostedBy(primaryName, organizers.firstOrNull()?.user?.id),
             dock = dock(dto.status, isFull),
             celebrationBanner =
@@ -95,6 +98,7 @@ object SupportTrainDetailProjection {
             exactAddress = dto.address?.singleLineLabel?.takeIf { it.isNotBlank() },
             deliveryInstructions = dto.deliveryInstructions,
             updates = updateCards(dto.updates.orEmpty(), organizers),
+            chatRoomId = dto.chatThreadId?.takeIf { it.isNotBlank() },
         )
     }
 
@@ -292,6 +296,7 @@ object SupportTrainDetailProjection {
     private fun sections(
         slots: List<SupportTrainSlotDto>,
         reservations: List<SupportTrainMyReservationDto>,
+        helperReservations: List<SupportTrainReservationDto>?,
     ): List<SlotSection> {
         val out = mutableListOf<SlotSection>()
         val slotById = slots.associateBy { it.id }
@@ -325,15 +330,25 @@ object SupportTrainDetailProjection {
                     slot.isCovered && (mine == 0 || (slot.filledCount ?: 0) > mine)
                 }.sortedBy { it.slotDate ?: "" }
         if (covered.isNotEmpty()) {
-            val shown = covered.take(4).map { slotRow(it, covered = true) }
-            val action = if (covered.size > shown.size) "See all ${covered.size}" else null
+            val mineIds = reservations.map { it.id }.toSet()
+            val helpersBySlot =
+                helperReservations.orEmpty()
+                    .filter { it.id !in mineIds && it.status in setOf("reserved", "delivered", "confirmed") }
+                    .groupBy { it.slotId }
+            val rows =
+                covered.flatMap { slot ->
+                    helpersBySlot[slot.id]?.map { helperRow(it, slot) }
+                        ?: listOf(slotRow(slot, covered = true))
+                }
+            val shown = rows.take(4)
+            val action = if (rows.size > shown.size) "See all ${rows.size}" else null
             out +=
                 SlotSection(
                     id = "covered",
                     overline = "Already on the train",
                     actionLabel = action,
                     rows = shown,
-                    moreRows = covered.drop(shown.size).map { slotRow(it, covered = true) },
+                    moreRows = rows.drop(shown.size),
                 )
         }
         return out
@@ -387,6 +402,36 @@ object SupportTrainDetailProjection {
             reservationStatus = reservation.status,
             isBeforeSlotDay = date?.let { it.time > startOfTodayUtc().time } ?: false,
             slotDayLabel = date?.let { format(it, "EEE, MMM d") },
+        )
+    }
+
+    private fun helperRow(
+        reservation: SupportTrainReservationDto,
+        slot: SupportTrainSlotDto,
+    ): SlotRowContent {
+        val contribution =
+            SupportTrainMyReservationDto(
+                id = reservation.id,
+                slotId = reservation.slotId,
+                status = reservation.status,
+                contributionMode = reservation.contributionMode,
+                dishTitle = reservation.dishTitle,
+                restaurantName = reservation.restaurantName,
+                estimatedArrivalAt = reservation.estimatedArrivalAt,
+                noteToRecipient = reservation.noteToRecipient,
+            )
+        val status =
+            when (reservation.status) {
+                "delivered" -> "Delivered — awaiting confirmation"
+                "confirmed" -> "Delivery confirmed"
+                else -> null
+            }
+        return reservationRow(contribution, slot).copy(
+            mine = false,
+            author = SlotRowAuthor(initials(reservation.displayName), reservation.displayName, ContributorTone.Personal),
+            subtitle =
+                listOfNotNull(status, arrivalLabel(reservation.estimatedArrivalAt), reservation.noteToRecipient)
+                    .joinToString(" · ").takeIf { it.isNotBlank() },
         )
     }
 

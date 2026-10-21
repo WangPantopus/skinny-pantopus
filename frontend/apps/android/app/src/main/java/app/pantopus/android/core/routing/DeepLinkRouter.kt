@@ -32,6 +32,8 @@ import kotlinx.coroutines.flow.asStateFlow
 // Arrival completion shares this router's account binding and path resolver.
 @Suppress("TooManyFunctions")
 object DeepLinkRouter {
+    private const val BUSINESS_CONVERSATION_SEGMENTS = 4
+
     /**
      * How a resolved destination should be handled relative to auth.
      */
@@ -224,6 +226,12 @@ object DeepLinkRouter {
         data object SecurityDevices : Destination
 
         /**
+         * `pantopus://settings/notifications` — Settings → Notifications, where the assistant's
+         * "Open notification settings" button goes (AI assistant phase 1 link catalog).
+         */
+        data object NotificationSettings : Destination
+
+        /**
          * A14.8 — `pantopus://mailbox/vacation` opens the Vacation hold
          * screen (scheduling or active variant depending on server state
          * once the persistence layer lands).
@@ -272,6 +280,14 @@ object DeepLinkRouter {
          * routed to [BusinessProfile].
          */
         data class BusinessOwner(val businessId: String) : Destination
+
+        /**
+         * `/app/businesses/:id/chat/:roomId` — a conversation in the business's
+         * inbox (the `business_message` notice its owner and staff get). Opens
+         * the owner view, then the thread acting as the business; never the
+         * person's own Messages. Mirrors iOS `businessConversation`.
+         */
+        data class BusinessConversation(val businessId: String, val roomId: String) : Destination
 
         /**
          * `pantopus://business/:username` — A10.6 public business profile
@@ -379,6 +395,16 @@ object DeepLinkRouter {
 
         /** `/plans` opens the Plans tab (Pulse build S3). Behind the `plans` flag. */
         data object PlansTab : Destination
+
+        /**
+         * `pantopus://assistant` opens the assistant thread; `?nudge=<notificationId>` opens it at that brief's or
+         * nudge's message (AI assistant phase 2 contract §8.2), and `&conversation=<id>` names the conversation it was
+         * added to. Each is null without one, or when it isn't a UUID.
+         */
+        data class Assistant(
+            val nudgeId: String? = null,
+            val conversationId: String? = null,
+        ) : Destination
 
         data class Unknown(val uri: String) : Destination
     }
@@ -750,6 +776,15 @@ object DeepLinkRouter {
             "nearby" -> if (segments.size == 1) Destination.Nearby else Destination.Unknown(raw)
             "notifications" -> Destination.Notifications
             "today" -> if (segments.size == 1) Destination.TodayTab else Destination.Unknown(raw)
+            "assistant" ->
+                if (segments.size == 1) {
+                    Destination.Assistant(
+                        nudgeId = Paths.queryParam(queryPart, "nudge")?.takeIf(MAIL_UUID::matches),
+                        conversationId = Paths.queryParam(queryPart, "conversation")?.takeIf(MAIL_UUID::matches),
+                    )
+                } else {
+                    Destination.Unknown(raw)
+                }
             "hub-today", "hub_today" ->
                 // `?deliveryId=` + `?kind=` ride the Morning/Evening Briefing push.
                 Destination.HubToday(
@@ -911,15 +946,20 @@ object DeepLinkRouter {
             "businesses" -> {
                 // `pantopus://businesses/new` opens the Create Business wizard.
                 // `pantopus://businesses/:id/page-editor` opens the owner-only
-                // A13.10 editor. `pantopus://businesses/:id` opens the A10.7
-                // Business owner view. Mirrors iOS `businessesDestination`.
+                // A13.10 editor. `pantopus://businesses/:id/chat/:roomId` opens
+                // a thread of the business inbox. `pantopus://businesses/:id`
+                // opens the A10.7 Business owner view. Mirrors iOS
+                // `businessesDestination`.
                 val id = segments.getOrNull(1)
                 val trailing = segments.getOrNull(2)
+                val roomId = segments.getOrNull(3)
                 when {
                     id == "new" -> Destination.CreateBusiness
                     id.isNullOrBlank() -> Destination.Unknown(raw)
                     trailing == "page-editor" || trailing == "page_editor" ->
                         Destination.EditBusinessPage(id)
+                    trailing == "chat" && segments.size == BUSINESS_CONVERSATION_SEGMENTS && roomId != null && MAIL_UUID.matches(roomId) ->
+                        Destination.BusinessConversation(id, roomId.lowercase())
                     else -> Destination.BusinessOwner(id)
                 }
             }
@@ -974,7 +1014,14 @@ object DeepLinkRouter {
             }
             "invite" -> {
                 val token = segments.getOrNull(1)
-                if (token == "lease") {
+                if (token == "seat") {
+                    // Business share links carry the token in the query; "seat" is the invitation kind, not the token.
+                    if (segments.size == 2 && !tokenQuery.isNullOrEmpty()) {
+                        Destination.Invite(tokenQuery)
+                    } else {
+                        Destination.Unknown(raw)
+                    }
+                } else if (token == "lease") {
                     val proof = segments.getOrNull(2)
                     if (segments.size == 3 && proof?.matches(Regex("[a-fA-F0-9]{64}")) == true) {
                         Destination.Invite(proof, leaseInvitation = true)
@@ -1069,13 +1116,15 @@ object DeepLinkRouter {
                     Destination.VerifyEmail(token = tokenQuery, email = emailQuery)
                 }
             "settings" ->
-                // `pantopus://settings/payments` — A14.6, and
-                // `pantopus://settings/security` — Devices & sessions. Other
-                // settings sub-routes aren't deep-linkable yet; the bare host
+                // `pantopus://settings/payments` — A14.6,
+                // `pantopus://settings/security` — Devices & sessions, and
+                // `pantopus://settings/notifications`. Other settings
+                // sub-routes aren't deep-linkable yet; the bare host
                 // `pantopus://settings` falls through to `.Unknown`.
                 when (segments.getOrNull(1)) {
                     "payments" -> Destination.PaymentsSettings
                     "security" -> Destination.SecurityDevices
+                    "notifications" -> Destination.NotificationSettings
                     else -> Destination.Unknown(raw)
                 }
             else -> Destination.Unknown(raw)
@@ -1095,6 +1144,28 @@ object DeepLinkRouter {
         if (ownerKind == null) return Destination.BookingDetail(bookingId)
         val owner = HomeTaskNotificationRoute.canonicalId(ownerId)?.takeIf { ownerKind == "home" || ownerKind == "business" }
         return owner?.let { Destination.BookingDetail(bookingId, ownerKind, it) }
+    }
+
+    /** Briefs and nudges: the notification types the assistant sends first (AI assistant phase 2 contract §3.2). */
+    private val ASSISTANT_NOTIFICATION_TYPES = setOf("assistant_brief", "assistant_nudge")
+
+    /**
+     * A brief or nudge (a push or a notification row) opens the assistant at its message, whatever its stored link
+     * says (AI assistant phase 2 contract §8.3): `pantopus://assistant?nudge=<notificationId>`, with
+     * `&conversation=<id>` when the notification names the conversation it was added to. Null for other types.
+     */
+    fun assistantNotificationPath(
+        type: String?,
+        notificationId: String?,
+        link: String?,
+        conversationId: String? = null,
+    ): String? {
+        if (type?.lowercase() !in ASSISTANT_NOTIFICATION_TYPES) return null
+        val linked = link?.let { resolveString(Paths.normalizeIncoming(it)) as? Destination.Assistant }
+        val nudgeId = notificationId?.takeIf(MAIL_UUID::matches) ?: linked?.nudgeId
+        val conversation = conversationId?.takeIf(MAIL_UUID::matches) ?: linked?.conversationId
+        val query = listOfNotNull(nudgeId?.let { "nudge=$it" }, conversation?.let { "conversation=$it" }).joinToString("&")
+        return if (query.isEmpty()) "pantopus://assistant" else "pantopus://assistant?$query"
     }
 
     /**

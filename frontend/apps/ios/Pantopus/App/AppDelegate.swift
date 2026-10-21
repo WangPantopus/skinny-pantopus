@@ -42,6 +42,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         URLCache.shared.removeAllCachedResponses()
         URLCache.shared = URLCache(memoryCapacity: 32 * 1024 * 1024, diskCapacity: 0)
         try? HomeDocumentTemporaryFiles.clearPreviousLaunch()
+        // Files opened from chats and copies of photos sent to the assistant that an earlier run left.
+        ChatMediaURL.removeLocalFiles()
         APIClient.removeLegacyDiskCache()
         MainActor.assumeIsolated {
             Observability.shared.start(environment: AppEnvironment.current)
@@ -144,10 +146,11 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
     /// chat pushes for the conversation the user is currently viewing.
     /// The backend's chat push carries `type: "chat_message"` and
     /// `room_id` at the top level of the APNs payload
-    /// (`backend/routes/chats.js:1837`, flattened by
-    /// `backend/services/push/apnsClient.js:buildPayload`); when that
-    /// room is registered as on-screen we suppress the banner entirely —
-    /// the socket already rendered the message in place.
+    /// (`backend/routes/chats.js`, POST /messages, flattened by
+    /// `backend/services/push/apnsClient.js:buildPayload`), and so does
+    /// the business inbox notice (`business_message`) owners and staff
+    /// get; when that room is registered as on-screen we suppress the
+    /// banner entirely — the socket already rendered the message in place.
     nonisolated func userNotificationCenter(
         _: UNUserNotificationCenter,
         willPresent notification: UNNotification
@@ -157,7 +160,7 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
         let userInfo = notification.request.content.userInfo
         let type = userInfo["type"] as? String
         let roomId = userInfo["room_id"] as? String
-        if type == "chat_message", let roomId {
+        if type == "chat_message" || type == "business_message", let roomId {
             let isViewingThread = await MainActor.run {
                 ActiveChatThreadTracker.shared.isViewingRoom(roomId)
             }

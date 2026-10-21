@@ -16,20 +16,20 @@ enum CreateBusinessSampleData {
         WhatYouGetItem(
             id: "listings",
             icon: .listChecks,
-            label: "Service listings",
-            subcopy: "Set rates per hour or per job"
+            label: "Service catalog",
+            subcopy: "Add services and prices after setup"
         ),
         WhatYouGetItem(
-            id: "tax",
+            id: "profile",
             icon: .fileText,
-            label: "1099/W-9 ready",
-            subcopy: "We collect tax info in step 2"
+            label: "Business profile",
+            subcopy: "Add your name, description, and contact details"
         ),
         WhatYouGetItem(
-            id: "insurance",
+            id: "draft",
             icon: .shield,
-            label: "Insurance hint",
-            subcopy: "Optional but boosts trust score"
+            label: "Save as draft",
+            subcopy: "Keep your page hidden until you publish"
         )
     ]
 

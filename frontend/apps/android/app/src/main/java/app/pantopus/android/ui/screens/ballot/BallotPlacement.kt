@@ -12,6 +12,7 @@ import androidx.compose.ui.unit.sp
 import app.pantopus.android.data.api.models.place.BallotSummary
 import app.pantopus.android.data.api.models.place.PlaceGroupBlock
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
+import app.pantopus.android.data.api.models.place.PlaceSectionEnvelope
 import app.pantopus.android.data.api.models.place.PlaceSectionId
 import app.pantopus.android.data.api.models.place.PlaceSectionStatus
 import app.pantopus.android.ui.theme.PantopusColors
@@ -31,9 +32,11 @@ object BallotPlacement {
     )
 
     /** The civic_election envelope's Ballot P0 card, when the server sent one. */
-    fun ballot(intel: PlaceIntelligence): Placed? =
-        intel.groups
-            .flatMap { it.sections }
+    fun ballot(intel: PlaceIntelligence): Placed? = ballot(intel.groups.flatMap { it.sections })
+
+    /** The same card among a preview's sections (a saved or looked-up address). */
+    fun ballot(sections: List<PlaceSectionEnvelope>): Placed? =
+        sections
             .filter { it.sectionId == PlaceSectionId.CIVIC_ELECTION && it.status == PlaceSectionStatus.READY }
             .firstNotNullOfOrNull { env -> env.civicElection?.ballotCard?.let { Placed(it, env.asOf) } }
 

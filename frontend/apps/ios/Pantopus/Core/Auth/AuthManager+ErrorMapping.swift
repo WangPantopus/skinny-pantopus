@@ -89,7 +89,12 @@ extension AuthManager {
     }
 
     static func mapByStatus(status: Int, body: String?) -> AuthError {
-        switch status {
+        if status == 401,
+           let code = AuthErrorBody.decode(body?.data(using: .utf8))?.code,
+           ["DPOP_REQUIRED", "DPOP_INVALID", "DPOP_REPLAY"].contains(code) {
+            return .serverError("Couldn't confirm this device for sign-in. Try again. If it keeps happening, contact support.")
+        }
+        return switch status {
         case 429: .rateLimited
         case 401: .invalidCredentials
         default: .serverError(extractMessage(from: body) ?? body ?? "Request failed (\(status)).")

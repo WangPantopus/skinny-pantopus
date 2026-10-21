@@ -18,6 +18,7 @@ import app.pantopus.android.data.api.models.neighborhood.NeighborhoodMeter
 import app.pantopus.android.data.api.models.notifications.NotificationUnreadCountResponse
 import app.pantopus.android.data.api.models.notifications.NotificationsListResponse
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
+import app.pantopus.android.data.api.models.place.PlacePreview
 import app.pantopus.android.data.api.models.place.PlaceSectionId
 import app.pantopus.android.data.api.models.posts.MyPostsResponse
 import app.pantopus.android.data.api.models.posts.PostDetailResponse
@@ -123,6 +124,15 @@ object StoreKeys {
             type = PlaceIntelligence::class.java,
         )
 
+    /** Public preview shared by the saved-address root and its details. */
+    fun savedPlacePreview(id: String) =
+        StoreKey<PlacePreview>(
+            "api/saved-places/$id/preview",
+            kind = StoreKind.TODAY,
+            topics = setOf(StoreTopics.HOMES, StoreTopics.TODAY, "place:$id"),
+            type = PlacePreview::class.java,
+        )
+
     /** My Homes: one source for every screen that lists the viewer's homes. */
     val myHomes =
         StoreKey<MyHomesResponse>(
@@ -163,11 +173,11 @@ object StoreKeys {
             type = NotificationPreferences::class.java,
         )
 
-    /** Support Trains the viewer organizes or helps with (first page), for My trains and Invitations. */
+    /** All Support Trains the viewer participates in, for My trains and Invitations. */
     val mySupportTrains =
         StoreKey<SupportTrainsListResponse>(
             "api/activities/support-trains/me/support-trains",
-            mapOf("limit" to "20", "offset" to "0"),
+            mapOf("pages" to "all"),
             kind = StoreKind.SUPPORT_TRAINS,
             topics = setOf("supporttrain:*"),
         )
@@ -294,9 +304,10 @@ object StoreKeys {
     fun roomMessages(
         roomId: String,
         limit: Int,
+        asBusinessUserId: String? = null,
     ) = StoreKey<ChatMessagesResponse>(
         "api/chat/rooms/$roomId/messages",
-        mapOf("limit" to limit.toString()),
+        mapOf("limit" to limit.toString(), "asBusinessUserId" to asBusinessUserId),
         kind = StoreKind.CONVERSATION,
         topics = setOf("chat:$roomId", StoreTopics.CHATS),
     )

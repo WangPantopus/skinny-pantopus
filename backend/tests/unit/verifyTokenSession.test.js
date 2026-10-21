@@ -54,7 +54,7 @@ beforeEach(() => {
   setAuthMocks({
     getUser: async (token) => {
       const parts = String(token).split('.');
-      let sub = 'mock-user-id';
+      let sub = UID;
       if (parts.length === 3) {
         try { sub = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')).sub || sub; } catch { /* legacy */ }
       }

@@ -1449,6 +1449,23 @@ router.get('/my-packages', asyncHandler(async (req, res) => {
 // ============================================================
 // MY BOOKINGS (invitee/customer list across owners)
 // ============================================================
+
+// A business's booking as its customer sees it: the business hosts it and makes its changes. Which owner or staff
+// member hosts it, booked it for them, cancelled it or proposed a new time stays with the business's team (its
+// booking list and detail). The customer's own actions keep their own id.
+function customerBookingView(booking, viewerId) {
+  if (!booking || booking.owner_type !== 'business') return booking;
+  const asBusiness = (id) => (id == null ? null : String(id) === String(viewerId) ? id : booking.owner_id);
+  return {
+    ...booking,
+    host_user_id: asBusiness(booking.host_user_id),
+    created_by: asBusiness(booking.created_by),
+    cancelled_by: asBusiness(booking.cancelled_by),
+    proposed_by: asBusiness(booking.proposed_by),
+    proposed_host_id: asBusiness(booking.proposed_host_id),
+  };
+}
+
 router.get('/my-bookings', asyncHandler(async (req, res) => {
   const email = req.user.email ? normalizeEmail(req.user.email) : null;
   // Two parameterized queries (no filter-string interpolation), merged + deduped — matches by
@@ -1472,7 +1489,7 @@ router.get('/my-bookings', asyncHandler(async (req, res) => {
     const { data: pages } = await supabaseAdmin.from('BookingPage').select('id, slug, is_live').in('id', pageIds);
     for (const p of pages || []) if (p.is_live) liveSlugs.set(p.id, p.slug);
   }
-  res.json({ bookings: merged.map((b) => ({ ...b, page_slug: liveSlugs.get(b.page_id) || null })) });
+  res.json({ bookings: merged.map((b) => ({ ...customerBookingView(b, req.user.id), page_slug: liveSlugs.get(b.page_id) || null })) });
 }));
 
 // ============================================================

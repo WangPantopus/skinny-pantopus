@@ -142,6 +142,9 @@ final class DeepLinkRouter {
         /// reached from `https://pantopus.com/app/settings/security`, the
         /// link those notices carry.
         case securityDevices
+        /// `pantopus://settings/notifications` — Settings → Notifications
+        /// (quiet hours, briefings, alerts), from a Pantopus AI link button.
+        case notificationSettings
 
         // MARK: - B1.6 batch-2 routing seam
 
@@ -172,6 +175,11 @@ final class DeepLinkRouter {
         /// `pantopus://businesses/:id` — A10.7 Business owner view. The public
         /// profile (A10.6) lives at the singular `pantopus://business/:username`.
         case businessOwner(businessId: String)
+        /// `/app/businesses/:id/chat/:roomId` — a conversation in the business's
+        /// inbox (the `business_message` notice its owner and staff get). Opens
+        /// the owner view, then the thread acting as the business; never the
+        /// person's own Messages.
+        case businessConversation(businessId: String, roomId: String)
         /// `pantopus://identity/preview` — A18.5 "View as" identity preview.
         case viewAs
         /// `pantopus://homes/:id/waiting-room` — A18.4 persistent waiting room.
@@ -677,6 +685,12 @@ final class DeepLinkRouter {
             }
             return .unknown(url)
         case "invite":
+            // Business share links carry the token in the query; "seat" is
+            // the invitation kind, not the token itself.
+            if segments.dropFirst().first == "seat" {
+                guard segments.count == 2, let token = tokenQuery, !token.isEmpty else { return .unknown(url) }
+                return .invite(token: token)
+            }
             if segments.dropFirst().first == "lease" {
                 guard segments.count == 3, let token = segments.last,
                       token.range(of: "^[a-fA-F0-9]{64}$", options: .regularExpression) != nil else { return .unknown(url) }
@@ -695,8 +709,9 @@ final class DeepLinkRouter {
         case "verify-email", "verify_email":
             return verifyEmailDestination(url: url, token: tokenQuery, email: emailQuery)
         case "settings":
-            // `pantopus://settings/payments` — A14.6, and
-            // `pantopus://settings/security` — Devices & sessions. Other
+            // `pantopus://settings/payments` — A14.6,
+            // `pantopus://settings/security` — Devices & sessions, and
+            // `pantopus://settings/notifications` — Notifications. Other
             // settings sub-routes aren't deep-linkable yet; the bare host
             // `pantopus://settings` falls through to `.unknown`.
             if segments.dropFirst().first == "payments" {
@@ -704,6 +719,9 @@ final class DeepLinkRouter {
             }
             if segments.dropFirst().first == "security" {
                 return .securityDevices
+            }
+            if segments.dropFirst().first == "notifications", segments.count == 2 {
+                return .notificationSettings
             }
             return .unknown(url)
         default:
@@ -815,7 +833,8 @@ final class DeepLinkRouter {
 
     /// Plural `businesses/*` is the owner-side surface family.
     /// `…/new` opens the Create Business wizard, `…/:id/page-editor` opens
-    /// A13.10 (owner-only), and `…/:id` opens the A10.7 Business owner view.
+    /// A13.10 (owner-only), `…/:id/chat/:roomId` opens a thread of the
+    /// business inbox, and `…/:id` opens the A10.7 Business owner view.
     /// The singular `business/:username` (A10.6 public profile) is handled
     /// separately in `resolve`.
     private func businessesDestination(url: URL, segments: [String]) -> Destination {
@@ -826,6 +845,10 @@ final class DeepLinkRouter {
         let trailing = Array(segments.dropFirst(2))
         if trailing.first == "page-editor" || trailing.first == "page_editor" {
             return .editBusinessPage(businessId: id)
+        }
+        if trailing.first == "chat", trailing.count == 2, let roomId = trailing.last,
+           UUID(uuidString: roomId) != nil {
+            return .businessConversation(businessId: id, roomId: roomId.lowercased())
         }
         return .businessOwner(businessId: id)
     }

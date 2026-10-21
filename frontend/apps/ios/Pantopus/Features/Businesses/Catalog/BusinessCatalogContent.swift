@@ -222,7 +222,46 @@ public struct BusinessCatalogItemDraft: Sendable, Hashable {
     }
 
     public var isValid: Bool {
-        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        validationError == nil
+    }
+
+    public var validationError: String? {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedName.isEmpty { return "Name is required." }
+        if trimmedName.count > 200 { return "Keep the name to 200 characters or fewer." }
+        if description.count > 5000 { return "Keep the description to 5,000 characters or fewer." }
+        if priceUnit.count > 30 { return "Keep the price unit to 30 characters or fewer." }
+        return priceError ?? priceMaxError ?? durationError
+    }
+
+    public var priceError: String? {
+        guard kind != .donation else { return nil }
+        return Self.numberError(priceCents, label: "Price", unit: "cents")
+    }
+
+    public var priceMaxError: String? {
+        guard kind != .donation else { return nil }
+        if let error = Self.numberError(priceMaxCents, label: "Maximum price", unit: "cents") { return error }
+        guard let maximum = Int(priceMaxCents.trimmingCharacters(in: .whitespacesAndNewlines)) else { return nil }
+        guard let minimum = Int(priceCents.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+            return "Enter a starting price before setting a maximum."
+        }
+        return maximum < minimum ? "Maximum price must be at least the starting price." : nil
+    }
+
+    public var durationError: String? {
+        guard kind != .donation else { return nil }
+        return Self.numberError(durationMinutes, label: "Duration", unit: "minutes")
+    }
+
+    private static func numberError(_ input: String, label: String, unit: String) -> String? {
+        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        guard let value = Int(trimmed), value >= 0 else {
+            return "\(label) must be a whole number of \(unit), 0 or greater."
+        }
+        // These columns are PostgreSQL integers; prevent overflow before sending.
+        return value > Int(Int32.max) ? "\(label) must be 2,147,483,647 or less." : nil
     }
 
     /// Donation items reject a fixed price server-side
@@ -235,10 +274,10 @@ public struct BusinessCatalogItemDraft: Sendable, Hashable {
             description: description.trimmingCharacters(in: .whitespacesAndNewlines),
             kind: kind.rawValue,
             status: (isDraft ? BusinessCatalogStatus.draft : .active).rawValue,
-            priceCents: isDonation ? nil : Int(priceCents.trimmingCharacters(in: .whitespaces)),
-            priceMaxCents: isDonation ? nil : Int(priceMaxCents.trimmingCharacters(in: .whitespaces)),
+            priceCents: isDonation ? nil : Int(priceCents.trimmingCharacters(in: .whitespacesAndNewlines)),
+            priceMaxCents: isDonation ? nil : Int(priceMaxCents.trimmingCharacters(in: .whitespacesAndNewlines)),
             priceUnit: priceUnit.trimmingCharacters(in: .whitespacesAndNewlines),
-            durationMinutes: Int(durationMinutes.trimmingCharacters(in: .whitespaces)),
+            durationMinutes: isDonation ? nil : Int(durationMinutes.trimmingCharacters(in: .whitespacesAndNewlines)),
             isFeatured: isFeatured,
             categoryId: categoryId
         )

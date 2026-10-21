@@ -30,11 +30,15 @@ public struct PostCreatorDTO: Decodable, Sendable, Hashable, Identifiable {
     public let city: String?
     public let state: String?
     public let accountType: String?
+    /// The identity projection's kind (`type`): `business` for a post written
+    /// as a business, whose `id` is then the business's.
+    public let identityType: String?
     private let wireDisplayName: String?
     public let credential: FeedAuthorCredentialDTO?
 
     private enum CodingKeys: String, CodingKey {
         case id, username, name, handle
+        case identityType = "type"
         case displayName, credential
         case displayNameSnake = "display_name"
         case firstName = "first_name"
@@ -55,7 +59,8 @@ public struct PostCreatorDTO: Decodable, Sendable, Hashable, Identifiable {
         profilePictureURL: String?,
         city: String?,
         state: String?,
-        accountType: String?
+        accountType: String?,
+        identityType: String? = nil
     ) {
         self.id = id
         self.username = username
@@ -66,6 +71,7 @@ public struct PostCreatorDTO: Decodable, Sendable, Hashable, Identifiable {
         self.city = city
         self.state = state
         self.accountType = accountType
+        self.identityType = identityType
         wireDisplayName = nil
         credential = nil
     }
@@ -91,6 +97,7 @@ public struct PostCreatorDTO: Decodable, Sendable, Hashable, Identifiable {
         city = c.lenient(String.self, forKey: .city)
         state = c.lenient(String.self, forKey: .state)
         accountType = c.lenient(String.self, forKey: .accountType)
+        identityType = c.lenient(String.self, forKey: .identityType)
     }
 
     /// Best-effort display name across the various populated fields.
@@ -101,6 +108,14 @@ public struct PostCreatorDTO: Decodable, Sendable, Hashable, Identifiable {
         if !combined.isEmpty { return combined }
         if let handle = MadeUpUsername.handle(username) { return handle }
         return "Pantopus user"
+    }
+
+    /// The page a business author opens: its id, while the business is
+    /// published (the identity carries its handle only then, as the web's
+    /// `/b/` link). Nil for other authors and for a business without a page.
+    public var businessPageId: String? {
+        guard identityType == "business", username?.isEmpty == false else { return nil }
+        return id
     }
 
     /// Locality summary — "City, ST" if both, else city, else state, else nil.

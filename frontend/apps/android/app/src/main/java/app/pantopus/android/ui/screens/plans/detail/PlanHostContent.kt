@@ -96,14 +96,15 @@ internal fun ColumnScope.PlanHostBody(
     if (closed) HostClosedBanner(plan)
     val pending = requests?.pending.orEmpty()
     val waiting = requests?.waitlisted.orEmpty()
+    val waitingCount = requests?.waitlisted?.size ?: plan.waitlistCount
     val count = maxOf(plan.requestsCount ?: 0, pending.size)
     if (!closed && count > 0) {
         RequestsCard(count, pending.mapNotNull { it.user?.displayName }, onOpenRequests)
-    } else if (!closed && waiting.isNotEmpty()) {
+    } else if (!closed && waitingCount > 0) {
         // Nobody to answer, but people are waiting for a spot: the host can still see who (H10's waitlist).
-        WaitlistCard(waiting.mapNotNull { it.user?.displayName }, onOpenRequests)
+        WaitlistCard(waitingCount, waiting.mapNotNull { it.user?.displayName }, onOpenRequests)
     }
-    GoingSection(plan, viewerId, busy, closed, asked = count > 0 || waiting.isNotEmpty(), onRemove = onRemove)
+    GoingSection(plan, viewerId, busy, closed, asked = count > 0 || waitingCount > 0, onRemove = onRemove)
     if (closed && plan.chatRoomId != null) {
         // The chat stays to read once the plan is over (as on iOS).
         GhostButton(title = "Read the group chat", onClick = onMessageGuests)
@@ -180,11 +181,13 @@ private fun RequestsCard(
 
 @Composable
 private fun WaitlistCard(
+    count: Int,
     names: List<String>,
     onOpen: () -> Unit,
 ) {
     val who =
         when (names.size) {
+            0 -> if (count == 1) "Someone is waiting for a spot" else "$count people are waiting for a spot"
             1 -> "${names[0]} is waiting for a spot"
             2 -> "${names[0]} and ${names[1]} are waiting for a spot"
             else -> "${names.take(2).joinToString(", ")} and ${names.size - 2} more are waiting for a spot"
@@ -203,7 +206,7 @@ private fun WaitlistCard(
         PlanIconTile(PantopusIcon.List, PantopusColors.appSurfaceSunken, PantopusColors.appTextStrong)
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "Waitlist · ${names.size}",
+                text = "Waitlist · $count",
                 style = PantopusTextStyle.body.copy(fontWeight = FontWeight.SemiBold),
                 color = PantopusColors.appText,
             )

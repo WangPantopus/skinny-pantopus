@@ -26,6 +26,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -44,6 +47,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.BuildConfig
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.core.routing.PlacePendingStore
+import app.pantopus.android.data.api.models.place.BallotGovernments
+import app.pantopus.android.data.api.models.place.PlaceBand
 import app.pantopus.android.data.api.models.place.PlaceGroup
 import app.pantopus.android.data.api.models.place.PlaceMoneyLead
 import app.pantopus.android.data.api.models.place.PlacePreview
@@ -53,7 +58,12 @@ import app.pantopus.android.data.api.models.place.PlacePreviewLockedSection
 import app.pantopus.android.data.api.models.place.PlacePreviewPlaceRef
 import app.pantopus.android.data.api.models.place.PlacePreviewSectionStatus
 import app.pantopus.android.data.api.models.place.PlaceSectionEnvelope
+import app.pantopus.android.data.api.models.place.PlaceSectionId
 import app.pantopus.android.ui.components.PrimaryButton
+import app.pantopus.android.ui.screens.ballot.BallotGovernmentsSheet
+import app.pantopus.android.ui.screens.ballot.BallotPlacement
+import app.pantopus.android.ui.screens.ballot.BallotSeasonBlock
+import app.pantopus.android.ui.screens.place.PlaceDetailGroup
 import app.pantopus.android.ui.screens.place.PlaceRootBar
 import app.pantopus.android.ui.screens.place.PlaceSectionView
 import app.pantopus.android.ui.screens.place.components.PlaceChip
@@ -823,7 +833,12 @@ internal fun PlacePreviewFindings(
     onRetry: () -> Unit,
     retrying: Boolean,
     modifier: Modifier = Modifier,
+    onOpenDetail: ((PlaceDetailGroup) -> Unit)? = null,
 ) {
+    // Ballot P0 (ballot_p0): the "Your ballot" card under "This season", in
+    // place of the election row, as on the Place dashboard.
+    val ballot = BallotPlacement.ballot(preview.sections.orEmpty())
+    var ballotGovernments by remember { mutableStateOf<BallotGovernments?>(null) }
     Column(modifier = modifier) {
         // A real dollar band when one exists for this address,
         // and nothing at all when it does not — the tiles carry
@@ -832,10 +847,18 @@ internal fun PlacePreviewFindings(
         // fact, in the server's words.
         preview.aha?.takeIf { it.isRenderable }?.let { AhaCard(it, onFollowUp) }
         preview.moneyLead?.takeIf { it.isRenderable }?.let { MoneyLeadCard(it) }
+        if (ballot != null) {
+            BallotSeasonBlock(
+                placed = ballot,
+                onOpenGovernments = ballot.card.governments?.let { governments -> { ballotGovernments = governments } },
+                modifier = Modifier.padding(top = 18.dp),
+            )
+        }
         // Every Band-A section through the dashboard's own cards;
         // older backends send only `free` and keep the three tiles.
         val sections = preview.sections.orEmpty()
-        if (sections.isNotEmpty()) PreviewSections(sections, onFollowUp, onRetry, retrying)
+        val shown = if (ballot != null) sections.filter { it.sectionId != PlaceSectionId.CIVIC_ELECTION } else sections
+        if (sections.isNotEmpty()) PreviewSections(shown, onFollowUp, onRetry, retrying, onOpenDetail)
         preview.free?.takeIf { sections.isEmpty() }?.let { free ->
             PlaceGroupLabel(text = "Risk & readiness", modifier = Modifier.padding(top = 18.dp))
             PlaceSectionCard(
@@ -865,6 +888,13 @@ internal fun PlacePreviewFindings(
             }
         }
     }
+    ballotGovernments?.let { governments ->
+        BallotGovernmentsSheet(
+            governments = governments,
+            address = preview.place?.address?.substringBefore(",").orEmpty(),
+            onDismiss = { ballotGovernments = null },
+        )
+    }
 }
 
 @Composable
@@ -873,6 +903,7 @@ private fun PreviewSections(
     onCreateAccount: () -> Unit,
     onRetry: () -> Unit,
     retrying: Boolean,
+    onOpenDetail: ((PlaceDetailGroup) -> Unit)?,
 ) {
     PREVIEW_GROUP_ORDER.forEach { (group, label) ->
         val items = sections.filter { it.groupId == group }
@@ -882,7 +913,12 @@ private fun PreviewSections(
                 items.forEach { env ->
                     PlaceSectionView(
                         env = env,
-                        onOpen = null,
+                        onOpen =
+                            onOpenDetail?.let { open ->
+                                PlaceDetailGroup.forGroup(env.groupId)
+                                    ?.takeIf { it.supportsSavedPlace && env.band == PlaceBand.A }
+                                    ?.let { detail -> { open(detail) } }
+                            },
                         onVerify = onCreateAccount,
                         onClaim = onCreateAccount,
                         onRetry = onRetry,

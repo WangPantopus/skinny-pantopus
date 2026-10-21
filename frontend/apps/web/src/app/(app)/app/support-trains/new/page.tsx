@@ -71,18 +71,20 @@ function homesFromApi(raw: any): HomeInfo[] {
   return homes
     .map((h: any): HomeInfo | null => {
       const coords = h?.location?.coordinates;
-      const hasCoords = Array.isArray(coords) && coords.length >= 2
-        && Number.isFinite(coords[0]) && Number.isFinite(coords[1]);
-      const lat = hasCoords ? coords[1] : NaN;
-      const lng = hasCoords ? coords[0] : NaN;
+      // My Homes returns a decoded point. Keep GeoJSON compatibility for
+      // older responses, without turning an absent coordinate into zero.
+      const lat = h?.location?.latitude ?? (Array.isArray(coords) ? coords[1] : undefined);
+      const lng = h?.location?.longitude ?? (Array.isArray(coords) ? coords[0] : undefined);
+      const hasCoords = Number.isFinite(lat) && Math.abs(lat) <= 90
+        && Number.isFinite(lng) && Math.abs(lng) <= 180;
       return {
         id: String(h?.id ?? ''),
         name: String(h?.name ?? h?.address ?? 'Home'),
         address: h?.address ?? undefined,
         city: h?.city ?? '',
         state: h?.state ?? '',
-        latitude: lat,
-        longitude: lng,
+        latitude: hasCoords ? lat : NaN,
+        longitude: hasCoords ? lng : NaN,
         hasLocation: hasCoords,
       };
     })
