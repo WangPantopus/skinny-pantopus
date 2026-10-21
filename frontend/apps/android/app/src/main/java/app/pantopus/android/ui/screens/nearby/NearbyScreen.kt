@@ -21,14 +21,15 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,17 +51,19 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.LaunchFeature
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.core.perf.ReportContentShown
-import app.pantopus.android.data.ai.AIScreenContext
 import app.pantopus.android.data.api.models.neighborhood.NeighborhoodCells
 import app.pantopus.android.data.api.models.neighborhood.NeighborhoodMeter
 import app.pantopus.android.ui.components.ErrorState
+import app.pantopus.android.ui.components.NavigationMenuButton
 import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.components.RefreshFailedLine
 import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.screens.place.components.placeCard
+import app.pantopus.android.ui.screens.scheduling.resources.SegmentedControl
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
+import app.pantopus.android.ui.theme.Spacing
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.GoogleMap
@@ -68,9 +71,10 @@ import com.google.maps.android.compose.MapProperties
 import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.Polygon
 import com.google.maps.android.compose.rememberCameraPositionState
-
-// Social discovery is available in every meter state. The meter controls
-// the local marketplace and tasks preview and preserves privacy floors.
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.getAndUpdate
 
 private data class NearbySurface(val icon: PantopusIcon, val title: String, val subtitle: String, val feature: LaunchFeature)
 
@@ -80,23 +84,97 @@ private val SURFACES =
         NearbySurface(PantopusIcon.Briefcase, "Tasks", "Small jobs for the people next door", LaunchFeature.OPEN_GIGS),
     )
 
+/**
+ * "Invite your neighbors" on the Neighborhood segment: the /start funnel, as on iOS and web, so the person invited sees
+ * their own address answered, not an app pitch.
+ */
+const val NEIGHBORHOOD_INVITE_MESSAGE =
+    "See what's true about your address — records, risks, and who's verified nearby. Free, no account. " +
+        "https://pantopus.com/start"
+
 /** Launch cuts #3 (Marketplace) / #4 (Open Gigs): the surfaces the first launch still shows. */
 private val launchSurfaces: List<NearbySurface>
     get() = SURFACES.filter { LaunchFeatures.isEnabled(it.feature) }
 
-// Keep each destination callback explicit at this screen boundary.
-@Suppress("LongParameterList")
+/**
+ * The Nearby tab's two segments (founder decision 2026-10-20): Pulse on the left, where the tab opens, and
+ * Neighborhood, the density map. iOS: `NearbySegment`.
+ */
+enum class NearbySegment(val label: String, val key: String) {
+    Pulse("Pulse", "pulse"),
+    Neighborhood("Neighborhood", "neighborhood"),
+}
+
+/**
+ * The segment a link asked for (a feed or post link: Pulse; a `/nearby` link: Neighborhood), set before the Nearby tab
+ * opens and taken by [NearbyTab]. iOS: `NeighborhoodDoorStore.pendingSegment`.
+ */
+object NearbySegmentRequests {
+    private val pendingSegment = MutableStateFlow<NearbySegment?>(null)
+    val pending: StateFlow<NearbySegment?> = pendingSegment.asStateFlow()
+
+    fun request(segment: NearbySegment) {
+        pendingSegment.value = segment
+    }
+
+    fun take(): NearbySegment? = pendingSegment.getAndUpdate { null }
+}
+
+/**
+ * The Nearby tab while the Pulse redesign is off (founder decision 2026-10-20): no door page, but the Pulse |
+ * Neighborhood switch and the side menu over the two segments. [pulse] is the October 13 feed, built by the nav host
+ * with its routes; [neighborhood] the density window and meter ([NeighborhoodScreen]). Each segment keeps its saved
+ * state (the feed's place, filters and List / Map mode) while the other shows. Connections is in the side menu.
+ */
+@Composable
+fun NearbyTab(
+    onOpenMenu: () -> Unit,
+    pulse: @Composable () -> Unit,
+    neighborhood: @Composable () -> Unit,
+) {
+    var segment by rememberSaveable { mutableStateOf(NearbySegment.Pulse) }
+    val requested by NearbySegmentRequests.pending.collectAsStateWithLifecycle()
+    LaunchedEffect(requested) { NearbySegmentRequests.take()?.let { segment = it } }
+    val segments = rememberSaveableStateHolder()
+    Column(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg).testTag("nearbyTab")) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(start = Spacing.s4, end = Spacing.s1, top = Spacing.s1, bottom = Spacing.s1),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            SegmentedControl(
+                options = NearbySegment.entries,
+                selected = segment,
+                label = NearbySegment::label,
+                onSelect = { segment = it },
+                modifier = Modifier.weight(1f).testTag("nearbySegments"),
+                selectedTextColor = PantopusColors.appText,
+                fontSize = 14.sp,
+                optionTag = { "nearbySegment.${it.key}" },
+            )
+            NavigationMenuButton(onClick = onOpenMenu, testTag = "nearby.menu")
+        }
+        Box(modifier = Modifier.weight(1f)) {
+            segments.SaveableStateProvider(segment.key) {
+                when (segment) {
+                    NearbySegment.Pulse -> pulse()
+                    NearbySegment.Neighborhood -> neighborhood()
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The Neighborhood segment: the density window (the cells map), the meter and "Invite your neighbors", or "Set up a
+ * home" before there is one. The meter controls the local marketplace and tasks preview and preserves privacy floors.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NearbyScreen(
+fun NeighborhoodScreen(
     onClaim: () -> Unit,
-    onOpenPulse: () -> Unit,
-    onOpenBeacons: () -> Unit,
-    onOpenConnections: () -> Unit,
     onOpenMarketplace: () -> Unit,
     onOpenTasks: () -> Unit,
-    /** Ask Pantopus about posts nearby (AI assistant phase 1); null hides the button. */
-    onAsk: ((AIScreenContext) -> Unit)? = null,
+    onInvite: () -> Unit,
     viewModel: NearbyViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -111,17 +189,7 @@ fun NearbyScreen(
     Column(Modifier.fillMaxSize()) {
         refreshNotice?.let { RefreshFailedLine(it) }
         PullToRefreshBox(isRefreshing = refreshing, onRefresh = viewModel::refresh, modifier = Modifier.weight(1f)) {
-            NearbyContent(
-                state,
-                onClaim,
-                onOpenPulse,
-                onOpenBeacons,
-                onOpenConnections,
-                onOpenMarketplace,
-                onOpenTasks,
-                viewModel::refresh,
-                onAsk = onAsk?.let { ask -> { ask(AIScreenContext.nearby()) } },
-            )
+            NeighborhoodContent(state, onClaim, onOpenMarketplace, onOpenTasks, onInvite, viewModel::refresh)
         }
     }
 }
@@ -197,72 +265,26 @@ private fun QuietMeterCard(
     }
 }
 
-/** "Nearby", with Ask Pantopus at the end of the line when [onAsk] is set (AI assistant phase 1). */
-@Composable
-private fun NearbyTitle(onAsk: (() -> Unit)?) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            "Nearby",
-            fontSize = 22.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = (-0.4).sp,
-            color = PantopusColors.appText,
-            modifier = Modifier.weight(1f),
-        )
-        if (onAsk != null) {
-            IconButton(onClick = onAsk, modifier = Modifier.size(48.dp).testTag("nearbyAskPantopus")) {
-                PantopusIconImage(
-                    icon = PantopusIcon.Sparkles,
-                    contentDescription = "Ask Pantopus",
-                    size = 20.dp,
-                    tint = PantopusColors.magic,
-                )
-            }
-        }
-    }
-}
-
 // Keep each destination callback explicit at this screen boundary.
 @Suppress("LongParameterList")
 @Composable
-internal fun NearbyContent(
+internal fun NeighborhoodContent(
     state: NearbyUiState,
     onClaim: () -> Unit,
-    onOpenPulse: () -> Unit,
-    onOpenBeacons: () -> Unit,
-    onOpenConnections: () -> Unit,
     onOpenMarketplace: () -> Unit,
     onOpenTasks: () -> Unit,
+    onInvite: () -> Unit,
     onRetry: () -> Unit,
-    onAsk: (() -> Unit)? = null,
 ) {
     Column(
-        modifier = Modifier.fillMaxSize().background(PantopusColors.appBg).verticalScroll(rememberScrollState()).testTag("nearbyTab"),
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .background(PantopusColors.appBg)
+                .verticalScroll(rememberScrollState())
+                .padding(top = Spacing.s3)
+                .testTag("nearbyNeighborhood"),
     ) {
-        Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp)) {
-            NearbyTitle(onAsk)
-            // Launch cut #1 (Beacon): the copy drops Beacons for the first launch.
-            Text(
-                if (LaunchFeatures.beacon) {
-                    "Join conversations, find Beacons, and stay connected. Choose an area inside Pulse to browse local posts. " +
-                        "Following Beacons needs no home address."
-                } else {
-                    "Join conversations and stay connected. Choose an area inside Pulse to browse local posts."
-                },
-                fontSize = 13.5.sp,
-                lineHeight = 19.sp,
-                color = PantopusColors.appTextSecondary,
-                modifier = Modifier.padding(top = 4.dp),
-            )
-        }
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            SocialRow("Pulse", "Browse a chosen area or catch up with your connections", PantopusIcon.Rss, onOpenPulse)
-            // Launch cut #1 (Beacon): hidden for the first launch.
-            if (LaunchFeatures.beacon) {
-                SocialRow("Beacons", "Find public profiles and return to the people you follow", PantopusIcon.Radio, onOpenBeacons)
-            }
-            SocialRow("Connections", "Keep up with people you know", PantopusIcon.Users, onOpenConnections)
-        }
         when (val current = state) {
             NearbyUiState.Loading -> Placeholders()
             is NearbyUiState.Error -> ErrorState(message = current.message, onRetry = onRetry)
@@ -275,8 +297,7 @@ internal fun NearbyContent(
                         // Launch cuts #3/#4: the "open" banner, the meter (it counts toward the local
                         // marketplace and tasks) and the locked list go with the surfaces they announce.
                         when {
-                            launchSurfaces.isEmpty() -> Unit
-                            current.meter.unlocked -> {
+                            current.meter.unlocked && launchSurfaces.isNotEmpty() -> {
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                                     PantopusIconImage(
                                         PantopusIcon.Sparkles,
@@ -295,50 +316,30 @@ internal fun NearbyContent(
                                 }
                                 SurfaceRows(locked = false, onOpenMarketplace, onOpenTasks)
                             }
+                            current.meter.unlocked -> Unit
                             else -> {
-                                MeterCard(current.meter)
-                                Text(
-                                    "Local marketplace and tasks",
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = PantopusColors.appText,
+                                if (launchSurfaces.isNotEmpty()) MeterCard(current.meter)
+                                // The area is still forming or growing: ask the neighbors in (as iOS and web do).
+                                PrimaryButton(
+                                    title = "Invite your neighbors",
+                                    onClick = onInvite,
+                                    modifier = Modifier.fillMaxWidth().testTag("nearbyInvite"),
                                 )
-                                SurfaceRows(locked = true, onOpenMarketplace, onOpenTasks)
+                                if (launchSurfaces.isNotEmpty()) {
+                                    Text(
+                                        "Local marketplace and tasks",
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = PantopusColors.appText,
+                                    )
+                                    SurfaceRows(locked = true, onOpenMarketplace, onOpenTasks)
+                                }
                             }
                         }
                     }
                     Spacer(modifier = Modifier.height(96.dp))
                 }
         }
-    }
-}
-
-@Composable
-private fun SocialRow(
-    title: String,
-    subtitle: String,
-    icon: PantopusIcon,
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier =
-            Modifier.fillMaxWidth().placeCard().clickable(
-                onClick = onClick,
-            ).padding(16.dp).testTag("nearbySocial.${title.lowercase()}"),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(PantopusColors.primary600),
-            contentAlignment = Alignment.Center,
-        ) {
-            PantopusIconImage(icon, null, size = 20.dp, tint = PantopusColors.appSurface)
-        }
-        Column(Modifier.weight(1f)) {
-            Text(title, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = PantopusColors.appText)
-            Text(subtitle, fontSize = 13.sp, color = PantopusColors.appTextSecondary)
-        }
-        PantopusIconImage(PantopusIcon.ChevronRight, null, size = 18.dp, tint = PantopusColors.appTextSecondary)
     }
 }
 

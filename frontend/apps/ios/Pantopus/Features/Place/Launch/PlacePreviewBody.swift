@@ -120,6 +120,7 @@ struct PlacePreviewContent: View {
     let preview: PlacePreview
     /// "More with a free account": only for someone without an account.
     var showsLocked = true
+    var onOpenDetail: ((PlaceDetailGroup) -> Void)?
     /// The aha follow-up and every locked, verify or claim call to action.
     var onAction: () -> Void
     var onRetry: () -> Void
@@ -321,7 +322,7 @@ struct PlacePreviewContent: View {
                     ForEach(items, id: \.id) { env in
                         PlaceSectionView(
                             env: env,
-                            onOpen: nil,
+                            onOpen: detailAction(for: env),
                             onVerify: onAction,
                             onClaim: onAction,
                             onRetry: onRetry,
@@ -331,6 +332,12 @@ struct PlacePreviewContent: View {
                 }
             }
         }
+    }
+
+    private func detailAction(for env: PlaceSectionEnvelope) -> (() -> Void)? {
+        guard env.band == .a, let open = onOpenDetail,
+              let group = PlaceDetailGroup.forGroup(env.group), group.supportsSavedPlace else { return nil }
+        return { open(group) }
     }
 
     @ViewBuilder

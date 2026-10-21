@@ -5,6 +5,7 @@
 > - **What launches:** the October 13 Pulse, with four tabs (Place · Today · Nearby · Messages) and the feed that opens from Nearby, with its composer and post page. Nothing was removed.
 > - **What stays on regardless:** crime and suspicion Heads-ups stay refused, businesses don't start feed posts, and the privacy fixes made during the build stay on.
 > - **What is paused with the build:** the October 13 "no feature flag" decision and the October 14 "all of it in the launch build" decision below.
+> - **October 20 (founder):** with the key off, Nearby has no door page: it opens on two segments, Pulse (the October 13 feed) and Neighborhood (the density map and meter), and Connections is in the side menu. The side menu is on the top screen of every tab, hosted once by `RootTabView` (iOS) and `RootTabScreen` (Android). When the build resumes, the Pulse tab's header gets the menu button too (`NavigationMenuButton` on both apps); see NEXT_STEPS "Nearby and the side menu".
 >
 > **To resume:**
 > 1. Read the dated "Paused" note at the top of your stream's [status file](status/) and the handoff it names.

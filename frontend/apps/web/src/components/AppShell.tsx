@@ -296,6 +296,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const isIdentityRoute = showIdentityNavigation && (pathname.startsWith('/app/identity') || pathname.startsWith('/app/persona'));
   const isSettingsRoute = pathname.startsWith('/app/profile/settings') || pathname.startsWith('/app/settings');
   const isMyPostsRoute = pathname.startsWith('/app/my-pulse');
+  const isConnectionsRoute = pathname.startsWith('/app/connections');
 
   // ── Memoized inline style objects (avoid new identity per render) ──
   const topBarStyle = useMemo(() => ({ left: sidebarWidth }), [sidebarWidth]);
@@ -498,6 +499,9 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
           <div className="border-t border-app flex-shrink-0">
             {showIdentityNavigation && <SidebarItem icon={NavIcons.identity} label={identityCopy.profilesPrivacyTitle} active={isIdentityRoute} onClick={() => router.push('/app/identity')} showLabel={showLabels} />}
 
+            {/* Connections: in the menu, as in the apps' side menu (it left the Nearby page, founder decision 2026-10-20) */}
+            <SidebarItem icon={NavIcons.connections} label="Connections" active={isConnectionsRoute} onClick={() => router.push('/app/connections')} showLabel={showLabels} testId="sidebar-connections" />
+
             {/* Your posts and the ones you saved (the my-x screens left the main nav; native: drawer "My Pulse", You → "My posts") */}
             <SidebarItem icon={NavIcons.myPulse} label="My posts" active={isMyPostsRoute} onClick={() => router.push('/app/my-pulse')} showLabel={showLabels} testId="sidebar-my-posts" />
 
@@ -561,6 +565,16 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
                   showLabel
                 />
               )}
+              <SidebarItem
+                icon={NavIcons.connections}
+                label="Connections"
+                active={isConnectionsRoute}
+                onClick={() => {
+                  router.push('/app/connections');
+                  sidebarDispatch({ type: 'SET_MOBILE_OPEN', value: false });
+                }}
+                showLabel
+              />
               <SidebarItem
                 icon={NavIcons.myPulse}
                 label="My posts"
@@ -725,7 +739,7 @@ export function PersonalSidebarContent({ currentPath, showLabels, chatUnread, on
   }, [router, queryClient]);
 
   const prefetchNearby = useCallback(() => {
-    router.prefetch('/app/nearby');
+    router.prefetch('/app/feed');
   }, [router]);
 
   // Messages — the conversation list (the mailbox too, while Mailbox is on).
@@ -764,7 +778,8 @@ export function PersonalSidebarContent({ currentPath, showLabels, chatUnread, on
           (deep links resolve) but leave the nav. */}
       <SidebarItem icon={NavIcons.place} label="Place" active={startsWith('/app/place') || isActive('/app/hub')} onClick={() => go('/app/place')} onPrefetch={prefetchPlace} showLabel={showLabels} accent="home" testId="sidebar-place" />
       <SidebarItem icon={NavIcons.today} label="Today" active={startsWith('/app/today') || startsWith('/app/hub/today')} onClick={() => go('/app/today')} onPrefetch={prefetchToday} showLabel={showLabels} testId="sidebar-today" />
-      <SidebarItem icon={NavIcons.nearby} label="Nearby" active={startsWith('/app/nearby') || startsWith('/app/neighborhood') || startsWith('/app/feed') || startsWith('/app/beacons') || startsWith('/app/connections') || startsWith('/app/gigs') || startsWith('/app/marketplace')} onClick={() => go('/app/nearby')} onPrefetch={prefetchNearby} showLabel={showLabels} testId="sidebar-nearby" />
+      {/* Nearby opens on its Pulse segment (/app/feed); Neighborhood is /app/nearby (founder decision 2026-10-20). */}
+      <SidebarItem icon={NavIcons.nearby} label="Nearby" active={startsWith('/app/nearby') || startsWith('/app/neighborhood') || startsWith('/app/feed') || startsWith('/app/beacons') || startsWith('/app/gigs') || startsWith('/app/marketplace')} onClick={() => go('/app/feed')} onPrefetch={prefetchNearby} showLabel={showLabels} testId="sidebar-nearby" />
       {launchFeatures.mailbox
         ? <SidebarItem icon={NavIcons.mail} label="Mail" active={startsWith('/app/mailbox') || startsWith('/app/chat')} onClick={() => go('/app/mailbox?scope=personal')} onPrefetch={prefetchMail} showLabel={showLabels} count={chatUnread} testId="sidebar-mail" />
         : <SidebarItem icon={NavIcons.messages} label="Messages" active={startsWith('/app/chat')} onClick={() => go('/app/chat')} onPrefetch={prefetchMail} showLabel={showLabels} count={chatUnread} testId="sidebar-mail" />}

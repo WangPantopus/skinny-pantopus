@@ -17,14 +17,30 @@ internal fun currentGigDetail(
             statusPill = currentGigStatus(gig, content.statusPill),
             dock = currentGigDock(content.dock, gig, viewer, canDeliver, canTip),
         ),
+        gig,
+        viewer,
     )
 
-/** Launch cut #4 (Open Gigs): a task's detail shows no bids, bid counts or "Be the first to bid". */
-private fun launchScopedGigDetail(content: ContentDetailContent): ContentDetailContent {
+/**
+ * Launch cut #4 (Open Gigs): a task's detail shows no bids, bid counts or "Be the first to bid", and on an open task
+ * nobody but the poster gets a dock (no bid, no accept), as on iOS. A business's owner and staff reach this view.
+ */
+private fun launchScopedGigDetail(
+    content: ContentDetailContent,
+    gig: GigDto,
+    viewer: String?,
+): ContentDetailContent {
     if (LaunchFeatures.openGigs) return content
+    val stranger = gig.status?.lowercase() == "open" && (viewer == null || viewer != gig.userId)
     return content.copy(
         statusPill = content.statusPill?.let { pill -> if (pill.label.startsWith("Open · ")) pill.copy(label = "Open") else pill },
         modules = content.modules.filterNot { it is ContentDetailModule.Bids || it.id == "be-first" },
+        dock =
+            if (stranger) {
+                ContentDetailDock(primary = ContentDetailDockButton("Not available", PantopusIcon.Lock, enabled = false))
+            } else {
+                content.dock
+            },
     )
 }
 
