@@ -1213,6 +1213,15 @@ public struct HubTabRoot: View {
         case let .businessOwner(businessId):
             path.append(.businessOwner(businessId: businessId))
             _ = router.consume()
+        case let .businessConversation(businessId, roomId):
+            // A business inbox notice: the owner view underneath, so Back
+            // lands on the business, then the thread acting as the business.
+            _ = router.consume()
+            path.append(.businessOwner(businessId: businessId))
+            Task { @MainActor in
+                let thread = await Self.businessThread(businessId: businessId, roomId: roomId)
+                path.append(.chatConversation(thread))
+            }
         case .viewAs:
             path.append(.viewAs)
             _ = router.consume()
@@ -1444,6 +1453,28 @@ public struct HubTabRoot: View {
         let parts = name.split(separator: " ").prefix(2)
         let joined = parts.compactMap { $0.first.map(String.init) }.joined().uppercased()
         return joined.isEmpty ? "··" : joined
+    }
+
+    /// A business inbox notice names only the business and the room. The
+    /// thread is headed with the room's member who isn't the business, as
+    /// its inbox row is; "Conversation" when the room can't be read (the
+    /// thread then shows its own error).
+    private static func businessThread(businessId: String, roomId: String) async -> InboxConversationDestination {
+        let detail = try? await APIClient.shared.request(
+            ChatEndpoints.room(roomId: roomId, asBusinessUserId: businessId), as: ChatRoomDetailResponse.self
+        )
+        let name = detail?.room.participants?
+            .first { $0.userId != nil && $0.userId != businessId }?
+            .user?.displayName
+        let displayName = name.flatMap { $0.isEmpty ? nil : $0 } ?? "Conversation"
+        return InboxConversationDestination(
+            mode: .room(id: roomId),
+            displayName: displayName,
+            initials: initials(from: displayName),
+            identityKind: nil,
+            verified: false,
+            asBusinessUserId: businessId
+        )
     }
 
     #if DEBUG
