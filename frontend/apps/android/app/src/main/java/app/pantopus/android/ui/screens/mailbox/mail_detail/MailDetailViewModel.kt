@@ -90,7 +90,10 @@ data class MailDetailContent(
     val senderTypeLabel: String,
     val carrierLine: String,
     val senderInitials: String,
+    /** Who the sender card opens: the person's profile, or the business's page when [senderIsBusiness]. */
     val senderUserId: String?,
+    /** The letter was sent as a business; [senderUserId] is the business's id. */
+    val senderIsBusiness: Boolean = false,
     val title: String,
     val excerpt: String?,
     val referenceLabel: String,
@@ -981,12 +984,14 @@ class MailDetailViewModel
                 val trust = MailTrust.fromRaw(detail.senderTrust)
                 val senderDisplayName = resolveSenderName(detail)
                 val senderMeta = MadeUpUsername.handle(detail.sender?.username) ?: detail.senderAddress
+                val businessLetter = sentAsBusiness(detail)
                 val senderTypeLabel =
                     senderTypeLabel(
                         category = category,
                         sender = detail.sender,
                         businessName = detail.senderBusinessName,
                         senderTrust = detail.senderTrust,
+                        sentAsBusiness = businessLetter,
                     )
                 val carrierLine = "via ${carrierLabel(detail.`object`)}"
                 val referenceLabel = referenceLabel(detail.`object`, detail.id)
@@ -1013,7 +1018,10 @@ class MailDetailViewModel
                     senderTypeLabel = senderTypeLabel,
                     carrierLine = carrierLine,
                     senderInitials = makeInitials(senderDisplayName),
-                    senderUserId = detail.sender?.id,
+                    // A letter sent as a business comes with the business as its sender (its id, or none on
+                    // letters stored before it was recorded).
+                    senderUserId = if (businessLetter) detail.senderEntityId ?: detail.sender?.id else detail.sender?.id,
+                    senderIsBusiness = businessLetter,
                     title = title,
                     excerpt = excerpt,
                     referenceLabel = referenceLabel,
@@ -1217,15 +1225,25 @@ class MailDetailViewModel
                 sender: MailDetail.Sender?,
                 businessName: String?,
                 senderTrust: String?,
+                // A letter sent as a business reads as the business's, not a Pantopus user's.
+                sentAsBusiness: Boolean = false,
             ): String =
                 when {
-                    sender != null -> "Pantopus user"
-                    businessName != null && senderTrust in VERIFIED_SENDER_TRUST -> "Verified sender"
-                    businessName != null -> "Business"
+                    sender != null && !sentAsBusiness -> "Pantopus user"
+                    (businessName != null || sentAsBusiness) && senderTrust in VERIFIED_SENDER_TRUST -> "Verified sender"
+                    businessName != null || sentAsBusiness -> "Business"
                     category.detailTrust == MailDetailTrust.Warning -> "Action notice"
                     else -> "Mail sender"
                 }
 
             private val VERIFIED_SENDER_TRUST = setOf("verified_gov", "verified_utility", "verified_business")
+
+            /**
+             * The server's `sentAsBusiness` (`backend/utils/mailSenderView.js`): the letter names the business it
+             * was sent as, or (letters stored before that) carries a business name.
+             */
+            @JvmStatic
+            fun sentAsBusiness(detail: MailDetail): Boolean =
+                !detail.senderEntityId.isNullOrEmpty() || !detail.senderBusinessName.isNullOrBlank()
         }
     }

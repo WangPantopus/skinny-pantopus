@@ -398,6 +398,7 @@ public enum HubRoute: Hashable {
     /// W4 — a Place group-detail page (Today / Your home / Risk / Block /
     /// Money / Civic / Identity), tapped through from a dashboard card.
     case placeDetail(homeId: String, group: PlaceDetailGroup)
+    case savedPlaceDetail(savedPlaceId: String, group: PlaceDetailGroup)
     /// W4 — the full Today's Pulse signal stream (from the dashboard hero).
     case placePulse(homeId: String)
     /// Wedge v2 §2 — the privacy mirror: this home as a neighbor sees it.
@@ -535,10 +536,6 @@ public struct HubTabRoot: View {
     @State private var modalRoute: HubModalRoute?
     /// P6.6 — "Find people" → contacts picker → invite share.
     @State private var showFindPeople = false
-    /// §1C-b — context-aware navigation drawer, opened from the Hub menu
-    /// button (repurposed from "open Settings"). Settings now lives as a row
-    /// inside the drawer.
-    @State private var showNavDrawer = false
     @State private var savedPlaceMapFocus: ExploreMapFocus?
     /// Identity Center presented when the drawer's context pill is tapped
     /// (LAUNCHER / Option A switching path).
@@ -577,11 +574,6 @@ public struct HubTabRoot: View {
 
     private var currentUserId: String {
         if case let .signedIn(user) = auth.state { return user.id }
-        return ""
-    }
-
-    private var currentUserName: String {
-        if case let .signedIn(user) = auth.state { return user.displayName ?? "" }
         return ""
     }
 
@@ -736,6 +728,7 @@ public struct HubTabRoot: View {
             // Cross-tab dispatch may select this tab *after* the pending
             // destination landed — re-attempt once ownership arrives.
             consumeDeepLinkIfNeeded(pending: router.pending)
+            consumeMenuActionIfNeeded()
         }
         .task(id: rootTabs.selected) {
             // Let the NavigationStack install its initial binding before
@@ -746,6 +739,7 @@ public struct HubTabRoot: View {
             navigationReady = true
             consumeAddHomeRequestIfNeeded()
             consumeDeepLinkIfNeeded(pending: router.pending)
+            consumeMenuActionIfNeeded()
             if rootTabs.selected == owningTab { await resolvePlaceRoot() }
         }
         .fullScreenCover(item: $modalRoute) { item in
@@ -753,7 +747,9 @@ public struct HubTabRoot: View {
         }
         .sheet(item: $systemSheet) { request in request.makeView() }
         .findPeopleSheet(isPresented: $showFindPeople)
-        .overlay { navigationDrawerOverlay }
+        // The side menu is `RootTabView`'s, over every tab: its choices
+        // arrive here, where its screens live.
+        .onChange(of: rootTabs.pendingMenuAction) { _, _ in consumeMenuActionIfNeeded() }
         .sheet(
             isPresented: $navDrawerIdentityCenter,
             onDismiss: { openPendingAudienceProfile() },
@@ -903,26 +899,25 @@ public struct HubTabRoot: View {
         }
     }
 
-    /// §1C-b — the context-aware navigation drawer. The Hub menu is always the
-    /// personal context (home / business dashboards adopt the drawer with their
-    /// own context); the pill's name opens the profile (the You cover, also
-    /// reachable from the Place dashboard, which hides the Hub avatar), its
-    /// Switch chip opens the Identity Center, and rows push existing routes via
-    /// `route(forDrawer:)`.
-    private var navigationDrawerOverlay: some View {
-        NavigationDrawerView(
-            viewModel: NavigationDrawerViewModel(context: .personal(name: currentUserName)),
-            isPresented: $showNavDrawer,
-            onSelect: { destination in
-                if let route = Self.route(forDrawer: destination, context: .personal(name: "")) {
-                    path.append(route)
-                }
-            },
-            // Launch cut #2 (Personas): the drawer hides its identity Switch.
-            onOpenIdentityCenter: { navDrawerIdentityCenter = LaunchFeatures.personas },
-            onBackToHub: { Task { @MainActor in path.removeAll { _ in true } } },
-            onOpenProfile: { onOpenProfile() }
-        )
+    /// §1C-b — the side menu's choices (the navigation drawer, which
+    /// `RootTabView` hosts over every tab since 2026-10-20, founder decision).
+    /// The menu is the personal context; its rows push existing routes via
+    /// `route(forDrawer:)` on top of this stack, "Back to Place" returns to
+    /// its root, and the Switch chip opens the Identity Center.
+    private func consumeMenuActionIfNeeded() {
+        guard mode == .hub, navigationReady, rootTabs.selected == .place,
+              let action = rootTabs.pendingMenuAction else { return }
+        rootTabs.pendingMenuAction = nil
+        switch action {
+        case let .open(destination):
+            if let route = Self.route(forDrawer: destination, context: .personal(name: "")) {
+                path.append(route)
+            }
+        case .backToPlace:
+            path.removeAll { _ in true }
+        case .identityCenter:
+            navDrawerIdentityCenter = LaunchFeatures.personas
+        }
     }
 
     /// Maps a drawer destination onto an existing `HubRoute`. Destinations with
@@ -1219,6 +1214,15 @@ public struct HubTabRoot: View {
         case let .businessOwner(businessId):
             path.append(.businessOwner(businessId: businessId))
             _ = router.consume()
+        case let .businessConversation(businessId, roomId):
+            // A business inbox notice: the owner view underneath, so Back
+            // lands on the business, then the thread acting as the business.
+            _ = router.consume()
+            path.append(.businessOwner(businessId: businessId))
+            Task { @MainActor in
+                let thread = await Self.businessThread(businessId: businessId, roomId: roomId)
+                path.append(.chatConversation(thread))
+            }
         case .viewAs:
             path.append(.viewAs)
             _ = router.consume()
@@ -1298,9 +1302,10 @@ public struct HubTabRoot: View {
                 unreadCount: placeUnreadCount,
                 scrollToTop: rootTabs.placeReselectedAtRoot,
                 onOpenNotifications: { path.append(.notifications) },
-                onOpenMenu: { showNavDrawer = true },
+                onOpenMenu: { rootTabs.showsNavigationMenu = true },
                 onSetUpHome: { path.append(.addHomeAt(address: place.label)) },
-                onLookUpAddress: { path.append(.savePlace) }
+                onLookUpAddress: { path.append(.savePlace) },
+                onOpenDetail: { path.append(.savedPlaceDetail(savedPlaceId: place.id, group: $0)) }
             )
             .id(place.id)
             .onAppear { Self.placeRootViewed("saved_place") }
@@ -1314,7 +1319,7 @@ public struct HubTabRoot: View {
                 embedded: PlaceLaunchEmbedding(
                     unreadCount: placeUnreadCount,
                     onOpenNotifications: { path.append(.notifications) },
-                    onOpenMenu: { showNavDrawer = true }
+                    onOpenMenu: { rootTabs.showsNavigationMenu = true }
                 )
             )
             .accessibilityElement(children: .contain)
@@ -1363,7 +1368,7 @@ public struct HubTabRoot: View {
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     PlaceBellButton(unreadCount: placeUnreadCount) { path.append(.notifications) }
-                    Button { showNavDrawer = true } label: {
+                    Button { rootTabs.showsNavigationMenu = true } label: {
                         Icon(.menu, size: 20, color: Theme.Color.appText)
                     }
                     .accessibilityLabel("Menu")
@@ -1450,6 +1455,28 @@ public struct HubTabRoot: View {
         let parts = name.split(separator: " ").prefix(2)
         let joined = parts.compactMap { $0.first.map(String.init) }.joined().uppercased()
         return joined.isEmpty ? "··" : joined
+    }
+
+    /// A business inbox notice names only the business and the room. The
+    /// thread is headed with the room's member who isn't the business, as
+    /// its inbox row is; "Conversation" when the room can't be read (the
+    /// thread then shows its own error).
+    private static func businessThread(businessId: String, roomId: String) async -> InboxConversationDestination {
+        let detail = try? await APIClient.shared.request(
+            ChatEndpoints.room(roomId: roomId, asBusinessUserId: businessId), as: ChatRoomDetailResponse.self
+        )
+        let name = detail?.room.participants?
+            .first { $0.userId != nil && $0.userId != businessId }?
+            .user?.displayName
+        let displayName = name.flatMap { $0.isEmpty ? nil : $0 } ?? "Conversation"
+        return InboxConversationDestination(
+            mode: .room(id: roomId),
+            displayName: displayName,
+            initials: initials(from: displayName),
+            identityKind: nil,
+            verified: false,
+            asBusinessUserId: businessId
+        )
     }
 
     #if DEBUG
@@ -2170,6 +2197,9 @@ public struct HubTabRoot: View {
                 onOpenSenderProfile: { userId in
                     Task { @MainActor in push(.publicProfile(userId: userId)) }
                 },
+                onOpenSenderBusiness: { businessId in
+                    Task { @MainActor in push(.businessProfile(businessId: businessId)) }
+                },
                 onOpenExtractedTask: { sourceMailId in
                     // A17.12 — the certified-notice "view task" affordance
                     // opens the mail-derived task keyed by its source mail.
@@ -2310,9 +2340,9 @@ public struct HubTabRoot: View {
                 onEdit: { id in
                     Task { @MainActor in push(.editPost(postId: id)) }
                 },
-                onOpenBusiness: { username in
-                    // "Nearby Providers" row → `/business/:username`.
-                    Task { @MainActor in push(.businessProfile(businessId: username)) }
+                onOpenBusiness: { business in
+                    // A "Nearby Providers" row (username) or a business author (id) → `/business/:key`.
+                    Task { @MainActor in push(.businessProfile(businessId: business)) }
                 }
             )
             .toolbar(.hidden, for: .navigationBar)
@@ -3420,6 +3450,10 @@ public struct HubTabRoot: View {
             )
         case let .placeDashboard(homeId):
             placeDashboard(homeId: homeId, isActive: path.last == route && rootTabs.selected == owningTab)
+        case let .savedPlaceDetail(savedPlaceId, group):
+            PlaceDetailView(
+                viewModel: PlaceDetailViewModel(homeId: "", group: group, savedPlaceId: savedPlaceId)
+            ) { pop() }
         case let .placeDetail(homeId, group):
             PlaceDetailView(
                 viewModel: PlaceDetailViewModel(
@@ -3530,7 +3564,7 @@ public struct HubTabRoot: View {
             isActive: isActive,
             isRoot: isRoot,
             scrollToTop: isRoot ? rootTabs.placeReselectedAtRoot : nil
-        ) { showNavDrawer = true }
+        ) { rootTabs.showsNavigationMenu = true }
     }
 
     /// A Place link. A Home the person can open becomes the root (the named

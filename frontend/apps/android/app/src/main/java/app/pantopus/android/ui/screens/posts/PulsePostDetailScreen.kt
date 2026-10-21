@@ -503,6 +503,7 @@ fun PulsePostDetailLoadedContent(
                 if (content.post.isRemovedByModerator) {
                     RemovedPostNotice(modifier = Modifier.padding(horizontal = Spacing.s4))
                 }
+                val businessAuthor = content.post.creator?.takeIf { it.identityType == "business" }
                 PostAuthorHeader(
                     displayName = content.authorDisplayName,
                     avatarUrl = content.authorAvatarUrl,
@@ -510,7 +511,13 @@ fun PulsePostDetailLoadedContent(
                     identity = content.authorIdentity,
                     timeAndLocality = content.timeAndLocality,
                     intent = content.intent,
-                    onAvatarTap = { onOpenProfile(content.post.userId) },
+                    // A business author opens its page, and only while it has a published one (the web links none).
+                    onAvatarTap =
+                        if (businessAuthor != null) {
+                            businessAuthor.businessPageId?.let { businessId -> { onOpenBusiness(businessId) } }
+                        } else {
+                            { onOpenProfile(content.post.userId) }
+                        },
                 )
                 content.status?.let { status ->
                     PostStatusPill(

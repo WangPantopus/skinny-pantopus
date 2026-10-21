@@ -48,6 +48,7 @@ import app.pantopus.android.BuildConfig
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.core.routing.PlacePendingStore
 import app.pantopus.android.data.api.models.place.BallotGovernments
+import app.pantopus.android.data.api.models.place.PlaceBand
 import app.pantopus.android.data.api.models.place.PlaceGroup
 import app.pantopus.android.data.api.models.place.PlaceMoneyLead
 import app.pantopus.android.data.api.models.place.PlacePreview
@@ -62,6 +63,7 @@ import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.screens.ballot.BallotGovernmentsSheet
 import app.pantopus.android.ui.screens.ballot.BallotPlacement
 import app.pantopus.android.ui.screens.ballot.BallotSeasonBlock
+import app.pantopus.android.ui.screens.place.PlaceDetailGroup
 import app.pantopus.android.ui.screens.place.PlaceRootBar
 import app.pantopus.android.ui.screens.place.PlaceSectionView
 import app.pantopus.android.ui.screens.place.components.PlaceChip
@@ -831,6 +833,7 @@ internal fun PlacePreviewFindings(
     onRetry: () -> Unit,
     retrying: Boolean,
     modifier: Modifier = Modifier,
+    onOpenDetail: ((PlaceDetailGroup) -> Unit)? = null,
 ) {
     // Ballot P0 (ballot_p0): the "Your ballot" card under "This season", in
     // place of the election row, as on the Place dashboard.
@@ -855,7 +858,7 @@ internal fun PlacePreviewFindings(
         // older backends send only `free` and keep the three tiles.
         val sections = preview.sections.orEmpty()
         val shown = if (ballot != null) sections.filter { it.sectionId != PlaceSectionId.CIVIC_ELECTION } else sections
-        if (sections.isNotEmpty()) PreviewSections(shown, onFollowUp, onRetry, retrying)
+        if (sections.isNotEmpty()) PreviewSections(shown, onFollowUp, onRetry, retrying, onOpenDetail)
         preview.free?.takeIf { sections.isEmpty() }?.let { free ->
             PlaceGroupLabel(text = "Risk & readiness", modifier = Modifier.padding(top = 18.dp))
             PlaceSectionCard(
@@ -900,6 +903,7 @@ private fun PreviewSections(
     onCreateAccount: () -> Unit,
     onRetry: () -> Unit,
     retrying: Boolean,
+    onOpenDetail: ((PlaceDetailGroup) -> Unit)?,
 ) {
     PREVIEW_GROUP_ORDER.forEach { (group, label) ->
         val items = sections.filter { it.groupId == group }
@@ -909,7 +913,12 @@ private fun PreviewSections(
                 items.forEach { env ->
                     PlaceSectionView(
                         env = env,
-                        onOpen = null,
+                        onOpen =
+                            onOpenDetail?.let { open ->
+                                PlaceDetailGroup.forGroup(env.groupId)
+                                    ?.takeIf { it.supportsSavedPlace && env.band == PlaceBand.A }
+                                    ?.let { detail -> { open(detail) } }
+                            },
                         onVerify = onCreateAccount,
                         onClaim = onCreateAccount,
                         onRetry = onRetry,

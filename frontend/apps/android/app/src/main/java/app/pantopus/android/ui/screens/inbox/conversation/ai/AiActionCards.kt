@@ -24,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -259,21 +260,31 @@ private fun AiCardButtons(
                     modifier = Modifier.testTag("chatAIActionError"),
                 )
             }
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-                actions.forEach { action ->
-                    PantopusButton(
-                        title = action.label,
-                        kind =
-                            when (action.style) {
-                                "secondary" -> PantopusButtonKind.Ghost
-                                "destructive" -> PantopusButtonKind.Destructive
-                                else -> PantopusButtonKind.Primary
-                            },
-                        onClick = { onAction(scope, action) },
-                        modifier = Modifier.weight(1f).testTag("chatAIActionButton_${action.id}"),
-                        isLoading = (run as? ChatAICardRun.Running)?.actionId == action.id,
-                        isEnabled = !card.isRunning,
-                    )
+
+            @Composable
+            fun button(
+                action: ChatAICardAction,
+                modifier: Modifier,
+            ) = PantopusButton(
+                title = action.label,
+                kind =
+                    when (action.style) {
+                        "secondary" -> PantopusButtonKind.Ghost
+                        "destructive" -> PantopusButtonKind.Destructive
+                        else -> PantopusButtonKind.Primary
+                    },
+                onClick = { onAction(scope, action) },
+                modifier = modifier.testTag("chatAIActionButton_${action.id}"),
+                isLoading = (run as? ChatAICardRun.Running)?.actionId == action.id,
+                isEnabled = !card.isRunning,
+            )
+            if (stacksButtons(actions, LocalDensity.current.fontScale)) {
+                Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    actions.forEach { button(it, Modifier.fillMaxWidth()) }
+                }
+            } else {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+                    actions.forEach { button(it, Modifier.weight(1f)) }
                 }
             }
         }
@@ -322,6 +333,9 @@ private fun actionCardIcon(card: String): PantopusIcon =
         card.startsWith("plan_") -> PantopusIcon.CalendarCheck
         card == "post_solve" -> PantopusIcon.CheckCircle
         card == "home_task" -> PantopusIcon.ListChecks
+        card == "home_task_update" -> PantopusIcon.CheckCheck
+        card == "home_system" -> PantopusIcon.Wrench
+        card.startsWith("home_") -> PantopusIcon.Home
         card == "notification_settings" -> PantopusIcon.Bell
         else -> PantopusIcon.Sparkles
     }
@@ -337,9 +351,31 @@ private fun actionCardLabel(card: String): String =
         "post_reply" -> "Reply"
         "post_solve" -> "Mark solved"
         "home_task" -> "Reminder"
+        "home_task_update" -> "Task update"
+        "home_system" -> "Home system"
         "notification_settings" -> "Notifications"
-        else -> "Pantopus"
+        // A nudge with nothing to do but "Fewer like this" (AI assistant phase 2 §3.6).
+        "suggestion" -> "Suggestion"
+        else -> if (card.startsWith("home_")) "Home" else "Pantopus"
     }
+
+/** The longest label that sits beside another button on a card; a longer one wraps there, so the buttons stack. */
+private const val SIDE_BY_SIDE_LABEL_MAX = 12
+
+/** From this font scale on, two buttons on a card stack too. */
+private const val LARGE_TEXT_SCALE = 1.3f
+
+/**
+ * Two short buttons share a row. Three or more (a task's Done, new date and assign), a label too long to sit beside
+ * another ("Fewer like this"), or large text stack, so none is squeezed.
+ */
+private fun stacksButtons(
+    actions: List<ChatAICardAction>,
+    fontScale: Float,
+): Boolean {
+    if (actions.size != 2) return actions.size > 2
+    return fontScale > LARGE_TEXT_SCALE || actions.any { it.label.length > SIDE_BY_SIDE_LABEL_MAX }
+}
 
 /** Buttons to screens of the app under an assistant reply (contract section 5). */
 @Composable

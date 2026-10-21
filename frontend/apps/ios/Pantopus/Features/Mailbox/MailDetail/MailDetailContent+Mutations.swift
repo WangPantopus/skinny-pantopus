@@ -145,6 +145,7 @@ extension MailDetailContent {
             carrierLine: content.carrierLine,
             senderInitials: content.senderInitials,
             senderUserId: content.senderUserId,
+            senderIsBusiness: content.senderIsBusiness,
             title: content.title,
             excerpt: content.excerpt,
             referenceLabel: content.referenceLabel,

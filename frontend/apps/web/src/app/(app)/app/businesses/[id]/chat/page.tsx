@@ -23,13 +23,14 @@ export default function BusinessChatListPage() {
   const businessId = String(params.id || '');
 
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // A failed read is not "No business messages yet": a role that can't act for the business gets a 403.
+  const [loadFailure, setLoadFailure] = useState<'forbidden' | 'failed' | null>(null);
   const [rooms, setRooms] = useState<BusinessChatRoom[]>([]);
   const [search, setSearch] = useState('');
 
   const load = async () => {
     try {
-      setError(null);
+      setLoadFailure(null);
       setLoading(true);
       const resp = await api.chat.getBusinessChatRooms(businessId, { limit: 100 });
       const list = Array.isArray(resp?.rooms) ? (resp.rooms as BusinessChatRoom[]) : [];
@@ -43,8 +44,12 @@ export default function BusinessChatListPage() {
         })
       );
     } catch (e: unknown) {
-      console.error('Failed to load business chats', e);
-      setError(e instanceof Error ? e.message : 'Failed to load business chats');
+      if ((e as { statusCode?: number } | null)?.statusCode === 403) {
+        setLoadFailure('forbidden');
+      } else {
+        console.error('Failed to load business chats', e);
+        setLoadFailure('failed');
+      }
     } finally {
       setLoading(false);
     }
@@ -85,7 +90,8 @@ export default function BusinessChatListPage() {
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
         <PageHeader
           title="Business Messages"
-          subtitle={totalUnread > 0 ? `${totalUnread} unread` : `${rooms.length} conversations`}
+          subtitle={loading || loadFailure ? undefined : totalUnread > 0 ? `${totalUnread} unread`
+            : `${rooms.length} ${rooms.length === 1 ? 'conversation' : 'conversations'}`}
           ctaLabel="Refresh"
           ctaOnClick={load}
         >
@@ -99,12 +105,6 @@ export default function BusinessChatListPage() {
       </div>
 
       <main className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 pb-6">
-        {error && (
-          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-            {error}
-          </div>
-        )}
-
         {loading ? (
           <div className="space-y-3">
             {[1, 2, 3].map((i) => (
@@ -118,6 +118,19 @@ export default function BusinessChatListPage() {
                 </div>
               </div>
             ))}
+          </div>
+        ) : loadFailure ? (
+          <div className="bg-surface rounded-2xl border border-app shadow-sm p-10 text-center mt-4">
+            <div className="text-app font-semibold text-lg">
+              {loadFailure === 'forbidden' ? "Your role can't open the business inbox" : "Couldn't load business messages"}
+            </div>
+            {loadFailure === 'forbidden' ? (
+              <div className="text-sm text-app-text-secondary mt-1">The business owner can change your role.</div>
+            ) : (
+              <button onClick={() => void load()} className="text-sm text-violet-600 hover:underline mt-2">
+                Try again
+              </button>
+            )}
           </div>
         ) : rooms.length === 0 ? (
           <div className="bg-surface rounded-2xl border border-app shadow-sm p-10 text-center mt-4">

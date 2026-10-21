@@ -1219,6 +1219,9 @@ public struct YouTabRoot: View {
                 onOpenSenderProfile: { userId in
                     Task { @MainActor in path.append(.publicProfile(userId: userId)) }
                 },
+                onOpenSenderBusiness: { businessId in
+                    Task { @MainActor in path.append(.businessProfile(businessId: businessId)) }
+                },
                 onOpenExtractedTask: { sourceMailId in
                     // A17.12 — the certified-notice "view task" affordance
                     // opens the mail-derived task keyed by its source mail.
@@ -1595,9 +1598,9 @@ public struct YouTabRoot: View {
                 onEdit: { id in
                     Task { @MainActor in path.append(.editPost(postId: id)) }
                 },
-                onOpenBusiness: { username in
-                    // "Nearby Providers" row → `/business/:username`.
-                    Task { @MainActor in path.append(.businessProfile(businessId: username)) }
+                onOpenBusiness: { business in
+                    // A "Nearby Providers" row (username) or a business author (id) → `/business/:key`.
+                    Task { @MainActor in path.append(.businessProfile(businessId: business)) }
                 }
             )
         case .myBids:

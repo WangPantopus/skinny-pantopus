@@ -21,6 +21,7 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
 import app.pantopus.android.core.routing.DeepLinkRouter
+import app.pantopus.android.core.routing.WebLinkFallback
 import app.pantopus.android.core.security.AppLockManager
 import app.pantopus.android.core.security.SecureWindowController
 import app.pantopus.android.data.analytics.PilotEvents
@@ -30,6 +31,7 @@ import app.pantopus.android.data.auth.TokenStorage
 import app.pantopus.android.data.chats.ActiveChatThread
 import app.pantopus.android.data.plans.PlansFeature
 import app.pantopus.android.data.store.StoreSync
+import app.pantopus.android.push.ASSISTANT_RECIPIENT
 import app.pantopus.android.push.PushTokenSyncer
 import app.pantopus.android.push.ReminderActionReceiver
 import app.pantopus.android.ui.components.ToastController
@@ -48,7 +50,8 @@ import javax.inject.Inject
  * Navigation is entirely in-Compose via [PantopusNavHost]; incoming
  * deep-link intents get forwarded into [DeepLinkRouter] for the
  * RootTabScreen to consume — except the browser OAuth callback, which goes
- * to [OAuthSessionStore] instead.
+ * to [OAuthSessionStore] instead, and pantopus.com pages the app has no
+ * screen for, which open in the browser ([WebLinkFallback]).
  *
  * Declared `singleTask` in the manifest so a browser redirect resumes this
  * instance through [onNewIntent] rather than stacking a second copy.
@@ -227,8 +230,32 @@ class MainActivity : FragmentActivity() {
             OAuthSessionStore.deliver(uri)
             return
         }
-        if (forwardReminderAction(intent, uri)) return
+        if (forwardWebOnlyLink(intent, uri) || forwardReminderAction(intent, uri) || forwardAssistantNudge(intent, uri)) return
         DeepLinkRouter.handle(uri)
+    }
+
+    /**
+     * A pantopus.com page the app has no screen for opens in the browser, except on a
+     * relaunch from Recents, which is a return to the app. True when [uri] is such a page.
+     */
+    private fun forwardWebOnlyLink(
+        intent: Intent,
+        uri: Uri,
+    ): Boolean {
+        if (!WebLinkFallback.isWebOnly(uri)) return false
+        if (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY == 0) WebLinkFallback.open(this, uri)
+        return true
+    }
+
+    /** A brief or nudge opens only for the account it was sent to; signed out, it waits for that account's sign-in. */
+    private fun forwardAssistantNudge(
+        intent: Intent,
+        uri: Uri,
+    ): Boolean {
+        val recipient = intent.getStringExtra(ASSISTANT_RECIPIENT) ?: return false
+        intent.removeExtra(ASSISTANT_RECIPIENT)
+        DeepLinkRouter.handle(uri.toString(), expectedUserId = recipient)
+        return true
     }
 
     /**

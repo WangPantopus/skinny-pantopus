@@ -137,8 +137,9 @@ public enum EmergencyCardPDF {
         ]
 
         let renderer = UIGraphicsPDFRenderer(bounds: pageRect)
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("emergency-card-\(UUID().uuidString.prefix(8)).pdf")
+        // With the other private exports, so it goes at sign-out and at the next launch.
+        guard let directory = try? HomeDocumentTemporaryFiles.makeDirectory() else { return nil }
+        let url = directory.appendingPathComponent("emergency-card-\(UUID().uuidString.prefix(8)).pdf")
 
         do {
             try renderer.writePDF(to: url) { ctx in

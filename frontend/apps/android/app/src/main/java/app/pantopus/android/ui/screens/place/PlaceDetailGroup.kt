@@ -19,6 +19,8 @@ enum class PlaceDetailGroup(val slug: String, val title: String) {
     IDENTITY("identity", "Identity"),
     ;
 
+    val supportsSavedPlace: Boolean get() = this == TODAY || this == RISK || this == CIVIC
+
     /** The contract groups whose sections this detail page renders. */
     val groups: List<PlaceGroup>
         get() =

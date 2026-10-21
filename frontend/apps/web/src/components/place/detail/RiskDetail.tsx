@@ -237,7 +237,7 @@ function EnvironmentalHazardsCard({ data }: { data: PlaceEnvironmentalHazardsDat
                 <div className="text-[13.5px] font-semibold text-app-text truncate">{f.name}</div>
                 <div className="text-[12px] text-app-text-muted">{f.program}</div>
               </div>
-              <span className="text-[12.5px] text-app-text-secondary shrink-0">{f.distance_mi} mi</span>
+              {f.distance_mi != null ? <span className="text-[12.5px] text-app-text-secondary shrink-0">{f.distance_mi} mi</span> : null}
             </div>
           ))}
         </div>

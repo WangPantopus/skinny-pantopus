@@ -41,6 +41,7 @@ public struct ChatConversationView: View {
     @State private var attachmentsPresented = false
     @State private var photosPickerSelection: [PhotosPickerItem] = []
     @State private var photosPickerPresented = false
+    @State private var chatMediaPickerPresented = false
     @State private var cameraPresented = false
     @State private var documentImporterPresented = false
     @State private var gigPickerPresented = false
@@ -56,6 +57,8 @@ public struct ChatConversationView: View {
     @State private var bulkDeleteConfirmPresented = false
     /// Message awaiting the single-delete confirm.
     @State private var pendingDeleteId: String?
+    /// The assistant's "Delete conversation" awaiting its confirm.
+    @State private var aiDeleteConfirmPresented = false
     /// Photos shown in the full-screen viewer.
     @State private var viewerPhotos: ChatPhotoViewerItem?
     /// Gates the scroll-to-top pagination trigger: armed ~0.5s after the
@@ -139,6 +142,8 @@ public struct ChatConversationView: View {
                 onBack: onBack,
                 onOpenDetails: { detailsPresented = true },
                 onNewAIChat: { viewModel.startNewAIConversation() },
+                onDeleteAIChat: { aiDeleteConfirmPresented = true },
+                isDeletingAIChat: viewModel.isDeletingAIConversation,
                 onOpenProfile: headerProfileTap
             )
             if isSelecting {
@@ -269,7 +274,9 @@ public struct ChatConversationView: View {
             if UIImagePickerController.isSourceTypeAvailable(.camera) {
                 Button("Camera") { cameraPresented = true }
             }
-            Button("Photos") { photosPickerPresented = true }
+            Button("Photos and videos") {
+                if mode == .aiAssistant { photosPickerPresented = true } else { chatMediaPickerPresented = true }
+            }
             Button("Document") { documentImporterPresented = true }
             Button("Location") { Task { await viewModel.sendCurrentLocation() } }
             // Launch cuts #4 (Open gigs) / #3 (Marketplace): no task or listing shares.
@@ -292,6 +299,22 @@ public struct ChatConversationView: View {
         }
         .sheet(isPresented: $listingPickerPresented) {
             ChatShareListingPickerSheet(viewModel: viewModel) { listingPickerPresented = false }
+        }
+        .sheet(isPresented: $chatMediaPickerPresented) {
+            PulseMediaPicker(limit: max(1, 5 - viewModel.queuedAttachments.count)) { media, error in
+                for item in media {
+                    viewModel.queueAttachment(
+                        kind: (item.mimeType ?? "").hasPrefix("image/") ? .image : .document,
+                        filename: item.filename ?? "photo.jpg",
+                        mimeType: item.mimeType ?? "image/jpeg",
+                        data: item.data,
+                        liveVideo: item.liveVideo
+                    )
+                }
+                if let error { viewModel.actionFailure = error }
+                chatMediaPickerPresented = false
+            }
+            .interactiveDismissDisabled()
         }
         .photosPicker(
             isPresented: $photosPickerPresented,
@@ -363,6 +386,14 @@ public struct ChatConversationView: View {
             }
         } message: { _ in
             Text("Deleted messages are removed for everyone in this conversation.")
+        }
+        .alert("Delete this conversation?", isPresented: $aiDeleteConfirmPresented) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) {
+                Task { await viewModel.deleteAIConversations() }
+            }
+        } message: {
+            Text("Pantopus AI won\u{2019}t remember it. Any earlier chats with Pantopus AI are deleted too.")
         }
         .fullScreenCover(item: $viewerPhotos) { photos in
             MediaViewerView(
@@ -1660,6 +1691,10 @@ private struct ChatConversationHeader: View {
     var onOpenDetails: @MainActor () -> Void = {}
     /// The assistant's "New chat" (AI thread only).
     var onNewAIChat: @MainActor () -> Void = {}
+    /// The assistant's More menu: "Delete conversation" (AI thread only).
+    var onDeleteAIChat: @MainActor () -> Void = {}
+    /// True while that delete runs.
+    var isDeletingAIChat = false
     /// Opens the other person's profile from their avatar and name (person DMs only).
     var onOpenProfile: (@MainActor () -> Void)?
 
@@ -1798,7 +1833,7 @@ private struct ChatConversationHeader: View {
                 .accessibilityLabel("Conversation details")
             case .ai:
                 // A15.3 header actions: square-pen "New chat" then
-                // more-horizontal (decorative until it has actions).
+                // more-horizontal, whose menu deletes the conversation.
                 HStack(spacing: 2) {
                     Button {
                         onNewAIChat()
@@ -1810,9 +1845,21 @@ private struct ChatConversationHeader: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel("New chat")
                     .accessibilityIdentifier("chatAINewChat")
-                    Icon(.moreHorizontal, size: 18, color: Theme.Color.appTextStrong)
-                        .frame(width: 34, height: 34)
-                        .accessibilityHidden(true)
+                    Menu {
+                        Button(role: .destructive) {
+                            onDeleteAIChat()
+                        } label: {
+                            Label("Delete conversation", systemImage: "trash")
+                        }
+                        .accessibilityIdentifier("chatAIDeleteConversation")
+                    } label: {
+                        Icon(.moreHorizontal, size: 18, color: Theme.Color.appTextStrong)
+                            .frame(width: 34, height: 34)
+                            .contentShape(Rectangle())
+                    }
+                    .disabled(isDeletingAIChat)
+                    .accessibilityLabel("More options")
+                    .accessibilityIdentifier("chatAIMore")
                 }
             case .group:
                 Icon(.moreVertical, size: 18, color: Theme.Color.appText)
@@ -2738,6 +2785,26 @@ private struct ChatBubbleRow: View {
     }
 
     @ViewBuilder private var bubbleBody: some View {
+        if ChatAttachmentList.needsTypedViewer(content.attachments), content.lockedTier == nil || content.side == .outgoing {
+            bubbleContainer {
+                VStack(alignment: .leading, spacing: 8) {
+                    ChatAttachmentList(files: content.attachments, onOpenFile: onOpenAttachment)
+                    if let caption = attachmentCaption { textBody(caption) }
+                }
+            }
+        } else {
+            legacyBubbleBody
+        }
+    }
+
+    private var attachmentCaption: String? {
+        switch content.body {
+        case let .image(_, caption, _), let .attachment(_, _, _, _, caption): caption
+        default: nil
+        }
+    }
+
+    @ViewBuilder private var legacyBubbleBody: some View {
         switch content.body {
         case let .text(text):
             if Self.isEmojiOnly(text) {
@@ -3680,6 +3747,10 @@ private struct AttachmentTile: View {
             .accessibilityIdentifier("chatAttachmentRemove_\(attachment.id)")
         }
         .frame(width: 64, height: 64)
+        .overlay(alignment: .bottomLeading) {
+            if attachment
+                .liveVideo != nil { Text("LIVE").font(.caption2).padding(2).background(.black.opacity(0.6)).foregroundStyle(.white) }
+        }
         .accessibilityElement(children: .contain)
     }
 

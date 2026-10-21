@@ -125,6 +125,7 @@ public enum NotificationCategory: Sendable, Hashable {
         "comment": .reply,
         "chat": .reply,
         "chat_message": .reply,
+        "business_message": .reply,
         "dm": .reply,
         "mention": .mention,
         "follow": .mention,
