@@ -1,6 +1,6 @@
 # Saved-address public details
 
-October 20, 2026 · **Approved by the founder on October 20, 2026; implementation in progress.**
+October 20, 2026 · **Approved by the founder on October 20, 2026; implemented on iOS and Android.**
 
 ## Approved design
 
@@ -77,6 +77,7 @@ dependency.
 
 ## Verification
 
-Implementation and device verification are in progress. This document will
-record the actual simulator/emulator results and CI before merge. Synthetic
-accounts, credentials, raw logs, UI flows and screenshots remain outside Git.
+The actual simulator/emulator checks, verification limits and CI result are
+recorded in [PR #2547](https://github.com/WangPantopus/skinny-pantopus/pull/2547).
+The merge gate remains the approved checklist above. Synthetic accounts,
+credentials, raw logs, UI flows and screenshots remain outside Git.
