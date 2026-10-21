@@ -130,3 +130,57 @@ extension ScreenSnapshot where Value == PlaceIntelligence {
         )
     }
 }
+
+extension PlaceStoreReads {
+    static func previewCopy(id: String) -> ScreenSnapshot<PlaceIntelligence>? {
+        ScreenStore.shared.peek(SavedPlacesEndpoints.preview(id: id), as: PlacePreview.self)?.publicDetails()
+    }
+
+    static func previewDetails(id: String, force: Bool) async throws -> ScreenSnapshot<PlaceIntelligence> {
+        let copy = try await ScreenStore.shared.load(
+            SavedPlacesEndpoints.preview(id: id),
+            as: PlacePreview.self,
+            kind: .today,
+            topics: [ScreenTopic.savedPlaces, ScreenTopic.today],
+            force: force
+        )
+        return copy.publicDetails()
+    }
+}
+
+private extension ScreenSnapshot where Value == PlacePreview {
+    func publicDetails() -> ScreenSnapshot<PlaceIntelligence> {
+        let order: [(PlaceGroup, String)] = [
+            (.riskReadiness, "Risk & readiness"), (.healthEnvironment, "Health & environment"), (.civic, "Civic")
+        ]
+        let available = value.status == .ready || value.status == .partial
+        let groups = order.compactMap { group, label -> PlaceGroupBlock? in
+            let sections = (available ? value.sections ?? [] : []).filter {
+                $0.group == group && $0.band == .a && $0.access != .locked
+            }
+            return sections.isEmpty ? nil : PlaceGroupBlock(group: group, label: label, sections: sections)
+        }
+        let address = value.place
+        let intel = PlaceIntelligence(
+            place: PlaceAddressRef(
+                label: address?.address ?? "",
+                line1: address?.address ?? "",
+                city: address?.city ?? "",
+                state: address?.state ?? "",
+                postalCode: address?.zipcode
+            ),
+            tier: .t1,
+            verifyAvailable: false,
+            regionSupported: value.status != .unsupportedRegion,
+            generatedAt: "",
+            groups: groups
+        )
+        return ScreenSnapshot<PlaceIntelligence>(
+            value: intel,
+            fetchedAt: fetchedAt,
+            isFresh: isFresh,
+            refreshFailed: refreshFailed,
+            kind: kind
+        )
+    }
+}

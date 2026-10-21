@@ -31,6 +31,7 @@ struct PlaceDetailView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
+        .refreshFailureToast($viewModel.refreshFailureMessage)
         .task { await viewModel.load() }
         // The home or today's conditions changed: the open page re-reads, its copy staying shown.
         .refreshesOnStoreChange(
@@ -83,7 +84,9 @@ struct PlaceDetailView: View {
     }
 
     private var headerAddress: String {
-        if case let .loaded(intel) = viewModel.state { return placeDetailAddress(intel.place) }
+        if case let .loaded(intel) = viewModel.state {
+            return viewModel.savedPlaceId != nil ? intel.place.label : placeDetailAddress(intel.place)
+        }
         return ""
     }
 
@@ -93,7 +96,15 @@ struct PlaceDetailView: View {
         case .loading:
             PlaceDetailSkeleton()
         case let .loaded(intel):
-            if intel.leavesOut(viewModel.group) {
+            if viewModel.savedPlaceId != nil,
+               !viewModel.group.supportsSavedPlace || viewModel.sections(in: intel).isEmpty {
+                EmptyState(
+                    icon: .mapPin,
+                    headline: "Details aren't available for this address yet.",
+                    subcopy: "Return to your Place to see its available public information.",
+                    cta: .init(title: "Back to your Place", action: onBack)
+                )
+            } else if intel.leavesOut(viewModel.group) {
                 // The server leaves out what doesn't apply to this viewer;
                 // a link to it gets a straight answer, not empty cards.
                 notForViewer(role: intel.viewer?.role)
@@ -105,6 +116,7 @@ struct PlaceDetailView: View {
                     .padding(.horizontal, 16)
                     .padding(.bottom, Spacing.s10)
                 }
+                .refreshable { await viewModel.refresh() }
             }
         case let .error(message):
             if viewModel.accessDenied {

@@ -34,10 +34,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.api.models.place.PlacePreviewStatus
 import app.pantopus.android.data.api.models.saved_places.SavedPlaceDto
 import app.pantopus.android.ui.components.PrimaryButton
+import app.pantopus.android.ui.components.RefreshFailedLine
+import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.screens.place.components.placeCard
 import app.pantopus.android.ui.screens.place.launch.PlacePreviewFindings
 import app.pantopus.android.ui.theme.PantopusColors
@@ -67,14 +70,20 @@ fun SavedPlaceRootScreen(
     onOpenMenu: () -> Unit,
     onSetUpHome: () -> Unit,
     onLookUpAddress: () -> Unit,
+    onOpenDetail: ((PlaceDetailGroup) -> Unit)? = null,
     modifier: Modifier = Modifier,
     /** The Place tab tapped again on this root: back to the top. */
     scrollToTop: Flow<Unit>? = null,
     viewModel: SavedPlaceRootViewModel = hiltViewModel(key = "saved-place-${place.id}"),
 ) {
-    LaunchedEffect(place.id) { viewModel.load(place.id) }
+    LifecycleResumeEffect(place.id) {
+        viewModel.load(place.id)
+        onPauseOrDispose { }
+    }
+    RefreshOnStoreChange({ viewModel.load(place.id) })
     val state by viewModel.state.collectAsStateWithLifecycle()
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
+    val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
     LaunchedEffect(scrollToTop) { scrollToTop?.collect { listState.animateScrollToItem(0) } }
 
@@ -89,6 +98,7 @@ fun SavedPlaceRootScreen(
         modifier = modifier.fillMaxSize().background(PantopusColors.appBg).testTag(SAVED_PLACE_ROOT_TAG),
     ) {
         LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+            item { refreshNotice?.let { RefreshFailedLine(it) } }
             item {
                 PlaceDashboardHeader(
                     label = place.label,
@@ -111,6 +121,7 @@ fun SavedPlaceRootScreen(
                     retrying = refreshing,
                     onSetUpHome = onSetUpHome,
                     onRetry = viewModel::refresh,
+                    onOpenDetail = onOpenDetail,
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
             }
@@ -184,6 +195,7 @@ private fun SavedPlacePublicPreview(
     retrying: Boolean,
     onSetUpHome: () -> Unit,
     onRetry: () -> Unit,
+    onOpenDetail: ((PlaceDetailGroup) -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     when (state) {
@@ -217,6 +229,7 @@ private fun SavedPlacePublicPreview(
                     PlacePreviewFindings(
                         preview = preview,
                         onFollowUp = onSetUpHome,
+                        onOpenDetail = onOpenDetail,
                         onRetry = onRetry,
                         retrying = retrying,
                         modifier = modifier,

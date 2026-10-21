@@ -398,6 +398,7 @@ public enum HubRoute: Hashable {
     /// W4 — a Place group-detail page (Today / Your home / Risk / Block /
     /// Money / Civic / Identity), tapped through from a dashboard card.
     case placeDetail(homeId: String, group: PlaceDetailGroup)
+    case savedPlaceDetail(savedPlaceId: String, group: PlaceDetailGroup)
     /// W4 — the full Today's Pulse signal stream (from the dashboard hero).
     case placePulse(homeId: String)
     /// Wedge v2 §2 — the privacy mirror: this home as a neighbor sees it.
@@ -1303,7 +1304,8 @@ public struct HubTabRoot: View {
                 onOpenNotifications: { path.append(.notifications) },
                 onOpenMenu: { rootTabs.showsNavigationMenu = true },
                 onSetUpHome: { path.append(.addHomeAt(address: place.label)) },
-                onLookUpAddress: { path.append(.savePlace) }
+                onLookUpAddress: { path.append(.savePlace) },
+                onOpenDetail: { path.append(.savedPlaceDetail(savedPlaceId: place.id, group: $0)) }
             )
             .id(place.id)
             .onAppear { Self.placeRootViewed("saved_place") }
@@ -3448,6 +3450,10 @@ public struct HubTabRoot: View {
             )
         case let .placeDashboard(homeId):
             placeDashboard(homeId: homeId, isActive: path.last == route && rootTabs.selected == owningTab)
+        case let .savedPlaceDetail(savedPlaceId, group):
+            PlaceDetailView(
+                viewModel: PlaceDetailViewModel(homeId: "", group: group, savedPlaceId: savedPlaceId)
+            ) { pop() }
         case let .placeDetail(homeId, group):
             PlaceDetailView(
                 viewModel: PlaceDetailViewModel(

@@ -1,8 +1,8 @@
 # Saved-address public details
 
-October 20, 2026 · **Proposed; founder approval required before implementation.**
+October 20, 2026 · **Approved by the founder on October 20, 2026; implementation in progress.**
 
-## Proposal for approval
+## Approved design
 
 Someone who saved an address privately and has no Home can open useful public
 details from their Place tab. Reuse the current detail layouts on iOS and
@@ -52,68 +52,31 @@ relaunch, deletion/refusal, account switching and Home regressions. Record
 actual results; no new unit tests. Merge only after real-app checks and green
 CI. Hosted services and physical phones are not covered by local checks.
 
-**Decision requested:** approve these three destinations, static Block/Money,
-the Home-only exclusions and app-side preview adaptation, or specify changes.
+**Founder decision:** approved the recommended design and directed completion
+of iOS and Android, verification against the local backend, and merge after
+green CI, with no new unit tests.
 
-## Engineering handoff
+## Implementation
 
-### Verified starting point
+Both apps push their existing detail container with the selected saved-place
+ID. Today uses the existing saved-place Today endpoint; Risk and Civic adapt
+only unlocked Band-A preview envelopes. Section status, source, coverage and
+provider timestamps remain intact. Missing/unsupported preview sections show
+an explicit empty state. The adapters do not invent a Home or a generated
+server timestamp.
 
-- The requested worktree was clean on `claude/elated-shamir-1c5174` at
-  `1aad10359`; it contained no saved proposal or implementation commits.
-- Created `codex/saved-place-public-details` in that same worktree and rebased
-  it onto freshly fetched master `7f4e931d5` (PR #2541 merged). Its conditional
-  chevrons and nullable EPA-distance handling must be preserved.
-- Open PRs were checked on October 20. None implements these saved-place
-  destinations. Recheck before editing, especially #2535 (iOS Place launch
-  lifecycle), #2496 (Today assistant context), and any later navigation work.
-- This document is the only change. Approval, implementation, app verification
-  and merge remain outstanding. A draft PR is not design approval or evidence
-  that the feature works. Master CI was still pending at the initial check.
+The saved root and details share an account- and address-scoped preview cache.
+Transient refresh failures retain the last allowed copy with a notice;
+403/404 clear rejected content. Saved Today preserves alert freshness rules.
+Home-only controls and their loaders are excluded from saved-place pages,
+while Home detail pages keep their existing content.
 
-### Reuse map
+No web, backend contract, database schema or provider changes. No new unit
+tests; the existing Android view-model test receives its added repository
+dependency.
 
-- iOS: `Features/Place/Launch/SavedPlaceRootView.swift` renders
-  `PlacePreviewContent` in `PlacePreviewBody.swift`; `previewSections` has no
-  open callback. Extend that callback only at the saved-root caller. Reuse
-  `PlaceDetailView`, `PlaceDetailViewModel`, `PlaceStoreReads`,
-  `PlaceRiskDetailContent` and `PlaceCivicDetailContent`.
-- iOS already carries `savedPlaceId` in the detail model for Today. Risk
-  currently constructs a fridge-card model and always renders the checklist;
-  gate both before enabling saved-place Risk. The existing Ask guard already
-  excludes saved places.
-- Android: `ui/screens/place/SavedPlaceRootScreen.kt` renders
-  `PlacePreviewFindings` / `PreviewSections` in `launch/PlaceLaunchScreen.kt`.
-  Add the saved-root callback and reuse the detail group layouts. Extend
-  `detail/PlaceDetailViewModel.kt` and its copy loader to accept an explicit
-  saved-place anchor; today they require a Home ID. Reuse
-  `data/saved_places/SavedPlacesRepository.kt` and the saved-place Today path
-  in `today/TodayTabViewModel.kt`. Do not reuse its newest-address selection.
-- Backend reference only: ownership checks in `routes/savedPlaces.js` scope
-  both endpoints to the caller. `routes/public.js:placePreviewWithBallot` and
-  `services/placePreviewService.js` compose public preview envelopes;
-  `services/placeIntelligenceService.js:composeSavedPlaceToday` returns only
-  weather, air, alerts and daylight. No Home lookup is needed.
+## Verification
 
-Keep the adapters small and adjacent to the existing DTO/store code. Carry
-source, coverage, status and per-section `as_of` through unchanged. Never
-render a failed refresh as a fresh successful read; preserve allowed cached
-content with the existing stale/offline notice. A 403/404 or account change
-must clear the rejected account/place copy. Guard unsupported preview responses
-and old responses without `sections` rather than opening a blank page.
-
-### Kickoff prompt after approval
-
-> Resume in the existing `pulse-pi-ios-build-2ae310` worktree on
-> `codex/saved-place-public-details`. Read this proposal and record the founder's
-> actual approval or requested amendments before writing app code. Check Git,
-> open PRs and CI, then rebase onto current master. Implement the approved
-> saved-address Today, Risk and Civic navigation in both native apps using
-> existing layouts and stores, with exact saved-place binding and no Home-only
-> requests or modules. Leave web and backend contracts unchanged. Verify the
-> full checklist above on a simulator and emulator against a real local stack,
-> including a Home account. Write no new unit tests; run relevant existing
-> checks. Update this PR's scope and validation to describe the implementation,
-> merge only after green CI and real-app verification, and report the merged
-> PR and any verification limits. Preserve unrelated work and keep secrets and
-> local fixture/evidence files out of Git and chat.
+Implementation and device verification are in progress. This document will
+record the actual simulator/emulator results and CI before merge. Synthetic
+accounts, credentials, raw logs, UI flows and screenshots remain outside Git.

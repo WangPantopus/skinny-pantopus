@@ -342,6 +342,7 @@ import app.pantopus.android.ui.screens.place.PlaceRootBar
 import app.pantopus.android.ui.screens.place.PlaceRootViewed
 import app.pantopus.android.ui.screens.place.SavedPlaceRootScreen
 import app.pantopus.android.ui.screens.place.detail.PLACE_DETAIL_HOME_ID_KEY
+import app.pantopus.android.ui.screens.place.detail.PLACE_DETAIL_SAVED_ID_KEY
 import app.pantopus.android.ui.screens.place.detail.PLACE_DETAIL_SLUG_KEY
 import app.pantopus.android.ui.screens.place.detail.PlaceDetailScreen
 import app.pantopus.android.ui.screens.place.launch.PendingPlaceScreen
@@ -562,6 +563,13 @@ private object ChildRoutes {
         homeId: String,
         slug: String,
     ): String = "place/$homeId/detail/$slug"
+
+    const val SAVED_PLACE_DETAIL = "saved-place/{$PLACE_DETAIL_SAVED_ID_KEY}/detail/{$PLACE_DETAIL_SLUG_KEY}"
+
+    fun savedPlaceDetail(
+        id: String,
+        slug: String,
+    ): String = "saved-place/$id/detail/$slug"
 
     /** W4 — the full Today's Pulse signal stream. */
     const val PLACE_PULSE = "place/{$PLACE_PULSE_HOME_ID_KEY}/pulse"
@@ -2218,6 +2226,7 @@ private val SAVED_PAGE_OFFLINE_STRIP_ROUTES =
     setOf(
         PantopusRoute.Place.path, PantopusRoute.Today.path, PantopusRoute.Nearby.path, PantopusRoute.Mail.path,
         PantopusRoute.Messages.path, PantopusRoute.Pulse.path, ChildRoutes.PLACE_DASHBOARD, ChildRoutes.PLACE_DETAIL,
+        ChildRoutes.SAVED_PLACE_DETAIL,
         ChildRoutes.PULSE_FEED, ChildRoutes.PULSE_POST, ChildRoutes.CHAT_CONVERSATION, ChildRoutes.PROFILE,
         ChildRoutes.PUBLIC_PROFILE, ChildRoutes.NOTIFICATIONS_ROUTE, ChildRoutes.CONNECTIONS_ROUTE, ChildRoutes.MY_POSTS,
         ChildRoutes.SAVED_PLACES, ChildRoutes.MENU, ChildRoutes.EXPLORE_ROUTE,
@@ -3218,6 +3227,16 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     arguments = listOf(navArgument(PRIVACY_MIRROR_HOME_ID_KEY) { type = NavType.StringType }),
                 ) {
                     PlacePrivacyMirrorScreen(onBack = { navController.popBackStack() })
+                }
+                composable(
+                    route = ChildRoutes.SAVED_PLACE_DETAIL,
+                    arguments =
+                        listOf(
+                            navArgument(PLACE_DETAIL_SAVED_ID_KEY) { type = NavType.StringType },
+                            navArgument(PLACE_DETAIL_SLUG_KEY) { type = NavType.StringType },
+                        ),
+                ) {
+                    PlaceDetailScreen(onBack = { navController.popBackStack() })
                 }
                 composable(
                     route = ChildRoutes.PLACE_DETAIL,
@@ -7353,6 +7372,7 @@ private fun PlaceTabRoot(
                         onOpenMenu = onOpenMenu,
                         onSetUpHome = { navController.navigate(ChildRoutes.addHomeAt(current.place.label)) },
                         onLookUpAddress = { navController.navigate(ChildRoutes.SAVE_PLACE) },
+                        onOpenDetail = { navController.navigate(ChildRoutes.savedPlaceDetail(current.place.id, it.slug)) },
                         scrollToTop = scrollToTop,
                     )
                 }
