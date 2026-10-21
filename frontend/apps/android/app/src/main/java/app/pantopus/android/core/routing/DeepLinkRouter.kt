@@ -32,6 +32,8 @@ import kotlinx.coroutines.flow.asStateFlow
 // Arrival completion shares this router's account binding and path resolver.
 @Suppress("TooManyFunctions")
 object DeepLinkRouter {
+    private const val BUSINESS_CONVERSATION_SEGMENTS = 4
+
     /**
      * How a resolved destination should be handled relative to auth.
      */
@@ -956,7 +958,7 @@ object DeepLinkRouter {
                     id.isNullOrBlank() -> Destination.Unknown(raw)
                     trailing == "page-editor" || trailing == "page_editor" ->
                         Destination.EditBusinessPage(id)
-                    trailing == "chat" && segments.size == 4 && roomId != null && MAIL_UUID.matches(roomId) ->
+                    trailing == "chat" && segments.size == BUSINESS_CONVERSATION_SEGMENTS && roomId != null && MAIL_UUID.matches(roomId) ->
                         Destination.BusinessConversation(id, roomId.lowercase())
                     else -> Destination.BusinessOwner(id)
                 }

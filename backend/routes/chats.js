@@ -389,8 +389,8 @@ async function emitToBusinessStaff(emitTo, payload, businessIds, heard) {
 // The chat push goes to room members, so it doesn't reach a business's owner and staff either. Each one who may act
 // for a business that received a message gets a notice (bell row, and a push unless their push is off) that opens the
 // business's thread: the web's /app/businesses/:id/chat/:roomId, which the apps open as the business, then its
-// thread. Never their personal Messages. One unread notice per conversation: a newer message replaces it, and
-// reading the conversation for the business reads it. Room members already got the chat push; anyone across a block
+// thread. Never their personal Messages. Each message has an idempotent notice; reading the conversation for the
+// business reads its notices. Room members already got the chat push; anyone across a block
 // with the sender gets nothing.
 const BUSINESS_MESSAGE_NOTICE = 'business_message';
 
@@ -398,7 +398,7 @@ function businessThreadLink(businessUserId, roomId) {
   return `/app/businesses/${businessUserId}/chat/${roomId}`;
 }
 
-async function notifyBusinessStaff({ room, messageId, businessIds, actorUserId, senderUserId, memberIds, preview }) {
+async function notifyBusinessStaff({ room, messageId, businessIds, actorUserId, senderUserId, memberIds, mutedBusinessIds, preview }) {
   const skip = new Set([String(actorUserId), String(senderUserId), ...memberIds.map(String)]);
   const staff = await businessStaff(businessIds, { include: (staffId) => !skip.has(staffId) });
   if (staff.length === 0) return;
@@ -422,14 +422,6 @@ async function notifyBusinessStaff({ room, messageId, businessIds, actorUserId, 
       continue;
     }
     const link = businessThreadLink(businessUserId, room.id);
-    const { error: replaceError } = await supabaseAdmin
-      .from('Notification')
-      .delete()
-      .eq('user_id', staffId)
-      .eq('type', BUSINESS_MESSAGE_NOTICE)
-      .eq('link', link)
-      .eq('is_read', false);
-    if (replaceError) logger.warn('business_message_notice_not_replaced', { roomId: room.id, error: replaceError.message });
     await notificationService.createNotification({
       userId: staffId,
       type: BUSINESS_MESSAGE_NOTICE,
@@ -441,6 +433,8 @@ async function notifyBusinessStaff({ room, messageId, businessIds, actorUserId, 
       metadata: { business_user_id: businessUserId, room_id: String(room.id), user_id: String(senderUserId), message_id: messageId },
       contextType: 'business',
       contextId: businessUserId,
+      idempotencyKey: `business-message:${messageId}:${businessUserId}:${staffId}`,
+      sendPush: !mutedBusinessIds.has(businessUserId),
     });
   }
 }
@@ -547,7 +541,7 @@ async function deliverNewMessage(io, { room, message, actorUserId, senderUserId 
   // Push fresh badge counts (including total message count) immediately.
   const { data: participantRows } = await supabaseAdmin
     .from('ChatParticipant')
-    .select('user_id, user:user_id(account_type)')
+    .select('user_id, notifications_enabled, user:user_id(account_type)')
     .eq('room_id', roomId)
     .eq('is_active', true);
   const participantUserIds = Array.from(new Set((participantRows || []).map((row) => String(row.user_id)).filter(Boolean)));
@@ -609,6 +603,8 @@ async function deliverNewMessage(io, { room, message, actorUserId, senderUserId 
       actorUserId,
       senderUserId,
       memberIds: participantUserIds,
+      mutedBusinessIds: new Set((participantRows || [])
+        .filter((row) => row.notifications_enabled === false).map((row) => String(row.user_id))),
       preview,
     }).catch((err) => {
       logger.warn('business_message_notice_failed', { requestId, roomId, error: err.message });
