@@ -536,7 +536,8 @@ export interface PlaceEpaFacility {
   name: string;
   /** Regulating program, e.g. "Clean Water Act". */
   program: string;
-  distance_mi: number;
+  /** Null when ECHO sends no coordinates for the site (its default columns carry none). */
+  distance_mi: number | null;
 }
 
 /**

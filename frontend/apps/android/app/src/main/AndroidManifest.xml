@@ -58,7 +58,10 @@
 
             <!-- Deep links: https://pantopus.com/... — the product domain. It is
                  what the backend and both clients build share and invite links
-                 on, and the only host that serves .well-known/assetlinks.json. -->
+                 on, and the only host that serves .well-known/assetlinks.json.
+                 It claims every path; a page the app has no screen for (a
+                 letter's claim page, the postcard opt-out, …) goes on to the
+                 browser (core/routing/WebLinkFallback.kt). -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />

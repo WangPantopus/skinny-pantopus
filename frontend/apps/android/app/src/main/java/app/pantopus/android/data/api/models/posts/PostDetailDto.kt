@@ -24,7 +24,16 @@ data class PostCreatorDto(
     @Json(name = "displayName") val projectedDisplayName: String? = null,
     val handle: String? = null,
     val avatarUrl: String? = null,
+    /** The identity projection's kind: `business` for a post written as a business, whose [id] is then the business's. */
+    @Json(name = "type") val identityType: String? = null,
 ) {
+    /**
+     * The page a business author opens: its id, while the business is published (the identity carries its
+     * handle only then, as the web's `/b/` link). Null for other authors and for a business without a page.
+     */
+    val businessPageId: String?
+        get() = id?.takeIf { identityType == "business" && !(handle ?: username).isNullOrEmpty() }
+
     /** Best-effort display name across the various populated fields. */
     val displayName: String
         get() {

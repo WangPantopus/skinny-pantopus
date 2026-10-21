@@ -16,7 +16,9 @@ import javax.inject.Inject
  * not blocked, opens that person's thread as the Messages list does, so its
  * details keep Report and Block. Anything else, or a failed read, returns
  * null and the link opens the room exactly as before. iOS mirrors this in
- * `InboxTabRoot.linkedConversation`. Fetches nothing until a link needs it.
+ * `InboxTabRoot.linkedConversation`. A business inbox link
+ * (`/app/businesses/<id>/chat/<roomId>`) only needs the thread's header name
+ * ([businessCounterpartName]). Fetches nothing until a link needs it.
  */
 @HiltViewModel
 class DeepLinkChatResolverViewModel
@@ -62,5 +64,25 @@ class DeepLinkChatResolverViewModel
             val room = (chatRepository.room(roomId) as? NetworkResult.Success)?.data?.room ?: return null
             if (room.type == "direct" || room.type == "gig") return null
             return room.name?.takeIf(String::isNotBlank)
+        }
+
+        /**
+         * The name a business inbox thread opened from a notice is headed with:
+         * the room's member who isn't the business, as its inbox row names
+         * them. Null when the room can't be read for the business. iOS mirrors
+         * this in `HubTabRoot.businessThread`.
+         */
+        suspend fun businessCounterpartName(
+            roomId: String,
+            businessId: String,
+        ): String? {
+            val room = (chatRepository.room(roomId, asBusinessUserId = businessId) as? NetworkResult.Success)?.data?.room
+            return room
+                ?.participants
+                .orEmpty()
+                .firstOrNull { !it.userId.isNullOrBlank() && it.userId != businessId }
+                ?.user
+                ?.displayName
+                ?.takeIf(String::isNotBlank)
         }
     }

@@ -348,7 +348,7 @@ private fun HealthCard(env: PlaceSectionEnvelope) {
                                 color = PantopusColors.appTextStrong,
                                 modifier = Modifier.weight(1f),
                             )
-                            Text("%.1f mi".format(f.distanceMi), fontSize = 12.sp, color = PantopusColors.appTextMuted)
+                            f.distanceMi?.let { Text("%.1f mi".format(it), fontSize = 12.sp, color = PantopusColors.appTextMuted) }
                         }
                     }
                 }

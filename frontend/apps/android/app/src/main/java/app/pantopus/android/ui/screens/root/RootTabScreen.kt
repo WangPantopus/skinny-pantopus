@@ -2637,6 +2637,23 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 navController.navigate(ChildRoutes.businessOwner(pending.businessId))
                 DeepLinkRouter.consume()
             }
+            is DeepLinkRouter.Destination.BusinessConversation -> {
+                // A business inbox notice: the owner view underneath, so Back
+                // lands on the business, then the thread acting as the business.
+                navController.navigate(ChildRoutes.businessOwner(pending.businessId))
+                val display =
+                    deepLinkChatResolver.businessCounterpartName(pending.roomId, pending.businessId) ?: "Conversation"
+                navController.navigate(
+                    ChildRoutes.chatConversationRoom(
+                        roomId = pending.roomId,
+                        displayName = display,
+                        initials = initialsFromName(display),
+                        verified = false,
+                        asBusinessUserId = pending.businessId,
+                    ),
+                )
+                DeepLinkRouter.consume()
+            }
             is DeepLinkRouter.Destination.BusinessProfile -> {
                 navController.navigate(ChildRoutes.businessProfile(pending.businessId))
                 DeepLinkRouter.consume()
@@ -4817,6 +4834,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onOpenSenderProfile = { userId ->
                             navController.navigate(ChildRoutes.publicProfile(userId))
                         },
+                        onOpenSenderBusiness = { businessId ->
+                            navController.navigate(ChildRoutes.businessProfile(businessId))
+                        },
                         onOpenExtractedTask = { sourceMailId ->
                             // A17.12 — the certified-notice "view task" affordance
                             // opens the mail-derived task keyed by its source mail.
@@ -5009,9 +5029,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onEdit = { postId ->
                             navController.navigate(ChildRoutes.editPost(postId))
                         },
-                        onOpenBusiness = { username ->
-                            // "Nearby Providers" row → `/business/:username`.
-                            navController.navigate(ChildRoutes.businessProfile(username))
+                        onOpenBusiness = { business ->
+                            // A "Nearby Providers" row (username) or a business author (id) → `/business/:key`.
+                            navController.navigate(ChildRoutes.businessProfile(business))
                         },
                         onAsk = { context -> navController.navigate(ChildRoutes.askPantopus(context)) },
                     )

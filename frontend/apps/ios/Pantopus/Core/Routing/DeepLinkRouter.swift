@@ -175,6 +175,11 @@ final class DeepLinkRouter {
         /// `pantopus://businesses/:id` — A10.7 Business owner view. The public
         /// profile (A10.6) lives at the singular `pantopus://business/:username`.
         case businessOwner(businessId: String)
+        /// `/app/businesses/:id/chat/:roomId` — a conversation in the business's
+        /// inbox (the `business_message` notice its owner and staff get). Opens
+        /// the owner view, then the thread acting as the business; never the
+        /// person's own Messages.
+        case businessConversation(businessId: String, roomId: String)
         /// `pantopus://identity/preview` — A18.5 "View as" identity preview.
         case viewAs
         /// `pantopus://homes/:id/waiting-room` — A18.4 persistent waiting room.
@@ -828,7 +833,8 @@ final class DeepLinkRouter {
 
     /// Plural `businesses/*` is the owner-side surface family.
     /// `…/new` opens the Create Business wizard, `…/:id/page-editor` opens
-    /// A13.10 (owner-only), and `…/:id` opens the A10.7 Business owner view.
+    /// A13.10 (owner-only), `…/:id/chat/:roomId` opens a thread of the
+    /// business inbox, and `…/:id` opens the A10.7 Business owner view.
     /// The singular `business/:username` (A10.6 public profile) is handled
     /// separately in `resolve`.
     private func businessesDestination(url: URL, segments: [String]) -> Destination {
@@ -839,6 +845,10 @@ final class DeepLinkRouter {
         let trailing = Array(segments.dropFirst(2))
         if trailing.first == "page-editor" || trailing.first == "page_editor" {
             return .editBusinessPage(businessId: id)
+        }
+        if trailing.first == "chat", trailing.count == 2, let roomId = trailing.last,
+           UUID(uuidString: roomId) != nil {
+            return .businessConversation(businessId: id, roomId: roomId.lowercased())
         }
         return .businessOwner(businessId: id)
     }
