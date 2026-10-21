@@ -207,7 +207,7 @@ enum class NotificationCategory {
         fun fromRaw(raw: String?): NotificationCategory {
             val lower = raw?.lowercase(Locale.ROOT).orEmpty()
             return when (lower) {
-                "reply", "comment", "chat", "chat_message", "dm" -> Reply
+                "reply", "comment", "chat", "chat_message", "business_message", "dm" -> Reply
                 "mention", "follow", "connection", "connections", "user" -> Mention
                 "claim", "home_member_request", "home_claim", "home_ownership" -> Claim
                 "gig", "gig_bid", "gig_match" -> Gig

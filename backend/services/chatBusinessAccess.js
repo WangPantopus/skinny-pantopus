@@ -31,6 +31,28 @@ async function canActAsBusiness(businessUserId, actorUserId) {
   return hasPermission(businessUserId, actorUserId, 'gigs.post');
 }
 
+// The owner and staff who may act for each of these businesses (active team members passing canActAsBusiness), as
+// [{ businessUserId, userId }]. `include` skips team members before their permission check. Throws when the team
+// can't be read.
+async function businessStaff(businessUserIds, { include = () => true } = {}) {
+  if (!Array.isArray(businessUserIds) || businessUserIds.length === 0) return [];
+  const { data: team, error } = await supabaseAdmin
+    .from('BusinessTeam')
+    .select('business_user_id, user_id')
+    .in('business_user_id', businessUserIds)
+    .eq('is_active', true);
+  if (error || !Array.isArray(team)) throw new Error(error?.message || 'business team unavailable');
+  const staff = [];
+  for (const row of team) {
+    const userId = String(row.user_id);
+    if (!include(userId)) continue;
+    if (await canActAsBusiness(row.business_user_id, userId)) {
+      staff.push({ businessUserId: String(row.business_user_id), userId });
+    }
+  }
+  return staff;
+}
+
 // The business's own active membership of the room, when the actor may act for that business; otherwise null.
 async function businessMembership(roomId, actorUserId, businessUserId) {
   if (!roomId || !actorUserId || !businessUserId) return null;
@@ -132,6 +154,7 @@ async function dropStaffMembership(roomId, actorUserId, businessUserId) {
 module.exports = {
   isBusinessAccount,
   canActAsBusiness,
+  businessStaff,
   businessMembership,
   actingBusinessInRoom,
   taskBusinessInRoom,

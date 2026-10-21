@@ -200,8 +200,10 @@ struct PlaceRiskDetailContent: View {
                                     Text(f.name).font(.system(size: 12.5, weight: .medium))
                                         .foregroundStyle(Theme.Color.appTextStrong)
                                     Spacer()
-                                    Text(String(format: "%.1f mi", f.distanceMi))
-                                        .pantopusTextStyle(.caption).foregroundStyle(Theme.Color.appTextMuted)
+                                    if let distance = f.distanceMi {
+                                        Text(String(format: "%.1f mi", distance))
+                                            .pantopusTextStyle(.caption).foregroundStyle(Theme.Color.appTextMuted)
+                                    }
                                 }
                             }
                         }
