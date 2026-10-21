@@ -45,6 +45,15 @@ const {
   normalizeSlotsWithActiveReservations,
 } = require('../services/supportTrainSlotAvailability');
 
+// An inconclusive sign-in check must not turn an organizer/helper into a
+// visitor or turn their reservation into an email-only guest signup.
+function requireAvailableOptionalAuth(req, res, next) {
+  if (req.authUnavailable) {
+    return supportTrainUnavailable(res, 'Could not check your sign-in right now. Please try again.');
+  }
+  return next();
+}
+
 /** PostGIS GEOGRAPHY Point WKT */
 function formatLocationForDB(latitude, longitude) {
   return `POINT(${longitude} ${latitude})`;
@@ -2970,6 +2979,7 @@ router.post(
   '/:id/slots/:slotId/guest-reserve',
   supportTrainWriteLimiter,
   optionalAuth,
+  requireAvailableOptionalAuth,
   loadSupportTrain,
   validate(guestReserveSchema),
   asyncHandler(async (req, res) => {
@@ -4144,6 +4154,7 @@ const SUPPORT_TRAIN_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a
 router.get(
   '/:id',
   optionalAuth,
+  requireAvailableOptionalAuth,
   asyncHandler(async (req, res) => {
     const supportTrainId = req.params.id;
     const userId = req.user?.id || null;
@@ -4480,13 +4491,20 @@ router.get(
     // The train's chat, only for someone in it: its organizers and recipient join at publish
     // and helpers when they sign up, and they leave it when they're out.
     if (userId && activity?.chat_thread_id) {
-      const { data: chatMember } = await supabaseAdmin
+      const { data: chatMember, error: chatMemberError } = await supabaseAdmin
         .from('ChatParticipant')
         .select('id')
         .eq('room_id', activity.chat_thread_id)
         .eq('user_id', userId)
         .eq('is_active', true)
         .maybeSingle();
+      if (chatMemberError) {
+        logger.error('Support Train chat membership check failed', {
+          supportTrainId,
+          error: chatMemberError.message,
+        });
+        return supportTrainUnavailable(res);
+      }
       if (chatMember) response.chat_thread_id = activity.chat_thread_id;
     }
 
