@@ -2733,9 +2733,6 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
         drawerState = navDrawerState,
         gesturesEnabled = navDrawerState.isOpen,
         drawerContent = {
-            // Back closes an open side menu, as on every Android app, instead of navigating the screen under it.
-            // Composed after the NavHost (the drawer sits above the content), so it is asked first.
-            androidx.activity.compose.BackHandler(enabled = navDrawerState.isOpen) { navDrawerScope.launch { navDrawerState.close() } }
             NavigationDrawer(
                 context = NavigationDrawerContext.Personal(name = currentHandle),
                 onSelect = { destination ->
@@ -7227,6 +7224,11 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 if (BuildConfig.DEBUG) {
                     composable(ChildRoutes.TOKEN_GALLERY) { TokenGalleryScreen() }
                 }
+            }
+            // Register when the drawer opens, after the current destination's handlers (including Plans' sheet).
+            // Keeping a disabled handler registered lets subsequently mounted destinations take Back instead.
+            if (navDrawerState.isOpen) {
+                androidx.activity.compose.BackHandler { navDrawerScope.launch { navDrawerState.close() } }
             }
         }
     }
