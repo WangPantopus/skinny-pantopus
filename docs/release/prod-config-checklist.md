@@ -172,7 +172,7 @@ to the founder. No unchecked hosted or physical-device gate is claimed complete.
 | New native apps | iOS `app.pantopus.ios`, Android `app.pantopus.android`: different app IDs from the April apps, so they're new store listings (decision D2). Not uploaded anywhere yet. |
 | Supabase | The April production project and new `pantopus-production` project (`falmvysvndmwtfxsrxek`) are in the founder's `Pantopus` Free organization. The new project is healthy in Oregon; all 148 canonical migrations were applied and verified on October 9, the first production release applied the 36 newer ones on October 17 (184 in all), and the private `home-documents` bucket is configured. Auth transfer, the two 100 MB buckets, the S3 key and managed daily backups are pending. `Pantopus-staging` is separate and was reset to the canonical migrations on October 7 (S2). A separate production organization is optional billing isolation. |
 | GitHub | `staging` releases from `dev` after CI. `production` has nine secrets, `DB_MIGRATIONS_ENABLED=true`, and, since October 17 at 00:20 UTC, `BACKEND_DEPLOY_ENABLED=true`: every master merge that changes the backend releases to production after CI, migrations first. Store signing setup remains separate (section 4). |
-| AWS Lambdas | Staging stack `pantopus-seeder-staging` carries the seeder, briefing, home-reminder, weather-alert, mail and job-trigger functions. The founder paused the April `pantopus-seeder-production` stack: all 14 EventBridge rules were independently confirmed `DISABLED` on October 11, and its briefing log has no event after October 8 at 19:14 UTC. P8 then replaced its code and secret (paused, October 17) and turned on only the briefing rule and its daily cleanup (October 18); every other production schedule stays disabled. The April `pantopus-seeder-dev` functions were deleted; its ten schedules have nothing to run. |
+| AWS Lambdas | Staging stack `pantopus-seeder-staging` carries the seeder, briefing, home-reminder, weather-alert, mail and job-trigger functions. The founder paused the April `pantopus-seeder-production` stack: all 14 EventBridge rules were independently confirmed `DISABLED` on October 11, and its briefing log has no event after October 8 at 19:14 UTC. P8 then replaced its code and secret (paused, October 17) and turned on only the briefing rule and its daily cleanup (October 18), followed by the approved local seeder, Home/weather and maintenance groups on October 21 (P8). The April `pantopus-seeder-dev` functions were deleted; its ten schedules have nothing to run. |
 
 **Reminders run on AWS Lambda.** Morning and evening briefings (the night-before
 pickup push rides the evening one), task and bill reminders, weather alerts and
@@ -781,23 +781,45 @@ sources. All 55 enrichment sources, including sports, are inactive. Curator logi
 was verified and credentials saved in the production secret without changing its
 other fields. The registered iPhone's location is within the configured coverage.
 A bootstrap publisher run created two real posts with zero failures; both appeared
-in the production web Pulse. A subsequent fetch completed with zero errors.
+in the production web Pulse and the founder confirmed seeing a new post on the
+physical iPhone. A subsequent fetch completed with zero errors.
 The first manual fetch overlapped the newly enabled schedule and encountered
 unique-key deduplication conflicts; no duplicate queue rows were inserted.
 
 All six maintenance jobs completed through the deployed Lambda/backend path.
 Home and weather checks completed without failures, with no eligible reminders
 or alerts to send. Daily discovery completed with no new clusters. CloudFormation
-reported `UPDATE_COMPLETE`; all 12 function packages were preserved and remain
-Active. The production SNS email subscription is confirmed, all six existing
-error alarms route to it, and the one-time routing test arrived in the inbox.
+reported `UPDATE_COMPLETE`; the activation preserved all 12 function packages.
+The subsequent launch-reliability update replaced the shared package with the
+reviewed monitoring/lookup fixes; all 12 functions remain Active. The production
+SNS email subscription is confirmed, all 17 alarms route to it, and the earlier
+one-time routing test arrived in the inbox.
 The worker's Lambda cron fallback remains off to prevent duplicate scheduling.
+
+Production FCM OAuth and a validation-only message request passed (HTTP 200),
+and the privately saved Android release Firebase configuration matches the
+server project. No Android registration exists yet, so this does not prove
+Android receipt.
 
 The founder confirmed physical iPhone receipt of the authorized generic push test
 and that tapping opened Today. **Scheduled useful briefing/Home-reminder receipt
 on physical iPhone and Android remains unverified.** Quiet-day suppression is
 intentional; a successful generic push does not prove briefing composition,
 idempotency or the briefing-specific destination. P8's physical checks remain open.
+
+**Launch reliability follow-up:** local fetcher, poster and discovery now report
+caught and partial failures through a bounded CloudWatch metric. Weather checks
+also report per-location and push failures. Housekeeping and Home-member lookup
+failures propagate to their existing error alarms. Quiet/no-recipient runs are successful;
+publishing failures keep their existing retry behavior to avoid extra posts.
+The production update completed October 21. Existing seeder tests (505), SAM
+lint and the 128 activation combinations passed. Live fetcher, poster, discovery
+and weather checks completed without errors. Error alarms combine application
+outcomes with Lambda crashes/timeouts. Eight
+missing-invocation alarms cover the enabled functions, including daily housekeeping;
+their actions follow the schedule switches so intentional pauses stay silent.
+The jobs alarm covers the shared trigger; inspect each maintenance rule separately
+when changing schedules. Failure alarms use the existing confirmed production inbox.
 
 The April stack `pantopus-seeder-production` already exists, so
 `sam deploy --config-env prod` updates it in place: new code, the job trigger,
@@ -1278,3 +1300,20 @@ can't write Supabase's two (empty) vector-bucket tables, so they're excluded; th
 migration ledger isn't part of a normal dump, so it's dumped separately; and
 `aws s3 sync` would skip the files because the restored rows make them look
 present, so the restore uploads each file explicitly.
+
+**October 21 recovery check:** a fresh production database, migration ledger and
+Storage backup was saved outside Git on FileVault-encrypted local storage. All
+three buckets were inventoried; there were no stored objects and no missing
+files. A network-isolated local PostgreSQL restore succeeded, with matching row
+counts across 398 tables. The rehearsal aligned managed role names and used an
+additional auth/storage/public/pgboss schema export because the local Supabase
+bootstrap differs from the hosted service. This is a database recovery rehearsal,
+not a hosted-project failover or an app acceptance check. Production/staging host
+environment, Nginx and TLS configuration were also backed up privately.
+
+These are point-in-time copies; automatic recurring off-host backups are not
+configured by this check. Keep following the weekly and pre-change procedure
+above. EC2 uses key-only SSH and IMDSv2, but its 8 GiB root disk is unencrypted
+and SSH ingress remains broad. Encrypting the root disk requires replacing it
+during a planned API/worker maintenance window; do not stop the host as part
+of a Lambda rollout.

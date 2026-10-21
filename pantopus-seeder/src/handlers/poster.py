@@ -19,6 +19,7 @@ from src.config.secrets import get_secrets
 from src.pipeline.humanizer import humanize
 from src.pipeline.poster import authenticate_curator, curator_auth_client, post_to_pantopus
 from src.tapering.density_checker import allowed_categories, check_density, should_post_in_slot
+from src.utils.run_metrics import publish_run_outcome
 
 # Configure logging for Lambda (root logger must be set to INFO)
 logging.basicConfig(level=logging.INFO, force=True)
@@ -35,7 +36,8 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         result = _run(event, context)
     except Exception:
         log.exception("Poster handler failed with unhandled exception")
-        return {"error": "unhandled_exception", "regions_processed": 0}
+        result = {"error": "unhandled_exception", "regions_processed": 0}
+    publish_run_outcome(result, "items_failed")
     log.info("Run summary: %s", result)
     return result
 

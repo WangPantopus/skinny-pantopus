@@ -88,7 +88,7 @@ def _purge_old_deliveries(supabase) -> int:
         return count
     except Exception:
         log.warning("Failed to purge old delivery rows", exc_info=True)
-        return 0
+        raise
 
 
 def _purge_expired_context_cache(supabase) -> int:
@@ -107,7 +107,7 @@ def _purge_expired_context_cache(supabase) -> int:
         return count
     except Exception:
         log.warning("Failed to purge expired context cache", exc_info=True)
-        return 0
+        raise
 
 
 def _reset_stale_composing(supabase) -> int:
@@ -131,4 +131,4 @@ def _reset_stale_composing(supabase) -> int:
         return count
     except Exception:
         log.warning("Failed to reset stale composing rows", exc_info=True)
-        return 0
+        raise

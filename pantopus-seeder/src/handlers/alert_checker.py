@@ -22,6 +22,7 @@ import jwt
 from src.config.secrets import get_briefing_secrets, BriefingSecrets
 from src.utils.supabase_errors import is_missing_table_error, log_missing_table_once
 from src.utils.coordinates import parse_valid_coordinates
+from src.utils.run_metrics import publish_run_outcome
 
 logging.basicConfig(level=logging.INFO, force=True)
 # httpx logs every request URL at INFO. AirNow's key travels in the query
@@ -93,6 +94,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     if result.get("error"):
         # Fail the invocation so the Lambda Errors metric and its alarm see it.
         raise RuntimeError(f"Alert checker run failed: {result}")
+    publish_run_outcome(result, "push_errors", "check_errors")
     return result
 
 
@@ -123,6 +125,7 @@ def _run(event: dict[str, Any], context: Any) -> dict[str, Any]:
         "aqi_alerts_found": 0,
         "users_notified": 0,
         "push_errors": 0,
+        "check_errors": 0,
         "weatherkit_fallbacks": 0,
         "weatherkit_backoff_skips": 0,
     }
@@ -146,6 +149,7 @@ def _run(event: dict[str, Any], context: Any) -> dict[str, Any]:
             )
             stats["aqi_alerts_found"] += aqi_count
         except Exception:
+            stats["check_errors"] += 1
             log.exception("Error checking alerts for geohash=%s", geohash)
 
     # 3. Cleanup expired history entries

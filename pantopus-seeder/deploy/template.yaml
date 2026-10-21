@@ -80,6 +80,9 @@ Conditions:
   RunPaymentJobs: !Or
     - !Equals [!Ref SchedulesEnabled, 'true']
     - !Equals [!Ref PaymentJobsEnabled, 'true']
+  RunJobs: !Or
+    - !Condition RunMaintenanceJobs
+    - !Condition RunPaymentJobs
   UseDefaultSecretName: !Equals [!Ref SecretName, '']
 
 Globals:
@@ -679,14 +682,33 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub pantopus-alert-checker-errors-${Environment}
-      AlarmDescription: !Sub 'pantopus-alert-checker-${Environment} failed: weather and air-quality alerts. Check its CloudWatch logs.'
-      Namespace: AWS/Lambda
-      MetricName: Errors
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref AlertCheckerFunction
-      Statistic: Sum
-      Period: 900
+      AlarmDescription: 'A scheduled run crashed or reported a caught/partial failure. Check CloudWatch logs; quiet days are successful.'
+      Metrics:
+        - Id: failures
+          Expression: crashes + outcomes
+          ReturnData: true
+        - Id: crashes
+          ReturnData: false
+          MetricStat:
+            Metric:
+              Namespace: AWS/Lambda
+              MetricName: Errors
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref AlertCheckerFunction
+            Period: 900
+            Stat: Sum
+        - Id: outcomes
+          ReturnData: false
+          MetricStat:
+            Metric:
+              Namespace: !Sub Pantopus/ScheduledJobs/${Environment}
+              MetricName: RunFailures
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref AlertCheckerFunction
+            Period: 900
+            Stat: Sum
       EvaluationPeriods: 1
       Threshold: 1
       ComparisonOperator: GreaterThanOrEqualToThreshold
@@ -729,6 +751,283 @@ Resources:
       Threshold: 1
       ComparisonOperator: GreaterThanOrEqualToThreshold
       TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref JobAlarmTopic
+
+  # Local jobs report partial failures without retrying already published content.
+  SeederFetcherErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub pantopus-seeder-fetcher-errors-${Environment}
+      AlarmDescription: 'A scheduled run crashed or reported a caught/partial failure. Check CloudWatch logs; quiet days are successful.'
+      Metrics:
+        - Id: failures
+          Expression: crashes + outcomes
+          ReturnData: true
+        - Id: crashes
+          ReturnData: false
+          MetricStat:
+            Metric:
+              Namespace: AWS/Lambda
+              MetricName: Errors
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref SeederFetcherFunction
+            Period: 900
+            Stat: Sum
+        - Id: outcomes
+          ReturnData: false
+          MetricStat:
+            Metric:
+              Namespace: !Sub Pantopus/ScheduledJobs/${Environment}
+              MetricName: RunFailures
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref SeederFetcherFunction
+            Period: 900
+            Stat: Sum
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref JobAlarmTopic
+
+  SeederPosterErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub pantopus-seeder-poster-errors-${Environment}
+      AlarmDescription: 'A scheduled run crashed or reported a caught/partial failure. Check CloudWatch logs; quiet days are successful.'
+      Metrics:
+        - Id: failures
+          Expression: crashes + outcomes
+          ReturnData: true
+        - Id: crashes
+          ReturnData: false
+          MetricStat:
+            Metric:
+              Namespace: AWS/Lambda
+              MetricName: Errors
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref SeederPosterFunction
+            Period: 900
+            Stat: Sum
+        - Id: outcomes
+          ReturnData: false
+          MetricStat:
+            Metric:
+              Namespace: !Sub Pantopus/ScheduledJobs/${Environment}
+              MetricName: RunFailures
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref SeederPosterFunction
+            Period: 900
+            Stat: Sum
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref JobAlarmTopic
+
+  SeederDiscoveryErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub pantopus-seeder-discovery-errors-${Environment}
+      AlarmDescription: 'A scheduled run crashed or reported a caught/partial failure. Check CloudWatch logs; quiet days are successful.'
+      Metrics:
+        - Id: failures
+          Expression: crashes + outcomes
+          ReturnData: true
+        - Id: crashes
+          ReturnData: false
+          MetricStat:
+            Metric:
+              Namespace: AWS/Lambda
+              MetricName: Errors
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref SeederDiscoveryFunction
+            Period: 900
+            Stat: Sum
+        - Id: outcomes
+          ReturnData: false
+          MetricStat:
+            Metric:
+              Namespace: !Sub Pantopus/ScheduledJobs/${Environment}
+              MetricName: RunFailures
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref SeederDiscoveryFunction
+            Period: 900
+            Stat: Sum
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref JobAlarmTopic
+
+  # Missing invocations detect stopped schedules, regardless of eligible recipients.
+  # Actions follow the same switches as the schedules; intentional pauses are silent.
+  FetcherMissingRunsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub pantopus-seeder-fetcher-missing-runs-${Environment}
+      AlarmDescription: 'No scheduled invocation in the expected window. Check schedule state, invocation permissions, throttles and Lambda logs.'
+      ActionsEnabled: !If [RunSeeder, true, false]
+      Namespace: AWS/Lambda
+      MetricName: Invocations
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref SeederFetcherFunction
+      Statistic: Sum
+      Period: 21600
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
+      AlarmActions:
+        - !Ref JobAlarmTopic
+
+  PosterMissingRunsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub pantopus-seeder-poster-missing-runs-${Environment}
+      AlarmDescription: 'No scheduled invocation in the expected window. Check schedule state, invocation permissions, throttles and Lambda logs.'
+      ActionsEnabled: !If [RunSeeder, true, false]
+      Namespace: AWS/Lambda
+      MetricName: Invocations
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref SeederPosterFunction
+      Statistic: Sum
+      Period: 10800
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
+      AlarmActions:
+        - !Ref JobAlarmTopic
+
+  DiscoveryMissingRunsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub pantopus-seeder-discovery-missing-runs-${Environment}
+      AlarmDescription: 'No scheduled invocation in the expected window. Check schedule state, invocation permissions, throttles and Lambda logs.'
+      ActionsEnabled: !If [RunSeeder, true, false]
+      Namespace: AWS/Lambda
+      MetricName: Invocations
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref SeederDiscoveryFunction
+      Statistic: Sum
+      Period: 86400
+      EvaluationPeriods: 2
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
+      AlarmActions:
+        - !Ref JobAlarmTopic
+
+  BriefingMissingRunsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub pantopus-briefing-scheduler-missing-runs-${Environment}
+      AlarmDescription: 'No scheduled invocation in the expected window. Check schedule state, invocation permissions, throttles and Lambda logs.'
+      ActionsEnabled: !If [RunBriefings, true, false]
+      Namespace: AWS/Lambda
+      MetricName: Invocations
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref BriefingSchedulerFunction
+      Statistic: Sum
+      Period: 900
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
+      AlarmActions:
+        - !Ref JobAlarmTopic
+
+  CleanupMissingRunsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub pantopus-briefing-cleanup-missing-runs-${Environment}
+      AlarmDescription: 'No scheduled invocation in the expected window. Check schedule state, invocation permissions, throttles and Lambda logs.'
+      ActionsEnabled: !If [RunBriefings, true, false]
+      Namespace: AWS/Lambda
+      MetricName: Invocations
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref BriefingCleanupFunction
+      Statistic: Sum
+      Period: 86400
+      EvaluationPeriods: 2
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
+      AlarmActions:
+        - !Ref JobAlarmTopic
+
+  HomeMissingRunsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub pantopus-home-reminders-missing-runs-${Environment}
+      AlarmDescription: 'No scheduled invocation in the expected window. Check schedule state, invocation permissions, throttles and Lambda logs.'
+      ActionsEnabled: !If [RunHomeReminders, true, false]
+      Namespace: AWS/Lambda
+      MetricName: Invocations
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref HomeRemindersFunction
+      Statistic: Sum
+      Period: 3600
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
+      AlarmActions:
+        - !Ref JobAlarmTopic
+
+  AlertsMissingRunsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub pantopus-alert-checker-missing-runs-${Environment}
+      AlarmDescription: 'No scheduled invocation in the expected window. Check schedule state, invocation permissions, throttles and Lambda logs.'
+      ActionsEnabled: !If [RunAlerts, true, false]
+      Namespace: AWS/Lambda
+      MetricName: Invocations
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref AlertCheckerFunction
+      Statistic: Sum
+      Period: 1800
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
+      AlarmActions:
+        - !Ref JobAlarmTopic
+
+  JobsMissingRunsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub pantopus-job-trigger-missing-runs-${Environment}
+      AlarmDescription: 'No scheduled invocation in the expected window. Check schedule state, invocation permissions, throttles and Lambda logs.'
+      ActionsEnabled: !If [RunJobs, true, false]
+      Namespace: AWS/Lambda
+      MetricName: Invocations
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref JobTriggerFunction
+      Statistic: Sum
+      Period: 10800
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
       AlarmActions:
         - !Ref JobAlarmTopic
 
