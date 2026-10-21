@@ -32,6 +32,7 @@ const {
 } = require('../utils/moduleSchemas');
 const stripeService = require('../stripe/stripeService');
 const blockService = require('../services/blockService');
+const { canActAsBusiness } = require('../services/chatBusinessAccess');
 const { escapeIlike } = require('../utils/escapeIlike');
 const { publicPayment, payeePayment, publicGigFee } = require('../stripe/gigPaymentProof');
 const paidGigAcceptance = require('../services/gigPaymentAcceptance');
@@ -4101,7 +4102,7 @@ router.post('/:gigId/bids', verifyToken, async (req, res) => {
       return res.status(400).json({ error: 'This gig is no longer accepting bids' });
     }
 
-    if (gig.user_id === userId) {
+    if (await canActAsBusiness(gig.user_id, userId)) {
       return res.status(400).json({ error: 'You cannot bid on your own gig' });
     }
 
@@ -4467,6 +4468,16 @@ router.put('/:gigId/bids/:bidId', verifyToken, async (req, res) => {
       return res.status(400).json({ error: 'Only pending or countered bids can be updated' });
     }
 
+    const { data: gig, error: gigErr } = await supabaseAdmin
+      .from('Gig')
+      .select('user_id')
+      .eq('id', gigId)
+      .single();
+    if (gigErr || !gig) return res.status(404).json({ error: 'Gig not found' });
+    if (await canActAsBusiness(gig.user_id, userId)) {
+      return res.status(400).json({ error: 'You cannot bid on your own gig' });
+    }
+
     const { data: updatedBid, error: updErr } = await supabaseAdmin
       .from('GigBid')
       .update({
@@ -4543,6 +4554,11 @@ router.post('/:gigId/bids/:bidId/accept', verifyToken, async (req, res) => {
 
     if (String(bid.gig_id) !== String(gigId)) {
       return res.status(400).json({ error: 'Bid does not belong to this gig' });
+    }
+
+    // Recheck old bids and membership changes before payment or worker assignment.
+    if (await canActAsBusiness(gig.user_id, bid.user_id)) {
+      return res.status(400).json({ error: 'You cannot accept your own task' });
     }
 
     const agreedPrice = Number(bid.bid_amount);
@@ -4786,6 +4802,11 @@ router.post('/:gigId/bids/:bidId/finalize-accept', verifyToken, async (req, res)
 
     if (String(bid.gig_id) !== String(gigId)) {
       return res.status(400).json({ error: 'Bid does not belong to this gig' });
+    }
+
+    // Recheck old bids and membership changes before payment or worker assignment.
+    if (await canActAsBusiness(gig.user_id, bid.user_id)) {
+      return res.status(400).json({ error: 'You cannot accept your own task' });
     }
 
     let finalized;
@@ -5058,6 +5079,17 @@ router.post('/:gigId/bids/:bidId/counter/accept', verifyToken, async (req, res) 
       return res.status(400).json({ error: 'No pending counter-offer on this bid' });
     }
 
+    const { data: gig, error: gigErr } = await supabaseAdmin
+      .from('Gig')
+      .select('user_id, title')
+      .eq('id', gigId)
+      .single();
+
+    if (gigErr || !gig) return res.status(404).json({ error: 'Gig not found' });
+    if (await canActAsBusiness(gig.user_id, userId)) {
+      return res.status(400).json({ error: 'You cannot bid on your own gig' });
+    }
+
     const nowIso = new Date().toISOString();
     const { data: updatedBid, error: updateErr } = await supabaseAdmin
       .from('GigBid')
@@ -5079,12 +5111,6 @@ router.post('/:gigId/bids/:bidId/counter/accept', verifyToken, async (req, res) 
     }
 
     // Notify the requester
-    const { data: gig } = await supabaseAdmin
-      .from('Gig')
-      .select('user_id, title')
-      .eq('id', gigId)
-      .single();
-
     if (gig) {
       const { data: bidder } = await supabaseAdmin
         .from('User')
@@ -5136,6 +5162,17 @@ router.post('/:gigId/bids/:bidId/counter/decline', verifyToken, async (req, res)
       return res.status(400).json({ error: 'No pending counter-offer on this bid' });
     }
 
+    const { data: gig, error: gigErr } = await supabaseAdmin
+      .from('Gig')
+      .select('user_id, title')
+      .eq('id', gigId)
+      .single();
+
+    if (gigErr || !gig) return res.status(404).json({ error: 'Gig not found' });
+    if (await canActAsBusiness(gig.user_id, userId)) {
+      return res.status(400).json({ error: 'You cannot bid on your own gig' });
+    }
+
     const nowIso = new Date().toISOString();
     const { data: updatedBid, error: updateErr } = await supabaseAdmin
       .from('GigBid')
@@ -5156,12 +5193,6 @@ router.post('/:gigId/bids/:bidId/counter/decline', verifyToken, async (req, res)
     }
 
     // Notify the requester
-    const { data: gig } = await supabaseAdmin
-      .from('Gig')
-      .select('user_id, title')
-      .eq('id', gigId)
-      .single();
-
     if (gig) {
       const { data: bidder } = await supabaseAdmin
         .from('User')
@@ -6468,8 +6499,10 @@ router.post('/:gigId/change-orders/:orderId/approve', verifyToken, async (req, r
       return res.status(400).json({ error: `Change order is already ${order.status}` });
     }
 
-    // The approver must be the OTHER party (not the requester)
-    if (String(order.requested_by) === String(userId)) {
+    // The business and anyone who can act for it are the same party.
+    if (String(order.requested_by) === String(userId)
+      || (await canActAsBusiness(gig.user_id, userId)
+        && await canActAsBusiness(gig.user_id, order.requested_by))) {
       return res.status(403).json({ error: 'You cannot approve your own change order' });
     }
 
@@ -6579,7 +6612,10 @@ router.post('/:gigId/change-orders/:orderId/reject', verifyToken, async (req, re
       return res.status(400).json({ error: `Change order is already ${order.status}` });
     }
 
-    if (String(order.requested_by) === String(userId)) {
+    // The business and anyone who can act for it are the same party.
+    if (String(order.requested_by) === String(userId)
+      || (await canActAsBusiness(gig.user_id, userId)
+        && await canActAsBusiness(gig.user_id, order.requested_by))) {
       return res
         .status(403)
         .json({ error: 'You cannot reject your own change order. Use withdraw instead.' });
@@ -7681,6 +7717,16 @@ router.patch('/:id/my-bid', verifyToken, async (req, res) => {
     if (!existing) return res.status(404).json({ error: 'Bid not found' });
     if (existing.status !== 'pending')
       return res.status(400).json({ error: 'Only pending bids can be edited' });
+
+    const { data: gig, error: gigErr } = await supabaseAdmin
+      .from('Gig')
+      .select('user_id')
+      .eq('id', gigId)
+      .single();
+    if (gigErr || !gig) return res.status(404).json({ error: 'Gig not found' });
+    if (await canActAsBusiness(gig.user_id, userId)) {
+      return res.status(400).json({ error: 'You cannot bid on your own gig' });
+    }
 
     const patch = {};
     if (bid_amount !== undefined) patch.bid_amount = bid_amount;
