@@ -66,6 +66,7 @@ import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.api.models.geo.GeoSuggestion
+import app.pantopus.android.data.gigs.GigCameraPhotos
 import app.pantopus.android.ui.components.FutureDateTimePickerDialogs
 import app.pantopus.android.ui.components.PantopusFieldState
 import app.pantopus.android.ui.components.PantopusTextField
@@ -81,7 +82,6 @@ import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
 import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
-import java.io.File
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -140,7 +140,7 @@ fun PostGigV1Screen(
             if (success) handlePicked(uri)
         }
     val launchCamera = {
-        val photoFile = File(context.cacheDir, "gig-camera-${UUID.randomUUID()}.jpg")
+        val photoFile = GigCameraPhotos.newFile(context.cacheDir)
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", photoFile)
         pendingCameraUri = uri.toString()
         // No camera app (or a broken resolver) must not crash — drop it.

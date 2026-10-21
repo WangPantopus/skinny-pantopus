@@ -29,10 +29,16 @@ function categorizeFile(mimeType) {
 }
 
 function generateS3Key(folder, originalFilename, userId) {
+  return generateOpaqueS3Key(`${folder}/${userId}`, originalFilename);
+}
+
+// A key that names no uploader, for files a letter carries: a letter can be sent as a business, its recipients see
+// the file's URL, and the uploader's id in it would name the person behind the business.
+function generateOpaqueS3Key(folder, originalFilename) {
   const ext = path.extname(originalFilename).toLowerCase();
   const ts = Date.now();
   const rand = crypto.randomBytes(8).toString('hex');
-  return `${folder}/${userId}/${ts}_${rand}${ext}`;
+  return `${folder}/${ts}_${rand}${ext}`;
 }
 
 function getPublicUrl(key) {
@@ -411,10 +417,12 @@ async function getPresignedDownloadUrl(key, expiresIn = 3600) {
   return getSignedUrl(s3Client, new GetObjectCommand({ Bucket: S3_BUCKET, Key: key }), { expiresIn });
 }
 
-// An object's bytes as a stream, for the API to serve under its own address.
-async function getObjectStream(key, bucket = S3_BUCKET) {
-  const response = await s3Client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
-  return { body: response.Body, contentLength: response.ContentLength };
+// An object's bytes as a stream, for the API to serve under its own address. With `range` (one HTTP byte range, as a
+// Range header), storage may answer with just those bytes: contentRange then says which.
+async function getObjectStream(key, bucket = S3_BUCKET, range) {
+  const response = await s3Client.send(new GetObjectCommand({ Bucket: bucket, Key: key, ...(range ? { Range: range } : {}) }));
+  const partial = Boolean(range) && response.$metadata?.httpStatusCode === 206 && response.ContentRange;
+  return { body: response.Body, contentLength: response.ContentLength, contentRange: partial ? response.ContentRange : undefined };
 }
 
 async function getObjectAsString(key, bucket = S3_BUCKET) {
@@ -445,7 +453,7 @@ function isAllowedType(mimeType) {
 }
 
 module.exports = {
-  categorizeFile, generateS3Key, getPublicUrl, isPublicStorageUrl, isAllowedType,
+  categorizeFile, generateS3Key, generateOpaqueS3Key, getPublicUrl, isPublicStorageUrl, isAllowedType,
   uploadToS3, uploadProfilePicture, uploadGigMedia,
   chatFileStorageReference, chatFileObjectMetadata, removeDeletedChatFile,
   verifyGigCompletionFile, normalizeGigCompletionFile,

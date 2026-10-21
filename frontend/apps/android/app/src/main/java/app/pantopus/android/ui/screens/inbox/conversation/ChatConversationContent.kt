@@ -5,6 +5,7 @@ package app.pantopus.android.ui.screens.inbox.conversation
 import androidx.compose.runtime.Immutable
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.ai.AIScreenContext
+import app.pantopus.android.data.api.models.chats.ChatAttachmentDto
 import app.pantopus.android.ui.screens.compose.pulse.PulseComposeDraftFields
 import app.pantopus.android.ui.theme.PantopusIcon
 import java.io.File
@@ -154,6 +155,10 @@ data class ChatConversationRouteArgs(
     val gigId: String? = null,
     /** The screen an assistant thread was opened from (Ask Pantopus), or null. */
     val aiContext: AIScreenContext? = null,
+    /** A brief's or nudge's notification id: the assistant thread opens at its message. */
+    val aiNudgeId: String? = null,
+    /** The conversation that brief or nudge was added to: the assistant thread opens and continues it. */
+    val aiConversationId: String? = null,
 )
 
 /**
@@ -227,6 +232,13 @@ data class ChatFanEntitlement(
 enum class ChatSystemLinkAccent { Primary, Success, Warning, Error }
 
 enum class ChatQueuedAttachmentKind { Image, Document }
+
+/** A document sent to the assistant (a PDF), as its chip shows it: the file's name and size. */
+@Immutable
+data class ChatSentFile(
+    val name: String,
+    val sizeLabel: String? = null,
+)
 
 @Immutable
 data class ChatQueuedAttachment(
@@ -388,6 +400,7 @@ data class ChatShareListingOption(
 data class ChatOpenFile(
     val file: File,
     val mimeType: String,
+    val liveFile: File? = null,
 )
 
 /** Body of a single bubble. */
@@ -397,6 +410,8 @@ sealed interface ChatBubbleBody {
     data class TextWithImages(
         val text: String,
         val imageUrls: List<String>,
+        /** Documents (PDFs) sent to the assistant with the message, shown as file chips. */
+        val files: List<ChatSentFile> = emptyList(),
     ) : ChatBubbleBody
 
     /**
@@ -419,6 +434,7 @@ sealed interface ChatBubbleBody {
         val caption: String? = null,
         val fileUrl: String? = null,
         val mimeType: String? = null,
+        val liveVideoFileId: String? = null,
     ) : ChatBubbleBody
 
     data class LocationCard(val card: ChatLocationCard) : ChatBubbleBody
@@ -471,6 +487,7 @@ data class ChatBubbleContent(
     val isContinuation: Boolean = false,
     /** Public sender label for multi-person rooms; never the room title. */
     val senderName: String? = null,
+    val attachments: List<ChatAttachmentDto> = emptyList(),
 )
 
 @Immutable

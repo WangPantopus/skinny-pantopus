@@ -93,8 +93,13 @@ public struct PulsePostDetailLoadedContent: View {
         )
     }
 
-    /// Opens the author's profile; nil (no tap) when the post came without its author's id.
+    /// Opens the author's profile, or a business author's page; nil (no tap) when the post came
+    /// without its author's id, or from a business with no published page (the web links none).
     private var authorProfileTap: (@MainActor () -> Void)? {
+        if let creator = detail.post.creator, creator.identityType == "business" {
+            guard let businessId = creator.businessPageId else { return nil }
+            return { onOpenBusiness(businessId) }
+        }
         let userId = detail.post.userId
         guard !userId.isEmpty else { return nil }
         return { onOpenProfile(userId) }

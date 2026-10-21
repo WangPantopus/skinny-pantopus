@@ -16,6 +16,7 @@ const router = express.Router();
 const crypto = require('crypto');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const verifyToken = require('../middleware/verifyToken');
+const { canActAsBusiness } = require('../services/chatBusinessAccess');
 const logger = require('../utils/logger');
 const { createNotification } = require('../services/notificationService');
 const stripeService = require('../stripe/stripeService');
@@ -90,7 +91,7 @@ router.post('/:gigId/instant-accept', verifyToken, async (req, res) => {
     }
 
     // 4. Validate not self-accept
-    if (gig.user_id === helperId) {
+    if (await canActAsBusiness(gig.user_id, helperId)) {
       return res.status(400).json({
         error: 'You cannot accept your own task',
       });

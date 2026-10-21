@@ -21,6 +21,7 @@ const { isUnpublishedBusiness } = require('../utils/visibilityPolicy');
 const {
   isBusinessAccount,
   canActAsBusiness,
+  businessStaff,
   businessMembership,
   actingBusinessInRoom,
   taskBusinessInRoom,
@@ -39,6 +40,7 @@ const {
 } = require('../services/chatGigRoomAccess');
 const { incCounter, recordHistogram, getSnapshot } = require('../services/chatMetrics');
 const pushService = require('../services/pushService');
+const notificationService = require('../services/notificationService');
 const rateLimit = require('express-rate-limit');
 const { pipeline } = require('stream/promises');
 const sharp = require('sharp');
@@ -373,18 +375,87 @@ async function personRowUnread(userId, otherUserId, sentRoomId) {
 async function emitToBusinessStaff(emitTo, payload, businessIds, heard) {
   if (businessIds.length === 0) return;
   const { connectedUsers } = require('../socket/chatSocketio');
-  const { data: team, error } = await supabaseAdmin
-    .from('BusinessTeam')
-    .select('business_user_id, user_id')
-    .in('business_user_id', businessIds)
-    .eq('is_active', true);
-  if (error || !Array.isArray(team)) throw new Error(error?.message || 'business team unavailable');
-  for (const row of team) {
-    const staffId = String(row.user_id);
-    if (heard.has(staffId) || !connectedUsers.has(staffId)) continue;
-    if (!(await canActAsBusiness(row.business_user_id, staffId))) continue;
+  const staff = await businessStaff(businessIds, {
+    include: (staffId) => !heard.has(staffId) && connectedUsers.has(staffId),
+  });
+  for (const { userId: staffId } of staff) {
+    if (heard.has(staffId)) continue;
     heard.add(staffId);
     emitTo(staffId, payload);
+  }
+}
+
+// ── Business inbox notices ───────────────────────────────────────────
+// The chat push goes to room members, so it doesn't reach a business's owner and staff either. Each one who may act
+// for a business that received a message gets a notice (bell row, and a push unless their push is off) that opens the
+// business's thread: the web's /app/businesses/:id/chat/:roomId, which the apps open as the business, then its
+// thread. Never their personal Messages. Each message has an idempotent notice; reading the conversation for the
+// business reads its notices. Room members already got the chat push; anyone across a block
+// with the sender gets nothing.
+const BUSINESS_MESSAGE_NOTICE = 'business_message';
+
+function businessThreadLink(businessUserId, roomId) {
+  return `/app/businesses/${businessUserId}/chat/${roomId}`;
+}
+
+async function notifyBusinessStaff({ room, messageId, businessIds, actorUserId, senderUserId, memberIds, mutedBusinessIds, preview }) {
+  const skip = new Set([String(actorUserId), String(senderUserId), ...memberIds.map(String)]);
+  const staff = await businessStaff(businessIds, { include: (staffId) => !skip.has(staffId) });
+  if (staff.length === 0) return;
+  const [{ data: businesses, error: businessError }, { data: sender, error: senderError }] = await Promise.all([
+    supabaseAdmin.from('User').select('id, name, username').in('id', businessIds),
+    supabaseAdmin
+      .from('User')
+      .select('id, username, name, first_name, middle_name, last_name')
+      .eq('id', senderUserId)
+      .maybeSingle(),
+  ]);
+  if (businessError || senderError) throw new Error((businessError || senderError).message);
+  const businessNames = new Map((businesses || []).map((b) => [String(b.id), b.name || b.username || 'your business']));
+  // The sender as the business inbox lists them.
+  const senderIdentity = sender ? (await loadLocalIdentityMapForUsers([sender])).get(String(sender.id)) : null;
+  const senderName = senderIdentity?.displayName || 'Someone';
+  for (const { businessUserId, userId: staffId } of staff) {
+    try {
+      if (await isBlocked(staffId, senderUserId)) continue;
+    } catch {
+      continue;
+    }
+    const link = businessThreadLink(businessUserId, room.id);
+    await notificationService.createNotification({
+      userId: staffId,
+      type: BUSINESS_MESSAGE_NOTICE,
+      title: `New message for ${businessNames.get(businessUserId) || 'your business'}`,
+      body: `${senderName}: ${preview}`,
+      icon: '💬',
+      link,
+      // user_id is the sender: lists and counts leave the notice out across a later block.
+      metadata: { business_user_id: businessUserId, room_id: String(room.id), user_id: String(senderUserId), message_id: messageId },
+      contextType: 'business',
+      contextId: businessUserId,
+      idempotencyKey: `business-message:${messageId}:${businessUserId}:${staffId}`,
+      sendPush: !mutedBusinessIds.has(businessUserId),
+    });
+  }
+}
+
+// Reading a business's conversation reads the reader's own notices about it.
+async function readBusinessNotices(userId, businessUserId, roomIds) {
+  if (!businessUserId || String(businessUserId) === String(userId) || roomIds.length === 0) return;
+  try {
+    const { data: read, error } = await supabaseAdmin
+      .from('Notification')
+      .update({ is_read: true })
+      .eq('user_id', userId)
+      .eq('type', BUSINESS_MESSAGE_NOTICE)
+      .in('link', roomIds.map((roomId) => businessThreadLink(businessUserId, roomId)))
+      .eq('is_read', false)
+      .select('id');
+    if (error) throw error;
+    if (read?.length) badgeService.emitBadgeUpdate(userId);
+  } catch (err) {
+    // The conversation is read either way; the notice stays unread in the bell.
+    logger.warn('business_message_notice_read_failed', { userId, error: err.message });
   }
 }
 
@@ -470,7 +541,7 @@ async function deliverNewMessage(io, { room, message, actorUserId, senderUserId 
   // Push fresh badge counts (including total message count) immediately.
   const { data: participantRows } = await supabaseAdmin
     .from('ChatParticipant')
-    .select('user_id')
+    .select('user_id, notifications_enabled, user:user_id(account_type)')
     .eq('room_id', roomId)
     .eq('is_active', true);
   const participantUserIds = Array.from(new Set((participantRows || []).map((row) => String(row.user_id)).filter(Boolean)));
@@ -486,6 +557,12 @@ async function deliverNewMessage(io, { room, message, actorUserId, senderUserId 
   }
   if (recipientUserIds.length === 0) return;
   badgeService.emitBadgeUpdateToMany(recipientUserIds);
+
+  const text = String(message.message || '');
+  const type = message.type || 'text';
+  const preview = type === 'text'
+    ? (text.length > 100 ? text.slice(0, 100) + '…' : text)
+    : type === 'file' ? '📎 Sent an attachment' : '💬 New message';
 
   // A device push to every recipient who has push on, so it arrives when the
   // app is in the background or closed.
@@ -504,11 +581,6 @@ async function deliverNewMessage(io, { room, message, actorUserId, senderUserId 
       if (pushEnabledIds.length === 0) return;
 
       const senderName = serializeUserIdentityForViewer(message.sender)?.displayName || 'Someone';
-      const text = String(message.message || '');
-      const type = message.type || 'text';
-      const preview = type === 'text'
-        ? (text.length > 100 ? text.slice(0, 100) + '…' : text)
-        : type === 'file' ? '📎 Sent an attachment' : '💬 New message';
       await pushService.sendToUsers(pushEnabledIds, {
         title: senderName,
         body: preview,
@@ -518,6 +590,26 @@ async function deliverNewMessage(io, { room, message, actorUserId, senderUserId 
       logger.warn('Chat push delivery failed (non-blocking)', { error: err.message, roomId });
     }
   })();
+
+  const recipientSet = new Set(recipientUserIds);
+  const businessRecipientIds = (participantRows || [])
+    .filter((row) => row.user?.account_type === 'business' && recipientSet.has(String(row.user_id)))
+    .map((row) => String(row.user_id));
+  if (businessRecipientIds.length > 0) {
+    notifyBusinessStaff({
+      room,
+      messageId: message.id,
+      businessIds: businessRecipientIds,
+      actorUserId,
+      senderUserId,
+      memberIds: participantUserIds,
+      mutedBusinessIds: new Set((participantRows || [])
+        .filter((row) => row.notifications_enabled === false).map((row) => String(row.user_id))),
+      preview,
+    }).catch((err) => {
+      logger.warn('business_message_notice_failed', { requestId, roomId, error: err.message });
+    });
+  }
 }
 
 async function resolveRoomPreviewMap(roomPreviews, requestId, logContext) {
@@ -1624,6 +1716,7 @@ router.post('/conversations/:otherUserId/read', verifyToken, async (req, res) =>
     }
 
     badgeService.emitBadgeUpdateToMany(usersToClear);
+    await readBusinessNotices(userId, asBusinessUserId, sharedRoomIds);
     return res.json({ unreadCount: 0, updatedRooms: sharedRoomIds.length });
   } catch (err) {
     logger.error('Conversation read error', { requestId: req.requestId, userId: req.user?.id, error: err.message });
@@ -1864,7 +1957,7 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
       const uniqueFileIds = [...new Set(fileIds.map((id) => String(id)))];
       const { data: files, error: fileErr } = await supabaseAdmin
         .from('File')
-        .select('id, user_id, file_url, original_filename, mime_type, file_size, is_deleted, file_type')
+        .select('id, user_id, file_url, original_filename, mime_type, file_size, is_deleted, file_type, metadata')
         .in('id', uniqueFileIds);
 
       if (fileErr) {
@@ -1882,6 +1975,12 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
       }
 
       const validMap = new Map(validFiles.map((f) => [String(f.id), f]));
+      for (const file of validFiles) {
+        const pairId = file.metadata?.live_video_file_id || file.metadata?.live_photo_file_id;
+        if (pairId && (!validMap.has(pairId) || String(file.metadata?.room_id) !== String(roomId))) {
+          return res.status(400).json({ error: 'Attach both Live Photo resources in their original room' });
+        }
+      }
       attachmentPayload = uniqueFileIds.map((fid) => {
         const f = validMap.get(String(fid));
         return {
@@ -1891,6 +1990,8 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
           mime_type: f.mime_type,
           file_size: f.file_size,
           file_type: f.file_type,
+          ...(f.metadata?.live_video_file_id ? { live_video_file_id: f.metadata.live_video_file_id } : {}),
+          ...(f.metadata?.live_photo_file_id ? { live_photo_file_id: f.metadata.live_photo_file_id } : {}),
         };
       });
     }
@@ -2279,6 +2380,7 @@ router.post('/rooms/:roomId/read', verifyToken, async (req, res) => {
     }
 
     badgeService.emitBadgeUpdateToMany(usersToClear);
+    await readBusinessNotices(userId, asBusinessUserId, [roomIdStr]);
     res.json({ unreadCount: 0 });
     
   } catch (err) {
@@ -3033,7 +3135,7 @@ router.get('/messages/:messageId/reactions', verifyToken, async (req, res) => {
 });
 
 // ============================================================
-// Authenticated chat file download — generates short-lived signed URL
+// Authenticated chat file download — streamed by this API
 // ============================================================
 
 // Allow auth token via query param for contexts where headers can't be set
@@ -3048,6 +3150,22 @@ function tokenFromQuery(req, _res, next) {
   next();
 }
 
+// One HTTP byte range (`bytes=a-b`, `bytes=a-`, `bytes=-n`) resolved against the file's size: a chat file's bytes never
+// change under its id, so storage is only ever asked for bytes that exist (local storage hangs on a range past the end).
+// Null for no range or one this API doesn't serve (the whole file then answers); `unsatisfiable` past the end.
+function chatFileByteRange(header, size) {
+  const match = /^bytes=(\d*)-(\d*)$/.exec(header || '');
+  if (!match || (!match[1] && !match[2]) || !Number.isSafeInteger(size) || size <= 0) return null;
+  if (!match[1]) {
+    const suffix = Number(match[2]);
+    return suffix > 0 ? { start: Math.max(0, size - suffix), end: size - 1 } : { unsatisfiable: true };
+  }
+  const start = Number(match[1]);
+  if (match[2] && Number(match[2]) < start) return null;
+  if (start >= size) return { unsatisfiable: true };
+  return { start, end: match[2] ? Math.min(Number(match[2]), size - 1) : size - 1 };
+}
+
 router.get('/files/:fileId', tokenFromQuery, verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
@@ -3060,7 +3178,7 @@ router.get('/files/:fileId', tokenFromQuery, verifyToken, async (req, res) => {
     // Look up the file record
     const { data: file, error: fileErr } = await supabaseAdmin
       .from('File')
-      .select('id, file_path, file_url, mime_type, metadata, is_deleted, file_type, access_count')
+      .select('id, file_path, file_url, original_filename, mime_type, file_size, metadata, is_deleted, file_type, access_count')
       .eq('id', fileId)
       .maybeSingle();
 
@@ -3136,13 +3254,41 @@ router.get('/files/:fileId', tokenFromQuery, verifyToken, async (req, res) => {
       });
     }
 
-    // Videos and documents: a 15-minute signed link (range requests, never cached automatically).
-    const signedUrl = await s3Service.getPresignedDownloadUrl(file.file_path, 900);
-    trackAccess();
-    res.redirect(302, signedUrl);
+    // Videos and documents are served here too, never by a link to storage: the object's key and metadata name the
+    // person who uploaded it, and in a business's rooms that is its owner or a staff member, whom the customer must not
+    // learn (a business seat never exposes the person behind it). One byte range at a time, so players can seek; never
+    // cached. A video plays in the page; a document downloads under its own name.
+    const size = Number(file.file_size);
+    const range = chatFileByteRange(req.headers.range, size);
+    if (range?.unsatisfiable) return res.status(416).set('Content-Range', `bytes */${size}`).end();
+    let object;
+    try {
+      object = await s3Service.getObjectStream(file.file_path, undefined, range ? `bytes=${range.start}-${range.end}` : undefined);
+    } catch (storageErr) {
+      if (storageErr?.name === 'NoSuchKey' || storageErr?.$metadata?.httpStatusCode === 404) {
+        return res.status(404).json({ error: 'File not found' });
+      }
+      throw storageErr;
+    }
+    const name = file.original_filename || 'attachment';
+    const disposition = String(file.mime_type).startsWith('video/') ? 'inline' : 'attachment';
+    res.set({
+      'Cache-Control': 'private, no-store',
+      'Accept-Ranges': 'bytes',
+      'Content-Disposition': `${disposition}; filename="${name.replace(/[^\x20-\x7e]|["\\]/g, '_')}"; `
+        + `filename*=UTF-8''${encodeURIComponent(name).replace(/['()*]/g, c => `%${c.charCodeAt(0).toString(16).toUpperCase()}`)}`,
+    });
+    res.type(file.mime_type || 'application/octet-stream');
+    if (object.contentRange) res.status(206).set('Content-Range', object.contentRange);
+    if (Number.isSafeInteger(object.contentLength)) res.set('Content-Length', String(object.contentLength));
+    // A player asks for many ranges per view: count the first.
+    if (!range || range.start === 0) trackAccess();
+    return pipeline(object.body, res).catch((streamErr) => {
+      logger.warn('Chat file stream ended early', { requestId: req.requestId, fileId, error: streamErr.message });
+    });
   } catch (err) {
     logger.error('Chat file download error', { requestId: req.requestId, userId: req.user?.id, fileId: req.params.fileId, error: err.message });
-    res.status(500).json({ error: 'Failed to generate download URL' });
+    res.status(500).json({ error: 'Failed to load the file' });
   }
 });
 

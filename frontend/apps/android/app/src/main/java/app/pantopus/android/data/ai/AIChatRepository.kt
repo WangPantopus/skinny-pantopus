@@ -148,10 +148,11 @@ class AIChatRepository
 
         /**
          * One conversation's earlier turns, so a restored thread shows what
-         * the assistant remembers. Route `backend/routes/ai.js:365`.
+         * the assistant remembers. It sends the chat request's card list, so
+         * history holds only the cards this app shows. Route `backend/routes/ai.js:459`.
          */
         suspend fun conversationMessages(id: String): NetworkResult<AIConversationMessagesResponse> =
-            safeApiCall { api.conversationMessages(id) }
+            safeApiCall { api.conversationMessages(id, AI_CARDS.joinToString(",")) }
 
         /** A restored draft (`GET …/messages`) as the card a streamed one becomes. */
         fun draftCard(
@@ -167,6 +168,9 @@ class AIChatRepository
             val text = label?.trim()?.ifEmpty { null } ?: return null
             return url?.trim()?.ifEmpty { null }?.let { ChatAILink(label = text, url = it) }
         }
+
+        /** Delete one conversation for good. Route `backend/routes/ai.js:451`. */
+        suspend fun deleteConversation(id: String): NetworkResult<Unit> = safeApiCall { api.deleteConversation(id) }
 
         /**
          * One turn of the assistant over server-sent events. [context] says which screen the thread was

@@ -2,11 +2,14 @@
 //  NeighborhoodView.swift
 //  Pantopus
 //
-//  Social discovery is available in every meter state. The meter controls
+//  The Nearby tab's Neighborhood segment (founder decision 2026-10-20): the
+//  density window (`NearbyCellsMapCard`), the meter and "Invite your
+//  neighbors", or "Set up a home" before there is one. The meter controls
 //  the local marketplace and tasks preview and preserves privacy floors.
-//  The Nearby door of October 13, shown while the Pulse redesign is off
-//  (launch cut #11); with it on, the Pulse tab's quiet card (`PulseQuietCard`)
-//  carries the meter instead.
+//  Pulse is the segment beside it and Connections is in the side menu, so
+//  the October 13 door's title and Pulse / Connections rows are gone. Shown
+//  while the Pulse redesign is off (launch cut #11); with it on, the Pulse
+//  tab's quiet card (`PulseQuietCard`) carries the meter instead.
 //
 
 import SwiftUI
@@ -15,37 +18,26 @@ import SwiftUI
 /// is internal, and the app is a single target.
 struct NeighborhoodView: View {
     @State private var viewModel: NeighborhoodViewModel
-    /// Ask Pantopus about recent posts nearby (AI assistant phase 1).
-    @State private var askTopic: AIAskTopic?
 
     /// Present a neighborhood surface (unlocked state) — wired by
     /// `NeighborhoodTabRoot` to its sheet presentation.
     private let onOpenSurface: @MainActor (NeighborhoodDoorStore.Surface) -> Void
-    /// Route to the Place tab's claim flow (no_place state).
+    /// Start adding a home in the Place tab (no_place state).
     private let onClaimPlace: @MainActor () -> Void
-    private let onOpenBeacons: @MainActor () -> Void
-    private let onOpenConnections: @MainActor () -> Void
 
     init(
         viewModel: NeighborhoodViewModel = NeighborhoodViewModel(),
         onOpenSurface: @escaping @MainActor (NeighborhoodDoorStore.Surface) -> Void,
-        onClaimPlace: @escaping @MainActor () -> Void,
-        onOpenBeacons: @escaping @MainActor () -> Void,
-        onOpenConnections: @escaping @MainActor () -> Void
+        onClaimPlace: @escaping @MainActor () -> Void
     ) {
         _viewModel = State(initialValue: viewModel)
         self.onOpenSurface = onOpenSurface
         self.onClaimPlace = onClaimPlace
-        self.onOpenBeacons = onOpenBeacons
-        self.onOpenConnections = onOpenConnections
     }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.s4) {
-                header
-                socialDestinations
-
                 switch viewModel.state {
                 case .loading:
                     loadingBody
@@ -75,32 +67,19 @@ struct NeighborhoodView: View {
                 }
             }
             .padding(.horizontal, Spacing.s4)
+            .padding(.top, Spacing.s3)
             .padding(.bottom, Spacing.s10)
         }
         .background(Theme.Color.appBg)
-        .accessibilityIdentifier("nearbyDoor")
-        .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
+        .accessibilityIdentifier("nearbyNeighborhood")
+        // The offline strip is the tab's, above the segment header (`NeighborhoodTabRoot`), as on the Pulse segment.
         .task { await viewModel.load() }
         .refreshable { await viewModel.refresh() }
         // A home added, claimed or verified (`homes`) can change the meter.
         .refreshesOnStoreChange(affects: { $0.names(topic: ScreenTopic.homes) }, perform: { await viewModel.load() })
-        .askPantopus($askTopic)
     }
 
     // MARK: - Loading / error
-
-    private var socialDestinations: some View {
-        VStack(spacing: Spacing.s3) {
-            socialRow("Pulse", detail: "Browse a chosen area or catch up with your connections", icon: .rss) { onOpenSurface(.pulse) }
-            // Launch cut #1 (Beacon): hidden for the first launch.
-            if LaunchFeatures.beacon {
-                socialRow(
-                    "Beacons", detail: "Find public profiles and return to the people you follow", icon: .radio, action: onOpenBeacons
-                )
-            }
-            socialRow("Connections", detail: "Keep up with people you know", icon: .users, action: onOpenConnections)
-        }
-    }
 
     private var loadingBody: some View {
         VStack(spacing: Spacing.s3) {
@@ -333,65 +312,5 @@ struct NeighborhoodView: View {
     private func areaSuffix(_ meter: NeighborhoodMeterDTO) -> String {
         if let city = meter.area?.city, !city.isEmpty { return "near \(city)" }
         return "near you"
-    }
-}
-
-/// The header and the social-row builder live outside the struct body to keep
-/// it inside the type-body length budget (first-launch gates, 2026-10-01; Ask
-/// Pantopus, 2026-10-20).
-extension NeighborhoodView {
-    // MARK: - Header
-
-    /// "Nearby", with Ask Pantopus at the end of the line.
-    private var header: some View {
-        VStack(alignment: .leading, spacing: Spacing.s2) {
-            HStack(spacing: Spacing.s2) {
-                Text("Nearby")
-                    .font(.system(size: 28, weight: .heavy))
-                    .foregroundStyle(Theme.Color.appText)
-                Spacer(minLength: 0)
-                AskPantopusButton(accessibilityIdentifier: "nearbyAskPantopus") {
-                    askTopic = .nearby()
-                } label: {
-                    AskPantopusGlyph(size: 20)
-                        .frame(width: 44, height: 44)
-                }
-            }
-            // Launch cut #1 (Beacon): the copy drops Beacons for the first launch.
-            Text(
-                LaunchFeatures.beacon
-                    ? "Join conversations, find Beacons, and stay connected. Choose an area inside Pulse to browse local posts. "
-                    + "Following Beacons needs no home address."
-                    : "Join conversations and stay connected. Choose an area inside Pulse to browse local posts."
-            )
-            .pantopusTextStyle(.small)
-            .foregroundStyle(Theme.Color.appTextSecondary)
-            .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(.top, Spacing.s3)
-    }
-
-    private func socialRow(_ title: String, detail: String, icon: PantopusIcon, action: @escaping @MainActor () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: Spacing.s3) {
-                Icon(icon, size: 20, color: .white)
-                    .frame(width: 44, height: 44)
-                    .background(Theme.Color.primarySolid)
-                    .clipShape(RoundedRectangle(cornerRadius: Radii.md))
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(title).font(.system(size: 15, weight: .bold)).foregroundStyle(Theme.Color.appText)
-                    Text(detail).pantopusTextStyle(.small).foregroundStyle(Theme.Color.appTextSecondary)
-                }
-                Spacer(minLength: 0)
-                Icon(.chevronRight, size: 18, color: Theme.Color.appTextSecondary)
-            }
-            .padding(Spacing.s4)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.Color.appSurface)
-            .clipShape(RoundedRectangle(cornerRadius: Radii.lg))
-            .overlay(RoundedRectangle(cornerRadius: Radii.lg).stroke(Theme.Color.appBorder))
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("nearbySocial.\(title.lowercased())")
     }
 }

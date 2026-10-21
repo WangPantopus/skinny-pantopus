@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -46,6 +47,7 @@ import app.pantopus.android.core.perf.ReportContentShown
 import app.pantopus.android.data.ai.AIScreenContext
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.GhostButton
+import app.pantopus.android.ui.components.NavigationMenuButton
 import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.components.RefreshFailedLine
 import app.pantopus.android.ui.components.RefreshNotice
@@ -82,6 +84,8 @@ fun TodayTabScreen(
     onOpenPlace: ((homeId: String) -> Unit)? = null,
     plans: PlansTodayActions? = null,
     onAsk: ((AIScreenContext) -> Unit)? = null,
+    /** The side menu, on every tab (founder decision 2026-10-20); null hides the button. */
+    onOpenMenu: (() -> Unit)? = null,
     viewModel: TodayTabViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -97,21 +101,25 @@ fun TodayTabScreen(
     val placeNow = rememberMinuteClock(todayPlaceZone(state))
     val nowMs = placeNow.toInstant().toEpochMilli()
     Column(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg).testTag("todayTab")) {
-        Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp)) {
-            Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Today", fontSize = 22.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.4).sp, color = PantopusColors.appText)
-                // The date beside the title (the f1-today-tab design); it turns over at midnight.
-                Text(
-                    placeNow.format(DateTimeFormatter.ofPattern("EEE, MMM d", Locale.getDefault())),
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = PantopusColors.appTextMuted,
-                    modifier = Modifier.padding(bottom = 3.dp),
-                )
+        // The title, date and address, with the side menu at the end of the title line.
+        Row(modifier = Modifier.padding(start = 18.dp, end = 6.dp, top = 10.dp, bottom = 10.dp)) {
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Today", fontSize = 22.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.4).sp, color = PantopusColors.appText)
+                    // The date beside the title (the f1-today-tab design); it turns over at midnight.
+                    Text(
+                        placeNow.format(DateTimeFormatter.ofPattern("EEE, MMM d", Locale.getDefault())),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = PantopusColors.appTextMuted,
+                        modifier = Modifier.padding(bottom = 3.dp),
+                    )
+                }
+                (state as? TodayTabUiState.Loaded)?.intelligence?.place?.label?.let {
+                    Text(it, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = PantopusColors.appTextMuted, maxLines = 1)
+                }
             }
-            (state as? TodayTabUiState.Loaded)?.intelligence?.place?.label?.let {
-                Text(it, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = PantopusColors.appTextMuted, maxLines = 1)
-            }
+            onOpenMenu?.let { NavigationMenuButton(onClick = it, testTag = "today.menu", modifier = Modifier.offset(y = (-10).dp)) }
         }
         PullToRefreshBox(
             isRefreshing = pulled && refreshing,

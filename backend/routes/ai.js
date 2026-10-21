@@ -14,7 +14,9 @@
  *   GET  /property-profile       — Property intelligence profile
  *   GET  /pulse                  — Neighborhood Pulse (cold-start)
  *   GET  /conversations          — List user's AI conversations
+ *   GET  /conversations/:id/messages?cards= — One conversation's turns, with the cards the app can show
  *   DELETE /conversations/:id    — Delete a conversation
+ *   POST /nudges/:id/fewer       — "Fewer like this" on a nudge or the morning brief
  */
 const express = require('express');
 const Joi = require('joi');
@@ -26,6 +28,7 @@ const validate = require('../middleware/validate');
 const { aiChatLimiter, aiDraftLimiter } = require('../middleware/rateLimiter');
 const { asyncHandler } = require('../errorHandler');
 const agentService = require('../services/ai/agentService');
+const nudgeEngine = require('../services/ai/nudges/engine');
 const radonReport = require('../services/ai/radonReport');
 const { CHAT_MODEL, DRAFT_MODEL } = require('../config/anthropic');
 const propertyIntelligenceService = require('../services/ai/propertyIntelligenceService');
@@ -43,6 +46,19 @@ function aiErrorStatus(errorCode) {
 
 // ─── Validation Schemas ─────────────────────────────────────────────────────
 
+// The draft cards this app can show beyond the original ones (e.g. "pickup_schedule",
+// "action", "link"). Unknown names are ignored, so older servers and newer apps get along.
+const cardsSchema = Joi.array().items(Joi.string().max(40)).max(20);
+
+/** The same list on a GET, comma-separated (`?cards=pickup_schedule,action,link`). */
+function cardsQuery(listed) {
+  if (listed === undefined) return { value: [] };
+  if (typeof listed !== 'string') return { error: new Error('cards must be a comma-separated list') };
+  const names = listed.split(',').map((name) => name.trim()).filter(Boolean);
+  const { error } = Joi.object({ cards: cardsSchema }).validate({ cards: names });
+  return error ? { error } : { value: names };
+}
+
 const chatSchema = Joi.object({
   message: Joi.string().min(1).max(2000).required(),
   conversationId: Joi.string().uuid().optional(),
@@ -52,9 +68,7 @@ const chatSchema = Joi.object({
   }).optional(),
   // The person's own uploads (POST /api/upload/ai-media hands back ai-photo: references) or image URLs.
   images: Joi.array().items(Joi.string().uri()).max(5).optional(),
-  // The draft cards this app can show beyond the original ones (e.g. "pickup_schedule",
-  // "action", "link"). Unknown names are ignored, so older servers and newer apps get along.
-  cards: Joi.array().items(Joi.string().max(40)).max(20).optional(),
+  cards: cardsSchema.optional(),
   // The screen the person tapped Ask on (docs/product/ai-assistant-phase1-contract-2026-10-20.md §6).
   // Unknown surfaces are ignored; access is checked as that screen checks it.
   context: Joi.object({
@@ -439,11 +453,15 @@ router.get('/conversations', verifyToken, asyncHandler(async (req, res) => {
   res.json({ conversations });
 }));
 
-// A conversation's history, so an app can show it again after a relaunch.
+// A conversation's history, so an app can show it again after a relaunch. `?cards=` is the
+// chat request's list, comma-separated: an app gets back only the cards it can show, so a
+// build without action cards never sees one that another build of the same account made.
 router.get('/conversations/:id/messages', verifyToken, asyncHandler(async (req, res) => {
   const { error: invalid } = Joi.string().uuid().validate(req.params.id);
   if (invalid) return res.status(404).json({ error: 'Conversation not found' });
-  const conversation = await agentService.getConversationMessages(req.user.id, req.params.id);
+  const { value: cards, error: badCards } = cardsQuery(req.query.cards);
+  if (badCards) return res.status(400).json({ error: 'Validation failed', message: badCards.message });
+  const conversation = await agentService.getConversationMessages(req.user.id, req.params.id, { cards });
   if (!conversation) return res.status(404).json({ error: 'Conversation not found' });
   res.json(conversation);
 }));
@@ -455,6 +473,16 @@ router.delete('/conversations/:id', verifyToken, asyncHandler(async (req, res) =
     return res.status(404).json({ error: 'Conversation not found' });
   }
   res.json({ message: 'Conversation deleted' });
+}));
+
+// ─── "Fewer like this" ──────────────────────────────────────────────────────
+// The secondary action on every nudge's card (phase 2 contract §3.6): mutes that kind
+// of suggestion for 30 days; on the morning brief, the plain briefing comes back.
+
+router.post('/nudges/:notificationId/fewer', verifyToken, asyncHandler(async (req, res) => {
+  const result = await nudgeEngine.fewerLikeThis(req.user.id, req.params.notificationId);
+  if (!result) return res.status(404).json({ error: 'Suggestion not found' });
+  res.json(result);
 }));
 
 // ─── Audio Transcription ─────────────────────────────────────────────────────

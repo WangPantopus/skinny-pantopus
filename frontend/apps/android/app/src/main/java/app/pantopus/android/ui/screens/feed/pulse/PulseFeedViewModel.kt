@@ -387,6 +387,16 @@ class PulseFeedViewModel
 
         fun refresh() = fetch(isRefresh = true)
 
+        /**
+         * The Nearby posts are on screen: the person's "since you last looked" marker moves to now, at most every
+         * 5 minutes (AI assistant phase 2 contract §6.1), so the assistant's catch-up starts from here.
+         */
+        fun markNearbySeen() {
+            if (_surface.value != FeedSurface.Pulse) return
+            val userId = viewerId ?: return
+            viewModelScope.launch { repo.markNearbySeen(userId) }
+        }
+
         /** Keep the context bar aligned with the accepted feed request's area. */
         var onViewingAreaResolved: (ViewingLocationDto) -> Unit = {}
 

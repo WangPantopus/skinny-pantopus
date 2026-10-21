@@ -27,8 +27,15 @@ struct PlansMapTopBar: View {
                     areaPill
                     if !viewModel.isEmpty { locateButton }
                     if let onAsk { askButton(onAsk) }
+                    menuButton
                 }
                 if !viewModel.isEmpty { chipRow }
+            } else {
+                // Still loading, or failed: the side menu keeps its place.
+                HStack {
+                    Spacer(minLength: 0)
+                    menuButton
+                }
             }
         }
         .padding(.horizontal, Spacing.s3)
@@ -46,6 +53,8 @@ struct PlansMapTopBar: View {
                     .planFont(.body)
                     .foregroundStyle(Theme.Color.appText)
                     .lineLimit(1)
+                    // Room for the menu button beside it on narrow phones.
+                    .minimumScaleFactor(0.85)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Icon(.chevronDown, size: 16, color: Theme.Color.appText)
             }
@@ -83,6 +92,11 @@ struct PlansMapTopBar: View {
         .buttonStyle(.plain)
         .accessibilityLabel("Show my location")
         .accessibilityIdentifier("plansLocate")
+    }
+
+    /// The side menu, on every tab (founder decision 2026-10-20).
+    private var menuButton: some View {
+        NavigationMenuButton(accessibilityIdentifier: "plans.menu", floating: true)
     }
 
     private func askButton(_ action: @escaping @MainActor () -> Void) -> some View {
@@ -183,6 +197,7 @@ struct PlansMapTopBar: View {
             if showsAreaChip {
                 PlanScopeChip(text: selectedKind == .playdate ? "Neighborhood only until you're in" : "Area only until you're in")
             }
+            menuButton
         }
     }
 

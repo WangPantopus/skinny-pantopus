@@ -79,6 +79,9 @@ public struct FeedView: View {
     private let onRefresh: (@MainActor () async -> Void)?
     /// The Nearby feed's header offers "Ask Pantopus" about what's nearby.
     private let asksPantopus: Bool
+    /// Drawn above the top bar: the Nearby tab's segment header (the Pulse |
+    /// Neighborhood switch and the side menu, founder decision 2026-10-20).
+    private let header: AnyView?
 
     init(
         viewModel: PulseFeedViewModel? = nil,
@@ -91,6 +94,7 @@ public struct FeedView: View {
         topMenu: FeedTopMenu? = nil,
         topCard: AnyView? = nil,
         onRefresh: (@MainActor () async -> Void)? = nil,
+        header: AnyView? = nil,
         asksPantopus: Bool = false
     ) {
         // Swift 5.10 crashes while lowering PulseFeedViewModel() in a default-argument thunk.
@@ -112,12 +116,14 @@ public struct FeedView: View {
         self.topMenu = topMenu
         self.topCard = topCard
         self.onRefresh = onRefresh
+        self.header = header
         self.asksPantopus = asksPantopus
     }
 
     public var body: some View {
         ZStack(alignment: .bottomTrailing) {
             VStack(spacing: Spacing.s0) {
+                if let header { header }
                 topBar
                 if viewModel.surface == .beacons {
                     HStack(spacing: Spacing.s4) {
@@ -211,6 +217,11 @@ public struct FeedView: View {
                 contextBarViewModel?.fallbackLabel = $0
             }
             await viewModel.load()
+            if showsNearbyPosts { await NearbyFeedSeen.feedShown() }
+        }
+        // Back on Nearby from Connections, or loaded after an error.
+        .onChange(of: showsNearbyPosts) { _, shown in
+            if shown { Task { await NearbyFeedSeen.feedShown() } }
         }
         .onReceive(NotificationCenter.default.publisher(for: .pulsePostsDidChange)) { _ in
             Task { await viewModel.refresh() }
@@ -245,6 +256,15 @@ public struct FeedView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("pulseFeed")
+    }
+
+    /// The Nearby feed (the one with Ask) shows its posts or its empty state.
+    private var showsNearbyPosts: Bool {
+        guard asksPantopus, viewModel.surface == .pulse else { return false }
+        switch viewModel.state {
+        case .loaded, .empty: return true
+        case .loading, .error: return false
+        }
     }
 
     /// Open the composer pre-filled from a Sports starter prompt.

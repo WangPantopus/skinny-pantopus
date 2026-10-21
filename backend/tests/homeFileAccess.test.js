@@ -4,7 +4,7 @@ const db = require('./__mocks__/supabaseAdmin');
 
 jest.mock('../utils/homePermissions', () => ({ checkHomePermission: jest.fn() }));
 jest.mock('../services/s3Service', () => ({
-  uploadToS3: jest.fn(), generateS3Key: jest.fn(), deleteFromS3: jest.fn(),
+  uploadToS3: jest.fn(), generateS3Key: jest.fn(), generateOpaqueS3Key: jest.fn(), deleteFromS3: jest.fn(),
   createPrivateGigCompletionFile: jest.fn(),
 }));
 const s3 = require('../services/s3Service');
@@ -161,6 +161,7 @@ test('the legacy Home listing excludes byte-contract documents with separate vis
 describe('Existing standalone upload types', () => {
   beforeEach(() => {
     s3.generateS3Key.mockImplementation((folder, name, actor) => `${folder}/${actor}/${name}`);
+    s3.generateOpaqueS3Key.mockImplementation((folder, name) => `${folder}/${name}`);
     s3.uploadToS3.mockImplementation(async (_bytes, key) => ({ key, url: `https://storage.example/${key}` }));
     s3.deleteFromS3.mockResolvedValue(true);
   });
@@ -181,7 +182,9 @@ describe('Existing standalone upload types', () => {
     expect(db.getTable('File').at(-1)).toMatchObject({
       user_id: userId, file_type: stored, ...(context ? { file_context: context } : {}), visibility: 'private', processing_status: 'completed',
     });
-    expect(s3.generateS3Key).toHaveBeenCalledWith(requested === 'voice_postscript' ? 'voice-postscripts' : 'uploads', name, userId);
+    // A voice postscript goes into a letter, which may go out as a business: its key names no uploader.
+    if (requested === 'voice_postscript') expect(s3.generateOpaqueS3Key).toHaveBeenCalledWith('voice-postscripts', name);
+    else expect(s3.generateS3Key).toHaveBeenCalledWith('uploads', name, userId);
     expect(response.body.file).toMatchObject({ id: expect.any(String), url: expect.any(String) });
   });
 

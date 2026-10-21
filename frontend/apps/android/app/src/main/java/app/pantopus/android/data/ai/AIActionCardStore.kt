@@ -71,6 +71,14 @@ class AIActionCardStore
             if (!isDismissed(cardId)) append(JSONObject().put(KEY_CARD, cardId).put(KEY_DISMISSED, true))
         }
 
+        /** A deleted conversation's cards: nothing of them stays on the phone. */
+        @Synchronized
+        fun forget(cardIds: Set<String>) {
+            if (cardIds.isEmpty()) return
+            val kept = entries().filterNot { it.optString(KEY_CARD) in cardIds }
+            prefs.edit { putString(KEY_ENTRIES, JSONArray(kept).toString()) }
+        }
+
         private fun append(entry: JSONObject) {
             val kept = (entries() + entry).takeLast(MAX_ENTRIES)
             prefs.edit { putString(KEY_ENTRIES, JSONArray(kept).toString()) }

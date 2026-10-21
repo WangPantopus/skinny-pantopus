@@ -101,7 +101,8 @@ public struct FindHomeView: View {
                 .submitLabel(.search)
                 .autocorrectionDisabled()
                 .focused($searchFocused)
-                .onSubmit { viewModel.submitSearch() }
+                // Weakly: the keyboard's AutoFill can keep this field, and the action with it, after the screen closes.
+                .onSubmit { [weak viewModel] in viewModel?.submitSearch() }
                 .accessibilityIdentifier("findHomeSearchField")
 
                 if !viewModel.query.isEmpty {

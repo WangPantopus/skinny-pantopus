@@ -715,11 +715,18 @@ async function getToday(args, ctx) {
 
 async function getNotificationSettings(_args, ctx) {
   const { data, error } = await supabaseAdmin.from('UserNotificationPreferences')
-    .select('daily_briefing_enabled, daily_briefing_time_local, daily_briefing_timezone, evening_briefing_enabled, evening_briefing_time_local, weather_alerts_enabled, aqi_alerts_enabled, home_reminders_enabled, quiet_hours_start_local, quiet_hours_end_local')
+    .select('daily_briefing_enabled, daily_briefing_time_local, daily_briefing_timezone, evening_briefing_enabled, evening_briefing_time_local, weather_alerts_enabled, aqi_alerts_enabled, home_reminders_enabled, quiet_hours_start_local, quiet_hours_end_local, suggestions_enabled, suggestions_muted')
     .eq('user_id', ctx.userId)
     .maybeSingle();
   if (error) throw new Error(`Preferences read failed: ${error.message}`);
-  return { settings: data || null, note: data ? null : 'No settings saved yet; the defaults apply.' };
+  // Suggestions exist only in apps that can show them (ctx.suggestions); older builds have no such switch.
+  const { suggestions_enabled: suggestionsEnabled, suggestions_muted: suggestionsMuted, ...settings } = data || {};
+  const suggestions = ctx.suggestions ? {
+    suggestions_enabled: suggestionsEnabled ?? null,
+    suggestions_muted: suggestionsMuted || {},
+    suggestions_note: 'Suggestions from Pantopus: null means never chosen, which is off. suggestions_muted lists kinds muted with "Fewer like this", until when.',
+  } : {};
+  return { settings: data ? { ...settings, ...suggestions } : null, note: data ? null : 'No settings saved yet; the defaults apply.' };
 }
 
 // ─── Dispatch ──────────────────────────────────────────────────────────────
