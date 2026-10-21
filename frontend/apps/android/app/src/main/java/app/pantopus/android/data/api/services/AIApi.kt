@@ -27,7 +27,9 @@ interface AIApi {
      * Route `backend/routes/ai.js:358`.
      */
     @GET("api/ai/conversations")
-    suspend fun conversations(): AIConversationsResponse
+    suspend fun conversations(
+        @Query("order") order: String? = null,
+    ): AIConversationsResponse
 
     /**
      * One conversation's earlier turns, for a restored thread. [cards] is the

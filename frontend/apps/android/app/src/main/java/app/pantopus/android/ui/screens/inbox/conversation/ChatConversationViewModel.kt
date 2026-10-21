@@ -1356,18 +1356,19 @@ class ChatConversationViewModel
         private suspend fun deleteEveryAiConversation(): String? =
             try {
                 val deleted = mutableSetOf<String>()
-                var listed = aiRepo.conversations().orThrow().conversations.map { it.id }
+                val activeId = aiConversationId
+                var listed = aiRepo.conversations(oldestFirst = true).orThrow().conversations.map { it.id }
                 var rounds = 1
-                // The list holds the newest 50, so a long history takes a few rounds. One listed again after its
-                // delete went through stops it.
+                // Oldest first across every page. Keep the displayed thread until it is the only one left.
                 while (listed.any { it !in deleted } && rounds < AI_DELETE_ROUNDS) {
-                    for (id in listed.filterNot { it in deleted }) {
-                        val cardIds = aiActionCardIds(id)
-                        aiRepo.deleteConversation(id).orThrow()
-                        aiCards.forget(cardIds)
+                    val onlyActive = listed.size == 1 && listed.first() == activeId
+                    val ids = listed.filter { it !in deleted && (it != activeId || onlyActive) }
+                    if (ids.isEmpty()) break
+                    for (id in ids) {
+                        deleteAiConversation(id, activeId)
                         deleted += id
                     }
-                    listed = aiRepo.conversations().orThrow().conversations.map { it.id }
+                    listed = aiRepo.conversations(oldestFirst = true).orThrow().conversations.map { it.id }
                     rounds++
                 }
                 if (listed.isEmpty()) null else AI_DELETE_FAILED
@@ -1375,6 +1376,17 @@ class ChatConversationViewModel
                 Timber.w("AI conversation delete failed: ${error.message}")
                 if (error.code == HTTP_TOO_MANY_REQUESTS) AI_DELETE_TOO_MANY else AI_DELETE_FAILED
             }
+
+        private suspend fun deleteAiConversation(
+            id: String,
+            activeId: String?,
+        ) {
+            val cardIds = aiActionCardIds(id)
+            aiRepo.deleteConversation(id).orThrow()
+            aiCards.forget(cardIds)
+            // Clear a confirmed deletion even if the following verification read fails.
+            if (id == activeId) startNewAiConversation()
+        }
 
         /** The action cards in one conversation, by card id; none when it is already gone. */
         private suspend fun aiActionCardIds(conversationId: String): Set<String> =

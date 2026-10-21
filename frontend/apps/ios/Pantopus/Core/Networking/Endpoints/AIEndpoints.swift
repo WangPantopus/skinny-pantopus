@@ -15,8 +15,8 @@ public enum AIEndpoints {
     /// newest-updated first (server caps at 50). Summaries only; a
     /// conversation's turns come from `conversationMessages(id:)`.
     /// Route `backend/routes/ai.js:359`.
-    public static func conversations() -> Endpoint {
-        Endpoint(method: .get, path: "/api/ai/conversations")
+    public static func conversations(oldestFirst: Bool = false) -> Endpoint {
+        Endpoint(method: .get, path: "/api/ai/conversations", query: oldestFirst ? ["order": "oldest"] : [:])
     }
 
     /// `GET /api/ai/conversations/:id/messages?cards=` — one conversation's

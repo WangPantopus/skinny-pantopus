@@ -1362,17 +1362,18 @@ ${alertsResult.alerts.map(a => `- ${a.event} (${a.severity}): ${a.headline}. ${a
 
 // ─── Conversation Management ────────────────────────────────────────────────
 
-async function listConversations(userId) {
+async function listConversations(userId, { oldestFirst = false } = {}) {
   const { data, error } = await supabaseAdmin
     .from('AIConversation')
     .select('id, title, message_count, last_message_at, created_at, updated_at')
     .eq('user_id', userId)
-    .order('updated_at', { ascending: false })
+    .order('updated_at', { ascending: oldestFirst })
+    .order('id', { ascending: oldestFirst })
     .limit(50);
 
   if (error) {
     logger.error('listConversations error', { userId, error: error.message });
-    return [];
+    throw error;
   }
   return data || [];
 }
