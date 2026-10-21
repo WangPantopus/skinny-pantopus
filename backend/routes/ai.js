@@ -437,7 +437,9 @@ router.get('/pulse', verifyToken, asyncHandler(async (req, res) => {
 // ─── Conversation Management ────────────────────────────────────────────────
 
 router.get('/conversations', verifyToken, asyncHandler(async (req, res) => {
-  const conversations = await agentService.listConversations(req.user.id);
+  const { value: order, error } = Joi.string().valid('newest', 'oldest').default('newest').validate(req.query.order);
+  if (error) return res.status(400).json({ error: 'Invalid conversation order' });
+  const conversations = await agentService.listConversations(req.user.id, { oldestFirst: order === 'oldest' });
   res.json({ conversations });
 }));
 

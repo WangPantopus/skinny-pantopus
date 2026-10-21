@@ -144,7 +144,8 @@ class AIChatRepository
          * first). Route `backend/routes/ai.js:358`. Used to restore the
          * latest conversation id across app relaunches.
          */
-        suspend fun conversations(): NetworkResult<AIConversationsResponse> = safeApiCall { api.conversations() }
+        suspend fun conversations(oldestFirst: Boolean = false): NetworkResult<AIConversationsResponse> =
+            safeApiCall { api.conversations(if (oldestFirst) "oldest" else null) }
 
         /**
          * One conversation's earlier turns, so a restored thread shows what

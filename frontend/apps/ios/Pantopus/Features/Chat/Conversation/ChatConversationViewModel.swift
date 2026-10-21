@@ -1296,21 +1296,24 @@ public final class ChatConversationViewModel {
         defer { isDeletingAIConversation = false }
         aiStreamTask?.cancel()
         var deleted: Set<String> = []
+        let activeId = aiConversationId
         var cleared = false
         do {
-            // The list holds the newest 50, so a long history takes a few rounds.
+            // Read oldest first across every page; the displayed thread is deleted only when it is alone.
             for _ in 0..<20 {
-                let listed: AIConversationsResponse = try await api.request(AIEndpoints.conversations())
-                let ids = listed.conversations.map(\.id).filter { !deleted.contains($0) }
+                let listed: AIConversationsResponse = try await api.request(AIEndpoints.conversations(oldestFirst: true))
+                let onlyActive = listed.conversations.count == 1 && listed.conversations.first?.id == activeId
+                let ids = listed.conversations.map(\.id).filter { !deleted.contains($0) && ($0 != activeId || onlyActive) }
                 cleared = listed.conversations.isEmpty
                 // Done, or listed again after its delete went through.
                 if ids.isEmpty { break }
-                // Oldest first, the one on screen last: a failure part-way leaves the thread as the server has it.
-                for id in ids.reversed() {
+                for id in ids {
                     let cardIds = try await aiActionCardIds(conversationId: id)
                     _ = try await api.request(AIEndpoints.deleteConversation(id: id), as: EmptyResponse.self)
                     actionDoneStore.forget(cardIds: cardIds)
                     deleted.insert(id)
+                    // A later verification read may fail; don't retain a thread whose delete succeeded.
+                    if id == activeId { startNewAIConversation() }
                 }
             }
         } catch let APIError.clientError(status, _) where status == 429 {

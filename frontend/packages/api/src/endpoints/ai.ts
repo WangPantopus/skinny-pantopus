@@ -250,8 +250,8 @@ export async function getNeighborhoodPulse(homeId: string): Promise<Neighborhood
 /**
  * List the user's AI conversations.
  */
-export async function getConversations(): Promise<{ conversations: AIConversation[] }> {
-  return get<{ conversations: AIConversation[] }>('/api/ai/conversations');
+export async function getConversations(options?: { order: 'oldest' | 'newest' }): Promise<{ conversations: AIConversation[] }> {
+  return get<{ conversations: AIConversation[] }>('/api/ai/conversations', options);
 }
 
 /**

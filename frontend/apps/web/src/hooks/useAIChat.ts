@@ -158,21 +158,24 @@ export function useAIChat() {
     setStatusText(null);
     setError(null);
     const deleted = new Set<string>();
+    const activeId = conversationId;
     try {
-      // The list holds the newest 50, so a long history takes a few rounds.
+      // Read oldest first across every page, keeping the displayed thread until it is the only one left.
       for (let round = 0; round < 20; round += 1) {
-        const { conversations } = await api.ai.getConversations();
-        const ids = conversations.map((c) => c.id).filter((id) => !deleted.has(id));
+        const { conversations } = await api.ai.getConversations({ order: 'oldest' });
+        const onlyActive = conversations.length === 1 && conversations[0].id === activeId;
+        const ids = conversations.map((c) => c.id).filter((id) => !deleted.has(id) && (id !== activeId || onlyActive));
         if (conversations.length === 0) {
           startNewConversation();
           return true;
         }
         // Listed again after its delete went through: the server kept it.
         if (ids.length === 0) break;
-        // Oldest first, this page's own conversation last: a failure part-way leaves it as the server has it.
-        for (const id of [...ids].reverse()) {
+        for (const id of ids) {
           await api.ai.deleteConversation(id);
           deleted.add(id);
+          // A later verification read can fail too; never keep showing a thread we know is gone.
+          if (id === activeId) startNewConversation();
         }
       }
       setError("Couldn't delete the conversation. Try again.");
@@ -183,7 +186,7 @@ export function useAIChat() {
         : "Couldn't delete the conversation. Try again.");
     }
     return false;
-  }, [startNewConversation]);
+  }, [conversationId, startNewConversation]);
 
   /**
    * Load a previous conversation (messages are not stored server-side,
