@@ -31,7 +31,11 @@ public struct MailDetailContent: Sendable {
     public let senderTypeLabel: String
     public let carrierLine: String
     public let senderInitials: String
+    /// Who the sender card opens: the person's profile, or the business's
+    /// page when `senderIsBusiness`. Nil leaves the card without a tap.
     public let senderUserId: String?
+    /// The letter was sent as a business; `senderUserId` is the business's id.
+    public let senderIsBusiness: Bool
     public let title: String
     public let excerpt: String?
     public let referenceLabel: String
@@ -73,6 +77,7 @@ public struct MailDetailContent: Sendable {
         carrierLine: String,
         senderInitials: String,
         senderUserId: String?,
+        senderIsBusiness: Bool = false,
         title: String,
         excerpt: String?,
         referenceLabel: String,
@@ -109,6 +114,7 @@ public struct MailDetailContent: Sendable {
         self.carrierLine = carrierLine
         self.senderInitials = senderInitials
         self.senderUserId = senderUserId
+        self.senderIsBusiness = senderIsBusiness
         self.title = title
         self.excerpt = excerpt
         self.referenceLabel = referenceLabel

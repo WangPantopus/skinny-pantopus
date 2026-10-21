@@ -16,6 +16,9 @@ public struct MailDetailView: View {
     private let mailId: String
     private let onBack: () -> Void
     private let onOpenSenderProfile: (@MainActor (String) -> Void)?
+    /// Opens a business's page from the sender card of a letter sent as that
+    /// business. Nil leaves such a card without a tap.
+    private let onOpenSenderBusiness: (@MainActor (String) -> Void)?
     /// Opens the A17.13 Translation screen for this mail. When set, the
     /// generic detail variant surfaces a "Translate" overflow action.
     private let onTranslate: (@MainActor @Sendable () -> Void)?
@@ -44,6 +47,7 @@ public struct MailDetailView: View {
         mailId: String,
         onBack: @escaping () -> Void,
         onOpenSenderProfile: (@MainActor (String) -> Void)? = nil,
+        onOpenSenderBusiness: (@MainActor (String) -> Void)? = nil,
         onTranslate: (@MainActor @Sendable () -> Void)? = nil,
         onOpenExtractedTask: (@MainActor (String) -> Void)? = nil,
         onOpenCeremonialMail: (@MainActor (String) -> Void)? = nil,
@@ -55,6 +59,7 @@ public struct MailDetailView: View {
         _viewModel = State(initialValue: MailDetailViewModel(mailId: mailId))
         self.onBack = onBack
         self.onOpenSenderProfile = onOpenSenderProfile
+        self.onOpenSenderBusiness = onOpenSenderBusiness
         self.onTranslate = onTranslate
         self.onOpenExtractedTask = onOpenExtractedTask
         self.onOpenCeremonialMail = onOpenCeremonialMail
@@ -170,6 +175,12 @@ public struct MailDetailView: View {
         return "Dismiss \"\(content.title)\"?"
     }
 
+    /// The sender card's tap: the business's page for a letter sent as a
+    /// business, the person's profile otherwise.
+    private func openSender(_ content: MailDetailContent) -> (@MainActor (String) -> Void)? {
+        content.senderIsBusiness ? onOpenSenderBusiness : onOpenSenderProfile
+    }
+
     @ViewBuilder
     private func loaded(_ content: MailDetailContent) -> some View {
         switch content.category {
@@ -214,7 +225,7 @@ public struct MailDetailView: View {
                 ackInFlight: viewModel.ackInFlight,
                 onBack: { onBack() },
                 onAcknowledge: { Task { await viewModel.acknowledge() } },
-                onOpenSenderProfile: onOpenSenderProfile,
+                onOpenSenderProfile: openSender(content),
                 onSaveToVault: { Task { await viewModel.openSaveToVaultPicker() } },
                 onArchive: { Task { await viewModel.archive() } },
                 onDownloadPDF: { Task { await viewModel.downloadBookletPDF() } },
@@ -234,7 +245,7 @@ public struct MailDetailView: View {
                 ackInFlight: viewModel.ackInFlight,
                 onBack: { onBack() },
                 onAcknowledge: { Task { await viewModel.acknowledge() } },
-                onOpenSenderProfile: onOpenSenderProfile,
+                onOpenSenderProfile: openSender(content),
                 onSaveToVault: { Task { await viewModel.openSaveToVaultPicker() } },
                 onArchive: { Task { await viewModel.archive() } },
                 onOpenExtractedTask: onOpenExtractedTask.map { open in
@@ -258,7 +269,7 @@ public struct MailDetailView: View {
                 rsvpInFlight: viewModel.rsvpInFlight,
                 onBack: { onBack() },
                 onRsvp: { status in Task { await viewModel.setRsvp(status) } },
-                onOpenSenderProfile: onOpenSenderProfile,
+                onOpenSenderProfile: openSender(content),
                 onSaveToVault: { Task { await viewModel.openSaveToVaultPicker() } }
             )
         } else {
@@ -275,7 +286,7 @@ public struct MailDetailView: View {
                 redeemInFlight: viewModel.couponRedeemInFlight,
                 onBack: { onBack() },
                 onRedeem: { Task { await viewModel.redeemCoupon() } },
-                onOpenSenderProfile: onOpenSenderProfile,
+                onOpenSenderProfile: openSender(content),
                 onSaveToVault: { Task { await viewModel.openSaveToVaultPicker() } },
                 onArchive: { Task { await viewModel.archive() } }
             )
@@ -293,7 +304,7 @@ public struct MailDetailView: View {
                 bidInFlight: viewModel.gigBidInFlight,
                 onBack: { onBack() },
                 onAccept: { Task { await viewModel.acceptGigBid() } },
-                onOpenSenderProfile: onOpenSenderProfile,
+                onOpenSenderProfile: openSender(content),
                 onSaveToVault: { Task { await viewModel.openSaveToVaultPicker() } },
                 onArchive: { Task { await viewModel.archive() } },
                 paymentPending: viewModel.gigPaymentPending,
@@ -313,7 +324,7 @@ public struct MailDetailView: View {
                 saveInFlight: viewModel.saveToVaultInFlight,
                 onBack: { onBack() },
                 onSaveMemory: { Task { await viewModel.saveMemoryToVault() } },
-                onOpenSenderProfile: onOpenSenderProfile,
+                onOpenSenderProfile: openSender(content),
                 onSaveToVault: { Task { await viewModel.openSaveToVaultPicker() } },
                 onArchive: { Task { await viewModel.archive() } }
             )
@@ -331,7 +342,7 @@ public struct MailDetailView: View {
                 ackInFlight: viewModel.ackInFlight,
                 onBack: { onBack() },
                 onAcknowledgeDelivery: { Task { await viewModel.acknowledge() } },
-                onOpenSenderProfile: onOpenSenderProfile,
+                onOpenSenderProfile: openSender(content),
                 onSaveToVault: { Task { await viewModel.openSaveToVaultPicker() } },
                 onArchive: { Task { await viewModel.archive() } },
                 onOpenUnboxing: onOpenUnboxing,
@@ -357,7 +368,7 @@ public struct MailDetailView: View {
                 onAdjustPlusOne: { count in Task { await viewModel.setPartyPlusOneCount(count) } },
                 onClaimBring: { index in Task { await viewModel.togglePartyBringClaim(at: index, byName: "You") } },
                 onReleaseBring: { index in Task { await viewModel.togglePartyBringClaim(at: index, byName: nil) } },
-                onOpenSenderProfile: onOpenSenderProfile,
+                onOpenSenderProfile: openSender(content),
                 onSaveToVault: { Task { await viewModel.openSaveToVaultPicker() } }
             )
         } else {
@@ -374,7 +385,7 @@ public struct MailDetailView: View {
                 fileInFlight: viewModel.recordsFileInFlight,
                 onBack: { onBack() },
                 onFileInVault: { Task { await viewModel.fileRecordToVault() } },
-                onOpenSenderProfile: onOpenSenderProfile,
+                onOpenSenderProfile: openSender(content),
                 onSaveToVault: { Task { await viewModel.openSaveToVaultPicker() } },
                 onArchive: { Task { await viewModel.archive() } }
             )
@@ -389,7 +400,7 @@ public struct MailDetailView: View {
             ackInFlight: viewModel.ackInFlight,
             onBack: { onBack() },
             onAcknowledge: { Task { await viewModel.acknowledge() } },
-            onOpenSenderProfile: onOpenSenderProfile,
+            onOpenSenderProfile: openSender(content),
             onSaveToVault: { Task { await viewModel.openSaveToVaultPicker() } },
             onArchive: { Task { await viewModel.archive() } },
             onTranslate: onTranslate,
