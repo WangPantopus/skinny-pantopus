@@ -79,6 +79,9 @@ public struct FeedView: View {
     private let onRefresh: (@MainActor () async -> Void)?
     /// The Nearby feed's header offers "Ask Pantopus" about what's nearby.
     private let asksPantopus: Bool
+    /// Drawn above the top bar: the Nearby tab's segment header (the Pulse |
+    /// Neighborhood switch and the side menu, founder decision 2026-10-20).
+    private let header: AnyView?
 
     init(
         viewModel: PulseFeedViewModel? = nil,
@@ -91,6 +94,7 @@ public struct FeedView: View {
         topMenu: FeedTopMenu? = nil,
         topCard: AnyView? = nil,
         onRefresh: (@MainActor () async -> Void)? = nil,
+        header: AnyView? = nil,
         asksPantopus: Bool = false
     ) {
         // Swift 5.10 crashes while lowering PulseFeedViewModel() in a default-argument thunk.
@@ -112,12 +116,14 @@ public struct FeedView: View {
         self.topMenu = topMenu
         self.topCard = topCard
         self.onRefresh = onRefresh
+        self.header = header
         self.asksPantopus = asksPantopus
     }
 
     public var body: some View {
         ZStack(alignment: .bottomTrailing) {
             VStack(spacing: Spacing.s0) {
+                if let header { header }
                 topBar
                 if viewModel.surface == .beacons {
                     HStack(spacing: Spacing.s4) {

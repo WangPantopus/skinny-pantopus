@@ -87,16 +87,15 @@ test('Nearby reaches public Beacon discovery and following without a home', asyn
   await expect(
     page.getByRole('heading', { name: 'Add a home for neighborhood context' }),
   ).toBeVisible();
-  const discovery = page.getByRole('navigation', { name: 'Social discovery' });
-  await expect(discovery.getByRole('button', { name: /^Pulse/ })).toBeVisible();
-  await expect(
-    discovery.getByRole('button', { name: /^Connections/ }),
-  ).toBeVisible();
+  // Nearby is Pulse | Neighborhood (founder decision 2026-10-20); Connections is in the menu.
+  const segments = page.getByRole('navigation', { name: 'Nearby' });
+  await expect(segments.getByRole('link', { name: 'Pulse' })).toHaveAttribute('href', '/app/feed');
+  await expect(segments.getByRole('link', { name: 'Neighborhood' })).toHaveAttribute('aria-current', 'page');
   await page.screenshot({
     path: '/tmp/pantopus-social-nearby-web.png',
     fullPage: true,
   });
-  await discovery.getByRole('button', { name: /^Beacons/ }).click();
+  await page.goto('/app/beacons');
   await expect(page).toHaveURL(/\/app\/beacons$/);
   await expect(
     page.getByRole('link', { name: 'Garden club', exact: true }),

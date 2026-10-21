@@ -1,20 +1,21 @@
 'use client';
 
-// Social discovery is available before an address or neighborhood density.
-// The meter describes local participation; it does not authorize feed access.
+// The Nearby tab's Neighborhood segment (founder decision 2026-10-20): the
+// density window, the meter and "Invite your neighbors", or "Set up a home"
+// before there is one. Pulse is the segment beside it (/app/feed) and
+// Connections is in the menu, so the old door's Pulse / Connections rows are
+// gone. The meter describes local participation; it does not authorize feed
+// access.
 
 import { useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import {
-  Newspaper,
-  Radio,
   ShoppingBag,
   Briefcase,
   Compass,
   Map as MapIcon,
-  Users,
   Lock,
   Share2,
   Check,
@@ -25,6 +26,7 @@ import {
 import * as api from '@pantopus/api';
 import type { NeighborhoodMeter } from '@pantopus/api';
 import { ShimmerBlock } from '@/components/ui/Shimmer';
+import NearbyTabs from '@/components/nearby/NearbyTabs';
 import { launchFeatures } from '@/lib/featureFlags';
 
 // Leaflet touches `window` at import time; the window is client-only.
@@ -36,30 +38,11 @@ const SURFACES = [
   ...(launchFeatures.openGigs ? [{ icon: Briefcase, title: 'Tasks', subtitle: 'Post and pick up local work, backed by verified addresses', route: '/app/gigs' }] : []),
 ] as const;
 
-const SOCIAL = [
-  { icon: Newspaper, title: 'Pulse', subtitle: 'Browse a chosen area or catch up with your connections', route: '/app/feed' },
-  ...(launchFeatures.beacon ? [{ icon: Radio, title: 'Beacons', subtitle: 'Find public profiles and return to the people you follow — no home address needed', route: '/app/beacons' }] : []),
-  { icon: Users, title: 'Connections', subtitle: 'Keep up with people you know', route: '/app/connections' },
-] as const;
-
 // With both hidden, nothing opens at the meter's threshold, so the meter,
 // the locked list and the "open" banner go too (decision 1, as on iOS).
 const HAS_LOCAL_SURFACES = SURFACES.length > 0;
 // Launch cut #1 (Beacon): no Beacons to mention.
 const AVAILABLE_NOW = launchFeatures.beacon ? 'Pulse and Beacons are available now.' : 'Pulse is available now.';
-
-function SocialDestinations() {
-  const router = useRouter();
-  return <nav aria-label="Social discovery" className="space-y-3 mb-6">
-    {SOCIAL.map(({ icon: Icon, title, subtitle, route }) => (
-      <button key={title} type="button" onClick={() => router.push(route)} className="w-full flex items-center gap-4 p-4 rounded-xl bg-app-surface border border-app-border hover:bg-app-hover transition text-left">
-        <span className="w-11 h-11 rounded-xl bg-primary-600 flex items-center justify-center shrink-0"><Icon className="w-5 h-5 text-white" /></span>
-        <span className="flex-1"><span className="block text-[15px] font-bold text-app-text">{title}</span><span className="block text-[13px] text-app-text-secondary mt-0.5">{subtitle}</span></span>
-        <ChevronRight className="w-5 h-5 text-app-text-muted shrink-0" />
-      </button>
-    ))}
-  </nav>;
-}
 
 const SECONDARY = [
   { icon: Compass, label: 'Discover', route: '/app/discover' },
@@ -226,18 +209,10 @@ export default function NearbyPage() {
   const cellsMap = cellsQuery.data?.state === 'ready' ? <NearbyCellsMap cells={cellsQuery.data} /> : null;
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-extrabold text-app-text leading-tight">Nearby</h1>
-        <p className="text-sm text-app-text-secondary mt-2 leading-relaxed">
-          {/* Launch cut #1 (Beacon): the copy leaves Beacons out. */}
-          {launchFeatures.beacon
-            ? 'Join conversations, find Beacons, and stay connected. Choose an area inside Pulse to browse local posts; following Beacons needs no home address.'
-            : 'Join conversations and stay connected. Choose an area inside Pulse to browse local posts.'}
-        </p>
-      </div>
-
-      <SocialDestinations />
+    // The feed's width, so the Pulse | Neighborhood switch stays put between the two segments.
+    <div className="max-w-2xl mx-auto px-4 pt-2 pb-6">
+      <h1 className="sr-only">Nearby: Neighborhood</h1>
+      <NearbyTabs active="neighborhood" className="mb-4" />
 
       {meterQuery.isPending ? (
         <div className="space-y-3" aria-hidden="true">
@@ -269,7 +244,7 @@ export default function NearbyPage() {
           </p>
           <button
             type="button"
-            onClick={() => router.push('/app/place')}
+            onClick={() => router.push('/app/homes/new')}
             className="mt-5 inline-flex items-center gap-1.5 h-11 px-5 rounded-xl bg-primary-600 text-white text-sm font-semibold hover:bg-primary-700 transition-colors"
           >
             Set up a home
