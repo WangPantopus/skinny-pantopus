@@ -338,7 +338,7 @@ def _get_home_members(supabase, home_ids: list[str]) -> dict[str, list[str]]:
         return members
     except Exception:
         log.exception("Failed to query HomeOccupancy for members")
-        return {}
+        raise
 
 
 def _already_sent(supabase, dedup_key: str, *, fail_closed: bool = False) -> bool:

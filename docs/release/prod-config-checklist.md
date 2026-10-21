@@ -801,7 +801,8 @@ idempotency or the briefing-specific destination. P8's physical checks remain op
 
 **Launch reliability follow-up:** local fetcher, poster and discovery now report
 caught and partial failures through a bounded CloudWatch metric. Weather checks
-also report per-location and push failures. Quiet/no-recipient runs are successful;
+also report per-location and push failures. Housekeeping and Home-member lookup
+failures propagate to their existing error alarms. Quiet/no-recipient runs are successful;
 publishing failures keep their existing retry behavior to avoid extra posts.
 Error alarms combine these outcomes with Lambda crashes/timeouts. Eight
 missing-invocation alarms cover the enabled functions, including daily housekeeping;
