@@ -781,17 +781,25 @@ sources. All 55 enrichment sources, including sports, are inactive. Curator logi
 was verified and credentials saved in the production secret without changing its
 other fields. The registered iPhone's location is within the configured coverage.
 A bootstrap publisher run created two real posts with zero failures; both appeared
-in the production web Pulse. A subsequent fetch completed with zero errors.
+in the production web Pulse and the founder confirmed seeing a new post on the
+physical iPhone. A subsequent fetch completed with zero errors.
 The first manual fetch overlapped the newly enabled schedule and encountered
 unique-key deduplication conflicts; no duplicate queue rows were inserted.
 
 All six maintenance jobs completed through the deployed Lambda/backend path.
 Home and weather checks completed without failures, with no eligible reminders
 or alerts to send. Daily discovery completed with no new clusters. CloudFormation
-reported `UPDATE_COMPLETE`; all 12 function packages were preserved and remain
-Active. The production SNS email subscription is confirmed, all six existing
-error alarms route to it, and the one-time routing test arrived in the inbox.
+reported `UPDATE_COMPLETE`; the activation preserved all 12 function packages.
+The subsequent launch-reliability update replaced the shared package with the
+reviewed monitoring/lookup fixes; all 12 functions remain Active. The production
+SNS email subscription is confirmed, all 17 alarms route to it, and the earlier
+one-time routing test arrived in the inbox.
 The worker's Lambda cron fallback remains off to prevent duplicate scheduling.
+
+Production FCM OAuth and a validation-only message request passed (HTTP 200),
+and the privately saved Android release Firebase configuration matches the
+server project. No Android registration exists yet, so this does not prove
+Android receipt.
 
 The founder confirmed physical iPhone receipt of the authorized generic push test
 and that tapping opened Today. **Scheduled useful briefing/Home-reminder receipt
@@ -804,7 +812,10 @@ caught and partial failures through a bounded CloudWatch metric. Weather checks
 also report per-location and push failures. Housekeeping and Home-member lookup
 failures propagate to their existing error alarms. Quiet/no-recipient runs are successful;
 publishing failures keep their existing retry behavior to avoid extra posts.
-Error alarms combine these outcomes with Lambda crashes/timeouts. Eight
+The production update completed October 21. Existing seeder tests (505), SAM
+lint and the 128 activation combinations passed. Live fetcher, poster, discovery
+and weather checks completed without errors. Error alarms combine application
+outcomes with Lambda crashes/timeouts. Eight
 missing-invocation alarms cover the enabled functions, including daily housekeeping;
 their actions follow the schedule switches so intentional pauses stay silent.
 The jobs alarm covers the shared trigger; inspect each maintenance rule separately
@@ -1289,3 +1300,20 @@ can't write Supabase's two (empty) vector-bucket tables, so they're excluded; th
 migration ledger isn't part of a normal dump, so it's dumped separately; and
 `aws s3 sync` would skip the files because the restored rows make them look
 present, so the restore uploads each file explicitly.
+
+**October 21 recovery check:** a fresh production database, migration ledger and
+Storage backup was saved outside Git on FileVault-encrypted local storage. All
+three buckets were inventoried; there were no stored objects and no missing
+files. A network-isolated local PostgreSQL restore succeeded, with matching row
+counts across 398 tables. The rehearsal aligned managed role names and used an
+additional auth/storage/public/pgboss schema export because the local Supabase
+bootstrap differs from the hosted service. This is a database recovery rehearsal,
+not a hosted-project failover or an app acceptance check. Production/staging host
+environment, Nginx and TLS configuration were also backed up privately.
+
+These are point-in-time copies; automatic recurring off-host backups are not
+configured by this check. Keep following the weekly and pre-change procedure
+above. EC2 uses key-only SSH and IMDSv2, but its 8 GiB root disk is unencrypted
+and SSH ingress remains broad. Encrypting the root disk requires replacing it
+during a planned API/worker maintenance window; do not stop the host as part
+of a Lambda rollout.
