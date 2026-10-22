@@ -22,16 +22,24 @@ function isEmojiOnly(text?: string): boolean {
 
 export type { ChatMessage };
 
+/** The message a reply answers, as its quote shows it. */
+export interface ChatReplyQuote {
+  senderName: string;
+  text: string;
+}
+
 interface ChatMessageBubbleProps {
   msg: ChatMessage;
   isMine: boolean;
   showSender?: boolean;
+  /** Set when this message replies to one that is loaded. */
+  reply?: ChatReplyQuote;
   onImageClick?: (url: string, title?: string) => void;
   onReact?: (messageId: string, emoji: string) => void;
   onRetry?: (messageId: string) => void;
 }
 
-function ChatMessageBubble({ msg, isMine, showSender = false, onImageClick, onReact, onRetry }: ChatMessageBubbleProps) {
+function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClick, onReact, onRetry }: ChatMessageBubbleProps) {
   const [preview, setPreview] = useState<{ url: string; title?: string; mimeType?: string; liveUrl?: string } | null>(null);
   const [hovered, setHovered] = useState(false);
   const [showQuickPicker, setShowQuickPicker] = useState(false);
@@ -53,7 +61,6 @@ function ChatMessageBubble({ msg, isMine, showSender = false, onImageClick, onRe
   if (msgType === 'listing_offer' && !launchFeatures.marketplace) return null;
 
   const isEdited = msg.edited || msg.is_edited;
-  const replyMeta = msg.reply_to_id ? (metadata as Record<string, any>)?.replyContext : null;
 
   // Text the server fills in for a message that is only attachments ("Photo",
   // "Document"), or an older client's "[1 attachment]"; not a caption.
@@ -181,17 +188,17 @@ function ChatMessageBubble({ msg, isMine, showSender = false, onImageClick, onRe
                 : 'bg-surface text-app border border-app rounded-bl-md'
             } ${isOptimistic ? 'opacity-60' : ''} ${isFailed ? 'opacity-70 ring-1 ring-red-400' : ''}`}
           >
-            {replyMeta && (
+            {reply && (
               <div className={`border-l-[3px] rounded px-2 py-1 mb-1.5 text-xs ${
                 isMine
                   ? 'border-white/50 bg-white/15'
                   : 'border-primary-500 bg-primary-500/[0.08]'
               }`}>
                 <div className={`font-semibold ${isMine ? 'text-white/90' : 'text-primary-600'}`}>
-                  {(replyMeta as Record<string, any>).senderName || 'Message'}
+                  {reply.senderName}
                 </div>
                 <div className={`line-clamp-2 ${isMine ? 'text-white/70' : 'text-app-muted'}`}>
-                  {(replyMeta as Record<string, any>).text || ''}
+                  {reply.text}
                 </div>
               </div>
             )}
@@ -309,6 +316,8 @@ export default React.memo(ChatMessageBubble, (prev, next) => {
     && prev.msg._refused === next.msg._refused
     && prev.isMine === next.isMine
     && prev.showSender === next.showSender
+    && prev.reply?.senderName === next.reply?.senderName
+    && prev.reply?.text === next.reply?.text
     && prev.msg.reactions === next.msg.reactions
     && prev.onReact === next.onReact
     && prev.onImageClick === next.onImageClick

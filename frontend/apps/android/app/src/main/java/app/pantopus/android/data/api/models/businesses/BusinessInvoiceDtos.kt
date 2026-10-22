@@ -22,10 +22,12 @@ data class BusinessInvoiceResponse(
     val invoice: BusinessInvoiceDto,
 )
 
-/** `GET /api/businesses/invoices/received` — backend/routes/businesses.js:4562. */
+/** `GET /api/businesses/invoices/received` — backend/routes/businesses.js:4747. */
 @JsonClass(generateAdapter = true)
 data class BusinessInvoicesResponse(
     val invoices: List<BusinessInvoiceDto> = emptyList(),
+    /** `{ page, page_size, total }`, to know when every page has been read. */
+    val pagination: BusinessInvoicePaginationDto? = null,
 )
 
 /** One `BusinessInvoice` row plus the joined billing business. */
