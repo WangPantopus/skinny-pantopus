@@ -1,0 +1,88 @@
+/* Pulse (Nearby → Pulse): the quick-return header and the map's pins (founder request
+   2026-10-22). Pins sit on the always-light map, so their ring is white in both themes. */
+
+/* ── Quick-return header ──────────────────────────────────────────
+   It slides (transform) normally; with Reduce Motion it fades instead. The app turns every
+   transition off under Reduce Motion, so the fade states its own duration. */
+@media (prefers-reduced-motion: reduce) {
+  .pulse-header-motion {
+    transition: opacity 160ms ease-out !important;
+  }
+}
+
+/* ── Post pins ──────────────────────────────────────────────────── */
+.pulse-pin {
+  position: relative;
+  box-sizing: border-box;
+  width: 30px;
+  height: 30px;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--pin-color);
+  color: white;
+  border: 2px solid white;
+  box-shadow: 0 2px 6px rgb(15 23 42 / 0.32);
+  transition: transform 160ms ease-out, box-shadow 160ms ease-out;
+}
+
+/* The open pin grows and wears a soft halo in its colour. */
+.pulse-pin--selected {
+  transform: scale(1.15);
+  box-shadow: 0 2px 8px rgb(15 23 42 / 0.36);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--pin-color) 30%, transparent), 0 2px 8px rgb(15 23 42 / 0.36);
+}
+
+/* ── Cluster bubbles: a ring of the intents inside, the count on the brand colour ── */
+.pulse-cluster {
+  position: relative;
+  box-sizing: border-box;
+  width: var(--cluster-size, 40px);
+  height: var(--cluster-size, 40px);
+  padding: 4px;
+  border-radius: 9999px;
+  background: var(--cluster-ring);
+  box-shadow: 0 4px 14px rgb(15 23 42 / 0.3);
+}
+
+.pulse-cluster__count {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  border: 2px solid white;
+  background: rgb(var(--accent-primary-fill));
+  color: white;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── "Live" halo: posts from the last 24 hours (and clusters holding one) ── */
+.pulse-pin--live::after,
+.pulse-cluster--live::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 9999px;
+  border: 2px solid var(--pin-color, rgb(var(--accent-primary-fill)));
+  pointer-events: none;
+  animation: pulse-live-halo 2.4s ease-out infinite;
+}
+
+@keyframes pulse-live-halo {
+  0% { transform: scale(1); opacity: 0.75; }
+  80%, 100% { transform: scale(2); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse-pin--live::after,
+  .pulse-cluster--live::after {
+    display: none;
+  }
+}
