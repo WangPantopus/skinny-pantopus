@@ -56,7 +56,8 @@ import app.pantopus.android.ui.theme.Spacing
  * An action card in an assistant reply (AI assistant phase 1 contract, section 4.3): the title, the
  * label/value lines, warnings in the caution style, one row per person with its own buttons, then the
  * card's buttons and "Not now". A button that ran shows its done label (with Open when it has a screen to
- * open) or the server's message; every button waits while a request runs.
+ * open) or the server's message; every button waits while a request runs. "Fewer like this" (a nudge's or
+ * the brief's last card) stays usable after the card's other buttons went through or expired, until it's used.
  *
  * @param canOpen whether the app can open a done link; links it can't open show no Open button.
  */
@@ -91,9 +92,30 @@ internal fun AiActionCard(
                 AiCardButtons(card, item.id, item.actions, expired, onAction, onOpenLink, canOpen)
             }
         }
-        AiCardButtons(card, ChatAIActionCard.CARD_SCOPE, card.actions, expired, onAction, onOpenLink, canOpen)
+        // "Fewer like this" sits with the card's buttons until it's used, they went through or the card expired.
+        val fewerApart =
+            expired ||
+                card.runs[ChatAIActionCard.CARD_SCOPE] is ChatAICardRun.Done ||
+                card.runs[ChatAIActionCard.FEWER_SCOPE] is ChatAICardRun.Done
+        val ownActions = if (fewerApart) card.otherActions else card.actions
+        AiCardButtons(card, ChatAIActionCard.CARD_SCOPE, ownActions, expired, onAction, onOpenLink, canOpen)
+        if (fewerApart && !expired) AiFewerLikeThis(card, onAction, onOpenLink, canOpen)
         AiActionCardFooter(card = card, expired = expired, onDismiss = onDismiss, modifier = Modifier.align(Alignment.CenterHorizontally))
+        // Under the expired line: it still works.
+        if (expired) AiFewerLikeThis(card, onAction, onOpenLink, canOpen)
     }
+}
+
+/** "Fewer like this" apart from the card's other buttons: usable until it's used, then "You'll see fewer like this". */
+@Composable
+private fun AiFewerLikeThis(
+    card: ChatAIActionCard,
+    onAction: (scope: String, action: ChatAICardAction) -> Unit,
+    onOpenLink: (String) -> Unit,
+    canOpen: (String) -> Boolean,
+) {
+    val fewer = card.fewerLikeThis ?: return
+    AiCardButtons(card, ChatAIActionCard.FEWER_SCOPE, listOf(fewer), expired = false, onAction, onOpenLink, canOpen)
 }
 
 /** The card's kind, with "Done" or "Expired" at the end. */
@@ -124,7 +146,8 @@ private fun AiActionCardHeader(
         Spacer(modifier = Modifier.weight(1f))
         when {
             card.isFinished -> AiCardStatus("Done", PantopusColors.success)
-            expired -> AiCardStatus("Expired", PantopusColors.appTextMuted)
+            // Nothing on a card with only "Fewer like this" stopped working.
+            expired && !card.hasOnlyFewerLikeThis -> AiCardStatus("Expired", PantopusColors.appTextMuted)
         }
     }
 }
@@ -171,6 +194,8 @@ private fun AiActionCardFooter(
 ) {
     if (card.isFinished) return
     if (expired) {
+        // A nudge with nothing to do but "Fewer like this" has lost nothing.
+        if (card.hasOnlyFewerLikeThis) return
         Text(
             text = "This card has expired. Ask again.",
             fontSize = 11.5.sp,
@@ -252,7 +277,8 @@ private fun AiCardButtons(
         }
         else -> {
             if (expired) return
-            (run as? ChatAICardRun.Failed)?.let {
+            // "Fewer like this" among the card's buttons runs in a scope of its own.
+            actions.map { card.runScope(scope, it) }.distinct().mapNotNull { card.runs[it] as? ChatAICardRun.Failed }.forEach {
                 Text(
                     text = it.message,
                     fontSize = 11.5.sp,
@@ -275,7 +301,7 @@ private fun AiCardButtons(
                     },
                 onClick = { onAction(scope, action) },
                 modifier = modifier.testTag("chatAIActionButton_${action.id}"),
-                isLoading = (run as? ChatAICardRun.Running)?.actionId == action.id,
+                isLoading = (card.runs[card.runScope(scope, action)] as? ChatAICardRun.Running)?.actionId == action.id,
                 isEnabled = !card.isRunning,
             )
             if (stacksButtons(actions, LocalDensity.current.fontScale)) {

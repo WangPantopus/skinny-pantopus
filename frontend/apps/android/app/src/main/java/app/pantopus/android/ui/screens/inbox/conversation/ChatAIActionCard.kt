@@ -3,6 +3,7 @@
 package app.pantopus.android.ui.screens.inbox.conversation
 
 import androidx.compose.runtime.Immutable
+import app.pantopus.android.data.ai.AIActionAllowlist
 import java.time.Instant
 
 /** A label and value row on an action card ("When" · "Sat, Oct 24 · 10:00–11:30 AM"). */
@@ -76,7 +77,8 @@ sealed interface ChatAICardRun {
 /**
  * An action card: what the assistant filled in, with buttons that send it through an endpoint the app
  * already uses after one tap (contract section 4). [runs] says how each set of buttons went; it is
- * keyed by [CARD_SCOPE] for the card's own buttons and by a row's id for that row's.
+ * keyed by [CARD_SCOPE] for the card's own buttons, [FEWER_SCOPE] for "Fewer like this" and by a row's
+ * id for that row's.
  */
 @Immutable
 data class ChatAIActionCard(
@@ -98,16 +100,54 @@ data class ChatAIActionCard(
     val isRunning: Boolean
         get() = runs.values.any { it is ChatAICardRun.Running }
 
-    /** The card's own button went through, or every row's did on a card that has only rows. */
+    /**
+     * "Fewer like this", among the own buttons of a nudge's card or the brief's last card. It stands apart from the
+     * card's other buttons: it works until it's used, after they went through and past [expiresAt] too, and using it
+     * leaves them as they are.
+     */
+    val fewerLikeThis: ChatAICardAction?
+        get() = actions.firstOrNull { AIActionAllowlist.isFewerLikeThis(it.request) }
+
+    /** The card's own buttons but "Fewer like this". */
+    val otherActions: List<ChatAICardAction>
+        get() = actions.filterNot { AIActionAllowlist.isFewerLikeThis(it.request) }
+
+    /** A nudge with nothing to do but "Fewer like this": an expired one has lost nothing. */
+    val hasOnlyFewerLikeThis: Boolean
+        get() = fewerLikeThis != null && otherActions.isEmpty() && items.all { it.actions.isEmpty() }
+
+    /** The card's own button (but "Fewer like this") went through, or every row's did on a card that has only rows. */
     val isFinished: Boolean
         get() =
             runs[CARD_SCOPE] is ChatAICardRun.Done ||
-                (actions.isEmpty() && items.isNotEmpty() && items.all { runs[it.id] is ChatAICardRun.Done })
+                (otherActions.isEmpty() && items.isNotEmpty() && items.all { runs[it.id] is ChatAICardRun.Done })
 
     fun isExpired(now: Instant = Instant.now()): Boolean = expiresAt?.isBefore(now) == true
 
+    /** Where [action], one of [scope]'s buttons, runs: "Fewer like this" in [FEWER_SCOPE], any other in [scope]. */
+    fun runScope(
+        scope: String,
+        action: ChatAICardAction,
+    ): String = if (scope == CARD_SCOPE && AIActionAllowlist.isFewerLikeThis(action.request)) FEWER_SCOPE else scope
+
+    /**
+     * Whether a tap can go out: nothing in flight, the card not put away, and that set of buttons neither done nor
+     * past [expiresAt]. "Fewer like this" goes out until it has been used.
+     */
+    fun canRun(
+        scope: String,
+        action: ChatAICardAction,
+    ): Boolean {
+        val runScope = runScope(scope, action)
+        if (isRunning || dismissed || runs[runScope] is ChatAICardRun.Done) return false
+        return runScope == FEWER_SCOPE || !isExpired()
+    }
+
     companion object {
         const val CARD_SCOPE = "card"
+
+        /** "Fewer like this", apart from the card's other buttons. */
+        const val FEWER_SCOPE = "card.fewer"
     }
 }
 
