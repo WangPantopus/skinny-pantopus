@@ -21,6 +21,8 @@ const { verificationReadToolDefinitions, runVerificationReadTool } = require('./
 const { actionCardDefinitions, runCardTool } = require('./actionCards');
 const { showLinkDefinition, runShowLink } = require('./appGuide');
 const { memoryToolDefinitions, runMemoryTool } = require('./memory');
+const { followUpToolDefinitions, runFollowUpTool } = require('./followUps');
+const { needsYouDefinition, runNeedsYou } = require('./needsYou');
 const { homesOf, localToUtc } = require('./assistantKit');
 
 const {
@@ -277,6 +279,9 @@ const toolDefinitions = [
   ...actionCardDefinitions,
   // Phase 3: what they ask Pantopus to remember (memory.js).
   ...memoryToolDefinitions,
+  // Phase 3: what waits on them (needsYou.js), and check-backs (followUps.js).
+  needsYouDefinition,
+  ...followUpToolDefinitions,
   showLinkDefinition,
 ];
 
@@ -342,6 +347,10 @@ const TOOL_TIMEOUTS_MS = {
   draft_memory: 8000,
   draft_plan_alert: 8000,
   recall_memory: 8000,
+  needs_you: 8000,
+  draft_follow_up: 8000,
+  draft_follow_up_cancel: 5000,
+  list_follow_ups: 5000,
 };
 
 /** The tool context: the person and what this turn knows. A bare user id still works (older callers, tests). */
@@ -399,6 +408,9 @@ async function _executeToolImpl(name, args, ctx) {
   if (drafted) return drafted;
   const remembered = await runMemoryTool(name, args, ctx);
   if (remembered) return remembered;
+  if (name === 'needs_you') return runNeedsYou(ctx);
+  const followed = await runFollowUpTool(name, args, ctx);
+  if (followed) return followed;
   if (name === 'show_link') return runShowLink(args, ctx);
   switch (name) {
     case 'get_user_context':

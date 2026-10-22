@@ -747,6 +747,14 @@ function startJobs(options = {}) {
     timezone: 'UTC',
   });
 
+  // ─── Assistant follow-ups ───
+  // Every 5 minutes: check-backs the person asked for that are due, each claimed first so two
+  // servers never run one, sent as requested nudges (services/ai/followUps.js).
+  scheduleCron('*/5 * * * *', wrapJob('assistantFollowUps', () => require('../services/ai/followUps').runFollowUps()), {
+    scheduled: true,
+    timezone: 'UTC',
+  });
+
   // ─── Nearby nudges (AI assistant phase 2) ───
   // Hourly at :27: lost-and-found pairs judged by the model (a pair at most once in 7
   // days), and open questions that got answers. They go out through the nudge engine.

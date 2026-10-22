@@ -23,6 +23,7 @@ const Joi = require('joi');
 const logger = require('../utils/logger');
 const notificationService = require('../services/notificationService');
 const blockService = require('../services/blockService');
+const { pendingReceived } = require('../services/connectionRequests');
 const { isBlocked, getRelationshipStatus } = require('../utils/visibilityPolicy');
 const { invalidateFilterCache } = require('../services/feedService');
 const marketplaceService = require('../services/marketplace/marketplaceService');
@@ -821,27 +822,17 @@ router.get('/', verifyToken, async (req, res) => {
  */
 router.get('/requests/pending', verifyToken, async (req, res) => {
   try {
-    const userId = req.user.id;
-    const blockedIds = [...await blockService.blockedUserIds(userId)];
-
-    let query = supabaseAdmin
-      .from('Relationship')
-      .select(`
-        id, status, created_at,
-        requester:requester_id (${USER_SELECT})
-      `)
-      .eq('addressee_id', userId)
-      .eq('status', 'pending')
-      .order('created_at', { ascending: false });
-    if (blockedIds.length) query = query.not('requester_id', 'in', `(${blockedIds.join(',')})`);
-    const { data: requests, error } = await query;
-
-    if (error) {
+    let requests;
+    try {
+      // The same read the assistant's "Needs you" uses (services/connectionRequests.js).
+      requests = await pendingReceived(req.user.id);
+    } catch (error) {
+      if (error.code !== 'PENDING_READ_FAILED') throw error;
       logger.error('Error fetching pending requests', { error: error.message });
       return res.status(500).json({ error: 'Failed to fetch pending requests' });
     }
 
-    res.json({ requests: (requests || []).map(r => ({ ...r, requester: withChosenUsername(r.requester) })) });
+    res.json({ requests: requests.map(r => ({ ...r, requester: withChosenUsername(r.requester) })) });
   } catch (err) {
     if (err.code === 'BLOCK_CHECK_UNAVAILABLE') return connectionReadUnavailable(res);
     logger.error('Pending requests error', { error: err.message });
