@@ -51,6 +51,8 @@ const RECENT_MS = 7 * DAY_MS;
 const NOTICE_AHEAD_MS = DAY_MS;
 const CARD_DAYS = 7;
 const EVENING_DEFAULT = '19:00';
+// The job runs hourly at :12, so a later evening time would be missed before midnight.
+const EVENING_LATEST = '23:00';
 const RUNS_SHOWN = 5;
 const BATCH = 100;
 // While a run works, its rule's next_run_at moves this far ahead, so another server skips it.
@@ -236,16 +238,14 @@ async function ownRule(userId, id) {
 
 /** The last runs of each rule, newest first: { at, status, label, link }, with how many are going to a posted plan. */
 async function runsOf(rules) {
-  const ids = rules.map((rule) => rule.id);
-  const byRule = new Map(ids.map((id) => [id, []]));
-  if (!ids.length) return byRule;
-  const { data: runs, error } = await supabaseAdmin.from('AgentRequest').select(RUN_FIELDS)
-    .in('rule_id', ids).eq('origin', 'rule').order('created_at', { ascending: false }).limit(ids.length * 20);
-  if (error) throw new Error(`Rule runs read failed: ${error.message}`);
-  for (const run of runs || []) {
-    const list = byRule.get(run.rule_id);
-    if (list && list.length < RUNS_SHOWN) list.push(run);
-  }
+  const byRule = new Map();
+  // One read per rule (a person has at most five), so a busy rule never crowds out an older one's runs.
+  await Promise.all(rules.map(async (rule) => {
+    const { data, error } = await supabaseAdmin.from('AgentRequest').select(RUN_FIELDS)
+      .eq('rule_id', rule.id).eq('origin', 'rule').order('created_at', { ascending: false }).limit(RUNS_SHOWN);
+    if (error) throw new Error(`Rule runs read failed: ${error.message}`);
+    byRule.set(rule.id, data || []);
+  }));
   const shown = [...byRule.values()].flat();
   const planIds = [...new Set(shown.map((run) => run.outcome?.plan_id).filter(isUuid))];
   const [steps, plans, going] = await Promise.all([
@@ -909,8 +909,8 @@ async function runPickupReminder(rule, now) {
   }
   const zone = resolveHomeTimezone(home, DEFAULT_TIMEZONE);
   const prefs = await memberPrefs(memberId);
-  const [hour, minute] = (HHMM.test(String(prefs.evening_briefing_time_local || '').slice(0, 5))
-    ? String(prefs.evening_briefing_time_local).slice(0, 5) : EVENING_DEFAULT).split(':').map(Number);
+  const chosen = String(prefs.evening_briefing_time_local || '').slice(0, 5);
+  const [hour, minute] = [HHMM.test(chosen) ? chosen : EVENING_DEFAULT, EVENING_LATEST].sort()[0].split(':').map(Number);
   const local = DateTime.fromMillis(now, { zone });
   const evening = local.set({ hour, minute, second: 0, millisecond: 0 });
   // Not evening yet (or a late run after midnight): look again at tonight's time.
