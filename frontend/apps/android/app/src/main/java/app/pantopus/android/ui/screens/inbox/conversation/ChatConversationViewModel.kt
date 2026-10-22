@@ -1497,6 +1497,7 @@ class ChatConversationViewModel
                         }
                         is AIChatStreamEvent.Error -> {
                             aiStatus = null
+                            giveBackIfUnanswered(assistantId, text, queued)
                             replaceLocalMessage(assistantId, event.message, "ai_reply", "ai")
                         }
                         AIChatStreamEvent.Done -> aiStatus = null
@@ -1506,10 +1507,30 @@ class ChatConversationViewModel
                 // A user-initiated stop is not a connection failure —
                 // [cancelAiStream] already finalized the row.
                 if (error is CancellationException) throw error
+                giveBackIfUnanswered(assistantId, text, queued)
                 replaceLocalMessage(assistantId, "I lost the connection. Please try again.", "ai_reply", "ai")
             }
             aiStatus = null
             streamingAssistantId = null
+        }
+
+        /**
+         * A reply that failed before it said anything (no words, card or link): the person's words and files go back
+         * in the composer, so trying again is one tap, and the files upload again then. Words typed in the meantime
+         * stay. Call it before the error replaces the empty reply.
+         */
+        private fun giveBackIfUnanswered(
+            assistantId: String,
+            text: String,
+            queued: List<ChatQueuedAttachment>,
+        ) {
+            val answered =
+                messages.any { it.id == assistantId && it.resolvedText.isNotEmpty() } ||
+                    !aiDraftsByMessageId[assistantId].isNullOrEmpty() ||
+                    !aiLinksByMessageId[assistantId].isNullOrEmpty()
+            if (answered) return
+            if (_composerText.value.isEmpty()) _composerText.value = text
+            _queuedAttachments.value = (queued + _queuedAttachments.value).distinctBy { it.id }.take(5)
         }
 
         fun react(
