@@ -5,7 +5,7 @@ const sha = 'a'.repeat(40);
 function fixture(overrides = {}) {
   const output = {};
   return {
-    core: { setOutput: (k, v) => { output[k] = v; }, notice: () => {} }, output,
+    core: { setOutput: (k, v) => { output[k] = v; }, notice: () => {}, info: () => {} }, output,
     context: { repo: { owner: 'example', repo: 'app' }, ref: 'refs/heads/master', sha, payload: {}, ...overrides.context },
     github: { rest: {
       repos: {
@@ -30,7 +30,7 @@ test('manual deployment requires green CI on the exact current commit', async ()
 });
 test('failed or missing CI cannot release', async () => {
   for (const runs of [[], [{ id: 1, event: 'push', status: 'completed', conclusion: 'failure' }], [{ id: 1, event: 'pull_request', status: 'completed', conclusion: 'success' }]]) {
-    await assert.rejects(requireCi(fixture({ runs })), /CI must succeed/);
+    await assert.rejects(requireCi(fixture({ runs }), { rereadSeconds: [0, 0, 0] }), /CI must succeed/);
   }
 });
 test('older green runs do not override a newer failed run', async () => {
