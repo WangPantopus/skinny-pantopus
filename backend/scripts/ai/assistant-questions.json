@@ -463,7 +463,7 @@
       "expect": {
         "noCard": true,
         "linkContains": "/verify-postcard",
-        "textMatches": "(on its way|was sent|mailed|went out)",
+        "textMatches": "(on its way|sent|mailed|went out)",
         "noError": true
       },
       "note": "Their own postcard, as the postcard screen shows it, with the link to enter its code."
