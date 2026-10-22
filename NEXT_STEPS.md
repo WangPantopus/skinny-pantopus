@@ -158,6 +158,13 @@ Sessions you start for one job (Instant Screens, Nearby Plans, single fixes) wor
 - [x] The thirteen decisions, all as recommended: the name "Lost pet alert"; senders must be signed in and nearby (a home, saved place or fresh location within 5 km); 1 mile for dogs and other pets, half a mile for cats; everyone with a home or saved place in range, with a "Lost pets near me" switch that starts on; pushes wait for quiet hours; reports without an account on a web page, an exception to the mobile-only rule like the Plans preview; exact sighting points for the household only; contact through Pantopus, no phone unless the owner adds it, no reward field; photo matching; found pets alert too; saved pet profiles after alerts are live; the new tables `PetAlert` and `PetSighting`; a `pet_alerts` flag with the Plans order of work.
 - [x] The photo check and photo matching send photos to the AI provider, so they stay off on hosted environments until your privacy step for [#2472](https://github.com/WangPantopus/skinny-pantopus/pull/2472) is done and the policy covers photos from people without an account. Alerts work without them.
 
+**Made by the founder on October 22 (money first).** You asked for "the one feature that can make money soonest" and said yes to the pick. Progress is in section 4A.
+
+- [x] Work on features that make money first; lost pet alerts stay paused (above).
+- [x] The first money feature is Crew Day, run by hand (section 4A), paid through the business invoices that are built and switched on in all three apps. A crew sets up a Pantopus business page and invoices each household after the street day; the household pays by card; Pantopus keeps its fee from the crew's payout: 10% for the first 50 businesses, 15% for home services after that.
+- [x] Close the business fee leak first: owners choose their own business type, and some types pay 0%. Decided under your standing instruction: a fee under 10% (pop-up, nonprofit, religious, community group) applies only after Pantopus verifies that type.
+- [ ] Yours: live payments for invoices ([production checklist P11](docs/release/prod-config-checklist.md#p11-live-payments-for-crew-day-founder)), which ends D4's test-mode pilot for payments; then the first crew and street.
+
 **Still open. The brief builds the default until you decide.**
 
 - [ ] Confirm the September 26 promise and pilot shape: "Know what matters for your home, and stay on top of it"; first-time homeowners in Vancouver, Camas and Washougal; five households, then 30 to 50, for eight weeks each. Default: as written.
@@ -167,7 +174,7 @@ Sessions you start for one job (Instant Screens, Nearby Plans, single fixes) wor
 - [ ] The pilot start date. Default: when section 2 below is done and one full journey works on the hosted backend.
 - [ ] Creator network and Places order. Decide in late November with the pilot's week-four number.
 - [ ] Crew Day by hand this fall, beside the pilot (section 4A). Default: talk to the crews now; choose the first streets only if the crews pass Gate 1.
-- [ ] The by-hand Crew Day's tools. Default: a form, texts, email, and payment through the crew or a payment link, with no Pantopus web build, so the mobile-only rule holds. The Street Organizer's Phase 1 assumes a browser booking page.
+- [x] The by-hand Crew Day's tools: decided October 22. Sign-ups by sheet, texts and email; payment through Pantopus business invoices, which households pay on pantopus.com or in the app. No new web build.
 - [x] Pulse's six approvals in [PR 625](https://github.com/WangPantopus/skinny-pantopus/pull/625): decided October 13 (see above): five tabs; place pages in release R4 after streets, buildings, HOAs and school zones first; labels and permissions approved; adult-only posting approved; paid moderation approved in principle; Pulse is built now rather than after Crew Day.
 - [x] The Pantopus Agent's open decisions: working name, Stage 1 entry point and languages, autonomy defaults and memory retention ([product design](docs/product/pantopus-agent-product-design-2026-10-04.md#open-decisions)). Decided October 20 (see above); building started the same day.
 - [ ] Record these decisions in `docs/pantopus-product-design-index-2026-09-09.md`, `docs/PROJECT_HANDOFF.md` and section 13 of the Wedge v2 page.
@@ -352,6 +359,12 @@ A checked subitem means the named implementation or local check is complete; a p
 ## 4A. Crew Day by hand, beside the pilot
 
 Phases 0 and 1 of the [Street Organizer launch plan](docs/product/street-organizer-design-2026-09-27.md#launch-plan). Founder-run, with no app build. Each gate must hold before the next step.
+
+**Since October 22 this is the first money feature (section 0).** Households pay the crew's business invoice; Pantopus keeps its fee from the crew's payout. The crew call, crew terms, organizer guide, sign-up sheet, messages, pricing worksheet and day-of checklist are in the [Crew Day Kit](https://claude.ai/artifact/BfXLe9ThWTrFk92kR76Knz) (private).
+
+- [ ] Close the business fee leak and check the invoice flow on the web, iOS and Android against a local backend in Stripe test mode (session invoice-fee-fix, October 22).
+- [ ] Yours: live payments ([checklist P11](docs/release/prod-config-checklist.md#p11-live-payments-for-crew-day-founder)). Until new store builds carry the live key, households pay on pantopus.com.
+- [ ] The first street day on business invoices. Log homes, price, what Pantopus kept and your hours in the kit's street day log.
 
 - [ ] Phase 0, now to mid-October: talk to five to eight local crews about route savings, per-home prices, weather rules and paying for postcards. Pick one or two exterior services.
 - [ ] Gate 1: crews confirm the route savings and accept the rules for payment, cancellation, weather and problems.
