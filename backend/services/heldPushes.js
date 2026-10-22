@@ -93,10 +93,12 @@ async function pushOrHold(row, { send, fallbackTz, ownOnly = false }) {
  * @param {string[]} opts.types
  * @param {(row: object) => Promise<unknown>} opts.send
  * @param {(row: object) => (boolean|Promise<boolean>)} [opts.isDropped]  True when the push no longer applies.
+ * @param {(row: object, outcome: { dropped: boolean }) => Promise<unknown>} [opts.onReleased]  Told about each push
+ *   this runner sent or dropped; its failures are logged and never stop the run.
  * @param {number} [opts.limit]
  * @returns {Promise<{ sent: number, dropped: number }>}
  */
-async function releaseHeldPushes({ types, send, isDropped = () => false, limit = 300 }) {
+async function releaseHeldPushes({ types, send, isDropped = () => false, onReleased = null, limit = 300 }) {
   const now = new Date().toISOString();
   const { data: rows, error } = await supabaseAdmin
     .from('Notification')
@@ -120,13 +122,23 @@ async function releaseHeldPushes({ types, send, isDropped = () => false, limit =
       continue;
     }
     if (!(await claim(row, { push_sent_at: now, ...(drop ? { push_skipped: true } : {}) }))) continue;
+    const released = async (outcome) => {
+      if (!onReleased) return;
+      try {
+        await onReleased(row, outcome);
+      } catch (err) {
+        logger.warn('held_push.released_hook_failed', { id: row.id, error: err.message });
+      }
+    };
     if (drop) {
       dropped += 1;
+      await released({ dropped: true });
       continue;
     }
     try {
       await send(row);
       sent += 1;
+      await released({ dropped: false });
     } catch (err) {
       logger.warn('held_push.send_failed', { id: row.id, error: err.message });
     }

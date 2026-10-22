@@ -38,6 +38,7 @@ const {
   gigRoomRecipients,
   isRoomClosedForWrites,
 } = require('../services/chatGigRoomAccess');
+const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
 const { incCounter, recordHistogram, getSnapshot } = require('../services/chatMetrics');
 const pushService = require('../services/pushService');
 const notificationService = require('../services/notificationService');
@@ -512,11 +513,12 @@ async function emitNewMessage(io, { room, message, actorUserId, identityUserId }
 // internal actor_user_id), the room moves up the lists, the sender's own row
 // stays read, and the other members get a badge update and a device push.
 // POST /messages and an organizer's Support Train reminder
-// (routes/supportTrains.js) both deliver through here.
-async function deliverNewMessage(io, { room, message, actorUserId, senderUserId = actorUserId, requestId = null }) {
+// (routes/supportTrains.js) both deliver through here. `people` names the
+// sender (loadChatPeople); without it they're looked up here.
+async function deliverNewMessage(io, { room, message, actorUserId, senderUserId = actorUserId, requestId = null, people = null }) {
   const roomId = room.id;
+  const broadcast = serializeChatMessageForViewer(message, { people: people || await loadMessageSenders([message]) });
   if (io) {
-    const broadcast = serializeChatMessageForViewer(message);
     emitNewMessage(io, { room, message: broadcast, actorUserId, identityUserId: senderUserId })
       .catch((emitError) => {
         // Without the members, the room still hears it as before (the lists reload).
@@ -580,7 +582,7 @@ async function deliverNewMessage(io, { room, message, actorUserId, senderUserId 
       const pushEnabledIds = recipientUserIds.filter((id) => !disabled.has(id));
       if (pushEnabledIds.length === 0) return;
 
-      const senderName = serializeUserIdentityForViewer(message.sender)?.displayName || 'Someone';
+      const senderName = broadcast.sender?.displayName || 'Someone';
       await pushService.sendToUsers(pushEnabledIds, {
         title: senderName,
         body: preview,
@@ -671,21 +673,21 @@ function stripActorIdentity(message) {
   return rest;
 }
 
-function serializeChatParticipantForViewer(participant) {
+function serializeChatParticipantForViewer(participant, people = new Map()) {
   if (!participant) return null;
   const { user, ...safe } = participant;
   return {
     ...safe,
-    user: serializeUserAsLocalIdentity(user),
+    user: (user?.id && people.get(String(user.id))) || serializeUserAsLocalIdentity(user),
   };
 }
 
-function serializeChatRoomForViewer(room) {
+function serializeChatRoomForViewer(room, people = new Map()) {
   if (!room) return null;
   return {
     ...room,
     participants: Array.isArray(room.participants)
-      ? room.participants.map(serializeChatParticipantForViewer)
+      ? room.participants.map((participant) => serializeChatParticipantForViewer(participant, people))
       : room.participants,
   };
 }
@@ -718,12 +720,14 @@ function sendChatReadError(res, error, fallback) {
   return res.status(500).json({ error: fallback });
 }
 
+// `options.people` (loadChatPeople) names the sender as the chat list does.
 function serializeChatMessageForViewer(message, options = {}) {
   if (!message) return null;
   const base = options.includeActorIdentity ? message : stripActorIdentity(message);
   const { sender, ...safe } = base;
   const bodyText = safe.message_text ?? safe.message ?? null;
   const bodyType = safe.message_type ?? safe.type ?? 'text';
+  const senderId = sender?.id || safe.user_id;
   return {
     ...safe,
     // Emit both canonical DB columns and legacy aliases so all clients decode reliably.
@@ -731,8 +735,13 @@ function serializeChatMessageForViewer(message, options = {}) {
     message_text: bodyText,
     type: safe.type ?? bodyType,
     message_type: bodyType,
-    sender: serializeUserIdentityForViewer(sender),
+    sender: (senderId && options.people?.get(String(senderId))) || serializeUserIdentityForViewer(sender),
   };
+}
+
+// The people who wrote these messages (loadChatPeople).
+function loadMessageSenders(messages) {
+  return loadChatPeople((messages || []).map((message) => message?.sender?.id || message?.user_id));
 }
 
 /**
@@ -1194,7 +1203,9 @@ router.get('/rooms/:roomId', verifyToken, async (req, res) => {
       room.plan_id = plan?.post_id || null;
       room.is_active = roomIsActive(room, planStates);
     }
-    res.json({ room: serializeChatRoomForViewer(room) });
+    const members = Array.isArray(room.participants) ? room.participants : [];
+    const people = await loadChatPeople(members.map((p) => p.user?.id || p.user_id));
+    res.json({ room: serializeChatRoomForViewer(room, people) });
     
   } catch (err) {
     logger.error('Room fetch error', { requestId: req.requestId, userId: req.user?.id, roomId: req.params.roomId, error: err.message });
@@ -1303,7 +1314,8 @@ router.post('/direct', verifyToken, directChatLimiter, validate(createDirectChat
 
     res.status(201).json({
       roomId,
-      otherUser
+      // The conversation's header: the other person as the chat list names them.
+      otherUser: chatPersonRow(otherUser, await loadChatPeople([otherUser.id])),
     });
     
   } catch (err) {
@@ -1614,12 +1626,15 @@ router.get('/conversations/:otherUserId/messages', verifyToken, async (req, res)
       return res.status(500).json({ error: 'Failed to fetch conversation messages' });
     }
 
-    // Batch-fetch reactions for all visible messages to avoid N+1 queries
+    // Batch-fetch reactions and senders for all visible messages to avoid N+1 queries
     const visibleMessages = (messages || []).reverse();
     const messageIds = visibleMessages.map((m) => m.id).filter(Boolean);
-    const reactionMap = await buildReactionSummary(messageIds, userId);
+    const [reactionMap, people] = await Promise.all([
+      buildReactionSummary(messageIds, userId),
+      loadMessageSenders(visibleMessages),
+    ]);
     const messagesWithReactions = visibleMessages.map((m) => ({
-      ...serializeChatMessageForViewer(m),
+      ...serializeChatMessageForViewer(m, { people }),
       reactions: reactionMap.get(m.id) || [],
     }));
 
@@ -1793,12 +1808,15 @@ router.get('/rooms/:roomId/messages', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch messages' });
     }
 
-    // Batch-fetch reactions for all visible messages to avoid N+1 queries
+    // Batch-fetch reactions and senders for all visible messages to avoid N+1 queries
     const visibleMessages = (messages || []).reverse();
     const messageIds = visibleMessages.map((m) => m.id).filter(Boolean);
-    const reactionMap = await buildReactionSummary(messageIds, userId);
+    const [reactionMap, people] = await Promise.all([
+      buildReactionSummary(messageIds, userId),
+      loadMessageSenders(visibleMessages),
+    ]);
     const messagesWithReactions = visibleMessages.map((m) => ({
-      ...serializeChatMessageForViewer(m),
+      ...serializeChatMessageForViewer(m, { people }),
       reactions: reactionMap.get(m.id) || [],
     }));
 
@@ -2068,9 +2086,11 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
       if (retryError) throw retryError;
       return data;
     };
+    // Read alongside the write: the reply and the room hear the sender as the chat list names them.
+    const senderPeople = loadChatPeople([senderUserId]);
     if (clientMessageId) {
       const existingMsg = await findRetryMessage();
-      if (existingMsg) return res.json({ message: serializeChatMessageForViewer(existingMsg) });
+      if (existingMsg) return res.json({ message: serializeChatMessageForViewer(existingMsg, { people: await senderPeople }) });
     }
 
     // Insert message
@@ -2156,7 +2176,7 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
     if (error?.code === '23505' && clientMessageId) {
       // A concurrent same-scope insert may have won after the initial lookup.
       const existingMsg = await findRetryMessage();
-      if (existingMsg) return res.json({ message: serializeChatMessageForViewer(existingMsg) });
+      if (existingMsg) return res.json({ message: serializeChatMessageForViewer(existingMsg, { people: await senderPeople }) });
       return res.status(409).json({ error: 'Message retry key is already in use' });
     }
 
@@ -2166,8 +2186,9 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
       return res.status(500).json({ error: 'Failed to send message' });
     }
 
+    const people = await senderPeople;
     await Promise.all([
-      deliverNewMessage(req.app.get('io'), { room, message, actorUserId: userId, senderUserId, requestId }),
+      deliverNewMessage(req.app.get('io'), { room, message, actorUserId: userId, senderUserId, requestId, people }),
       topicId
         ? supabaseAdmin
             .from('ConversationTopic')
@@ -2181,7 +2202,7 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
     recordHistogram('chat.message.send_latency_ms', sendDurationMs);
     logger.info('message_send_complete', { requestId, roomId, userId, senderUserId, messageId: message.id, durationMs: sendDurationMs });
 
-    res.status(201).json({ message: serializeChatMessageForViewer(message) });
+    res.status(201).json({ message: serializeChatMessageForViewer(message, { people }) });
     
   } catch (err) {
     if (err.code === 'BLOCK_CHECK_UNAVAILABLE') return res.status(503).json({ error: err.message, code: err.code });
@@ -2241,7 +2262,8 @@ router.put('/messages/:messageId', verifyToken, messageEditLimiter, async (req, 
     }
 
     incCounter('chat.message.edited');
-    const responseMessage = serializeChatMessageForViewer(updated);
+    // The edited row names its sender as the room's messages do, so the edit doesn't blank the bubble's name.
+    const responseMessage = serializeChatMessageForViewer(updated, { people: await loadMessageSenders([updated]) });
 
     // Broadcast via socket
     const io = req.app.get('io');
@@ -2450,12 +2472,15 @@ router.post('/rooms/:roomId/participants', verifyToken, participantLimiter, asyn
     // PT403 when the room is direct and a block is active. That is the intended
     // direction, but the result was previously discarded entirely, so record it:
     // the participant change itself already succeeded and must still be reported.
+    // The room names the new member as the chat list does.
+    const people = await loadChatPeople([newParticipant.user?.id || newUserId]);
+    const added = chatPersonRow(newParticipant.user, people);
     const { error: addNoticeError } = await supabaseAdmin
       .from('ChatMessage')
       .insert({
         room_id: roomId,
         user_id: userId,
-        message: `added ${newParticipant.user.name || chosenUsernameOrNull(newParticipant.user.username) || 'someone'}`,
+        message: `added ${added?.name || chosenUsernameOrNull(added?.username) || 'someone'}`,
         type: 'system'
       });
     if (addNoticeError) {
@@ -2465,7 +2490,7 @@ router.post('/rooms/:roomId/participants', verifyToken, participantLimiter, asyn
       });
     }
 
-    res.status(201).json({ participant: serializeChatParticipantForViewer(newParticipant) });
+    res.status(201).json({ participant: serializeChatParticipantForViewer(newParticipant, people) });
     
   } catch (err) {
     logger.error('Add participant error', { requestId: req.requestId, userId: req.user?.id, roomId: req.params.roomId, error: err.message });
@@ -2964,15 +2989,8 @@ async function buildReactionSummary(messageIds, requestingUserId) {
 
   if (error || !reactions || reactions.length === 0) return new Map();
 
-  // Collect unique user IDs
-  const userIds = [...new Set(reactions.map((r) => r.user_id))];
-  const { data: users } = await supabaseAdmin
-    .from('User')
-    .select('id, username, name, first_name, middle_name, last_name, profile_picture_url, account_type')
-    .in('id', userIds);
-
-  const userMap = {};
-  (users || []).forEach((u) => { userMap[u.id] = u; });
+  // The people who reacted, as the chat list names them
+  const people = await loadChatPeople(reactions.map((r) => r.user_id));
 
   // Group: messageId -> reaction -> [user_id, ...]
   const grouped = {};
@@ -2988,7 +3006,7 @@ async function buildReactionSummary(messageIds, requestingUserId) {
       reaction,
       count: uids.length,
       users: uids.map((uid) => {
-        const identity = serializeUserAsLocalIdentity(userMap[uid]);
+        const identity = people.get(String(uid)) || null;
         return {
           id: identity?.id || uid,
           name: identity?.displayName || 'Unknown',

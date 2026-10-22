@@ -328,8 +328,21 @@ extension PulsePostDetailView {
     /// Ask Pantopus about this post; nothing to ask about one a moderator took down.
     private func askAction(_ post: PostDetailDTO) -> (@MainActor () -> Void)? {
         guard !post.isRemovedByModerator else { return nil }
-        let topic = AIAskTopic.post(id: post.id, title: Self.askAbout(post))
+        let topic = AIAskTopic.post(
+            id: post.id,
+            title: Self.askAbout(post),
+            makesPlan: PlansFlags.shared.plans && Self.isEventAhead(post)
+        )
         return { askTopic = topic }
+    }
+
+    /// An event that hasn't ended: its end, else its start, is still ahead.
+    /// Composers post the poster's wall clock labelled UTC, so it compares
+    /// with the phone's own wall clock read the same way (`PulseEventDetails`).
+    private static func isEventAhead(_ post: PostDetailDTO, now: Date = Date()) -> Bool {
+        guard post.postType == "event" else { return false }
+        guard let last = PlanTime.parse(post.eventEndDate) ?? PlanTime.parse(post.eventDate) else { return true }
+        return last > now.addingTimeInterval(TimeInterval(TimeZone.current.secondsFromGMT(for: now)))
     }
 
     /// "About: …" names the post by its headline, else its first words.

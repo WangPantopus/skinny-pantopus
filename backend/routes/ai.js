@@ -17,6 +17,8 @@
  *   GET  /conversations/:id/messages?cards= — One conversation's turns, with the cards the app can show
  *   DELETE /conversations/:id    — Delete a conversation
  *   POST /nudges/:id/fewer       — "Fewer like this" on a nudge or the morning brief
+ *   POST /cards/:cardId/state    — What ran on one of the person's cards (done or dismissed)
+ *   GET|POST|DELETE /memory, PATCH|DELETE /memory/:id, POST /memory/reviewed — What Pantopus remembers
  */
 const express = require('express');
 const Joi = require('joi');
@@ -29,6 +31,8 @@ const { aiChatLimiter, aiDraftLimiter } = require('../middleware/rateLimiter');
 const { asyncHandler } = require('../errorHandler');
 const agentService = require('../services/ai/agentService');
 const nudgeEngine = require('../services/ai/nudges/engine');
+const cardState = require('../services/ai/cardState');
+const memory = require('../services/ai/memory');
 const radonReport = require('../services/ai/radonReport');
 const { CHAT_MODEL, DRAFT_MODEL } = require('../config/anthropic');
 const propertyIntelligenceService = require('../services/ai/propertyIntelligenceService');
@@ -485,6 +489,68 @@ router.post('/nudges/:notificationId/fewer', verifyToken, asyncHandler(async (re
   const result = await nudgeEngine.fewerLikeThis(req.user.id, req.params.notificationId);
   if (!result) return res.status(404).json({ error: 'Suggestion not found' });
   res.json(result);
+}));
+
+// ─── Card done states ───────────────────────────────────────────────────────
+// Phase 3 contract §4.2: the apps report what ran on a card, so every device (and a
+// reinstall) shows it done. The writes limiter verifyToken applies covers it.
+
+const cardStateSchema = Joi.object({
+  status: Joi.string().valid('done', 'dismissed').required(),
+  action_id: Joi.when('status', {
+    is: 'done',
+    then: Joi.string().max(40).required(),
+    otherwise: Joi.string().max(40).allow(null).optional(),
+  }),
+  item_id: Joi.string().max(100).allow(null).optional(),
+  link: Joi.string().max(500).allow(null, '').optional(),
+});
+
+router.post('/cards/:cardId/state', verifyToken, validate(cardStateSchema), asyncHandler(async (req, res) => {
+  const result = await cardState.reportState(req.user.id, req.params.cardId, req.body);
+  if (result.code) return res.status(result.status).json({ error: result.message, code: result.code });
+  res.json(result);
+}));
+
+// ─── What Pantopus remembers ────────────────────────────────────────────────
+// Phase 3 contract §5.4: the person's own items only. An item is added only from a
+// memory_save card they tapped (POST with the card's id), as the card showed it.
+
+function memoryRoute(handler) {
+  return asyncHandler(async (req, res) => {
+    try {
+      await handler(req, res);
+    } catch (err) {
+      if (err instanceof memory.MemoryError) return res.status(err.status).json({ error: err.message, code: err.code });
+      throw err;
+    }
+  });
+}
+
+router.get('/memory', verifyToken, memoryRoute(async (req, res) => {
+  res.json(await memory.listMemory(req.user.id));
+}));
+
+router.post('/memory', verifyToken, validate(Joi.object({ card_id: Joi.string().uuid().required() })), memoryRoute(async (req, res) => {
+  const { status, item } = await memory.saveFromCard(req.user.id, req.body.card_id);
+  res.status(status).json({ item });
+}));
+
+router.post('/memory/reviewed', verifyToken, memoryRoute(async (req, res) => {
+  res.json(await memory.markReviewed(req.user.id));
+}));
+
+router.patch('/memory/:id', verifyToken, validate(Joi.object({ fact: Joi.string().max(1000).required() })), memoryRoute(async (req, res) => {
+  res.json({ item: await memory.editFact(req.user.id, req.params.id, req.body.fact) });
+}));
+
+router.delete('/memory/:id', verifyToken, memoryRoute(async (req, res) => {
+  await memory.forget(req.user.id, req.params.id);
+  res.status(204).end();
+}));
+
+router.delete('/memory', verifyToken, memoryRoute(async (req, res) => {
+  res.json(await memory.forgetAll(req.user.id));
 }));
 
 // ─── Audio Transcription ─────────────────────────────────────────────────────

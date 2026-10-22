@@ -718,11 +718,31 @@ async function getUserDisplayName(userId) {
  * POST /api/posts/precheck
  * Soft AI pre-check before submitting a post.
  * Returns suggestions — never blocks the post outright.
+ *
+ * The composers call it again with `stage: "post"` when the person taps Post. That adds
+ * `findings`, the kindness and safety check (AI assistant phase 2 contract §6.6,
+ * services/ai/postCheck.js): a heated tone, a phone number or street address in the words, a
+ * Heads-up kind this route's create would refuse. The apps show them with "Edit" and "Post anyway".
  */
 router.post('/precheck', verifyToken, async (req, res) => {
   try {
     const { content, postType, purpose, surface, latitude, longitude } = req.body;
     const userId = req.user.id;
+    const { stage, title, safetyAlertKind, sourceUrl } = req.body;
+    // Runs alongside the reads below; it never throws.
+    const findingsRead = stage === 'post'
+      ? require('../services/ai/postCheck').checkPost({
+        userId,
+        title: typeof title === 'string' ? title : null,
+        content: typeof content === 'string' ? content : '',
+        postType,
+        kindRefusal: postType === 'alert' && typeof safetyAlertKind === 'string'
+          ? alertKindRefusal(safetyAlertKind, req.user.accountType, sourceUrl) : null,
+      }).catch((err) => {
+        logger.warn('Post check failed', { userId, error: err.message });
+        return [];
+      })
+      : null;
 
     const suggestions = [];
     const flags = [];
@@ -809,11 +829,14 @@ router.post('/precheck', verifyToken, async (req, res) => {
       flags,
       suggestions,
       isVisitor,
+      ...(findingsRead ? { findings: await findingsRead } : {}),
     });
   } catch (err) {
     logger.error('Post precheck error', { error: err.message });
     // Always fail open — never block posting due to precheck errors
-    res.json({ ok: true, canPost: true, flags: [], suggestions: [], isVisitor: false });
+    res.json({
+      ok: true, canPost: true, flags: [], suggestions: [], isVisitor: false, ...(req.body?.stage === 'post' ? { findings: [] } : {}),
+    });
   }
 });
 
@@ -1772,6 +1795,24 @@ router.post('/feed/seen', verifyToken, async (req, res) => {
   } catch (err) {
     logger.error('Feed seen error', { error: err.message, userId: req.user?.id });
     res.status(500).json({ error: "Couldn't save where you left off." });
+  }
+});
+
+// "Before you ask" (AI assistant phase 2 contract §6.5): while someone writes a question, the
+// composers show up to 3 earlier questions and recommendations nearby that match its words, each
+// with its best reply. A plain search through the Nearby feed's own checks, with no model call,
+// around the point the question is going to (else the person's own place).
+router.get('/before-you-ask', verifyToken, async (req, res) => {
+  try {
+    const query = typeof req.query.q === 'string' ? req.query.q.slice(0, 500) : '';
+    const latitude = parseFloat(req.query.latitude);
+    const longitude = parseFloat(req.query.longitude);
+    const point = Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180 ? { latitude, longitude } : {};
+    const { earlierAnswers } = require('../services/ai/readToolsNearby');
+    res.json(await earlierAnswers({ query, ...point }, { userId: req.user.id }));
+  } catch (err) {
+    logger.error('Before you ask error', { error: err.message, userId: req.user?.id });
+    res.status(500).json({ error: "Couldn't look for earlier answers." });
   }
 });
 

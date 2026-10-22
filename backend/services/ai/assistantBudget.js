@@ -8,6 +8,9 @@
  *   AI_PERSON_DAILY_TURNS=120     turns one person may take in 24 hours
  *   AI_GLOBAL_DAILY_TURNS=4000    turns everyone together may take since midnight UTC
  *
+ * The kindness check a post composer runs when the person taps Post (postCheck.js, logged as
+ * post_check) counts as a turn too, and is skipped, never refused, when these say no.
+ *
  * A count that can't be read lets the turn through: the in-process rate limiter
  * still applies, and an outage of the log must not take the assistant down.
  *
@@ -28,6 +31,8 @@ const DISABLED = { error: 'AI_DISABLED', message: 'Pantopus AI is paused right n
 const PERSON_LIMIT = { error: 'AI_BUDGET', message: 'Pantopus AI has done a lot for you today. Try again tomorrow.' };
 const GLOBAL_LIMIT = { error: 'AI_BUDGET', message: 'Pantopus AI has done a lot today. Try again tomorrow.' };
 const GLOBAL_MEMO_MS = 60_000;
+// The endpoint names that count as turns.
+const TURN_ENDPOINTS = ['chat', 'post_check'];
 
 let globalMemo = { count: 0, until: 0 };
 
@@ -46,7 +51,7 @@ async function personTurns(userId) {
   const { count, error } = await supabaseAdmin.from('AIRequestLog')
     .select('id', { count: 'exact', head: true })
     .eq('user_id', userId)
-    .eq('endpoint', 'chat')
+    .in('endpoint', TURN_ENDPOINTS)
     .gte('created_at', since);
   if (error) throw new Error(error.message);
   return count || 0;
@@ -58,7 +63,7 @@ async function globalTurns() {
   midnight.setUTCHours(0, 0, 0, 0);
   const { count, error } = await supabaseAdmin.from('AIRequestLog')
     .select('id', { count: 'exact', head: true })
-    .eq('endpoint', 'chat')
+    .in('endpoint', TURN_ENDPOINTS)
     .gte('created_at', midnight.toISOString());
   if (error) throw new Error(error.message);
   globalMemo = { count: count || 0, until: Date.now() + GLOBAL_MEMO_MS };

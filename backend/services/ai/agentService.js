@@ -39,6 +39,9 @@ const { actionCardDefinitions, playdateCardDefinitions, PLAN_CARD_TOOLS } = requ
 const { appGuide } = require('./appGuide');
 const { screenContextText, screenName } = require('./screenContext');
 const { checkChatBudget } = require('./assistantBudget');
+const memory = require('./memory');
+const agentRecord = require('./agentRecord');
+const cardState = require('./cardState');
 
 const READ_TOOL_NAMES = new Set(readToolDefinitions.map((tool) => tool.name));
 const CARD_TOOL_NAMES = new Set(actionCardDefinitions.map((tool) => tool.name));
@@ -54,11 +57,16 @@ const PLAYDATE_TOOLS = new Map([...playdateReadToolDefinitions, ...playdateCardD
 // action cards ("action") and link buttons ("link"). Plans tools need the
 // person's `plans` flag, and playdates among their kinds `plans_playdates`.
 // The read tools answer in words, so every app gets them.
-function launchScopedChatTools({ pickupSchedule = false, actionCards = false, links = false, plans = false, playdates = false } = {}) {
+function launchScopedChatTools({ pickupSchedule = false, actionCards = false, links = false, plans = false, playdates = false, remembers = false } = {}) {
   const giftFunds = isLaunchFeatureEnabled('gift_funds');
   return toolDefinitions
     .filter((tool) => {
       if (tool.name === 'draft_pickup_schedule') return pickupSchedule;
+      // Phase 3 memory (`cards` lists "memory"): its cards also need "action", and plan alerts Plans.
+      if (memory.MEMORY_TOOL_NAMES.has(tool.name)) {
+        if (!memory.MEMORY_CARD_TOOLS.has(tool.name)) return remembers;
+        return remembers && actionCards && (plans || tool.name !== 'draft_plan_alert');
+      }
       if (CARD_TOOL_NAMES.has(tool.name)) return actionCards && (plans || !PLAN_CARD_TOOLS.has(tool.name));
       if (READ_TOOL_NAMES.has(tool.name)) return plans || !PLAN_TOOLS.has(tool.name);
       if (tool.name === 'show_link') return links;
@@ -85,7 +93,7 @@ function withoutGiftFunds(tool) {
   };
 }
 
-function launchScopedChatInstructions({ pickupSchedule = false, actionCards = false, links = false, plans = false, playdates = false } = {}) {
+function launchScopedChatInstructions({ pickupSchedule = false, actionCards = false, links = false, plans = false, playdates = false, remembers = false } = {}) {
   return prompts.chatAgentSystem({
     openGigs: isLaunchFeatureEnabled('open_gigs'),
     marketplace: isLaunchFeatureEnabled('marketplace'),
@@ -94,7 +102,8 @@ function launchScopedChatInstructions({ pickupSchedule = false, actionCards = fa
     actionCards,
     links,
     plans,
-    guide: appGuide({ plans, playdates, suggestions: actionCards, actionCards, links, pickupSchedule }),
+    remembers: remembers && actionCards,
+    guide: appGuide({ plans, playdates, suggestions: actionCards, actionCards, links, pickupSchedule, remembers: remembers && actionCards }),
   });
 }
 
@@ -164,6 +173,9 @@ const TOOL_STATUS = {
   draft_home_asset: 'Getting your home\'s record ready…',
   draft_notification_settings: 'Drafting your settings…',
   show_link: 'Finding the screen…',
+  draft_memory: 'Getting it ready to remember…',
+  draft_plan_alert: 'Setting up the alert…',
+  recall_memory: 'Checking what you asked me to remember…',
 };
 
 // A draft Claude declined to write: not an outage, so not "try again later".
@@ -191,24 +203,33 @@ const DRAFT_TIMEOUT_MS = 30000;    // 30s for single-turn drafts
 async function logRequest({
   userId, conversationId, endpoint, model, promptVersion,
   status, latencyMs, inputTokens, outputTokens,
-  toolCallsCount, schemaValid, cacheHit, errorMessage,
+  toolCallsCount, schemaValid, cacheHit, errorMessage, agentRequestId,
 }) {
+  const row = {
+    user_id: userId || null,
+    conversation_id: conversationId || null,
+    endpoint,
+    model,
+    prompt_version: promptVersion,
+    status,
+    latency_ms: latencyMs,
+    input_tokens: inputTokens || null,
+    output_tokens: outputTokens || null,
+    tool_calls_count: toolCallsCount || 0,
+    schema_valid: schemaValid !== false,
+    cache_hit: cacheHit || false,
+    error_message: errorMessage || null,
+    // A chat turn's request (agentRecord.js), so its cost is the sum of its rows.
+    ...(agentRequestId ? { agent_request_id: agentRequestId } : {}),
+  };
   try {
-    await supabaseAdmin.from('AIRequestLog').insert({
-      user_id: userId || null,
-      conversation_id: conversationId || null,
-      endpoint,
-      model,
-      prompt_version: promptVersion,
-      status,
-      latency_ms: latencyMs,
-      input_tokens: inputTokens || null,
-      output_tokens: outputTokens || null,
-      tool_calls_count: toolCallsCount || 0,
-      schema_valid: schemaValid !== false,
-      cache_hit: cacheHit || false,
-      error_message: errorMessage || null,
-    });
+    let { error } = await supabaseAdmin.from('AIRequestLog').insert(row);
+    if (error && row.agent_request_id) {
+      // A database without the column (migration assistant_agent_tables) still gets the row.
+      delete row.agent_request_id;
+      ({ error } = await supabaseAdmin.from('AIRequestLog').insert(row));
+    }
+    if (error) throw new Error(error.message);
   } catch (err) {
     logger.error('Failed to log AI request', { error: err.message });
   }
@@ -379,6 +400,13 @@ async function streamChat({
     ? screenContextText(screen, { userId, user: viewer, timeZone: home.timeZone, plansEnabled: plans })
     : null));
   const photosRead = images?.length ? photoBlocks(images, userId) : Promise.resolve([]);
+  // What they asked Pantopus to remember that goes with this message (phase 3 §5.3), for every build.
+  const memoryRead = contextRead.then((home) => memory.turnContext(userId, {
+    screen, message, recall: shown.has('memory'), timeZone: home.timeZone,
+  })).catch((err) => {
+    logger.warn('Memory context failed', { userId, error: err.message });
+    return null;
+  });
 
   let conversation;
   try {
@@ -389,18 +417,24 @@ async function streamChat({
     return;
   }
 
-  const logChat = (fields) => logRequest({
+  // The turn's request and steps (phase 3 contract §4.1): its cards' done states hang off it.
+  // Writing it never holds the turn up, and a failed write only leaves it unrecorded.
+  const record = agentRecord.chatTurn({ userId, conversationId: conversation.id });
+  const closeRecord = (status, error = null) => record.close({ status, error, homeId: screen?.home_id || null });
+
+  const logChat = async (fields) => logRequest({
     userId,
     conversationId: conversation.id,
     endpoint: 'chat',
     model: CHAT_MODEL,
     promptVersion: prompts.VERSIONS.chat,
     latencyMs: Date.now() - startTime,
+    agentRequestId: await record.ready(),
     ...fields,
   });
 
-  const [homeContext, photoResults, plansEnabled, playdatesEnabled, screenText] = await Promise.all([
-    contextRead, photosRead, plansRead, playdatesRead, screenRead,
+  const [homeContext, photoResults, plansEnabled, playdatesEnabled, screenText, memoryText] = await Promise.all([
+    contextRead, photosRead, plansRead, playdatesRead, screenRead, memoryRead,
   ]);
   const photos = photoResults.filter(Boolean);
   // One context message: the home facts (remembered for a minute), whether they have
@@ -408,8 +442,8 @@ async function streamChat({
   const plansLine = `- Plans: ${plansEnabled ? 'they have Plans (the Plans tab).' : "not available to them yet; don't offer plans."}`;
   const context = {
     timeZone: homeContext.timeZone,
-    text: homeContext.text || screenText
-      ? [homeContext.text || `${CONTEXT_HEADER}:`, plansLine, screenText].filter(Boolean).join('\n')
+    text: homeContext.text || screenText || memoryText
+      ? [homeContext.text || `${CONTEXT_HEADER}:`, plansLine, screenText, memoryText].filter(Boolean).join('\n')
       : null,
   };
   const toolContext = {
@@ -418,6 +452,8 @@ async function streamChat({
     suggestions: shown.has('action'),
     // Apps that show link buttons (show_link); a read tool asks for them only there.
     links: shown.has('link'),
+    // Apps with the memory list (phase 3) can open it from a link.
+    memory: shown.has('memory'),
   };
   if (images?.length && photos.length === 0) {
     // Answering without the photo or PDF would only confuse: say it couldn't be opened.
@@ -428,7 +464,7 @@ async function streamChat({
         : "I couldn't open that photo. Try a JPEG or PNG, or a different photo.",
     });
     sseWriter.end();
-    await logChat({ status: 'error', errorMessage: 'unreadable_photos' });
+    await Promise.all([logChat({ status: 'error', errorMessage: 'unreadable_photos' }), closeRecord('couldnt', 'unreadable_photos')]);
     return;
   }
 
@@ -465,6 +501,7 @@ async function streamChat({
     links: shown.has('link'),
     plans: plansEnabled,
     playdates: plansEnabled && playdatesEnabled,
+    remembers: shown.has('memory'),
   };
   const tools = launchScopedChatTools(capabilities);
   const toolNames = tools.map((tool) => tool.name);
@@ -510,10 +547,15 @@ async function streamChat({
       runTool: async (use) => {
         const name = toolNames.find((known) => known === use.name)
           || toolNames.find((known) => known.toLowerCase() === String(use.name).toLowerCase());
+        const toolStarted = Date.now();
         const result = name
           ? await executeTool(name, use.input || {}, toolContext)
           : { error: `Unknown tool: ${use.name}. The tools are: ${toolNames.join(', ')}.` };
         ran.set(use.id, { name, result });
+        record.tool(name || use.name, {
+          label: TOOL_STATUS[name] || 'Working on it…', result, latencyMs: Date.now() - toolStarted, known: Boolean(name),
+        });
+        if (result.draftType === 'action') record.card(result.draft);
         if (result.link) {
           links.push(result.link);
           // On Claude Sonnet 5.5, text written just before a tool call can come back as a
@@ -553,7 +595,7 @@ async function streamChat({
       // The client left. Nobody is reading, and the abort already stopped the model call.
       logger.debug('AI chat SSE client disconnected', { userId });
       sseWriter.end();
-      await logChat({ status: 'cancelled', ...tokens });
+      await Promise.all([logChat({ status: 'cancelled', ...tokens }), closeRecord('couldnt', 'cancelled')]);
       return;
     }
 
@@ -562,7 +604,7 @@ async function streamChat({
       logger.warn('Chat agent timeout', { userId, elapsed: Date.now() - startTime });
       sseWriter.write('error', { error: 'TIMEOUT', message: 'Response took too long. Please try again.' });
       sseWriter.end();
-      await logChat({ status: 'timeout', ...tokens });
+      await Promise.all([logChat({ status: 'timeout', ...tokens }), closeRecord('couldnt', 'timeout')]);
       return;
     }
 
@@ -572,7 +614,7 @@ async function streamChat({
     else if (isImageError(err)) message = "I couldn't read that photo. Please try a different one.";
     sseWriter.write('error', { error: 'AI_ERROR', message });
     sseWriter.end();
-    await logChat({ status: 'error', errorMessage: err.message, ...tokens });
+    await Promise.all([logChat({ status: 'error', errorMessage: err.message, ...tokens }), closeRecord('couldnt', 'error')]);
     return;
   }
 
@@ -610,7 +652,10 @@ async function streamChat({
         : 'Something went wrong with the AI. Please try again.',
     });
     sseWriter.end();
-    await logChat({ status: turn.outcome === 'refused' ? 'refusal' : 'error', errorMessage: reason, ...logged });
+    await Promise.all([
+      logChat({ status: turn.outcome === 'refused' ? 'refusal' : 'error', errorMessage: reason, ...logged }),
+      closeRecord('couldnt', reason.split(':')[0]),
+    ]);
     return;
   }
 
@@ -644,11 +689,14 @@ async function streamChat({
   sseWriter.end();
 
   // Log. A reply that stopped at its token ceiling was delivered, but cut short: say so.
-  await logChat({
-    status: 'ok',
-    ...(turn.stopReason === 'max_tokens' ? { errorMessage: 'max_tokens' } : {}),
-    ...logged,
-  });
+  await Promise.all([
+    logChat({
+      status: 'ok',
+      ...(turn.stopReason === 'max_tokens' ? { errorMessage: 'max_tokens' } : {}),
+      ...logged,
+    }),
+    turn.outcome === 'complete' ? closeRecord('done') : closeRecord('couldnt', turn.outcome),
+  ]);
 }
 
 // ─── 2. Single-turn Gig Draft ───────────────────────────────────────────────
@@ -1549,7 +1597,10 @@ async function getConversationMessages(userId, conversationId, { cards = [] } = 
   }
   if (!data) return null;
   const startedAt = new Date(data.created_at).toISOString();
-  return { conversationId: data.id, title: data.title, messages: displayMessages(data.messages, { cards, startedAt }) };
+  const messages = displayMessages(data.messages, { cards, startedAt });
+  // Each action card's done state, for apps that list "state" (phase 3 contract §4.3).
+  if (cards.includes('state')) await cardState.attachStates(userId, messages);
+  return { conversationId: data.id, title: data.title, messages };
 }
 
 async function deleteConversation(userId, conversationId) {

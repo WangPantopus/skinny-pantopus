@@ -984,6 +984,9 @@ function politicsPrefKey(surface) {
  * @param {string} [opts.cursorId]
  * @param {number} [opts.limit]        – defaults to 20
  * @param {string[]} [opts.tags]
+ * @param {boolean} [opts.includeEnded] – also posts that ended (archived when their time ran out,
+ *   or past their own end time), which still open on their pages; never one moderation removed.
+ *   Off for the feeds; "Before you ask" reads earlier questions with it.
  * @returns {Promise<{ posts: object[], pagination: object }>}
  */
 async function getListFeed({
@@ -1001,6 +1004,7 @@ async function getListFeed({
   topic,
   sportsMode,
   eventKey,
+  includeEnded = false,
 }) {
   // 1. Validate surface
   if (!FEED_SURFACES.includes(surface)) {
@@ -1097,10 +1101,10 @@ async function getListFeed({
 
   for (let round = 0; round < MAX_ROUNDS && accumulated.length < parsedLimit && !dbExhausted; round++) {
     // 5. Build base query
-    let query = scopeAccess.query(onlyShownPosts(supabaseAdmin
-      .from('Post')
-      .select(FEED_POST_SELECT)
-      .is('archived_at', null)))
+    const rows = supabaseAdmin.from('Post').select(FEED_POST_SELECT);
+    let query = scopeAccess.query(includeEnded
+      ? rows.eq('moderation_state', 'live').or('archive_reason.is.null,archive_reason.neq.moderation')
+      : onlyShownPosts(rows.is('archived_at', null)))
       .order('is_pinned', { ascending: false })
       .order('created_at', { ascending: false })
       .order('id', { ascending: false })
