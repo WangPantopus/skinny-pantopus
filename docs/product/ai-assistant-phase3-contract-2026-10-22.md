@@ -424,7 +424,7 @@ One list of what waits on the person. It is built when it is read, from the serv
 | `task_assigned` | The same read: open tasks assigned to the person, due within 7 days or with no date | The task, with its due date | the same |
 | `home_invite` | `homeInvitationService.list(userId)`: pending, unexpired, addressed to them | "Join the Lee household", with who invited them | `pantopus://notifications`. The apps open an invitation from its own notification; they have no screen for one by id. |
 | `household_request` | `homeInvitationService.listRequests` for homes where they manage members | "Jordan asked to join your home" | `pantopus://homes/<homeId>/members?tab=requests` (both routers open the members' requests) |
-| `connection_request` | The query behind `GET /api/relationships/requests/pending`, block-filtered. Move it into a function if it is inline. | "Alex wants to connect" | `pantopus://connections?tab=requests` |
+| `connection_request` | The query behind `GET /api/relationships/requests/pending`, block-filtered: `pendingReceived` in `services/connectionRequests.js`, which the route now calls too. | "Alex wants to connect" | `pantopus://connections?tab=requests` |
 | `nudge_card` | `AgentRequest` rows with `origin: nudge` from the last 7 days that have an open, unexpired card (§4). A follow-up that ran shows here while its card is open. | The nudge's title | `pantopus://assistant?nudge=<notificationId>` |
 | `question_answered` | Their own open `ask_local` posts with replies, counted as `checkQuestion` in `nudges/nearby.js` counts them: not their own replies, and nobody blocked in either direction. Newest first, at most 3 | "Your question has 3 answers", with the question | `pantopus://posts/<id>` |
 
@@ -468,7 +468,7 @@ One list of what waits on the person. It is built when it is read, from the serv
 
 ### 6.3 In the assistant
 
-A new read tool, `needs_you()`, returns the same items. It is offered to every build: it only reads, like the Nearby tools. "What needs me?" lists the items, with link buttons for builds that list `"link"`.
+A new read tool, `needs_you()`, returns the same items. It is offered to every build: it only reads, like the Nearby tools. "What needs me?" lists the items, with link buttons for builds that list `"link"` (the items carry their `link` only for those builds).
 
 ### 6.4 In the apps
 
@@ -494,6 +494,7 @@ A new read tool, `needs_you()`, returns the same items. It is offered to every b
   - lines: When ("Thu, Oct 29 · 9:00 AM"), About, and the subject's title when there is one;
   - action `set`, labeled "Set", with the request `POST /api/ai/follow-ups` and the body `{ "card_id": "<card id>" }`;
   - done: "Set".
+  - The envelope also carries what setting it stores: `follow_up: { due_at, about, subject, home_id }`. The route reads its own stored copy of the card, never this field from a request.
 - **Setting it.** `POST /api/ai/follow-ups` with `{ card_id }`:
   - creates a request from the card's stored `payload`: `origin: follow_up`, `status: waiting`, `due_at`, `summary`, `subject`, `home_id`, and the card's `conversation_id`;
   - answers `201 { follow_up }`, and `200` on a repeat;
@@ -501,7 +502,8 @@ A new read tool, `needs_you()`, returns the same items. It is offered to every b
 - **Listing and cancelling.**
   - `list_follow_ups()` is a read tool, offered with `"follow_up"`. It backs "What did I ask you to check?"
   - `GET /api/ai/follow-ups` lists the waiting ones as `{ follow_ups: [ { id, summary, due_at, subject } ] }`.
-  - `DELETE /api/ai/follow-ups/:id` cancels one (`status: cancelled`).
+  - `DELETE /api/ai/follow-ups/:id` cancels one (`status: cancelled`) and answers `200 { follow_up }` with its status; repeating it answers the same. Another person's id answers `404 FOLLOW_UP_NOT_FOUND`.
+  - Errors are `{ error, code }`; setting from a card with no recorded step answers `404 CARD_UNKNOWN`.
   - "Cancel that" gets a `follow_up_cancel` card, built by `draft_follow_up_cancel({ follow_up_id })`, with the request `DELETE /api/ai/follow-ups/:id` and done "Cancelled".
 
 ### 7.2 Storage
@@ -517,7 +519,7 @@ Only `AgentRequest` (§3.1): no other table and no new column. A follow-up belon
 3. While `AI_ASSISTANT` is off, it claims nothing. Follow-ups keep waiting.
 4. It re-reads the subject as the person and sends the nudge (§7.4). Then it closes the request: `done` with `outcome.notification_id`, or `couldnt` with a reason.
 5. **Limits:**
-   - A person gets at most 3 follow-ups in a local day. The rest move to 9:00 AM the next day.
+   - A person gets at most 3 follow-ups in a local day (counted from their `follow_up` nudge rows). The rest move to 9:00 AM the next day.
    - A follow-up more than 3 days late is closed as `couldnt` without a push. That only happens when the switch was off.
 
 ### 7.4 What it sends
@@ -529,7 +531,8 @@ The job calls `sendNudge` with `kind: 'follow_up'`, `requested: true`, `checkpoi
   - **The person's own question:** "3 replies since Monday. Still open.", with a `post_solve` card.
   - **A plan:** "4 going, 2 waiting to join. Sat 10:00 AM.", with a `plan_requests` card when the person hosts it and requests wait.
   - **A task:** "Still open, due Friday.", with a `home_task_update` card (Mark done).
-  - **No subject, or one they can no longer see:** "You asked me to check back: <about>." with no card.
+  - **No subject, or one they can no longer see:** "You asked me to check back: <about>." with no card. A card-less nudge still stores one marker call in the conversation (no card), so history and `?nudge=` find it.
+  - A task's Mark done card goes only to someone who can complete the task.
 - **`requested: true`** is new in the engine, and only follow-ups use it. With it:
   - the nudge is sent even when Suggestions is off or the kind is muted;
   - the day's two-nudge cap never stops it, but it counts toward the cap for later suggestions that day;

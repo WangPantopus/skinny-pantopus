@@ -746,7 +746,11 @@ public final class PulseComposeViewModel {
         case .event:
             [.title, .eventDate, .eventEndDate, .eventLocation, .eventCapacity, .body]
         case .lost:
-            [.body, .lostLastSeenLocation, .lostLastSeenDate, .contactPhone]
+            // An edit shows the saved contact read-only (`buildUpdateRequest` never sends it), so its
+            // phone number neither blocks nor enables Save.
+            isEditing
+                ? [.body, .lostLastSeenLocation, .lostLastSeenDate]
+                : [.body, .lostLastSeenLocation, .lostLastSeenDate, .contactPhone]
         case .announce:
             composePurpose == .deal ? [.title, .body, .dealBusinessName] : [.title, .body]
         }
@@ -958,6 +962,12 @@ public final class PulseComposeViewModel {
                 lostFoundKind = mapped
             }
             baselineLostFoundKind = lostFoundKind
+            // The saved contact ("dm", "comment", "phone" or "phone|<digits>"), shown read-only: the edit
+            // can't store a phone number. A post saved without one reads as Direct message, as on the web.
+            let savedContact = (post.lostFoundContactPref ?? "").split(separator: "|", maxSplits: 1).map(String.init)
+            lostFoundContactPref = savedContact.first.flatMap(PulseLostFoundContactPref.init(rawValue:)) ?? .dm
+            baselineLostFoundContactPref = lostFoundContactPref
+            seedField(.contactPhone, value: lostFoundContactPref == .phone ? savedContact.dropFirst().first ?? "" : "")
         case .announce:
             seedField(.title, value: post.title ?? "")
             seedField(.body, value: post.content)

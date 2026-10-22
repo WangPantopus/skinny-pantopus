@@ -19,6 +19,8 @@
  *   POST /nudges/:id/fewer       — "Fewer like this" on a nudge or the morning brief
  *   POST /cards/:cardId/state    — What ran on one of the person's cards (done or dismissed)
  *   GET|POST|DELETE /memory, PATCH|DELETE /memory/:id, POST /memory/reviewed — What Pantopus remembers
+ *   GET  /needs-you              — What waits on the person, for Today and the assistant
+ *   GET|POST /follow-ups, DELETE /follow-ups/:id — Check-backs ("check back Thursday")
  */
 const express = require('express');
 const Joi = require('joi');
@@ -33,6 +35,8 @@ const agentService = require('../services/ai/agentService');
 const nudgeEngine = require('../services/ai/nudges/engine');
 const cardState = require('../services/ai/cardState');
 const memory = require('../services/ai/memory');
+const { needsYou } = require('../services/ai/needsYou');
+const followUps = require('../services/ai/followUps');
 const radonReport = require('../services/ai/radonReport');
 const { CHAT_MODEL, DRAFT_MODEL } = require('../config/anthropic');
 const propertyIntelligenceService = require('../services/ai/propertyIntelligenceService');
@@ -551,6 +555,41 @@ router.delete('/memory/:id', verifyToken, memoryRoute(async (req, res) => {
 
 router.delete('/memory', verifyToken, memoryRoute(async (req, res) => {
   res.json(await memory.forgetAll(req.user.id));
+}));
+
+// ─── Needs you ──────────────────────────────────────────────────────────────
+// Phase 3 contract §6.2: read as the person from the screens' own services, each source
+// within 1.5 seconds (`partial` when one was left out). No model call, nothing written.
+
+router.get('/needs-you', verifyToken, asyncHandler(async (req, res) => {
+  res.json(await needsYou({ userId: req.user.id, user: { id: req.user.id, role: req.user.role || null } }));
+}));
+
+// ─── Follow-ups ─────────────────────────────────────────────────────────────
+// Phase 3 contract §7.1: set only from a follow_up card the person tapped, as it was shown.
+
+function followUpRoute(handler) {
+  return asyncHandler(async (req, res) => {
+    try {
+      await handler(req, res);
+    } catch (err) {
+      if (err instanceof followUps.FollowUpError) return res.status(err.status).json({ error: err.message, code: err.code });
+      throw err;
+    }
+  });
+}
+
+router.get('/follow-ups', verifyToken, followUpRoute(async (req, res) => {
+  res.json({ follow_ups: await followUps.listWaiting(req.user.id) });
+}));
+
+router.post('/follow-ups', verifyToken, validate(Joi.object({ card_id: Joi.string().uuid().required() })), followUpRoute(async (req, res) => {
+  const { status, follow_up: followUp } = await followUps.setFromCard(req.user.id, req.body.card_id);
+  res.status(status).json({ follow_up: followUp });
+}));
+
+router.delete('/follow-ups/:id', verifyToken, followUpRoute(async (req, res) => {
+  res.json(await followUps.cancel(req.user.id, req.params.id));
 }));
 
 // ─── Audio Transcription ─────────────────────────────────────────────────────
