@@ -22,6 +22,8 @@ public struct PulseComposeView: View {
     @State private var isLoadingMedia = false
     @State private var showsPhotosPicker = false
     @State private var showsPlacePicker = false
+    /// The "Before you ask" post open over the composer.
+    @State private var openedEarlierPost: OpenedEarlierPost?
     @Environment(\.dismiss) private var dismiss
 
     private let onPosted: @MainActor (String?) -> Void
@@ -94,6 +96,31 @@ public struct PulseComposeView: View {
         )
         .formShakeOnChange(of: viewModel.shakeTrigger)
         .accessibilityIdentifier("composePulseShell")
+        // The kindness and safety check before posting (AI phase 2 contract §6.6): advice only.
+        .alert(
+            "Before you post",
+            isPresented: Binding(
+                get: { viewModel.postCheckFindings != nil },
+                set: { if !$0 { viewModel.editAfterPostCheck() } }
+            ),
+            actions: {
+                Button("Edit", role: .cancel) { viewModel.editAfterPostCheck() }
+                    .accessibilityIdentifier("composePulsePostCheckEdit")
+                Button("Post anyway") { Task { await viewModel.postAnyway() } }
+                    .accessibilityIdentifier("composePulsePostCheckPostAnyway")
+            },
+            message: {
+                Text((viewModel.postCheckFindings ?? []).map(\.message).joined(separator: "\n\n"))
+            }
+        )
+        // "Before you ask": an earlier post opens over the composer, so the draft stays.
+        .sheet(item: $openedEarlierPost) { opened in
+            NavigationStack {
+                PulsePostDetailView(postId: opened.id, currentUserId: signedInUserId) {
+                    openedEarlierPost = nil
+                }
+            }
+        }
         .sheet(isPresented: $showsPhotosPicker, onDismiss: { isLoadingMedia = false }, content: {
             PulseMediaPicker(limit: pulseComposeMaxPhotos - viewModel.photos.count) { media, error in
                 media.forEach { viewModel.append(photo: $0) }
@@ -182,6 +209,11 @@ public struct PulseComposeView: View {
         }
     }
 
+    private var signedInUserId: String? {
+        if case let .signedIn(user) = AuthManager.shared.state { return user.id }
+        return nil
+    }
+
     private func closeCompose() {
         if managesDismiss {
             dismiss()
@@ -231,7 +263,8 @@ public struct PulseComposeView: View {
             onBodyEditingEnded: { Task { await viewModel.runPrecheck() } },
             onDismissPrecheckNudge: { viewModel.precheckNudge = nil },
             onAddLocation: { showsPlacePicker = true },
-            onClearLocation: { viewModel.clearPlaceTag() }
+            onClearLocation: { viewModel.clearPlaceTag() },
+            onOpenEarlierPost: { openedEarlierPost = OpenedEarlierPost(id: $0) }
         )
     }
 }
@@ -264,9 +297,15 @@ public extension PulseComposeViewModel {
             composePurpose: composePurpose,
             // Edits open on a Connections target; the header names the post's own (fixed) audience.
             postingTargetLabel: isEditing ? visibility.label : postingTarget?.displayLabel,
-            isNetworkTarget: !isEditing && postingTarget?.isNetworkTarget == true
+            isNetworkTarget: !isEditing && postingTarget?.isNetworkTarget == true,
+            earlierAnswers: earlierAnswers
         )
     }
+}
+
+/// An earlier post opened from "Before you ask".
+private struct OpenedEarlierPost: Identifiable {
+    let id: String
 }
 
 /// Shimmer skeleton shown while the edit-mode prefill is in flight.
