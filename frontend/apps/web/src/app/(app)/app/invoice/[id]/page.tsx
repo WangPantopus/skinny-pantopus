@@ -114,7 +114,8 @@ function InvoiceContent() {
         </div>
 
         {canPay && invoice.due_date && (
-          <p className="text-sm text-app-text-secondary mt-2">Due: {new Date(invoice.due_date).toLocaleDateString()}</p>
+          // A due date is a calendar day stored as midnight UTC: shown in local time it was the day before in the US.
+          <p className="text-sm text-app-text-secondary mt-2">Due: {new Date(invoice.due_date).toLocaleDateString(undefined, { timeZone: 'UTC' })}</p>
         )}
       </div>
 

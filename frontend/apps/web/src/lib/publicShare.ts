@@ -284,12 +284,14 @@ export function buildShareMetadata(opts: {
   };
 }
 
+// Posts, tasks and listings name their author with the public identity the signed-in app shows (type, handle,
+// displayName, avatarUrl); profiles and Support Train organizers send the person's name and username.
 export function displayNameForUser(user: any, fallback = 'Pantopus member'): string {
   if (!user || typeof user !== 'object') return fallback;
   // A made-up username is never shown as the person's name: user_…, or one the server flags (the pre-October-7 kind
   // built from the email address).
-  const handle = user.usernameIsGenerated ? null : chosenUsername(user.username);
-  return user.name || user.first_name || user.firstName || handle || fallback;
+  const handle = user.usernameIsGenerated ? null : chosenUsername(user.username || user.handle);
+  return user.displayName || user.name || user.first_name || user.firstName || handle || fallback;
 }
 
 export function formatMoney(value: unknown): string | null {
