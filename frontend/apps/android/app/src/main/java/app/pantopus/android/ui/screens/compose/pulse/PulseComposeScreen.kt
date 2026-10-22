@@ -876,6 +876,7 @@ private fun IntentSpecificSection(
                 fields = state.fields,
                 kind = state.lostFoundKind,
                 contactPref = state.lostFoundContactPref,
+                isContactLocked = state.isIntentLocked,
                 onUpdateField = onUpdateField,
                 onSelectKind = onSelectLostFoundKind,
                 onSelectContactPref = onSelectContactPref,
@@ -1067,6 +1068,7 @@ private fun LostSection(
     fields: Map<PulseComposeField, FormFieldState>,
     kind: PulseLostFoundKind,
     contactPref: PulseLostFoundContactPref,
+    isContactLocked: Boolean,
     onUpdateField: (PulseComposeField, String) -> Unit,
     onSelectKind: (PulseLostFoundKind) -> Unit,
     onSelectContactPref: (PulseLostFoundContactPref) -> Unit,
@@ -1099,16 +1101,30 @@ private fun LostSection(
             options = PulseLostFoundContactPref.entries.map { it.key to it.label },
             activeKey = contactPref.key,
             identifierPrefix = "composePulseContactPref",
+            isLocked = isContactLocked,
             onSelect = { key -> onSelectContactPref(PulseLostFoundContactPref.entries.first { it.key == key }) },
         )
-        if (contactPref == PulseLostFoundContactPref.Phone) {
+        // Editing shows the saved number read-only (none saved, no field).
+        if (contactPref == PulseLostFoundContactPref.Phone &&
+            (!isContactLocked || fields[PulseComposeField.ContactPhone]?.value.orEmpty().isNotEmpty())
+        ) {
             FieldRow(
                 field = PulseComposeField.ContactPhone,
                 label = "Phone number",
                 placeholder = "(555) 555-0123",
                 keyboardType = KeyboardType.Phone,
+                enabled = !isContactLocked,
                 fields = fields,
                 onUpdate = onUpdateField,
+            )
+        }
+        // The edit can't store a phone number, so the contact stays as posted, as on the web.
+        if (isContactLocked) {
+            Text(
+                text = "Contact can't be changed after posting.",
+                style = PantopusTextStyle.caption,
+                color = PantopusColors.appTextSecondary,
+                modifier = Modifier.testTag("composePulseContactLockedNote"),
             )
         }
     }
@@ -1615,6 +1631,7 @@ private fun FieldRow(
     onUpdate: (PulseComposeField, String) -> Unit,
     placeholder: String = "",
     keyboardType: KeyboardType = KeyboardType.Text,
+    enabled: Boolean = true,
 ) {
     val snapshot = fields[field] ?: FormFieldState(id = field.key)
     val state =
@@ -1631,6 +1648,7 @@ private fun FieldRow(
         state = state,
         keyboardType = keyboardType,
         fieldTestTag = "composePulseField_${field.key}",
+        enabled = enabled,
     )
 }
 
@@ -1896,6 +1914,8 @@ private fun ChipRow(
     activeKey: String,
     identifierPrefix: String,
     onSelect: (String) -> Unit,
+    /** Shows the choice without letting it change, like the post type when editing. */
+    isLocked: Boolean = false,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s1)) {
         Text(
@@ -1914,6 +1934,7 @@ private fun ChipRow(
                 Box(
                     modifier =
                         Modifier
+                            .alpha(if (isLocked && !isActive) 0.4f else 1f)
                             .heightIn(min = 30.dp)
                             .clip(RoundedCornerShape(Radii.pill))
                             .background(if (isActive) PantopusColors.primary600 else PantopusColors.appSurface)
@@ -1922,7 +1943,7 @@ private fun ChipRow(
                                 color = if (isActive) Color.Transparent else PantopusColors.appBorder,
                                 shape = RoundedCornerShape(Radii.pill),
                             )
-                            .selectable(selected = isActive, role = Role.RadioButton) { onSelect(key) }
+                            .selectable(selected = isActive, enabled = !isLocked, role = Role.RadioButton) { onSelect(key) }
                             .padding(horizontal = Spacing.s3, vertical = Spacing.s1)
                             .testTag("${identifierPrefix}_$key")
                             .semantics { contentDescription = displayLabel },

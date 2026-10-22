@@ -55,6 +55,8 @@ const NUDGE_KINDS = [
   'home_overdue', 'home_paperwork', 'radon_follow_up',
   // Phase 3 (docs/product/ai-assistant-phase3-contract-2026-10-22.md §10.1): "Plans you'd like".
   'plan_you_like',
+  // Phase 3 §7: a check-back the person asked for (sent with `requested`).
+  'follow_up',
 ];
 const KINDS = ['brief', ...NUDGE_KINDS];
 // The brief is about the person's day: its subject is the person.
@@ -147,7 +149,10 @@ function normalize(params) {
     ? { homeId: params.pickup.homeId, date: params.pickup.date }
     : null;
   if (params.pickup && !pickup) throw new TypeError('sendNudge: pickup must be { homeId: uuid, date: YYYY-MM-DD }');
-  return { ...target, title, body, message, expiresAt, cards, pickup };
+  // Phase 3 §7.4: the person asked for it (a follow-up). Suggestions, a mute and the day's cap don't stop it.
+  const requested = params.requested === true;
+  if (requested && target.kind !== 'follow_up') throw new TypeError('sendNudge: only follow-ups are requested');
+  return { ...target, title, body, message, expiresAt, cards, pickup, requested };
 }
 
 // ─── Checks ────────────────────────────────────────────────────────────────
@@ -218,15 +223,18 @@ async function subjectReadable(subject, userId) {
 async function check(nudge, { now = new Date() } = {}) {
   if (nudge.expiresAt && nudge.expiresAt.getTime() <= now.getTime()) return { ok: false, reason: 'expired' };
   if (isAssistantOff()) return { ok: false, reason: 'off' };
-  const prefs = await suggestionPrefs(nudge.userId);
-  if (!prefs.enabled) return { ok: false, reason: 'off' };
-  if (prefs.muted[nudge.kind]) return { ok: false, reason: 'muted' };
+  if (!nudge.requested) {
+    const prefs = await suggestionPrefs(nudge.userId);
+    if (!prefs.enabled) return { ok: false, reason: 'off' };
+    if (prefs.muted[nudge.kind]) return { ok: false, reason: 'muted' };
+  }
   if (nudge.pickup && !(await pickupConfirmed(nudge.userId, nudge.pickup))) return { ok: false, reason: 'unconfirmed_pickup' };
   if (await alreadySent(nudgeKey(nudge))) return { ok: false, reason: 'duplicate' };
   // The brief goes at the time they chose: only quiet hours of their own hold it.
   const window = await heldPushes.pushWindow(nudge.userId, { fallbackTz: DEFAULT_TIMEZONE, now, ownOnly: nudge.kind === 'brief' });
   const type = typeOf(nudge.kind);
-  if ((await sentToday(nudge.userId, type, window.timeZone)).length >= DAILY_CAP[type]) return { ok: false, reason: 'cap' };
+  // A requested nudge isn't held back by the cap, but its row counts toward it for later suggestions.
+  if (!nudge.requested && (await sentToday(nudge.userId, type, window.timeZone)).length >= DAILY_CAP[type]) return { ok: false, reason: 'cap' };
   if (!(await subjectReadable(nudge.subject, nudge.userId))) return { ok: false, reason: 'unreadable' };
   return { ok: true, window };
 }
@@ -239,8 +247,10 @@ async function check(nudge, { now = new Date() } = {}) {
  */
 function transcriptOf({ notificationId, kind, message, cards, sentAt, timeZone }) {
   const base = `toolu_nudge_${notificationId.replace(/-/g, '')}`;
-  const uses = cards.map((envelope, i) => ({
-    type: 'tool_use', id: `${base}_${i}`, name: NUDGE_TOOL, input: { kind, card: envelope.card },
+  // A nudge with no card (a requested follow-up) still stores one call, which marks it for history and ?nudge=.
+  const shown = cards.length ? cards : [null];
+  const uses = shown.map((envelope, i) => ({
+    type: 'tool_use', id: `${base}_${i}`, name: NUDGE_TOOL, input: { kind, card: envelope ? envelope.card : null },
   }));
   const at = sentAt.toISOString();
   return [
@@ -254,7 +264,9 @@ function transcriptOf({ notificationId, kind, message, cards, sentAt, timeZone }
       content: uses.map((use, i) => ({
         type: 'tool_result',
         tool_use_id: use.id,
-        content: JSON.stringify({ draftType: 'action', draft: cards[i], valid: true, nudge: { id: notificationId, kind } }),
+        content: JSON.stringify(shown[i]
+          ? { draftType: 'action', draft: shown[i], valid: true, nudge: { id: notificationId, kind } }
+          : { nudge: { id: notificationId, kind }, shown: 'No card: the message is the whole nudge.' }),
       })),
       at,
     },
@@ -359,8 +371,8 @@ const MEMORY_REVIEW_TYPE = 'assistant_memory_review';
 /** A held push goes only if the nudge is still current and wanted when quiet hours end. */
 async function heldPushDropped(row) {
   if (!(Date.parse(row.metadata?.expires_at) > Date.now())) return true;
-  // About the person's own data: neither Suggestions nor a mute drops it, only its expiry.
-  if (row.type === MEMORY_REVIEW_TYPE) return false;
+  // About the person's own data, or asked for by them (a follow-up): neither Suggestions nor a mute drops it, only its expiry.
+  if (row.type === MEMORY_REVIEW_TYPE || row.metadata?.requested === true) return false;
   if (isAssistantOff()) return true;
   const prefs = await suggestionPrefs(row.user_id);
   return !prefs.enabled || Boolean(prefs.muted[row.metadata?.kind]);
@@ -407,7 +419,10 @@ async function deliver(nudge, { window }) {
   // The nudge's AgentRequest (phase 3 contract §4.1), named on the row so a held push can update it.
   const requestId = crypto.randomUUID();
   const { conversation, created } = await latestConversation(userId, nudge.title);
-  const cards = withFewerLikeThis(nudge.cards, { notificationId, title: nudge.title, expiresAt: nudge.expiresAt });
+  // A requested nudge carries no "Fewer like this" (and no card of its own just for it).
+  const cards = nudge.requested
+    ? nudge.cards.map((envelope) => ({ ...envelope, expires_at: nudge.expiresAt.toISOString() }))
+    : withFewerLikeThis(nudge.cards, { notificationId, title: nudge.title, expiresAt: nudge.expiresAt });
   // A nudge that doesn't go out leaves nothing behind: its row, and a conversation made for it.
   const undo = async (reason, { row = false } = {}) => {
     if (row) await deleteRow('Notification', notificationId);
@@ -434,6 +449,7 @@ async function deliver(nudge, { window }) {
       // The inbox shows a row about a post only while its reader still can read the post.
       ...(subject.type === 'post' ? { post_id: subject.id } : {}),
       agent_request_id: requestId,
+      ...(nudge.requested ? { requested: true } : {}),
     },
     idempotencyKey: key,
     sendPush: false,
@@ -449,7 +465,7 @@ async function deliver(nudge, { window }) {
 
   // Two triggers at once could both pass the day's count: the later rows step back.
   const today = await sentToday(userId, type, window.timeZone);
-  if (today.indexOf(notificationId) >= DAILY_CAP[type]) return undo('cap', { row: true });
+  if (!nudge.requested && today.indexOf(notificationId) >= DAILY_CAP[type]) return undo('cap', { row: true });
 
   try {
     await appendToConversation(conversation, transcriptOf({

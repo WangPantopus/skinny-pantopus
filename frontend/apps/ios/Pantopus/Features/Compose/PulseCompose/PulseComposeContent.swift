@@ -612,8 +612,18 @@ public struct PulseComposeContent: View {
             textField(.lostLastSeenLocation, label: "Last seen location", placeholder: "Where?")
             lastSeenDateField
             contactPrefRow
-            if state.lostFoundContactPref == .phone {
+            // Editing shows the saved number read-only (none saved, no field).
+            if state.lostFoundContactPref == .phone,
+               !state.isIntentLocked || !(state.fields[.contactPhone]?.value ?? "").isEmpty {
                 textField(.contactPhone, label: "Phone number", placeholder: "(555) 555-0123", keyboardType: .phonePad)
+                    .disabled(state.isIntentLocked)
+            }
+            // The edit can't store a phone number, so the contact stays as posted, as on the web.
+            if state.isIntentLocked {
+                Text("Contact can't be changed after posting.")
+                    .pantopusTextStyle(.caption)
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                    .accessibilityIdentifier("composePulseContactLockedNote")
             }
         }
     }
@@ -628,6 +638,7 @@ public struct PulseComposeContent: View {
                     chipPill(
                         label: pref.label,
                         isActive: state.lostFoundContactPref == pref,
+                        isLocked: state.isIntentLocked,
                         identifier: "composePulseContactPref_\(pref.rawValue)"
                     ) {
                         actions.onSelectContactPref(pref)
@@ -1083,8 +1094,16 @@ public struct PulseComposeContent: View {
         .accessibilityIdentifier("composePulseField_body")
     }
 
-    private func chipPill(label: String, isActive: Bool, identifier: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+    /// `isLocked` shows the choice without letting it change: the chosen chip at full strength (a disabled
+    /// plain button fades to about 2:1), the others dimmed like the post type when editing.
+    private func chipPill(
+        label: String,
+        isActive: Bool,
+        isLocked: Bool = false,
+        identifier: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        let button = Button(action: action) {
             Text(label)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(isActive ? Theme.Color.appTextInverse : Theme.Color.appTextStrong)
@@ -1097,7 +1116,14 @@ public struct PulseComposeContent: View {
                 )
                 .clipShape(RoundedRectangle(cornerRadius: Radii.pill, style: .continuous))
         }
-        .buttonStyle(.plain)
+        return Group {
+            if isLocked {
+                button.buttonStyle(UndimmedButtonStyle()).disabled(true)
+            } else {
+                button.buttonStyle(.plain)
+            }
+        }
+        .opacity(isLocked && !isActive ? 0.4 : 1)
         .accessibilityLabel(label)
         .accessibilityAddTraits(isActive ? [.isButton, .isSelected] : .isButton)
         .accessibilityIdentifier(identifier)

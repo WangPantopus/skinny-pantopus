@@ -776,12 +776,14 @@ class PulseComposeViewModel
                         PulseComposeField.EventCapacity,
                         PulseComposeField.Body,
                     )
+                // An edit shows the saved contact read-only (buildUpdateRequest never sends it), so its
+                // phone number neither blocks nor enables Save.
                 PulseComposeIntent.Lost ->
-                    listOf(
+                    listOfNotNull(
                         PulseComposeField.Body,
                         PulseComposeField.LostLastSeenLocation,
                         PulseComposeField.LostLastSeenDate,
-                        PulseComposeField.ContactPhone,
+                        PulseComposeField.ContactPhone.takeUnless { isEditing },
                     )
                 PulseComposeIntent.Announce ->
                     if (composePurpose == PulseComposePurpose.Deal) {
@@ -1246,6 +1248,18 @@ class PulseComposeViewModel
                         ?.let { raw -> PulseLostFoundKind.entries.firstOrNull { it.key == raw } }
                         ?.let { _lostFoundKind.value = it }
                     baselineLostFoundKind = _lostFoundKind.value
+                    // The saved contact ("dm", "comment", "phone" or "phone|<digits>"), shown read-only: the edit
+                    // can't store a phone number. A post saved without one reads as Direct message, as on the web.
+                    val savedContact = post.lostFoundContactPref.orEmpty()
+                    _lostFoundContactPref.value =
+                        PulseLostFoundContactPref.entries.firstOrNull { it.key == savedContact.substringBefore('|') }
+                            ?: PulseLostFoundContactPref.Dm
+                    baselineLostFoundContactPref = _lostFoundContactPref.value
+                    val savedNumber = savedContact.substringAfter('|', missingDelimiterValue = "")
+                    seedField(
+                        PulseComposeField.ContactPhone,
+                        savedNumber.takeIf { _lostFoundContactPref.value == PulseLostFoundContactPref.Phone }.orEmpty(),
+                    )
                 }
                 PulseComposeIntent.Announce -> {
                     seedField(PulseComposeField.Title, post.title.orEmpty())
