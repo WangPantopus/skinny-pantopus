@@ -12,8 +12,8 @@ import { useBadges } from '@/contexts/BadgeContext';
 import { useFeatureFlagState } from '@/hooks/useFeatureFlag';
 import { queryKeys } from '@/lib/query-keys';
 import { useNotificationTap } from '@/hooks/useNotificationTap';
-import { resolveWebNotificationPath } from '@/lib/notificationRoutes';
-import { isLaunchCutNotification, launchFeatures } from '@/lib/featureFlags';
+import { isHiddenOnWeb, resolveWebNotificationPath } from '@/lib/notificationRoutes';
+import { launchFeatures } from '@/lib/featureFlags';
 import type { Notification } from '@pantopus/types';
 import NotificationRow from './NotificationRow';
 import { toast } from '@/components/ui/toast-store';
@@ -219,8 +219,8 @@ export default function NotificationsPage() {
     for (const page of pages) {
       for (const n of page?.notifications || []) {
         if (seen.has(n.id)) continue;
-        // Launch cut: rows of a hidden feature are left out.
-        if (isLaunchCutNotification(n, resolveWebNotificationPath(n.link, n))) continue;
+        // Rows of a hidden feature, and those only the apps open, are left out.
+        if (isHiddenOnWeb(n)) continue;
         seen.add(n.id);
         out.push(n);
       }
@@ -310,7 +310,7 @@ export default function NotificationsPage() {
     if (!socket) return;
     const handleNewNotification = (notif: Notification) => {
       if (!notificationMatchesZone(notif)) return;
-      if (isLaunchCutNotification(notif, resolveWebNotificationPath(notif.link, notif))) return;
+      if (isHiddenOnWeb(notif)) return;
       prependNotification(notif);
     };
     socket.on('notification:new', handleNewNotification);

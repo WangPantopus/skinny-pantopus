@@ -4,7 +4,7 @@ October 20, 2026 · Status: ready to build once phase 1 is merged. The founder d
 
 Phase 1 ([its contract](ai-assistant-phase1-contract-2026-10-20.md)) made the assistant see, do and know the app. In phase 2 it **speaks first** a few times a day, with the action ready. It also **catches people up** on Nearby and **reads home papers**. Everything in phase 1's contract still holds; this file adds to it.
 
-The web app keeps working unchanged. It never sends the new capabilities, so it gets nothing new.
+The web app keeps working unchanged. It never sends the new capabilities, so it gets nothing new. Briefs and nudges open only in the apps, so the web leaves `assistant_brief` and `assistant_nudge` rows out of its notification list, bell, desktop alerts, unread counts and "Mark all read" (it asks the server with `exclude=assistant`; the apps' requests are unchanged).
 
 ## 1. What this wave covers
 
