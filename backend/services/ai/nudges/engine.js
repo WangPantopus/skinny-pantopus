@@ -53,6 +53,8 @@ const agentRecord = require('../agentRecord');
 const NUDGE_KINDS = [
   'plan_weather', 'plan_requests_waiting', 'plan_after', 'lost_found_match', 'question_answered',
   'home_overdue', 'home_paperwork', 'radon_follow_up',
+  // Phase 3 (docs/product/ai-assistant-phase3-contract-2026-10-22.md §10.1): "Plans you'd like".
+  'plan_you_like',
 ];
 const KINDS = ['brief', ...NUDGE_KINDS];
 // The brief is about the person's day: its subject is the person.
@@ -351,9 +353,14 @@ async function pushNudge(row) {
   });
 }
 
+// The yearly memory review (phase 3 §5.5) is released with the nudges, but it isn't one.
+const MEMORY_REVIEW_TYPE = 'assistant_memory_review';
+
 /** A held push goes only if the nudge is still current and wanted when quiet hours end. */
 async function heldPushDropped(row) {
   if (!(Date.parse(row.metadata?.expires_at) > Date.now())) return true;
+  // About the person's own data: neither Suggestions nor a mute drops it, only its expiry.
+  if (row.type === MEMORY_REVIEW_TYPE) return false;
   if (isAssistantOff()) return true;
   const prefs = await suggestionPrefs(row.user_id);
   return !prefs.enabled || Boolean(prefs.muted[row.metadata?.kind]);
@@ -367,7 +374,7 @@ function recordReleased(row, { dropped }) {
 /** Every 5 minutes (jobs/index.js): held nudge and brief pushes whose quiet hours are over. */
 async function releaseHeldNudges() {
   const result = await heldPushes.releaseHeldPushes({
-    types: Object.values(TYPES), send: pushNudge, isDropped: heldPushDropped, onReleased: recordReleased,
+    types: [...Object.values(TYPES), MEMORY_REVIEW_TYPE], send: pushNudge, isDropped: heldPushDropped, onReleased: recordReleased,
   });
   if (result.sent || result.dropped) logger.info('nudges.held_pushes', result);
   return result;
@@ -602,6 +609,8 @@ module.exports = {
   fewerLikeThis,
   releaseHeldNudges,
   nudgesSentDuring,
+  // The push a nudge sends, also for the memory review (memory.js).
+  pushNudge,
   KINDS,
   NUDGE_KINDS,
   TYPES,

@@ -73,10 +73,10 @@ function applyNotificationFilters(query, {
 }
 
 // The assistant's brief and nudges (services/ai/nudges/engine.js TYPES) open the
-// apps' assistant thread, pantopus://assistant?nudge=<id>, which the web doesn't
-// have. The web asks for its list, counts and "Mark all read" without them
+// apps' assistant thread, pantopus://assistant?nudge=<id>, and its yearly memory
+// review opens the apps' memory list (pantopus://settings/memory): the web has neither. The web asks for its list, counts and "Mark all read" without them
 // (exclude=assistant); the apps send nothing and get every row, as before.
-const ASSISTANT_TYPES = ['assistant_brief', 'assistant_nudge'];
+const ASSISTANT_TYPES = ['assistant_brief', 'assistant_nudge', 'assistant_memory_review'];
 function withoutAssistantRows(query, req) {
   if ((req.query.exclude ?? req.body?.exclude) !== 'assistant') return query;
   return query.not('type', 'in', `(${ASSISTANT_TYPES.join(',')})`);

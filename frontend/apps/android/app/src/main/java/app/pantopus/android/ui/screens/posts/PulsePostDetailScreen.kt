@@ -46,6 +46,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.ai.AIScreenContext
 import app.pantopus.android.data.api.models.posts.PostDetailDto
+import app.pantopus.android.data.plans.PlanFormat
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.RefreshFailedLine
 import app.pantopus.android.ui.components.RefreshNotice
@@ -71,6 +72,8 @@ import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
 import kotlinx.coroutines.delay
+import java.time.Instant
+import java.time.ZoneId
 
 /** Report reasons mirrored from the iOS reasons dialog. */
 private val reportReasons =
@@ -125,6 +128,8 @@ fun PulsePostDetailScreen(
     onContentLoaded: () -> Unit = {},
     /** Ask Pantopus about this post (AI assistant phase 1); null hides the button. */
     onAsk: ((AIScreenContext) -> Unit)? = null,
+    /** Plans is on for the person, so Ask on an event that hasn't ended offers "Make this a plan". */
+    plansOn: Boolean = false,
     viewModel: PulsePostDetailViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
@@ -234,7 +239,10 @@ fun PulsePostDetailScreen(
                             ContentDetailTopBarAction(
                                 icon = PantopusIcon.Sparkles,
                                 contentDescription = "Ask Pantopus",
-                                onClick = { ask(AIScreenContext.post(content.post.id, postAskLabel(content.post))) },
+                                onClick = {
+                                    val makesPlan = plansOn && isEventAhead(content.post)
+                                    ask(AIScreenContext.post(content.post.id, postAskLabel(content.post), makesPlan))
+                                },
                                 testTag = "postAskPantopus",
                                 tint = PantopusColors.magic,
                             )
@@ -662,6 +670,19 @@ private fun ErrorLayout(
             onCta = onRetry ?: onBack,
         )
     }
+}
+
+/**
+ * An event that hasn't ended: its end, else its start, is still ahead. Composers post the poster's wall clock
+ * labelled UTC, so it compares with the phone's own wall clock read the same way (`pulseEventDetails`).
+ */
+private fun isEventAhead(
+    post: PostDetailDto,
+    now: Instant = Instant.now(),
+): Boolean {
+    if (post.postType != "event") return false
+    val last = PlanFormat.instant(post.eventEndDate) ?: PlanFormat.instant(post.eventDate) ?: return true
+    return last.isAfter(now.plusSeconds(ZoneId.systemDefault().rules.getOffset(now).totalSeconds.toLong()))
 }
 
 /** The assistant thread's "About: …" line for a post: its headline, or the start of its text. */
