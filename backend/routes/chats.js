@@ -223,6 +223,14 @@ const reactToMessageSchema = Joi.object({
   reacted: Joi.boolean(),
 });
 
+// A draft or closed business isn't public, so no chat names or reaches it (POST /direct). Nor does it start a
+// conversation or write in a direct one as itself: the person would see neither who wrote nor a way to answer. Its
+// inbox still lists and opens the conversations it has.
+const UNPUBLISHED_BUSINESS_REFUSAL = {
+  error: "This business isn't published, so it can't message people. Publish its profile first.",
+  code: 'NOT_PUBLISHED',
+};
+
 // The business identity an actor may act as here, or none (their own id always counts).
 async function verifiedBusinessIdentity(asBusinessUserId, actorUserId) {
   if (!asBusinessUserId) return [];
@@ -1245,6 +1253,9 @@ router.post('/direct', verifyToken, directChatLimiter, validate(createDirectChat
       if (String(asBusinessUserId) === String(otherUserId)) {
         return res.status(400).json({ error: 'Cannot create chat where both participants are the same business' });
       }
+      if (await isUnpublishedBusiness(asBusinessUserId)) {
+        return res.status(403).json(UNPUBLISHED_BUSINESS_REFUSAL);
+      }
       initiatorIdentityUserId = asBusinessUserId;
     }
     
@@ -1909,6 +1920,9 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
       const canAct = await canActAsBusiness(asBusinessUserId, userId);
       if (!canAct) {
         return res.status(403).json({ error: 'You do not have permission to message as this business' });
+      }
+      if (await isUnpublishedBusiness(asBusinessUserId)) {
+        return res.status(403).json(UNPUBLISHED_BUSINESS_REFUSAL);
       }
       const { data: businessParticipant } = await supabaseAdmin
         .from('ChatParticipant')
