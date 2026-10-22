@@ -18,7 +18,11 @@ const { assertListingInteractionAllowed } = require('../services/marketplace/lis
 const { LISTING_LIST } = require('../utils/columns');
 const { applyLocationPrecision } = require('../utils/locationPrivacy');
 const { haversineMiles } = require('../utils/geo');
-const { hydrateListingCreatorIdentities } = require('../utils/listingCreatorIdentity');
+const {
+  hydrateListingCreatorIdentities,
+  hydrateTaskPeople,
+  serializeTaskPerson,
+} = require('../utils/listingCreatorIdentity');
 const {
   AREA_SEARCH_CANDIDATE_LIMIT,
   applyMuteAndBlockFilters,
@@ -41,7 +45,6 @@ const discoveryCacheService = require('../services/marketplace/discoveryCacheSer
 const {
   SAFE_CREATOR_SELECT,
   serializeListingAuthorForViewer,
-  serializeUserAsLocalIdentity,
   serializeUserIdentityForViewer,
 } = require('../serializers/identitySerializers');
 
@@ -379,20 +382,24 @@ async function normalizeListingsWithHydratedCreators(rows) {
   return (rows || []).map(normalizeListing);
 }
 
+// The people on a listing are named as the listing names its seller, and as tasks name theirs: a person by their Local
+// Profile, a business as the business, with `id` the account id. That is the asker and the answerer (the seller) here
+// (hydrateTaskPeople, before this).
 function serializeListingQuestionForViewer(question) {
   if (!question) return null;
   const { asker, answerer, ...safe } = question;
   return {
     ...safe,
-    asker: serializeUserAsLocalIdentity(asker),
-    answerer: serializeUserIdentityForViewer(answerer),
+    asker: serializeTaskPerson(asker),
+    answerer: serializeTaskPerson(answerer),
   };
 }
 
+// The buyer, named by their Local Profile as above (hydrateTaskPeople, before this).
 function serializeListingMessageForViewer(message) {
   if (!message) return null;
   const { buyer, ...safe } = message;
-  const buyerIdentity = serializeUserAsLocalIdentity(buyer);
+  const buyerIdentity = serializeTaskPerson(buyer);
   return {
     ...safe,
     buyer: buyerIdentity,
@@ -1970,6 +1977,7 @@ router.get('/:id/messages', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch messages' });
     }
 
+    await hydrateTaskPeople(messages, ['buyer']);
     res.json({ messages: (messages || []).map(serializeListingMessageForViewer) });
   } catch (err) {
     logger.error('Listing messages fetch error', { error: err.message });
@@ -2093,6 +2101,7 @@ router.get('/:listingId/questions', async (req, res) => {
       [owner?.first_name, owner?.last_name].filter(Boolean).join(' ') ||
       owner?.username ||
       'Seller';
+    await hydrateTaskPeople(questions, ['asker', 'answerer']);
 
     const normalized = (questions || []).map((q) => ({
       ...serializeListingQuestionForViewer(q),
@@ -2191,6 +2200,7 @@ router.post('/:listingId/questions', verifyToken, async (req, res) => {
       });
     }
 
+    await hydrateTaskPeople([q], ['asker']);
     res.status(201).json({ question: serializeListingQuestionForViewer(q) });
   } catch (err) {
     if (err.listingBlockRefusal) return res.status(err.status).json({ error: err.message });
@@ -2291,6 +2301,7 @@ router.post('/:listingId/questions/:questionId/answer', verifyToken, async (req,
       [owner?.first_name, owner?.last_name].filter(Boolean).join(' ') ||
       owner?.username ||
       'Seller';
+    await hydrateTaskPeople([updated], ['asker', 'answerer']);
 
     res.json({
       question: {
