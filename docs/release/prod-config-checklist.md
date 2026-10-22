@@ -795,6 +795,9 @@ reviewed monitoring/lookup fixes; all 12 functions remain Active. The production
 SNS email subscription is confirmed, all 17 alarms route to it, and the earlier
 one-time routing test arrived in the inbox.
 The worker's Lambda cron fallback remains off to prevent duplicate scheduling.
+Before host maintenance, all 17 alarms reached OK. The normal 17:00 local seeder run
+published two additional posts with zero failures; the ongoing briefing and
+Home schedules also completed without reported failures.
 
 Production FCM OAuth and a validation-only message request passed (HTTP 200),
 and the privately saved Android release Firebase configuration matches the
@@ -1313,7 +1316,26 @@ environment, Nginx and TLS configuration were also backed up privately.
 
 These are point-in-time copies; automatic recurring off-host backups are not
 configured by this check. Keep following the weekly and pre-change procedure
-above. EC2 uses key-only SSH and IMDSv2, but its 8 GiB root disk is unencrypted
-and SSH ingress remains broad. Encrypting the root disk requires replacing it
-during a planned API/worker maintenance window; do not stop the host as part
-of a Lambda rollout.
+above. An EC2 root snapshot does not back up the external Supabase database or
+uploaded files.
+
+**October 21 approved host maintenance:** the shared production/staging EC2
+instance now boots from an encrypted 8 GiB gp3 root volume under the AWS-managed
+EBS key. A snapshot and encrypted copy were prepared while the stateless host
+remained online, then the instance was stopped, its root volume exchanged and
+the same instance restarted. The original device mapping, disk performance,
+Elastic IP, security groups, API/worker image digests and environment
+configuration were preserved. Pinned SSH and both HTTPS API readiness checks
+passed; all four API/worker containers were healthy. A maintenance job also
+completed through the deployed Lambda-to-API path. Readiness probes observed
+approximately 2 minutes 7 seconds of interruption, ending at 17:49 PDT.
+EC2's system, instance and attached-disk checks subsequently all reported OK.
+The briefing scheduler's error alarm detected connection timeouts/502 responses
+during the restart; scheduled runs recovered automatically once the API returned.
+
+The original disk and the private source/encrypted snapshots are retained for
+rollback pending the founder's retention decision; they incur ongoing storage
+charges. Key-only SSH and IMDSv2 remain in force, with the existing broad SSH
+ingress unchanged. This maintenance does not establish physical-phone delivery
+or automatic recurring backups. Future host stops require their own maintenance
+window; a Lambda rollout does not require stopping this host.
