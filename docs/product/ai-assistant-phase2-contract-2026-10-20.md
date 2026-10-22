@@ -57,6 +57,7 @@ The nudge goes into the person's most recent `AIConversation`, creating one if n
 
 - `GET /api/ai/conversations/:id/messages` shows it as an assistant message with its `draft` (action card), under the same `cards` gating as any card;
 - the model's next turn sees it, so "move it to Sunday" after a weather nudge just works;
+- a user-role line before it, which history hides, tells the model when Pantopus sent it and that its facts were looked up then, so a later reply stands by them instead of taking them back as unchecked;
 - a card's JSON longer than 4,000 characters must still come back from history. Raise the stored tool-result cap for cards, or store the card under its own key. Phase 1 cuts saved tool results at 4,000 characters (`agentLoop.js`).
 
 ### 3.4 The Suggestions switch
