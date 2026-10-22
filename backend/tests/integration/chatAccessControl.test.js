@@ -115,6 +115,8 @@ function seedBaseData() {
   seedTable('BusinessSeat', []);
   seedTable('SeatBinding', []);
   seedTable('BusinessTeam', []);
+  // A published business: a draft can't message people as itself.
+  seedTable('BusinessProfile', [{ business_user_id: U_BIZ, is_published: true }]);
 }
 
 beforeEach(() => {
