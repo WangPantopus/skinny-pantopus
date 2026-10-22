@@ -67,6 +67,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
+import app.pantopus.android.data.api.models.posts.EarlierPostDto
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.FutureDateTimePickerDialogs
 import app.pantopus.android.ui.components.PantopusFieldState
@@ -114,6 +115,8 @@ fun PulseComposeScreen(
      * business. Used by the Business owner dashboard's compose FAB.
      */
     businessAuthorId: String? = null,
+    /** "Before you ask": opens an earlier post; the composer keeps the draft underneath. */
+    onOpenPost: (String) -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val activeIntent by viewModel.activeIntent.collectAsStateWithLifecycle()
@@ -136,6 +139,8 @@ fun PulseComposeScreen(
     val shouldDismiss by viewModel.shouldDismiss.collectAsStateWithLifecycle()
     val prefillState by viewModel.prefillState.collectAsStateWithLifecycle()
     val selectedPlaceTag by viewModel.selectedPlaceTag.collectAsStateWithLifecycle()
+    val earlierAnswers by viewModel.earlierAnswers.collectAsStateWithLifecycle()
+    val postCheckFindings by viewModel.postCheckFindings.collectAsStateWithLifecycle()
     var showPlacePicker by remember { mutableStateOf(false) }
 
     LaunchedEffect(flowTarget, flowPurpose) {
@@ -265,6 +270,7 @@ fun PulseComposeScreen(
                                 composePurpose = viewModel.flowPurpose,
                                 postingTargetLabel = viewModel.flowTargetLabel,
                                 isNetworkTarget = viewModel.isNetworkFlowTarget,
+                                earlierAnswers = earlierAnswers,
                             ),
                         actions =
                             PulseComposeActions(
@@ -292,6 +298,7 @@ fun PulseComposeScreen(
                                 onDismissPrecheckNudge = viewModel::dismissPrecheckNudge,
                                 onAddLocation = { showPlacePicker = true },
                                 onClearLocation = viewModel::clearPlaceTag,
+                                onOpenEarlierPost = onOpenPost,
                             ),
                     )
             }
@@ -306,6 +313,14 @@ fun PulseComposeScreen(
                         .padding(bottom = Spacing.s10),
             )
         }
+    }
+
+    postCheckFindings?.let { findings ->
+        PostCheckDialog(
+            findings = findings,
+            onEdit = viewModel::editAfterPostCheck,
+            onPostAnyway = viewModel::postAnyway,
+        )
     }
 
     if (showPlacePicker) {
@@ -418,6 +433,8 @@ internal data class PulseComposeContentState(
     val postingTargetLabel: String? = null,
     /** Composing to the Connections target: the general form reads "Post" and speaks of connections. */
     val isNetworkTarget: Boolean = false,
+    /** "Before you ask": earlier questions and recommendations nearby matching the question being written. */
+    val earlierAnswers: List<EarlierPostDto> = emptyList(),
 )
 
 internal data class PulseComposeSelectionActions(
@@ -446,6 +463,8 @@ internal data class PulseComposeActions(
     val onAddLocation: () -> Unit = {},
     /** ✕ on the set-tag row — clears the venue tag. */
     val onClearLocation: () -> Unit = {},
+    /** A "Before you ask" row: opens that earlier post. */
+    val onOpenEarlierPost: (String) -> Unit = {},
 )
 
 /**
@@ -497,6 +516,7 @@ private fun PulseComposeBodySections(
         onSelectAskCategory = actions.selection.onSelectAskCategory,
         onSelectRecommendRating = actions.selection.onSelectRecommendRating,
     )
+    BeforeYouAskSection(posts = state.earlierAnswers, onOpenPost = actions.onOpenEarlierPost)
     PhotosSection(photos = state.photos, onPick = actions.onPickPhotos, onRemove = actions.onRemovePhoto)
     // Place tags are create-only (the update pipeline carries no location
     // fields), so hide the row in edit mode — offering a picker whose
