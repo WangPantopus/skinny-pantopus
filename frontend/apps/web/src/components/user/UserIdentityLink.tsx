@@ -173,6 +173,8 @@ export default function UserIdentityLink({
         if (relId) {
           await api.relationships.acceptRequest(relId);
           setRelationship('connected');
+          // Accepting makes each of you follow the other (routes/relationships.js), so Follow would say "already following".
+          setFollowing(true);
         }
       } else if (relationship === 'connected') {
         const relId = await resolveConnectionId(String(userId), 'connected');
