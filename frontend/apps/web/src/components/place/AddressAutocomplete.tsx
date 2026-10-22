@@ -27,6 +27,8 @@ export interface AddressAutocompleteProps {
   onSubmit?: () => void;
   placeholder?: string;
   autoFocus?: boolean;
+  /** The field's accessible name where no visible label points at it. */
+  ariaLabel?: string;
 }
 
 const DEBOUNCE_MS = 200;
@@ -38,6 +40,7 @@ export default function AddressAutocomplete({
   onSubmit,
   placeholder = 'Enter your address',
   autoFocus = false,
+  ariaLabel,
 }: AddressAutocompleteProps) {
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<GeoSuggestion[]>([]);
@@ -159,6 +162,7 @@ export default function AddressAutocomplete({
             blurTimerRef.current = setTimeout(() => setOpen(false), 120);
           }}
           role="combobox"
+          aria-label={ariaLabel}
           aria-expanded={open}
           aria-controls={listId}
           aria-autocomplete="list"
