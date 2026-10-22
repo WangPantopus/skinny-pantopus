@@ -23,6 +23,7 @@ const {
 } = require('../utils/businessPermissions');
 const { calculateAndStoreCompleteness } = require('../utils/businessCompleteness');
 const { VERIFICATION_RANK } = require('../utils/businessConstants');
+const { grantVerifiedTypeFee } = require('../services/businessEntityService');
 const { requireAdmin } = require('../middleware/verifyToken');
 
 const VALID_EVIDENCE_TYPES = ['business_license', 'ein_letter', 'utility_bill', 'state_registration', 'ein_verification', 'tax_exempt_letter'];
@@ -410,7 +411,7 @@ router.post('/:businessId/verify/review', verifyToken, requireAdmin, async (req,
     // Fetch evidence row
     const { data: evidence, error: fetchErr } = await supabaseAdmin
       .from('BusinessVerificationEvidence')
-      .select('id, business_user_id, status')
+      .select('id, business_user_id, evidence_type, status')
       .eq('id', evidence_id)
       .single();
 
@@ -465,6 +466,13 @@ router.post('/:businessId/verify/review', verifyToken, requireAdmin, async (req,
       }
 
       currentVerificationStatus = 'document_verified';
+
+      // Verified as the type it has: one that earns a reduced rate gets it.
+      try {
+        await grantVerifiedTypeFee(businessId, evidence.evidence_type, userId);
+      } catch (feeErr) {
+        logger.error('Verified type fee not set after review', { error: feeErr.message, businessId });
+      }
 
       calculateAndStoreCompleteness(businessId).catch((err) => {
         logger.error('Post-review completeness calculation failed', { businessId, error: err.message });
