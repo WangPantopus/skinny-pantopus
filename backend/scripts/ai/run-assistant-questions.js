@@ -13,8 +13,9 @@
  * A question's `attach` files (in scripts/ai/fixtures) are uploaded through
  * POST /api/upload/ai-media first and sent as the message's images, as the apps do.
  * Phase 3: `cards` replaces the list the app sends; `reset: ["memory"]` forgets the account's
- * saved items first (DELETE /api/ai/memory), so a run can be repeated; `tap` runs the named
- * action of the first card that has it, as the person's tap would (e.g. "remember").
+ * saved items first (DELETE /api/ai/memory), so a run can be repeated, and `reset: ["follow_ups"]`
+ * cancels their waiting check-backs; `tap` runs the named action of the first card that has it, as
+ * the person's tap would (e.g. "remember"); `same: true` continues the previous question's conversation.
  */
 const fs = require('fs');
 const path = require('path');
@@ -84,6 +85,8 @@ async function upload(question) {
   return json.images.map((image) => image.url);
 }
 
+let lastConversation = null;
+
 async function call(question, method, urlPath, body) {
   const res = await fetch(`${API}${urlPath}`, {
     method,
@@ -91,6 +94,7 @@ async function call(question, method, urlPath, body) {
     body: body ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) throw new Error(`${method} ${urlPath} failed (${res.status})`);
+  return res.status === 204 ? null : res.json().catch(() => null);
 }
 
 /** The person's tap on a card's action: its own request, as the app sends it. */
@@ -103,11 +107,16 @@ async function tap(question, got) {
 
 async function ask(question) {
   if ((question.reset || []).includes('memory')) await call(question, 'DELETE', '/api/ai/memory');
+  if ((question.reset || []).includes('follow_ups')) {
+    const { follow_ups: waiting = [] } = (await call(question, 'GET', '/api/ai/follow-ups')) || {};
+    for (const followUp of waiting) await call(question, 'DELETE', `/api/ai/follow-ups/${followUp.id}`);
+  }
   const body = {
     message: question.say,
     cards: question.cards || (question.old ? ['pickup_schedule'] : ['pickup_schedule', 'action', 'link']),
   };
   if (question.attach) body.images = await upload(question);
+  if (question.same && lastConversation) body.conversationId = lastConversation;
   const context = fillContext(question.context);
   if (context) body.context = context;
   const res = await fetch(`${API}/api/ai/chat`, {
@@ -122,6 +131,7 @@ async function ask(question) {
     const data = /^data: (.+)$/m.exec(block)?.[1];
     if (!name || !data) continue;
     const json = JSON.parse(data);
+    if (name === 'conversation') lastConversation = json.conversationId;
     if (name === 'text_delta') out.text += json.delta || '';
     if (name === 'link') out.links.push(json.url);
     if (name === 'error') out.errors.push(json.error);
