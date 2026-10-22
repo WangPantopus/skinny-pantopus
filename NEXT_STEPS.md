@@ -152,6 +152,12 @@ Sessions you start for one job (Instant Screens, Nearby Plans, single fixes) wor
 - [x] Phase 2 starts as soon as phase 1 is merged, in fresh sessions that use the recommended defaults without waiting for you. Anything that reads chat messages waits for your privacy step. You said so on October 20.
 - [ ] Yours before phase 1 ships: the privacy policy and the data inventory name AI processing and Anthropic as a processor, and you confirm the Anthropic account's data-retention setting. The draft wording is in [#2472](https://github.com/WangPantopus/skinny-pantopus/pull/2472): confirm the retention setting and Anthropic's terms there, then merge it. The backend half of phase 1 has been in production since October 20, so the policy is behind the code until #2472 merges.
 
+**Made by the founder on October 21 (Lost pet alerts), from the [design page](https://claude.ai/artifact/Jcd3FHddeyXRKjE2sXPdZW).** You said "Use the recommended option for every decision and start the work in the order D13 recommends." Minutes later you paused it before any build: "we want to focus on making money feature first." Nothing is built; the Lost pet alerts section below says how to resume. The [proposal](docs/product/lost-pet-alerts-proposal-2026-10-21.md), the [design page's source](docs/product/lost-pet-alerts-design-2026-10-21.html) and the [build contract](docs/product/lost-pet-alerts-contract-2026-10-21.md) are in `docs/product/`.
+
+- [x] Build lost pet alerts: one photo and one tap alert people nearby, make a flyer with a QR code and a link, and open a public pet page where anyone can report a sighting without an account. Found pets use the same flow.
+- [x] The thirteen decisions, all as recommended: the name "Lost pet alert"; senders must be signed in and nearby (a home, saved place or fresh location within 5 km); 1 mile for dogs and other pets, half a mile for cats; everyone with a home or saved place in range, with a "Lost pets near me" switch that starts on; pushes wait for quiet hours; reports without an account on a web page, an exception to the mobile-only rule like the Plans preview; exact sighting points for the household only; contact through Pantopus, no phone unless the owner adds it, no reward field; photo matching; found pets alert too; saved pet profiles after alerts are live; the new tables `PetAlert` and `PetSighting`; a `pet_alerts` flag with the Plans order of work.
+- [x] The photo check and photo matching send photos to the AI provider, so they stay off on hosted environments until your privacy step for [#2472](https://github.com/WangPantopus/skinny-pantopus/pull/2472) is done and the policy covers photos from people without an account. Alerts work without them.
+
 **Still open. The brief builds the default until you decide.**
 
 - [ ] Confirm the September 26 promise and pilot shape: "Know what matters for your home, and stay on top of it"; first-time homeowners in Vancouver, Camas and Washougal; five households, then 30 to 50, for eight weeks each. Default: as written.
@@ -475,6 +481,21 @@ Decided October 20 (section 0) from the [AI expansion proposal](https://claude.a
 - [ ] Phase 2, chats (after your privacy step): catch-up for chats, plan chats and Support Train chats, reply drafts, chat to task, "what's waiting on me" and warning signs on first messages from strangers.
 - [ ] Phase 3: the memory list, "Needs you", standing rules, follow-ups, and Siri and the Android assistant.
 - [ ] Later, when their flags turn on: selling, buying, negotiating within limits and hiring, as the proposal describes.
+
+## Lost pet alerts (added October 21)
+
+Decided October 21 (section 0) from the [design page](https://claude.ai/artifact/Jcd3FHddeyXRKjE2sXPdZW). The contract the lanes build against is [docs/product/lost-pet-alerts-contract-2026-10-21.md](docs/product/lost-pet-alerts-contract-2026-10-21.md). Everything is behind the `pet_alerts` flag, which starts off; a backend merge releases to production with its migration and changes nothing visible.
+
+**Paused October 21, before any build:** you want features that make money first. No lane was started and nothing below is built. To resume, start the four lanes in contract section 10 (design, backend and web, iOS, Android) from the contract, after rebasing on master.
+
+- [ ] Detailed screens on a design canvas built on the Pantopus design system (lane PD), for your review.
+- [ ] Backend and web, PR 1: the tables, the flag, creating an alert, the push to people nearby with caps and quiet hours, the reach count, the public endpoint, the web pet page and the printable flyer (lane PB).
+- [ ] Backend and web, PR 2: sightings with and without an account, the household's and neighbors' views, "Keep an eye out", ending and extending, the lifecycle and 30-day cleanup, the notifications and the "Lost pets near me" switch (lane PB).
+- [ ] Backend, PR 3: the photo check and photo matching, behind `PET_ALERT_PHOTO_AI`, off on hosted environments until your privacy step (lane PB).
+- [ ] iOS (lane PI) and Android (lane PA): reporting, the owner's and neighbors' pages, the pinned Nearby card, matches, "home", links and settings; merged after PB's PR 2.
+- [ ] The end-to-end check in contract section 11 across the web, iOS and Android.
+- [ ] Yours: the privacy step before the photo features run hosted; turning `pet_alerts` on in staging, then for the pilot households, then everyone; store builds; a check on physical phones.
+- [ ] Later (decision D11): the pets list from `household_extras`, with "Report missing" on each pet.
 
 ## Background backlog
 
