@@ -6,6 +6,7 @@ import DashboardCard from '../DashboardCard';
 import VisibilityChip from '../VisibilityChip';
 import { launchFeatures } from '@/lib/featureFlags';
 import { chosenUsername } from '@pantopus/utils';
+import type { HomeTask } from '../tasks/homeTaskModel';
 
 const PRIORITY_DOT: Record<string, string> = {
   urgent: 'bg-red-500',
@@ -36,6 +37,7 @@ interface TaskItem {
   task_type?: string;
   converted_to_gig_id?: string;
   visibility?: 'public' | 'members' | 'managers' | 'sensitive';
+  capabilities?: HomeTask['capabilities'];
   [key: string]: unknown;
 }
 
@@ -236,7 +238,10 @@ export default function TasksCard({
               {/* Checkbox */}
               <button
                 type="button"
-                aria-label={`${task.status === 'done' ? 'Reopen' : task.status === 'open' ? 'Start' : 'Complete'} task: ${task.title}`}
+                aria-label={task.capabilities?.can_complete === true
+                  ? `${task.status === 'done' ? 'Reopen' : task.status === 'open' ? 'Start' : 'Complete'} task: ${task.title}`
+                  : `${task.status === 'done' ? 'Completed' : task.status === 'in_progress' ? 'In progress' : task.status === 'canceled' ? 'Canceled' : 'Open'} task: ${task.title}`}
+                disabled={task.capabilities?.can_complete !== true}
                 onClick={(e) => {
                   e.stopPropagation();
                   const next = task.status === 'done' ? 'open' : task.status === 'open' ? 'in_progress' : 'done';
@@ -247,7 +252,7 @@ export default function TasksCard({
                     ? 'bg-green-700 border-green-500 text-white'
                     : task.status === 'in_progress'
                     ? 'bg-amber-400 border-amber-400 text-white'
-                    : 'border-app-border hover:border-gray-400'
+                    : 'border-app-border enabled:hover:border-gray-400'
                 }`}
               >
                 {task.status === 'done' && <Check className="w-3 h-3" />}
@@ -290,7 +295,7 @@ export default function TasksCard({
               </div>
 
               {/* Delete on hover */}
-              <button
+              {task.capabilities?.can_delete === true && <button
                 onClick={(e) => {
                   e.stopPropagation();
                   onTaskDelete(task.id);
@@ -301,7 +306,7 @@ export default function TasksCard({
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
-              </button>
+              </button>}
             </div>
           ))
         )}
