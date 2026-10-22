@@ -10,8 +10,8 @@ import { useSocket } from '@/contexts/SocketContext';
 import { useNotificationTap } from '@/hooks/useNotificationTap';
 import { toast } from '@/components/ui/toast-store';
 import { queryKeys } from '@/lib/query-keys';
-import { resolveWebNotificationPath } from '@/lib/notificationRoutes';
-import { isLaunchCutNotification, launchFeatures } from '@/lib/featureFlags';
+import { isHiddenOnWeb, resolveWebNotificationPath } from '@/lib/notificationRoutes';
+import { launchFeatures } from '@/lib/featureFlags';
 import { formatTimeAgo as timeAgo } from '@pantopus/ui-utils';
 import type { Notification } from '@pantopus/types';
 
@@ -80,8 +80,8 @@ export default function NotificationBell({
   const accentTextHover = isAudience ? 'hover:text-teal-800' : 'hover:text-blue-800';
   const unreadDot = isAudience ? 'bg-teal-500' : 'bg-blue-500';
   const notificationMatchesScope = useCallback((notif: Notification) => {
-    // Launch cut: rows of a hidden feature are left out.
-    if (isLaunchCutNotification(notif, resolveWebNotificationPath(notif.link, notif))) return false;
+    // Rows of a hidden feature, and those only the apps open, are left out.
+    if (isHiddenOnWeb(notif)) return false;
     const firewallContext = notif.context || 'personal';
     if (mode === 'audience') return firewallContext === 'audience';
     if (mode === 'personal') return firewallContext === 'personal' || firewallContext === 'platform';
@@ -130,8 +130,8 @@ export default function NotificationBell({
           return previous.filter(n => (n.context || 'personal') === context);
         });
         return [...new Map(rows.map(n => [n.id, n])).values()]
-          // Launch cut: rows of a hidden feature are left out.
-          .filter(n => !isLaunchCutNotification(n, resolveWebNotificationPath(n.link, n)))
+          // Rows of a hidden feature, and those only the apps open, are left out.
+          .filter(n => !isHiddenOnWeb(n))
           .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       });
     } catch {

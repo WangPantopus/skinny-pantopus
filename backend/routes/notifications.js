@@ -72,6 +72,16 @@ function applyNotificationFilters(query, {
   return next;
 }
 
+// The assistant's brief and nudges (services/ai/nudges/engine.js TYPES) open the
+// apps' assistant thread, pantopus://assistant?nudge=<id>, which the web doesn't
+// have. The web asks for its list, counts and "Mark all read" without them
+// (exclude=assistant); the apps send nothing and get every row, as before.
+const ASSISTANT_TYPES = ['assistant_brief', 'assistant_nudge'];
+function withoutAssistantRows(query, req) {
+  if ((req.query.exclude ?? req.body?.exclude) !== 'assistant') return query;
+  return query.not('type', 'in', `(${ASSISTANT_TYPES.join(',')})`);
+}
+
 /**
  * GET /api/notifications
  * Returns notifications for the current user + unread count.
@@ -90,6 +100,8 @@ function applyNotificationFilters(query, {
  *   context_id — business_user_id to filter business notifications
  *   firewall — alias for `context` kept for P0.6 internal callers.
  *     New code should pass `context` instead.
+ *   exclude — 'assistant' leaves out the assistant's brief and nudges, in the
+ *     list and its unread count (the web, which can't open them).
  *   after — only what's new (Instant Screens contract §8): a notification id
  *     the client already has, or an ISO time; returns the notifications
  *     newer than it, newest first (offset is ignored; hasMore means more new
@@ -172,7 +184,7 @@ router.get('/', verifyToken, async (req, res) => {
       query = query.eq('is_read', false);
     }
 
-    query = applyNotificationFilters(query, { contextType, contextId, contexts });
+    query = withoutAssistantRows(applyNotificationFilters(query, { contextType, contextId, contexts }), req);
     // Launch cuts: notifications that only a hidden feature produces are left out.
     query = excludeHiddenLaunchNotifications(query);
     // So are notices from someone across a block, in either direction.
@@ -187,7 +199,7 @@ router.get('/', verifyToken, async (req, res) => {
       .eq('user_id', userId)
       .eq('is_read', false);
 
-    countQuery = applyNotificationFilters(countQuery, { contextType, contextId, contexts });
+    countQuery = withoutAssistantRows(applyNotificationFilters(countQuery, { contextType, contextId, contexts }), req);
     countQuery = readablePost(withoutBlocked(excludeHiddenLaunchNotifications(countQuery)));
 
     const [{ data: notifications, error }, { count: unreadCount, error: countErr }] = await Promise.all([query, countQuery]);
@@ -210,6 +222,7 @@ router.get('/', verifyToken, async (req, res) => {
  * Quick endpoint for the bell badge — returns the total + a per-firewall
  * breakdown (P2.3 / unified-IA §6.1: separate streams for personal vs
  * audience, never combined). Existing callers reading `count` keep working.
+ * `?exclude=assistant` leaves the assistant's brief and nudges out (the web).
  *
  *   { count: 12, byContext: { personal: 9, audience: 3, platform: 0 } }
  */
@@ -221,11 +234,11 @@ router.get('/unread-count', verifyToken, async (req, res) => {
     // someone across a block.
     const withoutBlocked = await notificationBlockFilter(userId);
     const readablePost = await notificationPostFilter(userId);
-    const baseFilter = (q) => readablePost(withoutBlocked(excludeHiddenLaunchNotifications(q
+    const baseFilter = (q) => readablePost(withoutBlocked(excludeHiddenLaunchNotifications(withoutAssistantRows(q
       .from('Notification')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', userId)
-      .eq('is_read', false))));
+      .eq('is_read', false), req))));
 
     const [totalRes, personalRes, audienceRes, platformRes] = await Promise.all([
       baseFilter(supabaseAdmin),
@@ -489,6 +502,7 @@ router.patch('/:id/read', verifyToken, async (req, res) => {
  * Mark all notifications as read for the current user. Optional body/query:
  *   context | contexts | firewall — personal/audience/platform/all
  *   context_type/context_id       — legacy personal/business sub-filter
+ *   exclude=assistant             — leaves the assistant's brief and nudges unread (the web)
  */
 router.post('/read-all', verifyToken, async (req, res) => {
   try {
@@ -506,11 +520,11 @@ router.post('/read-all', verifyToken, async (req, res) => {
       .update({ is_read: true })
       .eq('user_id', userId)
       .eq('is_read', false);
-    query = applyNotificationFilters(query, {
+    query = withoutAssistantRows(applyNotificationFilters(query, {
       contextType,
       contextId,
       contexts: parsed.contexts,
-    });
+    }), req);
 
     const { error } = await query;
 

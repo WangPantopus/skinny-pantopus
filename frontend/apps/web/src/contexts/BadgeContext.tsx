@@ -66,10 +66,7 @@ export function BadgeProvider({ children }: { children: ReactNode }) {
   const socket = useSocket();
   const connected = useSocketConnected();
   const [counts, setCounts] = useState<BadgeCounts>(defaultCounts);
-  const countsRef = useRef<BadgeCounts>(defaultCounts);
-  useEffect(() => {
-    countsRef.current = counts;
-  }, [counts]);
+  const socketNotifications = useRef<number | null>(null);
   const fallbackRef = useRef<ReturnType<typeof setInterval>>(undefined);
 
   // Fallback polling when socket is disconnected
@@ -126,9 +123,9 @@ export function BadgeProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // badge:update carries only the unread total, so when it changes (a new notice, or one read
-  // here or on another device) the per-context split the inbox tabs and Personal bell show is
-  // fetched again.
+  // badge:update goes to every device a person is signed in on, so its unread total counts the
+  // assistant's brief and nudges, which the web leaves out. When it changes (a new notice, or one
+  // read here or on another device) the web's own total and per-context split are fetched again.
   const refreshNotificationContexts = useCallback(async () => {
     try {
       const res = (await api.notifications.getUnreadCount({ suppressDevErrorOverlay: true })) as {
@@ -182,25 +179,18 @@ export function BadgeProvider({ children }: { children: ReactNode }) {
     if (!socket) return;
 
     const handleBadgeUpdate = (data: Partial<BadgeCounts>) => {
-      const notificationsChanged = data?.notifications != null
-        && (Number(data.notifications) || 0) !== countsRef.current.notifications;
-      if (notificationsChanged && !data?.notificationsByContext) void refreshNotificationContexts();
+      if (data?.notifications != null) {
+        const total = Number(data.notifications) || 0;
+        if (total !== socketNotifications.current) {
+          socketNotifications.current = total;
+          void refreshNotificationContexts();
+        }
+      }
       setCounts((prev) => ({
         ...prev,
         unreadMessages: Number(data?.unreadMessages ?? prev.unreadMessages) || 0,
         totalMessages: Number(data?.totalMessages ?? prev.totalMessages) || 0,
         pendingOffers: Number(data?.pendingOffers ?? prev.pendingOffers) || 0,
-        notifications: Number(data?.notifications ?? prev.notifications) || 0,
-        // The socket contract may not yet emit byContext. Keep the prior
-        // per-context counts so the megaphone badge doesn't flicker to
-        // zero between socket updates and the next /unread-count poll.
-        notificationsByContext: data?.notificationsByContext
-          ? {
-              personal: Number(data.notificationsByContext.personal ?? prev.notificationsByContext.personal) || 0,
-              audience: Number(data.notificationsByContext.audience ?? prev.notificationsByContext.audience) || 0,
-              platform: Number(data.notificationsByContext.platform ?? prev.notificationsByContext.platform) || 0,
-            }
-          : prev.notificationsByContext,
       }));
     };
 

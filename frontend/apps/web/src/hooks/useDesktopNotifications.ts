@@ -5,8 +5,7 @@ import { useRouter } from 'next/navigation';
 import { AUTH_SESSION_CHANGE_KEY, getApiBaseUrl, getAuthToken, onTokenChange } from '@pantopus/api';
 import { useSocket } from '@/contexts/SocketContext';
 import { useBadges } from '@/contexts/BadgeContext';
-import { resolveWebNotificationPath } from '@/lib/notificationRoutes';
-import { isLaunchCutNotification } from '@/lib/featureFlags';
+import { isHiddenOnWeb, resolveWebNotificationPath } from '@/lib/notificationRoutes';
 import type { Notification as AppNotification } from '@pantopus/types';
 
 const BASE_TITLE = 'Pantopus';
@@ -64,8 +63,8 @@ export function useDesktopNotifications() {
 
     const handleAlert = (notif: AppNotification) => {
       if (!current() || !notif?.id || !notif.user_id || typeof notif.title !== 'string') return;
-      // Launch cut: no OS alert for a hidden feature.
-      if (isLaunchCutNotification(notif, resolveWebNotificationPath(notif.link, notif))) return;
+      // No OS alert for a hidden feature, or for a row only the apps open.
+      if (isHiddenOnWeb(notif)) return;
       if (typeof window === 'undefined' || !('Notification' in window)) return;
       if (Notification.permission !== 'granted') return;
       const key = `${notif.user_id}:${notif.id}`;

@@ -11,6 +11,10 @@ import type { ApiRequestConfig } from '../client';
 export type { Notification } from '@pantopus/types/notification';
 import type { Notification } from '@pantopus/types/notification';
 
+// The assistant's brief and nudges open the apps' assistant thread, which the
+// web doesn't have, so the web's lists, counts and "Mark all read" leave them out.
+const EXCLUDE = 'assistant';
+
 /**
  * Get notifications for the current user
  */
@@ -36,8 +40,8 @@ export async function getNotifications(opts?: {
   if (opts?.context && opts.context !== 'all') params.set('context', opts.context);
   if (opts?.context_type) params.set('context_type', opts.context_type);
   if (opts?.context_id) params.set('context_id', opts.context_id);
-  const qs = params.toString();
-  return get(`/api/notifications${qs ? `?${qs}` : ''}`);
+  params.set('exclude', EXCLUDE);
+  return get(`/api/notifications?${params.toString()}`);
 }
 
 export interface UnreadCountByContext {
@@ -55,7 +59,7 @@ export interface UnreadCountByContext {
 export async function getUnreadCount(
   config?: ApiRequestConfig,
 ): Promise<{ count: number; total?: number; byContext?: UnreadCountByContext }> {
-  return get('/api/notifications/unread-count', undefined, config);
+  return get('/api/notifications/unread-count', { exclude: EXCLUDE }, config);
 }
 
 /**
@@ -73,7 +77,7 @@ export type NotificationReadScope =
  * Mark notifications as read, optionally scoped to a firewall stream.
  */
 export async function markAllAsRead(scope?: NotificationReadScope): Promise<{ message: string }> {
-  return post('/api/notifications/read-all', scope || {});
+  return post('/api/notifications/read-all', { ...scope, exclude: EXCLUDE });
 }
 
 /**
