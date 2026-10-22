@@ -19,6 +19,7 @@
 //   - monthlyReceiptJob          → 1st of month at 9:00 AM PT (17:00 UTC)
 //   - authRegistryPrune          → hourly at :50 (persistent login)
 //   - nearbyNudges               → hourly at :27 (AI assistant phase 2)
+//   - assistantPickupRules       → hourly at :12 (AI assistant phase 3 standing rules)
 // ============================================================
 
 const cron = require('node-cron');
@@ -751,6 +752,15 @@ function startJobs(options = {}) {
   // Every 5 minutes: check-backs the person asked for that are due, each claimed first so two
   // servers never run one, sent as requested nudges (services/ai/followUps.js).
   scheduleCron('*/5 * * * *', wrapJob('assistantFollowUps', () => require('../services/ai/followUps').runFollowUps()), {
+    scheduled: true,
+    timezone: 'UTC',
+  });
+
+  // ─── Assistant: standing pickup reminders ───
+  // Hourly at :12: household members someone asked Pantopus to remind, at the member's evening
+  // briefing time the evening before each pickup day the household set (services/ai/rules.js).
+  // Weekly plans run in the Plans tick. Rules are claimed first, so two servers never run one.
+  scheduleCron('12 * * * *', wrapJob('assistantPickupRules', () => require('../services/ai/rules').runPickupReminders()), {
     scheduled: true,
     timezone: 'UTC',
   });

@@ -15,6 +15,8 @@
  *  6. The host's summary at 8 AM on the day, with how many requests are waiting.
  *  7. The assistant's nudges for hosts (services/ai/nudges/plans.js): weather
  *     and air, requests waiting as asking closes, and after the plan.
+ *  8. Standing rules (services/ai/rules.js): next week's plan for hosts who
+ *     turned on a weekly plan, once this week's has ended.
  *
  * Every send is claimed first with a conditional update (or a notice's
  * idempotency key), so two runners (or a retry) never send the same notice twice.
@@ -344,9 +346,18 @@ async function runPlansTick() {
   } catch (err) {
     logger.warn('plans.tick.alerts_failed', { error: err.message });
   }
-  const result = { released, ...lifecycle, askedAgain, reminders, summaries, ...(nudges ? { nudges } : {}), ...(alerts ? { alerts } : {}) };
+  // Last, weekly plans posted by standing rules: after the lifecycle above has ended this week's.
+  let repeats = 0;
+  try {
+    repeats = (await require('../services/ai/rules').runPlanRepeats()).posted;
+  } catch (err) {
+    logger.warn('plans.tick.rules_failed', { error: err.message });
+  }
+  const result = {
+    released, ...lifecycle, askedAgain, reminders, summaries, ...(nudges ? { nudges } : {}), ...(alerts ? { alerts } : {}), ...(repeats ? { repeats } : {}),
+  };
   if (released || askedAgain || reminders || summaries || lifecycle.expiredCount || lifecycle.endedCount || lifecycle.closedCount
-    || (nudges && nudges.sent) || alerts) {
+    || (nudges && nudges.sent) || alerts || repeats) {
     logger.info('plans.tick', result);
   }
   return result;

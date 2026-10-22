@@ -813,6 +813,8 @@ class OffersViewModel
             }
 
             fun displayName(bidder: BidderUserDto?): String {
+                val display = bidder?.displayName?.takeIf { it.isNotBlank() }
+                if (display != null) return display
                 val name = bidder?.name?.takeIf { it.isNotBlank() }
                 if (name != null) return name
                 val first = bidder?.firstName?.takeIf { it.isNotBlank() }

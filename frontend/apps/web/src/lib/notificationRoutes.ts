@@ -4,10 +4,11 @@ type NotificationTarget = { type?: string; metadata?: Record<string, unknown> | 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 // The assistant's brief and nudges open the apps' assistant thread
-// (pantopus://assistant?nudge=<id>), and its yearly memory review the apps'
-// memory list (pantopus://settings/memory); the web has neither. The server
-// leaves them out of the web's lists and counts; this catches live ones.
-const APP_ONLY_TYPES = new Set(['assistant_brief', 'assistant_nudge', 'assistant_memory_review']);
+// (pantopus://assistant?nudge=<id>), its yearly memory review the apps'
+// memory list (pantopus://settings/memory), and a standing rule's notices the
+// apps' rules list (pantopus://settings/rules); the web has none of them. The
+// server leaves them out of the web's lists and counts; this catches live ones.
+const APP_ONLY_TYPES = new Set(['assistant_brief', 'assistant_nudge', 'assistant_memory_review', 'assistant_rule']);
 
 /** True when the web leaves a notification out: one only the apps open, or one of a feature hidden for the launch. */
 export function isHiddenOnWeb(notification: NotificationTarget & { link?: string | null; context?: string | null }): boolean {

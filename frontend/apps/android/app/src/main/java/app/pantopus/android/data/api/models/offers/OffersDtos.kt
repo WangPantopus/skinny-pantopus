@@ -77,10 +77,11 @@ data class BidGigDto(
     @Json(name = "user_id") val userId: String? = null,
 )
 
-/** Inlined bidder identity on Received rows. */
+/** Inlined bidder identity on Received rows (`displayName`: their Local Profile name, as on the task's bid list). */
 @JsonClass(generateAdapter = true)
 data class BidderUserDto(
     val id: String,
+    val displayName: String? = null,
     val username: String? = null,
     val name: String? = null,
     @Json(name = "first_name") val firstName: String? = null,

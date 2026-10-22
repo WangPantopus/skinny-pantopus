@@ -29,19 +29,22 @@ public struct WalletView: View {
     private let onOpenHistory: () -> Void
     private let onOpenTaxDocs: () -> Void
     private let onSeeAllActivity: () -> Void
+    private let onOpenInvoices: () -> Void
 
     public init(
         viewModel: WalletViewModel = WalletViewModel(),
         onBack: @escaping () -> Void = {},
         onOpenHistory: @escaping () -> Void = {},
         onOpenTaxDocs: @escaping () -> Void = {},
-        onSeeAllActivity: @escaping () -> Void = {}
+        onSeeAllActivity: @escaping () -> Void = {},
+        onOpenInvoices: @escaping () -> Void = {}
     ) {
         _viewModel = State(initialValue: viewModel)
         self.onBack = onBack
         self.onOpenHistory = onOpenHistory
         self.onOpenTaxDocs = onOpenTaxDocs
         self.onSeeAllActivity = onSeeAllActivity
+        self.onOpenInvoices = onOpenInvoices
     }
 
     public var body: some View {
@@ -96,6 +99,10 @@ public struct WalletView: View {
                         .padding(.bottom, Spacing.s3)
                 }
                 heroSection(content)
+                // Invoices businesses sent you: the way back to one once its notification is gone.
+                section(overline: "Invoices") {
+                    InvoicesRow(onTap: onOpenInvoices)
+                }
                 if let breakdown = content.pendingBreakdown {
                     // RN splits the escrow total into "In review" /
                     // "Releasing soon" (`WalletTab.tsx:161-173`); the hero's

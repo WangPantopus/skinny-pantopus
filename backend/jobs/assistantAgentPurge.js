@@ -5,13 +5,15 @@
 // 2026-10-22.md §3.6). This deletes older ones, then chat-turn requests
 // older than 90 days that have no steps left. Cards (proposal steps) and
 // the requests that hold them live as long as their conversation, which
-// deletes them by cascade. Runs daily.
+// deletes them by cascade. A standing rule's runs (origin rule, with their
+// action steps) are its history and are kept a year (§18.2). Runs daily.
 // ============================================================
 
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 
 const KEEP_MS = 90 * 24 * 60 * 60 * 1000;
+const RULE_RUNS_KEEP_MS = 365 * 24 * 60 * 60 * 1000;
 const BATCH = 500;
 // A day's run stops here; the next run picks up the rest.
 const MAX_BATCHES = 40;
@@ -19,9 +21,11 @@ const MAX_BATCHES = 40;
 async function purgeSteps(cutoff) {
   let removed = 0;
   for (let batch = 0; batch < MAX_BATCHES; batch++) {
+    // Rule runs' action steps go with their runs, after a year.
     const { data, error } = await supabaseAdmin.from('AgentStep')
       .select('id')
       .neq('type', 'proposal')
+      .neq('type', 'action')
       .lt('created_at', cutoff)
       .order('created_at', { ascending: true })
       .limit(BATCH);
@@ -66,12 +70,33 @@ async function purgeEmptyChatRequests(cutoff) {
   return removed;
 }
 
+// A rule's runs older than a year; their action steps go with them (cascade).
+async function purgeRuleRuns(cutoff) {
+  let removed = 0;
+  for (let batch = 0; batch < MAX_BATCHES; batch++) {
+    const { data, error } = await supabaseAdmin.from('AgentRequest')
+      .select('id')
+      .eq('origin', 'rule')
+      .lt('created_at', cutoff)
+      .order('created_at', { ascending: true })
+      .limit(BATCH);
+    if (error) throw new Error(`Old rule runs read failed: ${error.message}`);
+    if (!data || !data.length) break;
+    const { error: deleteError } = await supabaseAdmin.from('AgentRequest').delete().in('id', data.map((row) => row.id)).eq('origin', 'rule');
+    if (deleteError) throw new Error(`Old rule runs delete failed: ${deleteError.message}`);
+    removed += data.length;
+    if (data.length < BATCH) break;
+  }
+  return removed;
+}
+
 async function assistantAgentPurge({ now = Date.now() } = {}) {
   const cutoff = new Date(now - KEEP_MS).toISOString();
   const steps = await purgeSteps(cutoff);
   const requests = await purgeEmptyChatRequests(cutoff);
-  if (steps || requests) logger.info('[assistantAgentPurge] Deleted old assistant records', { steps, requests });
-  return { steps, requests };
+  const ruleRuns = await purgeRuleRuns(new Date(now - RULE_RUNS_KEEP_MS).toISOString());
+  if (steps || requests || ruleRuns) logger.info('[assistantAgentPurge] Deleted old assistant records', { steps, requests, ruleRuns });
+  return { steps, requests, ruleRuns };
 }
 
 module.exports = assistantAgentPurge;

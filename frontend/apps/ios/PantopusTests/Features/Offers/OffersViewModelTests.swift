@@ -266,6 +266,7 @@ final class OffersViewModelTests: XCTestCase {
             category: "moving",
             bidder: BidderUserDTO(
                 id: "u_other",
+                displayName: nil,
                 username: "anika",
                 name: "Anika R.",
                 firstName: nil,

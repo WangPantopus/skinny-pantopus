@@ -76,6 +76,7 @@ import app.pantopus.android.ui.components.ToastController
 import app.pantopus.android.ui.components.ToastHost
 import app.pantopus.android.ui.screens.wallet.components.ActivityRow
 import app.pantopus.android.ui.screens.wallet.components.HoldBanner
+import app.pantopus.android.ui.screens.wallet.components.InvoicesRow
 import app.pantopus.android.ui.screens.wallet.components.LifetimeTotalsCard
 import app.pantopus.android.ui.screens.wallet.components.PayoutAccountCard
 import app.pantopus.android.ui.screens.wallet.components.PayoutMethodCard
@@ -109,6 +110,7 @@ fun WalletScreen(
     onOpenHistory: () -> Unit = {},
     onOpenTaxDocs: () -> Unit = {},
     onSeeAllActivity: () -> Unit = {},
+    onOpenInvoices: () -> Unit = {},
     viewModel: WalletViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -208,6 +210,7 @@ fun WalletScreen(
                     onReverifyPayout = { viewModel.setupPayouts() },
                     onOpenTaxDocs = onOpenTaxDocs,
                     onSeeAllActivity = onSeeAllActivity,
+                    onOpenInvoices = onOpenInvoices,
                     onRetry = { viewModel.refresh() },
                 )
             }
@@ -508,6 +511,7 @@ internal fun WalletScreenContent(
     onReverifyPayout: () -> Unit = {},
     onOpenTaxDocs: () -> Unit = {},
     onSeeAllActivity: () -> Unit = {},
+    onOpenInvoices: () -> Unit = {},
     onRetry: () -> Unit = {},
 ) {
     Column(
@@ -530,6 +534,7 @@ internal fun WalletScreenContent(
                     onReverifyPayout = onReverifyPayout,
                     onOpenTaxDocs = onOpenTaxDocs,
                     onSeeAllActivity = onSeeAllActivity,
+                    onOpenInvoices = onOpenInvoices,
                 )
             is WalletUiState.Hold ->
                 WalletBody(
@@ -540,6 +545,7 @@ internal fun WalletScreenContent(
                     onReverifyPayout = onReverifyPayout,
                     onOpenTaxDocs = onOpenTaxDocs,
                     onSeeAllActivity = onSeeAllActivity,
+                    onOpenInvoices = onOpenInvoices,
                 )
             is WalletUiState.Error ->
                 EmptyState(
@@ -639,6 +645,7 @@ private fun WalletBody(
     onReverifyPayout: () -> Unit,
     onOpenTaxDocs: () -> Unit,
     onSeeAllActivity: () -> Unit,
+    onOpenInvoices: () -> Unit,
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
@@ -657,6 +664,9 @@ private fun WalletBody(
                 Spacer(Modifier.height(Spacing.s3))
             }
             Hero(content)
+            // Invoices businesses sent you: the way back to one once its notification is gone.
+            SectionOverline(title = "Invoices")
+            InvoicesRow(onClick = onOpenInvoices)
             content.pendingBreakdown?.let { breakdown ->
                 // RN splits the escrow total into "In review" / "Releasing
                 // soon" (`WalletTab.tsx:161-173`); the hero's single Pending

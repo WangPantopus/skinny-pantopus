@@ -1611,7 +1611,7 @@ public final class ChatConversationViewModel {
         guard let message = combinedMessages().first(where: { $0.id == messageId }) else { return }
         replyingTo = ChatReplyPreview(
             messageId: message.id,
-            senderName: message.sender?.name ?? (message.userId == currentUserId ? "You" : "Message"),
+            senderName: Self.replyName(for: message, currentUserId: sendingIdentityId),
             text: message.messageText ?? ""
         )
         editingMessageId = nil
@@ -2865,7 +2865,7 @@ public final class ChatConversationViewModel {
                 || deliveryState == .sending
             let stamp: String? = showStamp ? Self.stampLabel(for: message, currentUserId: sendingIdentityId) : nil
             let body = bubbleBody(for: message)
-            let replyPreview = Self.replyPreview(for: message, in: combined)
+            let replyPreview = Self.replyPreview(for: message, in: combined, currentUserId: sendingIdentityId)
             let reactions = message.reactions.map {
                 ChatBubbleReaction(id: $0.reaction, reaction: $0.reaction, count: $0.count, reactedByMe: $0.reactedByMe)
             }
@@ -2907,6 +2907,13 @@ public final class ChatConversationViewModel {
     /// A made-up username is never shown.
     private func roomSenderName(for message: ChatMessageDTO) -> String? {
         guard case .room = mode else { return nil }
+        return Self.senderName(of: message) ?? "Participant"
+    }
+
+    /// The name a message's sender goes by: their identity's display name
+    /// (older servers send `name`), else a username they chose. Nil when
+    /// there's only a made-up one. Bubbles, replies and stamps all use it.
+    private static func senderName(of message: ChatMessageDTO) -> String? {
         for name in [message.sender?.displayName, message.sender?.name] {
             if let name = name?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
                 return name
@@ -2914,7 +2921,6 @@ public final class ChatConversationViewModel {
         }
         return MadeUpUsername.chosen(message.sender?.handle)
             ?? MadeUpUsername.chosen(message.sender?.username)
-            ?? "Participant"
     }
 
     /// Resolve the Chat Search scroll target once: if the deep-linked
@@ -3151,14 +3157,24 @@ public final class ChatConversationViewModel {
         return "\(bytes) B"
     }
 
-    private static func replyPreview(for message: ChatMessageDTO, in messages: [ChatMessageDTO]) -> ChatReplyPreview? {
+    private static func replyPreview(
+        for message: ChatMessageDTO,
+        in messages: [ChatMessageDTO],
+        currentUserId: String
+    ) -> ChatReplyPreview? {
         guard let replyToId = message.replyToId,
               let original = messages.first(where: { $0.id == replyToId }) else { return nil }
         return ChatReplyPreview(
             messageId: original.id,
-            senderName: original.sender?.name ?? "Message",
+            senderName: replyName(for: original, currentUserId: currentUserId),
             text: original.messageText ?? ""
         )
+    }
+
+    /// Who a reply quotes: "You" for your own message, as your bubbles and
+    /// stamps carry no name, else the sender's name.
+    private static func replyName(for message: ChatMessageDTO, currentUserId: String) -> String {
+        message.userId == currentUserId ? "You" : senderName(of: message) ?? "Message"
     }
 
     private static func lockedTier(for message: ChatMessageDTO) -> String? {
@@ -3215,7 +3231,7 @@ public final class ChatConversationViewModel {
         formatter.timeStyle = .short
         let time = formatter.string(from: date)
         let isOutgoing = message.userId == currentUserId
-        let sender = message.sender?.name.flatMap { $0.isEmpty ? nil : $0 }
+        let sender = senderName(of: message)
         if isOutgoing {
             return time
         } else if let sender {
