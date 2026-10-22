@@ -8,7 +8,7 @@ const refunds = require('./paymentRefundService');
 const { deliverStoredGigNotification, createNotification } = require('./notificationService');
 const logger = require('../utils/logger');
 const { sendAlert, SEVERITY } = require('./alertingService');
-const { chosenUsernameOrNull } = require('../utils/personalUsername');
+const { loadTaskPersonName } = require('../utils/listingCreatorIdentity');
 const stripe = getStripeClient();
 const fail = (code, message, statusCode = 409) => Object.assign(new Error(message), { code, statusCode });
 async function rpc(name, args, allowNull = false) {
@@ -330,11 +330,10 @@ async function chargeNoShowFee({ payment, actorId }) {
 // The poster's no-show notice, one per task: the report route and every recovery
 // path (webhook, scheduled replay) send the same notice at most once.
 async function notifyPosterNoShow({ gigId, posterId, workerId, gigTitle = null, feeCharge = null, incidentId = null }) {
-  const [{ data: reporter }, { data: gig }] = await Promise.all([
-    db.from('User').select('name, username').eq('id', workerId).maybeSingle(),
+  const [reporterName, { data: gig }] = await Promise.all([
+    loadTaskPersonName(workerId, 'The other party'),
     gigTitle ? Promise.resolve({ data: { title: gigTitle } }) : db.from('Gig').select('title').eq('id', gigId).maybeSingle(),
   ]);
-  const reporterName = reporter?.name || chosenUsernameOrNull(reporter?.username) || 'The other party';
   const chargedCents = feeCharge?.status === 'charged' ? feeCharge.feeCents : 0;
   const feeLine = chargedCents > 0
     ? ` No-show fee $${(chargedCents / 100).toFixed(2)} charged · $${(feeCharge.releasedCents / 100).toFixed(2)} released.` : '';

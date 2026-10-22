@@ -12,7 +12,11 @@ const Joi = require('joi');
 const logger = require('../utils/logger');
 const notificationService = require('../services/notificationService');
 const { chosenUsernameOrNull } = require('../utils/personalUsername');
-const { hydrateListingCreatorIdentities, serializeTaskPerson } = require('../utils/listingCreatorIdentity');
+const {
+  hydrateListingCreatorIdentities,
+  loadTaskPersonName,
+  serializeTaskPerson,
+} = require('../utils/listingCreatorIdentity');
 
 // ============ VALIDATION ============
 
@@ -111,17 +115,13 @@ router.post('/', verifyToken, validate(createReviewSchema), async (req, res) => 
     // and the recipient gets the standard badge/socket/push updates.
     (async () => {
       try {
-        const { data: reviewer } = await supabaseAdmin
-          .from('User')
-          .select('name, username, first_name')
-          .eq('id', reviewerId)
-          .maybeSingle();
+        const reviewerName = await loadTaskPersonName(reviewerId, 'Someone');
 
         await notificationService.createNotification({
           userId: reviewee_id,
           type: 'review_received',
           title: 'New Review',
-          body: `${reviewer?.name || reviewer?.first_name || chosenUsernameOrNull(reviewer?.username) || 'Someone'} left you a ${rating}-star review`,
+          body: `${reviewerName} left you a ${rating}-star review`,
           link: `/gigs/${gig_id}`,
           metadata: { gig_id, review_id: review.id },
         });
