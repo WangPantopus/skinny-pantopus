@@ -588,9 +588,11 @@ public struct GigChatRoomResponse: Decodable, Sendable {
 
 // MARK: - Structured Q&A
 
-/// User summary nested on a gig question row.
+/// User summary nested on a gig question row. The server names the asker and
+/// the answerer by `displayName` (their Local Profile, or the business).
 public struct GigQuestionUser: Decodable, Sendable, Hashable {
     public let id: String?
+    public let displayName: String?
     public let username: String?
     public let firstName: String?
     public let lastName: String?
@@ -598,7 +600,7 @@ public struct GigQuestionUser: Decodable, Sendable, Hashable {
     public let profilePictureUrl: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, username, name
+        case id, displayName, username, name
         case firstName = "first_name"
         case lastName = "last_name"
         case profilePictureUrl = "profile_picture_url"

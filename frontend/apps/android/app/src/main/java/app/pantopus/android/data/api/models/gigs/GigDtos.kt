@@ -254,10 +254,14 @@ data class GigChatRoomResponse(
     val workerName: String? = null,
 )
 
-/** User summary nested on a gig question row. */
+/**
+ * User summary nested on a gig question row. The server names the asker and
+ * the answerer by `displayName` (their Local Profile, or the business).
+ */
 @JsonClass(generateAdapter = true)
 data class GigQuestionUser(
     val id: String? = null,
+    val displayName: String? = null,
     val username: String? = null,
     @Json(name = "first_name") val firstName: String? = null,
     @Json(name = "last_name") val lastName: String? = null,
