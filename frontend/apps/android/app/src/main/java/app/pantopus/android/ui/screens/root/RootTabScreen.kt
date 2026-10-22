@@ -5674,6 +5674,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onBack = { navController.popBackStack() },
                         prefillFeedIntent = feedIntent,
                         prefillDraft = PulseComposeDraftFields.decode(entry.arguments?.getString(ChildRoutes.COMPOSE_DRAFT_FIELDS_KEY)),
+                        // "Before you ask": the post opens on top; back returns to the draft.
+                        onOpenPost = { postId -> navController.navigate(ChildRoutes.pulsePost(postId)) },
                     )
                 }
                 composable(
