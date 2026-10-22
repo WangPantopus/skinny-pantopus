@@ -12,6 +12,7 @@ const syncChangedService = require('../services/syncChangedService');
 const { isBlocked, blockedUserIds } = require('../services/blockService');
 const { closedGigRoomIds, isGigRoomClosedTo, isRoomClosedForWrites } = require('../services/chatGigRoomAccess');
 const { actingBusinessInRoom } = require('../services/chatBusinessAccess');
+const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
 const { setGauge } = require('../services/chatMetrics');
 // Persistent login (design §6.4): the same JWT decode helper verifyToken
 // exposes as `decodeSessionClaims` (verifyToken.js delegates to it), the 15-s
@@ -164,14 +165,8 @@ async function buildSocketReactionSummary(messageId, requestingUserId) {
 
   if (!reactions || reactions.length === 0) return [];
 
-  const userIds = [...new Set(reactions.map((r) => r.user_id))];
-  const { data: users } = await supabaseAdmin
-    .from('User')
-    .select('id, name')
-    .in('id', userIds);
-
-  const userMap = {};
-  (users || []).forEach((u) => { userMap[u.id] = u; });
+  // The people who reacted, as the chat list names them (services/chatPeople)
+  const people = await loadChatPeople(reactions.map((r) => r.user_id));
 
   const grouped = {};
   for (const r of reactions) {
@@ -182,7 +177,7 @@ async function buildSocketReactionSummary(messageId, requestingUserId) {
   return Object.entries(grouped).map(([reaction, uids]) => ({
     reaction,
     count: uids.length,
-    users: uids.map((uid) => ({ id: uid, name: (userMap[uid] || {}).name || 'Unknown' })),
+    users: uids.map((uid) => ({ id: uid, name: people.get(String(uid))?.displayName || 'Unknown' })),
     reacted_by_me: uids.includes(requestingUserId),
   }));
 }
@@ -198,16 +193,7 @@ async function buildSocketReactionSummaryMap(messageIds, requestingUserId) {
 
   if (!reactions || reactions.length === 0) return new Map();
 
-  const userIds = [...new Set(reactions.map((reaction) => reaction.user_id))];
-  const { data: users } = await supabaseAdmin
-    .from('User')
-    .select('id, name')
-    .in('id', userIds);
-
-  const userMap = {};
-  (users || []).forEach((user) => {
-    userMap[user.id] = user;
-  });
+  const people = await loadChatPeople(reactions.map((reaction) => reaction.user_id));
 
   const grouped = {};
   for (const reaction of reactions) {
@@ -221,7 +207,7 @@ async function buildSocketReactionSummaryMap(messageIds, requestingUserId) {
     result.set(messageId, Object.entries(reactionMap).map(([reaction, uids]) => ({
       reaction,
       count: uids.length,
-      users: uids.map((uid) => ({ id: uid, name: (userMap[uid] || {}).name || 'Unknown' })),
+      users: uids.map((uid) => ({ id: uid, name: people.get(String(uid))?.displayName || 'Unknown' })),
       reacted_by_me: uids.includes(requestingUserId),
     })));
   }
@@ -479,13 +465,18 @@ module.exports = (io) => {
           .order('created_at', { ascending: false })
           .limit(50);
         const backfill = (messages || []).reverse();
-        const reactionMap = await buildSocketReactionSummaryMap(backfill.map((message) => message.id), userId);
+        const [reactionMap, people] = await Promise.all([
+          buildSocketReactionSummaryMap(backfill.map((message) => message.id), userId),
+          loadChatPeople(backfill.map((message) => message.sender?.id || message.user_id)),
+        ]);
 
         callback({
           success: true,
           // Without actor_user_id, as the API serves messages: who wrote for a business stays internal.
+          // Each sender is named as the chat list names them (services/chatPeople).
           messages: backfill.map(({ actor_user_id: _actor, ...message }) => ({
             ...message,
+            sender: chatPersonRow(message.sender, people),
             reactions: reactionMap.get(String(message.id)) || [],
           })),
           roomId
