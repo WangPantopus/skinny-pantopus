@@ -1094,7 +1094,8 @@ public struct PulseComposeContent: View {
         .accessibilityIdentifier("composePulseField_body")
     }
 
-    /// `isLocked` shows the choice without letting it change, like the post type when editing.
+    /// `isLocked` shows the choice without letting it change: the chosen chip at full strength (a disabled
+    /// plain button fades to about 2:1), the others dimmed like the post type when editing.
     private func chipPill(
         label: String,
         isActive: Bool,
@@ -1102,7 +1103,7 @@ public struct PulseComposeContent: View {
         identifier: String,
         action: @escaping () -> Void
     ) -> some View {
-        Button(action: action) {
+        let button = Button(action: action) {
             Text(label)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(isActive ? Theme.Color.appTextInverse : Theme.Color.appTextStrong)
@@ -1115,8 +1116,13 @@ public struct PulseComposeContent: View {
                 )
                 .clipShape(RoundedRectangle(cornerRadius: Radii.pill, style: .continuous))
         }
-        .buttonStyle(.plain)
-        .disabled(isLocked)
+        return Group {
+            if isLocked {
+                button.buttonStyle(UndimmedButtonStyle()).disabled(true)
+            } else {
+                button.buttonStyle(.plain)
+            }
+        }
         .opacity(isLocked && !isActive ? 0.4 : 1)
         .accessibilityLabel(label)
         .accessibilityAddTraits(isActive ? [.isButton, .isSelected] : .isButton)
