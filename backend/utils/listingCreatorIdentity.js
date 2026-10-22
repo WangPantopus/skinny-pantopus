@@ -94,26 +94,37 @@ async function hydrateListingCreatorIdentities(input) {
   return input;
 }
 
-// Tasks name their poster as listings name their seller: a person by their Local Profile (the name, handle and photo
-// they show neighbors), a business as the business. Only identity fields are passed on, so a task says no more about
-// its poster than before (no bio or counts), and `id` stays the account id the web follows and connects by.
-function serializeTaskPoster(creator) {
-  if (!creator) return null;
-  const { id, username, name, first_name, middle_name, last_name, profile_picture_url, account_type } = creator;
+// Tasks name the people on them as listings name their seller: a person by their Local Profile (the name, handle and
+// photo they show neighbors), a business as the business. That is the poster, the people who ask, the bidders and the
+// worker. Only identity fields are passed on, so a task says no more about anyone than before (no bio or counts; with
+// `counts`, a bidder's review and completed-task counts, which the bid list always showed), and `id` stays the account
+// id the web follows and connects by.
+function serializeTaskPerson(person, { counts = false } = {}) {
+  if (!person) return null;
+  const { id, username, name, first_name, middle_name, last_name, profile_picture_url, account_type } = person;
   const account = { id, username, name, first_name, middle_name, last_name, profile_picture_url, account_type };
+  if (counts) Object.assign(account, { review_count: person.review_count, gigs_completed: person.gigs_completed });
   if (account_type === 'business') return serializeUserIdentityForViewer(account);
-  const { handle, display_name, avatar_url } = creator;
+  const { handle, display_name, avatar_url } = person;
   return serializeUserIdentityForViewer({ ...account, handle, display_name, avatar_url });
 }
 
-// The flat poster fields of task list rows, from each row's user_id: the poster as serializeTaskPoster names them,
+// Gives each row's person under `keys` (e.g. a question's asker, a bid's bidder) the Local Profile they are named by.
+async function hydrateTaskPeople(rows, keys) {
+  const holders = (rows || []).flatMap((row) => keys.filter((key) => row?.[key])
+    .map((key) => ({ row, key, creator: row[key] })));
+  await hydrateListingCreatorIdentities(holders);
+  for (const { row, key, creator } of holders) row[key] = creator;
+}
+
+// The flat poster fields of task list rows, from each row's user_id: the poster as serializeTaskPerson names them,
 // read in one batch. A poster whose account can't be read is 'Anonymous', as before.
 async function loadTaskPosterFields(rows) {
   const holders = [...new Set((rows || []).map((row) => row?.user_id).filter(Boolean).map(String))]
     .map((userId) => ({ user_id: userId }));
   await hydrateListingCreatorIdentities(holders);
   const fieldsByUserId = new Map(holders.map((holder) => {
-    const poster = serializeTaskPoster(holder.creator);
+    const poster = serializeTaskPerson(holder.creator);
     return [holder.user_id, poster && {
       poster_display_name: poster.displayName,
       poster_username: poster.handle || null,
@@ -136,7 +147,8 @@ function withoutAccountPoster({ creator_name, creator_username, profile_picture_
 module.exports = {
   LISTING_CREATOR_USER_SELECT,
   hydrateListingCreatorIdentities,
+  hydrateTaskPeople,
   loadTaskPosterFields,
-  serializeTaskPoster,
+  serializeTaskPerson,
   withoutAccountPoster,
 };

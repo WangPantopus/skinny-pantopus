@@ -12,6 +12,7 @@ const Joi = require('joi');
 const logger = require('../utils/logger');
 const notificationService = require('../services/notificationService');
 const { chosenUsernameOrNull } = require('../utils/personalUsername');
+const { hydrateListingCreatorIdentities, serializeTaskPerson } = require('../utils/listingCreatorIdentity');
 
 // ============ VALIDATION ============
 
@@ -394,22 +395,19 @@ router.get('/my-pending', verifyToken, async (req, res) => {
       }
     }
 
-    // Hydrate reviewee names
-    const revieweeIds = [...new Set(pending.map(p => p.reviewee_id))];
-    let nameMap = {};
-    if (revieweeIds.length > 0) {
-      const { data: users } = await supabaseAdmin
-        .from('User')
-        .select('id, username, name, first_name, profile_picture_url')
-        .in('id', revieweeIds);
-      (users || []).forEach(u => { nameMap[u.id] = u; });
-    }
+    // Hydrate reviewee names: the other person on the task, named by their Local Profile as the task names them
+    const reviewees = [...new Set(pending.map(p => String(p.reviewee_id)))].map(id => ({ user_id: id }));
+    await hydrateListingCreatorIdentities(reviewees);
+    const revieweeById = new Map(reviewees.map(r => [r.user_id, serializeTaskPerson(r.creator)]));
 
-    const enriched = pending.map(p => ({
-      ...p,
-      reviewee_name: nameMap[p.reviewee_id]?.name || chosenUsernameOrNull(nameMap[p.reviewee_id]?.username) || 'Unknown',
-      reviewee_avatar: nameMap[p.reviewee_id]?.profile_picture_url || null,
-    }));
+    const enriched = pending.map(p => {
+      const reviewee = revieweeById.get(String(p.reviewee_id));
+      return {
+        ...p,
+        reviewee_name: reviewee?.displayName || 'Unknown',
+        reviewee_avatar: reviewee?.avatarUrl || null,
+      };
+    });
 
     res.json({ pending: enriched });
   } catch (err) {

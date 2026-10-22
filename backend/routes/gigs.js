@@ -56,8 +56,9 @@ const {
 } = require('../serializers/identitySerializers');
 const {
   hydrateListingCreatorIdentities,
+  hydrateTaskPeople,
   loadTaskPosterFields,
-  serializeTaskPoster,
+  serializeTaskPerson,
   withoutAccountPoster,
 } = require('../utils/listingCreatorIdentity');
 
@@ -497,7 +498,7 @@ function serializeGigForViewer(gig, { canViewPrivateWork = false, viewerId = nul
     ...safe,
     ...(canViewPrivateWork ? { completion_review: paidGigAcceptance.completionReview(gig) } : {}),
     creator: creator
-      ? serializeTaskPoster(creator)
+      ? serializeTaskPerson(creator)
       : serializeGigAuthorForViewer({
           identity_context_type: 'local',
           creator: {
@@ -507,33 +508,29 @@ function serializeGigForViewer(gig, { canViewPrivateWork = false, viewerId = nul
             profile_picture_url: gig.profile_picture_url,
           },
         }),
-    acceptedBy: canViewPrivateWork ? serializeUserAsLocalIdentity(acceptedBy) : null,
+    acceptedBy: canViewPrivateWork ? serializeTaskPerson(acceptedBy) : null,
   };
 }
 
 // On a business's task the answers are the business's: `business` (the task's owner) is named as the answerer, never
-// the team member who wrote the answer. On a person's task the answerer is the poster (hydrateGigAnswerers).
+// the team member who wrote the answer. On a person's task the answerer is the poster. The asker and the poster are
+// named by their Local Profile (hydrateTaskPeople, before this).
 function serializeGigQuestionForViewer(question, { business = null } = {}) {
   if (!question) return null;
   const { asker, answerer, ...safe } = question;
   return {
     ...safe,
-    asker: serializeUserAsLocalIdentity(asker),
-    answerer: serializeTaskPoster(business && answerer ? business : answerer),
+    asker: serializeTaskPerson(asker),
+    answerer: serializeTaskPerson(business && answerer ? business : answerer),
   };
 }
 
-// The poster answers their own task's questions: give each answerer the Local Profile the task names its poster by.
-async function hydrateGigAnswerers(questions) {
-  const answered = questions.filter((question) => question?.answerer).map((question) => ({ question, creator: question.answerer }));
-  await hydrateListingCreatorIdentities(answered);
-  for (const { question, creator } of answered) question.answerer = creator;
-}
-
+// The bidder is named by their Local Profile (hydrateTaskPeople, before this), with the track record the poster
+// weighs bids by.
 function serializeGigBidForViewer(bid) {
   if (!bid) return null;
   const { bidder, ...safe } = bid;
-  const bidderIdentity = serializeUserAsLocalIdentity(bidder);
+  const bidderIdentity = serializeTaskPerson(bidder, { counts: true });
   return {
     ...safe,
     bidder: bidderIdentity ? {
@@ -2001,26 +1998,19 @@ router.get('/received-offers', verifyToken, async (req, res) => {
 
     const safeBids = bids || [];
 
-    // 4) Get bidder user info
-    const bidderIds = [...new Set(safeBids.map((b) => b.user_id).filter(Boolean))];
-    let usersById = {};
-    if (bidderIds.length > 0) {
-      const { data: users } = await supabaseAdmin
-        .from('User')
-        .select('id, username, name, first_name, profile_picture_url, city, state')
-        .in('id', bidderIds);
-      for (const u of users || []) usersById[u.id] = u;
-    }
+    // 4) Each bidder, named by their Local Profile as on the task's bid list
+    const bidders = safeBids.map((b) => ({ user_id: b.user_id }));
+    await hydrateListingCreatorIdentities(bidders);
 
     // 5) Build gigs lookup
     const gigsById = {};
     for (const g of myGigs) gigsById[g.id] = g;
 
     // 6) Merge
-    const merged = safeBids.map((b) => ({
+    const merged = safeBids.map((b, i) => ({
       ...b,
       gig: gigsById[b.gig_id] || null,
-      bidder: usersById[b.user_id] || null,
+      bidder: serializeTaskPerson(bidders[i].creator),
     }));
 
     return res.json({ offers: merged, total: merged.length });
@@ -3892,8 +3882,11 @@ router.get('/:id', optionalAuth, async (req, res) => {
       String(gig.accepted_by) === String(currentUserId)
       || (await getGigOwnerAccess(gig.user_id, currentUserId, 'gigs.manage')).allowed
     );
-    // The poster is named by their Local Profile, as on their listings and posts.
-    await hydrateListingCreatorIdentities(gig);
+    // The poster, and the worker for those who see them, are named by their Local Profile, as on their listings and posts.
+    await Promise.all([
+      hydrateListingCreatorIdentities(gig),
+      canViewPrivateWork && hydrateTaskPeople([gig], ['acceptedBy']),
+    ]);
     res.json({ gig: serializeGigForViewer(gig, { canViewPrivateWork, viewerId: currentUserId }) });
   } catch (err) {
     logger.error('Gig fetch error', { error: err.message, gigId: req.params.id });
@@ -4271,6 +4264,7 @@ router.get('/:gigId/bids', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch bids' });
     }
 
+    await hydrateTaskPeople(bids, ['bidder']);
     // Normalize 'assigned' → 'accepted' for backwards compat
     const normalizedBids = (bids || []).map((b) => ({
       ...serializeGigBidForViewer(b),
@@ -6831,7 +6825,7 @@ router.get('/:gigId/questions', async (req, res) => {
       [owner?.first_name, owner?.last_name].filter(Boolean).join(' ') ||
       owner?.username ||
       'Business';
-    if (!ownerIsBusiness) await hydrateGigAnswerers(questions || []);
+    await hydrateTaskPeople(questions, ownerIsBusiness ? ['asker'] : ['asker', 'answerer']);
 
     const normalized = (questions || []).map((q) => ({
       ...serializeGigQuestionForViewer(q, { business: ownerIsBusiness ? owner : null }),
@@ -6935,6 +6929,7 @@ router.post('/:gigId/questions', verifyToken, async (req, res) => {
     }
 
     emitGigUpdate(req, gigId, 'qa-update');
+    await hydrateTaskPeople([q], ['asker']);
     res.status(201).json({ question: serializeGigQuestionForViewer(q) });
   } catch (err) {
     logger.error('Question create error', { error: err.message });
@@ -7028,7 +7023,7 @@ router.post('/:gigId/questions/:questionId/answer', verifyToken, async (req, res
       [owner?.first_name, owner?.last_name].filter(Boolean).join(' ') ||
       owner?.username ||
       'Business';
-    if (!ownerIsBusiness) await hydrateGigAnswerers([updated]);
+    await hydrateTaskPeople([updated], ownerIsBusiness ? ['asker'] : ['asker', 'answerer']);
 
     emitGigUpdate(req, gigId, 'qa-update');
     res.json({
