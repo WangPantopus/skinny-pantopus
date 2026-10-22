@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback, useRef, useMemo, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
-import { Marker, Popup, useMapEvents } from 'react-leaflet';
+import dynamic from 'next/dynamic';
+import { Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import * as api from '@pantopus/api';
 import {
@@ -13,13 +14,34 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import { getPostTypeConfig, POST_TYPE_ICONS_LUCIDE, type PostTypeConfig } from '@pantopus/ui-utils';
 import type { FeedSurface, MapMarker, PostType } from '@pantopus/api';
-import { BaseMap, useCluster, useAnimatedPins, pinAnimClass, clusterAnimClass, ZoomGateOverlay, NearestActivityPrompt, boundsChangedSignificantly, RETINA_TILE_URL } from '@/components/map';
+import { BaseMap, MapSkeleton, useCluster, useAnimatedPins, useMapBounds, pinAnimClass, clusterAnimClass, ZoomGateOverlay, NearestActivityPrompt, RETINA_TILE_URL } from '@/components/map';
 import type { Bounds } from '@/components/map';
 import type { ClusterPoint } from '@/components/map/useCluster';
 import type { NearestActivityCenter } from '@/components/map';
+import { useReducedMotion } from '@/components/scheduling/polish/a11y';
 import { chosenUsername } from '@pantopus/utils';
 import { MAP_FILTERS } from './pulseMapFilters';
-import { PIN_SIZE, clusterSize, liveMarkerIds, pulseClusterHtml, pulsePinHtml } from './pulseMapPins';
+import { PIN_SIZE, clusterLabel, clusterSize, liveMarkerIds, pinLabel, pulseClusterHtml, pulsePinHtml } from './pulseMapPins';
+import { viewMovedSignificantly, type PulseCamera, type PulseMarker, type PulseView } from './pulseMapView';
+
+// The 3D map (mapbox-gl and its CSS) loads only here, when it's used. If its code can't be
+// fetched, the flat map takes over.
+function GlMapUnavailable({ onUnavailable }: { onUnavailable: (reason: string) => void }) {
+  useEffect(() => onUnavailable('chunk'), [onUnavailable]);
+  return <MapSkeleton />;
+}
+const PulseGlMap = dynamic(
+  () => import('./PulseGlMap').catch(() => ({ default: GlMapUnavailable })),
+  { ssr: false, loading: () => <MapSkeleton /> },
+);
+
+/** Mapbox's public token: the 3D map needs it (the flat map's tiles do too). */
+const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? '';
+
+/** WebGL 2, which the 3D map needs (mapboxgl.supported() checks the GPU once it has loaded). */
+function webGl2Present(): boolean {
+  return typeof window !== 'undefined' && typeof window.WebGL2RenderingContext !== 'undefined';
+}
 
 // Chip text on the map's own surfaces follows the theme: the palette's `textColor`
 // in light mode and `darkTextColor` in dark mode (inline colors can't reach `dark:`).
@@ -167,6 +189,40 @@ function PanWatcher({ onStart, onMove }: { onStart?: () => void; onMove?: (dx: n
   return null;
 }
 
+// ─── The flat map's view and camera, in the shape both renderers share ───
+function leafletView(map: L.Map, bounds?: Bounds, zoom?: number): PulseView {
+  const b = map.getBounds();
+  const c = map.getCenter();
+  const size = map.getSize();
+  return {
+    bounds: bounds ?? { south: b.getSouth(), west: b.getWest(), north: b.getNorth(), east: b.getEast() },
+    zoom: zoom ?? map.getZoom(),
+    center: { lat: c.lat, lng: c.lng },
+    size: { w: size.x, h: size.y },
+  };
+}
+
+function leafletCamera(map: L.Map | null): PulseCamera | null {
+  if (!map) return null;
+  return {
+    flyTo: (lat, lng, zoom, durationSec, onEnd) => {
+      map.flyTo([lat, lng], zoom, { duration: durationSec });
+      // Listen after flyTo: stopping a pan still in progress fires moveend at once.
+      if (onEnd) map.once('moveend', () => onEnd(leafletView(map)));
+    },
+    fitBounds: (b, paddingPx) => {
+      map.fitBounds([[b.south, b.west], [b.north, b.east]], { padding: [paddingPx, paddingPx] });
+    },
+  };
+}
+
+/** Reports the flat map's view once it settles (debounced, small moves ignored), and on open. */
+function LeafletViewWatcher({ onView }: { onView: (view: PulseView) => void }) {
+  const map = useMap();
+  useMapBounds((bounds, zoom) => onView(leafletView(map, bounds, zoom)), 400);
+  return null;
+}
+
 // ═══════════════════════════════════════════════════════════════
 // FEED MAP COMPONENT
 // ═══════════════════════════════════════════════════════════════
@@ -209,11 +265,29 @@ export default function FeedMap({
   const [error, setError] = useState(false);
   const [selectedPin, setSelectedPin] = useState<MapMarker | null>(null);
   const [clusterPosts, setClusterPosts] = useState<MapMarker[]>([]);
-  const [bounds, setBounds] = useState<Bounds | null>(null);
+  // The map's settled view (bounds, zoom, centre, size).
+  const [view, setView] = useState<PulseView | null>(null);
+  const bounds = view?.bounds ?? null;
+  const zoom = view?.zoom ?? 13;
   // The view the pins were read for (none before the first read or below the zoom gate).
-  const [searchedBounds, setSearchedBounds] = useState<Bounds | null>(null);
-  const [zoom, setZoom] = useState(13);
+  const [searched, setSearched] = useState<PulseView | null>(null);
   const [nearestActivity, setNearestActivity] = useState<NearestActivityCenter | null>(null);
+  const reducedMotion = useReducedMotion();
+
+  // The 3D map (Mapbox GL, Standard style) where it can run; the flat Leaflet map otherwise.
+  const [renderer, setRenderer] = useState<'3d' | 'flat'>(() => (MAPBOX_TOKEN && webGl2Present() ? '3d' : 'flat'));
+  const rendererRef = useRef(renderer);
+  rendererRef.current = renderer;
+  const glCamera = useRef<PulseCamera | null>(null);
+  const handleGlUnavailable = useCallback((reason: string) => {
+    if (rendererRef.current !== '3d') return;
+    console.warn(`[pulse-map] 3D map unavailable (${reason}); showing the flat map.`);
+    glCamera.current = null;
+    // The flat map's first view reads its posts.
+    setView(null);
+    setSearched(null);
+    setRenderer('flat');
+  }, []);
 
   // Derive map filter directly from the shared postTypeFilter prop — single source of truth
   const mapFilter = isPlaceSurface ? postTypeFilter : 'all';
@@ -222,6 +296,10 @@ export default function FeedMap({
 
   const mapRef = useRef<L.Map | null>(null);
   const requestGeneration = useRef(0);
+  const camera = useCallback(
+    (): PulseCamera | null => (rendererRef.current === '3d' ? glCamera.current : leafletCamera(mapRef.current)),
+    [],
+  );
 
   const center: [number, number] = useMemo(
     () => [userLat ?? 40.7128, userLng ?? -74.006],
@@ -261,6 +339,7 @@ export default function FeedMap({
   }, [isPlaceSurface, mapFilter, surface]);
 
   // Read the searched view, and read it again when the filter or surface changes
+  const searchedBounds = searched?.bounds ?? null;
   useEffect(() => {
     if (searchedBounds) fetchPins(searchedBounds);
     const requests = requestGeneration;
@@ -270,18 +349,11 @@ export default function FeedMap({
   // The map's own moves (to the viewing area, My location or the nearest activity) read the posts
   // where they land, so they never show "Search this area".
   const flyToAndSearch = useCallback((target: [number, number], targetZoom: number, duration: number) => {
-    const map = mapRef.current;
-    if (!map) return;
-    map.flyTo(target, targetZoom, { duration });
-    // Listen after flyTo: stopping a pan still in progress fires moveend at once.
-    map.once('moveend', () => {
-      const b = map.getBounds();
-      const view = { south: b.getSouth(), west: b.getWest(), north: b.getNorth(), east: b.getEast() };
-      setBounds(view);
-      setZoom(map.getZoom());
-      if (map.getZoom() >= ZOOM_GATE) setSearchedBounds(view);
+    camera()?.flyTo(target[0], target[1], targetZoom, duration, (landed) => {
+      setView(landed);
+      if (landed.zoom >= ZOOM_GATE) setSearched(landed);
     });
-  }, []);
+  }, [camera]);
 
   useEffect(() => {
     if (userLat == null || userLng == null) return;
@@ -300,13 +372,12 @@ export default function FeedMap({
   // ─── Map events ──────────────────────────────────────────
   // As in the iOS and Android apps, moving the map doesn't read its posts: a move off the
   // searched view shows "Search this area" instead.
-  const handleBoundsChange = useCallback((b: Bounds, z: number) => {
-    setBounds(b);
-    setZoom(z);
-    if (z < ZOOM_GATE) {
+  const handleViewChange = useCallback((next: PulseView) => {
+    setView(next);
+    if (next.zoom < ZOOM_GATE) {
       // Too far out for posts: drop the read, so zooming back in reads the view again.
       requestGeneration.current++;
-      setSearchedBounds(null);
+      setSearched(null);
       setPins([]);
       setNearestActivity(null);
       setError(false);
@@ -314,22 +385,23 @@ export default function FeedMap({
       return;
     }
     // The first view (and the first one back past the zoom gate) reads its posts.
-    setSearchedBounds((searched) => searched ?? b);
+    setSearched((current) => current ?? next);
   }, []);
 
   const belowZoomGate = zoom < ZOOM_GATE;
-  const mapDirty = !!bounds && !!searchedBounds && boundsChangedSignificantly(searchedBounds, bounds);
+  // Centre and zoom, so tilting or turning the 3D map doesn't count as moving it.
+  const mapDirty = !!view && !!searched && viewMovedSignificantly(searched, view);
 
   // A new surface or filter reads the view on screen, as in the apps. Adjusted while rendering,
   // so the read above runs once, with the new filter and the new view together.
   if (readWith !== `${surface}:${mapFilter}`) {
     setReadWith(`${surface}:${mapFilter}`);
-    if (mapDirty) setSearchedBounds(bounds);
+    if (mapDirty) setSearched(view);
   }
 
-  // Reads the posts for the view on screen (a new object, so the same view reads again).
+  // Reads the posts for the view on screen (new bounds, so the same view reads again).
   const searchView = () => {
-    if (bounds && !belowZoomGate) setSearchedBounds({ ...bounds });
+    if (view && !belowZoomGate) setSearched({ ...view, bounds: { ...view.bounds } });
   };
 
   const handleSearchArea = () => {
@@ -357,25 +429,23 @@ export default function FeedMap({
     const lats = pins.map((p) => p.latitude).filter(Boolean) as number[];
     const lngs = pins.map((p) => p.longitude).filter(Boolean) as number[];
     if (lats.length === 0) return;
-    mapRef.current?.fitBounds([
-      [Math.min(...lats), Math.min(...lngs)],
-      [Math.max(...lats), Math.max(...lngs)],
-    ], { padding: [40, 40] });
+    camera()?.fitBounds({
+      south: Math.min(...lats), west: Math.min(...lngs),
+      north: Math.max(...lats), east: Math.max(...lngs),
+    }, 40);
   };
 
   // ─── Pin click handlers ──────────────────────────────────
   const handleMarkerClick = useCallback((cp: ClusterPoint<MapMarker>) => {
     if (cp.isCluster) {
-      if (mapRef.current && cp.expansionZoom != null) {
-        mapRef.current.flyTo([cp.latitude, cp.longitude], cp.expansionZoom, { duration: 0.5 });
-      }
+      if (cp.expansionZoom != null) camera()?.flyTo(cp.latitude, cp.longitude, cp.expansionZoom, 0.5);
       setClusterPosts(cp.items);
       setSelectedPin(null);
       return;
     }
     setSelectedPin(cp.item || null);
     setClusterPosts([]);
-  }, []);
+  }, [camera]);
 
   // ─── Derived ─────────────────────────────────────────────
   // The pins stay where they were read, so a move can leave some of them out of view.
@@ -386,32 +456,63 @@ export default function FeedMap({
   const authorName = (p: MapMarker) => p.creator?.name || chosenUsername(p.creator?.username) || 'Neighbor';
   const postType = (p: MapMarker) => p.post_type || 'general';
 
-  const viewCenter = bounds
-    ? { latitude: (bounds.south + bounds.north) / 2, longitude: (bounds.west + bounds.east) / 2 }
+  // The camera's centre (a tilted map's bounds aren't centred on it).
+  const viewCenter = view
+    ? { latitude: view.center.lat, longitude: view.center.lng }
     : { latitude: center[0], longitude: center[1] };
 
   const handleFlyToNearest = useCallback((target: NearestActivityCenter) => {
     flyToAndSearch([target.latitude, target.longitude], 12, 1.2);
   }, [flyToAndSearch]);
 
-  // Marker icons are kept while their look is unchanged: Leaflet redraws a marker given a new
-  // icon, which would restart its halo and pop every cluster on each render of the screen.
-  const iconCache = useRef(new Map<string, L.DivIcon>());
-  const nextIcons = new Map<string, L.DivIcon>();
-  const markers = animatedPins.map(({ pin: cp, animState }) => {
+  // Each pin's and cluster's look, for either map.
+  const pinLooks = animatedPins.map(({ pin: cp, animState }) => {
     const selected = !cp.isCluster && !!cp.item && selectedPin?.id === cp.item.id;
     const live = cp.items.some((item) => !!item && liveIds.has(item.id));
     const html = cp.isCluster
       ? pulseClusterHtml(cp.count, cp.items, { live })
       : pulsePinHtml(cp.item!, { selected, live });
     const animCls = cp.isCluster ? clusterAnimClass(animState) : pinAnimClass(animState);
+    return { cp, animState, html, animCls, selected };
+  });
+
+  // Flat map: marker icons are kept while their look is unchanged. Leaflet redraws a marker given
+  // a new icon, which would restart its halo and pop every cluster on each render of the screen.
+  const iconCache = useRef(new Map<string, L.DivIcon>());
+  const nextIcons = new Map<string, L.DivIcon>();
+  const markers = renderer === 'flat' ? pinLooks.map((look) => {
+    const { cp, html, animCls } = look;
     const key = `${cp.id}|${animCls}|${html}`;
     const icon = iconCache.current.get(key) ?? nextIcons.get(key)
       ?? (cp.isCluster ? makeClusterDivIcon(html, cp.count, animCls) : makePostDivIcon(html, animCls));
     nextIcons.set(key, icon);
-    return { cp, animState, icon, selected };
-  });
+    return { ...look, icon };
+  }) : [];
   iconCache.current = nextIcons;
+
+  // 3D map: the same pins on GL markers (it redraws one only when its look changes).
+  const glMarkers: PulseMarker[] = renderer === '3d' ? pinLooks.map(({ cp, animState, html, animCls, selected }) => ({
+    id: cp.id,
+    lat: cp.latitude,
+    lng: cp.longitude,
+    html,
+    label: cp.isCluster ? clusterLabel(cp.count) : pinLabel(cp.item!),
+    animCls,
+    selected,
+    exiting: animState === 'exiting',
+  })) : [];
+  const pinLooksRef = useRef(pinLooks);
+  pinLooksRef.current = pinLooks;
+  const handleGlMarkerClick = useCallback((id: string) => {
+    const look = pinLooksRef.current.find((l) => l.cp.id === id);
+    if (look && look.animState !== 'exiting') handleMarkerClick(look.cp);
+  }, [handleMarkerClick]);
+  const handlePopupClosed = useCallback((pinId: string) => {
+    setSelectedPin((current) => (current?.id === pinId ? null : current));
+  }, []);
+  const popupPin = selectedPin && !clusterPosts.length && selectedPin.latitude != null && selectedPin.longitude != null
+    ? selectedPin
+    : null;
 
   // The intent chips and the post count: a row of the Pulse header in Map mode.
   const chipsRow = (
@@ -447,47 +548,70 @@ export default function FeedMap({
 
   return (
     <div className="relative w-full h-full">
-      <BaseMap
-        center={center}
-        zoom={13}
-        onBoundsChange={handleBoundsChange}
-        mapRef={mapRef}
-        tileUrl={RETINA_TILE_URL}
-      >
-        <PanWatcher onStart={onUserPanStart} onMove={onUserPan} />
-        {markers.map(({ cp, animState, icon, selected }) => (
-          <Marker
-            key={cp.id}
-            position={[cp.latitude, cp.longitude]}
-            icon={icon}
-            zIndexOffset={selected ? 1000 : 0}
-            eventHandlers={{ click: () => animState !== 'exiting' && handleMarkerClick(cp) }}
-          />
-        ))}
-
-        {selectedPin && !clusterPosts.length && selectedPin.latitude != null && selectedPin.longitude != null && (
-          <Popup
-            key={selectedPin.id}
-            position={[selectedPin.latitude, selectedPin.longitude]}
-            className="feed-map-popup"
-            closeButton={false}
-            autoPan
-            // Open below the header (or its capsule) and the "Search this area" pill.
-            autoPanPaddingTopLeft={[12, topInset + 56]}
-            offset={[0, -16]}
-            eventHandlers={{
-              remove: () => setSelectedPin((current) => (current?.id === selectedPin.id ? null : current)),
-              popupclose: () => setSelectedPin((current) => (current?.id === selectedPin.id ? null : current)),
-            }}
-          >
-            <MapPostPopupCard
-              pin={selectedPin}
-              onClose={() => setSelectedPin(null)}
-              onViewPost={onViewPost}
+      {renderer === '3d' ? (
+        <PulseGlMap
+          token={MAPBOX_TOKEN}
+          center={center}
+          zoom={13}
+          markers={glMarkers}
+          onMarkerClick={handleGlMarkerClick}
+          popupPin={popupPin}
+          renderPopup={(pin) => (
+            <MapPostPopupCard pin={pin} onClose={() => setSelectedPin(null)} onViewPost={onViewPost} />
+          )}
+          onPopupClosed={handlePopupClosed}
+          // Open below the header (or its capsule) and the "Search this area" pill.
+          popupTopPadding={topInset + 56}
+          onView={handleViewChange}
+          onUserPanStart={onUserPanStart}
+          onUserPan={onUserPan}
+          cameraRef={glCamera}
+          onUnavailable={handleGlUnavailable}
+          reducedMotion={reducedMotion}
+        />
+      ) : (
+        <BaseMap
+          center={center}
+          zoom={13}
+          mapRef={mapRef}
+          tileUrl={RETINA_TILE_URL}
+        >
+          <LeafletViewWatcher onView={handleViewChange} />
+          <PanWatcher onStart={onUserPanStart} onMove={onUserPan} />
+          {markers.map(({ cp, animState, icon, selected }) => (
+            <Marker
+              key={cp.id}
+              position={[cp.latitude, cp.longitude]}
+              icon={icon}
+              zIndexOffset={selected ? 1000 : 0}
+              eventHandlers={{ click: () => animState !== 'exiting' && handleMarkerClick(cp) }}
             />
-          </Popup>
-        )}
-      </BaseMap>
+          ))}
+
+          {popupPin && (
+            <Popup
+              key={popupPin.id}
+              position={[popupPin.latitude, popupPin.longitude]}
+              className="feed-map-popup"
+              closeButton={false}
+              autoPan
+              // Open below the header (or its capsule) and the "Search this area" pill.
+              autoPanPaddingTopLeft={[12, topInset + 56]}
+              offset={[0, -16]}
+              eventHandlers={{
+                remove: () => handlePopupClosed(popupPin.id),
+                popupclose: () => handlePopupClosed(popupPin.id),
+              }}
+            >
+              <MapPostPopupCard
+                pin={popupPin}
+                onClose={() => setSelectedPin(null)}
+                onViewPost={onViewPost}
+              />
+            </Popup>
+          )}
+        </BaseMap>
+      )}
 
       {/* ─── Header row: intent chips + post count (in the Pulse header when there is one) ─── */}
       {headerSlot

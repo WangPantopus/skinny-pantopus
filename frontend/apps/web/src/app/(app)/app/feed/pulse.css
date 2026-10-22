@@ -86,3 +86,29 @@
     display: none;
   }
 }
+
+/* ── 3D map (Mapbox GL): the same pins on GL markers, and the same post card ── */
+.pulse-gl-marker {
+  cursor: pointer;
+}
+
+.pulse-gl-marker:focus-visible {
+  outline: 2px solid rgb(var(--accent-primary-fill));
+  outline-offset: 3px;
+  border-radius: 9999px;
+}
+
+.pulse-gl-marker--exiting {
+  pointer-events: none;
+}
+
+.pulse-gl-popup .mapboxgl-popup-content {
+  padding: 0;
+  background: transparent;
+  border-radius: 20px;
+  box-shadow: none;
+}
+
+.pulse-gl-popup.mapboxgl-popup-anchor-bottom .mapboxgl-popup-tip {
+  border-top-color: rgb(var(--app-surface) / 0.96);
+}

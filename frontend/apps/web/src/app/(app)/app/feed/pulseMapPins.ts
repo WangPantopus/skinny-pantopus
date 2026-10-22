@@ -43,14 +43,24 @@ export function liveMarkerIds(pins: MapMarker[], now = Date.now()): Set<string> 
   return new Set(recent.slice(0, MAX_LIVE_HALOS).map((r) => r.id));
 }
 
+/** A post pin's accessible name. */
+export function pinLabel(post: MapMarker): string {
+  return `${getPostTypeConfig(post.post_type || 'general').label} post`;
+}
+
+/** A cluster's accessible name. */
+export function clusterLabel(count: number): string {
+  return `Cluster of ${count} posts`;
+}
+
 /** A post pin: its intent's colour and glyph on a disc with a white ring. */
 export function pulsePinHtml(post: MapMarker, { selected = false, live = false } = {}): string {
   const postType = post.post_type || 'general';
-  const { color, label } = getPostTypeConfig(postType);
+  const { color } = getPostTypeConfig(postType);
   const icon = POST_TYPE_SVG_ICONS[postType] || POST_TYPE_SVG_ICONS.general;
   const classes = ['pulse-pin', selected && 'pulse-pin--selected', live && 'pulse-pin--live'].filter(Boolean).join(' ');
-  // Leaflet makes the marker a keyboard button; the hidden text is its name.
-  return `<div class="${classes}" style="--pin-color:${color}">${icon}<span class="sr-only">${label} post</span></div>`;
+  // The marker is a keyboard button; the hidden text is its name.
+  return `<div class="${classes}" style="--pin-color:${color}">${icon}<span class="sr-only">${pinLabel(post)}</span></div>`;
 }
 
 /** A cluster bubble's diameter: 40 px for two posts, growing on a log scale to 56 px at 100. */
@@ -83,5 +93,5 @@ export function pulseClusterHtml(count: number, items: (MapMarker | null | undef
   const classes = ['pulse-cluster', live && 'pulse-cluster--live'].filter(Boolean).join(' ');
   return `<div class="${classes}" style="--cluster-size:${size}px;--cluster-ring:${clusterRing(items)}">`
     + `<span class="pulse-cluster__count" aria-hidden="true">${count}</span>`
-    + `<span class="sr-only">Cluster of ${count} posts</span></div>`;
+    + `<span class="sr-only">${clusterLabel(count)}</span></div>`;
 }
