@@ -41,6 +41,8 @@ const SCREENS = {
   assistant: ['pantopus://assistant', null, 'Open Pantopus AI'],
   // Settings → What Pantopus remembers (phase 3), only for apps that have it (`cards` lists "memory").
   memory_settings: ['pantopus://settings/memory', 'memory', 'See what Pantopus remembers'],
+  // Settings → What Pantopus does for you (phase 3 standing rules), only for apps that have it (`cards` lists "rules").
+  rules_settings: ['pantopus://settings/rules', 'rules', 'See what Pantopus does for you'],
 };
 const SCREEN_NAMES = Object.keys(SCREENS);
 
@@ -85,6 +87,7 @@ function runShowLink(args, ctx) {
   if (!entry) return { error: `Unknown screen. Screens: ${SCREEN_NAMES.join(', ')}.` };
   if (entry[1] && entry[1].includes('plans') && ctx.plansEnabled === false) return { error: "Plans aren't available for this person." };
   if (entry[1] === 'memory' && !ctx.memory) return { error: "This version of the app has no memory list. Say they can see it in Settings once they update the app." };
+  if (entry[1] === 'rules' && !ctx.rules) return { error: "This version of the app has no rules list. Say they can see it in Settings once they update the app." };
   const url = linkFor(args.screen, args.id, { home: args.home_id, section: args.section });
   if (!url) return { error: 'That screen needs a valid id from your tools or the screen context.' };
   const label = typeof args.label === 'string' && args.label.trim() ? args.label.trim().slice(0, 40) : entry[2];
@@ -99,7 +102,9 @@ function runShowLink(args, ctx) {
 // `actionCards`, `links` and `pickupSchedule`: the cards the app shows (the chat's `cards`). Card
 // tools and link screens are named only to apps that show them: the web and the 2.0.1 and 2.0.2
 // builds have neither, and hear where in the app the person does it instead.
-function appGuide({ plans = true, playdates = false, suggestions = false, actionCards = true, links = true, pickupSchedule = true, remembers = false } = {}) {
+function appGuide({
+  plans = true, playdates = false, suggestions = false, actionCards = true, links = true, pickupSchedule = true, remembers = false, standingRules = false,
+} = {}) {
   const marketplace = isLaunchFeatureEnabled('marketplace');
   const openGigs = isLaunchFeatureEnabled('open_gigs');
   const mailbox = isLaunchFeatureEnabled('mailbox');
@@ -143,8 +148,9 @@ SUPPORT TRAINS
 - A Support Train organizes meals, takeout or groceries for someone going through something hard: the organizer sets dates, helpers sign up for a slot, and everyone gets reminders. You can start one with draft_support_train_from_story.
 
 ACCOUNT AND PRIVACY
-- Neighbors never see exact addresses. You see only what the person can see, and you never act without their tap.${remembers ? `
-- What Pantopus remembers: only what the person asked you to remember, after they tapped Remember. Settings → What Pantopus remembers${screen('memory_settings')} lists it; they edit or delete an item there, or Forget everything, and once a year Pantopus asks them to review it. Only they see it: their household never does, and it is used only for them. Deleting a conversation doesn't delete it.` : ''}
+- Neighbors never see exact addresses. You see only what the person can see, and you never act without their tap${standingRules ? ', except the standing rules they turned on (below)' : ''}.${remembers ? `
+- What Pantopus remembers: only what the person asked you to remember, after they tapped Remember. Settings → What Pantopus remembers${screen('memory_settings')} lists it; they edit or delete an item there, or Forget everything, and once a year Pantopus asks them to review it. Only they see it: their household never does, and it is used only for them. Deleting a conversation doesn't delete it.` : ''}${standingRules ? `
+- What Pantopus does for you: standing rules the person turned on from a card, the one thing Pantopus does without a tap each time.${plans ? ' A weekly plan: a plan they host, posted again each week on the same weekday and time with the same details and entry rules, for up to 12 weeks, only at their home or within 3 miles of it; it pauses after two weeks with nobody going.' : ''} A pickup reminder: another household member reminded the night before each pickup day the household set (never from a city schedule nobody confirmed), set by someone who can assign tasks there. Pantopus tells them each time. Settings → What Pantopus does for you${screen('rules_settings')} lists each rule with its switch, its last runs, Extend and Delete.` : ''}
 - You are an AI assistant and can make mistakes; for anything that matters, the screen it came from is the source.`);
 
   // Playdates are described only to people with plans_playdates, whose tools offer them.

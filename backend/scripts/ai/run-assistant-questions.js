@@ -16,6 +16,8 @@
  * saved items first (DELETE /api/ai/memory), so a run can be repeated, and `reset: ["follow_ups"]`
  * cancels their waiting check-backs; `tap` runs the named action of the first card that has it, as
  * the person's tap would (e.g. "remember"); `same: true` continues the previous question's conversation.
+ * Standing rules: `reset: ["rules"]` deletes the account's rules first, and `expect.rule` checks a
+ * rule_save card's stored rule ({ "kind": "plan_repeat" }).
  */
 const fs = require('fs');
 const path = require('path');
@@ -111,6 +113,10 @@ async function ask(question) {
     const { follow_ups: waiting = [] } = (await call(question, 'GET', '/api/ai/follow-ups')) || {};
     for (const followUp of waiting) await call(question, 'DELETE', `/api/ai/follow-ups/${followUp.id}`);
   }
+  if ((question.reset || []).includes('rules')) {
+    const { rules = [] } = (await call(question, 'GET', '/api/ai/rules')) || {};
+    for (const rule of rules) await call(question, 'DELETE', `/api/ai/rules/${rule.id}`);
+  }
   const body = {
     message: question.say,
     cards: question.cards || (question.old ? ['pickup_schedule'] : ['pickup_schedule', 'action', 'link']),
@@ -168,6 +174,8 @@ function check(question, got) {
   if (e.linkContains && !got.links.some((url) => url.includes(e.linkContains))) fails.push(`no link containing ${e.linkContains}`);
   // A memory_save card's saved fields (phase 3): { "sensitive": true } or { "kind": "plan_alert" }.
   if (e.memory && !got.cards.some((c) => c.card === 'memory_save' && includes(c.memory, e.memory))) fails.push(`no memory_save card with ${JSON.stringify(e.memory)}`);
+  // A rule_save card's stored rule (standing rules): { "kind": "pickup_reminder" }.
+  if (e.rule && !got.cards.some((c) => c.card === 'rule_save' && includes(c.rule, e.rule))) fails.push(`no rule_save card with ${JSON.stringify(e.rule)}`);
   if (e.textMatches && !new RegExp(e.textMatches, 'i').test(got.text)) fails.push(`text lacks /${e.textMatches}/`);
   if (e.textNotMatches && new RegExp(e.textNotMatches, 'im').test(got.text)) fails.push(`text matches /${e.textNotMatches}/`);
   // What everyone nearby would read: the title and about a card would post.
