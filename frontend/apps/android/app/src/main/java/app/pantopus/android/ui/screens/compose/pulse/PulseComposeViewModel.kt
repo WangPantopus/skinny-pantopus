@@ -15,9 +15,9 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
 import app.pantopus.android.data.analytics.AnalyticsResult
+import app.pantopus.android.data.api.models.posts.EarlierPostDto
 import app.pantopus.android.data.api.models.posts.PostCreateRequest
 import app.pantopus.android.data.api.models.posts.PostDetailDto
-import app.pantopus.android.data.api.models.posts.EarlierPostDto
 import app.pantopus.android.data.api.models.posts.PostPrecheckFinding
 import app.pantopus.android.data.api.models.posts.PostPrecheckRequest
 import app.pantopus.android.data.api.models.posts.PostUpdateRequest

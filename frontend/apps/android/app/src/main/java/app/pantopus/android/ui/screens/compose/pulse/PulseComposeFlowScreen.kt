@@ -133,17 +133,17 @@ private fun targetParts(target: PulsePostingTarget): List<Any> =
         PulsePostingTarget.Connections -> listOf("connections", 0.0, 0.0, "", "")
     }
 
+/** Kind, latitude, longitude, label and home id: what [targetParts] saves. */
+private const val TARGET_PARTS = 5
+
 private fun targetFrom(parts: List<Any?>): PulsePostingTarget? {
-    val lat = parts.getOrNull(1) as? Double
-    val lng = parts.getOrNull(2) as? Double
-    val label = parts.getOrNull(3) as? String
-    return when (parts.firstOrNull()) {
-        "connections" -> PulsePostingTarget.Connections
-        "current" -> if (lat != null && lng != null && label != null) PulsePostingTarget.CurrentLocation(lat, lng, label) else null
-        "home" -> {
-            val homeId = parts.getOrNull(4) as? String
-            if (lat != null && lng != null && label != null && homeId != null) PulsePostingTarget.Home(homeId, lat, lng, label) else null
-        }
+    if (parts.size < TARGET_PARTS) return null
+    val (kind, lat, lng, label, homeId) = parts
+    if (kind == "connections") return PulsePostingTarget.Connections
+    if (lat !is Double || lng !is Double || label !is String) return null
+    return when (kind) {
+        "current" -> PulsePostingTarget.CurrentLocation(lat, lng, label)
+        "home" -> (homeId as? String)?.let { PulsePostingTarget.Home(it, lat, lng, label) }
         else -> null
     }
 }
