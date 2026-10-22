@@ -170,7 +170,7 @@ For each new table: `ENABLE ROW LEVEL SECURITY; REVOKE ALL … FROM PUBLIC, anon
 
 - Only the backend reads or writes them, through `supabaseAdmin`.
 - Every query names the signed-in person's id. A route never reads another person's rows.
-- The default privileges from September 30 already deny `anon` and `authenticated` on new tables. The explicit `REVOKE` keeps the house pattern, and `check-migrations.cjs` refuses RLS left off and any grant to a client role.
+- The default privileges from September 30 already deny `anon` and `authenticated` on new tables. The explicit `REVOKE` keeps the house pattern, and `check-migrations.cjs` refuses RLS left off and table grants to `anon`, `authenticated` or `PUBLIC`.
 
 ### 3.6 Retention and deletion
 
@@ -319,8 +319,10 @@ The prompt carries these rules. The server enforces what it can check (`services
    - Then items whose topic matches the screen context: `plans` and `plan` match plans; `place` and `today` match home and household; `nearby` and `post` match nearby.
    - Then items that share a word with the message (4 or more letters, not a stop word).
    - Newest first within each group.
-   - A sensitive item is included only when it shares a word with the message, that is, when the request is about it.
-3. **New read tool `recall_memory({ query })`,** offered with `"memory"`. It returns the matching items, sensitive ones only when the query names them, so the model can look further.
+   - Sensitive items are never added this way. The block says only how many private items there are ("2 private items: look them up with recall_memory when a question is about them").
+3. **New read tool `recall_memory({ query })`,** offered with `"memory"`, so the model can look further.
+   - It returns the person's items that share a word with the query.
+   - A sensitive item comes back only when the query shares one of its distinctive words: 4 or more letters, not a stop word, and not a day, month or time of day. "When do I take my insulin?" finds "I take insulin every morning" through "insulin"; "Plan a walk Saturday morning" doesn't find it, because "morning" is a time of day.
 4. **Memory is information, like the person's own message.** It never changes what a tool returns or what a card does.
    - When an item disagrees with a source (a city schedule, a task's date), the source wins and the answer says so.
 5. **Every chat turn uses memory, whatever the build,** because it is the person's own and changes nothing an app shows.
@@ -368,6 +370,7 @@ An `Item` looks like this:
    - The idempotency key is `memory_review:<userId>:<year>`, so it goes at most once a calendar year.
 2. **Delivery.** The push goes through the shared held-push helper (`heldPushes.pushOrHold`), so it waits out quiet hours.
    - It isn't a nudge: no cap, and it goes even when Suggestions is off, because it is about the person's own data.
+   - The held-push release today covers only `assistant_brief` and `assistant_nudge` (`releaseHeldNudges`). It must also release `assistant_memory_review`, dropping it only when its `metadata.expires_at` (7 days after it was created) has passed, never for Suggestions or mutes.
 3. **In the list.** While a review is due, the top of the list reads "It's been a year. Still right?" with a **Looks right** button (`POST /api/ai/memory/reviewed`). Editing an item counts as reviewing it.
 
 ### 5.6 What household members see
@@ -407,10 +410,10 @@ One list of what waits on the person. It is built when it is read, from the serv
 | `task_overdue` | `get_home_records` through `homeRecordService` for each home of theirs (`homesOf`): open tasks past due that the person can edit or complete, whoever they're assigned to | "Overdue: Clean the gutters", with the due date and the assignee | `pantopus://homes/<homeId>/tasks/<taskId>` |
 | `task_assigned` | The same read: open tasks assigned to the person, due within 7 days or with no date | The task, with its due date | the same |
 | `home_invite` | `homeInvitationService.list(userId)`: pending, unexpired, addressed to them | "Join the Lee household", with who invited them | `pantopus://notifications`. The apps open an invitation from its own notification; they have no screen for one by id. |
-| `household_request` | `homeInvitationService.listRequests` for homes where they manage members | "Jordan asked to join your home" | `pantopus://homes/<homeId>/members` |
-| `connection_request` | The query behind `GET /api/relationships/requests/pending`, block-filtered. Move it into a function if it is inline. | "Alex wants to connect" | `pantopus://connections` |
+| `household_request` | `homeInvitationService.listRequests` for homes where they manage members | "Jordan asked to join your home" | `pantopus://homes/<homeId>/members?tab=requests` (both routers open the members' requests) |
+| `connection_request` | The query behind `GET /api/relationships/requests/pending`, block-filtered. Move it into a function if it is inline. | "Alex wants to connect" | `pantopus://connections?tab=requests` |
 | `nudge_card` | `AgentRequest` rows with `origin: nudge` from the last 7 days that have an open, unexpired card (§4). A follow-up that ran shows here while its card is open. | The nudge's title | `pantopus://assistant?nudge=<notificationId>` |
-| `question_answered` | Their own open `ask_local` posts with replies from people they haven't blocked (as `questionsAnswered` in `nudges/nearby.js` counts them), newest first, at most 3 | "Your question has 3 answers", with the question | `pantopus://posts/<id>` |
+| `question_answered` | Their own open `ask_local` posts with replies, counted as `checkQuestion` in `nudges/nearby.js` counts them: not their own replies, and nobody blocked in either direction. Newest first, at most 3 | "Your question has 3 answers", with the question | `pantopus://posts/<id>` |
 
 - **Left out:**
   - Support Train invitations: nothing can accept one yet.
@@ -457,7 +460,7 @@ A new read tool, `needs_you()`, returns the same items. It is offered to every b
 ### 6.4 In the apps
 
 - **Placement.** A **Needs you** card on Today, between the Ask Pantopus box and the Plans cards.
-  - iOS: `AddressTodayTabView.swift`, and the no-place and load-failed branches too.
+  - iOS: `AddressTodayTabView.swift`. Its no-place and load-failed branches have no Ask box, so there the card goes above the Plans cards.
   - Android: `TodayTabScreen.kt`.
 - **Content.** It is hidden when the list is empty.
   - It shows up to 3 rows. "Show all (N)" expands the card in place, up to 20 rows.
@@ -520,6 +523,7 @@ The job calls `sendNudge` with `kind: 'follow_up'`, `requested: true`, `checkpoi
   - quiet hours still hold it, and duplicates are still stopped;
   - it is still never sent about a post the person can't read;
   - it carries no "Fewer like this".
+- **Held through quiet hours.** The row stores `metadata.requested: true` and an `expires_at` 3 days after the follow-up was due. Today `heldPushDropped` drops a held push when Suggestions is off or the kind is muted; it must skip both checks for a `requested` row, and drop it only once `expires_at` has passed.
 - **In the conversation.** The nudge goes in like any other, so "move it to Sunday" works after it.
 - **Kinds.** `NUDGE_KINDS` gains `follow_up` and `plan_you_like` (§10.1).
 
@@ -532,12 +536,12 @@ The job calls `sendNudge` with `kind: 'follow_up'`, `requested: true`, `checkpoi
 | Next pickup | Reads the pickup days | iOS: yes, spoken, with a small snippet | When signed out, or with no home or no schedule; on Android, always: Today | `GET /api/ai/glance/pickup` (new) |
 | What's on today | Reads the day: weather, alerts, plans, tasks due, a confirmed pickup | iOS: yes | When signed out or with no home; on Android, always: Today | `GET /api/ai/glance/today` (new) |
 | Catch me up nearby | Reads Nearby since they last looked | iOS: yes | When signed out or with no place; on Android, always: the assistant with "What did I miss nearby?" sent | iOS: `GET /api/ai/glance/nearby` (new). Android: `POST /api/ai/chat` |
-| Start a plan | Drafts a `plan_create` card | No | Always: the assistant with the person's words sent, and the card comes back for a tap. With no words: Host a plan. | `POST /api/ai/chat` (existing) |
-| Remind my household | Drafts a `home_task` card | No | Always: the assistant with the words sent (iOS) or started (Android); the card comes back for a tap | `POST /api/ai/chat` (existing) |
+| Start a plan | Drafts a `plan_create` card | No | Always. iOS: the assistant with the person's words sent (with no words, Host a plan). Android: the assistant with "Start a plan: " in the composer. The card comes back for a tap. | `POST /api/ai/chat` (existing) |
+| Remind my household | Drafts a `home_task` card | No | Always. iOS: the assistant with the words sent. Android: the assistant with "Remind my household to " in the composer. The card comes back for a tap. | `POST /api/ai/chat` (existing) |
 
 ### 8.2 The glance route: `GET /api/ai/glance/:topic`
 
-`topic` is `pickup`, `today` or `nearby`. The route uses `verifyToken` and `aiDraftLimiter`. An optional `?home_id=` must be one of the person's homes; by default it is the home Today shows (`chosenHome` in `readTools.js`).
+`topic` is `pickup`, `today` or `nearby`. The route uses `verifyToken` and `aiDraftLimiter`. An optional `?home_id=` must be one of the person's homes. The route checks that itself and answers `404 NO_HOME` otherwise, because `chosenHome` (`assistantKit.js`) quietly falls back to the default home. Without `home_id` it is the home Today shows.
 
 ```json
 {
@@ -596,8 +600,8 @@ The job calls `sendNudge` with `kind: 'follow_up'`, `requested: true`, `checkpoi
   - The card comes back in the thread. Nothing is created until the person taps it. Start a plan with no words opens Host a plan (`pantopus://plans/new`).
   - The words pass in process, never in a URL.
 - **Signed out, App Lock on, or a session that must be resumed:** a read says "Open Pantopus to sign in." and opens the app; a write just opens the app.
-- **Toolchain.** The project targets iOS 17 and builds with Xcode 16.4 in CI, so phase 3 uses only APIs from that SDK.
-  - `openAppWhenRun` is deprecated in the iOS 26 SDK, which replaces it with `supportedModes`. Switch when the project moves to that SDK.
+- **Toolchain.** The project targets iOS 17. CI builds with Xcode 16.4 (`project.yml`, `ios-ci.yml`), while TestFlight archives with Xcode 26.2 (`ios-beta.yml`). Phase 3 uses only APIs that compile on 16.4.
+  - `openAppWhenRun` is deprecated in the iOS 26 SDK, which replaces it with `supportedModes`, so the 26.2 archive warns about it. Switch once CI moves to Xcode 26.
 - **Not in phase 3** (§11):
   - App Intent schemas (`@AppIntent(schema:)`). Siri AI on iOS 27 reaches app actions through schemas, and none covers pickup days or a neighborhood feed. The Reminders and Calendar create schemas expect the intent itself to write.
   - Spotlight indexing of plans and tasks for Siri's personal context, because it puts household data in the device's index.
@@ -654,7 +658,7 @@ In October 2026 Android has no general voice path to another app's actions:
 | `post_solve`: answered questions, and a follow-up on one | **Mark solved** | It is the person's own question, and nothing is shared |
 | "Fewer like this", on every suggestion | **Fewer like this** | It changes only their own settings, and "Reset 'Fewer like this'" undoes it |
 
-- **Only one card per nudge.** A nudge gets the Mark done or Mark solved button only when it has exactly one qualifying action. A `home_overdue` nudge with three tasks gets only "Fewer like this".
+- **At most one action button per nudge.** A nudge gets Mark done or Mark solved only when it has exactly one qualifying action. A `home_overdue` nudge with three tasks gets only "Fewer like this".
 - **Never a button:**
   - Messages and replies (`plan_message`, `post_reply`). They speak for the person, and the push shows only part of the words.
   - Accepting or declining people (`plan_requests`). That is a decision about a person, and accepting at a home shares its address. Plans' own request pushes keep their Accept and Decline buttons, with their own address rule.
@@ -678,10 +682,12 @@ In October 2026 Android has no general voice path to another app's actions:
 2. **The action.** When a button applies, the push also carries `assistant_action`, a JSON string, because FCM data values are strings. It holds the card's own action request, exactly:
 
    ```json
-   { "card_id": "…", "item_id": null, "action_id": "done", "method": "PUT", "path": "/api/homes/<homeId>/tasks/<taskId>", "body": { "status": "done" } }
+   { "card_id": "…", "item_id": null, "action_id": "confirm", "method": "PUT", "path": "/api/homes/<homeId>/tasks/<taskId>", "body": { "status": "done" } }
    ```
 
-   A nudge's card has no session-scope header, and the task route accepts a request without one.
+   - A brief's task line and a task follow-up use the `home_task_update` card's top-level action, `confirm`, with `item_id: null`. Mark solved is also `confirm`.
+   - An overdue nudge with one task uses its item row: `item_id` is the row's id and `action_id` is `done` (`nudges/home.js`).
+   - A nudge's card has no session-scope header, and the task route accepts a request without one.
 3. **The server's allowlist.** `push/apnsClient.js` adds the five categories to its list, so APNs gets `aps.category`. FCM sends `category` as data, as it does for Plans.
 4. **Older builds** don't know these categories: they show the notification without buttons, and a tap opens it as before. They never get nudges anyway.
 
@@ -711,8 +717,8 @@ In October 2026 Android has no general voice path to another app's actions:
 ### 9.4 What the person sees
 
 - **On success,** the notification goes away: iOS removes it, and Android cancels it. The thread shows the card as done the next time it opens, from the server's state.
-- **On failure** (offline, an error answer, signed out), a notification says "Couldn't mark it done. Tap to open it in Pantopus." and opens `pantopus://assistant?nudge=<id>`.
-  - On Android it replaces the original, as `PlanActionReceiver` does.
+- **Whenever it doesn't succeed,** a notification says "Couldn't mark it done. Tap to open it in Pantopus." and opens `pantopus://assistant?nudge=<id>`. That covers an error answer, being offline, signed out or on another account, App Lock, and the time limit.
+  - On Android it replaces the original. `PlanActionReceiver` does this only for an error answer and stays silent in the other cases; the assistant's buttons never fail silently.
   - On iOS the app posts it as a local notification. Today the app posts none, and an in-app note would be lost if the app quits.
   - When the server sent a `message` (the task changed, or is gone), that message is used instead.
 
@@ -823,7 +829,7 @@ There are no new tabs. The only new screen is the memory list, inside Settings.
 - **No new background model calls.** Follow-ups, "Needs you", glance answers, the review and "Plans you'd like" are written from facts.
 - **Memory in a turn:** at most about 400 input tokens a turn, under $0.001 at Sonnet 5.5's $2 per million input tokens.
 - **The new read tools** (`recall_memory`, `needs_you`, `list_follow_ups`) add one tool round when the model uses them, as any read tool does: about 1–2¢.
-- **Siri:** its answers cost no model call. Siri's and the launcher's writes are ordinary chat turns: 3–5¢ with a card.
+- **Siri:** its answers cost no model call. Siri's writes, and the Android launcher's catch-up and writes, are ordinary chat turns: about 1¢ for the catch-up, 3–5¢ with a card.
 - **Storage:** about one request and five steps per chat turn. Proposals live as long as their conversation; everything else goes after 90 days.
 
 ## 14. Question and attack sets
@@ -861,7 +867,7 @@ Each session has one owner, its own worktree and branch, and small PRs. Each mer
 
 | Session | Owns | PRs, in merge order |
 |---|---|---|
-| **P3B**, backend (port 18971) | §§3–10 on the server | 1. The migration, recording, the state route, `state` in history, the purge job (§3, §4).<br>2. Memory: tools, card, routes, use in turns, the yearly review, the web's `ASSISTANT_TYPES`, and "Plans you'd like" (§5, §10.1).<br>3. "Needs you" and follow-ups: route, tools, cards, the job, `requested` in the engine (§6, §7).<br>4. The glance route, and push categories with `assistant_action` (§8.2, §9.2). |
+| **P3B**, backend (port 18971) | §§3–10 on the server | 1. The migration, recording, the state route, `state` in history, the purge job (§3, §4).<br>2. Memory: tools, card, routes, use in turns, the yearly review and its held-push release, the web's `ASSISTANT_TYPES`, and "Plans you'd like" (§5, §10.1).<br>3. "Needs you" and follow-ups: route, tools, cards, the job, `requested` in the engine and in `heldPushDropped` (§6, §7).<br>4. The glance route, and push categories with `assistant_action` (§8.2, §9.2). |
 | **P3I**, iOS app (port 18981) | §4.4, §5.7, §6.4, §12 on iOS | Each after the backend PR it shows: 1. done states; 2. the memory list and card; 3. Needs you on Today, and the follow-up cards |
 | **P3A**, Android app (port 18991) | The same on Android | The same order |
 | **P3S**, Siri and iOS buttons (port from the coordinator) | §8.3, §9 on iOS, and the `assistant` link parameters on iOS | After P3B PR 4, and P3I PR 1 for the state report |
@@ -889,7 +895,7 @@ Run against a local backend and database with the live model, on the iOS simulat
    - Edit, Delete and Forget everything work.
    - A household member's list is empty, and their assistant doesn't know the filter size.
 4. **Sensitive, and never.**
-   - "Remember that I take insulin in the morning" is saved as private. "Plan a walk Saturday" doesn't mention it; "What do I take in the morning?" does.
+   - "Remember that I take insulin every morning" is saved as private. "Plan a walk Saturday morning" doesn't mention it; "When do I take my insulin?" gets "every morning".
    - The never-list questions (§14) get no card.
 5. **The yearly review.**
    - On a test account with an item's `reviewed_at` a year back, the job sends one reminder. It is held through quiet hours, then opens the list.
@@ -952,7 +958,7 @@ The founder asked for the recommended default wherever a choice was open. These 
 | An item is saved only from a card the person tapped, and from the stored proposal | What is saved is exactly what was shown, and the client can't change it | A free-form save route. Offering to remember things nobody asked for. |
 | Memory is personal. Shared household facts go to tasks and records | No sharing model is needed, and nothing leaks between members | Memory shared with the household |
 | Forgetting deletes rows. Deleting conversations keeps memory | What people forget is gone; memory has its own controls | Soft deletes (`deleted_at`). Deleting memory along with conversations. |
-| Relevance is worked out in code (topic, words, at most 8 items, sensitive ones only on a match), plus `recall_memory` | No extra model call, and it can be predicted | Sending every item each turn. Vector search. |
+| Relevance is worked out in code (topic and words, at most 8 items). Sensitive items are never added on their own: only `recall_memory` returns them, on a distinctive word | No extra model call, it can be predicted, and private items stay out of unrelated turns | Sending every item each turn. Vector search. |
 | The yearly review is a plain notification, once a year, even with Suggestions off | It is about the person's own data | A nudge, which would need Suggestions on |
 | "Needs you" is worked out when it is read, from existing services as the person. It shows on Today, expanding in place, and through a read tool | No parallel data, and no new screen or tab | A stored inbox. A new screen. Mixing it into Notifications. |
 | A follow-up is a waiting `AgentRequest`, run by a 5-minute job as a requested nudge, written from facts | It is approved storage, and the person asked for it, so Suggestions and the cap don't stop it | A home task, which doesn't re-check the subject and which the household sees. A model call when it runs. |
