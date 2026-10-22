@@ -1,0 +1,81 @@
+/**
+ * The caller's own ownership claims, as the claim waiting room and My Claims read them
+ * (GET /api/homes/my-ownership-claims) and the assistant reports them. Internal states
+ * are masked for the claimant (an opaque handshake), so nothing here says whether
+ * anyone else claimed the same home.
+ */
+const supabaseAdmin = require('../config/supabaseAdmin');
+const logger = require('../utils/logger');
+const householdClaimConfig = require('../config/householdClaims');
+
+/**
+ * Opaque handshake: mask internal claim states for the claimant.
+ */
+function maskClaimState(state, claimPhaseV2 = null) {
+  const useV2ReadPaths = householdClaimConfig.flags.v2ReadPaths;
+  const phaseRequiresCompatibilityOverride = claimPhaseV2 === 'challenged' || claimPhaseV2 === 'expired';
+
+  if ((useV2ReadPaths || phaseRequiresCompatibilityOverride) && ['initiated', 'evidence_submitted', 'under_review', 'challenged'].includes(claimPhaseV2)) {
+    return 'under_review';
+  }
+
+  if ((useV2ReadPaths || phaseRequiresCompatibilityOverride) && claimPhaseV2 === 'verified') {
+    return 'approved';
+  }
+
+  if ((useV2ReadPaths || phaseRequiresCompatibilityOverride) && (claimPhaseV2 === 'rejected' || claimPhaseV2 === 'expired')) {
+    return 'rejected';
+  }
+
+  const terminalStates = {
+    approved: 'approved',
+    rejected: 'rejected',
+    revoked: 'revoked',
+  };
+  return terminalStates[state] || 'under_review';
+}
+
+/** The claims `userId` made, newest first, with masked statuses. Throws when they can't be read. */
+async function listOwnClaims(userId) {
+  const { data: claims, error } = await supabaseAdmin
+    .from('HomeOwnershipClaim')
+    .select('id, home_id, claim_type, state, claim_phase_v2, method, created_at, updated_at, home:home_id ( address, address2, city, state )')
+    .eq('claimant_user_id', userId)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+
+  // Whether each claim has documents, so a claim started from Add Home isn't
+  // described as documents waiting for review. Unknown (null) if unreadable.
+  let withEvidence = null;
+  const claimIds = (claims || []).map(c => c.id);
+  if (claimIds.length) {
+    const { data: evidence, error: evidenceError } = await supabaseAdmin
+      .from('HomeVerificationEvidence')
+      .select('claim_id')
+      .in('claim_id', claimIds);
+    if (evidenceError) {
+      logger.warn('Failed to read claim evidence presence', { error: evidenceError.message });
+    } else {
+      withEvidence = new Set((evidence || []).map(e => e.claim_id));
+    }
+  }
+
+  // The claimed address is the one they entered, so their own claim can name it.
+  return (claims || []).map(c => ({
+    id: c.id,
+    home_id: c.home_id,
+    claim_type: c.claim_type,
+    method: c.method,
+    status: maskClaimState(c.state, c.claim_phase_v2),
+    has_evidence: withEvidence ? withEvidence.has(c.id) : null,
+    created_at: c.created_at,
+    updated_at: c.updated_at,
+    home: c.home ? {
+      address: c.home.address || null, address2: c.home.address2 || null,
+      city: c.home.city || null, state: c.home.state || null,
+    } : null,
+  }));
+}
+
+module.exports = { listOwnClaims, maskClaimState };

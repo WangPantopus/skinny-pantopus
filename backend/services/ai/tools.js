@@ -17,6 +17,7 @@ const { escapeIlike } = require('../../utils/escapeIlike');
 const { draftPickupSchedule } = require('./pickupDraft');
 const { readToolDefinitions, runReadTool, PLACE_POST_TYPES } = require('./readTools');
 const { nearbyReadToolDefinitions, runNearbyReadTool } = require('./readToolsNearby');
+const { verificationReadToolDefinitions, runVerificationReadTool } = require('./readToolsVerification');
 const { actionCardDefinitions, runCardTool } = require('./actionCards');
 const { showLinkDefinition, runShowLink } = require('./appGuide');
 const { homesOf, localToUtc } = require('./assistantKit');
@@ -271,6 +272,7 @@ const toolDefinitions = [
   },
   ...readToolDefinitions,
   ...nearbyReadToolDefinitions,
+  ...verificationReadToolDefinitions,
   ...actionCardDefinitions,
   showLinkDefinition,
 ];
@@ -321,6 +323,10 @@ const TOOL_TIMEOUTS_MS = {
   list_home_tasks: 8000,
   get_household: 8000,
   draft_plan: 15000,
+  // The venue's place search, then draft_plan's.
+  draft_plan_from_event: 20000,
+  // Each home's claim, access, postcard and residency reads.
+  get_home_verification: 10000,
   draft_plan_change: 15000,
   show_plan_requests: 8000,
   draft_plan_ask: 8000,
@@ -381,6 +387,8 @@ async function _executeToolImpl(name, args, ctx) {
   if (read) return read;
   const nearby = await runNearbyReadTool(name, args, ctx);
   if (nearby) return nearby;
+  const verification = await runVerificationReadTool(name, args, ctx);
+  if (verification) return verification;
   const drafted = await runCardTool(name, args, ctx);
   if (drafted) return drafted;
   if (name === 'show_link') return runShowLink(args, ctx);

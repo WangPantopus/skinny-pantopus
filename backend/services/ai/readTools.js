@@ -289,6 +289,11 @@ function postForModel(post, zone) {
     replies: post.comment_count ?? null,
     state: post.state || null,
     event_date: post.event_date || null,
+    // An event's time in their zone, and its venue as the post shows it to everyone who reads it.
+    ...(post.post_type === 'event' ? {
+      event_when: post.event_date ? whenLabel(post.event_date, post.event_end_date, zone) : null,
+      event_venue_text: clip(post.event_venue, 120),
+    } : {}),
   };
 }
 
