@@ -7,10 +7,98 @@
 
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
-const { ENTITY_TYPE_CONFIG } = require('../utils/businessConstants');
+const {
+  ENTITY_TYPE_CONFIG,
+  REDUCED_FEE_BELOW_PCT,
+  REDUCED_FEE_TYPES,
+  FOUNDING_FEE_CAP_PCT,
+  NONPROFIT_EVIDENCE_TYPES,
+  PANTOPUS_VERIFIED_STATUSES,
+} = require('../utils/businessConstants');
 const { writeAuditLog } = require('../utils/businessPermissions');
 
 const DEFAULT_PLATFORM_FEE_PCT = 15;
+
+/** Whether a business still has its founding offer's 10% cap (it lasts 12 months from the claim). */
+function hasFoundingCap(profile) {
+  if (!profile?.founding_badge) return false;
+  return !profile.founding_benefit_expires_at || new Date(profile.founding_benefit_expires_at) > new Date();
+}
+
+/**
+ * Whether Pantopus has verified this business as the type that earns its reduced rate (under 10%): a reviewer
+ * approved its documents, it is still a reduced-rate type, and a nonprofit's 501(c)(3) proof was approved. The owner
+ * sets the type and the profile's attributes, so neither counts on its own.
+ *
+ * @param {string} businessUserId
+ * @param {{ business_type: string, verification_status: string }} profile
+ * @returns {Promise<boolean>}
+ */
+async function reducedFeeVerified(businessUserId, profile) {
+  if (!REDUCED_FEE_TYPES.has(profile?.business_type)) return false;
+  if (!PANTOPUS_VERIFIED_STATUSES.has(profile.verification_status)) return false;
+  if (profile.business_type !== 'nonprofit_501c3') return true;
+  const { data, error } = await supabaseAdmin
+    .from('BusinessVerificationEvidence')
+    .select('id')
+    .eq('business_user_id', businessUserId)
+    .in('evidence_type', NONPROFIT_EVIDENCE_TYPES)
+    .eq('status', 'approved')
+    .limit(1);
+  if (error) throw error;
+  return (data || []).length > 0;
+}
+
+/**
+ * The reduced rate approving a document gives a business of this type, or null when it gives none: a nonprofit's
+ * rate needs its 501(c)(3) proof, which takes it to 0%.
+ */
+function feeOnApproval(businessType, evidenceType) {
+  if (!REDUCED_FEE_TYPES.has(businessType)) return null;
+  if (businessType === 'nonprofit_501c3') return NONPROFIT_EVIDENCE_TYPES.includes(evidenceType) ? 0 : null;
+  return ENTITY_TYPE_CONFIG[businessType].defaultFeePct;
+}
+
+/**
+ * Pantopus approved one of this business's documents, as the type it has now: a type that earns a reduced rate gets
+ * it. A later type change takes it away again (settleFeeOnTypeChange).
+ *
+ * @returns {Promise<number|null>} the rate set, or null when the approval gives none
+ */
+async function grantVerifiedTypeFee(businessUserId, evidenceType, actorUserId) {
+  const { data: profile, error } = await supabaseAdmin
+    .from('BusinessProfile')
+    .select('business_type')
+    .eq('business_user_id', businessUserId)
+    .maybeSingle();
+  if (error) throw error;
+  const feePct = feeOnApproval(profile?.business_type, evidenceType);
+  if (feePct === null) return null;
+  const written = await setEntityFeeOverride(businessUserId, feePct, { actorUserId, force: true });
+  if (!written) throw new Error('Could not set the verified type fee');
+  return feePct;
+}
+
+/**
+ * The owner changed the business's type. A reduced rate comes only from Pantopus verifying the business as a type
+ * that earns one (grantVerifiedTypeFee), so a type change neither writes one nor keeps the one the business had: that
+ * check was for the old type. The new type's own rate applies (the standard rate for a reduced-rate type, until
+ * Pantopus verifies it), capped by a founding offer. A rate of 10% or more set by an admin or the founding offer stays.
+ */
+async function settleFeeOnTypeChange(businessUserId, config, actorUserId) {
+  const { data: profile, error } = await supabaseAdmin
+    .from('BusinessProfile')
+    .select('fee_override_pct, founding_badge, founding_benefit_expires_at')
+    .eq('business_user_id', businessUserId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!profile) return;
+  const stored = profile.fee_override_pct;
+  if (stored !== null && stored !== undefined && Number(stored) >= REDUCED_FEE_BELOW_PCT) return;
+  let feePct = config.defaultFeePct < REDUCED_FEE_BELOW_PCT ? DEFAULT_PLATFORM_FEE_PCT : config.defaultFeePct;
+  if (hasFoundingCap(profile)) feePct = Math.min(feePct, FOUNDING_FEE_CAP_PCT);
+  await setEntityFeeOverride(businessUserId, feePct, { actorUserId, force: true });
+}
 
 /**
  * Set the fee_override_pct on BusinessProfile based on entity type config.
@@ -82,7 +170,8 @@ async function setEntityFeeOverride(businessUserId, feePct, opts = {}) {
 /**
  * Apply entity-type-specific side effects after business creation or type change.
  *
- * - Sets fee_override_pct based on entity type config
+ * - Sets fee_override_pct based on entity type config (a reduced rate applies only once Pantopus has verified the
+ *   type; see reducedFeeVerified)
  * - For nonprofit_501c3: sets awaiting_nonprofit_verification attribute
  *
  * @param {string} businessUserId
@@ -100,11 +189,12 @@ async function applyEntityTypeSideEffects(businessUserId, entityType, opts = {})
     return;
   }
 
-  // Set fee override based on entity type default
-  await setEntityFeeOverride(businessUserId, config.defaultFeePct, {
-    actorUserId,
-    force: !isTypeChange, // On creation, always set; on type change, respect admin overrides
-  });
+  if (isTypeChange) {
+    await settleFeeOnTypeChange(businessUserId, config, actorUserId);
+  } else {
+    // On creation, always set
+    await setEntityFeeOverride(businessUserId, config.defaultFeePct, { actorUserId, force: true });
+  }
 
   // Nonprofit-specific: set pending verification flag
   if (entityType === 'nonprofit_501c3') {
@@ -133,4 +223,8 @@ async function applyEntityTypeSideEffects(businessUserId, entityType, opts = {})
 module.exports = {
   setEntityFeeOverride,
   applyEntityTypeSideEffects,
+  hasFoundingCap,
+  reducedFeeVerified,
+  feeOnApproval,
+  grantVerifiedTypeFee,
 };

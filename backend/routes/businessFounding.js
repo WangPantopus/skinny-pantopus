@@ -194,7 +194,9 @@ router.post('/:businessId/founding-offer/claim', verifyToken, async (req, res) =
       .eq('business_user_id', businessId)
       .single();
 
-    if (!currentProfile?.fee_override_pct || currentProfile.fee_override_pct > 10) {
+    // A verified reduced rate (a nonprofit's 0%) is lower than the cap and stays.
+    const currentFee = currentProfile?.fee_override_pct;
+    if (currentFee === null || currentFee === undefined || Number(currentFee) > 10) {
       benefitUpdates.fee_override_pct = 10;
     }
 

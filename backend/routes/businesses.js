@@ -1489,6 +1489,18 @@ router.patch('/:businessId', verifyToken, validate(updateBusinessSchema), async 
       }
     }
 
+    // The type the business had: its side effects (fee, nonprofit flag) run only when the type changes, since the
+    // profile editors resend the same type with every save.
+    let previousType = null;
+    if (profileFields.business_type) {
+      const { data: current } = await supabaseAdmin
+        .from('BusinessProfile')
+        .select('business_type')
+        .eq('business_user_id', businessId)
+        .maybeSingle();
+      previousType = current?.business_type || null;
+    }
+
     // Update BusinessProfile
     if (Object.keys(profileFields).length > 0) {
       profileFields.updated_at = new Date().toISOString();
@@ -1503,7 +1515,7 @@ router.patch('/:businessId', verifyToken, validate(updateBusinessSchema), async 
     }
 
     // If business_type changed, apply entity-type side effects (fee override, nonprofit flags)
-    if (profileFields.business_type) {
+    if (profileFields.business_type && profileFields.business_type !== previousType) {
       applyEntityTypeSideEffects(businessId, profileFields.business_type, {
         actorUserId: userId,
         isTypeChange: true,
@@ -4945,12 +4957,17 @@ router.post('/invoices/:invoiceId/pay', verifyToken, async (req, res) => {
 
     // Store the payment reference and mark as "viewed" (not "paid" yet —
     // the invoice transitions to "paid" only after Stripe confirms capture).
+    // The payment is priced at the business's rate now, which can differ from when the invoice was sent (its type
+    // was verified since, say); the invoice shows the fee actually taken.
+    const paymentFee = result.payment?.amount_platform_fee;
+    const feeCents = Number.isInteger(paymentFee) ? paymentFee : invoice.fee_cents;
     const { error: updateErr } = await supabaseAdmin
       .from('BusinessInvoice')
       .update({
         status: 'viewed',
         payment_id: result.paymentId,
         stripe_payment_intent_id: result.paymentIntentId,
+        fee_cents: feeCents,
       })
       .eq('id', invoiceId);
 
@@ -4963,7 +4980,7 @@ router.post('/invoices/:invoiceId/pay', verifyToken, async (req, res) => {
       payment_intent_id: result.paymentIntentId,
       payment_id: result.paymentId,
       amount_cents: invoice.total_cents,
-      fee_cents: invoice.fee_cents,
+      fee_cents: feeCents,
     });
   } catch (err) {
     logger.error('Pay invoice error', { error: err.message });

@@ -157,9 +157,39 @@ async function discover(payment, requests) {
 async function settleInvoiceAfterRefund(payment) {
   const invoiceId = payment?.metadata?.invoice_id;
   if (payment?.payment_status !== 'refunded_full' || payment.metadata?.type !== 'invoice_payment' || !invoiceId) return;
-  const { error } = await db.from('BusinessInvoice').update({ status: 'void' })
-    .eq('id', invoiceId).eq('payment_id', payment.id).eq('status', 'paid');
+  const { data: voided, error } = await db.from('BusinessInvoice').update({ status: 'void' })
+    .eq('id', invoiceId).eq('payment_id', payment.id).eq('status', 'paid')
+    .select('id, business_user_id, recipient_user_id, total_cents');
   if (error) logger.warn('Refunded invoice could not be voided', { paymentId: payment.id, invoiceId, error: error.message });
+  // Only the call that voided it says so; a notice that fails never fails the refund.
+  if (voided?.[0]) {
+    notifyInvoiceRefunded(voided[0], payment).catch((err) => {
+      logger.warn('Invoice refund notice skipped', { invoiceId, error: err.message });
+    });
+  }
+}
+// The crew learns of a refund (the payer's own, or one Pantopus made) from its owner's notices, as it learned of the
+// payment: otherwise the invoice just turns void, after "will reach your wallet after a short review".
+async function notifyInvoiceRefunded(invoice, payment) {
+  const { getBusinessPrimaryOwnerId } = require('../utils/businessPermissions');
+  const { chosenUsernameOrNull } = require('../utils/personalUsername');
+  const ownerId = await getBusinessPrimaryOwnerId(invoice.business_user_id);
+  if (!ownerId) return;
+  const { data: payer } = await db.from('User').select('name, username').eq('id', invoice.recipient_user_id).maybeSingle();
+  const payerName = payer?.name || chosenUsernameOrNull(payer?.username) || 'A customer';
+  const total = `$${(invoice.total_cents / 100).toFixed(2)}`;
+  await require('./notificationService').createNotification({
+    userId: ownerId,
+    type: 'invoice_refunded',
+    title: `Invoice refunded: ${total}`,
+    body: payment.transfer_completed_at
+      ? `${payerName}'s ${total} payment was refunded in full, so the invoice is now void.`
+      : `${payerName}'s ${total} payment was refunded in full, so the invoice is now void and nothing will be paid out for it.`,
+    link: `/app/businesses/${invoice.business_user_id}/dashboard?tab=invoices`,
+    metadata: { invoice_id: invoice.id, business_id: invoice.business_user_id, amount_cents: invoice.total_cents },
+    context: 'personal',
+    idempotencyKey: `invoice-refunded:${invoice.id}`,
+  });
 }
 async function reconcile(paymentId) {
   let payment = await paymentById(paymentId);

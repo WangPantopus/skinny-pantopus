@@ -140,12 +140,21 @@ export async function removeReportedPost(reportId: string): Promise<{
 export interface VerificationQueueItem {
   id: string;
   business_user_id: string;
-  business: { id: string; username: string | null; name: string | null; profile_picture_url: string | null } | null;
+  business: {
+    id: string;
+    username: string | null;
+    name: string | null;
+    profile_picture_url: string | null;
+    /** The type the business says it is; approving verifies it. */
+    business_type?: string | null;
+  } | null;
   evidence_type: string;
   file_id: string | null;
   /** A link to the document that works for about ten minutes; null when the file is gone. */
   document_url: string | null;
   document_mime_type: string | null;
+  /** The platform fee approving sets for the business (a reduced rate for its type), or null when it sets none. */
+  fee_on_approval_pct?: number | null;
   metadata: Record<string, unknown> | null;
   created_at: string;
 }

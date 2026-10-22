@@ -281,6 +281,10 @@ public struct InboxTabRoot: View {
                 }
             ) { if !path.isEmpty { path.removeLast() } }
                 .onDisappear { completeConversationArrival(dest) }
+                // A thread is its route: when `openAssistant` swaps the thread on
+                // top for another nudge's, SwiftUI would otherwise keep the old
+                // view and its view model, and the new nudge would never load.
+                .id(dest)
         case .compose:
             NewMessageView(
                 viewModel: NewMessageViewModel(
