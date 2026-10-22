@@ -1184,6 +1184,8 @@ struct RowView: View {
         if let subtitle = row.subtitle { parts.append(subtitle) }
         if let body = row.body { parts.append(body) }
         if case let .statusChip(text, _) = row.trailing { parts.append(text) }
+        // Bills, maintenance and received invoices: the amount and its status (Android's merged row reads both).
+        if case let .amountWithChip(amount, chipText, _, _) = row.trailing { parts.append(contentsOf: [amount, chipText]) }
         if case let .pillButton(label, _, _) = row.trailing { parts.append(label) }
         if let chips = row.chips {
             parts.append(contentsOf: chips.map(\.text))

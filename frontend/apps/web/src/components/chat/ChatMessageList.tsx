@@ -1,10 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { getDateKey, formatDateLabel } from '../../hooks/useChatMessages';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { chatPersonName, getDateKey, formatDateLabel } from '../../hooks/useChatMessages';
 import ChatDateSeparator from './ChatDateSeparator';
 import ChatMessageBubble from './ChatMessageBubble';
-import type { ChatMessage } from './ChatMessageBubble';
+import type { ChatMessage, ChatReplyQuote } from './ChatMessageBubble';
 
 interface ChatMessageListProps {
   messages: ChatMessage[];
@@ -30,6 +30,17 @@ interface ChatMessageListProps {
 /** Within this distance of the bottom, the list follows new messages. */
 const FOLLOW_SLACK_PX = 120;
 
+/**
+ * How a reply quotes the message it answers, as in the apps: "You" for your
+ * own message (your bubbles carry no name), else its sender's name.
+ */
+function replyQuote(original: ChatMessage, isMine: boolean): ChatReplyQuote {
+  return {
+    senderName: isMine ? 'You' : chatPersonName(original.sender) || 'Message',
+    text: original.message_text || original.message || original.content || '',
+  };
+}
+
 export default function ChatMessageList({
   messages,
   loading,
@@ -52,6 +63,9 @@ export default function ChatMessageList({
   // The list as last laid out, to tell a new message from an older page.
   const laidOutRef = useRef<{ firstId?: string; lastId?: string; count: number; height: number }>({ count: 0, height: 0 });
   const [newBelow, setNewBelow] = useState(false);
+  // A reply quotes its original only when that is loaded: one answering a
+  // message older than the loaded pages shows no quote.
+  const messagesById = useMemo(() => new Map(messages.map((m) => [String(m.id), m])), [messages]);
 
   const scrollToNewest = useCallback(() => {
     const el = scrollRef.current;
@@ -175,9 +189,11 @@ export default function ChatMessageList({
                 const isMine = isOwnMessage(msg);
                 const showSender = !isMine && senderId !== lastSenderId;
                 lastSenderId = senderId || null;
+                const original = msg.reply_to_id ? messagesById.get(String(msg.reply_to_id)) : undefined;
+                const reply = original ? replyQuote(original, isOwnMessage(original)) : undefined;
 
                 nodes.push(
-                  <ChatMessageBubble key={msg.id} msg={msg} isMine={isMine} showSender={showSender} onImageClick={onImageClick} onReact={onReact} onRetry={onRetry} />
+                  <ChatMessageBubble key={msg.id} msg={msg} isMine={isMine} showSender={showSender} reply={reply} onImageClick={onImageClick} onReact={onReact} onRetry={onRetry} />
                 );
 
                 return nodes;

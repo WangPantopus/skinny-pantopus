@@ -15,8 +15,10 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
 import app.pantopus.android.data.analytics.AnalyticsResult
+import app.pantopus.android.data.api.models.posts.EarlierPostDto
 import app.pantopus.android.data.api.models.posts.PostCreateRequest
 import app.pantopus.android.data.api.models.posts.PostDetailDto
+import app.pantopus.android.data.api.models.posts.PostPrecheckFinding
 import app.pantopus.android.data.api.models.posts.PostPrecheckRequest
 import app.pantopus.android.data.api.models.posts.PostUpdateRequest
 import app.pantopus.android.data.api.net.NetworkResult
@@ -40,10 +42,13 @@ import app.pantopus.android.ui.screens.shared.form.isoDateOrEmpty
 import app.pantopus.android.ui.screens.shared.form.maxLength
 import app.pantopus.android.ui.screens.shared.form.required
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -269,17 +274,18 @@ class PulseComposeViewModel
             PulseComposeDraftFields.decode(savedStateHandle.get<String>(PREFILL_DRAFT_FIELDS_KEY))
 
         /**
-         * The drafted event times: each field's seeded value (this phone's clock) and the instant the draft named. While
-         * a field still shows its seed, the post keeps the drafted instant.
+         * The drafted event times: each field's seeded value (this phone's clock) and the drafted time as every
+         * composer posts it, that wall clock labelled UTC ([postedDraftTime]). While a field still shows its seed, the
+         * post keeps the drafted time, so a start left unchanged keeps its hour though its field shows only the day.
          */
         private val draftTimes: Map<PulseComposeField, Pair<String, String?>> =
             buildMap {
                 prefillDraft?.eventDate?.let { PulseComposeDraftFields.localTime(it) }?.let { time ->
-                    put(PulseComposeField.EventDate, time.local.toLocalDate().toString() to time.instant?.toString())
+                    put(PulseComposeField.EventDate, time.local.toLocalDate().toString() to postedDraftTime(time))
                 }
                 prefillDraft?.eventEndDate?.let { PulseComposeDraftFields.localTime(it) }?.let { time ->
                     val shown = if (time.instant == null) time.local.toLocalDate().toString() else pickerDateTime(time.local)
-                    put(PulseComposeField.EventEndDate, shown to time.instant?.toString())
+                    put(PulseComposeField.EventEndDate, shown to postedDraftTime(time))
                 }
             }
 
@@ -346,6 +352,21 @@ class PulseComposeViewModel
          * changes, mirroring RN's `precheckDone` flag.
          */
         private var precheckDone = false
+
+        // "Before you ask", and the check before posting (AI phase 2 contract §6.5, §6.6).
+
+        /** Earlier questions and recommendations nearby matching the question being written. Empty hides them. */
+        private val _earlierAnswers = MutableStateFlow<List<EarlierPostDto>>(emptyList())
+        val earlierAnswers: StateFlow<List<EarlierPostDto>> = _earlierAnswers.asStateFlow()
+        private var earlierAnswersQuery = ""
+        private var earlierAnswersJob: Job? = null
+
+        /** What the kindness and safety check found after Post was tapped. Non-null shows "Before you post". */
+        private val _postCheckFindings = MutableStateFlow<List<PostPrecheckFinding>?>(null)
+        val postCheckFindings: StateFlow<List<PostPrecheckFinding>?> = _postCheckFindings.asStateFlow()
+
+        /** The draft "Post anyway" was tapped for: that exact draft posts without another check. */
+        private var postAnywayDraft: String? = null
 
         private val _announceAudience = MutableStateFlow(PulseAnnounceAudience.Neighbors)
         val announceAudience: StateFlow<PulseAnnounceAudience> = _announceAudience.asStateFlow()
@@ -550,6 +571,7 @@ class PulseComposeViewModel
             if (isIntentLocked) return
             if (_activeIntent.value == intent) return
             _activeIntent.value = intent
+            scheduleEarlierAnswers()
         }
 
         fun selectIdentity(identity: PulseComposeIdentity) {
@@ -613,6 +635,7 @@ class PulseComposeViewModel
             // RN re-arms the precheck whenever the body text changes
             // (`PostComposerModal.tsx:789`).
             if (field == PulseComposeField.Body && changed) precheckDone = false
+            if ((field == PulseComposeField.Title || field == PulseComposeField.Body) && changed) scheduleEarlierAnswers()
         }
 
         /** X on the precheck nudge banner. */
@@ -938,15 +961,113 @@ class PulseComposeViewModel
                 return
             }
             _state.value = PulseComposeUiState.Submitting
+            // Earlier answers still on their way would only arrive behind the post.
+            earlierAnswersJob?.cancel()
+            earlierAnswersQuery = ""
             viewModelScope.launch {
                 val editingId = editingPostId
                 if (editingId != null) {
                     handleUpdate(editingId)
                 } else {
+                    if (needsSecondLook()) return@launch
                     refreshGpsFixIfNeeded()
                     handleCreate()
                 }
             }
+        }
+
+        // MARK: - Before you ask (`GET /api/posts/before-you-ask`)
+
+        /** A new question going to a place nearby: the only draft that looks for earlier answers. */
+        private val isWritingQuestion: Boolean
+            get() = !isEditing && effectivePostType() == "ask_local" && postingTarget?.isPlaceTarget != false
+
+        /**
+         * Looks for earlier answers once the question has 3 words, 600 ms after it stops changing; a shorter
+         * question or another kind of post clears them. Nothing is shown when the look fails.
+         */
+        private fun scheduleEarlierAnswers() {
+            val query =
+                if (isWritingQuestion) {
+                    "${trimmedValue(PulseComposeField.Title)} ${trimmedValue(PulseComposeField.Body)}".trim()
+                } else {
+                    ""
+                }
+            if (query.split(WHITESPACE).count { it.isNotEmpty() } < EARLIER_ANSWERS_MIN_WORDS) {
+                earlierAnswersJob?.cancel()
+                earlierAnswersQuery = ""
+                _earlierAnswers.value = emptyList()
+                return
+            }
+            if (query == earlierAnswersQuery) return
+            earlierAnswersQuery = query
+            earlierAnswersJob?.cancel()
+            earlierAnswersJob =
+                viewModelScope.launch {
+                    delay(EARLIER_ANSWERS_DEBOUNCE_MS)
+                    val target = postingTarget
+                    val result =
+                        precheckRepo.beforeYouAsk(
+                            query,
+                            target?.targetLatitude ?: freshGpsFix?.latitude,
+                            target?.targetLongitude ?: freshGpsFix?.longitude,
+                        )
+                    val posts = (result as? NetworkResult.Success)?.data?.posts ?: return@launch
+                    if (query == earlierAnswersQuery) _earlierAnswers.value = posts
+                }
+        }
+
+        // MARK: - The check before posting (`POST /api/posts/precheck`, `stage: "post"`)
+
+        /** The draft as the check reads it; "Post anyway" approves exactly this. */
+        private fun postCheckDraft(request: PostCreateRequest): String =
+            listOf(request.postType, request.safetyAlertKind.orEmpty(), request.title.orEmpty(), request.content)
+                .joinToString("\u001F")
+
+        /**
+         * Runs the kindness and safety check when Post is tapped on a new post to a place nearby. True when it
+         * found something: the composer is back to editing and shows the findings with Edit and Post anyway. A
+         * failed or slow check (10 s) posts as usual.
+         */
+        private suspend fun needsSecondLook(): Boolean {
+            if (businessAuthorId != null || postingTarget?.isPlaceTarget == false) return false
+            val request = buildRequest()
+            val draft = postCheckDraft(request)
+            if (draft == postAnywayDraft) return false
+            val target = postingTarget
+            val result =
+                withTimeoutOrNull(POST_CHECK_TIMEOUT_MS) {
+                    precheckRepo.precheck(
+                        PostPrecheckRequest(
+                            content = request.content,
+                            postType = request.postType,
+                            purpose = request.purpose,
+                            surface = "place",
+                            latitude = target?.targetLatitude ?: freshGpsFix?.latitude,
+                            longitude = target?.targetLongitude ?: freshGpsFix?.longitude,
+                            stage = "post",
+                            title = request.title,
+                            safetyAlertKind = request.safetyAlertKind,
+                        ),
+                    )
+                }
+            val findings = (result as? NetworkResult.Success)?.data?.findings.orEmpty()
+            if (findings.isEmpty()) return false
+            _state.value = PulseComposeUiState.Idle
+            _postCheckFindings.value = findings
+            return true
+        }
+
+        /** "Post anyway": posts this draft as it is. */
+        fun postAnyway() {
+            postAnywayDraft = postCheckDraft(buildRequest())
+            _postCheckFindings.value = null
+            submit()
+        }
+
+        /** "Edit": back to the composer, the words kept. */
+        fun editAfterPostCheck() {
+            _postCheckFindings.value = null
         }
 
         /**
@@ -1504,7 +1625,7 @@ class PulseComposeViewModel
         }
 
         /**
-         * An event time for the post: the drafted instant while [field] still shows its seed ([value]), else the
+         * An event time for the post: the drafted time while [field] still shows its seed ([value]), else the
          * person's pick as [isoDateTime] reads it; null when the field is empty.
          */
         private fun eventTime(
@@ -1514,6 +1635,14 @@ class PulseComposeViewModel
             if (value.isEmpty()) return null
             return draftTimes[field]?.takeIf { it.first == value }?.second ?: isoDateTime(value)
         }
+
+        /**
+         * A drafted time as the post carries it: the draft's moment on this phone's wall clock, through [isoDateTime]
+         * like a pick ("10:00 AM" goes out as `…T10:00:00Z`, which `pulseEventDetails` reads back as 10:00 AM). The
+         * drafted instant itself would show shifted by the zone's offset. Null for a day without a time.
+         */
+        private fun postedDraftTime(time: PulseComposeDraftFields.DraftTime): String? =
+            time.instant?.let { isoDateTime(pickerDateTime(time.local)) }
 
         /** The `yyyy-MM-dd HH:mm` shape the end-time picker writes. */
         private fun pickerDateTime(value: LocalDateTime): String =
@@ -1549,6 +1678,10 @@ class PulseComposeViewModel
             private const val PHONE_MAX_DIGITS = 15
             private const val DEAL_DEFAULT_EXPIRY_DAYS = 7L
             private const val GPS_REFRESH_TIMEOUT_MS = 3_000L
+            private const val EARLIER_ANSWERS_MIN_WORDS = 3
+            private const val EARLIER_ANSWERS_DEBOUNCE_MS = 600L
+            private const val POST_CHECK_TIMEOUT_MS = 10_000L
+            private val WHITESPACE = Regex("\\s+")
             private const val LAST_SEEN_SEPARATOR = " · "
             private val PICKER_DATE_TIME_PATTERN = Regex("""^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$""")
             private val ISO_DATE_ONLY_PATTERN = Regex("""^\d{4}-\d{2}-\d{2}$""")

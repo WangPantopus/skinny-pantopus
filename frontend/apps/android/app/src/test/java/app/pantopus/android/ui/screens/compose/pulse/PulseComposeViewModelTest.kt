@@ -3,6 +3,7 @@
 package app.pantopus.android.ui.screens.compose.pulse
 
 import androidx.lifecycle.SavedStateHandle
+import app.pantopus.android.data.api.models.posts.BeforeYouAskResponse
 import app.pantopus.android.data.api.models.posts.PlaceEligibilityResponse
 import app.pantopus.android.data.api.models.posts.PostCreateRequest
 import app.pantopus.android.data.api.models.posts.PostCreateResponse
@@ -59,11 +60,12 @@ class PulseComposeViewModelTest {
     private val locationProvider = FallbackLocationProvider()
     private val businessPosts: BusinessPostsRepository = mockk()
 
-    // Pre-post safety precheck — relaxed so it always fails open.
+    // Pre-post safety precheck — relaxed so it always fails open; "Before you ask" finds nothing.
     private val precheckRepo: PostPrecheckRepository =
         mockk {
             coEvery { precheck(any()) } returns
                 NetworkResult.Success(PostPrecheckResponse(ok = true, canPost = true))
+            coEvery { beforeYouAsk(any(), any(), any()) } returns NetworkResult.Success(BeforeYouAskResponse())
         }
     private val isOnline = MutableStateFlow(true)
 
