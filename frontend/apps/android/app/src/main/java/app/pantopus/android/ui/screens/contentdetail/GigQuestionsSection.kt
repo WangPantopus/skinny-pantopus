@@ -617,19 +617,14 @@ private fun OwnerAnswerControls(
 private fun askerDisplayName(user: GigQuestionUser?): String {
     // No asker means the person has deleted their account; their question stays.
     if (user == null) return "Former member"
-    user.displayName?.takeIf { it.isNotEmpty() }?.let { return it }
-    user.name?.takeIf { it.isNotEmpty() }?.let { return it }
-    val parts = listOfNotNull(user.firstName, user.lastName).filter { it.isNotEmpty() }
-    if (parts.isNotEmpty()) return parts.joinToString(" ")
-    return user.username ?: "Neighbor"
+    val fullName = listOfNotNull(user.firstName, user.lastName).filter { it.isNotEmpty() }.joinToString(" ")
+    return listOf(user.displayName, user.name, fullName).firstOrNull { !it.isNullOrEmpty() } ?: user.username ?: "Neighbor"
 }
 
 private fun answererDisplayName(question: GigQuestionDto): String {
-    question.answererDisplayName?.takeIf { it.isNotEmpty() }?.let { return it }
-    question.answerer?.displayName?.takeIf { it.isNotEmpty() }?.let { return it }
-    question.answerer?.name?.takeIf { it.isNotEmpty() }?.let { return it }
-    question.answerer?.username?.takeIf { it.isNotEmpty() }?.let { return it }
-    return "Poster"
+    val answerer = question.answerer
+    return listOf(question.answererDisplayName, answerer?.displayName, answerer?.name, answerer?.username)
+        .firstOrNull { !it.isNullOrEmpty() } ?: "Poster"
 }
 
 private fun relativeTime(iso: String?): String? {
