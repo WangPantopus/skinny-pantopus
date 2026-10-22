@@ -717,26 +717,49 @@ public struct PulseComposeContent: View {
                         .accessibilityIdentifier("composePulseField_lostLastSeenDate_clear")
                 }
             }
-            DatePicker(
-                "Last seen date",
-                selection: Binding(
-                    get: { Self.parseISO(snapshot.value) ?? Date() },
-                    set: { actions.onUpdateField(.lostLastSeenDate, Self.formatISO($0)) }
-                ),
-                in: ...Date(),
-                displayedComponents: .date
-            )
-            .labelsHidden()
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(Spacing.s3)
-            .frame(minHeight: 44)
-            .background(Theme.Color.appSurface)
-            .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
-                    .stroke(Theme.Color.appBorder, lineWidth: 1)
-            )
-            .accessibilityIdentifier("composePulseField_lostLastSeenDate")
+            if snapshot.value.isEmpty {
+                // An empty picker would show today, and picking the day it shows changes nothing, so today
+                // could never be chosen. Unset, the field is a button that sets today; the picker then adjusts it.
+                Button { actions.onUpdateField(.lostLastSeenDate, Self.formatISO(Date())) } label: {
+                    Text("Tap to pick")
+                        .pantopusTextStyle(.body)
+                        .foregroundStyle(Theme.Color.appTextMuted)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(Spacing.s3)
+                        .frame(minHeight: 44)
+                        .background(Theme.Color.appSurface)
+                        .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
+                                .stroke(Theme.Color.appBorder, lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Last seen date, not set")
+                .accessibilityHint("Sets today. You can then change it.")
+                .accessibilityIdentifier("composePulseField_lostLastSeenDate")
+            } else {
+                DatePicker(
+                    "Last seen date",
+                    selection: Binding(
+                        get: { Self.parseISO(snapshot.value) ?? Date() },
+                        set: { actions.onUpdateField(.lostLastSeenDate, Self.formatISO($0)) }
+                    ),
+                    in: ...Date(),
+                    displayedComponents: .date
+                )
+                .labelsHidden()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(Spacing.s3)
+                .frame(minHeight: 44)
+                .background(Theme.Color.appSurface)
+                .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
+                        .stroke(Theme.Color.appBorder, lineWidth: 1)
+                )
+                .accessibilityIdentifier("composePulseField_lostLastSeenDate")
+            }
         }
     }
 
@@ -1088,11 +1111,13 @@ public struct PulseComposeContent: View {
 
     // MARK: - Date helpers
 
+    /// The Last seen date field's `yyyy-MM-dd` is the day the picker shows, in the phone's
+    /// time zone: in UTC, an evening pick in the Americas stored the next day.
     private static func makeISOFormatter() -> DateFormatter {
         let formatter = DateFormatter()
         formatter.calendar = Calendar(identifier: .iso8601)
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.timeZone = .current
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter
     }
