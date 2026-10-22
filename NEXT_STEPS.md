@@ -171,7 +171,8 @@ Sessions you start for one job (Instant Screens, Nearby Plans, single fixes) wor
 - [x] Picking an address in the hero shows three sourced facts from the public preview, then hands off to `/start`; a preview slower than 2.5 seconds goes straight there. The sky follows the visitor's clock only, with no location lookup. Examples are county- and area-level facts for a Clark County home, and they are labeled.
 - [x] The Ballot band shows through November 3. Ask Pantopus is built but stays off until the public apps carry action cards and #2472 is merged. Playdates appear as one kind with their rules and no images of children. Pulse is described as having no crime or suspicious-person alerts. Verification is described by what it unlocks, with no method named.
 - [x] Measured first-party: the hero's preview beacon carries `surface: home`, and the funnel route is set to `home` unless a mailed card already set one.
-- [ ] Yours: publish. Merging PR 2573 deploys pantopus.com. D6 says publish once a new address can be saved and a home set up in production, which waits on the Lob, Smarty and Google Address Validation keys (deferred since October 9).
+- [x] Publish now. On October 22 you said "Merge #2573 through the queue now, even before the production address keys are set up," which replaces D6's wait. Merging PR 2573 deploys pantopus.com.
+- [ ] Yours: the Lob, Smarty and Google Address Validation keys in production (deferred since October 9). Until then a new address can't be validated or a home added there without a cached validation, though the homepage's step 2 invites people to set up their home.
 - D14 (the `/start` copy) was not changed after a closer look. The "Founding Neighbor slots" line only shows while a block's founding slots are really open. The privacy promise's "it works by mail" (web, iOS, Android) becomes true again with the same provider keys.
 
 **Still open. The brief builds the default until you decide.**
