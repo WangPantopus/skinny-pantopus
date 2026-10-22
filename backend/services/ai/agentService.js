@@ -147,7 +147,9 @@ const TOOL_STATUS = {
   list_home_tasks: 'Looking at your tasks…',
   get_household: 'Looking at your household…',
   get_notification_settings: 'Checking your settings…',
+  get_home_verification: 'Checking your claim and postcard…',
   draft_plan: 'Drafting your plan…',
+  draft_plan_from_event: 'Drafting your plan…',
   draft_plan_change: 'Drafting the change…',
   draft_plan_cancel: 'Getting the plan ready to cancel…',
   show_plan_requests: 'Looking at who asked…',
@@ -414,6 +416,8 @@ async function streamChat({
     userId, user: viewer, sessionScope: sessionScope || null, timeZone: context.timeZone || undefined, plansEnabled,
     // Apps with action cards have the Suggestions switch (phase 2); older builds aren't told about it.
     suggestions: shown.has('action'),
+    // Apps that show link buttons (show_link); a read tool asks for them only there.
+    links: shown.has('link'),
   };
   if (images?.length && photos.length === 0) {
     // Answering without the photo or PDF would only confuse: say it couldn't be opened.

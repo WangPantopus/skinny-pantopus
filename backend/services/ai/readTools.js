@@ -289,6 +289,12 @@ function postForModel(post, zone) {
     replies: post.comment_count ?? null,
     state: post.state || null,
     event_date: post.event_date || null,
+    // An event's time and venue as its page shows them to everyone who reads it: composers post the
+    // poster's wall clock labelled UTC, so it reads in UTC.
+    ...(post.post_type === 'event' ? {
+      event_when: post.event_date ? whenLabel(post.event_date, post.event_end_date, 'UTC') : null,
+      event_venue_text: clip(post.event_venue, 120),
+    } : {}),
   };
 }
 
