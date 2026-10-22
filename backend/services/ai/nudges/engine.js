@@ -348,6 +348,48 @@ async function appendToConversation(conversation, added) {
 
 // ─── Push ──────────────────────────────────────────────────────────────────
 
+// ─── Notification buttons (phase 3 §9) ─────────────────────────────────────
+
+// The only card actions a notification button may run: Mark done (a task's status to done, nothing
+// else) and Mark solved (the person's own question). "Fewer like this" is the category's own button.
+const BUTTON_ACTIONS = [
+  ['done', 'PUT', new RegExp(`^/api/homes/${ID}/tasks/${ID}$`, 'i'), (body) => JSON.stringify(body) === '{"status":"done"}'],
+  ['solved', 'PATCH', new RegExp(`^/api/posts/${ID}/solve$`, 'i'), () => true],
+];
+const CATEGORIES = {
+  suggestion: 'ASSISTANT_SUGGESTION', done: 'ASSISTANT_DONE', solved: 'ASSISTANT_SOLVED', done_only: 'ASSISTANT_DONE_ONLY', solved_only: 'ASSISTANT_SOLVED_ONLY',
+};
+
+/**
+ * The push category and the one action a button runs (§9.2), from all of a nudge's cards: a button
+ * only when exactly one action qualifies. A requested nudge (a follow-up) has no "Fewer like this".
+ * @returns {{ push_category?: string, assistant_action?: string }}
+ */
+function pushButtons(cards, { requested = false } = {}) {
+  const found = [];
+  for (const envelope of cards) {
+    const rows = [{ item: null, actions: envelope.actions || [] }, ...(envelope.items || []).map((item) => ({ item, actions: item.actions || [] }))];
+    for (const { item, actions } of rows) {
+      for (const candidate of actions) {
+        const request = candidate?.request;
+        const match = request && BUTTON_ACTIONS.find(([, method, path, body]) => request.method === method && path.test(String(request.path)) && body(request.body || {}));
+        if (match && !candidate.then) found.push({ kind: match[0], envelope, item, candidate });
+      }
+    }
+  }
+  const one = found.length === 1 ? found[0] : null;
+  if (!one) return requested ? {} : { push_category: CATEGORIES.suggestion };
+  const { kind, envelope, item, candidate } = one;
+  return {
+    push_category: CATEGORIES[requested ? `${kind}_only` : kind],
+    // A JSON string: FCM data values are strings. The card's own request, exactly.
+    assistant_action: JSON.stringify({
+      card_id: envelope.id, item_id: item ? item.id : null, action_id: candidate.id,
+      method: candidate.request.method, path: candidate.request.path, body: candidate.request.body || {},
+    }),
+  };
+}
+
 /** The push carries what opens the nudge, never the card (a push holds about 4 KB). */
 async function pushNudge(row) {
   if (!(await notificationService.isPushEnabled(row.user_id))) return;
@@ -361,6 +403,9 @@ async function pushNudge(row) {
       kind: row.metadata?.kind || null,
       conversation_id: row.metadata?.conversation_id || null,
       recipient_user_id: row.user_id,
+      // Phase 3 §9.2: set from the stored row each time, so a push held through quiet hours carries them too.
+      ...(row.metadata?.push_category ? { category: row.metadata.push_category } : {}),
+      ...(row.metadata?.assistant_action ? { assistant_action: row.metadata.assistant_action } : {}),
     },
   });
 }
@@ -450,6 +495,7 @@ async function deliver(nudge, { window }) {
       ...(subject.type === 'post' ? { post_id: subject.id } : {}),
       agent_request_id: requestId,
       ...(nudge.requested ? { requested: true } : {}),
+      ...pushButtons(cards, { requested: nudge.requested }),
     },
     idempotencyKey: key,
     sendPush: false,
@@ -627,6 +673,7 @@ module.exports = {
   nudgesSentDuring,
   // The push a nudge sends, also for the memory review (memory.js).
   pushNudge,
+  pushButtons,
   KINDS,
   NUDGE_KINDS,
   TYPES,
