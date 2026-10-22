@@ -1581,7 +1581,7 @@ class ChatConversationViewModel
             _replyingTo.value =
                 ChatReplyPreview(
                     messageId = message.id,
-                    senderName = message.sender?.displayLabel ?: if (message.userId == currentUserId) "You" else "Message",
+                    senderName = replyNameOf(message),
                     text = message.resolvedText,
                 )
             _editingMessageId.value = null
@@ -2939,10 +2939,17 @@ class ChatConversationViewModel
             val original = allMessages.firstOrNull { it.id == replyToId } ?: return null
             return ChatReplyPreview(
                 messageId = original.id,
-                senderName = original.sender?.displayLabel ?: "Message",
+                senderName = replyNameOf(original),
                 text = original.resolvedText,
             )
         }
+
+        /**
+         * Who a reply quotes: "You" for a message sent as this viewer's identity (the business in its inbox),
+         * as those bubbles and stamps carry no name, else the sender's name.
+         */
+        private fun replyNameOf(message: ChatMessageDto): String =
+            if (message.userId == messageIdentityId) "You" else message.sender?.displayLabel ?: "Message"
 
         private fun lockedTierOf(message: ChatMessageDto): String? {
             val metadata = message.metadata ?: return null
