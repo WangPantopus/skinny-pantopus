@@ -78,7 +78,7 @@ One migration, `<timestamp>_assistant_agent_tables.sql`, sorted after master's n
 | `id` | `uuid` PK | |
 | `user_id` | `uuid NOT NULL` → `"User"(id) ON DELETE CASCADE` | The person. |
 | `conversation_id` | `uuid NULL` → `"AIConversation"(id) ON DELETE CASCADE` | The conversation it belongs to. Deleting the conversation deletes the request, its steps and any follow-up still waiting. |
-| `home_id` | `uuid NULL` → `"Home"(id) ON DELETE SET NULL` | The home it is about, when there is one: the screen context's home for a chat turn, or a task's home for a follow-up. |
+| `home_id` | `uuid NULL`, no foreign key | The home it is about, when there is one: the screen context's home for a chat turn, or a task's home for a follow-up. No foreign key, as `Plan.place_home_id`: Home deletion is governed by `home_delete_eligibility`, and the schema test requires every table with a foreign key to `Home` to be named in it. Readers check the person still sees the home. |
 | `origin` | `text NOT NULL`: `chat` \| `nudge` \| `follow_up` | `chat` is a chat turn; `nudge` is a brief or nudge the server sent; `follow_up` is a check-back the person set. |
 | `kind` | `text NULL`, at most 40 characters | For `nudge`, the nudge kind (`brief`, `plan_weather`, …, `plan_you_like`). For follow-ups, `follow_up`. Null for chat turns. |
 | `status` | `text NOT NULL`: `working` \| `waiting` \| `done` \| `couldnt` \| `cancelled` | The October 4 design's states. A chat turn is `working` until it ends, then `done` (or `couldnt` on an error). A follow-up is `waiting` until it is due. `needs_you` isn't stored, because "Needs you" is worked out when it is read (§6). |
@@ -138,7 +138,7 @@ One migration, `<timestamp>_assistant_agent_tables.sql`, sorted after master's n
 |---|---|---|
 | `id` | `uuid` PK | |
 | `user_id` | `uuid NOT NULL` → `"User"(id) ON DELETE CASCADE` | The person. Nobody else reads it. |
-| `home_id` | `uuid NULL` → `"Home"(id) ON DELETE CASCADE` | The home it is about. It is used only while the person can still see that home. |
+| `home_id` | `uuid NULL`, no foreign key (as `AgentRequest.home_id`) | The home it is about. It is used only while the person can still see that home; once the home is gone or they left it, the item shows as not in use until they delete it. |
 | `kind` | `text NOT NULL DEFAULT 'fact'`: `fact` \| `plan_alert` | A remembered fact or preference, or a "Plans you'd like" alert (§10.1). |
 | `topic` | `text NOT NULL`: `you` \| `household` \| `home` \| `plans` \| `nearby` \| `other` | Decides when it is relevant (§5.3). |
 | `fact` | `text NOT NULL`, 3 to 280 characters | The sentence the list shows and the model reads: "Our furnace filter is 16x25x1." |

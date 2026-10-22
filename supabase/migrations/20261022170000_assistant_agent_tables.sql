@@ -25,7 +25,10 @@ CREATE TABLE public."AgentRequest" (
   -- Deleting the conversation deletes its requests, their steps and any
   -- follow-up still waiting.
   conversation_id uuid REFERENCES public."AIConversation"(id) ON DELETE CASCADE,
-  home_id uuid REFERENCES public."Home"(id) ON DELETE SET NULL,
+  -- The home it is about. No foreign key on purpose, as Plan.place_home_id: Home
+  -- deletion stays governed by its explicit policy (home_delete_eligibility),
+  -- which this table doesn't join. Readers check the person still sees the home.
+  home_id uuid,
   origin text NOT NULL CHECK (origin IN ('chat', 'nudge', 'follow_up')),
   -- The nudge kind (brief, plan_weather, ...), or follow_up; null for chat turns.
   kind text CHECK (kind IS NULL OR char_length(kind) <= 40),
@@ -103,8 +106,10 @@ COMMENT ON TABLE public."AgentStep" IS
 CREATE TABLE public."AgentMemoryItem" (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL REFERENCES public."User"(id) ON DELETE CASCADE,
-  -- Used only while the person can still see this home.
-  home_id uuid REFERENCES public."Home"(id) ON DELETE CASCADE,
+  -- Used only while the person can still see this home. No foreign key on
+  -- purpose, as AgentRequest.home_id: an item whose home is gone, or that the
+  -- person left, shows as not in use until they delete it.
+  home_id uuid,
   kind text NOT NULL DEFAULT 'fact' CHECK (kind IN ('fact', 'plan_alert')),
   topic text NOT NULL CHECK (topic IN ('you', 'household', 'home', 'plans', 'nearby', 'other')),
   fact text NOT NULL CHECK (char_length(fact) BETWEEN 3 AND 280),
