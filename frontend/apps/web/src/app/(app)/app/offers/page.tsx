@@ -21,7 +21,12 @@ type Offer = {
   status: string;
   created_at: string;
   gig?: { id: string; title: string; price: number; status: string; category?: string };
-  bidder?: { id: string; username: string; name?: string; first_name?: string; profile_picture_url?: string; city?: string; state?: string };
+  // The bidder as the task's bid list names them (displayName, handle, avatarUrl: their Local Profile); older
+  // servers sent the account row (name, username, profile_picture_url, city).
+  bidder?: {
+    id: string; displayName?: string; handle?: string; avatarUrl?: string | null;
+    username?: string; name?: string; first_name?: string; profile_picture_url?: string; city?: string; state?: string;
+  };
 };
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = BID_STATUS;
@@ -64,7 +69,7 @@ export default function OffersPage() {
       const q = search.toLowerCase();
       const title = (o.gig?.title || '').toLowerCase();
       const msg = (o.message || '').toLowerCase();
-      const name = (o.bidder?.name || o.bidder?.username || '').toLowerCase();
+      const name = (o.bidder?.displayName || o.bidder?.name || o.bidder?.username || '').toLowerCase();
       if (!title.includes(q) && !msg.includes(q) && !name.includes(q)) return false;
     }
     return true;
@@ -167,8 +172,10 @@ function OfferCard({
 }) {
   const status = STATUS_STYLES[offer.status] || STATUS_STYLES.pending;
   const personName = perspective === 'received'
-    ? (offer.bidder?.name || offer.bidder?.first_name || offer.bidder?.username || 'Unknown')
+    ? (offer.bidder?.displayName || offer.bidder?.name || offer.bidder?.first_name || offer.bidder?.username || 'Unknown')
     : null;
+  const bidderHandle = offer.bidder?.handle || offer.bidder?.username;
+  const bidderAvatar = offer.bidder?.avatarUrl || offer.bidder?.profile_picture_url || null;
 
   return (
     <div
@@ -188,19 +195,19 @@ function OfferCard({
           {/* Person (for received offers) */}
           {perspective === 'received' && offer.bidder && (
             <div className="flex items-center gap-2 mt-1.5">
-              {offer.bidder.profile_picture_url ? (
-                <Image src={offer.bidder.profile_picture_url} alt="" width={20} height={20} sizes="20px" quality={75} className="w-5 h-5 rounded-full object-cover" />
+              {bidderAvatar ? (
+                <Image src={bidderAvatar} alt="" width={20} height={20} sizes="20px" quality={75} className="w-5 h-5 rounded-full object-cover" />
               ) : (
                 <div className="w-5 h-5 rounded-full bg-gray-300 text-white text-[10px] font-bold flex items-center justify-center">
                   {(personName || '?')[0].toUpperCase()}
                 </div>
               )}
-              {offer.bidder.username ? (
+              {bidderHandle ? (
                 <UserIdentityLink
                   userId={offer.bidder.id}
-                  username={offer.bidder.username}
-                  displayName={personName || offer.bidder.username}
-                  avatarUrl={offer.bidder.profile_picture_url || null}
+                  username={bidderHandle}
+                  displayName={personName || bidderHandle}
+                  avatarUrl={bidderAvatar}
                   city={offer.bidder.city || null}
                   state={offer.bidder.state || null}
                   textClassName="text-xs text-app-text-secondary hover:underline"

@@ -461,6 +461,7 @@ struct GigQuestionsSection: View {
 private func askerDisplayName(_ user: GigQuestionUser?) -> String {
     // No asker means the person has deleted their account; their question stays.
     guard let user else { return "Former member" }
+    if let display = user.displayName, !display.isEmpty { return display }
     if let name = user.name, !name.isEmpty { return name }
     let parts = [user.firstName, user.lastName].compactMap { $0 }.filter { !$0.isEmpty }
     if !parts.isEmpty { return parts.joined(separator: " ") }
@@ -470,6 +471,7 @@ private func askerDisplayName(_ user: GigQuestionUser?) -> String {
 private func answererDisplayName(_ question: GigQuestionDTO) -> String {
     if let display = question.answererDisplayName, !display.isEmpty { return display }
     if let answerer = question.answerer {
+        if let display = answerer.displayName, !display.isEmpty { return display }
         if let name = answerer.name, !name.isEmpty { return name }
         if let username = answerer.username, !username.isEmpty { return username }
     }

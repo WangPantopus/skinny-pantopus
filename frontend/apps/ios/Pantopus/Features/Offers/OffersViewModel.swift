@@ -766,6 +766,7 @@ extension OffersViewModel {
     }
 
     static func displayName(for bidder: BidderUserDTO?) -> String {
+        if let display = bidder?.displayName, !display.isEmpty { return display }
         if let name = bidder?.name, !name.isEmpty { return name }
         if let first = bidder?.firstName, !first.isEmpty { return first }
         if let username = bidder?.username, !username.isEmpty { return username }
