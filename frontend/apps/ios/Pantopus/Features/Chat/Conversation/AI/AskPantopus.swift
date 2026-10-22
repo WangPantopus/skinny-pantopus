@@ -72,11 +72,13 @@ public struct AIAskTopic: Identifiable, Hashable, Sendable {
         )
     }
 
-    static func post(id: String, title: String) -> AIAskTopic {
+    /// A post's page. An event that hasn't ended also offers making a plan
+    /// of it (`makesPlan`, for people with Plans).
+    static func post(id: String, title: String, makesPlan: Bool = false) -> AIAskTopic {
         AIAskTopic(
             context: AIChatContext(surface: "post", id: id),
             about: title,
-            starters: ["Draft a reply", "Sum up the replies"]
+            starters: (makesPlan ? ["Make this a plan"] : []) + ["Draft a reply", "Sum up the replies"]
         )
     }
 }
