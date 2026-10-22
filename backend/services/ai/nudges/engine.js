@@ -45,6 +45,7 @@ const { runCardTool, card: makeCard, action } = require('../actionCards');
 const { isAssistantOff } = require('../assistantBudget');
 const { userTimeZone } = require('../chatContext');
 const { clip, isUuid } = require('../assistantKit');
+const agentRecord = require('../agentRecord');
 
 // ─── Kinds and limits ──────────────────────────────────────────────────────
 
@@ -52,6 +53,8 @@ const { clip, isUuid } = require('../assistantKit');
 const NUDGE_KINDS = [
   'plan_weather', 'plan_requests_waiting', 'plan_after', 'lost_found_match', 'question_answered',
   'home_overdue', 'home_paperwork', 'radon_follow_up',
+  // Phase 3 (docs/product/ai-assistant-phase3-contract-2026-10-22.md §10.1): "Plans you'd like".
+  'plan_you_like',
 ];
 const KINDS = ['brief', ...NUDGE_KINDS];
 // The brief is about the person's day: its subject is the person.
@@ -350,17 +353,29 @@ async function pushNudge(row) {
   });
 }
 
+// The yearly memory review (phase 3 §5.5) is released with the nudges, but it isn't one.
+const MEMORY_REVIEW_TYPE = 'assistant_memory_review';
+
 /** A held push goes only if the nudge is still current and wanted when quiet hours end. */
 async function heldPushDropped(row) {
   if (!(Date.parse(row.metadata?.expires_at) > Date.now())) return true;
+  // About the person's own data: neither Suggestions nor a mute drops it, only its expiry.
+  if (row.type === MEMORY_REVIEW_TYPE) return false;
   if (isAssistantOff()) return true;
   const prefs = await suggestionPrefs(row.user_id);
   return !prefs.enabled || Boolean(prefs.muted[row.metadata?.kind]);
 }
 
+/** A held push that went out or was dropped: the nudge's notify step says so (agentRecord.js). */
+function recordReleased(row, { dropped }) {
+  return agentRecord.notifyReleased(row.metadata?.agent_request_id, row.user_id, dropped ? 'dropped' : 'sent');
+}
+
 /** Every 5 minutes (jobs/index.js): held nudge and brief pushes whose quiet hours are over. */
 async function releaseHeldNudges() {
-  const result = await heldPushes.releaseHeldPushes({ types: Object.values(TYPES), send: pushNudge, isDropped: heldPushDropped });
+  const result = await heldPushes.releaseHeldPushes({
+    types: [...Object.values(TYPES), MEMORY_REVIEW_TYPE], send: pushNudge, isDropped: heldPushDropped, onReleased: recordReleased,
+  });
   if (result.sent || result.dropped) logger.info('nudges.held_pushes', result);
   return result;
 }
@@ -389,6 +404,8 @@ async function deliver(nudge, { window }) {
   const type = typeOf(kind);
   const key = nudgeKey(nudge);
   const notificationId = crypto.randomUUID();
+  // The nudge's AgentRequest (phase 3 contract §4.1), named on the row so a held push can update it.
+  const requestId = crypto.randomUUID();
   const { conversation, created } = await latestConversation(userId, nudge.title);
   const cards = withFewerLikeThis(nudge.cards, { notificationId, title: nudge.title, expiresAt: nudge.expiresAt });
   // A nudge that doesn't go out leaves nothing behind: its row, and a conversation made for it.
@@ -416,6 +433,7 @@ async function deliver(nudge, { window }) {
       push_sent_at: null,
       // The inbox shows a row about a post only while its reader still can read the post.
       ...(subject.type === 'post' ? { post_id: subject.id } : {}),
+      agent_request_id: requestId,
     },
     idempotencyKey: key,
     sendPush: false,
@@ -447,12 +465,19 @@ async function deliver(nudge, { window }) {
     logger.info('nudge.conversation_saved_late', { userId, kind, error: err.message });
   }
 
+  let pushed = 'sent';
   try {
-    await heldPushes.pushOrHold(row, { send: pushNudge, fallbackTz: window.timeZone, ownOnly: kind === 'brief' });
+    const { heldUntil } = await heldPushes.pushOrHold(row, { send: pushNudge, fallbackTz: window.timeZone, ownOnly: kind === 'brief' });
+    if (heldUntil) pushed = 'held';
   } catch (err) {
     // The row and the message stand; only the push is lost.
     logger.warn('nudge.push_failed', { userId, kind, error: err.message });
+    pushed = 'dropped';
   }
+  // Its request, cards and push, so the cards' done states can be reported (fail-open: never throws).
+  await agentRecord.nudgeSent({
+    id: requestId, userId, conversationId: conversation.id, kind, subject, notificationId, cards, notify: type, pushed,
+  });
   return { sent: true, notificationId };
 }
 
@@ -584,6 +609,8 @@ module.exports = {
   fewerLikeThis,
   releaseHeldNudges,
   nudgesSentDuring,
+  // The push a nudge sends, also for the memory review (memory.js).
+  pushNudge,
   KINDS,
   NUDGE_KINDS,
   TYPES,

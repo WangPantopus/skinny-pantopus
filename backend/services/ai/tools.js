@@ -17,8 +17,10 @@ const { escapeIlike } = require('../../utils/escapeIlike');
 const { draftPickupSchedule } = require('./pickupDraft');
 const { readToolDefinitions, runReadTool, PLACE_POST_TYPES } = require('./readTools');
 const { nearbyReadToolDefinitions, runNearbyReadTool } = require('./readToolsNearby');
+const { verificationReadToolDefinitions, runVerificationReadTool } = require('./readToolsVerification');
 const { actionCardDefinitions, runCardTool } = require('./actionCards');
 const { showLinkDefinition, runShowLink } = require('./appGuide');
+const { memoryToolDefinitions, runMemoryTool } = require('./memory');
 const { homesOf, localToUtc } = require('./assistantKit');
 
 const {
@@ -271,7 +273,10 @@ const toolDefinitions = [
   },
   ...readToolDefinitions,
   ...nearbyReadToolDefinitions,
+  ...verificationReadToolDefinitions,
   ...actionCardDefinitions,
+  // Phase 3: what they ask Pantopus to remember (memory.js).
+  ...memoryToolDefinitions,
   showLinkDefinition,
 ];
 
@@ -321,6 +326,10 @@ const TOOL_TIMEOUTS_MS = {
   list_home_tasks: 8000,
   get_household: 8000,
   draft_plan: 15000,
+  // The venue's place search, then draft_plan's.
+  draft_plan_from_event: 20000,
+  // Each home's claim, access, postcard and residency reads.
+  get_home_verification: 10000,
   draft_plan_change: 15000,
   show_plan_requests: 8000,
   draft_plan_ask: 8000,
@@ -330,6 +339,9 @@ const TOOL_TIMEOUTS_MS = {
   draft_home_year: 15000,
   draft_home_system: 12000,
   draft_home_asset: 8000,
+  draft_memory: 8000,
+  draft_plan_alert: 8000,
+  recall_memory: 8000,
 };
 
 /** The tool context: the person and what this turn knows. A bare user id still works (older callers, tests). */
@@ -381,8 +393,12 @@ async function _executeToolImpl(name, args, ctx) {
   if (read) return read;
   const nearby = await runNearbyReadTool(name, args, ctx);
   if (nearby) return nearby;
+  const verification = await runVerificationReadTool(name, args, ctx);
+  if (verification) return verification;
   const drafted = await runCardTool(name, args, ctx);
   if (drafted) return drafted;
+  const remembered = await runMemoryTool(name, args, ctx);
+  if (remembered) return remembered;
   if (name === 'show_link') return runShowLink(args, ctx);
   switch (name) {
     case 'get_user_context':

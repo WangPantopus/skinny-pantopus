@@ -337,9 +337,16 @@ async function runPlansTick() {
   } catch (err) {
     logger.warn('plans.tick.nudges_failed', { error: err.message });
   }
-  const result = { released, ...lifecycle, askedAgain, reminders, summaries, ...(nudges ? { nudges } : {}) };
+  // Then "Plans you'd like": newly posted plans, to the people who asked to hear about their kind.
+  let alerts = 0;
+  try {
+    alerts = await require('../services/ai/nudges/planAlerts').runPlanAlerts();
+  } catch (err) {
+    logger.warn('plans.tick.alerts_failed', { error: err.message });
+  }
+  const result = { released, ...lifecycle, askedAgain, reminders, summaries, ...(nudges ? { nudges } : {}), ...(alerts ? { alerts } : {}) };
   if (released || askedAgain || reminders || summaries || lifecycle.expiredCount || lifecycle.endedCount || lifecycle.closedCount
-    || (nudges && nudges.sent)) {
+    || (nudges && nudges.sent) || alerts) {
     logger.info('plans.tick', result);
   }
   return result;

@@ -12,6 +12,9 @@
  * cents of model usage; run it when prompts or tools change, and before raising limits.
  * A question's `attach` files (in scripts/ai/fixtures) are uploaded through
  * POST /api/upload/ai-media first and sent as the message's images, as the apps do.
+ * Phase 3: `cards` replaces the list the app sends; `reset: ["memory"]` forgets the account's
+ * saved items first (DELETE /api/ai/memory), so a run can be repeated; `tap` runs the named
+ * action of the first card that has it, as the person's tap would (e.g. "remember").
  */
 const fs = require('fs');
 const path = require('path');
@@ -55,11 +58,12 @@ async function token(label) {
   }
 }
 
+// "<owner.home>" is OWNER_HOME_ID in the accounts file, and "<guest.event>" GUEST_EVENT_ID.
 function fillContext(context) {
   if (!context) return undefined;
   return Object.fromEntries(Object.entries(context).map(([key, value]) => {
-    const m = typeof value === 'string' && value.match(/^<([a-z0-9]+)\.home>$/);
-    return [key, m ? field(m[1], 'HOME_ID') : value];
+    const m = typeof value === 'string' && value.match(/^<([a-z0-9]+)\.([a-z]+)>$/);
+    return [key, m ? field(m[1], `${m[2].toUpperCase()}_ID`) : value];
   }));
 }
 
@@ -80,10 +84,28 @@ async function upload(question) {
   return json.images.map((image) => image.url);
 }
 
+async function call(question, method, urlPath, body) {
+  const res = await fetch(`${API}${urlPath}`, {
+    method,
+    headers: { Authorization: `Bearer ${await token(question.as)}`, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) throw new Error(`${method} ${urlPath} failed (${res.status})`);
+}
+
+/** The person's tap on a card's action: its own request, as the app sends it. */
+async function tap(question, got) {
+  const action = got.cards.flatMap((c) => c.actions || []).find((a) => a.id === question.tap);
+  if (!action) return `no ${question.tap} action to tap`;
+  await call(question, action.request.method, action.request.path, action.request.body || {});
+  return null;
+}
+
 async function ask(question) {
+  if ((question.reset || []).includes('memory')) await call(question, 'DELETE', '/api/ai/memory');
   const body = {
     message: question.say,
-    cards: question.old ? ['pickup_schedule'] : ['pickup_schedule', 'action', 'link'],
+    cards: question.cards || (question.old ? ['pickup_schedule'] : ['pickup_schedule', 'action', 'link']),
   };
   if (question.attach) body.images = await upload(question);
   const context = fillContext(question.context);
@@ -134,6 +156,8 @@ function check(question, got) {
   for (const type of e.cards || []) if (!types.includes(type)) fails.push(`no ${type} card (got ${types.join(',') || 'none'})`);
   if (e.bodyIncludes && !bodies.some((body) => includes(body, e.bodyIncludes))) fails.push(`no card request with ${JSON.stringify(e.bodyIncludes)}`);
   if (e.linkContains && !got.links.some((url) => url.includes(e.linkContains))) fails.push(`no link containing ${e.linkContains}`);
+  // A memory_save card's saved fields (phase 3): { "sensitive": true } or { "kind": "plan_alert" }.
+  if (e.memory && !got.cards.some((c) => c.card === 'memory_save' && includes(c.memory, e.memory))) fails.push(`no memory_save card with ${JSON.stringify(e.memory)}`);
   if (e.textMatches && !new RegExp(e.textMatches, 'i').test(got.text)) fails.push(`text lacks /${e.textMatches}/`);
   if (e.textNotMatches && new RegExp(e.textNotMatches, 'im').test(got.text)) fails.push(`text matches /${e.textNotMatches}/`);
   // What everyone nearby would read: the title and about a card would post.
@@ -151,6 +175,10 @@ function check(question, got) {
     try {
       const got = await ask(question);
       const fails = check(question, got);
+      if (!fails.length && question.tap) {
+        const missing = await tap(question, got);
+        if (missing) fails.push(missing);
+      }
       if (fails.length) failed += 1;
       console.log(`${fails.length ? 'FAIL' : 'pass'}  ${question.id}  ${Date.now() - started} ms${fails.length ? `  — ${fails.join('; ')}` : ''}`);
       if (fails.length) console.log(`      reply: ${got.text.replace(/\s+/g, ' ').slice(0, 240)}${got.errors.length ? `  (errors: ${got.errors.join(', ')})` : ''}`);
