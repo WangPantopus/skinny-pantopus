@@ -37,12 +37,30 @@ const ENTITY_TYPE_CONFIG = {
   franchise_location: { defaultFeePct: 12, requiresPhysicalLocation: true },
 };
 
+// A fee under this is a reduced rate a business gets for its type (nonprofit, religious org, community group,
+// pop-up). The owner picks the type, so the rate applies only once Pantopus has verified the business as that type;
+// until then it pays the standard rate, or its founding cap (founder rule 2026-10-22).
+const REDUCED_FEE_BELOW_PCT = 10;
+const REDUCED_FEE_TYPES = new Set(Object.keys(ENTITY_TYPE_CONFIG)
+  .filter((type) => ENTITY_TYPE_CONFIG[type].defaultFeePct < REDUCED_FEE_BELOW_PCT));
+const FOUNDING_FEE_CAP_PCT = 10;
+
+// The documents that prove 501(c)(3) status; approving one takes a nonprofit's fee to 0%.
+const NONPROFIT_EVIDENCE_TYPES = ['ein_verification', 'tax_exempt_letter'];
+
 const VERIFICATION_STATUSES = {
   UNVERIFIED: 'unverified',
   SELF_ATTESTED: 'self_attested',
   DOCUMENT_VERIFIED: 'document_verified',
   GOVERNMENT_VERIFIED: 'government_verified',
 };
+
+// The statuses only Pantopus sets: a reviewer approved a document, or a registry check passed. self_attested is
+// the owner's own word.
+const PANTOPUS_VERIFIED_STATUSES = new Set([
+  VERIFICATION_STATUSES.DOCUMENT_VERIFIED,
+  VERIFICATION_STATUSES.GOVERNMENT_VERIFIED,
+]);
 
 const VERIFICATION_RANK = {
   unverified: 0,
@@ -153,7 +171,12 @@ module.exports = {
   ENTITY_TYPES,
   ENTITY_TYPE_CONFIG,
   ENTITY_TYPE_LABELS,
+  REDUCED_FEE_BELOW_PCT,
+  REDUCED_FEE_TYPES,
+  FOUNDING_FEE_CAP_PCT,
+  NONPROFIT_EVIDENCE_TYPES,
   VERIFICATION_STATUSES,
+  PANTOPUS_VERIFIED_STATUSES,
   VERIFICATION_RANK,
   VERIFICATION_MULTIPLIERS,
   FOUNDING_BUSINESS_MULTIPLIER,
