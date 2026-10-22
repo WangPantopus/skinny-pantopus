@@ -443,6 +443,8 @@ public enum HubRoute: Hashable {
     case wallet
     /// WS5.1 — full transaction history (`GET /api/wallet/transactions`).
     case walletActivityList
+    /// Invoices businesses sent you (`GET /api/businesses/invoices/received`), from the Wallet's Invoices row.
+    case receivedInvoices
 
     // MARK: - B1.6 batch-2 routing seam
 
@@ -3264,13 +3266,18 @@ public struct HubTabRoot: View {
                 onBack: pop,
                 onOpenHistory: { Task { @MainActor in push(.walletActivityList) } },
                 onOpenTaxDocs: { Task { @MainActor in push(.placeholder(label: "Tax documents")) } },
-                onSeeAllActivity: { Task { @MainActor in push(.walletActivityList) } }
+                onSeeAllActivity: { Task { @MainActor in push(.walletActivityList) } },
+                onOpenInvoices: { Task { @MainActor in push(.receivedInvoices) } }
             )
         case .walletActivityList:
             WalletActivityListView(
                 viewModel: WalletActivityListViewModel(),
                 onBack: pop
             )
+        case .receivedInvoices:
+            ReceivedInvoicesView(viewModel: ReceivedInvoicesViewModel { invoiceId in
+                Task { @MainActor in push(.invoiceDetail(invoiceId: invoiceId)) }
+            })
 
         // MARK: - B1.6 batch-2 routing seam
         // Placeholder destinations. Each screen prompt (B2–B5) swaps the one

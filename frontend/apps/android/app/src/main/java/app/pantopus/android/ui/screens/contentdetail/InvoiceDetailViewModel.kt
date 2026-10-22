@@ -24,6 +24,7 @@ import java.text.NumberFormat
 import java.time.Instant
 import java.time.OffsetDateTime
 import java.time.ZoneId
+import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import javax.inject.Inject
@@ -282,7 +283,7 @@ class InvoiceDetailViewModel
                 if (invoice.status == "paid") {
                     shortDate(invoice.paidAt)?.let { parts += "paid $it" }
                 } else {
-                    shortDate(invoice.dueDate)?.let { parts += "due $it" }
+                    shortDate(invoice.dueDate, preservingDay = true)?.let { parts += "due $it" }
                 }
                 return parts.joinToString(" · ")
             }
@@ -306,14 +307,14 @@ class InvoiceDetailViewModel
                     "overdue" ->
                         ContentDetailPill(
                             id = "status",
-                            label = "Overdue" + (shortDate(invoice.dueDate)?.let { " · due $it" } ?: ""),
+                            label = "Overdue" + (shortDate(invoice.dueDate, preservingDay = true)?.let { " · due $it" } ?: ""),
                             icon = PantopusIcon.AlertCircle,
                             tone = ContentDetailPill.Tone.Warning,
                         )
                     "viewed", "sent" ->
                         ContentDetailPill(
                             id = "status",
-                            label = shortDate(invoice.dueDate)?.let { "Due $it" } ?: "Payment requested",
+                            label = shortDate(invoice.dueDate, preservingDay = true)?.let { "Due $it" } ?: "Payment requested",
                             icon = PantopusIcon.Clock,
                             tone = ContentDetailPill.Tone.Info,
                         )
@@ -441,15 +442,19 @@ class InvoiceDetailViewModel
 
             /**
              * ISO-8601 timestamp → `"Dec 14"`; null when absent or unparseable
-             * (the caller then omits that clause entirely).
+             * (the caller then omits that clause entirely). A due date is a calendar day stored as midnight UTC, so
+             * [preservingDay] reads it in UTC to keep its day (as iOS does); in US time zones it showed the day before.
              */
-            fun shortDate(raw: String?): String? {
+            fun shortDate(
+                raw: String?,
+                preservingDay: Boolean = false,
+            ): String? {
                 if (raw.isNullOrEmpty()) return null
                 val instant =
                     runCatching { Instant.parse(raw) }.getOrNull()
                         ?: runCatching { OffsetDateTime.parse(raw).toInstant() }.getOrNull()
                         ?: return null
-                return shortDateFormat.format(instant.atZone(ZoneId.systemDefault()))
+                return shortDateFormat.format(instant.atZone(if (preservingDay) ZoneOffset.UTC else ZoneId.systemDefault()))
             }
         }
     }
