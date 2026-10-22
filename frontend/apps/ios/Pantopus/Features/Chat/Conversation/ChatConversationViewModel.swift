@@ -455,9 +455,11 @@ public final class ChatConversationViewModel {
 
     /// User-facing notice set when the backend rejects a send with the
     /// gig pre-bid message cap (429 `PRE_BID_LIMIT`,
-    /// `backend/routes/chats.js:1573`). Cleared on the next successful
-    /// send or topic switch; the view renders it as a dismissible
-    /// banner above the composer.
+    /// `backend/routes/chats.js:1573`), refuses it (403), or, in the
+    /// assistant thread, won't take a file (`POST /api/upload/ai-media`).
+    /// Cleared on the next successful send, the assistant's next Send or a
+    /// topic switch; the view renders it as a dismissible banner above the
+    /// composer.
     public private(set) var sendLimitNotice: String?
 
     /// Set when a delete, edit or reaction fails, so the rollback isn't
@@ -1082,7 +1084,7 @@ public final class ChatConversationViewModel {
         await fetch(.reload)
     }
 
-    /// Dismiss the pre-bid send-limit banner.
+    /// Dismiss the send notice banner.
     public func dismissSendLimitNotice() {
         sendLimitNotice = nil
     }
@@ -1307,21 +1309,34 @@ public final class ChatConversationViewModel {
         let references: [String]
         /// PDFs and no photos: the question without words asks about the document.
         let documentsOnly: Bool
+        /// The composer's files as they were sent, given back if the reply fails before it starts.
+        let files: [ChatQueuedAttachment]
     }
 
     /// The person's message, its photos and PDFs uploaded first: nil when the
     /// upload failed. Then nothing went, and the composer keeps the words and
-    /// the files for another try.
+    /// the files for another try, except a file the server refused: that one
+    /// leaves, and the server's reason stays above the composer.
     private func outgoingAIMessage(_ text: String) async -> AIOutgoing? {
         // What the upload sends, taken before it starts.
-        let photos = queuedAttachments.compactMap { $0.mimeType.hasPrefix("image/") ? $0.data : nil }
-        let documents = queuedAttachments.filter { $0.mimeType == Self.pdfMimeType && $0.data != nil }
+        let files = queuedAttachments
+        let photos = files.compactMap { $0.mimeType.hasPrefix("image/") ? $0.data : nil }
+        let documents = files.filter { $0.mimeType == Self.pdfMimeType && $0.data != nil }
         let references: [String]
         do {
-            references = try await uploadQueuedAIMediaIfNeeded()
+            references = try await uploadAIMedia(files)
         } catch {
             if composerText.isEmpty { setComposerTextSilently(text) }
-            actionFailure = Self.aiUploadFailure(error)
+            if let refusal = Self.aiUploadRefusal(error) {
+                // Sent again, it would be refused again: it leaves the queue. A toast would be
+                // gone before the reason is read.
+                if let refused = Self.refusedAIFile(refusal, among: files) {
+                    queuedAttachments.removeAll { $0.id == refused.id }
+                }
+                sendLimitNotice = refusal.message
+            } else {
+                actionFailure = Self.aiUploadFailure(error)
+            }
             return nil
         }
         let userMessage = localMessage(
@@ -1338,18 +1353,27 @@ public final class ChatConversationViewModel {
                 ChatSentFile(name: $0.filename, sizeLabel: Self.fileSizeLabel($0.data?.count))
             }
         }
-        return AIOutgoing(message: userMessage, references: references, documentsOnly: photos.isEmpty && !documents.isEmpty)
+        return AIOutgoing(
+            message: userMessage,
+            references: references,
+            documentsOnly: photos.isEmpty && !documents.isEmpty,
+            files: files
+        )
     }
 
     private func sendAIMessage(_ text: String) async {
+        // A refusal shown for the last Send.
+        sendLimitNotice = nil
         guard let outgoing = await outgoingAIMessage(text) else { return }
         let userMessage = outgoing.message
         let references = outgoing.references
+        let files = outgoing.files
         let assistantId = "ai_assistant_\(UUID().uuidString)"
         let assistantMessage = localMessage(id: assistantId, text: "", userId: "ai", type: "ai_reply")
         messages.append(userMessage)
         messages.append(assistantMessage)
-        queuedAttachments = []
+        // Files picked while the upload ran stay.
+        queuedAttachments.removeAll { sent in files.contains { $0.id == sent.id } }
         rebuild()
 
         let request = AIChatStreamRequest(
@@ -1395,6 +1419,7 @@ public final class ChatConversationViewModel {
                         rebuild()
                     case let .error(message):
                         aiStatus = nil
+                        if !Task.isCancelled { giveBackIfUnanswered(assistantId: assistantId, text: text, files: files) }
                         replaceLocalMessage(id: assistantId, text: message, type: "ai_reply", userId: "ai")
                     case .done:
                         aiStatus = nil
@@ -1402,6 +1427,7 @@ public final class ChatConversationViewModel {
                 }
             } catch {
                 if !Task.isCancelled {
+                    self?.giveBackIfUnanswered(assistantId: assistantId, text: text, files: files)
                     self?.replaceLocalMessage(
                         id: assistantId,
                         text: "I lost the connection. Please try again.",
@@ -1442,6 +1468,20 @@ public final class ChatConversationViewModel {
         aiDraftsByMessageId = [:]
         aiLinksByMessageId = [:]
         rebuild()
+    }
+
+    /// A reply that failed before it said anything (no words, card or link): the person's words and
+    /// files go back in the composer, so trying again is one tap, and the files upload again then;
+    /// the server deletes their old references once read. Words typed in the meantime stay, and
+    /// files picked meanwhile follow the given-back ones. As on Android.
+    private func giveBackIfUnanswered(assistantId: String, text: String, files: [ChatQueuedAttachment]) {
+        let answered = messages.contains { $0.id == assistantId && !($0.messageText ?? "").isEmpty }
+            || !(aiDraftsByMessageId[assistantId] ?? []).isEmpty
+            || !(aiLinksByMessageId[assistantId] ?? []).isEmpty
+        guard !answered else { return }
+        if composerText.isEmpty { setComposerTextSilently(text) }
+        let picked = queuedAttachments.filter { queued in !files.contains { $0.id == queued.id } }
+        queuedAttachments = Array((files + picked).prefix(5))
     }
 
     private func finalizeCancelledAIStream(assistantId: String, partialText: String) {
@@ -1736,10 +1776,11 @@ public final class ChatConversationViewModel {
     /// the card's request through the signed-in client, if it is on the
     /// allowlist. While it runs the card's buttons are off; once it went
     /// through, that row (or the card) stays done, here and after a relaunch.
+    /// "Fewer like this" stays usable on an expired or finished card until it's used.
     public func runAIAction(cardId: String, itemId: String?, actionId: String) async {
         guard let state = aiDraftsByMessageId.values.joined().first(where: { $0.id == cardId })?.action,
-              state.running == nil, !state.isSettled(itemId: itemId), !state.isExpired,
-              let tapped = state.actions(itemId: itemId).first(where: { $0.id == actionId }) else { return }
+              let tapped = state.actions(itemId: itemId).first(where: { $0.id == actionId }),
+              state.canRun(tapped, itemId: itemId) else { return }
         let key = AIActionDoneStore.key(cardId: state.envelope.id, itemId: itemId, actionId: actionId)
         updateAction(cardId) {
             $0.running = key
@@ -2126,8 +2167,8 @@ public final class ChatConversationViewModel {
 
     /// The queued photos and PDFs, uploaded to `ai-media`: a private
     /// reference for each, which the chat's `images` carries.
-    private func uploadQueuedAIMediaIfNeeded() async throws -> [String] {
-        let files = queuedAttachments.compactMap { attachment -> MultipartFile? in
+    private func uploadAIMedia(_ attachments: [ChatQueuedAttachment]) async throws -> [String] {
+        let files = attachments.compactMap { attachment -> MultipartFile? in
             guard let data = attachment.data,
                   attachment.mimeType.hasPrefix("image/") || attachment.mimeType == Self.pdfMimeType else { return nil }
             return MultipartFile(fieldName: "files", filename: attachment.filename, mimeType: attachment.mimeType, data: data)
@@ -2166,8 +2207,41 @@ public final class ChatConversationViewModel {
         queueAttachment(kind: .document, filename: name, mimeType: Self.pdfMimeType, data: data)
     }
 
-    /// The upload's refusal in the server's own words (a PDF over its page
-    /// limit, say), else a plain line.
+    /// `ai-media` turning the upload down for what was sent (a locked PDF, a
+    /// file that isn't what it says), not a lost connection, a busy server or
+    /// too many uploads, which another Send may get past.
+    private struct AIUploadRefusal {
+        /// The server's own sentence.
+        let message: String
+        /// `PDF_ENCRYPTED`, …
+        let code: String?
+        /// Its `error` text, which names the file when the refusal is about one.
+        let error: String?
+    }
+
+    private static func aiUploadRefusal(_ error: any Error) -> AIUploadRefusal? {
+        guard case let APIError.clientError(status, body) = error, ![408, 429].contains(status) else { return nil }
+        let object = body?.data(using: .utf8).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+        return AIUploadRefusal(
+            message: APIError.friendlyClientMessage(body) ?? APIError.plainClientMessage(status: status),
+            code: object?["code"] as? String,
+            error: object?["error"] as? String
+        )
+    }
+
+    /// The file a refusal is about: the one it names (`File "name" …`),
+    /// else, for a PDF the server can't read (`PDF_…`), the only PDF sent;
+    /// nil when it can't tell (two PDFs, say), and then every file stays.
+    private static func refusedAIFile(_ refusal: AIUploadRefusal, among files: [ChatQueuedAttachment]) -> ChatQueuedAttachment? {
+        if let error = refusal.error, let named = files.first(where: { error.contains("File \"\($0.filename)\"") }) {
+            return named
+        }
+        guard refusal.code?.hasPrefix("PDF_") == true else { return nil }
+        let documents = files.filter { $0.mimeType == pdfMimeType && $0.data != nil }
+        return documents.count == 1 ? documents.first : nil
+    }
+
+    /// The upload's failure in the server's own words, else a plain line.
     private static func aiUploadFailure(_ error: any Error) -> String {
         let fallback = "Couldn\u{2019}t send that. Check your connection and try again."
         switch error {

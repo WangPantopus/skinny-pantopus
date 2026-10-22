@@ -54,15 +54,46 @@ extension ChatAIActionCard {
         return envelope.items.first { $0.id == itemId }?.actions ?? []
     }
 
-    /// What went through for the card's own actions, or for one row.
+    /// "Fewer like this", among the own actions of a nudge's card or the brief's last card. It
+    /// stands apart from the card's other buttons: it works until it's used, after they went
+    /// through and past `expires_at` too, and using it leaves them as they are.
+    var fewerLikeThis: AIActionCardDTO.Action? {
+        envelope.actions.first { AIActionAllowlist.isFewerLikeThis($0.request) }
+    }
+
+    /// The card's own actions but "Fewer like this", or one row's.
+    func otherActions(itemId: String?) -> [AIActionCardDTO.Action] {
+        guard itemId == nil else { return actions(itemId: itemId) }
+        return envelope.actions.filter { !AIActionAllowlist.isFewerLikeThis($0.request) }
+    }
+
+    /// What went through for the card's own actions (but "Fewer like this"), or for one row.
     func done(itemId: String?) -> ChatAIActionDone? {
-        actions(itemId: itemId).lazy
+        otherActions(itemId: itemId).lazy
             .compactMap { done[AIActionDoneStore.key(cardId: envelope.id, itemId: itemId, actionId: $0.id)] }
             .first
     }
 
+    /// "You'll see fewer like this", once "Fewer like this" went through.
+    var fewerDone: ChatAIActionDone? {
+        fewerLikeThis.flatMap { done[AIActionDoneStore.key(cardId: envelope.id, itemId: nil, actionId: $0.id)] }
+    }
+
+    /// A nudge with nothing to do but "Fewer like this": an expired one has lost nothing.
+    var hasOnlyFewerLikeThis: Bool {
+        fewerLikeThis != nil && otherActions(itemId: nil).isEmpty && envelope.items.allSatisfy(\.actions.isEmpty)
+    }
+
     func isSettled(itemId: String?) -> Bool {
         done(itemId: itemId) != nil
+    }
+
+    /// Whether a tap can go out: nothing in flight, and that row (or the card) neither done nor
+    /// past `expires_at`. "Fewer like this" goes out until it has been used.
+    func canRun(_ action: AIActionCardDTO.Action, itemId: String?) -> Bool {
+        guard running == nil else { return false }
+        if itemId == nil, AIActionAllowlist.isFewerLikeThis(action.request) { return fewerDone == nil }
+        return !isSettled(itemId: itemId) && !isExpired
     }
 
     /// Past `expires_at`, the card's actions are off.
@@ -168,16 +199,25 @@ struct AIActionCardView: View {
     @ViewBuilder private var footer: some View {
         if let done = card.done(itemId: nil) {
             AIActionDoneRow(done: done)
+            fewerLikeThisRow
         } else if card.isExpired {
-            Text("This card has expired. Ask again.")
-                .font(.system(size: 11.5))
-                .foregroundStyle(Theme.Color.appTextSecondary)
-                .accessibilityIdentifier("chatAIActionExpired")
+            if !card.hasOnlyFewerLikeThis {
+                Text("This card has expired. Ask again.")
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                    .accessibilityIdentifier("chatAIActionExpired")
+            }
+            fewerLikeThisRow
         } else {
-            if !card.envelope.actions.isEmpty {
-                buttons(card.envelope.actions, itemId: nil, size: .footer)
+            // "Fewer like this" sits with the card's buttons until it's used.
+            let actions = card.fewerDone == nil ? card.envelope.actions : card.otherActions(itemId: nil)
+            if !actions.isEmpty {
+                buttons(actions, itemId: nil, size: .footer)
             }
             failure(itemId: nil)
+            if let done = card.fewerDone {
+                AIActionDoneRow(done: done)
+            }
             if card.running == nil, card.done.isEmpty {
                 Button("Not now") { handlers.dismiss(cardId) }
                     .font(.system(size: 12, weight: .semibold))
@@ -186,6 +226,17 @@ struct AIActionCardView: View {
                     .frame(minHeight: 32)
                     .accessibilityIdentifier("chatAIActionNotNow")
             }
+        }
+    }
+
+    /// "Fewer like this" under a card whose other buttons went through or expired: usable
+    /// until it's used, then "You'll see fewer like this".
+    @ViewBuilder private var fewerLikeThisRow: some View {
+        if let done = card.fewerDone {
+            AIActionDoneRow(done: done)
+        } else if let fewer = card.fewerLikeThis {
+            buttons([fewer], itemId: nil, size: .footer)
+            failure(itemId: nil)
         }
     }
 
@@ -209,8 +260,8 @@ struct AIActionCardView: View {
     }
 
     private func buttonRow(_ actions: [AIActionCardDTO.Action], itemId: String?, size: CompactButtonSize) -> some View {
-        let locked = card.running != nil || card.isExpired
-        return ForEach(actions) { action in
+        ForEach(actions) { action in
+            let locked = !card.canRun(action, itemId: itemId)
             CompactButton(title: action.label, variant: variant(action.style), size: size) {
                 handlers.run(cardId, itemId, action.id)
             }

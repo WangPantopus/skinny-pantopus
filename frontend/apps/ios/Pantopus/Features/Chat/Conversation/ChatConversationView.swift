@@ -462,7 +462,8 @@ public struct ChatConversationView: View {
     }
 
     /// Dismissible banner shown when a send was rejected by the gig
-    /// room's pre-bid message cap (429 `PRE_BID_LIMIT`).
+    /// room's pre-bid message cap (429 `PRE_BID_LIMIT`) or refused, or the
+    /// assistant's upload wouldn't take a file.
     @ViewBuilder private var sendLimitBanner: some View {
         if let notice = viewModel.sendLimitNotice {
             HStack(spacing: Spacing.s2) {
@@ -478,7 +479,7 @@ public struct ChatConversationView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Dismiss message limit notice")
+                .accessibilityLabel("Dismiss notice")
             }
             .padding(.leading, Spacing.s3)
             .frame(minHeight: 44)
