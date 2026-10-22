@@ -17,6 +17,7 @@
  *   GET  /conversations/:id/messages?cards= — One conversation's turns, with the cards the app can show
  *   DELETE /conversations/:id    — Delete a conversation
  *   POST /nudges/:id/fewer       — "Fewer like this" on a nudge or the morning brief
+ *   POST /cards/:cardId/state    — What ran on one of the person's cards (done or dismissed)
  */
 const express = require('express');
 const Joi = require('joi');
@@ -29,6 +30,7 @@ const { aiChatLimiter, aiDraftLimiter } = require('../middleware/rateLimiter');
 const { asyncHandler } = require('../errorHandler');
 const agentService = require('../services/ai/agentService');
 const nudgeEngine = require('../services/ai/nudges/engine');
+const cardState = require('../services/ai/cardState');
 const radonReport = require('../services/ai/radonReport');
 const { CHAT_MODEL, DRAFT_MODEL } = require('../config/anthropic');
 const propertyIntelligenceService = require('../services/ai/propertyIntelligenceService');
@@ -484,6 +486,27 @@ router.delete('/conversations/:id', verifyToken, asyncHandler(async (req, res) =
 router.post('/nudges/:notificationId/fewer', verifyToken, asyncHandler(async (req, res) => {
   const result = await nudgeEngine.fewerLikeThis(req.user.id, req.params.notificationId);
   if (!result) return res.status(404).json({ error: 'Suggestion not found' });
+  res.json(result);
+}));
+
+// ─── Card done states ───────────────────────────────────────────────────────
+// Phase 3 contract §4.2: the apps report what ran on a card, so every device (and a
+// reinstall) shows it done. The writes limiter verifyToken applies covers it.
+
+const cardStateSchema = Joi.object({
+  status: Joi.string().valid('done', 'dismissed').required(),
+  action_id: Joi.when('status', {
+    is: 'done',
+    then: Joi.string().max(40).required(),
+    otherwise: Joi.string().max(40).allow(null).optional(),
+  }),
+  item_id: Joi.string().max(100).allow(null).optional(),
+  link: Joi.string().max(500).allow(null, '').optional(),
+});
+
+router.post('/cards/:cardId/state', verifyToken, validate(cardStateSchema), asyncHandler(async (req, res) => {
+  const result = await cardState.reportState(req.user.id, req.params.cardId, req.body);
+  if (result.code) return res.status(result.status).json({ error: result.message, code: result.code });
   res.json(result);
 }));
 

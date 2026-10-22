@@ -211,8 +211,11 @@ The coordinator decided this on October 22 (D1). Each card becomes an `AgentStep
 4. **Each brief or nudge gets one request.** The nudge engine (`deliver` in `nudges/engine.js`) creates:
    - an `AgentRequest` with `origin: nudge`, `kind`, `subject` and `outcome.notification_id`;
    - one `proposal` step per card;
-   - one `notify` step: `sent` or `held`, and later `dropped` if `releaseHeldNudges` drops the push.
+   - one `notify` step: `sent` or `held`. When quiet hours end, `releaseHeldNudges` turns a `held` step into `sent`, or `dropped` if it drops the push. The row's `metadata.agent_request_id` names the request.
 5. **Recording never blocks.** If a write fails, the turn or nudge goes on as today, logged as `agent.record_failed`. Its card simply has no server state.
+   - A card bigger than 32,000 characters of JSON isn't recorded, for the same reason.
+   - A chat turn's request names a home only when the screen context's home is one the person lives in.
+   - A turn that ends without an answer closes as `couldnt` with a short code: `cancelled` (the app left), `timeout`, `error`, `refusal`, `max_tokens`, `empty_reply`, `tool_limit` or `unreadable_photos`.
 
 ### 4.2 Reporting: `POST /api/ai/cards/:cardId/state`
 
@@ -230,9 +233,12 @@ or `{ "status": "dismissed" }` for "Not now".
   - It needs an `action_id` that the stored envelope has: at the top level, or in the item named by `item_id`. Otherwise it answers `400 CARD_ACTION_UNKNOWN`.
   - A `link` is kept only when it matches the action's `done.link`: the same text, with each `{{…}}` placeholder filled by a uuid. Any other link is dropped.
   - It adds `{ item_id, action_id, at, link }` to `result.done`, unless that pair is already there. The first report is kept.
-  - The step's `status` becomes `done` once the top-level action has run, or once every item has a done action. Until then it stays `open`, with its `done` entries.
-- **`dismissed`.** It sets `dismissed` only while nothing on the card is done.
+  - The step's `status` becomes `done` once a top-level action has run, or once every item has a done action. Until then it stays `open`, with its `done` entries.
+  - "Fewer like this" (`fewer`, which the engine adds to a nudge's last card) is kept in `done` but doesn't make the card done by itself, so its own buttons stay.
+- **`dismissed`.** It sets `dismissed` only while nothing on the card is done. A card that was dismissed and then has an action reported (from another phone) is `open` or `done` again.
 - **The answer** is `200 { "state": State }` (§4.3). Repeating a report changes nothing. A report that arrives after the card expired is still accepted, because the action ran before it expired.
+- **Errors** are `{ error, code }`. Two reports at once never lose one: each write goes only over what it read, three tries, then `409 CARD_BUSY` (retry later).
+- **Limits.** `verifyToken` applies the per-person write limit (60 a minute) to every write, so the route adds none of its own.
 
 ### 4.3 History
 
@@ -245,6 +251,7 @@ When `cards` lists `"state"`, each action-card item in `GET /api/ai/conversation
 }
 ```
 
+- `state` sits on the item, next to its `draft`: `{ "role": "assistant", "draft": { "type": "action", "draft": { … } }, "at": …, "state": { … } }`.
 - `status` is one of `open`, `done`, `dismissed` or `expired`. `expired` means the card's `expires_at` has passed and nothing on it was done.
 - A card with no recorded step carries no `state`. The app keeps using its own record for it.
 - The server reads every state for the page in one query (`idempotency_key IN (…)`), not one query per card.

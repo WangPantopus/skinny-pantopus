@@ -45,6 +45,7 @@ const { runCardTool, card: makeCard, action } = require('../actionCards');
 const { isAssistantOff } = require('../assistantBudget');
 const { userTimeZone } = require('../chatContext');
 const { clip, isUuid } = require('../assistantKit');
+const agentRecord = require('../agentRecord');
 
 // ─── Kinds and limits ──────────────────────────────────────────────────────
 
@@ -358,9 +359,16 @@ async function heldPushDropped(row) {
   return !prefs.enabled || Boolean(prefs.muted[row.metadata?.kind]);
 }
 
+/** A held push that went out or was dropped: the nudge's notify step says so (agentRecord.js). */
+function recordReleased(row, { dropped }) {
+  return agentRecord.notifyReleased(row.metadata?.agent_request_id, row.user_id, dropped ? 'dropped' : 'sent');
+}
+
 /** Every 5 minutes (jobs/index.js): held nudge and brief pushes whose quiet hours are over. */
 async function releaseHeldNudges() {
-  const result = await heldPushes.releaseHeldPushes({ types: Object.values(TYPES), send: pushNudge, isDropped: heldPushDropped });
+  const result = await heldPushes.releaseHeldPushes({
+    types: Object.values(TYPES), send: pushNudge, isDropped: heldPushDropped, onReleased: recordReleased,
+  });
   if (result.sent || result.dropped) logger.info('nudges.held_pushes', result);
   return result;
 }
@@ -389,6 +397,8 @@ async function deliver(nudge, { window }) {
   const type = typeOf(kind);
   const key = nudgeKey(nudge);
   const notificationId = crypto.randomUUID();
+  // The nudge's AgentRequest (phase 3 contract §4.1), named on the row so a held push can update it.
+  const requestId = crypto.randomUUID();
   const { conversation, created } = await latestConversation(userId, nudge.title);
   const cards = withFewerLikeThis(nudge.cards, { notificationId, title: nudge.title, expiresAt: nudge.expiresAt });
   // A nudge that doesn't go out leaves nothing behind: its row, and a conversation made for it.
@@ -416,6 +426,7 @@ async function deliver(nudge, { window }) {
       push_sent_at: null,
       // The inbox shows a row about a post only while its reader still can read the post.
       ...(subject.type === 'post' ? { post_id: subject.id } : {}),
+      agent_request_id: requestId,
     },
     idempotencyKey: key,
     sendPush: false,
@@ -447,12 +458,19 @@ async function deliver(nudge, { window }) {
     logger.info('nudge.conversation_saved_late', { userId, kind, error: err.message });
   }
 
+  let pushed = 'sent';
   try {
-    await heldPushes.pushOrHold(row, { send: pushNudge, fallbackTz: window.timeZone, ownOnly: kind === 'brief' });
+    const { heldUntil } = await heldPushes.pushOrHold(row, { send: pushNudge, fallbackTz: window.timeZone, ownOnly: kind === 'brief' });
+    if (heldUntil) pushed = 'held';
   } catch (err) {
     // The row and the message stand; only the push is lost.
     logger.warn('nudge.push_failed', { userId, kind, error: err.message });
+    pushed = 'dropped';
   }
+  // Its request, cards and push, so the cards' done states can be reported (fail-open: never throws).
+  await agentRecord.nudgeSent({
+    id: requestId, userId, conversationId: conversation.id, kind, subject, notificationId, cards, notify: type, pushed,
+  });
   return { sent: true, notificationId };
 }
 
