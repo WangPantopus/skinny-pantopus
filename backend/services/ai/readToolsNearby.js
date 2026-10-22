@@ -9,7 +9,8 @@
  * the post page's reply rule (onlyShownReplies) and leave out people on either side of a block.
  * Words other people wrote are marked as such (OTHERS_WORDS). The morning brief reads the
  * catch-up through the same function (catchUpNearby); neither tool moves the seen marker,
- * which the apps move when the feed appears (POST /api/posts/feed/seen).
+ * which the apps move when the feed appears (POST /api/posts/feed/seen). The post composers'
+ * "Before you ask" (earlierAnswers) searches the same feed, with no model call.
  */
 const { DateTime } = require('luxon');
 const supabaseAdmin = require('../../config/supabaseAdmin');
@@ -98,9 +99,10 @@ async function feedLocation(userId) {
 /**
  * The person's Nearby feed back to `sinceMs`, newest first: a few pages of the feed's own query,
  * with its own checks. Pinned posts lead the first page whatever their age, so they are kept only
- * when they are new enough too.
+ * when they are new enough too. `includeEnded` also reads posts whose time ran out (an Ask ends
+ * after 7 days), which still open on their pages.
  */
-async function feedSince(ctx, location, sinceMs, { postType = null, pages }) {
+async function feedSince(ctx, location, sinceMs, { postType = null, pages, includeEnded = false }) {
   const posts = [];
   let cursor = null;
   for (let page = 0; page < pages; page += 1) {
@@ -114,6 +116,7 @@ async function feedSince(ctx, location, sinceMs, { postType = null, pages }) {
       cursorCreatedAt: cursor?.createdAt || null,
       cursorId: cursor?.id || null,
       limit: FEED_PAGE,
+      includeEnded,
     });
     const batch = result.posts || [];
     posts.push(...batch);
@@ -190,9 +193,9 @@ const ASKING_WORDS = new Set([
 ]);
 
 /** The words of a request worth matching, each as a short stem ("plumbers" and "plumbing" share "plumb"). */
-function queryStems(query) {
+function queryStems(query, skip = ASKING_WORDS) {
   return [...new Set(normalizeTitle(String(query || ''))
-    .filter((word) => word.length >= 3 && !ASKING_WORDS.has(word))
+    .filter((word) => word.length >= 3 && !skip.has(word))
     .map((word) => (word.length > 5 ? word.slice(0, Math.max(4, word.length - 3)) : word)))];
 }
 
@@ -382,6 +385,142 @@ async function findRecommendations(args, ctx) {
   };
 }
 
+// ─── Before you ask ────────────────────────────────────────────────────────
+
+// While someone writes a question, the composer shows earlier questions and recommendations
+// nearby that match its words, each with its best reply (contract §6.5): a plain search of the
+// feed find_recommendations reads, ended posts included, with no model call.
+const EARLIER_PAGES = 2;
+const EARLIER_SHOWN = 3;
+// The best matches whose replies are read; a question nobody answered is passed over.
+const EARLIER_READ = 8;
+// A match is shown only when it scores at least this share of the best one.
+const EARLIER_MIN_SHARE = 0.4;
+// A post sharing one word with the question is about it when that word is this share of its title.
+const TITLE_SHARE = 0.4;
+// Words questions are written with that say nothing about what is asked.
+const QUESTION_WORDS = new Set([
+  ...ASKING_WORDS,
+  'would', 'could', 'might', 'like', 'want', 'wanted', 'wondering', 'there', 'their', 'they', 'them', 'about', 'from',
+  'been', 'just', 'really', 'thanks', 'thank', 'advance', 'tips', 'ideas', 'idea', 'suggestions', 'suggestion',
+  'suggest', 'thoughts', 'advice', 'experience', 'experiences', 'question', 'anybody', 'everyone', 'everybody',
+  'folks', 'people', 'which', 'when', 'how', 'why', 'are', 'was', 'were', 'did', 'had', 'you', 'all', 'one', 'thing',
+  'things', 'something', 'find', 'trying', 'try', 'recently', 'area', 'town', 'neighborhood', 'close', 'near', 'week',
+  'today', 'tomorrow', 'also', 'still', 'much', 'many', 'more', 'other', 'than', 'then', 'into', 'over', 'maybe',
+  'well', 'better', 'getting', 'going', 'come', 'see', 'out', 'hello', 'hey', 'options', 'worth', 'okay', 'make',
+  'making', 'call', 'called', 'calling', 'needs', 'hire', 'hiring',
+]);
+// Replies that answer nothing.
+const NOT_AN_ANSWER = /^\s*(\+1|bump|following|same|same here|same question|me too|ditto|interested|subscribing|commenting to follow)[\s.!]*$/i;
+
+/** The stems a text holds, as the start of one of its words. */
+function stemsIn(stems, text) {
+  const words = normalizeTitle(text);
+  return stems.filter((stem) => words.some((word) => word.startsWith(stem)));
+}
+
+/**
+ * Posts about what a question asks, best first. A post is about it when it holds two of the
+ * question's words, or when they make up a good part of its title ("Honest mechanic?" for a long
+ * question about brakes); a single shared word elsewhere ("kids") isn't enough. A word most of
+ * the posts share says little about which one is meant, so it counts for less; a word in the
+ * title counts for more, and a solved question a little more.
+ */
+function rankEarlier(stems, posts) {
+  const found = posts.map((post) => {
+    const title = post.title || String(post.content || '').split(/[.?!\n]/)[0];
+    return {
+      post,
+      titleWords: queryStems(title, QUESTION_WORDS).length,
+      inTitle: stemsIn(stems, title),
+      inPost: stemsIn(stems, `${post.title || ''} ${post.content || ''}`),
+    };
+  }).filter(({ inPost, inTitle, titleWords }) => inPost.length >= Math.min(2, stems.length)
+    || (inTitle.length > 0 && inTitle.length >= TITLE_SHARE * titleWords));
+  const postsWith = new Map();
+  for (const { inPost } of found) for (const stem of inPost) postsWith.set(stem, (postsWith.get(stem) || 0) + 1);
+  const weight = (stem) => Math.log(1 + posts.length / postsWith.get(stem));
+  const scored = found.map((item) => ({
+    ...item,
+    score: item.inPost.reduce((sum, stem) => sum + weight(stem) * (item.inTitle.includes(stem) ? 1.5 : 1), 0)
+      * (item.post.state === 'solved' ? 1.2 : 1),
+  })).sort((a, b) => (b.score - a.score)
+    || (Number(b.post.state === 'solved') - Number(a.post.state === 'solved'))
+    || ((b.post.comment_count || 0) - (a.post.comment_count || 0))
+    || (Date.parse(b.post.created_at) - Date.parse(a.post.created_at)));
+  const best = scored[0]?.score || 0;
+  return scored.filter(({ score }) => score >= best * EARLIER_MIN_SHARE);
+}
+
+/** The reply to show: the one the asker marked Helpful, else the most liked, else the first. */
+function bestReply(replies) {
+  return [...replies].sort((a, b) => (Number(Boolean(b.helpful_at)) - Number(Boolean(a.helpful_at)))
+    || ((b.like_count || 0) - (a.like_count || 0))
+    || (Date.parse(a.created_at) - Date.parse(b.created_at)))[0] || null;
+}
+
+/**
+ * Up to 3 earlier questions and recommendations matching the words of a question being written,
+ * each with its best reply: posts the person can see on their Nearby feed within 10 miles of the
+ * point given (else of their own place) from the last 180 days, ended ones included, their blocks,
+ * mutes and hidden posts respected. Their own posts are left out, and so is a question nobody has
+ * answered; a recommendation is an answer itself.
+ */
+async function earlierAnswers({ query, latitude, longitude }, ctx) {
+  const stems = queryStems(query, QUESTION_WORDS);
+  if (!stems.length) return { posts: [] };
+  const location = Number.isFinite(latitude) && Number.isFinite(longitude)
+    ? { latitude, longitude } : await feedLocation(ctx.userId);
+  if (!location) return { posts: [] };
+  const sinceMs = Date.now() - RECOMMENDATION_DAYS * DAY_MS;
+  const read = (postType) => feedSince(ctx, location, sinceMs, { postType, pages: EARLIER_PAGES, includeEnded: true });
+  const [questions, recommendations] = await Promise.all([read('ask_local'), read('recommendation')]);
+  const ranked = rankEarlier(stems, [...questions, ...recommendations]
+    // A global pin leads every first page whatever its type.
+    .filter((post) => ['ask_local', 'recommendation'].includes(post.post_type)
+      && String(post.user_id) !== String(ctx.userId)))
+    .slice(0, EARLIER_READ);
+  if (!ranked.length) return { posts: [] };
+
+  // Replies as the post page shows them, without people on either side of a block.
+  const blocked = await blockService.blockedUserIds(ctx.userId);
+  const { data: replies, error } = await onlyShownReplies(supabaseAdmin.from('PostComment')
+    .select('id, post_id, user_id, comment, like_count, helpful_at, created_at')
+    .in('post_id', ranked.map(({ post }) => post.id))
+    .eq('is_deleted', false), ctx.userId)
+    .order('created_at', { ascending: true })
+    .limit(RECOMMENDATION_REPLIES);
+  if (error) throw new Error(`Reply read failed: ${error.message}`);
+  const shownByPost = new Map();
+  for (const reply of replies || []) {
+    if (reply.user_id && blocked.has(String(reply.user_id))) continue;
+    if (!shownByPost.has(reply.post_id)) shownByPost.set(reply.post_id, []);
+    shownByPost.get(reply.post_id).push(reply);
+  }
+
+  const posts = [];
+  for (const { post } of ranked) {
+    const shown = shownByPost.get(post.id) || [];
+    // The asker's own replies ("Thanks all!") and "+1" answer nothing.
+    const answers = shown.filter((reply) => String(reply.user_id) !== String(post.user_id)
+      && clip(reply.comment, 400) && !NOT_AN_ANSWER.test(reply.comment));
+    if (post.post_type === 'ask_local' && !answers.length) continue;
+    const reply = bestReply(answers);
+    posts.push({
+      post_id: post.id,
+      type: post.post_type,
+      title: clip(post.title, 120) || clip(post.content, 120),
+      body: post.title ? clip(post.content, 160) : null,
+      created_at: post.created_at,
+      solved: post.state === 'solved' || post.resolution === 'answered',
+      reply_count: shown.length,
+      best_reply: reply ? { text: clip(reply.comment, 240), helpful: Boolean(reply.helpful_at), likes: reply.like_count || 0 } : null,
+    });
+    if (posts.length === EARLIER_SHOWN) break;
+  }
+  return { posts };
+}
+
 // ─── Dispatch ──────────────────────────────────────────────────────────────
 
 const NEARBY_READ_EXECUTORS = {
@@ -407,4 +546,6 @@ module.exports = {
   // For the morning brief.
   catchUpNearby,
   findRecommendations,
+  // For "Before you ask" in the post composers (GET /api/posts/before-you-ask).
+  earlierAnswers,
 };
