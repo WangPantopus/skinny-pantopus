@@ -21,6 +21,7 @@
  *   GET|POST|DELETE /memory, PATCH|DELETE /memory/:id, POST /memory/reviewed — What Pantopus remembers
  *   GET  /needs-you              — What waits on the person, for Today and the assistant
  *   GET|POST /follow-ups, DELETE /follow-ups/:id — Check-backs ("check back Thursday")
+ *   GET  /glance/:topic          — Pickup, today or nearby in a few sentences, for Siri and the launcher
  */
 const express = require('express');
 const Joi = require('joi');
@@ -37,6 +38,7 @@ const cardState = require('../services/ai/cardState');
 const memory = require('../services/ai/memory');
 const { needsYou } = require('../services/ai/needsYou');
 const followUps = require('../services/ai/followUps');
+const { glance, GlanceError } = require('../services/ai/glance');
 const radonReport = require('../services/ai/radonReport');
 const { CHAT_MODEL, DRAFT_MODEL } = require('../config/anthropic');
 const propertyIntelligenceService = require('../services/ai/propertyIntelligenceService');
@@ -590,6 +592,20 @@ router.post('/follow-ups', verifyToken, validate(Joi.object({ card_id: Joi.strin
 
 router.delete('/follow-ups/:id', verifyToken, followUpRoute(async (req, res) => {
   res.json(await followUps.cancel(req.user.id, req.params.id));
+}));
+
+// ─── Glance answers ─────────────────────────────────────────────────────────
+// Phase 3 contract §8.2: written from facts as the person (no model call, nothing written).
+// A home_id must be theirs: chosenHome would quietly fall back to the default home.
+
+router.get('/glance/:topic', verifyToken, aiDraftLimiter, asyncHandler(async (req, res) => {
+  const homeId = req.query.home_id ?? null;
+  try {
+    res.json(await glance(req.user.id, req.params.topic, { homeId }));
+  } catch (err) {
+    if (err instanceof GlanceError) return res.status(404).json({ code: err.code, speech: err.speech, link: err.link });
+    throw err;
+  }
 }));
 
 // ─── Audio Transcription ─────────────────────────────────────────────────────
