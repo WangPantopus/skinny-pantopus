@@ -165,6 +165,16 @@ Sessions you start for one job (Instant Screens, Nearby Plans, single fixes) wor
 - [x] Close the business fee leak first: owners choose their own business type, and some types pay 0%. Decided under your standing instruction: a fee under 10% (pop-up, nonprofit, religious, community group) applies only after Pantopus verifies that type.
 - [ ] Yours: live payments for invoices ([production checklist P11](docs/release/prod-config-checklist.md#p11-live-payments-for-crew-day-founder)), which ends D4's test-mode pilot for payments; then the first crew and street.
 
+**Made by the founder on October 21–22 (the homepage), from the [proposal](https://claude.ai/artifact/RVJgjB7fPcgEnWpa3UgEut) and the [comps](https://claude.ai/artifact/Sxvphjgs9ETh1soqfMyhpb).** On October 21 you said "All recommended" for D1–D15; on October 22 you said "Comps approved. Start building the new homepage." Built in [PR 2573](https://github.com/WangPantopus/skinny-pantopus/pull/2573).
+
+- [x] pantopus.com becomes "one day at one place" under the Living Sky (the Today sky drawn for the web), headed "Your place, alive." It shows only features that are live; nothing behind a launch-cut flag appears.
+- [x] Picking an address in the hero shows three sourced facts from the public preview, then hands off to `/start`; a preview slower than 2.5 seconds goes straight there. The sky follows the visitor's clock only, with no location lookup. Examples are county- and area-level facts for a Clark County home, and they are labeled.
+- [x] The Ballot band shows through November 3. Ask Pantopus is built but stays off until the public apps carry action cards and #2472 is merged. Playdates appear as one kind with their rules and no images of children. Pulse is described as having no crime or suspicious-person alerts. Verification is described by what it unlocks, with no method named.
+- [x] Measured first-party: the hero's preview beacon carries `surface: home`, and the funnel route is set to `home` unless a mailed card already set one.
+- [x] Publish now. On October 22 you said "Merge #2573 through the queue now, even before the production address keys are set up," which replaces D6's wait. Merging PR 2573 deploys pantopus.com.
+- [ ] Yours: the Lob, Smarty and Google Address Validation keys in production (deferred since October 9). Until then a new address can't be validated or a home added there without a cached validation, though the homepage's step 2 invites people to set up their home.
+- D14 (the `/start` copy) was not changed after a closer look. The "Founding Neighbor slots" line only shows while a block's founding slots are really open. The privacy promise's "it works by mail" (web, iOS, Android) becomes true again with the same provider keys.
+
 **Still open. The brief builds the default until you decide.**
 
 - [ ] Confirm the September 26 promise and pilot shape: "Know what matters for your home, and stay on top of it"; first-time homeowners in Vancouver, Camas and Washougal; five households, then 30 to 50, for eight weeks each. Default: as written.
