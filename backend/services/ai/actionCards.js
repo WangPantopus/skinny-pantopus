@@ -133,8 +133,43 @@ function draftPlanAskDefinition({ playdates = false } = {}) {
   };
 }
 
+// A plan from an event is a walk and coffee, a pickup game or a watch party, as the founder's Pulse
+// rule has it for plans made from a conversation or an event (docs/product/pulse-build/01-build-spec.md,
+// S14), or a study group, which Plans added after it. Never a playdate: a parent hosts one from Plans.
+const EVENT_PLAN_KINDS = rules.KINDS.filter((kind) => kind !== 'playdate');
+
+/** draft_plan_from_event: draft_plan's fields, with the event's time and place as the defaults. */
+function draftPlanFromEventDefinition() {
+  const plan = draftPlanDefinition().input_schema.properties;
+  return {
+    name: 'draft_plan_from_event',
+    description: "Turn an event post on the Nearby feed (the post on screen, or one from find_posts) into a plan the person hosts around it, so neighbors can ask to join and see the place once they're in. Anyone who can see the event may; the plan is theirs, and whoever posted the event isn't told. It takes the event's time and place unless you give others. Kinds: watch_party (a game, match, race, show or movie to watch together), pickup_game (playing a sport), walk_coffee (a walk, hike, dog or stroller walk, coffee, or strolling a market, fair or festival together), study_group (studying or learning together). If the event is none of these (a concert, a meeting, a sale, a class, a fundraiser, a kids' event), don't call this: say a plan is a watch party, a pickup game, a walk and coffee or a study group, so this event can't be one, and offer to draft a reply asking who would like to go together. Never a playdate: those aren't made from posts. The title and about are public, so keep the event's place and any address out of them; where exactly to meet goes in guest_note. Make sensible assumptions (8 spots) and name the main one in the note. Draft the card each time they ask, even when an earlier reply had one for this event: the screen they ask from shows only the new reply.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        post_id: { type: 'string', description: 'The event post: post_id from the screen context or find_posts.' },
+        kind: { type: 'string', enum: EVENT_PLAN_KINDS },
+        title: plan.title,
+        starts_local: nullable({ type: 'string', description: "Null for the event's start. Otherwise their local time, YYYY-MM-DDTHH:MM, to meet before it or for part of a long event." }),
+        ends_local: nullable({ type: 'string', description: "Null for the event's end (an hour and a half when it gives none)." }),
+        spots: plan.spots,
+        place_name: nullable({ type: 'string', description: "Null for the event's place. Otherwise a public place near them: the name of the place in the event's venue (\"Esther Short Park\"), or another place they ask for." }),
+        at_home: plan.at_home,
+        who_gets_in: plan.who_gets_in,
+        details: plan.details,
+        about: plan.about,
+        guest_note: plan.guest_note,
+        note: plan.note,
+      },
+      required: ['post_id', 'kind', 'title', 'starts_local', 'ends_local', 'spots', 'place_name', 'at_home', 'who_gets_in', 'details', 'about', 'guest_note', 'note'],
+      additionalProperties: false,
+    },
+  };
+}
+
 const actionCardDefinitions = [
   draftPlanDefinition(),
+  draftPlanFromEventDefinition(),
   {
     name: 'draft_plan_change',
     description: 'Draft a change to a plan the person hosts: the time, the place, spots, title or notes. Only the fields that change. Moving the start more than 30 minutes or changing the place asks everyone who is in "Still coming?".',
@@ -375,7 +410,7 @@ const actionCardDefinitions = [
 // The card tools that differ for people with plans_playdates.
 const playdateCardDefinitions = [draftPlanDefinition({ playdates: true }), draftPlanAskDefinition({ playdates: true })];
 
-const PLAN_CARD_TOOLS = new Set(['draft_plan', 'draft_plan_change', 'draft_plan_cancel', 'show_plan_requests', 'draft_plan_ask', 'draft_plan_message']);
+const PLAN_CARD_TOOLS = new Set(['draft_plan', 'draft_plan_from_event', 'draft_plan_change', 'draft_plan_cancel', 'show_plan_requests', 'draft_plan_ask', 'draft_plan_message']);
 
 // ─── Envelope ──────────────────────────────────────────────────────────────
 
@@ -626,6 +661,136 @@ async function draftPlan(args, ctx) {
     expiresAt: checked.startsAt,
   });
   return finished(draft, args.note, "Here's your plan. Check it, then tap Post plan.");
+}
+
+// ─── Plans from events ─────────────────────────────────────────────────────
+
+// An event that gives only its start becomes a plan this long, as draft_plan assumes for games.
+const EVENT_PLAN_MINUTES = 90;
+const MAX_PLAN_MS = rules.LIMITS.maxDurationMinutes * 60 * 1000;
+
+/** The event post as the person can read it. Its venue is what the post shows everyone who reads it. */
+async function readableEvent(postId, ctx) {
+  if (!isUuid(postId)) return { error: 'That is not a post id. Use the post on screen or find_posts.' };
+  const { data: post, error } = await supabaseAdmin.from('Post')
+    .select(`${POST_READ_SELECT}, title, content, post_type, event_date, event_end_date, event_venue`)
+    .eq('id', postId).maybeSingle();
+  if (error) throw new Error(`Post read failed: ${error.message}`);
+  if (!post || !(await canReadPost(post, ctx.userId))) return { error: "That post isn't available to them." };
+  if (post.post_type !== 'event') return { error: "That post isn't an event. For a plan of their own, use draft_plan." };
+  return { event: post };
+}
+
+/** The names a venue may be on the map by: before its first comma, as written, and the park it names. */
+function venueNames(venue) {
+  const text = clip(venue, 120);
+  if (!text) return [];
+  const first = text.split(',')[0].trim();
+  return [...new Set([first, text, planPlaces.parkNameOf(first)].filter((name) => name && name.length >= 3))];
+}
+
+/**
+ * An event time as the post page shows it: composers post the poster's wall clock labelled UTC
+ * (iOS PulseComposeViewModel.isoDateTime, PulseEventDetails), so "10:00Z" is 10:00 where they are.
+ */
+function eventWallClock(iso) {
+  const at = DateTime.fromISO(String(iso || ''), { zone: 'utc' });
+  return at.isValid ? at.toFormat("yyyy-LL-dd'T'HH:mm") : null;
+}
+
+/** The next quarter hour at least 5 minutes away: when a plan for an event under way starts. */
+function nextQuarterHour() {
+  const quarter = 15 * 60 * 1000;
+  return new Date(Math.ceil((Date.now() + 5 * 60 * 1000) / quarter) * quarter).toISOString();
+}
+
+/**
+ * A plan the person hosts around an event post they can see: the event's time and its place
+ * (found by its venue's name among public places near them, as draft_plan finds one), checked
+ * by draft_plan's own rules. The plan isn't linked to the post, and its poster isn't told.
+ */
+async function draftPlanFromEvent(args, ctx) {
+  if (!(await plansOn(ctx))) return { error: "Plans aren't available for this person yet." };
+  if (args.kind === 'playdate') return { error: "Playdates aren't made from posts. Say so: a parent hosts one from the Plans tab." };
+  if (!EVENT_PLAN_KINDS.includes(args.kind)) {
+    return { error: 'Choose a watch party, a pickup game, a walk and coffee or a study group, or say this event is none of them.' };
+  }
+  const found = await readableEvent(args.post_id, ctx);
+  if (found.error) return found;
+  const { event } = found;
+
+  // When: the event's own time, as its page shows it, unless they gave another.
+  const now = Date.now();
+  const eventStartLocal = eventWallClock(event.event_date);
+  const eventEndLocal = eventWallClock(event.event_end_date);
+  const eventStart = Date.parse(localToUtc(eventStartLocal, ctx.timeZone) || '');
+  const eventEnd = Date.parse(localToUtc(eventEndLocal, ctx.timeZone) || '');
+  if (Number.isFinite(eventEnd) && eventEnd <= now) return { error: 'This event is over, so there is nothing to plan around it. Say so.' };
+  let startsLocal = args.starts_local || null;
+  if (!startsLocal) {
+    if (!Number.isFinite(eventStart)) return { error: "The event doesn't say when it is. Ask when they'd like to meet, in one short question." };
+    if (eventStart > now) startsLocal = eventStartLocal;
+    else if (Number.isFinite(eventEnd)) startsLocal = nextQuarterHour();
+    else return { error: "The event has started and doesn't say when it ends. Ask when they'd like to meet, in one short question." };
+  }
+  let endsLocal = args.ends_local || null;
+  if (!endsLocal) {
+    const from = Date.parse(localToUtc(startsLocal, ctx.timeZone) || '');
+    if (!Number.isFinite(from)) return { error: 'Give the start as a local time, YYYY-MM-DDTHH:MM.' };
+    if (Number.isFinite(eventEnd) && eventEnd > from) {
+      if (eventEnd - from > MAX_PLAN_MS) {
+        return { error: `The event runs longer than a plan can (up to ${rules.LIMITS.maxDurationMinutes / 60} hours). Ask which part of it they'd like to meet for, or choose a sensible window and name it in the note.` };
+      }
+      endsLocal = eventEndLocal;
+    } else {
+      endsLocal = new Date(from + EVENT_PLAN_MINUTES * 60 * 1000).toISOString();
+    }
+  }
+
+  // Where: the event's place as its post names it, when it is a public place near them.
+  let placeName = args.at_home ? null : clip(args.place_name, 120);
+  if (!args.at_home && !placeName) {
+    const names = venueNames(event.event_venue);
+    if (!names.length) return { error: "The event doesn't say where it is. Ask where they'd like to meet: a park, court, library or café near them." };
+    const viewer = await loadViewer(userFor(ctx));
+    for (const name of names) {
+      const place = await findPublicPlace(name, viewer.origin, args.kind);
+      if (place?.loading) return { error: PLACES_LOADING };
+      if (place) {
+        placeName = name;
+        break;
+      }
+    }
+    if (!placeName) {
+      return { error: `No public place matching the event's venue ("${clip(event.event_venue, 80)}") was found within about 3 miles of them, and plans meet near where the host lives or is. Say so, and ask for a public place near them to meet before or after it.` };
+    }
+  }
+
+  const drafted = await draftPlan({
+    kind: args.kind,
+    title: args.title,
+    starts_local: startsLocal,
+    ends_local: endsLocal,
+    spots: args.spots,
+    place_name: placeName,
+    at_home: args.at_home || null,
+    who_gets_in: args.who_gets_in || null,
+    details: args.details || null,
+    about: args.about || null,
+    guest_note: args.guest_note || null,
+    note: args.note,
+  }, ctx);
+  if (drafted.draftType !== 'action') return drafted;
+  const { draft } = drafted;
+  // The event's place stays out of the public text too, however its post names it.
+  const { body } = draft.actions[0].request;
+  if (body.place.kind === 'public') {
+    const named = placeGivenAway([body.title, body.about, args.details?.subject, args.details?.game_label], placeNames(...venueNames(event.event_venue)));
+    if (named) return keepPlacePrivate(named);
+  }
+  draft.lines = [line('Event', clip(event.title, 80) || clip(event.content, 80)), ...draft.lines].filter(Boolean);
+  if (String(event.user_id) !== String(ctx.userId)) draft.warnings = [...draft.warnings, "It's your own plan: whoever posted the event isn't told."];
+  return { ...drafted, closing: "Here's a plan for the event. Check it, then tap Post plan." };
 }
 
 async function draftPlanChange(args, ctx) {
@@ -1458,6 +1623,7 @@ async function draftNotificationSettings(args, ctx) {
 
 const CARD_EXECUTORS = {
   draft_plan: draftPlan,
+  draft_plan_from_event: draftPlanFromEvent,
   draft_plan_change: draftPlanChange,
   draft_plan_cancel: draftPlanCancel,
   show_plan_requests: showPlanRequests,

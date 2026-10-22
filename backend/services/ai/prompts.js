@@ -21,12 +21,14 @@ function chatAgentSystem({
     '- What is new on Nearby since they last looked (catch_up_nearby), and the businesses and people neighbors recommend for something (find_recommendations).',
   ];
   if (plans) sees.push('- Plans: the ones they host or joined, and plans nearby (find_plans, get_plan).');
+  sees.push('- Where their own home claims and address verification stand: each claim, residency request and verification postcard, with what happens next (get_home_verification).');
 
   const does = [];
   if (actionCards) {
     does.push('- Reminders and household tasks, assigned to someone and repeating if they like (draft_home_task); marking one done, moving it or giving it to someone (draft_home_task_update); a year of upkeep for their home when they ask to plan it (draft_home_year); notification settings such as quiet hours and briefing times (draft_notification_settings); a reply to a post (draft_post_reply); marking their own question solved (draft_post_solve).');
     does.push("- Record the year one of the home's building systems was installed (roof, heating and cooling, water heater, electrical panel, sewer or septic, windows) on the Place tab with draft_home_system, and add an appliance or another item with its make, model and warranty to the home's records with draft_home_asset, from what they tell you or a label or document they send.");
     if (plans) does.push("- Host a plan (draft_plan), change or cancel one they host (draft_plan_change, draft_plan_cancel), answer people asking to join (show_plan_requests), ask to join someone else's plan (draft_plan_ask), and message everyone in a plan (draft_plan_message).");
+    if (plans) does.push('- Make an event post into a plan they host around it ("Make this a plan"), so neighbors can ask to join and see the place once they\'re in (draft_plan_from_event).');
   }
   does.push('- Draft a community post for their Nearby feed (an announcement, question, event, heads-up, recommendation, lost or found pet) with create_post_draft.');
   does.push('- Draft a Support Train (meals, takeout or groceries for a neighbor going through something hard) with draft_support_train_from_story.');
@@ -421,7 +423,7 @@ module.exports = {
   LOST_FOUND_MATCH_SYSTEM,
 
   VERSIONS: {
-    chat: 'chat-v2.7',  // v1.2: prompt built from the features that are on; home context in system messages; a draft's note ends the turn; v1.3: pickup days for apps that show the card; v2.0: phase 1 (read tools, action cards, links, the app guide); v2.1: "this" in a message sent from a screen ([Asked from: …]) means that screen; v2.2: a photo is seen only with its message: earlier replies about it stand, and a later photo is a different one; v2.3: playdates in the plan tools and the guide for people with plans_playdates; v2.4: home papers (PDFs and photos): one card per fact with its page, no account or serial numbers, non-home documents stop; draft_home_system and draft_home_asset; v2.5: draft_home_task_update, draft_home_year, radon follow-through; v2.6: Nearby catch-up and recommendations (catch_up_nearby, find_recommendations); v2.7: apps without action cards or link buttons (the web, 2.0.1, 2.0.2) hear where in the app things are done, not card tools or link screens
+    chat: 'chat-v2.8',  // v1.2: prompt built from the features that are on; home context in system messages; a draft's note ends the turn; v1.3: pickup days for apps that show the card; v2.0: phase 1 (read tools, action cards, links, the app guide); v2.1: "this" in a message sent from a screen ([Asked from: …]) means that screen; v2.2: a photo is seen only with its message: earlier replies about it stand, and a later photo is a different one; v2.3: playdates in the plan tools and the guide for people with plans_playdates; v2.4: home papers (PDFs and photos): one card per fact with its page, no account or serial numbers, non-home documents stop; draft_home_system and draft_home_asset; v2.5: draft_home_task_update, draft_home_year, radon follow-through; v2.6: Nearby catch-up and recommendations (catch_up_nearby, find_recommendations); v2.7: apps without action cards or link buttons (the web, 2.0.1, 2.0.2) hear where in the app things are done, not card tools or link screens; v2.8: an event post made into a plan (draft_plan_from_event), and where claims and postcards stand (get_home_verification)
     gig: 'gig-draft-v1.2',  // v1.1: estimated_duration in hours, as the gig form and API expect; v1.2: told today's date
     listing: 'listing-draft-v1.0',
     post: 'post-draft-v1.2',  // v1.1: told today's date, so "this Saturday" gets a real event date; v1.2: nearby-feed types only for surface "place"

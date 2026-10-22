@@ -55,11 +55,12 @@ async function token(label) {
   }
 }
 
+// "<owner.home>" is OWNER_HOME_ID in the accounts file, and "<guest.event>" GUEST_EVENT_ID.
 function fillContext(context) {
   if (!context) return undefined;
   return Object.fromEntries(Object.entries(context).map(([key, value]) => {
-    const m = typeof value === 'string' && value.match(/^<([a-z0-9]+)\.home>$/);
-    return [key, m ? field(m[1], 'HOME_ID') : value];
+    const m = typeof value === 'string' && value.match(/^<([a-z0-9]+)\.([a-z]+)>$/);
+    return [key, m ? field(m[1], `${m[2].toUpperCase()}_ID`) : value];
   }));
 }
 
