@@ -28,7 +28,7 @@ const MAX_HOMES = 5;
 const verificationReadToolDefinitions = [
   {
     name: 'get_home_verification',
-    description: "Where the person's own home claims and address verification stand, as their claim and postcard screens show them: each claim they made on a home (ownership, or a renter's residency documents) and whether it is under review or decided, their verification and residency request at each home, and their verification postcard (requested, sent, code expired, verified), each with what happens next. Use it for \"did my postcard go out?\", \"why is my claim still pending?\" or \"am I verified yet?\". It covers only their own claims, so never guess about anyone else's. Pantopus promises no review time: never give one. Link to the screens it names with show_link (home_claim_status is the claim's waiting room, home_verify_postcard the postcard screen) and the home_id it gives.",
+    description: "Where the person's own home claims and address verification stand, as their claim and postcard screens show them: each claim they made on a home (ownership, or a renter's residency documents) and whether it is under review or decided, their verification and residency request at each home, and their verification postcard (requested, sent, code expired, verified), each with what happens next. Use it for \"did my postcard go out?\", \"why is my claim still pending?\" or \"am I verified yet?\". It covers only their own claims, so never guess about anyone else's. Pantopus promises no review time: never give one. Read it again each time they ask, even when you answered before in this conversation: claims and postcards change. Link to the screens it names with show_link (home_claim_status is the claim's waiting room, home_verify_postcard the postcard screen) and the home_id it gives.",
     input_schema: {
       type: 'object',
       properties: { home_id: { type: ['string', 'null'], description: 'One home, or null for all of theirs.' } },
@@ -41,7 +41,7 @@ const verificationReadToolDefinitions = [
 // ─── The screens' words ────────────────────────────────────────────────────
 
 // The claim waiting room (WaitingRoomContent.active and its notices; My Claims for decided claims).
-function claimForModel(claim, zone) {
+function claimForModel(claim, zone, hasAccess = false) {
   const residency = claim.claim_type === 'resident';
   const decided = claim.status !== 'under_review';
   let status;
@@ -54,6 +54,13 @@ function claimForModel(claim, zone) {
   } else if (claim.status === 'under_review') {
     status = 'Under review';
     screen = "Your documents are waiting for a Pantopus reviewer. We'll notify you when it's decided.";
+  }
+  // Without access to the home their address there isn't verified, and the room offers mail verification;
+  // the postcard screen adds that it confirms an address, not ownership (HomeResidencyProgress).
+  if (claim.status === 'under_review' && !hasAccess) {
+    screen += residency
+      ? ' Meanwhile, you can verify your address by mail.'
+      : " Meanwhile, you can verify your address by mail. Ownership has its own review: verifying your address by mail doesn't make you an owner.";
   } else if (claim.status === 'approved') {
     status = 'Verified';
     screen = residency ? "Your residency claim was approved: you're verified as living here." : "Your ownership claim was approved: you're the owner.";
@@ -230,7 +237,7 @@ async function getHomeVerification(args, ctx) {
       verification = { kind: verification.kind, status: verification.status };
     }
     const parts = {
-      claim: claim ? claimForModel(claim, zone) : null,
+      claim: claim ? claimForModel(claim, zone, Boolean(authority?.hasAccess)) : null,
       verification,
       residency_request: progress?.unreadable ? null : residencyForModel(progress),
       postcard: mailShown ? postcardForModel(mail, zone) : null,
