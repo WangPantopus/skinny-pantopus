@@ -70,6 +70,14 @@ enum AIActionAllowlist {
         return false
     }
 
+    /// A nudge's or the brief's "Fewer like this" (`POST /api/ai/nudges/:id/fewer`), which the
+    /// server takes on an expired nudge too (phase 2 contract §3.6).
+    static func isFewerLikeThis(_ request: AIActionCardDTO.Request) -> Bool {
+        guard request.method.flatMap({ Endpoint.Method(rawValue: $0.uppercased()) }) == .post, let path = request.path else { return false }
+        let segments: [String] = path.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
+        return matches(pattern: "/api/ai/nudges/:id/fewer", segments: segments)
+    }
+
     /// One route's path, segment by segment; `:id` takes only a uuid and
     /// `:system` only a system key.
     private static func matches(pattern: String, segments: [String]) -> Bool {
