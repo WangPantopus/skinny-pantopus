@@ -3,17 +3,14 @@
 package app.pantopus.android.ui.screens.inbox.conversation
 
 import android.Manifest
-import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.Context
-import android.content.ContextWrapper
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.util.Patterns
-import android.view.WindowManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -126,6 +123,7 @@ import app.pantopus.android.core.routing.DeepLinkRouter
 import app.pantopus.android.data.ai.AIPdfCheck
 import app.pantopus.android.data.links.LinkPreview
 import app.pantopus.android.ui.components.GhostButton
+import app.pantopus.android.ui.components.KeyboardResizeEffect
 import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.screens.inbox.conversation.ai.AiActionCard
@@ -5536,35 +5534,12 @@ private fun ErrorFrame(
     }
 }
 
-/**
- * While the chat is open the window resizes for the keyboard instead of
- * panning, so the header stays on screen; the previous mode comes back when
- * the chat closes.
- */
-@Composable
-private fun KeyboardResizeEffect() {
-    val context = LocalContext.current
-    DisposableEffect(context) {
-        val window = context.findActivity()?.window
-        val previous = window?.attributes?.softInputMode
-        window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
-        onDispose { if (window != null && previous != null) window.setSoftInputMode(previous) }
-    }
-}
-
 /** A picked file's own name ("Lease.pdf"), which the file bubble shows, or null. */
 private fun Context.pickedFileName(uri: Uri): String? =
     contentResolver
         .query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
         ?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
         ?.takeIf(String::isNotBlank)
-
-private tailrec fun Context.findActivity(): Activity? =
-    when (this) {
-        is Activity -> this
-        is ContextWrapper -> baseContext.findActivity()
-        else -> null
-    }
 
 /** Every logical attachment remains reachable, including mixed photo/video/document sends. */
 @Composable
