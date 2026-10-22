@@ -38,6 +38,8 @@ const {
 } = require('./assistantKit');
 
 const NOTE = 'One short sentence shown under the card: the assumption that matters most or a detail worth adding. Nothing happens until they tap, so write about the card, never as if it were already done. Null when there is nothing to say.';
+// A note saying what is already on their task list ("the furnace filter is already on your list").
+const LIST_CLAIM = /\balready\b[^.]{0,40}\b(list|tasks?|added|scheduled)\b/i;
 // What a home paper's end date can be (a task's details.kind; the home_paperwork nudge reads it).
 const DOCUMENT_KINDS = ['warranty', 'policy', 'lease'];
 // The kinds of item the assistant records (HomeAsset categories, without consumables).
@@ -285,7 +287,7 @@ const actionCardDefinitions = [
         home_id: nullable({ type: 'string', description: 'Null for the home Today shows.' }),
         assignee_user_id: nullable({ type: 'string', description: 'Someone from get_household the tasks are for, when they say so; null for anyone at home.' }),
         leave_out: { type: ['array', 'null'], items: { type: 'string' }, description: 'Words naming tasks to leave out, e.g. ["gutters"] when a service does them. Null for none.' },
-        note: { type: ['string', 'null'], description: NOTE },
+        note: { type: ['string', 'null'], description: `${NOTE} Never say what is or isn't on their list: the card leaves out their open tasks and names them, and a card from earlier in the chat may never have been added.` },
       },
       required: ['home_id', 'assignee_user_id', 'leave_out', 'note'],
       additionalProperties: false,
@@ -1217,11 +1219,15 @@ async function draftHomeYear(args, ctx) {
   // shares half its words with the job, as gig titles are compared).
   const skip = (args.leave_out || []).flatMap(normalizeTitle);
   const open = (collection.records || []).filter((task) => task.status === 'open' || task.status === 'in_progress')
-    .map((task) => normalizeTitle(task.title));
+    .map((task) => ({ title: task.title, words: normalizeTitle(task.title) }));
+  // The open tasks that stood in for a job: the card names them, since only the server knows the list.
+  const listed = new Set();
   const wanted = plan.filter((item) => {
     const words = normalizeTitle(item.title);
     if (skip.some((word) => words.some((w) => w.startsWith(word) || word.startsWith(w)))) return false;
-    return !open.some((title) => jaccardSimilarity(words, title) >= 0.5);
+    const match = open.find((task) => jaccardSimilarity(words, task.words) >= 0.5);
+    if (match) listed.add(clip(match.title, 80));
+    return !match;
   });
   // The systems' checks first, then the seasons' jobs soonest first, in date order.
   const byDate = (a, b) => a.date.localeCompare(b.date);
@@ -1269,12 +1275,16 @@ async function draftHomeYear(args, ctx) {
       line('Home', [home.city, home.state].filter(Boolean).join(', ')),
       line('From', [systems.length ? "Your home's systems record" : null, seasons.region_label ? `the ${seasons.region_label} seasonal checklist` : null].filter(Boolean).join(' and ')),
       line('Seen by', SEEN_BY[visibility]),
+      line('Already on your list', [...listed].slice(0, 3).join(', ')),
     ],
     warnings: assignee && String(assignee.id) !== String(ctx.userId) ? [`${assignee.name} gets a notification for each task you add.`] : [],
     actions: [],
     items,
   });
-  return finished(draft, args.note, `Here are ${items.length} tasks for the year. Tap Add on the ones you want.`);
+  // The model writes its note before this runs, from the chat: a card drafted earlier may never
+  // have been added. What is on the list is the line above's to say.
+  const note = LIST_CLAIM.test(args.note || '') ? null : args.note;
+  return finished(draft, note, `Here are ${items.length} tasks for the year. Tap Add on the ones you want.`);
 }
 
 // ─── Home systems ──────────────────────────────────────────────────────────

@@ -2,25 +2,47 @@
 
 package app.pantopus.android.ui.screens.support_trains.manage.components
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imeAnimationTarget
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -28,6 +50,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.pantopus.android.core.LaunchFeatures
@@ -41,6 +64,7 @@ import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
+import kotlinx.coroutines.launch
 
 /**
  * S1 — the Manage-train control stacks: dates, helper roster,
@@ -426,6 +450,8 @@ fun ManageNudgeSection(
     /** Shown above the editor when the AI draft failed and it holds a simple reminder instead. */
     draftNote: String? = null,
     isBusy: Boolean,
+    /** The list the card scrolls in: a new line in the draft scrolls it to keep the buttons above the keyboard. */
+    listScroll: ScrollState? = null,
     onDraft: () -> Unit,
     onEditDraft: (String) -> Unit,
     onSend: () -> Unit,
@@ -468,32 +494,111 @@ fun ManageNudgeSection(
                             modifier = Modifier.testTag("manageTrainNudgeDraftNote"),
                         )
                     }
-                    ManageTextField(
-                        value = draft,
-                        placeholder = "Reminder message",
-                        tag = "manageTrainNudgeDraftField",
-                        minHeight = 90.dp,
-                        onValueChange = onEditDraft,
+                    ReminderEditor(
+                        draft = draft,
+                        isBusy = isBusy,
+                        listScroll = listScroll,
+                        onEditDraft = onEditDraft,
+                        onSend = onSend,
+                        onDiscard = onDiscard,
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-                        ManagePillButton(
-                            label = "Send to chat",
-                            icon = PantopusIcon.Send,
-                            tag = "manageTrainSendNudgeButton",
-                            isEnabled = !isBusy && draft.isNotBlank(),
-                            onClick = onSend,
-                        )
-                        ManagePillButton(
-                            label = "Discard",
-                            icon = PantopusIcon.X,
-                            tag = "manageTrainDiscardNudgeButton",
-                            isEnabled = !isBusy,
-                            onClick = onDiscard,
-                        )
-                    }
                 }
             }
         }
+    }
+}
+
+/**
+ * The reminder draft and its buttons. While the draft has focus, Send to chat
+ * and Discard stay above the keyboard with the card's edge under them, as on
+ * iOS: they come into view once the keyboard is up, and when a new line pushes
+ * them under it, [listScroll] moves the text up instead, without animating, so
+ * they hold still. An organizer who scrolled them away to edit an earlier line
+ * keeps their place.
+ */
+@OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
+@Composable
+private fun ReminderEditor(
+    draft: String,
+    isBusy: Boolean,
+    listScroll: ScrollState?,
+    onEditDraft: (String) -> Unit,
+    onSend: () -> Unit,
+    onDiscard: () -> Unit,
+) {
+    val buttons = remember { BringIntoViewRequester() }
+    var editing by remember { mutableStateOf(false) }
+    // Read only in the layout callbacks: the field's height, whether it grew since the buttons were
+    // last placed, the buttons' size, and whether the card's bottom was above the keyboard then.
+    var fieldHeight by remember { mutableIntStateOf(0) }
+    var fieldGrew by remember { mutableStateOf(false) }
+    var buttonsSize by remember { mutableStateOf(IntSize.Zero) }
+    var cardWasClear by remember { mutableStateOf(false) }
+    val keyboard = WindowInsets.ime
+    val keyboardTarget = WindowInsets.imeAnimationTarget
+    val density = LocalDensity.current
+    val rootView = LocalView.current.rootView
+    // ManageCard's padding below the buttons.
+    val cardPadding = with(density) { Spacing.s3.toPx() }
+    LaunchedEffect(editing) {
+        if (editing) {
+            // Each time the keyboard finishes opening.
+            snapshotFlow {
+                val target = keyboardTarget.getBottom(density)
+                target > 0 && keyboard.getBottom(density) == target
+            }.collect { open ->
+                // The buttons and the card's edge below them.
+                val card = Rect(0f, 0f, buttonsSize.width.toFloat(), buttonsSize.height + cardPadding)
+                if (open) launch { buttons.bringIntoView(card) }
+            }
+        }
+    }
+    ManageTextField(
+        value = draft,
+        placeholder = "Reminder message",
+        tag = "manageTrainNudgeDraftField",
+        minHeight = 90.dp,
+        onValueChange = onEditDraft,
+        modifier =
+            Modifier
+                .onFocusChanged { editing = it.isFocused }
+                .onSizeChanged { size ->
+                    // Only a new line moves the buttons, so typing within a line never scrolls.
+                    if (size.height > fieldHeight) fieldGrew = true
+                    fieldHeight = size.height
+                },
+    )
+    Row(
+        modifier =
+            Modifier
+                .bringIntoViewRequester(buttons)
+                .onGloballyPositioned { coords ->
+                    buttonsSize = coords.size
+                    // How far the card's bottom reaches past the keyboard's top, where the list ends.
+                    val keyboardTop = rootView.height - keyboard.getBottom(density)
+                    val pastKeyboard = coords.positionInWindow().y + coords.size.height + cardPadding - keyboardTop
+                    // A new line pushed it there from above the keyboard: scroll the list by as much.
+                    val pushedByLine = editing && fieldGrew && cardWasClear
+                    if (pushedByLine && pastKeyboard > 0f) listScroll?.dispatchRawDelta(pastKeyboard)
+                    fieldGrew = false
+                    cardWasClear = pastKeyboard <= 2f
+                },
+        horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+    ) {
+        ManagePillButton(
+            label = "Send to chat",
+            icon = PantopusIcon.Send,
+            tag = "manageTrainSendNudgeButton",
+            isEnabled = !isBusy && draft.isNotBlank(),
+            onClick = onSend,
+        )
+        ManagePillButton(
+            label = "Discard",
+            icon = PantopusIcon.X,
+            tag = "manageTrainDiscardNudgeButton",
+            isEnabled = !isBusy,
+            onClick = onDiscard,
+        )
     }
 }
 
@@ -669,11 +774,12 @@ private fun ManageTextField(
     tag: String,
     onValueChange: (String) -> Unit,
     minHeight: androidx.compose.ui.unit.Dp = 56.dp,
+    modifier: Modifier = Modifier,
 ) {
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
-        modifier = Modifier.fillMaxWidth().heightIn(min = minHeight).testTag(tag),
+        modifier = modifier.fillMaxWidth().heightIn(min = minHeight).testTag(tag),
         colors =
             OutlinedTextFieldDefaults.colors(
                 focusedContainerColor = PantopusColors.appSurface,
