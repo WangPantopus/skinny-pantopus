@@ -17,9 +17,11 @@ export default function OfferCardV2({ offer, onAccept, onDecline, gig }: OfferCa
   const canAccept = gig?.status === 'open' && offer.status === 'pending';
   const canDecline = gig?.status === 'open' && ['pending', 'countered'].includes(offer.status);
   const isRecommended = offer.is_recommended || offer.match_rank === 1;
-  const displayName = user.first_name
-    ? `${user.first_name} ${user.last_name || ''}`.trim()
-    : user.displayName || user.name || user.username || 'Helper';
+  // The server names a bidder by their Local Profile (displayName, avatarUrl); older servers sent the account row.
+  const displayName = user.displayName
+    || (user.first_name ? `${user.first_name} ${user.last_name || ''}`.trim() : '')
+    || user.name || user.username || 'Helper';
+  const avatarUrl = user.avatarUrl || user.profile_picture_url;
 
   return (
     <div
@@ -32,9 +34,9 @@ export default function OfferCardV2({ offer, onAccept, onDecline, gig }: OfferCa
       {/* Header: avatar + name + price */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3 flex-1 min-w-0">
-          {user.profile_picture_url ? (
+          {avatarUrl ? (
             <Image
-              src={user.profile_picture_url}
+              src={avatarUrl}
               alt={displayName}
               width={36}
               height={36}
