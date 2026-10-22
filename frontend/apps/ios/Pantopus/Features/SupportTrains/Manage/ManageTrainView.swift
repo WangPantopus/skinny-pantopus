@@ -363,7 +363,8 @@ public struct ManageTrainView: View {
             .padding(.bottom, Spacing.s4)
         }
         .scrollDismissesKeyboard(.interactively)
-        .refreshable { await viewModel.refresh() }
+        // Weakly: the keyboard's AutoFill can keep a field below, and this action with it, after the screen closes.
+        .refreshable { [weak viewModel] in await viewModel?.refresh() }
         .safeAreaInset(edge: .bottom, spacing: Spacing.s0) {
             // The bar sends the update message. It steps aside while a card's own field has the
             // keyboard: riding the keyboard, it covered that card's buttons.
