@@ -172,7 +172,7 @@ const actionCardDefinitions = [
   draftPlanFromEventDefinition(),
   {
     name: 'draft_plan_change',
-    description: 'Draft a change to a plan the person hosts: the time, the place, spots, title or notes. Only the fields that change. Moving the start more than 30 minutes or changing the place asks everyone who is in "Still coming?".',
+    description: 'Draft a change to a plan the person hosts: the time, the place, spots, title or notes, or who gets in without them approving each person (who_gets_in: its entry rules). Only the fields that change. Moving the start more than 30 minutes or changing the place asks everyone who is in "Still coming?".',
     input_schema: {
       type: 'object',
       properties: {
@@ -184,9 +184,10 @@ const actionCardDefinitions = [
         place_name: nullable({ type: 'string', description: 'A new public place near them.' }),
         about: nullable({ type: 'string', description: 'A new about line. Public: never the place or an address.' }),
         guest_note: nullable({ type: 'string', description: 'A new note for people who are in (where exactly to meet).' }),
+        who_gets_in: nullable({ type: 'string', enum: Object.keys(WHO_GETS_IN), description: 'New entry rules: who gets in without them approving each person. anyone_nearby only for pickup games and walks in public; at home only hosted_before; a playdate\'s host approves each family. Null to leave them.' }),
         note: { type: ['string', 'null'], description: NOTE },
       },
-      required: ['plan_id', 'title', 'starts_local', 'ends_local', 'spots', 'place_name', 'about', 'guest_note', 'note'],
+      required: ['plan_id', 'title', 'starts_local', 'ends_local', 'spots', 'place_name', 'about', 'guest_note', 'who_gets_in', 'note'],
       additionalProperties: false,
     },
   },
@@ -793,6 +794,13 @@ async function draftPlanFromEvent(args, ctx) {
   return { ...drafted, closing: "Here's a plan for the event. Check it, then tap Post plan." };
 }
 
+// The entry rules a plan can use, as planActions keeps them (normalizeAutoRules): none for playdates,
+// only "people I've hosted" at home, and "anyone nearby" only for pickup games and walks.
+function entryRulesFor(kind, placeKind, requested) {
+  if (kind === 'playdate') return [];
+  return requested.filter((rule) => (placeKind === 'home' ? rule === 'hosted_before' : rule !== 'anyone_nearby' || ['pickup_game', 'walk_coffee'].includes(kind)));
+}
+
 async function draftPlanChange(args, ctx) {
   if (!(await plansOn(ctx))) return { error: "Plans aren't available for this person yet." };
   const found = await planFor(args.plan_id, ctx);
@@ -836,6 +844,18 @@ async function draftPlanChange(args, ctx) {
   }
   if (args.about) { patch.about = args.about; lines.push(line('About', args.about)); }
   if (args.guest_note) { patch.guest_note = args.guest_note; lines.push(line('Note for guests', args.guest_note)); }
+  if (args.who_gets_in) {
+    const who = WHO_GETS_IN[args.who_gets_in];
+    if (!who) return { error: `who_gets_in must be one of ${Object.keys(WHO_GETS_IN).join(', ')}.` };
+    const placeKind = patch.place ? 'public' : found.plan.place_kind;
+    if (entryRulesFor(found.plan.kind, placeKind, who.rules).join() !== who.rules.join()) {
+      if (found.plan.kind === 'playdate') return { error: "A playdate's host approves each family; nobody gets in on their own. Say so; no card." };
+      if (placeKind === 'home') return { error: "At their home only people they've hosted before can get in on their own (hosted_before); everyone else waits for them. Say so, and offer that instead." };
+      return { error: 'Anyone nearby can get in on their own only for pickup games and walks. Offer verified_neighbors or verified_and_hosted instead.' };
+    }
+    patch.auto_rules = who.rules;
+    lines.push(line('Who gets in', who.text));
+  }
   if (!Object.keys(patch).length) return { error: 'Nothing to change. Ask what they want to change.' };
   if (patch.title || patch.about) {
     const current = { name: found.plan.place_name, address: found.plan.place_address };

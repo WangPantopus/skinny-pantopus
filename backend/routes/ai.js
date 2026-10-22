@@ -22,6 +22,7 @@
  *   GET  /needs-you              — What waits on the person, for Today and the assistant
  *   GET|POST /follow-ups, DELETE /follow-ups/:id — Check-backs ("check back Thursday")
  *   GET  /glance/:topic          — Pickup, today or nearby in a few sentences, for Siri and the launcher
+ *   GET|POST /rules, PATCH|DELETE /rules/:id — What Pantopus does for you (standing rules)
  */
 const express = require('express');
 const Joi = require('joi');
@@ -39,6 +40,7 @@ const memory = require('../services/ai/memory');
 const { needsYou } = require('../services/ai/needsYou');
 const followUps = require('../services/ai/followUps');
 const { glance, GlanceError } = require('../services/ai/glance');
+const rules = require('../services/ai/rules');
 const radonReport = require('../services/ai/radonReport');
 const { CHAT_MODEL, DRAFT_MODEL } = require('../config/anthropic');
 const propertyIntelligenceService = require('../services/ai/propertyIntelligenceService');
@@ -606,6 +608,41 @@ router.get('/glance/:topic', verifyToken, aiDraftLimiter, asyncHandler(async (re
     if (err instanceof GlanceError) return res.status(404).json({ code: err.code, speech: err.speech, link: err.link });
     throw err;
   }
+}));
+
+// ─── Standing rules ─────────────────────────────────────────────────────────
+// Phase 3 contract §18.5: the person's own rules only. A rule is turned on only from a
+// rule_save card they tapped (POST with the card's id), as the card showed it.
+
+function ruleRoute(handler) {
+  return asyncHandler(async (req, res) => {
+    try {
+      await handler(req, res);
+    } catch (err) {
+      if (err instanceof rules.RuleError) return res.status(err.status).json({ error: err.message, code: err.code });
+      throw err;
+    }
+  });
+}
+
+router.get('/rules', verifyToken, ruleRoute(async (req, res) => {
+  res.json(await rules.listRules(req.user.id));
+}));
+
+router.post('/rules', verifyToken, validate(Joi.object({ card_id: Joi.string().uuid().required() })), ruleRoute(async (req, res) => {
+  const { status, rule } = await rules.saveFromCard(req.user.id, req.body.card_id);
+  res.status(status).json({ rule });
+}));
+
+const ruleChangeSchema = Joi.object({ enabled: Joi.boolean(), extend: Joi.boolean().valid(true) }).or('enabled', 'extend');
+
+router.patch('/rules/:id', verifyToken, validate(ruleChangeSchema), ruleRoute(async (req, res) => {
+  res.json(await rules.changeRule({ id: req.user.id, role: req.user.role || null }, req.params.id, req.body));
+}));
+
+router.delete('/rules/:id', verifyToken, ruleRoute(async (req, res) => {
+  await rules.deleteRule(req.user.id, req.params.id);
+  res.status(204).end();
 }));
 
 // ─── Audio Transcription ─────────────────────────────────────────────────────

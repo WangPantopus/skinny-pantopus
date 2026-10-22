@@ -22,6 +22,7 @@ const { actionCardDefinitions, runCardTool } = require('./actionCards');
 const { showLinkDefinition, runShowLink } = require('./appGuide');
 const { memoryToolDefinitions, runMemoryTool } = require('./memory');
 const { followUpToolDefinitions, runFollowUpTool } = require('./followUps');
+const { ruleToolDefinitions, runRuleTool } = require('./rules');
 const { needsYouDefinition, runNeedsYou } = require('./needsYou');
 const { homesOf, localToUtc } = require('./assistantKit');
 
@@ -282,6 +283,8 @@ const toolDefinitions = [
   // Phase 3: what waits on them (needsYou.js), and check-backs (followUps.js).
   needsYouDefinition,
   ...followUpToolDefinitions,
+  // Phase 3: standing rules, what Pantopus does on its own once they turn it on (rules.js).
+  ...ruleToolDefinitions,
   showLinkDefinition,
 ];
 
@@ -351,6 +354,10 @@ const TOOL_TIMEOUTS_MS = {
   draft_follow_up: 8000,
   draft_follow_up_cancel: 5000,
   list_follow_ups: 5000,
+  // The Plans checks for a repost, or the household's members and pickup days.
+  draft_rule: 15000,
+  draft_rule_change: 15000,
+  list_rules: 8000,
 };
 
 /** The tool context: the person and what this turn knows. A bare user id still works (older callers, tests). */
@@ -411,6 +418,8 @@ async function _executeToolImpl(name, args, ctx) {
   if (name === 'needs_you') return runNeedsYou(ctx);
   const followed = await runFollowUpTool(name, args, ctx);
   if (followed) return followed;
+  const ruled = await runRuleTool(name, args, ctx);
+  if (ruled) return ruled;
   if (name === 'show_link') return runShowLink(args, ctx);
   switch (name) {
     case 'get_user_context':
