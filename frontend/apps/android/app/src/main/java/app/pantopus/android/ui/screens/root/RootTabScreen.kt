@@ -477,6 +477,7 @@ import app.pantopus.android.ui.screens.support_trains.start_train.StartSupportTr
 import app.pantopus.android.ui.screens.token_accept.TokenAcceptScreen
 import app.pantopus.android.ui.screens.universal_search.UniversalSearchDestination
 import app.pantopus.android.ui.screens.universal_search.UniversalSearchScreen
+import app.pantopus.android.ui.screens.wallet.ReceivedInvoicesScreen
 import app.pantopus.android.ui.screens.wallet.WalletActivityListScreen
 import app.pantopus.android.ui.screens.wallet.WalletScreen
 import app.pantopus.android.ui.screens.wallet.scheduling.PaymentsSetupScreen
@@ -1802,6 +1803,9 @@ private object ChildRoutes {
 
     /** WS5.1 — full wallet transaction history. */
     const val WALLET_ACTIVITY = "wallet/activity"
+
+    /** Invoices businesses sent you (`GET api/businesses/invoices/received`), from the Wallet's Invoices row. */
+    const val RECEIVED_INVOICES = "wallet/invoices"
 
     /** WS5.3 — GDPR data-export request (mailto until backend job ships). */
     const val SETTINGS_DATA_EXPORT = "settings/data-export"
@@ -6497,10 +6501,17 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             navController.navigate(ChildRoutes.placeholder("Tax documents"))
                         },
                         onSeeAllActivity = { navController.navigate(ChildRoutes.WALLET_ACTIVITY) },
+                        onOpenInvoices = { navController.navigate(ChildRoutes.RECEIVED_INVOICES) },
                     )
                 }
                 composable(ChildRoutes.WALLET_ACTIVITY) {
                     WalletActivityListScreen(onBack = { navController.popBackStack() })
+                }
+                composable(ChildRoutes.RECEIVED_INVOICES) {
+                    ReceivedInvoicesScreen(
+                        onOpenInvoice = { invoiceId -> navController.navigate(ChildRoutes.invoiceDetail(invoiceId)) },
+                        onBack = { navController.popBackStack() },
+                    )
                 }
                 composable(
                     route = ChildRoutes.PROPERTY_DETAILS,
