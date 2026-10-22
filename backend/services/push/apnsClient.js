@@ -88,11 +88,13 @@ function buildPayload({ title, body, data } = {}) {
       sound: 'default',
     },
   };
-  // Only native pilot reminder categories and the Nearby Plans categories
-  // (services/plans/planNotifications.js) may opt into OS action buttons.
+  // Only native pilot reminder categories, the Nearby Plans categories
+  // (services/plans/planNotifications.js) and the assistant's nudge categories
+  // (services/ai/nudges/engine.js, phase 3 §9.2) may opt into OS action buttons.
   if ([
     'PICKUP_REMINDER', 'TASK_REMINDER', 'TASK_REMINDER_DONE_ONLY',
     'PLAN_REQUEST', 'PLAN_REMINDER', 'PLAN_CHANGED',
+    'ASSISTANT_SUGGESTION', 'ASSISTANT_DONE', 'ASSISTANT_SOLVED', 'ASSISTANT_DONE_ONLY', 'ASSISTANT_SOLVED_ONLY',
   ].includes(data?.category)) {
     payload.aps.category = data.category;
   }

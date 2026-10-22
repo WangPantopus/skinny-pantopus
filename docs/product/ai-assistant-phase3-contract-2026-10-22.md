@@ -589,7 +589,9 @@ The job calls `sendNudge` with `kind: 'follow_up'`, `requested: true`, `checkpoi
 - **Errors** are `404` with `{ code, speech, link }`:
   - `NO_HOME`: "Add your home in Pantopus first.", linking to `pantopus://place`;
   - `NO_PICKUP` (no schedule at all): "Pantopus doesn't know your pickup days yet.", linking to `pantopus://today`;
-  - `NO_PLACE` (nearby, with no home or saved place).
+  - `NO_PLACE` (nearby, with no home or saved place): "Add your home or a saved place in Pantopus first.", linking to `pantopus://place`;
+  - `TOPIC_UNKNOWN` for any other topic.
+- The alerts in **today** are read by name only. A household's own pickup rule replaces the city's schedule for that kind, as the address calendar composes it.
 - No model call, no `AIRequestLog` row, nothing written.
 
 ### 8.3 iOS: App Intents and App Shortcuts
@@ -684,7 +686,7 @@ In October 2026 Android has no general voice path to another app's actions:
 
 ### 9.2 How the push carries them
 
-1. **Categories.** `pushNudge` (`nudges/engine.js`) sets `category` from the stored row each time it sends, so a push held through quiet hours carries it too.
+1. **Categories.** `pushNudge` (`nudges/engine.js`) sets `category` from the stored row each time it sends, so a push held through quiet hours carries it too. The engine works them out once, from all of the nudge's cards, when it writes the row: `metadata.push_category` and `metadata.assistant_action` (the row keeps only the first card).
 
    | Category | Buttons |
    |---|---|
