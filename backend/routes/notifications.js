@@ -75,8 +75,10 @@ function applyNotificationFilters(query, {
 // The assistant's brief and nudges (services/ai/nudges/engine.js TYPES) open the
 // apps' assistant thread, pantopus://assistant?nudge=<id>, and its yearly memory
 // review opens the apps' memory list (pantopus://settings/memory): the web has neither. The web asks for its list, counts and "Mark all read" without them
-// (exclude=assistant); the apps send nothing and get every row, as before.
-const ASSISTANT_TYPES = ['assistant_brief', 'assistant_nudge', 'assistant_memory_review'];
+// (exclude=assistant); the apps send nothing and get every row, as before. A standing
+// rule's notices (assistant_rule: runs, pauses, pickup reminders) open the apps' rules list,
+// a plan or Today, and the web leaves them out too.
+const ASSISTANT_TYPES = ['assistant_brief', 'assistant_nudge', 'assistant_memory_review', 'assistant_rule'];
 function withoutAssistantRows(query, req) {
   if ((req.query.exclude ?? req.body?.exclude) !== 'assistant') return query;
   return query.not('type', 'in', `(${ASSISTANT_TYPES.join(',')})`);

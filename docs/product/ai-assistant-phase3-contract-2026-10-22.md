@@ -1038,7 +1038,7 @@ It follows the conventions in §3 and goes in its own migration, P3B PR 5, sorte
 |---|---|---|
 | `id` | `uuid` PK | |
 | `user_id` | `uuid NOT NULL` → `"User"(id) ON DELETE CASCADE` | Whose rule. |
-| `home_id` | `uuid NULL` → `"Home"(id) ON DELETE CASCADE` | `pickup_reminder`: the home. |
+| `home_id` | `uuid NULL`, no foreign key (as `AgentRequest.home_id`) | `pickup_reminder`: the home. A rule whose home is gone pauses as `member_left` at its next run. |
 | `kind` | `text NOT NULL`: `plan_repeat` \| `pickup_reminder` | |
 | `summary` | `text NOT NULL`, at most 200 characters | The sentence the card and the list show, written by the server. |
 | `config` | `jsonb NOT NULL` | `plan_repeat`: `{ "latest_plan_id", "weekday", "start_local": "09:00", "duration_minutes": 90, "timezone" }`. `pickup_reminder`: `{ "member_user_id", "kinds": ["garbage", "recycling"] }`. |
@@ -1087,6 +1087,8 @@ The same migration:
    - action `turn_on`, labeled "Turn on", with the request `POST /api/ai/rules` and the body `{ "card_id": "<card id>" }`;
    - done: "On", with the link `pantopus://settings/rules`.
 5. **Saving.** `POST /api/ai/rules` creates the rule from the card's stored proposal, as memory does (§5.2). It answers `201 { rule }`, `200` on a repeat, and `409 RULE_LIMIT` past the limits in §18.6.
+   - The envelope also carries what turning it on stores: `rule: { kind, summary, home_id, config, ends_at }`. Both apps ignore keys they don't know; the server saves from its own stored copy of the card, never from this field in a request.
+   - The card expires 7 days after it was drafted. A weekly plan's `ends_at` is the card's own Until, so what runs is what the card showed.
 6. **Telling the member.** Turning on a pickup reminder tells the member once: "Alex asked Pantopus to remind you the night before pickup." It links to `pantopus://settings/notifications`, where home reminders can be turned off.
 
 ### 18.4 How rules run
@@ -1125,7 +1127,11 @@ Policy code in `services/ai/rules.js` (new). No model call. While `AI_ASSISTANT`
 | `PATCH /api/ai/rules/:id` | `{ enabled }` switches it off or on; turning it on checks again that it can run. `{ extend: true }` sets a weekly plan's `ends_at` to 12 weeks from now. |
 | `DELETE /api/ai/rules/:id` | Deletes it and its runs. Answers `204`. |
 
-**In chat,** `list_rules()` reads the rules. `draft_rule_change({ rule_id, enabled })` gives a `rule_change` card (`PATCH /api/ai/rules/:id`), so "stop posting the pickup game" works.
+- Errors are `{ error, code }`: `RULE_LIMIT` (409), `RULE_NOT_FOUND` (404), `CARD_UNKNOWN` (404, a card with no recorded step), `RULE_CANNOT_RUN` (409, turning one back on when it can't run, with the reason in `error`) and `RULE_NOT_EXTENDABLE` (400, `extend` on a pickup reminder).
+- `{ extend: true }` on a weekly plan that ended also turns it back on. Turning an ended weekly plan back on gives it 12 more weeks.
+- A run is `{ at, status: "done" | "error", label, link }`: "Posted Sat Oct 31 · 4 going" with the plan's link, or "Reminded Sam · Wed Oct 28 pickup" with no link.
+
+**In chat,** `list_rules()` reads the rules. `draft_rule_change({ rule_id, enabled })` gives a `rule_change` card (`PATCH /api/ai/rules/:id`, action `turn_off` or `turn_on`), so "stop posting the pickup game" works.
 
 **In the apps:** **What Pantopus does for you**, in the Settings index's Privacy group, after What Pantopus remembers (`pantopus://settings/rules`). It shows:
 - each rule's sentence and its switch;
@@ -1140,6 +1146,9 @@ When empty: "Nothing yet. Ask Pantopus to post your weekly game for you." It has
 - They are plain text written from facts, and held through quiet hours by the held-push helper.
 - They are released as the memory review is (§5.5): dropped only past their `expires_at`.
 - The web leaves them out (`ASSISTANT_TYPES`).
+- Their links: a posted plan (`pantopus://plans/<id>`), the rules list (pauses and ends), `pantopus://settings/notifications` (the member's notice that a reminder was set) and `pantopus://today` (the pickup reminder). `metadata.kind` is the rule's kind.
+- The member's pickup reminder carries the evening briefing's push data: `category: PICKUP_REMINDER`, `pickupDate` and `homeId`, so Bins out works on every build. It expires at the member's local midnight. When the member turned home reminders off, nothing is sent. When the member's own evening briefing already carried that pickup, the notice is kept in the app without a second push.
+- A pickup reminder's setter isn't told each pickup night: the member's reminder is the run, it names who set it, and the rules list shows it.
 
 ### 18.6 Limits
 

@@ -41,6 +41,7 @@ const { screenContextText, screenName } = require('./screenContext');
 const { checkChatBudget } = require('./assistantBudget');
 const memory = require('./memory');
 const followUps = require('./followUps');
+const rules = require('./rules');
 const agentRecord = require('./agentRecord');
 const cardState = require('./cardState');
 
@@ -60,6 +61,7 @@ const PLAYDATE_TOOLS = new Map([...playdateReadToolDefinitions, ...playdateCardD
 // The read tools answer in words, so every app gets them.
 function launchScopedChatTools({
   pickupSchedule = false, actionCards = false, links = false, plans = false, playdates = false, remembers = false, checksBack = false,
+  standingRules = false,
 } = {}) {
   const giftFunds = isLaunchFeatureEnabled('gift_funds');
   return toolDefinitions
@@ -72,6 +74,8 @@ function launchScopedChatTools({
       }
       // Follow-ups (`cards` lists "follow_up"): its cards also need "action".
       if (followUps.FOLLOW_UP_TOOL_NAMES.has(tool.name)) return checksBack && (actionCards || !followUps.FOLLOW_UP_CARD_TOOLS.has(tool.name));
+      // Standing rules (`cards` lists "rules"): its cards also need "action".
+      if (rules.RULE_TOOL_NAMES.has(tool.name)) return standingRules && (actionCards || !rules.RULE_CARD_TOOLS.has(tool.name));
       if (CARD_TOOL_NAMES.has(tool.name)) return actionCards && (plans || !PLAN_CARD_TOOLS.has(tool.name));
       if (READ_TOOL_NAMES.has(tool.name)) return plans || !PLAN_TOOLS.has(tool.name);
       if (tool.name === 'show_link') return links;
@@ -100,6 +104,7 @@ function withoutGiftFunds(tool) {
 
 function launchScopedChatInstructions({
   pickupSchedule = false, actionCards = false, links = false, plans = false, playdates = false, remembers = false, checksBack = false,
+  standingRules = false,
 } = {}) {
   return prompts.chatAgentSystem({
     openGigs: isLaunchFeatureEnabled('open_gigs'),
@@ -111,7 +116,10 @@ function launchScopedChatInstructions({
     plans,
     remembers: remembers && actionCards,
     checksBack: checksBack && actionCards,
-    guide: appGuide({ plans, playdates, suggestions: actionCards, actionCards, links, pickupSchedule, remembers: remembers && actionCards }),
+    standingRules: standingRules && actionCards,
+    guide: appGuide({
+      plans, playdates, suggestions: actionCards, actionCards, links, pickupSchedule, remembers: remembers && actionCards, standingRules: standingRules && actionCards,
+    }),
   });
 }
 
@@ -188,6 +196,9 @@ const TOOL_STATUS = {
   draft_follow_up: 'Getting the check-back ready…',
   draft_follow_up_cancel: 'Getting it ready to cancel…',
   list_follow_ups: 'Looking at your check-backs…',
+  draft_rule: 'Getting the rule ready…',
+  draft_rule_change: 'Getting the change ready…',
+  list_rules: 'Looking at what I do for you…',
 };
 
 // A draft Claude declined to write: not an outage, so not "try again later".
@@ -466,6 +477,8 @@ async function streamChat({
     links: shown.has('link'),
     // Apps with the memory list (phase 3) can open it from a link.
     memory: shown.has('memory'),
+    // Apps with the rules list (phase 3, standing rules) can open it from a link.
+    rules: shown.has('rules'),
   };
   if (images?.length && photos.length === 0) {
     // Answering without the photo or PDF would only confuse: say it couldn't be opened.
@@ -515,6 +528,7 @@ async function streamChat({
     playdates: plansEnabled && playdatesEnabled,
     remembers: shown.has('memory'),
     checksBack: shown.has('follow_up'),
+    standingRules: shown.has('rules'),
   };
   const tools = launchScopedChatTools(capabilities);
   const toolNames = tools.map((tool) => tool.name);

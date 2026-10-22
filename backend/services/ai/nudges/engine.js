@@ -406,18 +406,23 @@ async function pushNudge(row) {
       // Phase 3 §9.2: set from the stored row each time, so a push held through quiet hours carries them too.
       ...(row.metadata?.push_category ? { category: row.metadata.push_category } : {}),
       ...(row.metadata?.assistant_action ? { assistant_action: row.metadata.assistant_action } : {}),
+      // A standing rule's pickup reminder (§18.4) is the evening briefing's push: its date and home, for Bins out.
+      ...(row.metadata?.pickup_date ? { pickupDate: row.metadata.pickup_date, homeId: row.metadata.home_id || null } : {}),
     },
   });
 }
 
-// The yearly memory review (phase 3 §5.5) is released with the nudges, but it isn't one.
+// The yearly memory review (phase 3 §5.5) is released with the nudges, but it isn't one;
+// neither are a standing rule's notices (§18.5): its runs, pauses and pickup reminders.
 const MEMORY_REVIEW_TYPE = 'assistant_memory_review';
+const RULE_TYPE = 'assistant_rule';
 
 /** A held push goes only if the nudge is still current and wanted when quiet hours end. */
 async function heldPushDropped(row) {
   if (!(Date.parse(row.metadata?.expires_at) > Date.now())) return true;
-  // About the person's own data, or asked for by them (a follow-up): neither Suggestions nor a mute drops it, only its expiry.
-  if (row.type === MEMORY_REVIEW_TYPE || row.metadata?.requested === true) return false;
+  // About the person's own data, a rule they turned on, or asked for by them (a follow-up): neither Suggestions
+  // nor a mute drops it, only its expiry.
+  if (row.type === MEMORY_REVIEW_TYPE || row.type === RULE_TYPE || row.metadata?.requested === true) return false;
   if (isAssistantOff()) return true;
   const prefs = await suggestionPrefs(row.user_id);
   return !prefs.enabled || Boolean(prefs.muted[row.metadata?.kind]);
@@ -431,7 +436,7 @@ function recordReleased(row, { dropped }) {
 /** Every 5 minutes (jobs/index.js): held nudge and brief pushes whose quiet hours are over. */
 async function releaseHeldNudges() {
   const result = await heldPushes.releaseHeldPushes({
-    types: [...Object.values(TYPES), MEMORY_REVIEW_TYPE], send: pushNudge, isDropped: heldPushDropped, onReleased: recordReleased,
+    types: [...Object.values(TYPES), MEMORY_REVIEW_TYPE, RULE_TYPE], send: pushNudge, isDropped: heldPushDropped, onReleased: recordReleased,
   });
   if (result.sent || result.dropped) logger.info('nudges.held_pushes', result);
   return result;
