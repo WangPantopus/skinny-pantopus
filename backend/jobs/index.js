@@ -560,6 +560,14 @@ function startJobs(options = {}) {
     timezone: 'UTC',
   });
 
+  // ─── Assistant: the yearly memory review ───
+  // Daily at 17:00 UTC: one notice a calendar year to people with an item they haven't reviewed
+  // in a year (services/ai/memory.js). Its push waits out quiet hours (released with the nudges).
+  scheduleCron('0 17 * * *', wrapJob('assistantMemoryReview', () => require('../services/ai/memory').runMemoryReview()), {
+    scheduled: true,
+    timezone: 'UTC',
+  });
+
   // ─── Assistant: Home nudges ───
   // Every 15 minutes at :07/:22/:37/:52, for people who turned Suggestions on, once a day after
   // their brief time: Monday's waiting tasks, papers ending in 30 and 7 days, radon follow-through
