@@ -688,7 +688,8 @@ fun PulseIntentChip(
 private val attendeeTints =
     listOf(FeedAvatarTint.Orange, FeedAvatarTint.Sky, FeedAvatarTint.Violet, FeedAvatarTint.Green)
 
-private fun PulseIntent.tintColors(): Pair<Color, Color> =
+/** The intent chip's foreground and background colours; the Pulse map's pins take the foreground. */
+internal fun PulseIntent.tintColors(): Pair<Color, Color> =
     when (this) {
         PulseIntent.All, PulseIntent.Generic -> PantopusColors.appTextSecondary to PantopusColors.appSurfaceSunken
         PulseIntent.Ask -> PantopusColors.warmAmber to PantopusColors.warmAmberBg
