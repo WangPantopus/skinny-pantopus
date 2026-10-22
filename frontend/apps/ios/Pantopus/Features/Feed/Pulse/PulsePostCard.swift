@@ -651,6 +651,24 @@ private struct PulseCuratorChip: View {
     }
 }
 
+public extension PulseIntent {
+    /// The intent's colour: the card chip's text and icon, and its map pin.
+    var tint: Color {
+        switch self {
+        case .all, .generic: Theme.Color.appTextSecondary
+        case .ask: Theme.Color.warmAmber
+        case .recommend: Theme.Color.success
+        case .event: Theme.Color.magic
+        case .lost: Theme.Color.rose
+        case .alert: Theme.Color.error
+        case .deal: Theme.Color.success
+        case .announce: Theme.Color.slate
+        case .neighborhoodWin: Theme.Color.warning
+        case .visitorGuide: Theme.Color.info
+        }
+    }
+}
+
 /// Right-aligned colored chip in the post header. Resolves intent →
 /// foreground/background tokens against the existing design system.
 public struct PulseIntentChip: View {
@@ -678,18 +696,7 @@ public struct PulseIntentChip: View {
     }
 
     private var foreground: Color {
-        switch intent {
-        case .all, .generic: Theme.Color.appTextSecondary
-        case .ask: Theme.Color.warmAmber
-        case .recommend: Theme.Color.success
-        case .event: Theme.Color.magic
-        case .lost: Theme.Color.rose
-        case .alert: Theme.Color.error
-        case .deal: Theme.Color.success
-        case .announce: Theme.Color.slate
-        case .neighborhoodWin: Theme.Color.warning
-        case .visitorGuide: Theme.Color.info
-        }
+        intent.tint
     }
 
     private var background: Color {
