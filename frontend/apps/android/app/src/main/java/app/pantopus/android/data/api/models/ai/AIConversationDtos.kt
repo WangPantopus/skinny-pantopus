@@ -54,6 +54,8 @@ data class AIConversationMessageDto(
     val nudge: AIConversationNudgeDto? = null,
     /** The same notification id as a flat field, as an earlier draft of the server sent it. */
     @Json(name = "nudge_id") val nudgeId: String? = null,
+    /** When it was said (ISO 8601). Older servers leave it out. */
+    val at: String? = null,
 ) {
     /** The notification id of the brief or nudge this item starts, if any. */
     val nudgeNotificationId: String? get() = nudge?.id ?: nudgeId

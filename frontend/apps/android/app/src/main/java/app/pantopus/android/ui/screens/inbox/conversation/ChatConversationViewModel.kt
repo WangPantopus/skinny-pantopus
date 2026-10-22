@@ -553,7 +553,7 @@ class ChatConversationViewModel
                 if (item.role == "user") {
                     openReplyId = null
                     val sent = sentText(text, item.photos ?: 0, item.documents ?: 0)
-                    restored.add(localMessage(id = id, text = sent, userId = currentUserId, type = "text"))
+                    restored.add(localMessage(id = id, text = sent, userId = currentUserId, type = "text", createdAt = item.at))
                     return@forEachIndexed
                 }
                 val draft = item.draft?.let { aiRepo.draftCard(it.type, it.draft) }
@@ -565,10 +565,10 @@ class ChatConversationViewModel
                 // A draft, its link buttons and the note after it share one reply, as they did when it streamed.
                 val replyId =
                     openReplyId?.takeIf { open -> restored.any { it.id == open } }
-                        ?: id.also { restored.add(localMessage(id = it, text = "", userId = "ai", type = "ai_reply")) }
+                        ?: id.also { restored.add(localMessage(id = it, text = "", userId = "ai", type = "ai_reply", createdAt = item.at)) }
                 if (text.isNotEmpty()) {
                     val at = restored.indexOfFirst { it.id == replyId }
-                    restored[at] = localMessage(id = replyId, text = text, userId = "ai", type = "ai_reply")
+                    restored[at] = localMessage(id = replyId, text = text, userId = "ai", type = "ai_reply", createdAt = item.at)
                 }
                 // A brief's or nudge's cards join its line.
                 openReplyId = if (nudge != null) replyId else replyId.takeIf { text.isEmpty() }
@@ -2960,11 +2960,13 @@ class ChatConversationViewModel
                     ),
             )
 
+        /** An assistant-thread message, dated now unless it was restored with its time. */
         private fun localMessage(
             id: String,
             text: String,
             userId: String,
             type: String,
+            createdAt: String? = null,
         ): ChatMessageDto =
             ChatMessageDto(
                 id = id,
@@ -2972,7 +2974,7 @@ class ChatConversationViewModel
                 userId = userId,
                 messageText = text,
                 messageType = type,
-                createdAt = Instant.now().toString(),
+                createdAt = createdAt ?: Instant.now().toString(),
             )
 
         private fun replaceLocalMessage(

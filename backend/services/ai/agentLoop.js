@@ -96,7 +96,8 @@ async function runAgentTurn({
       // No eager_input_streaming on the tools: their inputs are small and only used once
       // complete, so streaming them early would buy nothing and give up the API's validation.
       tools,
-      messages: working,
+      // Without `at`, when a stored message was said: it is for the apps' history, and the API takes only role and content.
+      messages: working.map(({ at: _at, ...message }) => message),
       // Caches the conversation up to its last block, so each round of the loop and
       // each later turn re-reads what came before instead of re-processing it.
       cache_control: { type: 'ephemeral' },
@@ -181,6 +182,15 @@ const blocksOf = (message) => (Array.isArray(message.content) ? message.content 
 const toolUseIds = (message) => blocksOf(message).filter((b) => b.type === 'tool_use').map((b) => b.id);
 const toolResultIds = (message) => blocksOf(message).filter((b) => b.type === 'tool_result').map((b) => b.tool_use_id);
 
+/**
+ * `message` with `at`, when it was said (ISO 8601), if `at` is a time. Stored messages carry it
+ * since October 2026 for the apps' history (agentService.displayMessages); older ones have none.
+ */
+function withTime(message, at) {
+  const time = typeof at === 'string' ? Date.parse(at) : NaN;
+  return Number.isNaN(time) ? message : { ...message, at: new Date(time).toISOString() };
+}
+
 /** A message a person wrote (text or photos), as opposed to the user-role message that carries tool results. */
 function isTurnStart(message) {
   if (message.role !== 'user') return false;
@@ -216,14 +226,19 @@ function replayableMessage(message) {
   if (!isObject(message)) return null;
   if (message.role === 'system') {
     // Pantopus's context for a turn (agentService), kept as plain text.
-    return typeof message.content === 'string' && !isBlank(message.content) ? { role: 'system', content: message.content } : null;
+    return typeof message.content === 'string' && !isBlank(message.content)
+      ? withTime({ role: 'system', content: message.content }, message.at)
+      : null;
   }
   if (message.role !== 'user' && message.role !== 'assistant') return null;
-  // Rebuilt rather than passed through, so a stray key in a stored row can't reach the API.
-  if (typeof message.content === 'string') return isBlank(message.content) ? null : { role: message.role, content: message.content };
+  // Rebuilt rather than passed through, so a stray key in a stored row can't reach the API
+  // (`at` is checked here and left out of requests by runAgentTurn).
+  if (typeof message.content === 'string') {
+    return isBlank(message.content) ? null : withTime({ role: message.role, content: message.content }, message.at);
+  }
   if (!Array.isArray(message.content)) return null;
   const content = message.content.map(replayableBlock).filter(Boolean);
-  return content.length ? { role: message.role, content } : null;
+  return content.length ? withTime({ role: message.role, content }, message.at) : null;
 }
 
 /** The last stretch of `messages` that fits the replay budget, starting on a person's message. */
@@ -324,13 +339,16 @@ const scrubDeep = (value) => JSON.parse(JSON.stringify(value, (_key, v) => (type
  *   - not photos or documents (PDFs), which are deleted once read and would cost
  *     tokens on every request; a placeholder says one was there, and the reply that
  *     described it stays;
- *   - not text that is only whitespace, which the API refuses as input.
+ *   - not text that is only whitespace, which the API refuses as input;
+ *   - when each message was said (`at`), when it says.
  */
 function compactForStorage(messages) {
   const compact = [];
   for (const message of messages) {
     if (message.role === 'system') {
-      if (typeof message.content === 'string' && !isBlank(message.content)) compact.push({ role: 'system', content: scrub(message.content) });
+      if (typeof message.content === 'string' && !isBlank(message.content)) {
+        compact.push(withTime({ role: 'system', content: scrub(message.content) }, message.at));
+      }
       continue;
     }
     const blocks = typeof message.content === 'string'
@@ -372,7 +390,7 @@ function compactForStorage(messages) {
         : `[${photos} photos attached. You saw them when you answered this message, and that answer says what they showed. They are not shown again; photos in other messages are different ones.]`;
       kept.unshift({ type: 'text', text: note });
     }
-    if (kept.length) compact.push({ role: message.role, content: kept });
+    if (kept.length) compact.push(withTime({ role: message.role, content: kept }, message.at));
   }
 
   if (compact.length <= MAX_STORED_MESSAGES) return compact;
