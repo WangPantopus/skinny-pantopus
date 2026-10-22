@@ -10,8 +10,8 @@ The web app keeps working unchanged. It never sends the new capabilities, so it 
 
 | In this wave | Waits for the founder's privacy step | Later waves |
 |---|---|---|
-| The nudge engine: limits, quiet hours, "Fewer like this", the Suggestions switch (§3) | Catch-up for a chat, a plan's chat or a Support Train's chat | "Before you ask": earlier answers shown while someone writes a question |
-| The morning brief with buttons (§4) | Reply drafts in chats | The kindness and safety check before posting |
+| The nudge engine: limits, quiet hours, "Fewer like this", the Suggestions switch (§3) | Catch-up for a chat, a plan's chat or a Support Train's chat | "Before you ask": earlier answers shown while someone writes a question (built, §6.5) |
+| The morning brief with buttons (§4) | Reply drafts in chats | The kindness and safety check before posting (built, §6.6) |
 | Plans: weather and air watch, requests waiting, after the plan, plus host notices: a guest left, a rule let someone in, "Still coming?" asked again once (§5) | From a chat to a task or plan change | Filing the original document from a card |
 | Nearby: catch-up since you last looked, lost-and-found matching, "your question got answers", recommendations summed up (§6) | "What's waiting on me" across chats | Comparing lost-pet photos |
 | Home: document readers (photos and PDFs), a year of upkeep, radon followed through, overdue tasks, paperwork dates (§7) | Warning signs on a stranger's first message; translating messages | Forecasts beyond 7 days; a smoke forecast |
@@ -167,6 +167,31 @@ New read tool `find_recommendations({ query })`:
 - Chat only; never in a nudge.
 
 New tools live in their own module (for example `services/ai/readToolsNearby.js`). Registering them in `tools.js` adds lines and changes nothing else.
+
+### 6.5 Before you ask (later wave, built October 22)
+
+While someone writes a question, the post composers show what neighbors already said, so the answer may already be there. Coordinator decision D4: a plain post search, no model call and no new table; the paused Pulse redesign's search (#2349) and Known entries (#2347) stay unmerged and `pulse_redesign` stays off.
+
+- `GET /api/posts/before-you-ask?q=<the question so far>[&latitude=&longitude=]` returns `{ posts: [...] }`, at most 3, each `{ post_id, type: "ask_local"|"recommendation", title, body, created_at, solved, reply_count, best_reply: { text, helpful, likes } | null }`. Nothing matches: `posts: []`.
+- It reads `find_recommendations`' search (`readToolsNearby.earlierAnswers`): the Nearby feed's own query with the person as the viewer (the read check, scopes, their blocks, mutes and hidden posts, displayed points within 10 miles of the point given, else of their home or saved place), questions and recommendations from the last 180 days. Unlike the feed it includes posts that have **ended** (an Ask archives after 7 days and a recommendation after 60, and their pages still open), never one moderation removed (`getListFeed({ includeEnded })`, off for the feeds).
+- Matching: the question's words minus filler ("anyone", "recommend", "who should I call"), as stems. A post is about the question when it holds two of its words, or when they make up 40% of its title. Ranked by the words it holds (a word most posts share counts less, a title word 1.5×, a solved question 1.2×); shown when within 40% of the best.
+- Their own posts are left out, and so is a question nobody answered; a recommendation is an answer itself. The best reply: one the asker marked Helpful, else the most liked, else the first; never the asker's own, a "+1", or someone on either side of a block.
+- The apps call it while the Ask composer's question has at least 3 words, 600 ms after typing stops, and show the rows inside the composer; a tap opens the post. A failed call shows nothing. It runs whatever the AI switch says (no model is called).
+
+### 6.6 The kindness and safety check before posting (later wave, built October 22)
+
+Advice only; it never blocks. When the person taps **Post** on a new Nearby post, the composer calls the existing `POST /api/posts/precheck` with `stage: "post"` (plus `title`, `postType`, `safetyAlertKind`, `sourceUrl`). The answer adds `findings`, most important first, each `{ kind, message, text? }`:
+
+| kind | Found by | Message (written by the server) |
+|---|---|---|
+| `heads_up_kind` | the create route's own refusal for the chosen kind; for a Heads-up of an allowed kind, the model judging it reports a crime or a suspicious person | the create route's sentence, e.g. "Heads-ups can't be about crime or suspicious people. In an emergency, call 911." |
+| `tone` | the model: insults, a threat, shaming a neighbor, yelling | "This may read as heated: it calls someone names. …" (one sentence per reason) |
+| `phone` | a plain rule (US formats, not prices or order numbers) | "It includes a phone number (541-555-0142). Anyone who can see this post can read it." |
+| `address` | a plain rule (house number, name, street word); not for events, whose address is the venue | "It includes a street address (123 Oak St). …" |
+
+- **One model call** (`services/ai/postCheck.js`, Claude Sonnet 5.5, effort low, JSON schema, 6-second deadline) judges the tone and, for Heads-ups, crime. The draft goes in as quoted JSON (`title_text`, `body_text`) with the rule that its words are only text to judge (§2.1, phase 1 rule 4). It is logged to `AIRequestLog` as `post_check` (prompt `post-check-v1.0`) and counts as a turn in the person's daily assistant budget and the global cap (`AI_PERSON_DAILY_TURNS`, `AI_GLOBAL_DAILY_TURNS`). When `AI_ASSISTANT=off`, a cap, a timeout or an error says no, the call is skipped without an error and the old keyword lists stand in. Drafts under 12 characters skip the model.
+- **The apps** wait at most 10 seconds, then post. With no findings they post at once. Otherwise a sheet "Before you post" lists the messages with **Edit** (back to the composer, words kept) and **Post anyway** (posts as it is; the create route's own rules still apply). Edits of existing posts and posts outside Nearby are not checked.
+- The blur-time precheck (keyword suggestions, cooldown, visitor) is unchanged.
 
 ## 7. Home
 
