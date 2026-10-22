@@ -145,6 +145,8 @@ public struct FeedView: View {
                             postType: viewModel.activeIntent.postType
                         ),
                         topInset: isHeaderHidden ? Self.revealCapsuleHeight : headerHeight,
+                        // The compose button: 52 pt, 40 pt off the bottom.
+                        bottomClearance: viewModel.surface == .beacons ? 0 : 52 + Spacing.s10 + Spacing.s2,
                         onContentDrag: mapDragged,
                         onOpenPost: onOpenPost
                     )
@@ -900,8 +902,8 @@ public struct FeedView: View {
             Color.clear
                 .frame(height: 1)
                 .id(Self.listTopID)
-                .onGeometryChange(for: Bool.self) { [headerHeight] proxy in
-                    proxy.frame(in: .scrollView).minY > headerHeight - Self.topSlack
+                .onGeometryChange(for: Bool.self) { [threshold = headerHeight - Self.topSlack] proxy in
+                    proxy.frame(in: .scrollView).minY > threshold
                 } action: { atTop in
                     viewModel.isReadingAtTop = atTop
                 }

@@ -33,10 +33,33 @@ import SwiftUI
 private final class FeedMapCameraTracker {
     /// The camera as of the latest change, gesture or animation.
     var camera: MapCamera?
-    /// Until then, camera changes are the view's own moves: they don't move
-    /// the header, and (with `adoptsSettle`) their settle isn't the person's.
-    var ownMoveUntil = Date.distantPast
+    /// When the view's own move began: until it settles, camera changes don't
+    /// move the header, and (with `adoptsSettle`) the settle isn't the
+    /// person's. A move that never settles stops counting after a few seconds.
+    var ownMoveStarted: Date?
     var adoptsSettle = false
+    /// Where the view's last own move sent the camera. MapKit can settle
+    /// there late, or twice (it caps the tilt by height); a settle at that
+    /// place is still the view's move, however long it took.
+    var ownTarget: MapCamera?
+    /// The tilt the view's own moves keep: 45° until the person tilts.
+    var pitch = FeedMapView.pitch
+    /// Steps closer taken to make the tilt hold since the last request.
+    var tiltAttempts = 0
+
+    var isOwnMove: Bool {
+        ownMoveStarted.map { Date().timeIntervalSince($0) < 6 } ?? false
+    }
+
+    /// Whether `camera` sits where the view's last own move sent it: its
+    /// centre within 5% of the camera's height of the target, about as high.
+    func isAtOwnTarget(_ camera: MapCamera) -> Bool {
+        guard let target = ownTarget else { return false }
+        let here = CLLocation(latitude: camera.centerCoordinate.latitude, longitude: camera.centerCoordinate.longitude)
+        let there = CLLocation(latitude: target.centerCoordinate.latitude, longitude: target.centerCoordinate.longitude)
+        return here.distance(from: there) < target.distance * 0.05
+            && abs(camera.distance - target.distance) < target.distance * 0.25
+    }
 }
 
 /// Map half of the Pulse feed's List / Map toggle.
@@ -48,6 +71,9 @@ struct FeedMapView: View {
     /// How far down from the top of the safe area the Pulse header (or its
     /// reveal capsule) reaches; the "Search this area" pill sits below it.
     let topInset: CGFloat
+    /// Room the screen's floating compose button takes at the bottom right;
+    /// the map's own buttons stay above it.
+    let bottomClearance: CGFloat
     /// The person dragged the map: how far its content moved, in points
     /// (`height` > 0: up, as when scrolling a list down).
     let onContentDrag: @MainActor (CGSize) -> Void
@@ -72,12 +98,14 @@ struct FeedMapView: View {
         viewModel: FeedMapViewModel,
         query: FeedMapQuery,
         topInset: CGFloat = 0,
+        bottomClearance: CGFloat = 0,
         onContentDrag: @escaping @MainActor (CGSize) -> Void = { _ in },
         onOpenPost: @escaping @MainActor (String) -> Void
     ) {
         self.viewModel = viewModel
         self.query = query
         self.topInset = topInset
+        self.bottomClearance = bottomClearance
         self.onContentDrag = onContentDrag
         self.onOpenPost = onOpenPost
         // Back in Map mode: the camera where it was. Else the map waits
@@ -186,34 +214,44 @@ struct FeedMapView: View {
     // MARK: - Camera
 
     /// Moves the camera for the view model (opening, Recenter, a new area,
-    /// the nearest activity). In 3D the centre moves and the tilt, turn and
-    /// height stay; the first move flies in from above to the tilted view.
+    /// the nearest activity). In 3D the centre moves and the turn and height
+    /// stay; the first move flies in from above to the tilted view.
     private func follow(_ request: FeedMapCameraRequest) {
         let center = CLLocationCoordinate2D(latitude: request.region.latitude, longitude: request.region.longitude)
+        tracker.tiltAttempts = 0
         if hasTilted, let current = tracker.camera {
             moveCamera(
-                to: MapCamera(centerCoordinate: center, distance: current.distance, heading: current.heading, pitch: current.pitch),
+                to: MapCamera(centerCoordinate: center, distance: current.distance, heading: current.heading, pitch: tracker.pitch),
                 duration: 0.6,
                 adoptsSettle: true
             )
         } else {
             hasTilted = true
             moveCamera(
-                to: MapCamera(centerCoordinate: center, distance: distance(showing: request.region), heading: 0, pitch: Self.pitch),
+                to: MapCamera(
+                    centerCoordinate: center,
+                    distance: distance(showing: request.region) * Self.openingCloseness,
+                    heading: 0,
+                    pitch: tracker.pitch
+                ),
                 duration: 1.4,
                 adoptsSettle: true
             )
         }
     }
 
+    /// The opening view comes a little closer than the region a flat map
+    /// shows: tilted, the horizon side shows the rest.
+    private static let openingCloseness = 0.6
+
     private func moveCamera(to camera: MapCamera, duration: Double, adoptsSettle adopts: Bool) {
-        let animated = !reduceMotion
-        tracker.ownMoveUntil = Date().addingTimeInterval((animated ? duration : 0) + 0.6)
+        tracker.ownMoveStarted = Date()
+        tracker.ownTarget = camera
         tracker.adoptsSettle = adopts
-        if animated {
-            withAnimation(.easeInOut(duration: duration)) { cameraPosition = .camera(camera) }
-        } else {
+        if reduceMotion {
             cameraPosition = .camera(camera)
+        } else {
+            withAnimation(.easeInOut(duration: duration)) { cameraPosition = .camera(camera) }
         }
     }
 
@@ -229,10 +267,13 @@ struct FeedMapView: View {
 
     /// The person dragging the map scrolls the header away (or back):
     /// where the last frame's centre is now shows how far the content moved.
-    /// Zooming, turning, tilting and the view's own moves don't count.
+    /// Zooming, turning, tilting and the view's own moves don't count; a
+    /// tilt the person makes (or the 2D / 3D toggle) is the tilt the view's
+    /// own moves keep from then on.
     private func trackDrag(to camera: MapCamera, proxy: MapProxy) {
         defer { tracker.camera = camera }
-        guard Date() >= tracker.ownMoveUntil, let previous = tracker.camera else { return }
+        guard !tracker.isOwnMove, let previous = tracker.camera else { return }
+        if abs(camera.pitch - previous.pitch) > 0.5 { tracker.pitch = camera.pitch }
         let zoomed = abs(camera.distance - previous.distance) > previous.distance * 0.01
         let turned = abs(angle(camera.heading - previous.heading)) > 0.5 || abs(camera.pitch - previous.pitch) > 0.5
         guard !zoomed, !turned,
@@ -251,10 +292,33 @@ struct FeedMapView: View {
 
     private func settle(_ context: MapCameraUpdateContext, proxy: MapProxy) {
         tracker.camera = context.camera
-        let byUser = Date() >= tracker.ownMoveUntil || !tracker.adoptsSettle
-        if !byUser { tracker.ownMoveUntil = .distantPast }
-        centerSpan = straightDownSpan(proxy: proxy)
+        // Where MapKit put the map before the view model's first request:
+        // nobody moved it.
+        guard hasTilted else { return }
         let camera = context.camera
+        let ownMove = tracker.isOwnMove || tracker.isAtOwnTarget(camera)
+        tracker.ownMoveStarted = nil
+        // Moved by the person: later settles are theirs too.
+        if !ownMove { tracker.ownTarget = nil }
+        let byUser = !(ownMove && tracker.adoptsSettle)
+        // MapKit caps the tilt by height (about 35° from 10 to 20 km up) and
+        // flattens a camera that is too high; come closer until some tilt
+        // holds (a few steps at most).
+        if ownMove, tracker.adoptsSettle, tracker.pitch >= 20, camera.pitch < 20, tracker.tiltAttempts < 3 {
+            tracker.tiltAttempts += 1
+            moveCamera(
+                to: MapCamera(
+                    centerCoordinate: camera.centerCoordinate,
+                    distance: camera.distance * 0.55,
+                    heading: camera.heading,
+                    pitch: tracker.pitch
+                ),
+                duration: 0.8,
+                adoptsSettle: true
+            )
+            return
+        }
+        centerSpan = straightDownSpan(proxy: proxy)
         viewModel.cameraDidSettle(
             on: FeedMapRegion(
                 latitude: context.region.center.latitude,
@@ -370,14 +434,31 @@ struct FeedMapView: View {
                 VStack(spacing: Spacing.s2) {
                     // The system's 2D / 3D switch, and its compass once the map is turned.
                     MapPitchToggle(scope: mapScope)
+                        .font(.system(size: 13, weight: .bold))
+                        .frame(width: 40, height: 40)
+                        .background(.ultraThinMaterial, in: Circle())
+                        .overlay(Circle().stroke(Theme.Color.appBorder, lineWidth: 1))
+                        .shadow(color: .black.opacity(0.10), radius: 4, x: 0, y: 4)
                         .accessibilityIdentifier("pulseMapPitchToggle")
                     MapCompass(scope: mapScope)
                         .accessibilityIdentifier("pulseMapCompass")
                     recenterButton
                 }
+                // Above the compose button when no card sits under them.
+                .padding(.bottom, showsStatusCard ? Spacing.s0 : bottomClearance)
             }
             .padding(.trailing, 14)
             statusLayer
+        }
+    }
+
+    /// Whether a card (loading, error, preview, cluster list, empty) shows at the bottom.
+    private var showsStatusCard: Bool {
+        switch viewModel.state {
+        case .loading, .error:
+            true
+        case let .loaded(loaded):
+            viewModel.selectedEntity != nil || !loaded.clusterPosts.isEmpty || loaded.isEmpty
         }
     }
 
@@ -532,7 +613,7 @@ struct FeedMapView: View {
                 .background(Theme.Color.appSurface)
                 .overlay(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(entity.kind.color, lineWidth: 2)
+                        .stroke(pinStyle(entity).intent.mapTint, lineWidth: 2)
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .shadow(color: .black.opacity(0.10), radius: 8, x: 0, y: 4)
@@ -608,13 +689,20 @@ struct FeedMapView: View {
         }
     }
 
+    /// A post's pin style (its intent colour and glyph), as its pin shows it.
+    private func pinStyle(_ entity: ExploreEntity) -> FeedMapPinStyle {
+        guard case let .loaded(loaded) = viewModel.state else { return Self.plainPin }
+        return loaded.pinStyles[entity.id] ?? Self.plainPin
+    }
+
     /// A post's tile, title, meta line and chevron, as the preview card and the cluster list show them.
     private func postSummary(_ entity: ExploreEntity) -> some View {
-        HStack(spacing: Spacing.s3) {
+        let intent = pinStyle(entity).intent
+        return HStack(spacing: Spacing.s3) {
             ZStack {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(entity.kind.color)
-                Icon(entity.kind.glyph, size: 20, color: .white)
+                    .fill(intent.mapTint)
+                Icon(intent.icon, size: 20, color: .white)
             }
             .frame(width: 44, height: 44)
             VStack(alignment: .leading, spacing: 3) {
@@ -631,5 +719,17 @@ struct FeedMapView: View {
             Spacer(minLength: Spacing.s0)
             Icon(.chevronRight, size: 16, color: Theme.Color.appTextMuted)
         }
+    }
+}
+
+extension MapCamera {
+    /// The MapKit camera a settled `FeedMapCamera` describes.
+    init(_ camera: FeedMapCamera) {
+        self.init(
+            centerCoordinate: CLLocationCoordinate2D(latitude: camera.latitude, longitude: camera.longitude),
+            distance: camera.distance,
+            heading: camera.heading,
+            pitch: camera.pitch
+        )
     }
 }

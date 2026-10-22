@@ -7,8 +7,7 @@
 //  camera it keeps so Map mode comes back to the same view.
 //
 
-import CoreLocation
-import MapKit
+import Foundation
 
 /// A viewport as the map reports it — centre plus span, mirroring RN's
 /// `Region`.
@@ -177,17 +176,5 @@ public struct FeedMapCamera: Sendable, Hashable {
         self.distance = distance
         self.heading = heading
         self.pitch = pitch
-    }
-}
-
-extension MapCamera {
-    /// The MapKit camera a settled `FeedMapCamera` describes.
-    init(_ camera: FeedMapCamera) {
-        self.init(
-            centerCoordinate: CLLocationCoordinate2D(latitude: camera.latitude, longitude: camera.longitude),
-            distance: camera.distance,
-            heading: camera.heading,
-            pitch: camera.pitch
-        )
     }
 }
