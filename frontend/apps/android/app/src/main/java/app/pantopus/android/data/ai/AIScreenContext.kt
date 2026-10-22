@@ -105,16 +105,17 @@ data class AIScreenContext(
                     },
             )
 
-        /** A post's page. */
+        /** A post's page. An event that hasn't ended also offers making a plan of it ([makesPlan], people with Plans). */
         fun post(
             id: String,
             title: String,
+            makesPlan: Boolean = false,
         ): AIScreenContext =
             AIScreenContext(
                 surface = "post",
                 id = id,
                 label = title,
-                starters = listOf("Draft a reply", "Sum up the replies"),
+                starters = (if (makesPlan) listOf("Make this a plan") else emptyList()) + listOf("Draft a reply", "Sum up the replies"),
             )
 
         private fun JSONObject.textOrNull(name: String): String? = if (isNull(name)) null else optString(name).trim().ifEmpty { null }
