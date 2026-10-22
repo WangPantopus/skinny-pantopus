@@ -107,11 +107,14 @@ public struct ListingOfferDTO: Decodable, Sendable, Hashable, Identifiable {
     }
 }
 
-/// Inlined buyer / seller user card on each listing offer. Mirrors the
-/// columns the backend enriches with (`first_name, last_name, username,
-/// profile_picture_url`).
+/// Inlined buyer / seller user card on each listing offer. The server names
+/// each person by their Local Profile, as the listing names its seller
+/// (`displayName`, `avatarUrl`); older servers sent the account columns
+/// (`first_name, last_name, username, profile_picture_url`).
 public struct ListingOfferUserDTO: Decodable, Sendable, Hashable, Identifiable {
     public let id: String
+    public let displayName: String?
+    public let avatarUrl: String?
     public let firstName: String?
     public let lastName: String?
     public let username: String?
@@ -119,12 +122,16 @@ public struct ListingOfferUserDTO: Decodable, Sendable, Hashable, Identifiable {
 
     public init(
         id: String,
+        displayName: String? = nil,
+        avatarUrl: String? = nil,
         firstName: String? = nil,
         lastName: String? = nil,
         username: String? = nil,
         profilePictureUrl: String? = nil
     ) {
         self.id = id
+        self.displayName = displayName
+        self.avatarUrl = avatarUrl
         self.firstName = firstName
         self.lastName = lastName
         self.username = username
@@ -132,7 +139,7 @@ public struct ListingOfferUserDTO: Decodable, Sendable, Hashable, Identifiable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, username
+        case id, displayName, avatarUrl, username
         case firstName = "first_name"
         case lastName = "last_name"
         case profilePictureUrl = "profile_picture_url"
