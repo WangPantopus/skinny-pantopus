@@ -314,6 +314,11 @@ export default function PostDetailPanel({
     post?.creator?.name ||
     chosenUsername(post?.creator?.username) ||
     'Neighbor';
+  // The hover card follows and connects by account id: a person's creator.id is their Local Profile id. A business
+  // keeps its own id, which its writer's copy of the post doesn't carry in user_id.
+  const creatorUserId = publicAuthor?.type === 'local'
+    ? post?.author_user_id || post?.user_id
+    : post?.creator?.id || post?.user_id;
 
   if (!mounted) return null;
   // Match SlidePanel: keep the existing overlay above the app shell's stacking context.
@@ -404,7 +409,7 @@ export default function PostDetailPanel({
                   ) : <span className="text-sm font-semibold text-app">{creatorName}</span>
                 ) : creatorHandle ? (
                     <UserIdentityLink
-                      userId={post.creator?.id || post.user_id}
+                      userId={creatorUserId}
                       username={creatorHandle}
                       displayName={creatorName}
                       avatarUrl={creatorAvatarUrl}

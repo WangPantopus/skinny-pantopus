@@ -345,6 +345,11 @@ export default function PostDetailPage() {
     publicAuthor?.handle ||
     post?.creator?.username ||
     null;
+  // The hover card follows and connects by account id: a person's creator.id is their Local Profile id. A business
+  // keeps its own id, which its writer's copy of the post doesn't carry in user_id.
+  const creatorUserId = publicAuthor?.type === 'local'
+    ? post?.author_user_id || post?.user_id
+    : post?.creator?.id || post?.user_id;
   const creatorInitial = (creatorName || '?')[0]?.toUpperCase() || '?';
   const locationText = '';
   const homeLabel = post?.home?.address || post?.home?.city || null;
@@ -506,7 +511,7 @@ export default function PostDetailPage() {
                   ) : <span className="text-sm font-semibold text-app">{creatorName}</span>
                 ) : creatorHandle ? (
                   <UserIdentityLink
-                    userId={post.creator?.id || post.user_id}
+                    userId={creatorUserId}
                     username={creatorHandle}
                     displayName={creatorName || 'Neighbor'}
                     avatarUrl={creatorAvatarUrl}
