@@ -5157,10 +5157,60 @@ const INVOICE_RECIPIENT_SOURCE_LIMIT = 200;
 const INVOICE_RECIPIENT_RESULT_LIMIT = 20;
 
 /**
+ * The people a crew already knows, the only ones it can invoice: those it invoiced before, who
+ * booked with it, whose task it accepted, who wrote to it in a direct chat, and the sender's own
+ * connections. A Map of id → relation, labelled by the first source to name them; within a
+ * source most recent first, at most INVOICE_RECIPIENT_SOURCE_LIMIT each. With onlyUserId, just
+ * that person when the crew knows them, however long ago. Never the crew or the sender; callers
+ * drop blocked people and business accounts.
+ */
+async function knownInvoiceRecipients(businessId, senderId, onlyUserId = null) {
+  const recent = (query, column, recency) => (onlyUserId
+    ? query.eq(column, onlyUserId).limit(1)
+    : query.order(recency, { ascending: false }).limit(INVOICE_RECIPIENT_SOURCE_LIMIT));
+  const connected = supabaseAdmin.from('Relationship').select('requester_id, addressee_id').eq('status', 'accepted');
+  const sources = await Promise.all([
+    recent(supabaseAdmin.from('BusinessInvoice').select('recipient_user_id')
+      .eq('business_user_id', businessId), 'recipient_user_id', 'created_at'),
+    recent(supabaseAdmin.from('Booking').select('invitee_user_id').eq('owner_type', 'business')
+      .eq('owner_id', businessId).not('invitee_user_id', 'is', null), 'invitee_user_id', 'created_at'),
+    recent(supabaseAdmin.from('Gig').select('user_id').eq('accepted_by', businessId), 'user_id', 'accepted_at'),
+    // A direct chat counts once the other person has written in it, not when the crew opened it:
+    // the crew's messages carry its id, whoever on its team sent them.
+    recent(supabaseAdmin.from('ChatParticipant')
+      .select('room:room_id!inner(type, member:ChatParticipant!inner(user_id), reply:ChatMessage!inner(user_id))')
+      .eq('user_id', businessId).eq('room.type', 'direct')
+      .neq('room.member.user_id', businessId).neq('room.reply.user_id', businessId)
+      .limit(1, { referencedTable: 'room.reply' }), 'room.member.user_id', 'joined_at'),
+    onlyUserId
+      ? connected.or([[senderId, onlyUserId], [onlyUserId, senderId]]
+        .map(([a, b]) => `and(requester_id.eq.${a},addressee_id.eq.${b})`).join(',')).limit(1)
+      : connected.or(`requester_id.eq.${senderId},addressee_id.eq.${senderId}`)
+        .order('accepted_at', { ascending: false, nullsFirst: false }).limit(INVOICE_RECIPIENT_SOURCE_LIMIT),
+  ]);
+  const failed = sources.find((r) => r.error);
+  if (failed) throw failed.error;
+  const [invoiced, booked, hired, wrote, connections] = sources.map((r) => r.data || []);
+
+  const known = new Map();
+  const excluded = new Set([businessId, senderId].map((id) => String(id).toLowerCase()));
+  const add = (id, relation) => {
+    if (id && !excluded.has(String(id).toLowerCase()) && !known.has(id)) known.set(id, relation);
+  };
+  invoiced.forEach((r) => add(r.recipient_user_id, 'invoiced'));
+  booked.forEach((r) => add(r.invitee_user_id, 'booked'));
+  hired.forEach((r) => add(r.user_id, 'hired'));
+  wrote.forEach((r) => r.room.member.forEach((m) => add(m.user_id, 'messaged')));
+  connections.forEach((r) => add(r.requester_id === senderId ? r.addressee_id : r.requester_id, 'connection'));
+  return known;
+}
+
+/**
  * GET /:businessId/invoice-recipients?q= — the people this crew can pick when sending an
- * invoice: those it already knows (invoiced before, booked with it, hired it for a task,
- * messaged it) and the sender's own connections, matched by name or username. Never an open
- * member search. Without q, the most recent ones. Editors and up, like sending an invoice.
+ * invoice: those it already knows (knownInvoiceRecipients: invoiced before, booked with it,
+ * hired it for a task, wrote to it) and the sender's own connections, matched by name or
+ * username. Never an open member search. Without q, the most recent ones. Editors and up, like
+ * sending an invoice.
  */
 router.get('/:businessId/invoice-recipients', verifyToken, async (req, res) => {
   try {
@@ -5174,46 +5224,11 @@ router.get('/:businessId/invoice-recipients', verifyToken, async (req, res) => {
 
     const query = String(req.query.q || '').trim().slice(0, 80).toLowerCase();
 
-    const { data: crewRooms } = await supabaseAdmin
-      .from('ChatParticipant')
-      .select('room_id')
-      .eq('user_id', businessId)
-      .limit(INVOICE_RECIPIENT_SOURCE_LIMIT);
-    const crewRoomIds = (crewRooms || []).map((r) => r.room_id);
-
-    const [invoiced, booked, hired, messaged, connections] = await Promise.all([
-      supabaseAdmin.from('BusinessInvoice').select('recipient_user_id, created_at')
-        .eq('business_user_id', businessId)
-        .order('created_at', { ascending: false }).limit(INVOICE_RECIPIENT_SOURCE_LIMIT),
-      supabaseAdmin.from('Booking').select('invitee_user_id, created_at')
-        .eq('owner_type', 'business').eq('owner_id', businessId).not('invitee_user_id', 'is', null)
-        .order('created_at', { ascending: false }).limit(INVOICE_RECIPIENT_SOURCE_LIMIT),
-      supabaseAdmin.from('Gig').select('user_id, accepted_at')
-        .eq('accepted_by', businessId)
-        .order('accepted_at', { ascending: false }).limit(INVOICE_RECIPIENT_SOURCE_LIMIT),
-      crewRoomIds.length === 0 ? { data: [] } : supabaseAdmin.from('ChatParticipant')
-        .select('user_id, joined_at, room:room_id!inner(type)')
-        .in('room_id', crewRoomIds).eq('room.type', 'direct').neq('user_id', businessId)
-        .order('joined_at', { ascending: false }).limit(INVOICE_RECIPIENT_SOURCE_LIMIT),
-      supabaseAdmin.from('Relationship').select('requester_id, addressee_id, accepted_at')
-        .eq('status', 'accepted').or(`requester_id.eq.${userId},addressee_id.eq.${userId}`)
-        .order('accepted_at', { ascending: false, nullsFirst: false }).limit(INVOICE_RECIPIENT_SOURCE_LIMIT),
-    ]);
-
-    // The first source to name someone gives their label; within a source, most recent first.
-    const relationById = new Map();
-    const add = (id, relation) => {
-      if (id && !relationById.has(id)) relationById.set(id, relation);
-    };
-    (invoiced.data || []).forEach((r) => add(r.recipient_user_id, 'invoiced'));
-    (booked.data || []).forEach((r) => add(r.invitee_user_id, 'booked'));
-    (hired.data || []).forEach((r) => add(r.user_id, 'hired'));
-    (messaged.data || []).forEach((r) => add(r.user_id, 'messaged'));
-    (connections.data || []).forEach((r) => add(r.requester_id === userId ? r.addressee_id : r.requester_id, 'connection'));
+    const relationById = await knownInvoiceRecipients(businessId, userId);
 
     const { blockedUserIds } = require('../services/blockService');
     const [crewBlocks, senderBlocks] = await Promise.all([blockedUserIds(businessId), blockedUserIds(userId)]);
-    for (const id of [businessId, userId, ...crewBlocks, ...senderBlocks]) relationById.delete(id);
+    for (const id of [...crewBlocks, ...senderBlocks]) relationById.delete(id);
 
     const order = [...relationById.keys()];
     if (order.length === 0) return res.json({ people: [] });
@@ -5272,18 +5287,24 @@ router.post('/:businessId/invoices', verifyToken, validate(createInvoiceSchema),
     // Validate recipient exists
     const { data: recipient } = await supabaseAdmin
       .from('User')
-      .select('id, name, username')
+      .select('id, name, username, account_type')
       .eq('id', recipient_user_id)
       .maybeSingle();
     if (!recipient) {
       return res.status(404).json({ error: 'Recipient not found', code: 'RECIPIENT_NOT_FOUND' });
     }
 
-    // A business can't invoice someone who has blocked it (or whom it has
-    // blocked). 422 (not 403) so clients show this message, which doesn't
-    // reveal the block; a failed block check refuses too.
+    // A business invoices only someone the recipient picker could offer: a person it already
+    // knows, not just anyone whose id the sender has, and not someone who has blocked it or the
+    // sender (or whom either has blocked). 422 (not 403) so clients show this message, which
+    // doesn't say which; a failed check refuses too.
     const { isBlocked } = require('../services/blockService');
-    if (await isBlocked(recipient_user_id, businessId)) {
+    const [known, blockedByCrew, blockedBySender] = await Promise.all([
+      knownInvoiceRecipients(businessId, userId, recipient_user_id),
+      isBlocked(recipient_user_id, businessId),
+      isBlocked(recipient_user_id, userId),
+    ]);
+    if (known.size === 0 || recipient.account_type === 'business' || blockedByCrew || blockedBySender) {
       return res.status(422).json({ error: 'Unable to send an invoice to this person.' });
     }
 

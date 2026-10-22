@@ -94,7 +94,7 @@ function launchScopedChatInstructions({ pickupSchedule = false, actionCards = fa
     actionCards,
     links,
     plans,
-    guide: appGuide({ plans, playdates, suggestions: actionCards }),
+    guide: appGuide({ plans, playdates, suggestions: actionCards, actionCards, links, pickupSchedule }),
   });
 }
 

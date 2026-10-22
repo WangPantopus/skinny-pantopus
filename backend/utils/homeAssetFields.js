@@ -28,6 +28,9 @@ const createHomeAssetSchema = Joi.object({
   details: Joi.object().unknown(true).custom((value, helpers) => (
     JSON.stringify(value).length > 8000 ? helpers.error('any.invalid') : value
   )).allow(null),
+  // The assistant's card sends its own id, so running the same card again (another phone, a
+  // reinstall) answers with the item it added instead of adding it twice.
+  request_id: Joi.string().guid(),
 });
 
 module.exports = { HOME_ASSET_CATEGORIES, createHomeAssetSchema };
