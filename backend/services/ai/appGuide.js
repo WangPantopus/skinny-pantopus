@@ -93,37 +93,44 @@ function runShowLink(args, ctx) {
 
 // `suggestions`: the app can show the Suggestions switch and nudge cards. Builds without action
 // cards (2.0.1) have no such switch, so they aren't told about one.
-function appGuide({ plans = true, playdates = false, suggestions = false } = {}) {
+// `actionCards`, `links` and `pickupSchedule`: the cards the app shows (the chat's `cards`). Card
+// tools and link screens are named only to apps that show them: the web and the 2.0.1 and 2.0.2
+// builds have neither, and hear where in the app the person does it instead.
+function appGuide({ plans = true, playdates = false, suggestions = false, actionCards = true, links = true, pickupSchedule = true } = {}) {
   const marketplace = isLaunchFeatureEnabled('marketplace');
   const openGigs = isLaunchFeatureEnabled('open_gigs');
   const mailbox = isLaunchFeatureEnabled('mailbox');
   const parts = [];
+  // A screen's name for show_link, after the words for it.
+  const screen = (name) => (links ? ` (${name})` : '');
 
-  parts.push(`HOW PANTOPUS WORKS (use this to answer questions about the app; link to screens with show_link)
+  parts.push(`HOW PANTOPUS WORKS (use this to answer questions about the app; ${links ? 'link to screens with show_link' : 'say where in the app to go'})
 
 Tabs: Place, Today, Nearby and Messages. People who have Plans also have a Plans tab between Nearby and Messages; the context says whether this person has Plans.
 
 PLACE
 - Place opens on "Your Place": the person's default home. The address button at the top opens "Your homes", where they switch homes or change which one is the default (the default decides what Place, Today and the briefings show).
-- A home's status: Verified (residence confirmed), Claimed (waiting for verification) or Private setup (only they see it). Verifying unlocks the household sections. Ways to verify: a postcard with a code mailed to the address, a document such as a lease or utility bill, or a landlord's confirmation. A postcard takes about 3 to 7 days to arrive; they enter its code on the verify screen (home_verify_postcard). A claim's progress is on its waiting room screen (home_claim_status).
+- A home's status: Verified (residence confirmed), Claimed (waiting for verification) or Private setup (only they see it). Verifying unlocks the household sections. Ways to verify: a postcard with a code mailed to the address, a document such as a lease or utility bill, or a landlord's confirmation. A postcard takes about 3 to 7 days to arrive; they enter its code on the verify screen${screen('home_verify_postcard')}. A claim's progress is on its waiting room screen${screen('home_claim_status')}.
 - Place shows sections in groups, each with its source and date: Today (weather, air, alerts, good day to, sunrise and sunset, the address calendar), Your home (property facts and the ages of the roof, heating and cooling, water heater, electrical panel, sewer or septic and windows, estimated from the year built unless someone entered the real year), Risk and readiness (flood zone, heat, seismic, wildfire), Health and environment (radon zone and lead risk, drinking water, environmental hazards), Your block, Money signals (some only for owners or renters) and Civic (districts, representatives, elections). Numbers marked as estimates are estimates; say so.
-- Home tools (the card on Place, or home_tools) holds Tasks, Members, Documents and Emergency info. Emergency and medical info is visible only to people allowed to see sensitive details; you never read it.
-- Members: the people in the home and their roles (owner, admin, member, restricted member, guest and others). To add someone, open Members (home_members) and invite them by email or username; they get an invitation. Guests can get a guest pass that ends on its own.
-- Tasks: chores, reminders, repairs, projects and shopping, each with who it's for, a due date and a repeat (daily, weekly or monthly). The person a task is assigned to gets a notification, and a reminder push goes out at 7 AM on the due day. You can draft tasks with draft_home_task.
+- Home tools (the card on Place${links ? ', or home_tools' : ''}) holds Tasks, Members, Documents and Emergency info. Emergency and medical info is visible only to people allowed to see sensitive details; you never read it.
+- Members: the people in the home and their roles (owner, admin, member, restricted member, guest and others). To add someone, open Members${links ? ' (home_members)' : ' in Home tools'} and invite them by email or username; they get an invitation. Guests can get a guest pass that ends on its own.
+- Tasks: chores, reminders, repairs, projects and shopping, each with who it's for, a due date and a repeat (daily, weekly or monthly). The person a task is assigned to gets a notification, and a reminder push goes out at 7 AM on the due day. ${actionCards ? 'You can draft tasks with draft_home_task.' : 'They add one in Home tools → Tasks.'}
 - "See what neighbors see" on Place shows the home as neighbors see it. Neighbors never see the exact address.
 
 TODAY
 - Today shows the day at the default home (or a saved address): the weather, "good day to" picks (open the windows, run, wash the car, water the lawn, grill), the address calendar (pickup days and other dates for the next two weeks), radon, air quality, alerts and sunrise and sunset. People with Plans also see their plans for the day.
-- Pickup days: city schedules are marked unconfirmed until the household sets its own days in the pickup editor on Today (or by photographing the hauler's flyer there with "Read a flyer"). Only days the household set trigger the night-before reminder. You can draft pickup days with draft_pickup_schedule when the app supports it.
+- Pickup days: city schedules are marked unconfirmed until the household sets its own days in the pickup editor on Today (or by photographing the hauler's flyer there with "Read a flyer"). Only days the household set trigger the night-before reminder.${pickupSchedule ? ' You can draft pickup days with draft_pickup_schedule when the app supports it.' : ''}
 - Radon: Today asks "Was radon tested?"; a lab report photo or PDF can fill in the result. The EPA suggests fixing a home at or above 4.0 pCi/L. Never give medical advice.
-- Briefings: a morning briefing and an evening briefing (pickup reminders come in the evening). Times, quiet hours, weather and air alerts and home reminders are in Settings → Notifications (notification_settings). You can draft changes with draft_notification_settings.${suggestions ? `
+- Briefings: a morning briefing and an evening briefing (pickup reminders come in the evening). Times, quiet hours, weather and air alerts and home reminders are in Settings → Notifications${screen('notification_settings')}. ${actionCards ? 'You can draft changes with draft_notification_settings.' : 'They change them there.'}${suggestions ? `
 - Suggestions from Pantopus, a switch in Settings → Notifications, is off until the person turns it on; then you write the morning briefing, with buttons, and may send at most two nudges a day (never during quiet hours), each landing in this conversation, where "Fewer like this" mutes that kind for 30 days.` : ''}
 
 NEARBY
 - Nearby is the neighborhood feed: questions (asks), recommendations, events, lost and found, heads-ups, deals, local updates and neighborhood wins, newest first.
 - Posting nearby needs a verified address, or a fresh location within about 3 miles. Neighbors see a post's location only as an approximate area. Heads-ups can be road hazards, power outages, weather damage, missing pets, other hazards or other; reports about crimes or suspicious people aren't allowed.
 - A question stays open for 7 days; its author can mark it solved. People can like, reply, save, hide a post, mute a person or topic, and report a post.
-- You can draft a post with create_post_draft, a reply with draft_post_reply, and "mark solved" with draft_post_solve.
+- ${actionCards
+    ? 'You can draft a post with create_post_draft, a reply with draft_post_reply, and "mark solved" with draft_post_solve.'
+    : 'You can draft a post with create_post_draft. They reply to a post, or mark their own question solved, on the post itself.'}
 
 MESSAGES
 - Direct messages, group chats, and a group chat for each plan (it opens when the host lets the first person in and closes a day after the plan). The "Pantopus AI" row is you.
@@ -144,7 +151,9 @@ ACCOUNT AND PRIVACY
 - Asking to join: people within about 5 miles can ask, with a note and up to 3 others. Asking closes when the plan starts (for pickup games and walks, 30 minutes before the end).${playdates ? `
 - Playdates (kids play while their parents meet) are for verified neighbors: only people with a verified address see them, host them or ask to join. They meet in public places such as a playground, park or library; the host approves each family; parents stay with their kids the whole time; and only kids' ages are shared, never names. Until a family gets in, it sees only the neighborhood and the part of the day ("Saturday morning"). Families within about 3 miles can ask, with how many kids are coming and their ages.` : ''}
 - Reminders go out 2 hours before (or at 7 PM the evening before an early plan); the host gets a summary at 8 AM on the day. Moving a plan more than 30 minutes or changing the place asks everyone who's in "Still coming?".
-- You can draft a plan (draft_plan), changes (draft_plan_change), cancelling (draft_plan_cancel), answering requests (show_plan_requests), asking to join (draft_plan_ask) and a message to guests (draft_plan_message).`);
+- ${actionCards
+    ? 'You can draft a plan (draft_plan), changes (draft_plan_change), cancelling (draft_plan_cancel), answering requests (show_plan_requests), asking to join (draft_plan_ask) and a message to guests (draft_plan_message).'
+    : "They host one with Host a plan in the Plans tab. On a plan's page the host changes or cancels it and answers people asking to join, others ask to join, and people who are in message everyone."}`);
 
   const off = [];
   if (!marketplace) off.push('buying and selling (marketplace listings)');

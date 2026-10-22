@@ -105,7 +105,7 @@ Every nudge card carries a secondary action, "Fewer like this": `POST /api/ai/nu
 | `question_answered` | An open question the person asked has 2 or more replies, or one reply older than 12 hours, and isn't solved. At most once per question every 48 hours. | The author | `post_solve`, and `post_reply` (a thanks) |
 | `home_overdue` | Weekly, on Monday at the brief time: tasks overdue or unassigned where the person can edit tasks | The person | `home_task_update` per task: done, a new date, assign. Up to 3 items. |
 | `home_paperwork` | A warranty, policy or lease date is 30 days away, then 7 days away. Sources: `HomeAsset.warranty_expires_at`, and tasks whose `details.origin` is `document` (§7.1) | Owners and admins | `home_task` (call, renew) |
-| `radon_follow_up` | A radon result at or above 4.0 pCi/L with no retest or mitigation task; or "not sure yet" past its date. Facts only, no medical advice. | People who can create tasks in that home | `home_task` (retest, get quotes) |
+| `radon_follow_up` | A radon result at or above 4.0 pCi/L with no retest or mitigation task; or "not sure yet" past its date. Facts only, no medical advice. | People who can create tasks in that home | A high result: `home_task` (retest, get quotes). A test past its date: `home_task_update` on that test's task (Mark done, Move to Saturday, and I'll do it when no one has it). As built: the test is already on the list, so the person finishes or moves it rather than adding a second task (decision D5, October 22). |
 
 **These are not nudges.** They are ordinary Plans notifications, not capped. They use the existing plan links and Plans quiet hours:
 - `plan_guest_left` (to the host);
