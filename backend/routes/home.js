@@ -55,6 +55,7 @@ const addressVerificationObservability = require('../services/addressValidation/
 const { redactStreet, queryKnowsNumber } = require('../utils/addressRedaction');
 const { serializeHomeForViewer, serializeOwnerForViewer } = require('../serializers/homeProfileSerializer');
 const { displayNameFromUser } = require('../serializers/identitySerializers');
+const { withoutAccountPoster } = require('../utils/listingCreatorIdentity');
 
 // Public previews still use this flag-aware personal claim predicate. It does
 // not grant shared detail access or expose an owner/occupant identity.
@@ -2543,7 +2544,7 @@ router.get('/:id/nearby-gigs', verifyToken, async (req, res) => {
     // Limit results
     const limitedGigs = (gigs || []).slice(0, parseInt(limit) || 10);
 
-    res.json({ gigs: limitedGigs });
+    res.json({ gigs: limitedGigs.map(withoutAccountPoster) });
   } catch (err) {
     logger.error('Nearby gigs fetch error', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch nearby gigs' });

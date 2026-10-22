@@ -147,6 +147,8 @@ describe('Gig Location Filtering', () => {
 
       // Seed empty GigBid table for bid count enrichment
       seedTable('GigBid', []);
+      // The poster is named from their account (or Local Profile), not the RPC's creator_name.
+      seedTable('User', [{ id: USER_1, username: 'testuser', name: 'Test User' }]);
 
       const res = await request(app)
         .get('/api/gigs')
@@ -589,6 +591,7 @@ describe('Gig Location Filtering', () => {
         }
         return { data: null, error: null };
       });
+      seedTable('User', [{ id: USER_1, username: 'testuser', name: 'Test User' }]);
 
       const res = await request(app)
         .get('/api/gigs/in-bounds')
