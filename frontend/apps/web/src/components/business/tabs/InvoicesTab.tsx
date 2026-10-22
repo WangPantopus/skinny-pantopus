@@ -220,7 +220,8 @@ export default function InvoicesTab({ businessId, canManage }: Props) {
                     <p className="text-sm font-semibold text-app-text truncate">{(inv as any).recipient?.name || chosenUsername((inv as any).recipient?.username) || 'Unknown'}</p>
                     <p className="text-xs text-app-text-secondary mt-0.5">
                       {new Date(inv.created_at).toLocaleDateString()}
-                      {inv.due_date && ` · Due ${new Date(inv.due_date).toLocaleDateString()}`}
+                      {/* A due date is a calendar day stored as midnight UTC; local time showed the day before in the US. */}
+                      {inv.due_date && ` · Due ${new Date(inv.due_date).toLocaleDateString(undefined, { timeZone: 'UTC' })}`}
                     </p>
                   </div>
                   <div className="text-right flex-shrink-0">

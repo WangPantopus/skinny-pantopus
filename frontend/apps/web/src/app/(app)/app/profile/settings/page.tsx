@@ -319,6 +319,23 @@ export default function SettingsPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
             </button>
+            {/* Invoices businesses sent you, to pay or look back at once the notification is gone. */}
+            <button
+              onClick={() => router.push('/app/invoices')}
+              data-testid="settings-invoices"
+              className="mt-2 w-full flex items-center justify-between px-4 py-3 border border-app rounded-lg hover-bg-app transition group"
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-xl">🧾</span>
+                <div className="text-left">
+                  <span className="font-medium text-app group-hover:text-primary-600 block">Invoices</span>
+                  <span className="text-xs text-app-secondary">Invoices from businesses you hire</span>
+                </div>
+              </div>
+              <svg className="w-5 h-5 text-app-muted group-hover:text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
           </div>
 
           {/* Account */}
