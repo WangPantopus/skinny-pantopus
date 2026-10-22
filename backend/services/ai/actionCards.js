@@ -689,6 +689,15 @@ function venueNames(venue) {
   return [...new Set([first, text, planPlaces.parkNameOf(first)].filter((name) => name && name.length >= 3))];
 }
 
+/**
+ * An event time as the post page shows it: composers post the poster's wall clock labelled UTC
+ * (iOS PulseComposeViewModel.isoDateTime, PulseEventDetails), so "10:00Z" is 10:00 where they are.
+ */
+function eventWallClock(iso) {
+  const at = DateTime.fromISO(String(iso || ''), { zone: 'utc' });
+  return at.isValid ? at.toFormat("yyyy-LL-dd'T'HH:mm") : null;
+}
+
 /** The next quarter hour at least 5 minutes away: when a plan for an event under way starts. */
 function nextQuarterHour() {
   const quarter = 15 * 60 * 1000;
@@ -710,15 +719,17 @@ async function draftPlanFromEvent(args, ctx) {
   if (found.error) return found;
   const { event } = found;
 
-  // When: the event's own time unless they gave another.
+  // When: the event's own time, as its page shows it, unless they gave another.
   const now = Date.now();
-  const eventStart = Date.parse(event.event_date || '');
-  const eventEnd = Date.parse(event.event_end_date || '');
+  const eventStartLocal = eventWallClock(event.event_date);
+  const eventEndLocal = eventWallClock(event.event_end_date);
+  const eventStart = Date.parse(localToUtc(eventStartLocal, ctx.timeZone) || '');
+  const eventEnd = Date.parse(localToUtc(eventEndLocal, ctx.timeZone) || '');
   if (Number.isFinite(eventEnd) && eventEnd <= now) return { error: 'This event is over, so there is nothing to plan around it. Say so.' };
   let startsLocal = args.starts_local || null;
   if (!startsLocal) {
     if (!Number.isFinite(eventStart)) return { error: "The event doesn't say when it is. Ask when they'd like to meet, in one short question." };
-    if (eventStart > now) startsLocal = new Date(eventStart).toISOString();
+    if (eventStart > now) startsLocal = eventStartLocal;
     else if (Number.isFinite(eventEnd)) startsLocal = nextQuarterHour();
     else return { error: "The event has started and doesn't say when it ends. Ask when they'd like to meet, in one short question." };
   }
@@ -730,7 +741,7 @@ async function draftPlanFromEvent(args, ctx) {
       if (eventEnd - from > MAX_PLAN_MS) {
         return { error: `The event runs longer than a plan can (up to ${rules.LIMITS.maxDurationMinutes / 60} hours). Ask which part of it they'd like to meet for, or choose a sensible window and name it in the note.` };
       }
-      endsLocal = new Date(eventEnd).toISOString();
+      endsLocal = eventEndLocal;
     } else {
       endsLocal = new Date(from + EVENT_PLAN_MINUTES * 60 * 1000).toISOString();
     }

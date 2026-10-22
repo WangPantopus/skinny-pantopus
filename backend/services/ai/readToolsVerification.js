@@ -116,6 +116,14 @@ const DELIVERY = {
   rejected: "The mail service couldn't send your postcard",
 };
 
+// Whether it went out, from how it travelled (the screen's delivery line), also once it has ended.
+const SENT = {
+  accepted: 'yes',
+  not_started: 'not yet',
+  unknown: "couldn't be confirmed",
+  rejected: "no: the mail service couldn't send it",
+};
+
 function postcardHeadline(card) {
   if (card.status === 'verified') return 'Address verified by mail';
   // A code also expires when its tries are used up.
@@ -132,7 +140,10 @@ function postcardNext(status, zone) {
     return status.can_request ? "You haven't requested a postcard yet. You can request one on the postcard screen; one takes about 3 to 7 days to arrive." : null;
   }
   if (card.status === 'verified') return 'Your address is verified by mail; nothing more to do with the postcard.';
-  if (card.status === 'expired' || card.status === 'cancelled') return `This postcard can't be used anymore.${again}`;
+  if (card.status === 'expired' || card.status === 'cancelled') {
+    const why = card.delivery === 'rejected' ? "The mail service couldn't send it, so it" : 'This postcard';
+    return `${why} can't be used anymore.${again}`;
+  }
   if (card.delivery === 'accepted') {
     const by = dayLabel(card.expires_at, zone);
     return `It was sent. A postcard takes about 3 to 7 days to arrive; when it comes, enter its code on the postcard screen${by ? ` by ${by}` : ''}.`;
@@ -153,7 +164,7 @@ function postcardForModel(status, zone) {
   ].filter(Boolean);
   return {
     status: card ? postcardHeadline(card) : "You haven't requested a postcard yet.",
-    ...(card ? { requested: dayLabel(card.requested_at, zone) } : {}),
+    ...(card ? { requested: dayLabel(card.requested_at, zone), sent: SENT[card.delivery] || null } : {}),
     ...(card?.status === 'pending' ? { code_expires: dayLabel(card.expires_at, zone), tries_left: card.attempts_remaining } : {}),
     ...(can.length ? { you_can_there: can } : {}),
     ...(status.restriction_message ? { screen_says: status.restriction_message } : {}),
@@ -208,12 +219,16 @@ async function getHomeVerification(args, ctx) {
     const claim = claims.find((row) => row.home_id === homeId) || null;
     const listed = mine.homes.find((home) => home.id === homeId);
     const place = listed || claim?.home || places.get(homeId) || {};
-    const verification = authority?.unreadable ? null : verificationForModel(authority);
+    let verification = authority?.unreadable ? null : verificationForModel(authority);
     // The postcard counts when there is one or the postcard screen offers something; its refusal
     // ("use ownership verification") only while a claim or a verification is pending.
     const mail = postcard && !postcard.unreadable ? postcard : null;
     const mailOffered = Boolean(mail && (mail.postcard || mail.can_request || mail.can_verify || mail.can_resume));
     const mailShown = mailOffered || Boolean(mail?.restriction_message && (claim?.status === 'under_review' || verification));
+    // The waiting room's "a code has been mailed" is the postcard screen's to say: it knows whether one was.
+    if (verification && authority.verification_status === 'pending_postcard' && mailOffered) {
+      verification = { kind: verification.kind, status: verification.status };
+    }
     const parts = {
       claim: claim ? claimForModel(claim, zone) : null,
       verification,
@@ -223,7 +238,7 @@ async function getHomeVerification(args, ctx) {
     const next = [
       parts.claim && parts.claim.status !== 'Verified' ? parts.claim.screen_says : null,
       mailOffered ? postcardNext(mail, zone) : null,
-      !parts.claim && verification ? verification.screen_says : null,
+      !parts.claim && verification?.screen_says ? verification.screen_says : null,
     ].filter(Boolean);
     const unread = [authority, postcard, progress].some((read) => read?.unreadable);
     const screens = [
