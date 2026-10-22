@@ -1083,9 +1083,11 @@ GitHub environments; never in Git or chat.
    refund.failed refund.updated setup_intent.setup_failed setup_intent.succeeded transfer.created
    transfer.failed transfer.paid transfer.reversed
    ```
-   Keep its signing secret for step 4. The server checks one signing secret. Whether a crew's onboarding updates also
-   need an endpoint for connected accounts is being checked with the invoice flow (NEXT_STEPS, section 4A); this
-   step will be updated with the answer.
+   Keep its signing secret for step 4. The server checks one signing secret, and this one endpoint is enough: a
+   crew's Stripe onboarding status is read from Stripe again whenever its payout page opens
+   (`GET /api/businesses/:businessId/stripe/account`), so no endpoint for connected accounts is needed. Events from
+   crews' own Stripe accounts (their bank payouts) don't reach the server; crews see those in their Stripe Express
+   dashboard.
 4. **Server keys.** In `~/pantopus/.env.prod` on the server: `STRIPE_SECRET_KEY` (the live `sk_live_…`),
    `STRIPE_PUBLISHABLE_KEY` (`pk_live_…`) and `STRIPE_WEBHOOK_SECRET` (step 3's `whsec_…`). Keep the test values
    somewhere outside Git for a rollback. Then re-run the latest production deployment (or restart the API and worker
