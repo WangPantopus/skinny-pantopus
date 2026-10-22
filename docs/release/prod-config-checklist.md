@@ -209,7 +209,8 @@ Each has a default that the steps below follow until you change it here.
   keys until you activate live payments; no pilot journey takes money. Pilot
   store builds then carry the matching `pk_test_` key (L4 adjusts the Android
   release guard, which demands `pk_live_`). A real card fails in test mode
-  instead of being charged.
+  instead of being charged. **October 22:** the founder chose Crew Day, paid through business invoices, as the
+  first money feature (NEXT_STEPS section 0); [P11](#p11-live-payments-for-crew-day-founder) turns on live payments for it.
 - [x] **D5 Postcards.** Updated by the founder October 9: defer Lob, Google Address Validation and Smarty setup for the first public web release. Set `DEFER_ADDRESS_PROVIDER_SETUP=true` in the production backend only. Missing providers stay unavailable; no mock postcard may be sent or reported as sent. New address validation, Add Home without a fresh cached validation, and mail verification/invitations will fail until the providers are configured. When enabling Lob, provide `LOB_ENV=live`, a `live_` key, its webhook secret and a real return address (`LOB_FROM_*`; the defaults are a placeholder San Francisco address), then remove the deferral switch. Staging still requires its test providers.
 - [ ] **D6 Email.** Open (October 6): the founder is checking which email service is already paid for; use that one if it does SMTP. Default: Postmark SMTP for backend email and for Supabase
   Auth email, sending from `pantopus.com` with SPF, DKIM and DMARC.
@@ -1054,6 +1055,66 @@ doesn't, `EDGE_PROXY_SECRET` differs between Vercel and the server).
 `node scripts/staging/check-hosted.cjs https://pantopus.com https://api.pantopus.com --production`
 passes every line (health, HTTPS, security headers, the web's API and realtime forwarding, both
 app-link files, robots.txt).
+
+### P11. Live payments for Crew Day (founder)
+
+Decided October 22 (NEXT_STEPS section 0): Crew Day street days are paid through business invoices, so production takes
+real cards for them. A crew invoices each household from its Pantopus business page; the household pays by card; 48
+hours later the payment jobs move the crew's share to the crew's Stripe account, minus Pantopus's fee (10% for the
+first 50 businesses, 15% for home services). This ends D4's test-mode pilot for payments. Do it after the business fee
+fix is merged and released (NEXT_STEPS, section 4A). Keys stay in Stripe, `~/pantopus/.env.prod`, Vercel and the
+GitHub environments; never in Git or chat.
+
+1. **Stripe account, live.** In the Stripe Dashboard, activate live payments: business details, Pantopus's bank
+   account and the identity check. Set the statement descriptor (what card statements show) to PANTOPUS.
+2. **Connect, live.** Settings → Connect: complete the platform profile for live mode, keep Express accounts, and set
+   the name, icon and color crews see during Stripe onboarding. Pantopus charges the card on its own account and
+   transfers the crew's share later ("separate charges and transfers").
+3. **Live webhook.** Developers → Webhooks, in live mode: add `https://api.pantopus.com/api/webhooks/stripe` for
+   events on your account, with the events `backend/stripe/stripeWebhooks.js` handles:
+   ```text
+   account.application.authorized account.application.deauthorized account.updated capability.updated
+   charge.dispute.closed charge.dispute.created charge.dispute.updated charge.failed charge.refund.updated
+   charge.refunded charge.succeeded checkout.session.completed customer.subscription.created
+   customer.subscription.deleted customer.subscription.updated customer.updated invoice.paid
+   invoice.payment_failed payment_intent.amount_capturable_updated payment_intent.canceled
+   payment_intent.payment_failed payment_intent.requires_action payment_intent.succeeded
+   payment_method.attached payment_method.detached payout.created payout.failed payout.paid refund.created
+   refund.failed refund.updated setup_intent.setup_failed setup_intent.succeeded transfer.created
+   transfer.failed transfer.paid transfer.reversed
+   ```
+   Keep its signing secret for step 4. The server checks one signing secret. Whether a crew's onboarding updates also
+   need an endpoint for connected accounts is being checked with the invoice flow (NEXT_STEPS, section 4A); this
+   step will be updated with the answer.
+4. **Server keys.** In `~/pantopus/.env.prod` on the server: `STRIPE_SECRET_KEY` (the live `sk_live_…`),
+   `STRIPE_PUBLISHABLE_KEY` (`pk_live_…`) and `STRIPE_WEBHOOK_SECRET` (step 3's `whsec_…`). Keep the test values
+   somewhere outside Git for a rollback. Then re-run the latest production deployment (or restart the API and worker
+   containers) so they read the new values. Staging keeps its test keys; it refuses live ones.
+5. **Web key.** Vercel production: `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` must be this account's `pk_live_…`. On
+   October 10 it already held a `pk_live_` key while the server used test keys, so card entry on the web fails until
+   both match. Confirm it is this account's live key, then redeploy the web, since the key is built in.
+6. **Payment jobs.** Turn on `PaymentJobsEnabled` the P8 way, changing only that switch from the October 21 state:
+   ```bash
+   sam deploy --config-env prod \
+     --parameter-overrides Environment=production SchedulesEnabled=false \
+       BriefingsEnabled=true SeederEnabled=true HomeRemindersEnabled=true \
+       AlertsEnabled=true MaintenanceJobsEnabled=true PaymentJobsEnabled=true
+   ```
+   Review the change set before executing it, and update `parameter_overrides` in `samconfig.toml` afterwards.
+   Without these jobs no crew is ever paid.
+7. **A real $1 check.** With your own accounts: create a home-service business, finish its Stripe onboarding with
+   your real details, invoice your own member account $1, pay it with your own card on pantopus.com, and check the
+   charge in Stripe. After 48 hours, check the transfer to the business's Stripe account ($1 minus the fee) and its
+   payout to the bank. Refund the $1 afterwards if you like.
+8. **Apps.** The current store builds carry the test key, so their card form fails against live keys: until new
+   builds ship, households pay on pantopus.com. For the next builds, put the `pk_live_…` key in the `ios-release`
+   and `android-release` secrets `STRIPE_PUBLISHABLE_KEY`, and delete the `PANTOPUS_ALLOW_TEST_PAYMENTS` variable
+   (section 4).
+9. **Rollback.** Put the test keys back in `.env.prod` and Vercel, redeploy both, and set `PaymentJobsEnabled=false`
+   the same way. Payments already taken stay in Stripe; refund them there if needed.
+
+After each street day, check the Dashboard for the day's charges, transfers and any dispute. Stripe emails you when a
+dispute opens.
 
 ## 4. Store builds
 
