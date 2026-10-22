@@ -1381,8 +1381,12 @@ async function draftHomeAsset(args, ctx) {
       line('From', sourceText(args.source)),
       line('Home', [home.city, home.state].filter(Boolean).join(', ')),
     ],
-    actions: [action('confirm', 'Add', { method: 'POST', path: `/api/homes/${home.id}/assets`, body }, { label: 'Added' })],
+    actions: [],
   });
+  // The card's id as request_id: the route answers a second Add of this card with the item it added.
+  draft.actions.push(action('confirm', 'Add', {
+    method: 'POST', path: `/api/homes/${home.id}/assets`, body: { ...body, request_id: draft.id },
+  }, { label: 'Added' }));
   return finished(draft, args.note, "Tap Add to put it in your home's records.");
 }
 

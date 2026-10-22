@@ -152,6 +152,18 @@ Sessions you start for one job (Instant Screens, Nearby Plans, single fixes) wor
 - [x] Phase 2 starts as soon as phase 1 is merged, in fresh sessions that use the recommended defaults without waiting for you. Anything that reads chat messages waits for your privacy step. You said so on October 20.
 - [ ] Yours before phase 1 ships: the privacy policy and the data inventory name AI processing and Anthropic as a processor, and you confirm the Anthropic account's data-retention setting. The draft wording is in [#2472](https://github.com/WangPantopus/skinny-pantopus/pull/2472): confirm the retention setting and Anthropic's terms there, then merge it. The backend half of phase 1 has been in production since October 20, so the policy is behind the code until #2472 merges.
 
+**Made on October 22 (AI assistant).** You answered "approve" to "approve or decline standing rules (`AgentRule`)". Section 18 of the [phase 3 contract](docs/product/ai-assistant-phase3-contract-2026-10-22.md) says what that builds.
+
+- [x] Standing rules, with `AgentRule` as a fourth phase 3 table.
+  - You turn a rule on from a card. From then on it does one thing on its own, within its limits, and tells you each time.
+  - Phase 3 has two kinds:
+    - post a plan every week: up to 12 weeks at a time, only at or near your home, paused after two weeks with nobody going;
+    - remind a household member the night before each pickup day your household set.
+  - Rules are listed in Settings, each with a switch and its history.
+- [x] Not rules:
+  - Accepting requests: each plan's own entry rules already do it.
+  - Answering guests in the plan chat: it reads chats, so it waits for your privacy step.
+
 **Made by the founder on October 21 (Lost pet alerts), from the [design page](https://claude.ai/artifact/Jcd3FHddeyXRKjE2sXPdZW).** You said "Use the recommended option for every decision and start the work in the order D13 recommends." Minutes later you paused it before any build: "we want to focus on making money feature first." Nothing is built; the Lost pet alerts section below says how to resume. The [proposal](docs/product/lost-pet-alerts-proposal-2026-10-21.md), the [design page's source](docs/product/lost-pet-alerts-design-2026-10-21.html) and the [build contract](docs/product/lost-pet-alerts-contract-2026-10-21.md) are in `docs/product/`.
 
 - [x] Build lost pet alerts: one photo and one tap alert people nearby, make a flyer with a QR code and a link, and open a public pet page where anyone can report a sighting without an account. Found pets use the same flow.
@@ -507,7 +519,16 @@ Decided October 20 (section 0) from the [AI expansion proposal](https://claude.a
 - [x] Phase 2, first wave, web: a plan's request notices open the plan ([#2529](https://github.com/WangPantopus/skinny-pantopus/pull/2529)), and briefs and nudges stay out of the web's notifications ([#2559](https://github.com/WangPantopus/skinny-pantopus/pull/2559)).
 - [ ] Phase 2, first wave, follow-ups found in the checks: "Fewer like this" goes away once a card is used or expires (iOS and Android); iOS keeps a PDF the server refused queued, and a failed reply loses the words and files (Android: [#2569](https://github.com/WangPantopus/skinny-pantopus/pull/2569)); the app guide offers card tools to 2.0.1 builds; the appliance card can add the same item twice; the web plan page calls its host an invitee; a card's done state lives on one phone until phase 3 keeps it on the server.
 - [ ] Phase 2, chats (after your privacy step): catch-up for chats, plan chats and Support Train chats, reply drafts, chat to task, "what's waiting on me" and warning signs on first messages from strangers.
-- [ ] Phase 3: the memory list, "Needs you", standing rules, follow-ups, and Siri and the Android assistant.
+- [ ] Phase 3, backend: the three tables, card done states on the server, the memory list's routes and yearly review, "Plans you'd like", "Needs you", follow-ups ("check back Thursday"), the short answers Siri reads, buttons on the assistant's notifications, and standing rules (`AgentRule`). Five PRs, against the [phase 3 contract](docs/product/ai-assistant-phase3-contract-2026-10-22.md) (sections 3 to 10, 15 and 18).
+- [ ] Phase 3, iOS: a card used on one phone shows as done everywhere, What Pantopus remembers and What Pantopus does for you in Settings, Needs you on Today, and the memory, follow-up and rule cards (contract sections 4.4, 5.7, 6.4, 12 and 18.5).
+- [ ] Phase 3, Android: the same on Android.
+- [ ] Phase 3, Siri: next pickup, what's on today, catch me up nearby, start a plan and remind my household as App Shortcuts. The first three answer in Siri; the other two open the assistant at a card you tap. Plus Mark done, Mark solved and "Fewer like this" on the assistant's notifications (contract sections 8.3 and 9).
+- [ ] Phase 3, Android launcher: the same five as launcher shortcuts, and the same notification buttons (contract sections 8.4 and 9). Android has no voice path for other apps this year: Assistant left phones in September, and Gemini's AppFunctions are a private preview.
+- [x] Phase 3, yours: standing rules, approved October 22 (section 0).
+- [ ] Phase 3, still yours:
+  - "New here, handled" waits: it needs storage per home, which needs your approval.
+  - Answering guests in the plan chat waits for your privacy step.
+  - When you want Gemini on Android, applying to Google's AppFunctions early access is yours (contract section 11).
 - [ ] Later, when their flags turn on: selling, buying, negotiating within limits and hiring, as the proposal describes.
 
 ## Lost pet alerts (added October 21)

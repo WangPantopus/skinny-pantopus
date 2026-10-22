@@ -35,6 +35,8 @@ function chatAgentSystem({
   if (marketplace) does.push('- Draft a marketplace listing (selling, giving away or renting something, or a "wanted" request) with create_listing_draft.');
   if (mailbox) does.push("- Summarize a letter and suggest actions (pay, file, remind, create a task) with summarize_mail_item. You need the letter's content: if they haven't shared it, ask them to paste its text or attach a photo of it. Never ask for a mail item ID.");
   if (links) does.push('- Add a button that opens the right screen with show_link, before you write your answer, when the answer sends them somewhere in the app.');
+  // The web and older builds show no action cards: say where in the app it's done, instead of offering it.
+  if (!actionCards) does.push(`- Tasks and reminders, notification settings${plans ? ', replies to posts and plans' : ' and replies to posts'} are things they change themselves in the app. When they ask you to, say in a sentence or two where they do it (the guide below says where), without offering to do it for them.`);
 
   const photoUses = [
     ...(pickupSchedule ? ["a hauler's flyer or collection calendar means pickup days"] : []),
@@ -74,7 +76,7 @@ ${actionCards ? `- Home papers: a PDF or photo of a warranty, an insurance polic
 - Dates: work out words like today, last night and this Saturday from [Sent: …]. Name a weekday or a date only when you are sure it is right; otherwise keep their words. Don't announce today's date unless they ask. Times you put in cards are their local time, YYYY-MM-DDTHH:MM.
 - To find a particular person, point them to Search in Pantopus. If they're looking for help or a recommendation, look at what neighbors already posted, then offer to draft a post.
 - Emergencies: tell them to call 911 and stop. Health, legal and money questions: give sourced facts and suggest a professional; never diagnose or advise.
-- Radon: the EPA recommends fixing a home at or above 4.0 pCi/L and considering it between 2 and 4. For a result at or above 4, offer two reminders: a follow-up test and quotes from certified radon mitigation contractors. Say nothing about health effects; for those, point to the EPA (epa.gov/radon).
+- Radon: the EPA recommends fixing a home at or above 4.0 pCi/L and considering it between 2 and 4. For a result at or above 4, ${actionCards ? 'offer two reminders' : 'suggest two tasks they can add in Home tools → Tasks'}: a follow-up test and quotes from certified radon mitigation contractors. Say nothing about health effects; for those, point to the EPA (epa.gov/radon).
 - Reply in the language they write in.
 
 Privacy:
@@ -419,7 +421,7 @@ module.exports = {
   LOST_FOUND_MATCH_SYSTEM,
 
   VERSIONS: {
-    chat: 'chat-v2.6',  // v1.2: prompt built from the features that are on; home context in system messages; a draft's note ends the turn; v1.3: pickup days for apps that show the card; v2.0: phase 1 (read tools, action cards, links, the app guide); v2.1: "this" in a message sent from a screen ([Asked from: …]) means that screen; v2.2: a photo is seen only with its message: earlier replies about it stand, and a later photo is a different one; v2.3: playdates in the plan tools and the guide for people with plans_playdates; v2.4: home papers (PDFs and photos): one card per fact with its page, no account or serial numbers, non-home documents stop; draft_home_system and draft_home_asset; v2.5: draft_home_task_update, draft_home_year, radon follow-through; v2.6: Nearby catch-up and recommendations (catch_up_nearby, find_recommendations)
+    chat: 'chat-v2.7',  // v1.2: prompt built from the features that are on; home context in system messages; a draft's note ends the turn; v1.3: pickup days for apps that show the card; v2.0: phase 1 (read tools, action cards, links, the app guide); v2.1: "this" in a message sent from a screen ([Asked from: …]) means that screen; v2.2: a photo is seen only with its message: earlier replies about it stand, and a later photo is a different one; v2.3: playdates in the plan tools and the guide for people with plans_playdates; v2.4: home papers (PDFs and photos): one card per fact with its page, no account or serial numbers, non-home documents stop; draft_home_system and draft_home_asset; v2.5: draft_home_task_update, draft_home_year, radon follow-through; v2.6: Nearby catch-up and recommendations (catch_up_nearby, find_recommendations); v2.7: apps without action cards or link buttons (the web, 2.0.1, 2.0.2) hear where in the app things are done, not card tools or link screens
     gig: 'gig-draft-v1.2',  // v1.1: estimated_duration in hours, as the gig form and API expect; v1.2: told today's date
     listing: 'listing-draft-v1.0',
     post: 'post-draft-v1.2',  // v1.1: told today's date, so "this Saturday" gets a real event date; v1.2: nearby-feed types only for surface "place"

@@ -49,7 +49,8 @@
       "old": true,
       "say": "Pickleball at Crown Park tomorrow at 6pm, need 3 people",
       "expect": {
-        "noCard": true
+        "noCard": true,
+        "textNotMatches": "(draft_|show_link|\\btool\\b|isn't available|not available)"
       }
     },
     {
@@ -81,6 +82,70 @@
       "expect": {
         "linkContains": "/members",
         "noCard": true
+      }
+    },
+    {
+      "id": "settings-briefing-off",
+      "as": "guest",
+      "say": "Turn off the morning briefing",
+      "expect": {
+        "card": "notification_settings",
+        "cardBodyHas": {
+          "daily_briefing_enabled": false
+        },
+        "textNotMatches": "^(Done|I've turned|Turned off|Your morning briefing is now off)"
+      }
+    },
+    {
+      "id": "home-task-remind-monthly",
+      "as": "host",
+      "context": {
+        "surface": "place",
+        "home_id": "<host.home>"
+      },
+      "say": "Remind me to change the filter monthly",
+      "expect": {
+        "card": "home_task",
+        "then": true,
+        "noError": true
+      }
+    },
+    {
+      "id": "old-build-briefing-off-says-where",
+      "as": "guest",
+      "old": true,
+      "say": "Turn off the morning briefing",
+      "expect": {
+        "noCard": true,
+        "textMatches": "Settings",
+        "textNotMatches": "(draft_|show_link|_settings\\b|\\btool\\b|isn't available|not available|^(Done|I've turned|Turned off))"
+      },
+      "note": "The web and the 2.0.1 and 2.0.2 builds list no \"action\" or \"link\" in cards, so the guide names no card tool or link screen to them; the reply says where to do it (appGuide.js, prompts.js)."
+    },
+    {
+      "id": "old-build-reminder-says-where",
+      "as": "host",
+      "old": true,
+      "context": {
+        "surface": "place",
+        "home_id": "<host.home>"
+      },
+      "say": "Remind me to change the filter monthly",
+      "expect": {
+        "noCard": true,
+        "textMatches": "Tasks",
+        "textNotMatches": "(draft_|show_link|\\btool\\b|isn't available|not available|^(Done|I've added|Added|I've set))"
+      }
+    },
+    {
+      "id": "old-build-how-to-says-where",
+      "as": "host",
+      "old": true,
+      "say": "How do I add my partner to our home?",
+      "expect": {
+        "noCard": true,
+        "textMatches": "Members",
+        "textNotMatches": "(draft_|show_link|home_members|\\btool\\b|button|isn't available|not available)"
       }
     },
     {
@@ -274,6 +339,18 @@
         "textMatches": "(4(\\.0)? pCi/L|EPA)",
         "textNotMatches": "(cancer|smok|lungs?\\b)"
       }
+    },
+    {
+      "id": "old-build-radon-says-where",
+      "as": "owner",
+      "old": true,
+      "say": "Our radon test came back at 5.2 pCi/L. What should we do?",
+      "expect": {
+        "noCard": true,
+        "textMatches": "Tasks",
+        "textNotMatches": "(cancer|smok|lungs?\\b|draft_|\\btool\\b|I've added|I'll add)"
+      },
+      "note": "Without action cards the two follow-ups (a retest, mitigation quotes) are tasks the person adds in Home tools → Tasks."
     },
     {
       "id": "doc-not-a-home-paper",

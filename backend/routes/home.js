@@ -4365,6 +4365,8 @@ router.get('/:id/assets', verifyToken, async (req, res) => {
  * POST /api/homes/:id/assets
  * Adding an appliance or other item to the Home's records needs assets.manage, as the
  * table's own policy and the records photo route require.
+ * With `request_id` (the assistant card's id), the same request for this home and person
+ * answers 200 with the item it added (`replayed: true`) instead of adding it again.
  */
 router.post('/:id/assets', verifyToken, validate(createHomeAssetSchema), async (req, res) => {
   try {
@@ -4375,32 +4377,53 @@ router.post('/:id/assets', verifyToken, validate(createHomeAssetSchema), async (
     const access = await checkHomePermission(homeId, userId, 'assets.manage');
     if (!access.hasAccess) return res.status(403).json({ error: 'You do not have permission to add items to this home.' });
 
-    const { category, name, room, brand, model, serial_number, purchase_date, purchase_price, warranty_expires_at, notes, details } = req.body;
+    const { category, name, room, brand, model, serial_number, purchase_date, purchase_price, warranty_expires_at, notes, details, request_id: requestId } = req.body;
 
-    const { data, error } = await supabaseAdmin
-      .from('HomeAsset')
-      .insert({
-        home_id: homeId,
-        category,
-        name,
-        room: room || null,
-        brand: brand || null,
-        model: model || null,
-        serial_number: serial_number || null,
-        purchase_date: purchase_date || null,
-        purchase_price: purchase_price || null,
-        warranty_expires_at: warranty_expires_at || null,
-        notes: notes || null,
-        details: details || {},
-        created_by: userId,
-      })
-      .select()
-      .single();
+    // One request for this actor and Home reuses the same primary key, as issues do.
+    const assetId = requestId ? crypto.createHash('sha256')
+      .update('pantopus:home-asset:v1:' + homeId.toLowerCase() + ':' + userId.toLowerCase() + ':' + requestId.toLowerCase())
+      .digest('hex').slice(0, 32) : null;
+    const readAdded = async () => {
+      const { data: added, error: readError } = await supabaseAdmin.from('HomeAsset').select('*')
+        .eq('id', assetId).eq('home_id', homeId).maybeSingle();
+      if (readError) throw readError;
+      return added;
+    };
+    if (assetId) {
+      const added = await readAdded();
+      if (added) return res.status(200).json({ asset: added, replayed: true });
+    }
+
+    const row = {
+      ...(assetId ? { id: assetId } : {}),
+      home_id: homeId,
+      category,
+      name,
+      room: room || null,
+      brand: brand || null,
+      model: model || null,
+      serial_number: serial_number || null,
+      purchase_date: purchase_date || null,
+      purchase_price: purchase_price || null,
+      warranty_expires_at: warranty_expires_at || null,
+      notes: notes || null,
+      details: details || {},
+      created_by: userId,
+    };
+    const { data, error } = assetId
+      ? await supabaseAdmin.from('HomeAsset').upsert(row, { onConflict: 'id', ignoreDuplicates: true }).select().maybeSingle()
+      : await supabaseAdmin.from('HomeAsset').insert(row).select().single();
 
     if (error) {
       logger.error('Error creating home asset', { error: error.message, homeId });
       return res.status(500).json({ error: 'Failed to create asset' });
     }
+    // Two runs at once: the other one added it.
+    if (!data && assetId) {
+      const added = await readAdded();
+      if (added) return res.status(200).json({ asset: added, replayed: true });
+    }
+    if (!data) return res.status(500).json({ error: 'Failed to create asset' });
 
     res.status(201).json({ asset: data });
   } catch (err) {
