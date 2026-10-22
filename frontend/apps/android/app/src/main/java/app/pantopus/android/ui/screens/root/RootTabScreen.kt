@@ -5053,6 +5053,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             navController.navigate(ChildRoutes.businessProfile(business))
                         },
                         onAsk = { context -> navController.navigate(ChildRoutes.askPantopus(context)) },
+                        plansOn = plansFlags.plans,
                     )
                 }
                 composable(

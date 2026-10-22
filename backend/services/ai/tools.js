@@ -20,6 +20,7 @@ const { nearbyReadToolDefinitions, runNearbyReadTool } = require('./readToolsNea
 const { verificationReadToolDefinitions, runVerificationReadTool } = require('./readToolsVerification');
 const { actionCardDefinitions, runCardTool } = require('./actionCards');
 const { showLinkDefinition, runShowLink } = require('./appGuide');
+const { memoryToolDefinitions, runMemoryTool } = require('./memory');
 const { homesOf, localToUtc } = require('./assistantKit');
 
 const {
@@ -274,6 +275,8 @@ const toolDefinitions = [
   ...nearbyReadToolDefinitions,
   ...verificationReadToolDefinitions,
   ...actionCardDefinitions,
+  // Phase 3: what they ask Pantopus to remember (memory.js).
+  ...memoryToolDefinitions,
   showLinkDefinition,
 ];
 
@@ -336,6 +339,9 @@ const TOOL_TIMEOUTS_MS = {
   draft_home_year: 15000,
   draft_home_system: 12000,
   draft_home_asset: 8000,
+  draft_memory: 8000,
+  draft_plan_alert: 8000,
+  recall_memory: 8000,
 };
 
 /** The tool context: the person and what this turn knows. A bare user id still works (older callers, tests). */
@@ -391,6 +397,8 @@ async function _executeToolImpl(name, args, ctx) {
   if (verification) return verification;
   const drafted = await runCardTool(name, args, ctx);
   if (drafted) return drafted;
+  const remembered = await runMemoryTool(name, args, ctx);
+  if (remembered) return remembered;
   if (name === 'show_link') return runShowLink(args, ctx);
   switch (name) {
     case 'get_user_context':

@@ -39,6 +39,7 @@ const { actionCardDefinitions, playdateCardDefinitions, PLAN_CARD_TOOLS } = requ
 const { appGuide } = require('./appGuide');
 const { screenContextText, screenName } = require('./screenContext');
 const { checkChatBudget } = require('./assistantBudget');
+const memory = require('./memory');
 const agentRecord = require('./agentRecord');
 const cardState = require('./cardState');
 
@@ -56,11 +57,16 @@ const PLAYDATE_TOOLS = new Map([...playdateReadToolDefinitions, ...playdateCardD
 // action cards ("action") and link buttons ("link"). Plans tools need the
 // person's `plans` flag, and playdates among their kinds `plans_playdates`.
 // The read tools answer in words, so every app gets them.
-function launchScopedChatTools({ pickupSchedule = false, actionCards = false, links = false, plans = false, playdates = false } = {}) {
+function launchScopedChatTools({ pickupSchedule = false, actionCards = false, links = false, plans = false, playdates = false, remembers = false } = {}) {
   const giftFunds = isLaunchFeatureEnabled('gift_funds');
   return toolDefinitions
     .filter((tool) => {
       if (tool.name === 'draft_pickup_schedule') return pickupSchedule;
+      // Phase 3 memory (`cards` lists "memory"): its cards also need "action", and plan alerts Plans.
+      if (memory.MEMORY_TOOL_NAMES.has(tool.name)) {
+        if (!memory.MEMORY_CARD_TOOLS.has(tool.name)) return remembers;
+        return remembers && actionCards && (plans || tool.name !== 'draft_plan_alert');
+      }
       if (CARD_TOOL_NAMES.has(tool.name)) return actionCards && (plans || !PLAN_CARD_TOOLS.has(tool.name));
       if (READ_TOOL_NAMES.has(tool.name)) return plans || !PLAN_TOOLS.has(tool.name);
       if (tool.name === 'show_link') return links;
@@ -87,7 +93,7 @@ function withoutGiftFunds(tool) {
   };
 }
 
-function launchScopedChatInstructions({ pickupSchedule = false, actionCards = false, links = false, plans = false, playdates = false } = {}) {
+function launchScopedChatInstructions({ pickupSchedule = false, actionCards = false, links = false, plans = false, playdates = false, remembers = false } = {}) {
   return prompts.chatAgentSystem({
     openGigs: isLaunchFeatureEnabled('open_gigs'),
     marketplace: isLaunchFeatureEnabled('marketplace'),
@@ -96,7 +102,8 @@ function launchScopedChatInstructions({ pickupSchedule = false, actionCards = fa
     actionCards,
     links,
     plans,
-    guide: appGuide({ plans, playdates, suggestions: actionCards, actionCards, links, pickupSchedule }),
+    remembers: remembers && actionCards,
+    guide: appGuide({ plans, playdates, suggestions: actionCards, actionCards, links, pickupSchedule, remembers: remembers && actionCards }),
   });
 }
 
@@ -166,6 +173,9 @@ const TOOL_STATUS = {
   draft_home_asset: 'Getting your home\'s record ready…',
   draft_notification_settings: 'Drafting your settings…',
   show_link: 'Finding the screen…',
+  draft_memory: 'Getting it ready to remember…',
+  draft_plan_alert: 'Setting up the alert…',
+  recall_memory: 'Checking what you asked me to remember…',
 };
 
 // A draft Claude declined to write: not an outage, so not "try again later".
@@ -390,6 +400,13 @@ async function streamChat({
     ? screenContextText(screen, { userId, user: viewer, timeZone: home.timeZone, plansEnabled: plans })
     : null));
   const photosRead = images?.length ? photoBlocks(images, userId) : Promise.resolve([]);
+  // What they asked Pantopus to remember that goes with this message (phase 3 §5.3), for every build.
+  const memoryRead = contextRead.then((home) => memory.turnContext(userId, {
+    screen, message, recall: shown.has('memory'), timeZone: home.timeZone,
+  })).catch((err) => {
+    logger.warn('Memory context failed', { userId, error: err.message });
+    return null;
+  });
 
   let conversation;
   try {
@@ -416,8 +433,8 @@ async function streamChat({
     ...fields,
   });
 
-  const [homeContext, photoResults, plansEnabled, playdatesEnabled, screenText] = await Promise.all([
-    contextRead, photosRead, plansRead, playdatesRead, screenRead,
+  const [homeContext, photoResults, plansEnabled, playdatesEnabled, screenText, memoryText] = await Promise.all([
+    contextRead, photosRead, plansRead, playdatesRead, screenRead, memoryRead,
   ]);
   const photos = photoResults.filter(Boolean);
   // One context message: the home facts (remembered for a minute), whether they have
@@ -425,8 +442,8 @@ async function streamChat({
   const plansLine = `- Plans: ${plansEnabled ? 'they have Plans (the Plans tab).' : "not available to them yet; don't offer plans."}`;
   const context = {
     timeZone: homeContext.timeZone,
-    text: homeContext.text || screenText
-      ? [homeContext.text || `${CONTEXT_HEADER}:`, plansLine, screenText].filter(Boolean).join('\n')
+    text: homeContext.text || screenText || memoryText
+      ? [homeContext.text || `${CONTEXT_HEADER}:`, plansLine, screenText, memoryText].filter(Boolean).join('\n')
       : null,
   };
   const toolContext = {
@@ -435,6 +452,8 @@ async function streamChat({
     suggestions: shown.has('action'),
     // Apps that show link buttons (show_link); a read tool asks for them only there.
     links: shown.has('link'),
+    // Apps with the memory list (phase 3) can open it from a link.
+    memory: shown.has('memory'),
   };
   if (images?.length && photos.length === 0) {
     // Answering without the photo or PDF would only confuse: say it couldn't be opened.
@@ -482,6 +501,7 @@ async function streamChat({
     links: shown.has('link'),
     plans: plansEnabled,
     playdates: plansEnabled && playdatesEnabled,
+    remembers: shown.has('memory'),
   };
   const tools = launchScopedChatTools(capabilities);
   const toolNames = tools.map((tool) => tool.name);

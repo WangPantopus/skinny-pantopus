@@ -296,6 +296,7 @@ Health, children, money, beliefs and similar topics are saved only when the pers
 The prompt carries these rules. The server enforces what it can check (`services/ai/memory.js`, new):
 - the length;
 - the digit rule;
+- facts that name a password, passcode, PIN, security answer or a gate, door or alarm code ("Pantopus doesn't keep passwords, PINs or codes");
 - the topic list;
 - the 100-item limit;
 - `sensitive` turned on when the fact uses a word from a short list (health, medication, diagnosis, pregnant, therapy, child, school, salary, debt, religion, immigration and the like).
@@ -310,6 +311,7 @@ The prompt carries these rules. The server enforces what it can check (`services
    - lines: Remember (the fact), and Used ("When it helps with your questions", or "Only when you ask about it" for a sensitive item). When the item has a home, a Home line names it.
    - action `remember`, labeled "Remember", with the request `POST /api/ai/memory` and the body `{ "card_id": "<card id>" }`;
    - done: "Remembered", with the link `pantopus://settings/memory`.
+   - The envelope also carries what saving it stores: `memory: { kind, topic, fact, home_id, sensitive, structured }`. Both apps ignore keys they don't know; the server saves from its own stored copy of the card, never from this field in a request.
 3. **Saving.** `POST /api/ai/memory` with `{ card_id }`:
    - finds the person's `proposal` step for that card (`name = 'memory_save'`);
    - creates the item from the step's stored `payload`, never from the request body, so what is saved is exactly what the card showed;
@@ -329,7 +331,7 @@ The prompt carries these rules. The server enforces what it can check (`services
    - Then items whose topic matches the screen context: `plans` and `plan` match plans; `place` and `today` match home and household; `nearby` and `post` match nearby.
    - Then items that share a word with the message (4 or more letters, not a stop word).
    - Newest first within each group.
-   - Sensitive items are never added this way. The block says only how many private items there are ("2 private items: look them up with recall_memory when a question is about them").
+   - Sensitive items are never added this way. For builds that list `"memory"` (which have `recall_memory`), the block says only how many private items there are ("2 private items: look them up with recall_memory when a question is about them"); older builds aren't told about them.
 3. **New read tool `recall_memory({ query })`,** offered with `"memory"`, so the model can look further.
    - It returns the person's items that share a word with the query.
    - A sensitive item comes back only when the query shares one of its distinctive words: 4 or more letters, not a stop word, and not a day, month or time of day. "When do I take my insulin?" finds "I take insulin every morning" through "insulin"; "Plan a walk Saturday morning" doesn't find it, because "morning" is a time of day.
@@ -370,13 +372,14 @@ An `Item` looks like this:
 - `home.label` is the home's name, else its city.
 - `in_use` is false when the item's home is one the person can no longer see.
 - `from` is null once the conversation it came from is deleted.
-- Errors are `{ error, code }`: `MEMORY_FACT_INVALID` (400, with a readable reason), `MEMORY_NOT_FOUND` (404), `MEMORY_FULL` (409).
+- A `plan_alert` item also carries `alert: { plan_kinds, within_miles }`.
+- Errors are `{ error, code }`: `MEMORY_FACT_INVALID` (400, with a readable reason), `MEMORY_NOT_EDITABLE` (400, editing a `plan_alert`), `MEMORY_NOT_FOUND` (404), `MEMORY_FULL` (409), `CARD_UNKNOWN` (404, saving from a card with no recorded step).
 
 ### 5.5 The yearly review
 
 1. **The job.** It runs daily at 17:00 UTC.
    - It looks for people with at least one item whose oldest `reviewed_at` is more than a year old.
-   - It sends each of them one notification: type `assistant_memory_review`, title "Review what Pantopus remembers", body "12 things saved. Keep, edit or delete them.", link `pantopus://settings/memory`.
+   - It sends each of them one notification: type `assistant_memory_review`, title "Review what Pantopus remembers", body "12 things saved. Keep, edit or delete them." ("1 thing saved. Keep, edit or delete it."), link `pantopus://settings/memory`.
    - The idempotency key is `memory_review:<userId>:<year>`, so it goes at most once a calendar year.
 2. **Delivery.** The push goes through the shared held-push helper (`heldPushes.pushOrHold`), so it waits out quiet hours.
    - It isn't a nudge: no cap, and it goes even when Suggestions is off, because it is about the person's own data.
@@ -742,6 +745,7 @@ It fits `AgentMemoryItem` cleanly: a preference the person saves, sees in their 
    - It is offered with `"memory"`, when the person has `plans` and Suggestions is on. When Suggestions is off, the assistant says to turn it on, with a link to Settings → Notifications.
    - The kinds come from the plan kinds the person can see. Playdates only with `plans_playdates`, under the plan service's own rules.
    - `within_miles` is 1 to 10, and 3 by default.
+   - It measures from the person's home (the default one), so someone with no home gets no card. `plan_you_like` joins `NUDGE_KINDS` with this PR (P3B PR 2), not with follow-ups.
 2. **The card** is a `memory_save` card with the server's sentence, for example "Tell me when a pickup game is posted within 3 miles." It is saved as `kind: plan_alert`.
 3. **The trigger** runs in the 5-minute Plans tick (`planJobs.js`), after the phase 2 nudges.
    - It looks at upcoming public plans posted in the last 15 minutes, and at most 300 `plan_alert` items whose kinds include each plan's kind.
@@ -805,7 +809,7 @@ The state report (§4.2) and the glance route (§8.2) aren't card requests: the 
 
 ### 12.3 Links
 
-- `pantopus://settings/memory` (**new**, both routers) opens Settings → What Pantopus remembers. `appGuide.js` adds it to the catalog, so "What do you remember about me?" gets a link button.
+- `pantopus://settings/memory` (**new**, both routers) opens Settings → What Pantopus remembers. `appGuide.js` adds it to the catalog (`memory_settings`), so "What do you remember about me?" gets a link button. Only apps that list `"memory"` get it; for others `show_link` refuses it.
 - `pantopus://settings/rules` (**new**, both routers) opens Settings → What Pantopus does for you (§18.5). `appGuide.js` adds it too.
 - `pantopus://assistant` gains `starter`, `compose` and `surface` (§8.4), with fixed keys only.
 
