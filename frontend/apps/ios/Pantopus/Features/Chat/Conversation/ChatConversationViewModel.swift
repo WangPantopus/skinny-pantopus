@@ -1392,6 +1392,9 @@ public final class ChatConversationViewModel {
         isAIStreaming = true
         let task = Task { [weak self] in
             var streamedText = ""
+            // A turn ends with `done` or an `error`; a stream that just stops was cut off
+            // (the server went away mid-turn).
+            var ended = false
             guard let client = self?.aiClient else { return }
             do {
                 for try await event in client.streamChat(request) {
@@ -1418,13 +1421,16 @@ public final class ChatConversationViewModel {
                         aiLinksByMessageId[assistantId, default: []].append(link)
                         rebuild()
                     case let .error(message):
+                        ended = true
                         aiStatus = nil
                         if !Task.isCancelled { giveBackIfUnanswered(assistantId: assistantId, text: text, files: files) }
                         replaceLocalMessage(id: assistantId, text: message, type: "ai_reply", userId: "ai")
                     case .done:
+                        ended = true
                         aiStatus = nil
                     }
                 }
+                if !ended { throw URLError(.networkConnectionLost) }
             } catch {
                 if !Task.isCancelled {
                     self?.giveBackIfUnanswered(assistantId: assistantId, text: text, files: files)
