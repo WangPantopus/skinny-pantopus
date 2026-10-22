@@ -1,6 +1,6 @@
 # Lost pet alerts: the contract between the server, the web and the apps
 
-October 21, 2026 · Status: decided, ready to build. The founder chose the recommended option for all 13 decisions on the [design page](https://claude.ai/artifact/Jcd3FHddeyXRKjE2sXPdZW) and said: "Use the recommended option for every decision and start the work in the order D13 recommends." The decisions are recorded in [NEXT_STEPS.md](../../NEXT_STEPS.md), "Made by the founder on October 21 (Lost pet alerts)". The design page has the principles, the ten screen sketches (O1–O4, N1–N2, W1–W2, F1, R1) and the reasons; this file is what the lanes build against. Code references are to master `4289603b4`.
+October 21, 2026 · Status: decided, then **paused before any build** the same day: the founder wants to work on features that make money first. Nothing here is built. To resume, start the lanes in section 10 from this file. The founder chose the recommended option for all 13 decisions on the [design page](https://claude.ai/artifact/Jcd3FHddeyXRKjE2sXPdZW) and said: "Use the recommended option for every decision and start the work in the order D13 recommends." The decisions are recorded in [NEXT_STEPS.md](../../NEXT_STEPS.md), "Made by the founder on October 21 (Lost pet alerts)". The design page has the principles, the ten screen sketches (O1–O4, N1–N2, W1–W2, F1, R1) and the reasons; this file is what the lanes build against. Code references are to master `4289603b4`.
 
 ## 1. What it is
 

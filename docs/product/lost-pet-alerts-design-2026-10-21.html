@@ -1,0 +1,1258 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<!-- Source of the private design page https://claude.ai/artifact/Jcd3FHddeyXRKjE2sXPdZW (October 21, 2026). Open in a browser; decision picks only load and save on claude.ai. -->
+</head>
+<body>
+<title>Lost Pet Alerts</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,500..900&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+/* Layout: a design brief dressed like a lost-pet flyer. One reading column, a sticky contents rail on wide screens; sketches, tables and decisions widen to the full content band. */
+:root {
+  --paper: #F4F6F8;
+  --card: #FFFFFF;
+  --ink: #0E1822;
+  --ink-2: #33424F;
+  --muted: #5F6D7A;
+  --rule: #D7DFE6;
+  --code-bg: #E8EEF2;
+  --brand: #0369A1;
+  --brand-soft: #E0F2FE;
+  --on-brand: #FFFFFF;
+  --lost: #F5B700;
+  --on-lost: #1A1300;
+  --lost-text: #92400E;
+  --lost-soft: #FEF3C7;
+  --home: #166534;
+  --home-soft: #DCFCE7;
+  --on-home: #FFFFFF;
+  --warn: #B91C1C;
+  --warn-soft: #FEE2E2;
+  --sheet: #FFFFFF;
+  --sheet-ink: #121212;
+  --shadow: rgba(14, 24, 34, 0.14);
+  --lock-bg: #1D2B38;
+  --lock-ink: #F4F6F8;
+  --lock-card: #E8EDF1;
+  --lock-card-ink: #0E1822;
+  --map-land: #EDF1EE;
+  --map-road: #FFFFFF;
+  --map-road-edge: #D3DAD5;
+  --map-park: #CDE7D3;
+  --map-water: #C9E2F2;
+  --pet: #C99A5E;
+  --pet-ear: #9A6B36;
+  --pet-muzzle: #EBD3AC;
+  --pet-eye: #24190F;
+  --collar: #C2410C;
+  --font-display: "Archivo", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --measure: 68ch;
+  --radius: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0B1117; --card: #111A22; --ink: #E6ECF1; --ink-2: #BAC6D0; --muted: #8B99A6; --rule: #25323E; --code-bg: #1A2530;
+    --brand: #38BDF8; --brand-soft: #0A2A3D; --on-brand: #04131D;
+    --lost-text: #FBBF24; --lost-soft: #33270A;
+    --home: #4ADE80; --home-soft: #0E2C1B; --on-home: #04210F;
+    --warn: #F87171; --warn-soft: #3A1414;
+    --sheet: #EDEDE8; --shadow: rgba(0, 0, 0, 0.5);
+    --lock-bg: #04080C; --lock-ink: #E6ECF1; --lock-card: #1A2530; --lock-card-ink: #E6ECF1;
+    --map-land: #16212A; --map-road: #2A3844; --map-road-edge: #33424F; --map-park: #1B3726; --map-water: #14304A;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0B1117; --card: #111A22; --ink: #E6ECF1; --ink-2: #BAC6D0; --muted: #8B99A6; --rule: #25323E; --code-bg: #1A2530;
+  --brand: #38BDF8; --brand-soft: #0A2A3D; --on-brand: #04131D;
+  --lost-text: #FBBF24; --lost-soft: #33270A;
+  --home: #4ADE80; --home-soft: #0E2C1B; --on-home: #04210F;
+  --warn: #F87171; --warn-soft: #3A1414;
+  --sheet: #EDEDE8; --shadow: rgba(0, 0, 0, 0.5);
+  --lock-bg: #04080C; --lock-ink: #E6ECF1; --lock-card: #1A2530; --lock-card-ink: #E6ECF1;
+  --map-land: #16212A; --map-road: #2A3844; --map-road-edge: #33424F; --map-park: #1B3726; --map-water: #14304A;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 1.0625rem;
+  line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0;
+}
+a { color: var(--brand); text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 4px; }
+code { font-family: var(--font-mono); font-size: 0.84em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; line-height: 1.08; margin: 0; }
+h2 { font-size: clamp(1.65rem, 3.2vw, 2.15rem); font-weight: 800; font-stretch: 76%; letter-spacing: 0.002em; }
+h3 { font-size: 1.15rem; font-weight: 700; font-stretch: 86%; }
+p { margin: 0; }
+ul, ol { margin: 0; padding-left: 1.2em; }
+li + li { margin-top: 6px; }
+.eyebrow { font-family: var(--font-mono); font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+
+.layout { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 40px; padding-block: 28px 96px; }
+main { min-width: 0; display: grid; gap: 0; }
+.rail { display: none; }
+@media (min-width: 1100px) {
+  .layout { grid-template-columns: 200px minmax(0, 1fr); }
+  .rail { display: block; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 24px); align-self: start; }
+  .toc-mobile { display: none; }
+}
+.rail nav, .toc-mobile nav { display: grid; gap: 2px; font-size: 0.875rem; }
+.rail nav a, .toc-mobile nav a { color: var(--ink-2); text-decoration: none; padding: 4px 8px; border-radius: 6px; }
+.rail nav a:hover, .toc-mobile nav a:hover { background: var(--card); color: var(--ink); }
+.rail .rail-count { margin: 0 8px 12px; font-family: var(--font-mono); font-size: 0.75rem; color: var(--muted); }
+.rail .rail-count b { color: var(--brand); font-weight: 500; }
+.toc-mobile { margin-top: 16px; background: var(--card); border: 1px solid var(--rule); border-radius: var(--radius); padding: 10px 14px; }
+.toc-mobile summary { cursor: pointer; font-family: var(--font-mono); font-size: 0.8125rem; color: var(--ink-2); }
+.toc-mobile nav { margin-top: 8px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+
+/* Hero: the flyer */
+.flyer { background: var(--card); border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; box-shadow: 0 10px 30px -18px var(--shadow); }
+.flyer-band { background: var(--lost); color: var(--on-lost); padding: 18px 24px 16px; display: grid; gap: 6px; }
+.flyer-band .eyebrow { color: var(--on-lost); }
+.flyer-band h1 { font-size: clamp(2.7rem, 9vw, 5.4rem); font-weight: 900; font-stretch: 64%; text-transform: uppercase; letter-spacing: 0.005em; line-height: 0.9; }
+.flyer-body { padding: 20px 24px 18px; display: grid; gap: 14px; }
+.lede { font-size: clamp(1.08rem, 2vw, 1.22rem); line-height: 1.5; max-width: 62ch; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { font-family: var(--font-mono); font-size: 0.75rem; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--rule); color: var(--ink-2); background: var(--paper); }
+.chip.lost { background: var(--lost-soft); border-color: transparent; color: var(--lost-text); }
+.tabs { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border-top: 2px dashed var(--rule); }
+.tabs li { margin: 0; border-right: 1px dashed var(--rule); }
+.tabs li:last-child { border-right: 0; }
+.tabs a { display: grid; gap: 2px; padding: 10px 6px 12px; text-align: center; text-decoration: none; color: var(--ink-2); font-size: 0.8125rem; }
+.tabs a b { font-family: var(--font-display); font-stretch: 70%; font-weight: 800; font-size: 1.3rem; color: var(--ink); line-height: 1; }
+.tabs a:hover { background: var(--paper); }
+
+/* Decision tracker */
+.tracker { margin-top: 20px; padding: 16px 18px; background: var(--card); border: 1px solid var(--rule); border-radius: var(--radius); display: grid; gap: 12px; }
+.tracker-top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; }
+.tracker-h { font-family: var(--font-display); font-size: 1.35rem; font-weight: 800; font-stretch: 80%; }
+.db-status { font-size: 0.875rem; color: var(--muted); margin-top: 2px; }
+.count { font-family: var(--font-mono); font-size: 0.875rem; color: var(--ink-2); }
+.count b { color: var(--brand); font-weight: 500; font-size: 1.1rem; }
+.dots { display: flex; flex-wrap: wrap; gap: 6px; }
+.dot { font-family: var(--font-mono); font-size: 0.75rem; padding: 4px 8px; border-radius: 6px; border: 1px dashed var(--muted); color: var(--muted); text-decoration: none; font-variant-numeric: tabular-nums; }
+.dot.done { border-style: solid; border-color: var(--brand); background: var(--brand-soft); color: var(--brand); }
+.tracker-actions { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; font-size: 0.9375rem; }
+.btn { font: inherit; font-size: 0.9375rem; font-weight: 600; cursor: pointer; border: 0; border-radius: 8px; padding: 9px 14px; background: var(--brand); color: var(--on-brand); }
+.btn:disabled { opacity: 0.6; cursor: default; }
+
+/* Sections */
+.section { padding-block: 44px 6px; display: grid; gap: 18px; scroll-margin-top: 16px; }
+.section > header { display: grid; gap: 6px; padding-top: 18px; border-top: 1px solid var(--rule); }
+.prose { max-width: var(--measure); display: grid; gap: 12px; }
+.prose p, .prose li { color: var(--ink-2); }
+.prose strong, .prose b { color: var(--ink); }
+
+.steps { list-style: none; padding: 0; margin: 0; display: grid; gap: 14px; counter-reset: step; max-width: var(--measure); }
+.steps li { margin: 0; display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 2px 14px; counter-increment: step; }
+.steps li::before { content: counter(step); grid-row: span 2; font-family: var(--font-display); font-weight: 900; font-stretch: 64%; font-size: 2.6rem; line-height: 0.9; color: var(--lost-text); }
+.steps b { color: var(--ink); }
+.steps span { color: var(--ink-2); }
+
+.grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 18px 28px; }
+.grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)); gap: 16px; }
+.principle { display: grid; gap: 4px; padding-top: 12px; border-top: 2px solid var(--ink); }
+.principle h3 { font-size: 1.05rem; }
+.principle p { color: var(--ink-2); font-size: 0.975rem; }
+.moment { background: var(--card); border: 1px solid var(--rule); border-radius: var(--radius); padding: 14px 16px; display: grid; gap: 6px; align-content: start; }
+.moment .ref { font-family: var(--font-mono); font-size: 0.75rem; color: var(--brand); }
+.moment p { color: var(--ink-2); font-size: 0.95rem; }
+
+.kind { background: var(--card); border: 1px solid var(--rule); border-radius: var(--radius); overflow: hidden; display: grid; align-content: start; }
+.kind-band { background: var(--lost); color: var(--on-lost); font-family: var(--font-display); font-weight: 900; font-stretch: 64%; font-size: 1.6rem; text-transform: uppercase; padding: 8px 14px 6px; line-height: 1; }
+.kind dl { margin: 0; padding: 12px 14px 14px; display: grid; gap: 8px; }
+.kind dt { font-family: var(--font-mono); font-size: 0.6875rem; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); }
+.kind dd { margin: 0; color: var(--ink-2); font-size: 0.95rem; }
+
+/* Screens */
+.group-label { font-family: var(--font-mono); font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); padding-bottom: 6px; border-bottom: 1px dashed var(--rule); }
+.sketches { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 228px), 1fr)); gap: 30px 20px; }
+figure.sk { margin: 0; display: grid; gap: 10px; justify-items: center; align-content: start; }
+figure.sk figcaption { font-size: 0.875rem; color: var(--ink-2); max-width: 250px; }
+figure.sk figcaption b { font-family: var(--font-mono); font-size: 0.75rem; color: var(--brand); margin-right: 6px; font-weight: 500; }
+.phone { width: 100%; max-width: 232px; aspect-ratio: 9 / 18.6; border: 2px solid var(--ink-2); border-radius: 30px; padding: 8px; background: var(--card); }
+.screen { height: 100%; border-radius: 22px; overflow: hidden; background: var(--paper); color: var(--ink); display: flex; flex-direction: column; font-size: 0.6875rem; line-height: 1.35; }
+.s-status { display: flex; justify-content: space-between; padding: 7px 14px 2px; font-family: var(--font-mono); font-size: 0.5625rem; color: var(--muted); }
+.s-top { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; gap: 6px; padding: 6px 10px 8px; border-bottom: 1px solid var(--rule); background: var(--card); }
+.s-top b { font-size: 0.75rem; text-align: center; }
+.s-top .s-back, .s-top .s-menu { color: var(--brand); font-size: 0.875rem; line-height: 1; }
+.s-body { flex: 1; display: flex; flex-direction: column; gap: 7px; padding: 9px 10px; min-height: 0; overflow: hidden; }
+.s-photo { aspect-ratio: 4 / 3; border-radius: 8px; border: 1px solid var(--rule); background: repeating-linear-gradient(45deg, var(--rule) 0 1px, var(--card) 1px 7px); display: grid; place-items: center; color: var(--muted); font-weight: 600; }
+.s-photo svg { width: 46%; height: auto; }
+.s-photos { display: grid; grid-template-columns: 2fr 1fr; gap: 6px; }
+.s-photos .add { aspect-ratio: auto; font-size: 0.625rem; }
+.s-field { display: grid; gap: 1px; padding-bottom: 4px; border-bottom: 1px solid var(--rule); }
+.s-field span { font-size: 0.5625rem; color: var(--muted); }
+.s-field b { font-weight: 500; }
+.s-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.s-chip { border: 1px solid var(--rule); border-radius: 999px; padding: 1px 7px; background: var(--card); color: var(--ink-2); font-size: 0.625rem; }
+.s-chip.on { background: var(--brand-soft); border-color: var(--brand); color: var(--brand); font-weight: 600; }
+.s-btn { border-radius: 8px; padding: 6px 8px; text-align: center; font-weight: 600; background: var(--brand); color: var(--on-brand); }
+.s-btn.ghost { background: transparent; color: var(--brand); border: 1px solid var(--brand); }
+.s-btn.home { background: var(--home); color: var(--on-home); }
+.s-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.s-card { background: var(--card); border: 1px solid var(--rule); border-radius: 8px; padding: 8px; display: grid; gap: 2px; }
+.s-card .big { font-family: var(--font-display); font-stretch: 72%; font-weight: 800; font-size: 1.5rem; line-height: 1; }
+.s-cap { font-size: 0.5938rem; color: var(--muted); }
+.s-map { border-radius: 8px; overflow: hidden; border: 1px solid var(--rule); aspect-ratio: 5 / 3; }
+.s-map svg { display: block; width: 100%; height: 100%; }
+.s-toggle { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.sw { width: 24px; height: 14px; border-radius: 999px; background: var(--rule); position: relative; flex: none; }
+.sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 10px; height: 10px; border-radius: 50%; background: var(--card); }
+.s-tag { font-family: var(--font-mono); font-size: 0.5rem; font-weight: 500; letter-spacing: 0.06em; background: var(--lost); color: var(--on-lost); border-radius: 4px; padding: 2px 5px; white-space: nowrap; }
+.s-seg { display: grid; grid-template-columns: 1fr 1fr; margin: 6px 10px 0; border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; background: var(--card); font-size: 0.625rem; text-align: center; }
+.s-seg span { padding: 3px; }
+.s-seg .on { background: var(--brand-soft); color: var(--brand); font-weight: 600; }
+.s-pin-card { background: var(--lost-soft); border: 1px solid var(--lost); border-radius: 10px; padding: 8px; display: grid; gap: 6px; }
+.s-pin-row { display: grid; grid-template-columns: 46px minmax(0, 1fr); gap: 8px; align-items: center; }
+.s-pin-row span { display: block; color: var(--ink-2); font-size: 0.5938rem; }
+.s-thumb { aspect-ratio: 1; border-radius: 6px; background: var(--card); display: grid; place-items: center; }
+.s-thumb svg { width: 80%; height: auto; }
+.s-post { border-bottom: 1px solid var(--rule); padding-bottom: 6px; color: var(--ink-2); }
+.s-post b { color: var(--ink); }
+.s-url { margin: 6px 10px 0; padding: 3px 8px; border-radius: 6px; background: var(--card); border: 1px solid var(--rule); font-family: var(--font-mono); font-size: 0.5625rem; color: var(--muted); text-align: center; }
+.s-band { background: var(--lost); color: var(--on-lost); font-family: var(--font-display); font-weight: 900; font-stretch: 64%; font-size: 1.15rem; text-align: center; padding: 5px 4px 3px; margin-top: 6px; letter-spacing: 0.02em; }
+.s-band.home { background: var(--home); color: var(--on-home); }
+.s-h { font-family: var(--font-display); font-stretch: 80%; font-weight: 800; font-size: 1rem; }
+.s-warn { background: var(--warn-soft); color: var(--warn); border-radius: 6px; padding: 4px 6px; font-size: 0.5938rem; }
+.s-foot { margin-top: auto; text-align: center; font-size: 0.5938rem; color: var(--muted); border-top: 1px solid var(--rule); padding-top: 6px; }
+.s-q { font-weight: 600; }
+.s-link { color: var(--brand); font-size: 0.625rem; text-decoration: underline; }
+.s-banner { background: var(--brand-soft); color: var(--ink); border-radius: 8px; padding: 6px 8px; }
+.s-banner u { color: var(--brand); }
+.s-list { display: grid; gap: 4px; }
+.s-list div { border-bottom: 1px solid var(--rule); padding-bottom: 4px; color: var(--ink-2); }
+.s-list b { color: var(--ink); }
+.s-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.s-pair > div { display: grid; gap: 3px; }
+.s-quiet { text-align: center; margin-top: auto; }
+
+.phone.lock .screen { background: var(--lock-bg); color: var(--lock-ink); padding: 0 8px; }
+.l-time { font-family: var(--font-display); font-weight: 600; font-stretch: 90%; font-size: 2.6rem; text-align: center; margin-top: 34px; line-height: 1; }
+.l-date { text-align: center; font-size: 0.6875rem; opacity: 0.85; margin-bottom: 18px; }
+.notif { background: var(--lock-card); color: var(--lock-card-ink); border-radius: 14px; padding: 8px 10px; display: grid; gap: 2px; }
+.n-app { display: flex; align-items: center; gap: 5px; font-family: var(--font-mono); font-size: 0.5rem; letter-spacing: 0.06em; opacity: 0.8; }
+.n-icon { width: 11px; height: 11px; border-radius: 3px; background: var(--brand); }
+.n-when { margin-left: auto; }
+
+.sheet { width: 100%; max-width: 232px; aspect-ratio: 8.5 / 11; background: var(--sheet); color: var(--sheet-ink); box-shadow: 0 12px 26px -12px var(--shadow); border: 1px solid var(--rule); display: grid; grid-template-rows: auto auto auto auto auto 1fr auto; gap: 4px; padding: 10px 10px 0; font-size: 0.5625rem; line-height: 1.3; }
+.sh-band { background: var(--lost); color: var(--on-lost); font-family: var(--font-display); font-weight: 900; font-stretch: 62%; font-size: 1.9rem; line-height: 0.95; text-align: center; padding: 4px 0 2px; }
+.sh-photo { aspect-ratio: 16 / 9; border: 1px solid var(--sheet-ink); display: grid; place-items: center; background: var(--sheet); }
+.sh-photo svg { height: 86%; width: auto; }
+.sh-name { font-family: var(--font-display); font-weight: 900; font-stretch: 70%; font-size: 1.15rem; text-align: center; line-height: 1; }
+.sh-text, .sh-seen { text-align: center; }
+.sh-seen { font-weight: 600; }
+.sh-qr { display: grid; grid-template-columns: 58px minmax(0, 1fr); gap: 8px; align-items: center; align-self: center; }
+.sh-url { font-family: var(--font-mono); font-size: 0.5rem; }
+.sh-tabs { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); border-top: 1px dashed var(--sheet-ink); height: 44px; margin: 0 -10px; }
+.sh-tabs span { writing-mode: vertical-rl; transform: rotate(180deg); font-family: var(--font-mono); font-size: 0.4375rem; display: flex; align-items: center; justify-content: center; border-left: 1px dashed var(--sheet-ink); overflow: hidden; }
+.sh-tabs span:last-child { border-left: 0; }
+.qr-svg { width: 58px; height: 58px; display: block; }
+.qr-svg rect { fill: var(--sheet-ink); }
+.qr-svg .qr-bg { fill: var(--sheet); }
+
+/* Map sketch classes */
+.m-land { fill: var(--map-land); }
+.m-water { fill: var(--map-water); }
+.m-park { fill: var(--map-park); }
+.m-road-edge { stroke: var(--map-road-edge); stroke-width: 7; fill: none; }
+.m-road { stroke: var(--map-road); stroke-width: 5; fill: none; }
+.m-area { fill: var(--lost); fill-opacity: 0.22; stroke: var(--lost-text); stroke-width: 1.2; stroke-dasharray: 3 2; }
+.m-pin { fill: var(--brand); stroke: var(--card); stroke-width: 1.2; }
+.m-trail { fill: none; stroke: var(--brand); stroke-width: 1.2; stroke-dasharray: 2 2; }
+.m-label { font: 500 8px var(--font-mono); fill: var(--ink); paint-order: stroke; stroke: var(--map-land); stroke-width: 2px; }
+.d-head-fill { fill: var(--pet); }
+.d-ear { fill: var(--pet-ear); }
+.d-muzzle { fill: var(--pet-muzzle); }
+.d-eye { fill: var(--pet-eye); }
+.d-collar { stroke: var(--collar); stroke-width: 4; stroke-linecap: round; fill: none; }
+
+/* Tables */
+.table-wrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--card); }
+table { border-collapse: collapse; width: 100%; min-width: 620px; font-size: 0.9375rem; }
+th, td { text-align: left; vertical-align: top; padding: 10px 14px; border-bottom: 1px solid var(--rule); }
+th { font-family: var(--font-mono); font-size: 0.6875rem; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); font-weight: 500; background: var(--paper); }
+td { color: var(--ink-2); }
+td:first-child { color: var(--ink); font-weight: 600; width: 22%; }
+tr:last-child td { border-bottom: 0; }
+.dref { font-family: var(--font-mono); font-size: 0.75rem; color: var(--brand); white-space: nowrap; text-decoration: none; }
+
+.list-tight li { color: var(--ink-2); }
+.list-tight li b { color: var(--ink); }
+.two-col { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 18px; }
+.panel { background: var(--card); border: 1px solid var(--rule); border-radius: var(--radius); padding: 16px 18px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+.panel h3 { font-size: 1.1rem; }
+.panel ul { display: grid; gap: 8px; }
+.panel li { margin: 0; color: var(--ink-2); font-size: 0.95rem; }
+.panel li b { color: var(--ink); }
+.endpoint { font-family: var(--font-mono); font-size: 0.8125rem; color: var(--ink); overflow-wrap: anywhere; }
+.callout { max-width: var(--measure); background: var(--lost-soft); color: var(--ink); border-radius: var(--radius); padding: 12px 16px; font-size: 0.95rem; display: grid; gap: 6px; }
+.callout li { color: var(--ink-2); }
+.panel h3 + ul { margin-top: -2px; }
+.panel ul + h3 { margin-top: 8px; }
+
+/* Decisions */
+.decisions { display: grid; gap: 20px; }
+.decision { background: var(--card); border: 1px solid var(--rule); border-radius: var(--radius); padding: 18px 20px; display: grid; gap: 12px; scroll-margin-top: 16px; min-width: 0; }
+.d-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
+.d-id { font-family: var(--font-mono); font-size: 0.8125rem; color: var(--brand); font-weight: 500; }
+.d-head h3 { flex: 1 1 220px; font-size: 1.3rem; }
+.d-state { font-family: var(--font-mono); font-size: 0.75rem; padding: 2px 9px; border-radius: 999px; border: 1px dashed var(--muted); color: var(--muted); }
+.d-state.done { border-style: solid; border-color: var(--brand); color: var(--brand); background: var(--brand-soft); }
+.d-q { color: var(--ink); font-weight: 500; }
+.opts { display: grid; gap: 8px; }
+.opt { font: inherit; text-align: left; color: var(--ink); cursor: pointer; display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 3px 10px; padding: 11px 14px; border: 1px solid var(--rule); border-radius: 8px; background: var(--paper); width: 100%; }
+.opt:hover:not(:disabled) { border-color: var(--brand); }
+.opt:disabled { cursor: default; }
+.opt[aria-pressed="true"] { border-color: var(--brand); background: var(--brand-soft); }
+.radio { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--muted); margin-top: 4px; grid-row: span 2; }
+.opt[aria-pressed="true"] .radio { border-color: var(--brand); background: radial-gradient(circle, var(--brand) 0 3.5px, transparent 4.5px); }
+.opt-title { font-weight: 600; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.opt-rec { font-family: var(--font-mono); font-size: 0.625rem; font-weight: 500; letter-spacing: 0.07em; text-transform: uppercase; color: var(--brand); border: 1px solid currentColor; border-radius: 999px; padding: 0 7px; line-height: 1.6; }
+.opt-detail { color: var(--ink-2); font-size: 0.9375rem; }
+.why { color: var(--ink-2); font-size: 0.95rem; max-width: var(--measure); }
+.why b { color: var(--ink); }
+.note-row { display: grid; gap: 4px; }
+.note-row label { font-family: var(--font-mono); font-size: 0.6875rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+textarea { font: inherit; font-size: 0.9375rem; color: var(--ink); background: var(--paper); border: 1px solid var(--rule); border-radius: 8px; padding: 8px 10px; min-height: 44px; resize: vertical; width: 100%; }
+textarea:disabled { opacity: 0.7; }
+.d-meta { font-family: var(--font-mono); font-size: 0.75rem; color: var(--muted); min-height: 1em; }
+
+footer.foot { margin-top: 56px; padding-top: 16px; border-top: 1px solid var(--rule); font-size: 0.875rem; color: var(--muted); max-width: var(--measure); display: grid; gap: 8px; }
+
+@media (max-width: 520px) {
+  .flyer-band, .flyer-body { padding-left: 16px; padding-right: 16px; }
+  .tabs a { font-size: 0.6875rem; }
+  .tabs a b { font-size: 1.1rem; }
+  .decision { padding: 16px; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+html { scroll-behavior: smooth; }
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="dog" viewBox="0 0 64 64">
+    <ellipse class="d-ear" cx="15" cy="27" rx="8" ry="15" transform="rotate(20 15 27)"></ellipse>
+    <ellipse class="d-ear" cx="49" cy="27" rx="8" ry="15" transform="rotate(-20 49 27)"></ellipse>
+    <circle class="d-head-fill" cx="32" cy="33" r="19"></circle>
+    <ellipse class="d-muzzle" cx="32" cy="42" rx="10" ry="7.5"></ellipse>
+    <circle class="d-eye" cx="24.5" cy="30" r="2.6"></circle>
+    <circle class="d-eye" cx="39.5" cy="30" r="2.6"></circle>
+    <ellipse class="d-eye" cx="32" cy="38.6" rx="3.6" ry="2.6"></ellipse>
+    <path class="d-collar" d="M23 54 Q32 58 41 54"></path>
+  </symbol>
+</svg>
+
+<div class="layout">
+  <aside class="rail" aria-label="Contents">
+    <p class="rail-count"><b id="rail-done">0</b> of 13 decided</p>
+    <nav>
+      <a href="#minute">In one minute</a>
+      <a href="#why">Why this</a>
+      <a href="#principles">Principles</a>
+      <a href="#moments">Moments</a>
+      <a href="#kinds">Dogs, cats, others</a>
+      <a href="#screens">Screens</a>
+      <a href="#rules">Rules</a>
+      <a href="#privacy">Privacy and safety</a>
+      <a href="#notifications">Notifications</a>
+      <a href="#exists">What exists</a>
+      <a href="#data">Data and endpoints</a>
+      <a href="#order">Order of work</a>
+      <a href="#signals">Success signals</a>
+      <a href="#risks">Limits and risks</a>
+      <a href="#decisions">Decisions</a>
+    </nav>
+  </aside>
+
+  <main>
+    <header class="flyer" id="top">
+      <div class="flyer-band">
+        <p class="eyebrow">Pantopus · one-page design · October 21, 2026</p>
+        <h1>Lost pet alerts</h1>
+      </div>
+      <div class="flyer-body">
+        <p class="lede">When a pet goes missing, one tap turns the owner's photo into a neighborhood search: an alert to people nearby, a flyer with a QR code, and one page where anyone can report a sighting without the app or an account.</p>
+        <div class="chips">
+          <span class="chip lost">Decided October 21 · paused before the build</span>
+          <span class="chip">13 decisions made: all recommended</span>
+          <span class="chip">Off behind a flag until you turn it on</span>
+        </div>
+      </div>
+      <ol class="tabs" aria-label="The five steps">
+        <li><a href="#minute"><b>1</b>Report</a></li>
+        <li><a href="#minute"><b>2</b>Alert</a></li>
+        <li><a href="#minute"><b>3</b>Spread</a></li>
+        <li><a href="#minute"><b>4</b>Sightings</a></li>
+        <li><a href="#minute"><b>5</b>Home</a></li>
+      </ol>
+    </header>
+
+    <section class="tracker" aria-labelledby="tracker-h">
+      <div class="tracker-top">
+        <div>
+          <h2 class="tracker-h" id="tracker-h">Your decisions</h2>
+          <p class="db-status" id="db-status">Loading saved picks…</p>
+        </div>
+        <p class="count"><b id="done-count">0</b> of 13 decided</p>
+      </div>
+      <div class="dots" id="dots">
+        <a class="dot" href="#d-name" data-key="name">D1</a>
+        <a class="dot" href="#d-who_sends" data-key="who_sends">D2</a>
+        <a class="dot" href="#d-radius" data-key="radius">D3</a>
+        <a class="dot" href="#d-audience" data-key="audience">D4</a>
+        <a class="dot" href="#d-quiet_hours" data-key="quiet_hours">D5</a>
+        <a class="dot" href="#d-open_reports" data-key="open_reports">D6</a>
+        <a class="dot" href="#d-sighting_view" data-key="sighting_view">D7</a>
+        <a class="dot" href="#d-contact" data-key="contact">D8</a>
+        <a class="dot" href="#d-photo_match" data-key="photo_match">D9</a>
+        <a class="dot" href="#d-found_pets" data-key="found_pets">D10</a>
+        <a class="dot" href="#d-pet_profiles" data-key="pet_profiles">D11</a>
+        <a class="dot" href="#d-tables" data-key="tables">D12</a>
+        <a class="dot" href="#d-rollout" data-key="rollout">D13</a>
+      </div>
+      <div class="tracker-actions">
+        <button class="btn" id="accept-all" type="button" hidden>Use the recommended option for every open decision</button>
+        <a href="#decisions">Go to the decisions</a>
+      </div>
+    </section>
+
+    <details class="toc-mobile">
+      <summary>Contents</summary>
+      <nav aria-label="Contents">
+        <a href="#minute">In one minute</a>
+        <a href="#why">Why this</a>
+        <a href="#principles">Principles</a>
+        <a href="#moments">Moments</a>
+        <a href="#kinds">Dogs, cats, others</a>
+        <a href="#screens">Screens</a>
+        <a href="#rules">Rules</a>
+        <a href="#privacy">Privacy and safety</a>
+        <a href="#notifications">Notifications</a>
+        <a href="#exists">What exists</a>
+        <a href="#data">Data and endpoints</a>
+        <a href="#order">Order of work</a>
+        <a href="#signals">Success signals</a>
+        <a href="#risks">Limits and risks</a>
+        <a href="#decisions">Decisions</a>
+      </nav>
+    </details>
+
+    <section class="section" id="minute" aria-labelledby="minute-h">
+      <header><p class="eyebrow">The feature</p><h2 id="minute-h">In one minute</h2></header>
+      <ol class="steps">
+        <li><b>Report.</b><span>The owner adds a photo, the pet's name and kind, and where and when it was last seen. About a minute.</span></li>
+        <li><b>Alert.</b><span>People whose home or saved place is within about a mile get one push. Quiet hours hold it until morning.</span></li>
+        <li><b>Spread.</b><span>A print-ready flyer with a QR code, and one link for Facebook groups, Nextdoor and texts. Every channel opens the same pet page.</span></li>
+        <li><b>Sightings.</b><span>Anyone can tap "I saw them" and drop a pin, with no app and no account. The household sees each one arrive on a map.</span></li>
+        <li><b>Home.</b><span>The owner marks the pet home. Everyone who helped hears it, and the alert ends.</span></li>
+      </ol>
+    </section>
+
+    <section class="section" id="why" aria-labelledby="why-h">
+      <header><p class="eyebrow">The case</p><h2 id="why-h">Why this, of everything we could add</h2></header>
+      <div class="prose">
+        <ul class="list-tight">
+          <li><b>It's the one moment people want every stranger within a mile to hear from them.</b> That is the audience a neighborhood app can't buy. Each flyer puts a Pantopus QR code on poles in the right streets, and each Facebook or Nextdoor post links back to a Pantopus page.</li>
+          <li><b>It helps the owner with nobody nearby on Pantopus.</b> The flyer, the link and the sightings page work on day one. The push gets better as neighbors join.</li>
+          <li><b>Strangers meet Pantopus by helping, without signing up.</b> The page then offers the reason to install: "Get alerts for lost pets near you."</li>
+          <li><b>It fits the rules we already keep.</b> The feed refuses crime and suspicion heads-ups. This is the cooperative opposite, and a pet coming home is the best news a street shares.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="section" id="principles" aria-labelledby="principles-h">
+      <header><p class="eyebrow">How it should feel</p><h2 id="principles-h">Eight principles</h2></header>
+      <div class="grid-2">
+        <div class="principle"><h3>A minute from panic to posted</h3><p>Ask for a photo, a name, the kind of pet, and where and when. Everything else can wait.</p></div>
+        <div class="principle"><h3>One page, every channel</h3><p>The push, the flyer's QR code, the Facebook post and the text message all open the same pet page.</p></div>
+        <div class="principle"><h3>Anyone can help</h3><p>Seeing the page and reporting a sighting needs no app and no account.</p></div>
+        <div class="principle"><h3>The home stays private</h3><p>The last-seen spot shows as an area, never the house. The owner's phone number stays off the page unless they add it.</p></div>
+        <div class="principle"><h3>Calm, not alarming</h3><p>One push per pet, only to people nearby, never during quiet hours, with a daily and weekly cap.</p></div>
+        <div class="principle"><h3>The assistant suggests, people decide</h3><p>A photo match says "might be", and only the household sees it.</p></div>
+        <div class="principle"><h3>Every alert ends</h3><p>Home, closed by the owner, or expired, and the people who helped hear how it ended.</p></div>
+        <div class="principle"><h3>Useful alone, better with neighbors</h3><p>Nothing in the owner's flow depends on anyone nearby already using Pantopus.</p></div>
+      </div>
+    </section>
+
+    <section class="section" id="moments" aria-labelledby="moments-h">
+      <header><p class="eyebrow">What people will remember</p><h2 id="moments-h">Six signature moments</h2></header>
+      <div class="grid-3">
+        <div class="moment"><span class="ref">O2 · O3</span><h3>The flyer makes itself</h3><p>Right after "Send alert", a print-ready flyer with the photo and a QR code, and a link ready to paste.</p></div>
+        <div class="moment"><span class="ref">N1</span><h3>The lock-screen alert</h3><p>"Missing dog near Esther Short Park. Biscuit, small tan terrier, last seen 6:40 pm." One tap opens the page.</p></div>
+        <div class="moment"><span class="ref">W1 · W2</span><h3>Three taps from a pole</h3><p>Scan the QR code, tap "I saw Biscuit", tap the map. Sent, with no sign-up.</p></div>
+        <div class="moment"><span class="ref">O4</span><h3>The sightings trail</h3><p>The household's map fills with pins and times, and each new sighting buzzes their phones.</p></div>
+        <div class="moment"><span class="ref">F1</span><h3>"Is this Biscuit?"</h3><p>Someone posts a found dog. Pantopus compares photos with missing pets nearby and asks the owner.</p></div>
+        <div class="moment"><span class="ref">R1</span><h3>"Biscuit is home"</h3><p>One tap ends the alert, thanks the people who helped, and offers a card to share.</p></div>
+      </div>
+    </section>
+
+    <section class="section" id="kinds" aria-labelledby="kinds-h">
+      <header><p class="eyebrow">Kind sheets</p><h2 id="kinds-h">Dogs, cats and other pets</h2></header>
+      <p class="prose">The kind sets the alert's reach, the flyer's headline and the tips on the pet page. Tips are short, standard advice, shown under "How to help".</p>
+      <div class="grid-3">
+        <div class="kind">
+          <div class="kind-band">Lost dog</div>
+          <dl>
+            <dt>Alert reaches</dt><dd>1 mile (<a class="dref" href="#d-radius">D3</a>)</dd>
+            <dt>How to help</dt><dd>Don't chase. Crouch, look away and let the dog come to you. Check nearby shelters; people often pick up a loose dog.</dd>
+            <dt>Flyer</dt><dd>LOST DOG, photo, name, size and collar, last seen.</dd>
+          </dl>
+        </div>
+        <div class="kind">
+          <div class="kind-band">Lost cat</div>
+          <dl>
+            <dt>Alert reaches</dt><dd>Half a mile (<a class="dref" href="#d-radius">D3</a>)</dd>
+            <dt>How to help</dt><dd>Indoor cats usually hide close by and stay quiet. Check under decks, in sheds and garages, with a flashlight after dark.</dd>
+            <dt>Flyer</dt><dd>LOST CAT, photo, name, markings, indoor or outdoor.</dd>
+          </dl>
+        </div>
+        <div class="kind">
+          <div class="kind-band">Lost pet</div>
+          <dl>
+            <dt>Alert reaches</dt><dd>1 mile (<a class="dref" href="#d-radius">D3</a>)</dd>
+            <dt>How to help</dt><dd>Birds, rabbits and others: note exactly where you saw it and when, and don't try to catch it unless the owner asks.</dd>
+            <dt>Flyer</dt><dd>LOST BIRD, LOST RABBIT and so on, from the owner's word for it.</dd>
+          </dl>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="screens" aria-labelledby="screens-h">
+      <header><p class="eyebrow">Low-fidelity sketches, in story order</p><h2 id="screens-h">Ten screens</h2></header>
+      <p class="prose">O is the owner, N a neighbor on Pantopus, W anyone on the web, F a possible match, R the ending. The detailed screens come next, on a design canvas, if you pick that in <a class="dref" href="#d-rollout">D13</a>.</p>
+
+      <p class="group-label">The owner reports</p>
+      <div class="sketches">
+        <figure class="sk">
+          <div class="phone"><div class="screen">
+            <div class="s-status"><span>6:46</span><span>5G</span></div>
+            <div class="s-top"><span class="s-back">‹</span><b>Lost pet</b><span></span></div>
+            <div class="s-body">
+              <div class="s-photos"><div class="s-photo"><svg viewBox="0 0 64 64"><use href="#dog"></use></svg></div><div class="s-photo add">+ Photo</div></div>
+              <div class="s-field"><span>Name</span><b>Biscuit</b></div>
+              <div class="s-chips"><span class="s-chip on">Dog</span><span class="s-chip">Cat</span><span class="s-chip">Other</span></div>
+              <div class="s-field"><span>What they look like</span><b>Small tan terrier, red collar</b></div>
+              <div class="s-map" data-map='{"area":[64,52,22]}'></div>
+              <span class="s-cap">Last seen near Esther Short Park</span>
+              <div class="s-chips"><span class="s-chip on">Just now</span><span class="s-chip">An hour ago</span><span class="s-chip">Pick a time</span></div>
+              <div class="s-btn">Next</div>
+            </div>
+          </div></div>
+          <figcaption><b>O1</b>Report. A photo, a name, the kind and where and when. The pin snaps to an area; the house is never shown.</figcaption>
+        </figure>
+
+        <figure class="sk">
+          <div class="phone"><div class="screen">
+            <div class="s-status"><span>6:47</span><span>5G</span></div>
+            <div class="s-top"><span class="s-back">‹</span><b>Ready to alert</b><span></span></div>
+            <div class="s-body">
+              <div class="s-card"><b class="big">About 140</b><span>people within 1 mile will get an alert</span></div>
+              <div class="s-card"><span class="s-cap">When nobody nearby is on Pantopus yet</span><span>"No one near you is on Pantopus yet. Your flyer and link still work."</span></div>
+              <div class="s-toggle"><span>Show my phone number</span><i class="sw" aria-hidden="true"></i></div>
+              <span class="s-cap">Messages come through Pantopus. Never pay anyone before your pet is back.</span>
+              <div class="s-btn">Send alert</div>
+              <div class="s-row2"><div class="s-btn ghost">Make flyer</div><div class="s-btn ghost">Copy link</div></div>
+            </div>
+          </div></div>
+          <figcaption><b>O2</b>Send. Says honestly how many people it reaches, including nobody, then offers the flyer and the link.</figcaption>
+        </figure>
+
+        <figure class="sk">
+          <div class="sheet" role="img" aria-label="Flyer sketch: LOST DOG, Biscuit, with a QR code and tear-off tabs">
+            <div class="sh-band">LOST DOG</div>
+            <div class="sh-photo"><svg viewBox="0 0 64 64"><use href="#dog"></use></svg></div>
+            <div class="sh-name">BISCUIT</div>
+            <div class="sh-text">Small tan terrier · red collar<br>Friendly but scared. Please don't chase.</div>
+            <div class="sh-seen">Last seen Tue Oct 20, 6:40 pm<br>near Esther Short Park</div>
+            <div class="sh-qr"><span class="qr" data-seed="20261020"></span><span><b>Seen him?</b> Scan to report.<br>No app needed.<br><span class="sh-url">pantopus.com/pet/7KQ2</span></span></div>
+            <div class="sh-tabs" aria-hidden="true"><span>pantopus.com/pet/7KQ2</span><span>pantopus.com/pet/7KQ2</span><span>pantopus.com/pet/7KQ2</span><span>pantopus.com/pet/7KQ2</span><span>pantopus.com/pet/7KQ2</span><span>pantopus.com/pet/7KQ2</span></div>
+          </div>
+          <figcaption><b>O3</b>Flyer. Letter size and fine in black and white. The QR code and short link open the pet page. A phone number appears only if the owner adds it.</figcaption>
+        </figure>
+      </div>
+
+      <p class="group-label">Neighbors on Pantopus</p>
+      <div class="sketches">
+        <figure class="sk">
+          <div class="phone lock"><div class="screen">
+            <div class="l-time">6:52</div>
+            <div class="l-date">Tuesday, October 20</div>
+            <div class="notif">
+              <div class="n-app"><span class="n-icon"></span>PANTOPUS<span class="n-when">now</span></div>
+              <b>Missing dog near Esther Short Park</b>
+              <span>Biscuit, small tan terrier, last seen 6:40 pm. Tap to help.</span>
+            </div>
+          </div></div>
+          <figcaption><b>N1</b>Alert. One push per pet, to people inside the radius, held during their quiet hours.</figcaption>
+        </figure>
+
+        <figure class="sk">
+          <div class="phone"><div class="screen">
+            <div class="s-status"><span>6:53</span><span>5G</span></div>
+            <div class="s-top"><span class="s-menu">☰</span><b>Nearby</b><span></span></div>
+            <div class="s-seg"><span class="on">Pulse</span><span>Neighborhood</span></div>
+            <div class="s-body">
+              <div class="s-pin-card">
+                <span><span class="s-tag">MISSING · 0.3 MI</span></span>
+                <div class="s-pin-row"><div class="s-thumb"><svg viewBox="0 0 64 64"><use href="#dog"></use></svg></div><div><b>Biscuit, small tan terrier</b><span>Last seen 6:40 pm near Esther Short Park</span></div></div>
+                <div class="s-row2"><div class="s-btn">I saw him</div><div class="s-btn ghost">Share</div></div>
+              </div>
+              <div class="s-post"><b>Ask</b> · Anyone know a good fence installer?</div>
+              <div class="s-post"><b>Event</b> · Farmers market moves to 8th St</div>
+              <div class="s-post"><b>Heads-up</b> · Power work on Main tomorrow</div>
+            </div>
+          </div></div>
+          <figcaption><b>N2</b>Nearby. Open alerts inside the radius stay pinned at the top of Pulse until they end.</figcaption>
+        </figure>
+      </div>
+
+      <p class="group-label">Anyone, on the web, no account</p>
+      <div class="sketches">
+        <figure class="sk">
+          <div class="phone"><div class="screen">
+            <div class="s-url">pantopus.com/pet/7KQ2</div>
+            <div class="s-band">MISSING DOG</div>
+            <div class="s-body">
+              <div class="s-photo"><svg viewBox="0 0 64 64"><use href="#dog"></use></svg></div>
+              <b class="s-h">Biscuit</b>
+              <span>Small tan terrier, red collar. Friendly but scared: please don't chase.</span>
+              <span class="s-cap">Last seen Tue 6:40 pm near Esther Short Park · seen 20 min ago near 8th St</span>
+              <div class="s-btn">I saw Biscuit</div>
+              <div class="s-btn ghost">Share this page</div>
+              <div class="s-warn">Never pay anyone or read out a code before a pet is home.</div>
+              <div class="s-foot">Get alerts for lost pets near you · <u>Get the app</u></div>
+            </div>
+          </div></div>
+          <figcaption><b>W1</b>Pet page. What the QR code and every shared link open. No sign-in, no names, just the area.</figcaption>
+        </figure>
+
+        <figure class="sk">
+          <div class="phone"><div class="screen">
+            <div class="s-url">pantopus.com/pet/7KQ2</div>
+            <div class="s-top"><span class="s-back">‹</span><b>I saw Biscuit</b><span></span></div>
+            <div class="s-body">
+              <span class="s-q">Where?</span>
+              <div class="s-map" data-map='{"pins":[[118,46,"here"]]}'></div>
+              <span class="s-link">Use my location</span>
+              <span class="s-q">When?</span>
+              <div class="s-chips"><span class="s-chip on">Just now</span><span class="s-chip">15 min ago</span><span class="s-chip">Earlier</span></div>
+              <div class="s-field"><span>Photo (optional)</span><b>+ Add</b></div>
+              <div class="s-field"><span>Anything else? (optional)</span><b>Heading east on 8th</b></div>
+              <div class="s-field"><span>Can the family reach you? (optional, only they see it)</span><b>Email or phone</b></div>
+              <div class="s-btn">Send to Biscuit's family</div>
+            </div>
+          </div></div>
+          <figcaption><b>W2</b>I saw them. Where and when are required; the rest is optional. Rate-limited.</figcaption>
+        </figure>
+      </div>
+
+      <p class="group-label">The search, a match, the ending</p>
+      <div class="sketches">
+        <figure class="sk">
+          <div class="phone"><div class="screen">
+            <div class="s-status"><span>7:58</span><span>5G</span></div>
+            <div class="s-top"><span class="s-back">‹</span><b>Biscuit</b><span class="s-tag">MISSING</span></div>
+            <div class="s-body">
+              <span class="s-cap">Alert sent to about 140 people · 1 h ago</span>
+              <div class="s-map" data-map='{"area":[64,52,22],"pins":[[92,44,"7:05"],[120,32,"7:22"],[150,30,"7:40"]],"trail":true}'></div>
+              <div class="s-banner"><b>Is this Biscuit?</b> A found dog was posted 0.4 mi away. <u>Look</u></div>
+              <div class="s-list"><div><b>7:40 pm</b> near 8th &amp; Columbia · photo</div><div><b>7:22 pm</b> near the library · "heading east"</div></div>
+              <div class="s-row2"><div class="s-btn ghost">Share</div><div class="s-btn ghost">Flyer</div></div>
+              <div class="s-btn home">Biscuit is home</div>
+            </div>
+          </div></div>
+          <figcaption><b>O4</b>Owner's page. Exact pins for the household only. Each sighting buzzes their phones.</figcaption>
+        </figure>
+
+        <figure class="sk">
+          <div class="phone"><div class="screen">
+            <div class="s-status"><span>8:01</span><span>5G</span></div>
+            <div class="s-top"><span class="s-back">‹</span><b>Is this Biscuit?</b><span></span></div>
+            <div class="s-body">
+              <div class="s-pair">
+                <div><div class="s-photo"><svg viewBox="0 0 64 64"><use href="#dog"></use></svg></div><span class="s-cap">Found 0.4 mi away, 7:55 pm</span></div>
+                <div><div class="s-photo"><svg viewBox="0 0 64 64"><use href="#dog"></use></svg></div><span class="s-cap">Biscuit</span></div>
+              </div>
+              <span>Pantopus thinks this might be Biscuit: same size, coat and red collar. Only your household sees this.</span>
+              <div class="s-btn">Message the finder</div>
+              <div class="s-btn ghost">Not Biscuit</div>
+            </div>
+          </div></div>
+          <figcaption><b>F1</b>Photo match. The assistant compares photos; the owner decides. A wrong guess is one tap to dismiss.</figcaption>
+        </figure>
+
+        <figure class="sk">
+          <div class="phone"><div class="screen">
+            <div class="s-status"><span>8:40</span><span>5G</span></div>
+            <div class="s-band home">HOME</div>
+            <div class="s-body">
+              <b class="s-h">Biscuit is home</b>
+              <span>14 people helped: 3 sightings and 11 shares.</span>
+              <div class="s-field"><span>Say thanks (optional)</span><b>Thank you! He was under a porch on 9th.</b></div>
+              <div class="s-btn home">Close and thank helpers</div>
+              <div class="s-btn ghost">Share the good news</div>
+              <span class="s-cap s-quiet">Not coming home? <u>Close quietly</u></span>
+            </div>
+          </div></div>
+          <figcaption><b>R1</b>Home. Ends the alert, tells helpers, offers a card to share. A quiet close is there for the hard endings.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="section" id="rules" aria-labelledby="rules-h">
+      <header><p class="eyebrow">Proposed defaults</p><h2 id="rules-h">Rules</h2></header>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th scope="col">Rule</th><th scope="col">Proposal</th><th scope="col">Decision</th></tr></thead>
+          <tbody>
+            <tr><td>Who can send</td><td>Signed in, with a home, a saved place or a fresh location fix within 5 km of the last-seen spot. A private home setup counts.</td><td><a class="dref" href="#d-who_sends">D2</a></td></tr>
+            <tr><td>How many</td><td>One open alert per pet, and at most two open per household.</td><td>Default</td></tr>
+            <tr><td>How long</td><td>Open 14 days, as Lost &amp; Found posts are today. The day before it ends, the owner can extend it once by 14 days.</td><td>Default</td></tr>
+            <tr><td>Who manages it</td><td>The sender and everyone in their household (the home's members) can update it and get sighting pushes.</td><td>Default</td></tr>
+            <tr><td>Reach</td><td>1 mile for dogs and other pets, half a mile for cats.</td><td><a class="dref" href="#d-radius">D3</a></td></tr>
+            <tr><td>Who's alerted</td><td>People whose home or saved place is inside the radius, with "Lost pets near me" on. Never the sender's household.</td><td><a class="dref" href="#d-audience">D4</a></td></tr>
+            <tr><td>When</td><td>Right away, except during each person's quiet hours.</td><td><a class="dref" href="#d-quiet_hours">D5</a></td></tr>
+            <tr><td>How often</td><td>At most one lost-or-found push per person a day and three a week. Alerts over the cap still show pinned in Nearby and in the morning briefing.</td><td>Default</td></tr>
+            <tr><td>A second push</td><td>Only when a sighting moves the search more than half a mile, then only to people near the new spot, once per alert.</td><td>Default</td></tr>
+            <tr><td>Sightings</td><td>Anyone, no account. Where and when are required; photo, note and contact are optional. Links are removed from notes.</td><td><a class="dref" href="#d-open_reports">D6</a></td></tr>
+            <tr><td>Who sees sightings</td><td>Household: exact pins. Everyone else: the area and the time.</td><td><a class="dref" href="#d-sighting_view">D7</a></td></tr>
+            <tr><td>Contact</td><td>Pantopus messages. A phone number only if the owner adds it. No reward field.</td><td><a class="dref" href="#d-contact">D8</a></td></tr>
+            <tr><td>Found pets</td><td>Same form, page and caps; the alert says "Found".</td><td><a class="dref" href="#d-found_pets">D10</a></td></tr>
+            <tr><td>Endings</td><td>Home, "Found, but not coming home" (quiet), Closed, or Expired. Helpers hear "Home" only.</td><td>Default</td></tr>
+            <tr><td>What's kept</td><td>Sightings and helpers' contact details are deleted 30 days after the alert ends. The post follows the usual post rules.</td><td>Default</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section" id="privacy" aria-labelledby="privacy-h">
+      <header><p class="eyebrow">Built in from the first release</p><h2 id="privacy-h">Privacy and safety</h2></header>
+      <div class="prose">
+        <ul class="list-tight">
+          <li><b>The home stays private.</b> The last-seen spot uses the area rule post pins already follow: snapped to a grid, then moved by about 500 m for everyone but the household. The page names a nearby public place, such as a park or an intersection. Today a post keeps whatever place name the poster typed; the alert writes its own label instead.</li>
+          <li><b>Photo location data is removed.</b> Post photos already lose their location data on upload. The alert takes photos only, and refuses an upload when stripping fails instead of keeping the original, as the upload path does today.</li>
+          <li><b>No names on the public page.</b> It shows the pet's name and "Biscuit's family", never the owner's name, handle or picture. The pet page gets its own endpoint that returns safe fields only, as the Plans preview does.</li>
+          <li><b>Phone numbers stay private by default.</b> The pet page and the flyer show a phone number only when the owner adds one.</li>
+          <li><b>Scam warnings where scammers strike.</b> The pet page, the flyer and the first message from someone new all say: never pay anyone or read out a code before your pet is home.</li>
+          <li><b>Fake alerts.</b> A photo is required, and it gets an automatic check (an animal; no people, no house numbers) before the push goes out. If the check fails or can't run, the alert still posts and can be shared, and the push waits for a review. A report hides the alert for review, as post reports do today.</li>
+          <li><b>Prank sightings.</b> Limits per device and per alert, links removed from notes, and the household can hide a sighting and mute that device. Pantopus has no captcha anywhere today; add one only if abuse shows up.</li>
+          <li><b>Reporters' privacy.</b> A reporter's exact pin goes to the household only. Contact details are optional, seen by the household only, and deleted 30 days after the alert ends. Sighting photos are stored privately, not under the public post-media path.</li>
+          <li><b>Reach counts.</b> "About 140 people" is rounded and never shown below 10, like the density meter.</li>
+          <li><b>Search engines.</b> An open alert's page may be indexed, so someone searching "lost dog" nearby can find it. It drops out of search when the alert ends.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="section" id="notifications" aria-labelledby="notifications-h">
+      <header><p class="eyebrow">Every push this adds</p><h2 id="notifications-h">Notifications</h2></header>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th scope="col">What</th><th scope="col">Who</th><th scope="col">When</th><th scope="col">Limits</th></tr></thead>
+          <tbody>
+            <tr><td>New lost or found alert</td><td>People inside the radius with "Lost pets near me" on</td><td>Right away, or when their quiet hours end (9 pm to 8 am unless they set their own)</td><td>One a day, three a week per person</td></tr>
+            <tr><td>New sighting</td><td>The household</td><td>Right away, any hour (they can mute it)</td><td>Grouped when more than three arrive within ten minutes</td></tr>
+            <tr><td>Possible photo match</td><td>The household</td><td>Right away</td><td>At most three per alert a day</td></tr>
+            <tr><td>Pet is home</td><td>Everyone who reported, shared from the app or tapped "Keep an eye out". Reporters without an account get one email, if they left one.</td><td>Right away, quiet hours respected</td><td>Once</td></tr>
+            <tr><td>Alert ends tomorrow</td><td>The household</td><td>The morning before</td><td>Once per alert</td></tr>
+            <tr><td>Morning briefing line</td><td>People inside the radius</td><td>In the morning briefing they already get</td><td>Open alerts only; no extra push</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section" id="exists" aria-labelledby="exists-h">
+      <header><p class="eyebrow">Checked on master 4289603b4</p><h2 id="exists-h">What exists, and what's new</h2></header>
+      <div class="two-col">
+        <div class="panel">
+          <h3>Reuse</h3>
+          <ul>
+            <li><b>Lost &amp; Found posts.</b> <code>lost_found</code> with lost or found and a contact choice, open 14 days. <code>reunited</code> is already an allowed ending, and both apps can already show a "Reunited" status. <a href="https://github.com/WangPantopus/skinny-pantopus/blob/4289603b48fd99c8f03e186047d97108ecf52bd6/backend/routes/posts.js#L288">posts.js:288</a> · <a href="https://github.com/WangPantopus/skinny-pantopus/blob/4289603b48fd99c8f03e186047d97108ecf52bd6/supabase/migrations/20261014070000_pulse_post_lifecycle.sql#L20">endings</a></li>
+            <li><b>Area privacy.</b> Pins snap to a grid and move about 500 m for everyone but the author. <a href="https://github.com/WangPantopus/skinny-pantopus/blob/4289603b48fd99c8f03e186047d97108ecf52bd6/backend/utils/locationPrivacy.js#L106">locationPrivacy.js</a></li>
+            <li><b>Photo uploads.</b> Location data is stripped on upload. <a href="https://github.com/WangPantopus/skinny-pantopus/blob/4289603b48fd99c8f03e186047d97108ecf52bd6/backend/routes/upload.js#L122">upload.js:122</a></li>
+            <li><b>Held pushes.</b> Quiet hours, 9 pm to 8 am unless set, already used by Plans. <a href="https://github.com/WangPantopus/skinny-pantopus/blob/4289603b48fd99c8f03e186047d97108ecf52bd6/backend/services/heldPushes.js">heldPushes.js</a></li>
+            <li><b>The Plans preview.</b> A public endpoint with safe fields only, and a drawn map on the page. <a href="https://github.com/WangPantopus/skinny-pantopus/blob/4289603b48fd99c8f03e186047d97108ecf52bd6/backend/services/plans/planPublic.js">planPublic.js</a></li>
+            <li><b>Guest sign-up.</b> Support Train helpers reserve a slot with a name and email, no account, rate-limited. <a href="https://github.com/WangPantopus/skinny-pantopus/blob/4289603b48fd99c8f03e186047d97108ecf52bd6/backend/routes/supportTrains.js#L2966">supportTrains.js:2966</a></li>
+            <li><b>Printing and QR codes.</b> The fridge card's print styles, and real QR codes on web, iOS (Core Image) and Android (ZXing). <a href="https://github.com/WangPantopus/skinny-pantopus/blob/4289603b48fd99c8f03e186047d97108ecf52bd6/frontend/apps/web/src/components/ui/QRCode.tsx">QRCode.tsx</a></li>
+            <li><b>Lost and found pairing.</b> An hourly job pairs found and lost posts within 3 miles and 7 days. <a href="https://github.com/WangPantopus/skinny-pantopus/blob/4289603b48fd99c8f03e186047d97108ecf52bd6/backend/services/ai/nudges/nearby.js#L69">nearby.js:69</a></li>
+            <li><b>Household pets.</b> <code>HomePet</code> holds a photo, species, breed and microchip number; screens exist on all three apps, hidden with <code>household_extras</code>. <a href="https://github.com/WangPantopus/skinny-pantopus/blob/4289603b48fd99c8f03e186047d97108ecf52bd6/backend/routes/home.js#L4600">home.js:4600</a></li>
+            <li><b>Flags, funnel and links.</b> The database flag and funnel block that <code>plans</code> uses. Android already opens every pantopus.com link; iOS lists <code>/posts/*</code> and <code>/plans/*</code>. <a href="https://github.com/WangPantopus/skinny-pantopus/blob/4289603b48fd99c8f03e186047d97108ecf52bd6/frontend/apps/web/public/.well-known/apple-app-site-association">iOS link file</a></li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h3>Build new</h3>
+          <ul>
+            <li><b>Push to people nearby.</b> Nothing does this today. The old urgent-task fan-out calls <code>find_homes_nearby</code>, which no migration ever created. <a href="https://github.com/WangPantopus/skinny-pantopus/blob/4289603b48fd99c8f03e186047d97108ecf52bd6/backend/services/urgentFanoutService.js#L17">urgentFanoutService.js</a></li>
+            <li><b>A "Lost pets near me" switch</b> on web, iOS and Android, and an Android "Lost pets" channel. No app has a Nearby switch today.</li>
+            <li><b>The pet page and the "I saw them" form</b>, with their own public endpoints and limits.</li>
+            <li><b>The flyer:</b> a print page with a real QR code, and a share image.</li>
+            <li><b>Sightings:</b> storage, and the household's map and list.</li>
+            <li><b>"Biscuit is home":</b> writes <code>reunited</code> and tells helpers.</li>
+            <li><b>The pinned Nearby card.</b> Alerts get only a red chip today.</li>
+            <li><b>The photo check and photo matching.</b> Today's pairing reads words only, and reaches only people who turned on Suggestions.</li>
+            <li><b><code>/pet/*</code></b> in the iOS link file.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="callout">
+        <b>Found while checking.</b> These are true today, whatever you decide here:
+        <ul class="list-tight">
+          <li>iOS and Android ask for a Lost &amp; Found "Last seen date", check it, and never send it. <a href="https://github.com/WangPantopus/skinny-pantopus/blob/4289603b48fd99c8f03e186047d97108ecf52bd6/frontend/apps/ios/Pantopus/Features/Compose/PulseCompose/PulseComposeViewModel.swift#L1058">iOS</a></li>
+          <li>iOS doesn't offer the missing-pet heads-up; web and Android do.</li>
+          <li>Nothing can mark a lost post "Reunited"; posts just close after 14 days.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="section" id="data" aria-labelledby="data-h">
+      <header><p class="eyebrow">Draft, for the build brief</p><h2 id="data-h">Data and endpoints</h2></header>
+      <div class="two-col">
+        <div class="panel">
+          <h3>Two new tables (<a class="dref" href="#d-tables">D12</a>)</h3>
+          <ul>
+            <li><b><code>PetAlert</code></b>, one per lost or found pet, linked to its <code>Post</code> (the public card, as with Plans) and to a <code>HomePet</code> when there is one. Kind, pet name, species, description, last seen at, the true last-seen point (household only) and its public label, reach, status (open, home, not home, closed, expired), push times, short code, end date.</li>
+            <li><b><code>PetSighting</code></b>: the alert, seen at, the true point (household only) and its area, a note, a private photo, the reporter's account if any, optional private contact, a device hash for limits, and when it was hidden.</li>
+          </ul>
+          <h3>Additive, no new tables</h3>
+          <ul>
+            <li>A <code>lost_pets</code> switch on notification preferences.</li>
+            <li>A database function that lists people with a home or saved place inside a radius.</li>
+            <li>The <code>pet_alerts</code> flag row, funnel event names, and <code>/pet/*</code> in the iOS link file.</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h3>Endpoints</h3>
+          <ul>
+            <li><span class="endpoint">POST /api/pet-alerts</span> creates the post and the alert, then queues the photo check and the push.</li>
+            <li><span class="endpoint">GET /api/pet-alerts/:id</span> household view (exact) or neighbor view (area).</li>
+            <li><span class="endpoint">PATCH /api/pet-alerts/:id</span> edits, moves the last-seen spot, extends, or ends it.</li>
+            <li><span class="endpoint">GET /api/pet-alerts/:id/sightings</span> exact for the household, area for everyone else.</li>
+            <li><span class="endpoint">PATCH /api/pet-alerts/:id/sightings/:sid</span> hides one and can mute that device.</li>
+            <li><span class="endpoint">GET /api/public/pets/:code</span> no account; safe fields only, like the Plans preview.</li>
+            <li><span class="endpoint">POST /api/public/pets/:code/sightings</span> no account; when, where, and an optional note, photo and contact; strict limits.</li>
+          </ul>
+          <h3>Web pages and jobs</h3>
+          <ul>
+            <li>Pages: <span class="endpoint">/pet/:code</span>, its "I saw them" form, and <span class="endpoint">/pet/:code/flyer</span>.</li>
+            <li>Jobs: the nearby push (reach, caps, held pushes), the photo check, photo matching, the day-before notice and expiry, and the 30-day cleanup.</li>
+            <li>Funnel: alert created, flyer opened, link shared, page viewed, sighting sent, app clicked, home.</li>
+          </ul>
+        </div>
+      </div>
+      <p class="prose">Neighbors with an account message the household in the existing chat. People without one reach the household through the sighting form. If they leave an email, Pantopus sends them one message only: the "home" news, with a link to get alerts nearby.</p>
+    </section>
+
+    <section class="section" id="order" aria-labelledby="order-h">
+      <header><p class="eyebrow">Chosen October 21 (D13)</p><h2 id="order-h">Order of work</h2></header>
+      <ol class="steps">
+        <li><b>Lock the spec.</b><span>A NEXT_STEPS entry with your picks, and a build brief from this page.</span></li>
+        <li><b>Detailed screens.</b><span>A design canvas on the Pantopus design system, as with Plans, while the backend starts.</span></li>
+        <li><b>Backend, behind <code>pet_alerts</code>.</b><span>Tables after your approval, the alert, the push with caps and quiet hours, the public page, sightings, relayed messages, the flyer, funnel events.</span></li>
+        <li><b>Web pages.</b><span>The pet page, the "I saw them" form and the printable flyer: an exception to the mobile-only rule, like the Plans share preview.</span></li>
+        <li><b>iOS and Android.</b><span>Report, owner's page, neighbor's page, pinned Nearby card, push and links, "Biscuit is home".</span></li>
+        <li><b>Photo matching.</b><span>The assistant compares found pets and sighting photos with missing pets nearby (<a class="dref" href="#d-photo_match">D9</a>).</span></li>
+        <li><b>End-to-end check.</b><span>An owner, a neighbor, a stranger without an account and a finder, on web, iOS and Android against a local backend; then staging.</span></li>
+        <li><b>Pilot, then everywhere.</b><span>On in Vancouver, Camas and Washougal first; watch the signals below for two weeks; then everyone.</span></li>
+      </ol>
+    </section>
+
+    <section class="section" id="signals" aria-labelledby="signals-h">
+      <header><p class="eyebrow">How we'll know</p><h2 id="signals-h">Success signals</h2></header>
+      <div class="prose">
+        <p>The bars are first guesses, to adjust after the pilot.</p>
+        <ul class="list-tight">
+          <li><b>Speed.</b> Median time from opening the form to "Send alert": under two minutes.</li>
+          <li><b>Spread.</b> Alerts whose flyer was opened or whose link was shared: most of them.</li>
+          <li><b>Reach outside the app.</b> Pet-page views from people without an account, per alert. This is the acquisition engine.</li>
+          <li><b>Help.</b> Alerts with at least one sighting.</li>
+          <li><b>Growth.</b> Sign-ups that start on a pet page, and how many of them come back in week four.</li>
+          <li><b>Attention cost.</b> People who turn off "Lost pets near me" within a day of an alert: kept rare.</li>
+          <li><b>Outcome.</b> Alerts marked Home (self-reported, so read it as a trend).</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="section" id="risks" aria-labelledby="risks-h">
+      <header><p class="eyebrow">Said plainly</p><h2 id="risks-h">Limits and risks</h2></header>
+      <div class="prose">
+        <ul class="list-tight">
+          <li><b>It won't fill Nearby by itself.</b> A neighborhood may see a few alerts a month. This brings people in; Today, Place and Plans have to keep them.</li>
+          <li><b>Early alerts reach almost nobody by push.</b> The flyer and the link carry the first months; the push grows with density.</li>
+          <li><b>Others already do lost pets.</b> PawBoost, Petco Love Lost, Facebook groups and Nextdoor. The difference is one tap to all of it, and a page that works for people who never install anything.</li>
+          <li><b>Some pets don't come home.</b> "Found, but not coming home" closes quietly: no celebration card and no push to helpers, only a note if the owner writes one.</li>
+          <li><b>Abuse will be tried.</b> Fake alerts, prank sightings and reward scams. The rules above cover the known ones; watch reports closely in the pilot.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="section" id="decisions" aria-labelledby="decisions-h">
+      <header><p class="eyebrow">Pick one option each; add a note if you like</p><h2 id="decisions-h">Decisions</h2></header>
+      <p class="prose">Your picks save to this page as you make them. Anything you leave open, I'll treat as the recommended option unless you say otherwise.</p>
+      <div class="decisions">
+        <article class="decision" id="d-name" data-key="name" data-id="D1" data-rec="a">
+          <div class="d-head"><span class="d-id">D1</span><h3 id="h-name">Name</h3><span class="d-state">Open</span></div>
+          <p class="d-q">What is the feature called in the app?</p>
+          <div class="opts" role="group" aria-labelledby="h-name">
+            <button class="opt" type="button" data-v="a" aria-pressed="false"><span class="radio" aria-hidden="true"></span><span class="opt-title">"Lost pet alert" <span class="opt-rec">Recommended</span></span><span class="opt-detail">Says what it does, in a push, a store listing and a search.</span></button>
+            <button class="opt" type="button" data-v="b" aria-pressed="false"><span class="radio" aria-hidden="true"></span><span class="opt-title">"Bring them home"</span><span class="opt-detail">Warmer, but less clear in a notification.</span></button>
+            <button class="opt" type="button" data-v="c" aria-pressed="false"><span class="radio" aria-hidden="true"></span><span class="opt-title">"Pet alert"</span><span class="opt-detail">Shorter, but it also sounds like reminders about your own pet.</span></button>
+          </div>
+          <p class="why"><b>Why:</b> People search for "lost dog" and "lost cat", so the words should match. The pet page can still say "Help bring Biscuit home."</p>
+          <div class="note-row"><label for="note-name">Your note</label><textarea id="note-name" rows="2" placeholder="Optional"></textarea></div>
+          <p class="d-meta"></p>
+        </article>
+
+        <article class="decision" id="d-who_sends" data-key="who_sends" data-id="D2" data-rec="a">
+          <div class="d-head"><span class="d-id">D2</span><h3 id="h-who_sends">Who can send an alert</h3><span class="d-state">Open</span></div>
+          <p class="d-q">Who may send a lost-pet alert?</p>
+          <div class="opts" role="group" aria-labelledby="h-who_sends">
+            <button class="opt" type="button" data-v="a" aria-pressed="false"><span class="radio" aria-hidden="true"></span><span class="opt-title">Signed in, and nearby <span class="opt-rec">Recommended</span></span><span class="opt-detail">A home, a saved place or a fresh location fix within 5 km of the last-seen spot. The "located" bar Plans uses for joining; a private home setup counts.</span></button>
+            <button class="opt" type="button" data-v="b" aria-pressed="false"><span class="radio" aria-hidden="true"></span><span class="opt-title">Verified addresses only</span><span class="opt-detail">The strongest bar, but postcard verification isn't running in production yet, so almost nobody could send one.</span></button>
+            <button class="opt" type="button" data-v="c" aria-pressed="false"><span class="radio" aria-hidden="true"></span><span class="opt-title">Anyone signed in</span><span class="opt-detail">Fastest, and open to alerts from people who aren't nearby.</span></button>
+          </div>
+          <p class="why"><b>Why:</b> A frightened owner can't wait days for a postcard. Requiring a nearby home, place or location still stops someone across the country from alerting Vancouver.</p>
+          <div class="note-row"><label for="note-who_sends">Your note</label><textarea id="note-who_sends" rows="2" placeholder="Optional"></textarea></div>
+          <p class="d-meta"></p>
+        </article>
+
+        <article class="decision" id="d-radius" data-key="radius" data-id="D3" data-rec="a">
+          <div class="d-head"><span class="d-id">D3</span><h3 id="h-radius">How far it reaches</h3><span class="d-state">Open</span></div>
+          <p class="d-q">How far from the last-seen spot does the alert go?</p>
+          <div class="opts" role="group" aria-labelledby="h-radius">
+            <button class="opt" type="button" data-v="a" aria-pressed="false"><span class="radio" aria-hidden="true"></span><span class="opt-title">1 mile for dogs and other pets, half a mile for cats <span class="opt-rec">Recommended</span></span><span class="opt-detail">Fits how far each kind tends to go.</span></button>
+            <button class="opt" type="button" data-v="b" aria-pressed="false"><span class="radio" aria-hidden="true"></span><span class="opt-title">1 mile for every pet</span><span class="opt-detail">One rule, simpler to explain.</span></button>
+            <button class="opt" type="button" data-v="c" aria-pressed="false"><span class="radio" aria-hidden="true"></span><span class="opt-title">Grows with need</span><span class="opt-detail">The nearest few hundred households, up to 3 miles. Better in rural areas, harder to explain ("why did I get this?").</span></button>
+          </div>
+          <p class="why"><b>Why:</b> Cats that slip out usually hide close to home, so a wider push mostly reaches people who can't help. Dogs travel farther. Revisit the third option once there are enough neighbors for it to matter.</p>
+          <div class="note-row"><label for="note-radius">Your note</label><textarea id="note-radius" rows="2" placeholder="Optional"></textarea></div>
+          <p class="d-meta"></p>
+        </article>
+
+        <article class="decision" id="d-audience" data-key="audience" data-id="D4" data-rec="a">
+          <div class="d-head"><span class="d-id">D4</span><h3 id="h-audience">Who gets the push</h3><span class="d-state">Open</span></div>
+          <p class="d-q">Inside that radius, who gets the alert?</p>
+          <div class="opts" role="group" aria-labelledby="h-audience">
+            <button class="opt" type="button" data-v="a" aria-pressed="false"><span class="radio" aria-hidden="true"></span><span class="opt-title">Everyone with a home or saved place there, with a switch that starts on <span class="opt-rec">Recommended</span></span><span class="opt-detail">A new "Lost pets near me" switch in notification settings, on by default, like weather alerts.</span></button>
+            <button class="opt" type="button" data-v="b" aria-pressed="false"><span class="radio" aria-hidden="true"></span><span class="opt-title">Only people who turn the switch on</span><span class="opt-detail">Quietest, but the list stays tiny.</span></button>
+            <button class="opt" type="button" data-v="c" aria-pressed="false"><span class="radio" aria-hidden="true"></span><span class="opt-title">Also people passing through, by live location</span><span class="opt-detail">Needs background location and follows people around.</span></button>
+          </div>
+          <p class="why"><b>Why:</b> Opt-in lists stay small, and the people who can help are the ones who live there. A saved place counts, so someone who follows their parents' street hears about it too. Live location isn't worth the tracking.</p>
+          <div class="note-row"><label for="note-audience">Your note</label><textarea id="note-audience" rows="2" placeholder="Optional"></textarea></div>
+          <p class="d-meta"></p>
+        </article>
+
+        <article class="decision" id="d-quiet_hours" data-key="quiet_hours" data-id="D5" data-rec="a">
+          <div class="d-head"><span class="d-id">D5</span><h3 id="h-quiet_hours">Alerts at night</h3><span class="d-state">Open</span></div>
+          <p class="d-q">What happens to an alert sent at night?</p>
+          <div class="opts" role="group" aria-labelledby="h-quiet_hours">
+            <button class="opt" type="button" data-v="a" aria-pressed="false"><span class="radio" aria-hidden="true"></span><span class="opt-title">Hold the push until each person's quiet hours end <span class="opt-rec">Recommended</span></span><span class="opt-detail">9 pm to 8 am unless they set their own. The alert still shows at the top of Nearby right away.</span></button>
+            <button class="opt" type="button" data-v="b" aria-pressed="false"><span class="radio" aria-hidden="true"></span><span class="opt-title">Send any time</span><span class="opt-detail">Fastest, and the loudest.</span></button>
+            <button class="opt" type="button" data-v="c" aria-pressed="false"><span class="radio" aria-hidden="true"></span><span class="opt-title">Any time in the first two hours, then hold</span><span class="opt-detail">A middle path that still wakes people.</span></button>
+          </div>
+          <p class="why"><b>Why:</b> Waking a street for a pet is the fastest way to get notifications turned off for good. The owner's flyer, link and pinned card work at any hour, and Plans already holds pushes this way.</p>
+          <div class="note-row"><label for="note-quiet_hours">Your note</label><textarea id="note-quiet_hours" rows="2" placeholder="Optional"></textarea></div>
+          <p class="d-meta"></p>
+        </article>
+
+        <article class="decision" id="d-open_reports" data-key="open_reports" data-id="D6" data-rec="a">
+          <div class="d-head"><span class="d-id">D6</span><h3 id="h-open_reports">Reports without an account</h3><span class="d-state">Open</span></div>
+          <p class="d-q">Can people without the app report a sighting?</p>
+          <div class="opts" role="group" aria-labelledby="h-open_reports">
+            <button class="opt" type="button" data-v="a" aria-pressed="false"><span class="radio" aria-hidden="true"></span><span class="opt-title">Yes, on a web page <span class="opt-rec">Recommended</span></span><span class="opt-detail">Where and when are required; photo, note and contact are optional; strict limits. An exception to the mobile-only rule, like the Plans preview.</span></button>
+            <button class="opt" type="button" data-v="b" aria-pressed="false"><span class="radio" aria-hidden="true"></span><span class="opt-title">No, an account is needed</span><span class="opt-detail">Fewer pranks, and far fewer sightings.</span></button>
+          </div>
+          <p class="why"><b>Why:</b> The person who sees the dog is usually not on Pantopus yet, and every required step loses sightings. The page ends with "Get alerts for lost pets near you", the moment most likely to win a download.</p>
+          <div class="note-row"><label for="note-open_reports">Your note</label><textarea id="note-open_reports" rows="2" placeholder="Optional"></textarea></div>
+          <p class="d-meta"></p>
+        </article>
+
+        <article class="decision" id="d-sighting_view" data-key="sighting_view" data-id="D7" data-rec="a">
+          <div class="d-head"><span class="d-id">D7</span><h3 id="h-sighting_view">Who sees sightings</h3><span class="d-state">Open</span></div>
+          <p class="d-q">Who sees where a pet was spotted?</p>
+          <div class="opts" role="group" aria-labelledby="h-sighting_view">
+            <button class="opt" type="button" data-v="a" aria-pressed="false"><span class="radio" aria-hidden="true"></span><span class="opt-title">The household sees exact pins; everyone else sees the area and time <span class="opt-rec">Recommended</span></span><span class="opt-detail">"Seen 20 minutes ago near 8th St."</span></button>
+            <button class="opt" type="button" data-v="b" aria-pressed="false"><span class="radio" aria-hidden="true"></span><span class="opt-title">Everyone sees exact pins</span><span class="opt-detail">Most useful for searchers, and it publishes where reporters were.</span></button>
+            <button class="opt" type="button" data-v="c" aria-pressed="false"><span class="radio" aria-hidden="true"></span><span class="opt-title">Only the household sees sightings</span><span class="opt-detail">Most private, and searchers lose the trail.</span></button>
+          </div>
+          <p class="why"><b>Why:</b> Area and time are enough to send searchers the right way, and a reporter who spotted the dog from their porch doesn't publish their own address.</p>
+          <div class="note-row"><label for="note-sighting_view">Your note</label><textarea id="note-sighting_view" rows="2" placeholder="Optional"></textarea></div>
+          <p class="d-meta"></p>
+        </article>
+
+        <article class="decision" id="d-contact" data-key="contact" data-id="D8" data-rec="a">
+          <div class="d-head"><span class="d-id">D8</span><h3 id="h-contact">Reaching the owner</h3><span class="d-state">Open</span></div>
+          <p class="d-q">How do people reach the owner, and can there be a reward?</p>
+          <div class="opts" role="group" aria-labelledby="h-contact">
+            <button class="opt" type="button" data-v="a" aria-pressed="false"><span class="radio" aria-hidden="true"></span><span class="opt-title">Through Pantopus, no reward field <span class="opt-rec">Recommended</span></span><span class="opt-detail">Neighbors message the household in the app; everyone else uses the sighting form. A phone number appears only if the owner adds it.</span></button>
+            <button class="opt" type="button" data-v="b" aria-pressed="false"><span class="radio" aria-hidden="true"></span><span class="opt-title">Show the owner's phone number by default</span><span class="opt-detail">What paper flyers usually do.</span></button>
+            <button class="opt" type="button" data-v="c" aria-pressed="false"><span class="radio" aria-hidden="true"></span><span class="opt-title">Phone number and an optional reward amount</span><span class="opt-detail">The most traditional, and the most scam-prone.</span></button>
+          </div>
+          <p class="why"><b>Why:</b> Scammers watch lost-pet posts for phone numbers and rewards: "I have your dog, send the reward first", or "read me the code we just texted you".</p>
+          <div class="note-row"><label for="note-contact">Your note</label><textarea id="note-contact" rows="2" placeholder="Optional"></textarea></div>
+          <p class="d-meta"></p>
+        </article>
+
+        <article class="decision" id="d-photo_match" data-key="photo_match" data-id="D9" data-rec="a">
+          <div class="d-head"><span class="d-id">D9</span><h3 id="h-photo_match">Photo matching</h3><span class="d-state">Open</span></div>
+          <p class="d-q">Should Pantopus compare photos of found pets with missing ones?</p>
+          <div class="opts" role="group" aria-labelledby="h-photo_match">
+            <button class="opt" type="button" data-v="a" aria-pressed="false"><span class="radio" aria-hidden="true"></span><span class="opt-title">Yes, and tell the household directly <span class="opt-rec">Recommended</span></span><span class="opt-detail">Found-pet and sighting photos are compared with missing pets within 3 miles from the last 14 days. "Might be Biscuit", for the household only.</span></button>
+            <button class="opt" type="button" data-v="b" aria-pressed="false"><span class="radio" aria-hidden="true"></span><span class="opt-title">Keep today's word-only pairing</span><span class="opt-detail">No new AI cost; misses most real matches.</span></button>
+            <button class="opt" type="button" data-v="c" aria-pressed="false"><span class="radio" aria-hidden="true"></span><span class="opt-title">Later</span><span class="opt-detail">Ship alerts first; add matching after the pilot.</span></button>
+          </div>
+          <p class="why"><b>Why:</b> Words like "tan dog" match half the neighborhood; photos are what people compare. Today's pairing also reaches only people who turned on Suggestions, which most owners never will. A check costs a few cents, inside the assistant's existing daily budgets.</p>
+          <div class="note-row"><label for="note-photo_match">Your note</label><textarea id="note-photo_match" rows="2" placeholder="Optional"></textarea></div>
+          <p class="d-meta"></p>
+        </article>
+
+        <article class="decision" id="d-found_pets" data-key="found_pets" data-id="D10" data-rec="a">
+          <div class="d-head"><span class="d-id">D10</span><h3 id="h-found_pets">Found pets</h3><span class="d-state">Open</span></div>
+          <p class="d-q">Does a found pet alert neighbors too?</p>
+          <div class="opts" role="group" aria-labelledby="h-found_pets">
+            <button class="opt" type="button" data-v="a" aria-pressed="false"><span class="radio" aria-hidden="true"></span><span class="opt-title">Yes, the same people under the same caps <span class="opt-rec">Recommended</span></span><span class="opt-detail">"Found dog near the library. Is he yours?"</span></button>
+            <button class="opt" type="button" data-v="b" aria-pressed="false"><span class="radio" aria-hidden="true"></span><span class="opt-title">No, only owners of matching missing pets hear about it</span><span class="opt-detail">Quieter, and useless when the owner isn't on Pantopus.</span></button>
+          </div>
+          <p class="why"><b>Why:</b> Many owners aren't on Pantopus. A finder's alert reaches neighbors who may know the dog, and the finder's page works for an owner without an account.</p>
+          <div class="note-row"><label for="note-found_pets">Your note</label><textarea id="note-found_pets" rows="2" placeholder="Optional"></textarea></div>
+          <p class="d-meta"></p>
+        </article>
+
+        <article class="decision" id="d-pet_profiles" data-key="pet_profiles" data-id="D11" data-rec="b">
+          <div class="d-head"><span class="d-id">D11</span><h3 id="h-pet_profiles">Saving pets ahead of time</h3><span class="d-state">Open</span></div>
+          <p class="d-q">Can households save their pets before anything happens?</p>
+          <div class="opts" role="group" aria-labelledby="h-pet_profiles">
+            <button class="opt" type="button" data-v="a" aria-pressed="false"><span class="radio" aria-hidden="true"></span><span class="opt-title">Yes, in the first release</span><span class="opt-detail">Bring back only the pets list from <code>household_extras</code>, with "Report missing" on each pet.</span></button>
+            <button class="opt" type="button" data-v="b" aria-pressed="false"><span class="radio" aria-hidden="true"></span><span class="opt-title">Yes, once alerts are live <span class="opt-rec">Recommended</span></span><span class="opt-detail">Same pets list, as the second release.</span></button>
+            <button class="opt" type="button" data-v="c" aria-pressed="false"><span class="radio" aria-hidden="true"></span><span class="opt-title">No</span><span class="opt-detail">Owners enter everything when the pet is lost.</span></button>
+          </div>
+          <p class="why"><b>Why:</b> The pets list already exists on web, iOS and Android and holds a photo, species, breed and microchip number. A saved pet turns the report into one tap and gives pet owners a reason to set up the app before anything happens. Doing it second keeps the first release on the moment of loss.</p>
+          <div class="note-row"><label for="note-pet_profiles">Your note</label><textarea id="note-pet_profiles" rows="2" placeholder="Optional"></textarea></div>
+          <p class="d-meta"></p>
+        </article>
+
+        <article class="decision" id="d-tables" data-key="tables" data-id="D12" data-rec="a">
+          <div class="d-head"><span class="d-id">D12</span><h3 id="h-tables">New tables</h3><span class="d-state">Open</span></div>
+          <p class="d-q">Approve the new tables?</p>
+          <div class="opts" role="group" aria-labelledby="h-tables">
+            <button class="opt" type="button" data-v="a" aria-pressed="false"><span class="radio" aria-hidden="true"></span><span class="opt-title"><code>PetAlert</code> and <code>PetSighting</code> <span class="opt-rec">Recommended</span></span><span class="opt-detail">The post stays the public card, as with Plans.</span></button>
+            <button class="opt" type="button" data-v="b" aria-pressed="false"><span class="radio" aria-hidden="true"></span><span class="opt-title">Only <code>PetSighting</code></span><span class="opt-detail">The pet's details become new columns on <code>Post</code>.</span></button>
+            <button class="opt" type="button" data-v="c" aria-pressed="false"><span class="radio" aria-hidden="true"></span><span class="opt-title">None; sightings become comments</span><span class="opt-detail">No schema work, and no private fields.</span></button>
+          </div>
+          <p class="why"><b>Why:</b> Comments are public, need an account, and can't hold a private exact spot or a reporter's private contact. A separate <code>PetAlert</code> keeps the large <code>Post</code> table lean and follows the <code>Plan</code> pattern you approved.</p>
+          <div class="note-row"><label for="note-tables">Your note</label><textarea id="note-tables" rows="2" placeholder="Optional"></textarea></div>
+          <p class="d-meta"></p>
+        </article>
+
+        <article class="decision" id="d-rollout" data-key="rollout" data-id="D13" data-rec="a">
+          <div class="d-head"><span class="d-id">D13</span><h3 id="h-rollout">Rollout and order</h3><span class="d-state">Open</span></div>
+          <p class="d-q">How should it be built and turned on?</p>
+          <div class="opts" role="group" aria-labelledby="h-rollout">
+            <button class="opt" type="button" data-v="a" aria-pressed="false"><span class="radio" aria-hidden="true"></span><span class="opt-title">Behind a <code>pet_alerts</code> flag, the Plans way <span class="opt-rec">Recommended</span></span><span class="opt-detail">Detailed screens on a design canvas while the backend is built, then the apps, then staging, then the pilot area, then everyone.</span></button>
+            <button class="opt" type="button" data-v="b" aria-pressed="false"><span class="radio" aria-hidden="true"></span><span class="opt-title">Build straight from this page, on for everyone at once</span><span class="opt-detail">Faster to start, with no pilot read.</span></button>
+          </div>
+          <p class="why"><b>Why:</b> The same order worked for Plans. Turning it on first in Vancouver, Camas and Washougal puts the first alerts where the seeder and the pilot already are.</p>
+          <div class="note-row"><label for="note-rollout">Your note</label><textarea id="note-rollout" rows="2" placeholder="Optional"></textarea></div>
+          <p class="d-meta"></p>
+        </article>
+      </div>
+    </section>
+
+    <footer class="foot">
+      <p>Drafted October 21, 2026 from master <code>4289603b4</code>, in the same shape as the Nearby Plans one-page design. Decided the same day: the recommended option for every decision. Paused the same day, before any build, to work on features that make money first; the contract is in the repo at <code>docs/product/lost-pet-alerts-contract-2026-10-21.md</code>. Sketches are low fidelity; names, places and times in them are examples.</p>
+      <p>Picks are stored with this page, one record per decision in <code>decisions</code>: the choice, your note and when it changed.</p>
+    </footer>
+  </main>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+
+  // Map sketches
+  function mapSVG(o) {
+    var s = '<svg viewBox="0 0 200 120" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Map sketch">';
+    s += '<rect class="m-land" width="200" height="120"></rect>';
+    s += '<path class="m-water" d="M0 98 C40 90 80 106 120 98 S180 86 200 92 V120 H0Z"></path>';
+    s += '<rect class="m-park" x="22" y="34" width="46" height="32" rx="6"></rect>';
+    var roads = ["M0 22 H200", "M0 76 H200", "M90 0 V120", "M142 0 V120", "M8 0 L58 120"];
+    roads.forEach(function (d) { s += '<path class="m-road-edge" d="' + d + '"></path><path class="m-road" d="' + d + '"></path>'; });
+    if (o.area) s += '<circle class="m-area" cx="' + o.area[0] + '" cy="' + o.area[1] + '" r="' + o.area[2] + '"></circle>';
+    var pins = o.pins || [];
+    if (o.trail && pins.length > 1) s += '<polyline class="m-trail" points="' + pins.map(function (p) { return p[0] + "," + p[1]; }).join(" ") + '"></polyline>';
+    pins.forEach(function (p) {
+      s += '<circle class="m-pin" cx="' + p[0] + '" cy="' + p[1] + '" r="4"></circle>';
+      if (p[2]) s += '<text class="m-label" x="' + (p[0] + 6) + '" y="' + (p[1] - 5) + '">' + esc(p[2]) + "</text>";
+    });
+    return s + "</svg>";
+  }
+  document.querySelectorAll("[data-map]").forEach(function (el) {
+    try { el.innerHTML = mapSVG(JSON.parse(el.getAttribute("data-map"))); } catch (e) { /* leave the frame empty */ }
+  });
+
+  // QR sketch: finder squares plus a seeded pattern (not a real code)
+  function qrSVG(seed) {
+    var n = 25, x = seed >>> 0, rects = "";
+    function rnd() { x = (Math.imul(x, 1664525) + 1013904223) >>> 0; return x / 4294967296; }
+    function finderCell(r, c) {
+      var fr = r < 8 ? r : r - (n - 7), fc = c < 8 ? c : c - (n - 7);
+      if (fr < 0 || fc < 0 || fr > 6 || fc > 6) return false;
+      return fr === 0 || fr === 6 || fc === 0 || fc === 6 || (fr >= 2 && fr <= 4 && fc >= 2 && fc <= 4);
+    }
+    for (var r = 0; r < n; r++) {
+      for (var c = 0; c < n; c++) {
+        var inFinder = (r < 8 && c < 8) || (r < 8 && c >= n - 8) || (r >= n - 8 && c < 8);
+        var on = inFinder ? finderCell(r, c) : rnd() < 0.47;
+        if (on) rects += '<rect x="' + c + '" y="' + r + '" width="1.02" height="1.02"></rect>';
+      }
+    }
+    return '<svg class="qr-svg" viewBox="-2 -2 29 29" aria-hidden="true"><rect class="qr-bg" x="-2" y="-2" width="29" height="29"></rect>' + rects + "</svg>";
+  }
+  document.querySelectorAll(".qr").forEach(function (el) { el.innerHTML = qrSVG(Number(el.getAttribute("data-seed")) || 7); });
+
+  // Decisions
+  var cards = Array.prototype.slice.call(document.querySelectorAll(".decision"));
+  var total = cards.length;
+  var state = {};
+  var canWrite = false;
+  var col = null;
+  var queues = {};
+  var statusEl = document.getElementById("db-status");
+  var acceptAll = document.getElementById("accept-all");
+
+  function fmt(iso) {
+    try { return new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }); } catch (e) { return ""; }
+  }
+  function render() {
+    var done = 0;
+    cards.forEach(function (card) {
+      var key = card.getAttribute("data-key");
+      var s = state[key] || {};
+      var choice = s.choice || null;
+      if (choice) done++;
+      card.querySelectorAll(".opt").forEach(function (b) {
+        b.setAttribute("aria-pressed", String(b.getAttribute("data-v") === choice));
+        b.disabled = !canWrite;
+      });
+      var st = card.querySelector(".d-state");
+      st.textContent = choice ? "Decided: " + choice.toUpperCase() : "Open";
+      st.classList.toggle("done", !!choice);
+      card.querySelector(".d-meta").textContent = s.updated_at ? "Saved " + fmt(s.updated_at) : "";
+      var ta = card.querySelector("textarea");
+      if (document.activeElement !== ta && !ta.getAttribute("data-dirty")) ta.value = s.note || "";
+      ta.disabled = !canWrite;
+      var dot = document.querySelector('.dot[data-key="' + key + '"]');
+      if (dot) {
+        dot.classList.toggle("done", !!choice);
+        dot.textContent = card.getAttribute("data-id") + (choice ? " · " + choice.toUpperCase() : "");
+      }
+    });
+    document.getElementById("done-count").textContent = done;
+    document.getElementById("rail-done").textContent = done;
+    acceptAll.hidden = !canWrite || done === total;
+  }
+  function onWriteError(err) {
+    if (err && (err.code === "invalid_argument" || err.code === "not_granted")) {
+      canWrite = false;
+      statusEl.textContent = "Read-only: only the page owner records decisions.";
+    } else if (err && err.code === "quota_exceeded") {
+      statusEl.textContent = "This page's storage is full, so the last pick didn't save.";
+    } else {
+      statusEl.textContent = "That pick didn't save. Check your connection and pick again.";
+    }
+    render();
+  }
+  function save(key, body) {
+    var prev = queues[key] || Promise.resolve();
+    var next = prev.then(function () { return col.doc(key).set(body); }).catch(onWriteError);
+    queues[key] = next;
+    return next;
+  }
+  function pick(key, v) {
+    if (!canWrite || !col) return Promise.resolve();
+    var card = document.querySelector('.decision[data-key="' + key + '"]');
+    var ta = card.querySelector("textarea");
+    var body = { choice: v, note: ta.value.trim(), updated_at: new Date().toISOString() };
+    state[key] = body;
+    ta.removeAttribute("data-dirty");
+    render();
+    return save(key, body);
+  }
+
+  cards.forEach(function (card) {
+    var key = card.getAttribute("data-key");
+    card.querySelectorAll(".opt").forEach(function (b) {
+      b.addEventListener("click", function () { pick(key, b.getAttribute("data-v")); });
+    });
+    var ta = card.querySelector("textarea");
+    ta.addEventListener("input", function () { ta.setAttribute("data-dirty", "1"); });
+    ta.addEventListener("change", function () {
+      if (!canWrite || !col) return;
+      var s = state[key] || {};
+      var note = ta.value.trim();
+      if ((s.note || "") === note) { ta.removeAttribute("data-dirty"); return; }
+      var body = { choice: s.choice || null, note: note, updated_at: new Date().toISOString() };
+      state[key] = body;
+      ta.removeAttribute("data-dirty");
+      render();
+      save(key, body);
+    });
+  });
+
+  acceptAll.addEventListener("click", function () {
+    acceptAll.disabled = true;
+    var chain = Promise.resolve();
+    cards.forEach(function (card) {
+      var key = card.getAttribute("data-key");
+      if (state[key] && state[key].choice) return;
+      chain = chain.then(function () { return pick(key, card.getAttribute("data-rec")); });
+    });
+    chain.then(function () { acceptAll.disabled = false; render(); });
+  });
+
+  render();
+
+  function boot() {
+    var c = window.claude;
+    if (!c || typeof c.use !== "function") { statusEl.textContent = "Picks save when this page is opened on claude.ai."; return; }
+    Promise.all([c.use("db"), c.use("user")]).then(function (res) {
+      var db = res[0], user = res[1];
+      if (!db) { statusEl.textContent = "Sign in to claude.ai to see and record picks."; return; }
+      col = db.collection("decisions");
+      var who = user ? user.canEdit() : Promise.resolve(false);
+      return who.then(function (ok) {
+        canWrite = !!ok;
+        statusEl.textContent = canWrite ? "Your picks save to this page as you make them." : "Read-only: only the page owner records decisions.";
+        render();
+        col.onSnapshot(function (snap) {
+          var next = {};
+          snap.docs.forEach(function (d) { var v = d.data(); if (v) next[d.id] = v; });
+          state = next;
+          render();
+        }, function () {
+          statusEl.textContent = "Saved picks couldn't load. Reload the page to try again.";
+        });
+      });
+    }).catch(function () { statusEl.textContent = "Saved picks couldn't load. Reload the page to try again."; });
+  }
+  boot();
+})();
+</script>
+
+</body>
+</html>
