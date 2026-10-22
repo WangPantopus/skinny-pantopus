@@ -269,17 +269,18 @@ class PulseComposeViewModel
             PulseComposeDraftFields.decode(savedStateHandle.get<String>(PREFILL_DRAFT_FIELDS_KEY))
 
         /**
-         * The drafted event times: each field's seeded value (this phone's clock) and the instant the draft named. While
-         * a field still shows its seed, the post keeps the drafted instant.
+         * The drafted event times: each field's seeded value (this phone's clock) and the drafted time as every
+         * composer posts it, that wall clock labelled UTC ([postedDraftTime]). While a field still shows its seed, the
+         * post keeps the drafted time, so a start left unchanged keeps its hour though its field shows only the day.
          */
         private val draftTimes: Map<PulseComposeField, Pair<String, String?>> =
             buildMap {
                 prefillDraft?.eventDate?.let { PulseComposeDraftFields.localTime(it) }?.let { time ->
-                    put(PulseComposeField.EventDate, time.local.toLocalDate().toString() to time.instant?.toString())
+                    put(PulseComposeField.EventDate, time.local.toLocalDate().toString() to postedDraftTime(time))
                 }
                 prefillDraft?.eventEndDate?.let { PulseComposeDraftFields.localTime(it) }?.let { time ->
                     val shown = if (time.instant == null) time.local.toLocalDate().toString() else pickerDateTime(time.local)
-                    put(PulseComposeField.EventEndDate, shown to time.instant?.toString())
+                    put(PulseComposeField.EventEndDate, shown to postedDraftTime(time))
                 }
             }
 
@@ -1504,7 +1505,7 @@ class PulseComposeViewModel
         }
 
         /**
-         * An event time for the post: the drafted instant while [field] still shows its seed ([value]), else the
+         * An event time for the post: the drafted time while [field] still shows its seed ([value]), else the
          * person's pick as [isoDateTime] reads it; null when the field is empty.
          */
         private fun eventTime(
@@ -1514,6 +1515,14 @@ class PulseComposeViewModel
             if (value.isEmpty()) return null
             return draftTimes[field]?.takeIf { it.first == value }?.second ?: isoDateTime(value)
         }
+
+        /**
+         * A drafted time as the post carries it: the draft's moment on this phone's wall clock, through [isoDateTime]
+         * like a pick ("10:00 AM" goes out as `…T10:00:00Z`, which `pulseEventDetails` reads back as 10:00 AM). The
+         * drafted instant itself would show shifted by the zone's offset. Null for a day without a time.
+         */
+        private fun postedDraftTime(time: PulseComposeDraftFields.DraftTime): String? =
+            time.instant?.let { isoDateTime(pickerDateTime(time.local)) }
 
         /** The `yyyy-MM-dd HH:mm` shape the end-time picker writes. */
         private fun pickerDateTime(value: LocalDateTime): String =
