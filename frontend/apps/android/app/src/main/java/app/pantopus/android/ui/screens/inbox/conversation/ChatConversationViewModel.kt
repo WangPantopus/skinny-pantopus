@@ -422,8 +422,9 @@ class ChatConversationViewModel
                 openAtNudge()
             } else if (mode is ChatThreadMode.Ai && aiConversationId == null) {
                 // Seed AI continuity: a new VM instance for the AI thread keeps
-                // appending to the conversation the app session already opened.
-                aiConversationId = aiSession.conversationId
+                // appending to the conversation the app session already opened
+                // for this account (another account's id is never handed out).
+                aiConversationId = aiSession.conversationIdFor(currentUserId)
                 // Cold relaunch: the session holder is empty — restore the
                 // latest backend conversation id so the thread continues
                 // across app restarts.
@@ -454,7 +455,7 @@ class ChatConversationViewModel
                         // fetch was in flight — never clobber it.
                         if (aiConversationId == null) {
                             aiConversationId = latest.id
-                            aiSession.conversationId = latest.id
+                            aiSession.setConversation(latest.id, currentUserId)
                             loadAiHistory(latest.id)
                         }
                     }
@@ -474,11 +475,11 @@ class ChatConversationViewModel
             viewModelScope.launch {
                 val listed = (aiRepo.conversations() as? NetworkResult.Success)?.data?.conversations.orEmpty()
                 val named = aiNudgeConversationId?.takeIf { id -> listed.any { it.id == id } }
-                val id = named ?: listed.firstOrNull()?.id ?: aiSession.conversationId ?: return@launch
+                val id = named ?: listed.firstOrNull()?.id ?: aiSession.conversationIdFor(currentUserId) ?: return@launch
                 // A message sent while the list loaded keeps its own conversation.
                 if (aiConversationId != null || messages.isNotEmpty()) return@launch
                 aiConversationId = id
-                aiSession.conversationId = id
+                aiSession.setConversation(id, currentUserId)
                 aiSession.freshStartUserId = null
                 loadAiHistory(id)
             }
@@ -1417,7 +1418,7 @@ class ChatConversationViewModel
             aiStatus = null
             streamingAssistantId = null
             aiConversationId = null
-            aiSession.conversationId = null
+            aiSession.setConversation(null, currentUserId)
             aiSession.freshStartUserId = currentUserId
             aiSentPhotos.clear()
             aiSentFiles.clear()
@@ -1480,7 +1481,7 @@ class ChatConversationViewModel
                     when (event) {
                         is AIChatStreamEvent.Conversation -> {
                             aiConversationId = event.id
-                            aiSession.conversationId = event.id
+                            aiSession.setConversation(event.id, currentUserId)
                             aiSession.freshStartUserId = null
                         }
                         is AIChatStreamEvent.Status -> {
