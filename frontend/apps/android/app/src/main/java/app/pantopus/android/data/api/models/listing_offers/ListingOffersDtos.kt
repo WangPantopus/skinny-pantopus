@@ -50,10 +50,15 @@ data class ListingOfferDto(
     val checkout: ListingCheckoutSummaryDto? = null,
 )
 
-/** Inlined buyer / seller user card on each offer. */
+/**
+ * Inlined buyer / seller user card on each offer. The server names each person by their Local Profile, as the listing
+ * names its seller (`displayName`, `avatarUrl`); older servers sent the account columns.
+ */
 @JsonClass(generateAdapter = true)
 data class ListingOfferUserDto(
     val id: String,
+    val displayName: String? = null,
+    val avatarUrl: String? = null,
     @Json(name = "first_name") val firstName: String? = null,
     @Json(name = "last_name") val lastName: String? = null,
     val username: String? = null,

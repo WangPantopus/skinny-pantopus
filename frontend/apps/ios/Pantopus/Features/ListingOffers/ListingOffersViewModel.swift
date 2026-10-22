@@ -885,7 +885,7 @@ public final class ListingOffersViewModel: ListOfRowsDataSource {
             template: .statusChip,
             leading: .avatarWithBadge(
                 name: buyerName,
-                imageURL: offer.buyer?.profilePictureUrl.flatMap(URL.init(string:)),
+                imageURL: (offer.buyer?.avatarUrl ?? offer.buyer?.profilePictureUrl).flatMap(URL.init(string:)),
                 background: tone.background,
                 size: .large,
                 verified: false
@@ -960,6 +960,7 @@ public final class ListingOffersViewModel: ListOfRowsDataSource {
     }
 
     public static func displayName(for user: ListingOfferUserDTO?) -> String {
+        if let display = user?.displayName, !display.isEmpty { return display }
         if let first = user?.firstName, !first.isEmpty {
             if let last = user?.lastName, !last.isEmpty {
                 return "\(first) \(last)"
