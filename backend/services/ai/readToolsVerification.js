@@ -28,7 +28,7 @@ const MAX_HOMES = 5;
 const verificationReadToolDefinitions = [
   {
     name: 'get_home_verification',
-    description: "Where the person's own home claims and address verification stand, as their claim and postcard screens show them: each claim they made on a home (ownership, or a renter's residency documents) and whether it is under review or decided, their verification and residency request at each home, and their verification postcard (requested, sent, code expired, verified), each with what happens next. Use it for \"did my postcard go out?\", \"why is my claim still pending?\" or \"am I verified yet?\". It covers only their own claims, so never guess about anyone else's. Pantopus promises no review time: never give one. Read it again each time they ask, even when you answered before in this conversation: claims and postcards change. Link to the screens it names with show_link (home_claim_status is the claim's waiting room, home_verify_postcard the postcard screen) and the home_id it gives.",
+    description: "Where the person's own home claims and address verification stand, as their claim and postcard screens show them: each claim they made on a home (ownership, or a renter's residency documents) and whether it is under review or decided, their verification and residency request at each home, and their verification postcard (requested, sent, code expired, verified), each with what happens next. Use it for \"did my postcard go out?\", \"why is my claim still pending?\" or \"am I verified yet?\". It covers only their own claims, so never guess about anyone else's. Pantopus promises no review time: never give one. Read it again each time they ask, even when you answered before in this conversation: claims and postcards change. When you can show link buttons (show_link), link to the screens it names (home_claim_status is the claim's waiting room, home_verify_postcard the postcard screen) with the home_id it gives.",
     input_schema: {
       type: 'object',
       properties: { home_id: { type: ['string', 'null'], description: 'One home, or null for all of theirs.' } },
@@ -263,7 +263,9 @@ async function getHomeVerification(args, ctx) {
     };
   }));
   return {
-    note: 'Their own claims and verification only, as their screens show them. Use the screens\' words; never guess a review time or anything about other people. Before you answer, add a show_link button for each screen a home lists in `screens` (with its home_id), every time you read this.',
+    note: `Their own claims and verification only, as their screens show them. Use the screens' words; never guess a review time or anything about other people.${ctx.links
+      ? ' Before you answer, add a show_link button for each screen a home lists in `screens` (with its home_id), every time you read this.'
+      : ''}`,
     homes,
     ...(chosen.length > MAX_HOMES ? { more_homes: chosen.length - MAX_HOMES } : {}),
   };
